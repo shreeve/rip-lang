@@ -26,26 +26,38 @@
 Rip brings CoffeeScript's elegance to modern JavaScript—but **25% smaller**, completely standalone, and self-hosting. No build tools, no external dependencies, not even a parser generator. Just clone and go.
 
 ```rip
-# Write beautiful code
-def fibonacci(n)
-  if n <= 1
-    n
-  else
-    fibonacci(n - 1) + fibonacci(n - 2)
+# Elegant syntax with modern features
+def parseUsers(...inputs)
+  users = []
+  for input in inputs
+    # Ruby-style regex with =~ operator and _ captures
+    if input =~ /^(\w+):([^@]+@[\w.]+)$/
+      name = _[1] ?? "guest"          # Nullish coalescing
+      domain = input[/@([\w.]+)/, 1]  # Regex extraction syntax
+      users.push { name, domain }
+  users
 
-fibonacci(10)  # 55
+# Async with dammit operator! (call and await)
+fetchUser = (id) => fetch! "/api/user/${id}"
+
+parseUsers "alice:alice@example.com", "bob:bob@test.org"
 ```
 
 ```javascript
-// Compiles to clean JavaScript
-function fibonacci(n) {
-  if (n <= 1) {
-    return n;
-  } else {
-    return fibonacci(n - 1) + fibonacci(n - 2);
+// Compiles to clean, modern JavaScript
+function parseUsers(...inputs) {
+  let users = [];
+  for (const input of inputs) {
+    if ((_ = input.match(/^(\w+):([^@]+@[\w.]+)$/)) != null) {
+      const name = _[1] ?? "guest";
+      const domain = ((_ = input.match(/@([\w.]+)/)) != null ? _[1] : undefined);
+      users.push({ name, domain });
+    }
   }
+  return users;
 }
-fibonacci(10);
+const fetchUser = (id) => await fetch(`/api/user/${id}`);
+parseUsers("alice:alice@example.com", "bob:bob@test.org");
 ```
 
 **What makes Rip special?**
