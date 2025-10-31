@@ -717,7 +717,8 @@ Both syntaxes handle `null` and `undefined` - pick the style that fits your proj
 - Solar-generated SLR(1) parser
 - Built from grammar specification
 - Generates s-expressions directly
-- Regenerate with `bun run build:parser`
+- Regenerate with `bun run parser` (~150ms, instant feedback!)
+- **Note:** Solar's 83x speed advantage over Jison (150ms vs 12.5s) made rapid grammar iteration possible
 
 **3. Code Generator** (`src/codegen.js`)
 - Pattern matches on s-expressions
@@ -1145,7 +1146,7 @@ MIT
 **Inspired by:**
 - CoffeeScript (syntax and lexer)
 - Lisp/Scheme (s-expressions)
-- Solar (parser generator)
+- Solar (parser generator) - **This project wouldn't have been possible without Solar's incredible speed (150ms vs Jison's 12.5 seconds for parser generation). Solar's performance enabled rapid iteration on grammar changes with instant feedback, making development a joy.**
 - Ruby (regex operators, __DATA__ marker)
 
 **Built by:** Developers who believe simplicity scales
