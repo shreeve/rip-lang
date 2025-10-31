@@ -357,7 +357,13 @@ console.log "Domain:", domain</textarea>
   </div>
 
   <script type="module">
-    import { compile, VERSION, BUILD_DATE } from './dist/rip.browser.min.js';
+    // Add timestamp to bust browser cache for ES modules
+    const timestamp = Date.now();
+    const module = await import(`./dist/rip.browser.min.js?v=${timestamp}`);
+    const { compile, VERSION, BUILD_DATE } = module;
+    
+    // Make compile available globally for the script
+    window.compile = compile;
 
     // Update subtitle with version and build time
     document.querySelector('.subtitle').textContent =
