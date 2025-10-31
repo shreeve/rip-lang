@@ -270,8 +270,32 @@ test 'regex index out of range', '''
   ''', undefined
 
 # ============================================================================
+# Heregex Interpolation Behavior
+# ============================================================================
+
+# IMPORTANT DISTINCTION:
+# - Strings: Both #{...} and ${...} interpolate
+# - Heregex: Only #{...} interpolates, ${...} stays literal (for regex patterns)
+
+# #{...} interpolation works in heregex (CoffeeScript style)
+test "heregex #{} interpolation", '''
+  name = "world"
+  pattern = ///hello#{name}///
+  pattern.test("helloworld")
+  ''', true
+
+# ${...} does NOT interpolate in heregex - stays as literal regex pattern (no escape needed!)
+code "heregex ${} no interpolation", '///test${var}end///', '/test${var}end/'
+
+# $ anchor works correctly in heregex
+test "heregex $ anchor", '''
+  pattern = ///^test$///
+  pattern.test("test") and not pattern.test("testing")
+  ''', true
+
+# ============================================================================
 # Stats for CODEGEN.md
 # ============================================================================
 # Node types: regex (literals, heregex)
-# Tests: 44 total (44 passing, 0 failing)
-# Coverage: Regex literals, flags, heregex (extended), =~ operator, regex indexing, validators, edge cases
+# Tests: 46 total (46 passing, 0 failing)
+# Coverage: Regex literals, flags, heregex (extended), =~ operator, regex indexing, validators, edge cases, interpolation behavior

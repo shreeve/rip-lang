@@ -11,7 +11,7 @@
 <p align="center">
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-1.0.0-blue.svg" alt="Version"></a>
   <a href="#es2022-target"><img src="https://img.shields.io/badge/target-ES2022-blue.svg" alt="Target"></a>
-  <a href="#current-status"><img src="https://img.shields.io/badge/tests-851%2F851-brightgreen.svg" alt="Tests"></a>
+  <a href="#current-status"><img src="https://img.shields.io/badge/tests-854%2F854-brightgreen.svg" alt="Tests"></a>
   <a href="#current-status"><img src="https://img.shields.io/badge/coverage-100%25-brightgreen.svg" alt="Coverage"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
@@ -411,7 +411,7 @@ bun --no-cache test/runner.js test/rip
 ### Quick Reference: NPM Scripts
 
 ```bash
-bun run test      # Run all 851 tests
+bun run test      # Run all 854 tests
 bun run parser    # Rebuild parser from grammar (self-hosting!)
 bun run browser   # Build browser bundles (43KB compressed)
 bun run serve     # Start dev server (REPL at localhost:3000)
@@ -972,7 +972,7 @@ rip/
 │   ├── BROWSER.md       # Browser usage & REPLs
 │   └── COFFEESCRIPT-COMPARISON.md # Feature comparison
 ├── test/
-│   ├── rip/             # Feature tests (20 files, 851 tests)
+│   ├── rip/             # Feature tests (20 files, 854 tests)
 │   └── runner.js        # Test runner
 ├── www/                 # Browser bundles and demos
 ├── examples/            # Example programs
@@ -1080,7 +1080,7 @@ Now supports both ES6 and CoffeeScript syntax:
 - ✅ Core architecture (lexer + parser + codegen pipeline)
 - ✅ Test infrastructure (test/code/fail helpers, async support)
 - ✅ **Code generator - 100% COMPLETE!** (110+ node types, all features working)
-- ✅ **851/851 tests passing (100%)** - PERFECT SCORE!
+- ✅ **854/854 tests passing (100%)** - PERFECT SCORE!
 - ✅ **Dual syntax support** - ES6 + CoffeeScript compatibility
 - ✅ **Dammit operator (`!`)** - `fetchData!` → `await fetchData()`
 - ✅ Comprehensive documentation (production ready)
