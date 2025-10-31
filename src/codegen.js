@@ -2938,7 +2938,7 @@ export class CodeGenerator {
           if (Array.isArray(head) && (head[0] === '.' || head[0] === '::') && head[2] instanceof String && head[2].await === true) {
             // Property has dammit operator - need to await the call
             needsAwait = true;
-            
+
             // Generate property access without calling it (just the reference)
             // We'll add the call with args below
             const [obj, prop] = head.slice(1);
@@ -2949,7 +2949,7 @@ export class CodeGenerator {
             const needsParens = isNumberLiteral || isObjectLiteral || isAwaitOrYield;
             const base = needsParens ? `(${objCode})` : objCode;
             const cleanProp = prop.valueOf();
-            
+
             if (head[0] === '::') {
               calleeCode = `${base}.prototype.${cleanProp}`;
             } else {
