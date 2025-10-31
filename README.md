@@ -58,16 +58,16 @@ const fetchUser = (id) => await fetch(`/api/user/${id}`);
 parseUsers("alice:alice@example.com", "bob:bob@test.org");
 ```
 
-**> bun run example.rip**
+Run with: **bun run example.rip**
 
 ```json
 [
   {
-    name: "alice",
-    domain: "example.com",
+    "name": "alice",
+    "domain": "example.com",
   }, {
-    name: "bob",
-    domain: "test.org",
+    "name": "bob",
+    "domain": "test.org",
   }
 ]
 ```
