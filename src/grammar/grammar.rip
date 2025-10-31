@@ -641,6 +641,9 @@ grammar =
     o 'Expression FOR ForVariables FORFROM Expression WHEN Expression'            , '["comprehension", 1, [["for-from", 3, 5, false, null]], [7]]'
     o 'Expression FOR AWAIT ForVariables FORFROM Expression'                      , '["comprehension", 1, [["for-from", 4, 6, true, null]], []]'
     o 'Expression FOR AWAIT ForVariables FORFROM Expression WHEN Expression'      , '["comprehension", 1, [["for-from", 4, 6, true, null]], [8]]'
+    # Postfix range (without loop variable) - for N-time repetition
+    o 'Expression FOR Range'                                                       , '["comprehension", 1, [["for-in", [], 3, null]], []]'
+    o 'Expression FOR Range BY Expression'                                         , '["comprehension", 1, [["for-in", [], 3, 5]], []]'
   ]
 
   ForValue: [

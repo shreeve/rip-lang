@@ -10,8 +10,14 @@ test "for-in array", "sum = 0; for x in [1, 2, 3]\n  sum += x\nsum", 6
 test "for-in with index", "result = ''; for item, i in ['a', 'b', 'c']\n  result += i\nresult", "012"
 test "for-in range", "sum = 0; for i in [1..5]\n  sum += i\nsum", 15
 
+# Range loop without variable (N-time repetition)
+test "range loop without var", "result = ''; for [1...5]\n  result += 'x'\nresult", "xxxx"
+test "range loop without var with by", "result = ''; for [1...10] by 2\n  result += 'x'\nresult", "xxxxx"
+test "postfix range without var", "result = ''; (result += 'x' for [1...5]); result", "xxxx"
+
 # Code generation
 code "for-in loop", "for x in arr\n  x", "for (const x of arr) { x; }"
+code "range loop no var", "for [1...5]\n  doSomething()", "for (let _i = 1; _i < 5; _i++) {\n  doSomething();\n}"
 
 # ============================================================================
 # For-Of Loops (Object Iteration): "for-of"
@@ -107,5 +113,5 @@ test "nested for-in", '''
 # Stats for CODEGEN.md
 # ============================================================================
 # Node types: for-in, for-of, while, until, loop, break, continue, break-if, continue-if
-# Tests: 21 total (21 passing, 0 failing)
-# Coverage: Array iteration, object iteration, while/until, infinite loops, break, continue, nesting
+# Tests: 25 total (25 passing, 0 failing)
+# Coverage: Array iteration, object iteration, while/until, infinite loops, break, continue, nesting, range loops without variable

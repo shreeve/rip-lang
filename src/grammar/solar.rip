@@ -809,7 +809,15 @@ class Generator
     if hash.recoverable
       @trace str
     else
-      error = new Error str
+      # Format error with line/column information
+      line = (hash.line or 0) + 1  # Convert 0-based to 1-based
+      col = hash.loc?.first_column or 0
+      token = if hash.token then " (token: #{hash.token})" else ''
+      text = if hash.text then " near '#{hash.text}'" else ''
+      location = "line #{line}, column #{col}"
+      message = "Parse error at #{location}#{token}#{text}: #{str}"
+      
+      error = new Error message
       error.hash = hash
       throw error
 
