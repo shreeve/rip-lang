@@ -6,10 +6,11 @@ import { startREPL } from '../src/repl.js';
 import packageJson from '../package.json' with { type: 'json' };
 
 const VERSION = packageJson.version;
+const SUMMARY = packageJson.description;
 
 function printHelp() {
   console.log(`
-Rip ${VERSION} - Whitespace-sensitive S-expression Language
+Rip ${VERSION} - ${SUMMARY}
 
 Usage:
   rip [options] [file]
