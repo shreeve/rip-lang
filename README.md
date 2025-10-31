@@ -190,9 +190,9 @@ case '+': {
 | Component | CoffeeScript | Rip | Notes |
 |-----------|--------------|-----|-------|
 | Lexer+Rewriter | 3,558 LOC | **3,145 LOC** | Expanded syntax |
-| Parser Generator | 2,285 LOC (Jison) | **1,047 LOC** (Solar) | Built-it, ~83x faster |
+| Parser Generator | 2,285 LOC (Jison) | **1,047 LOC** (Solar) | Built-in, ~83x faster |
 | Compiler | 10,346 LOC (AST Nodes) | **4,738 LOC** (S-expressions) | Powerful capabilities |
-| Tools | 1,571 LOC (Repl, Cake) | **520 LOC** (Repl, Browser) | Repl's + Browser |
+| Tools | 1,571 LOC (Repl, Cake) | **520 LOC** (Repl, Browser) | 3 Repl's + Browser |
 | **Total** | **17,760 LOC** | **9,450 LOC** | **~50% smaller** |
 
 **Plus:**
