@@ -23,7 +23,7 @@
 
 **Write less. Do more. Zero dependencies.**
 
-Rip brings CoffeeScript's elegance to modern JavaScript—but **25% smaller**, completely standalone, and self-hosting. No build tools, no external dependencies, not even a parser generator. Just clone and go.
+Rip brings CoffeeScript's elegance to modern JavaScript—but **50% smaller**, completely standalone, and self-hosting. No build tools, no external dependencies, not even a parser generator. Just clone and go.
 
 #### 💎  Elegant syntax with modern features
 
@@ -185,15 +185,15 @@ case '+': {
 }
 ```
 
-**Result: 25% smaller implementation**
+**Result: 50% smaller implementation**
 
 | Component | CoffeeScript | Rip | Notes |
 |-----------|--------------|-----|-------|
-| Lexer | 1,473 LOC | 3,146 LOC | Enhanced with compatibility |
-| AST Nodes | 6,138 LOC | **0 LOC** | S-expressions! |
-| Code Generator | 336 LOC | 4,567 LOC | Complete & optimized |
-| Parser Generator | External (Jison) | **1,048 LOC** | Built-in (solar.rip) |
-| **Total** | **11,826 LOC** | **9,173 LOC** | **~25% smaller** |
+| Lexer+Rewriter | 3,558 LOC | **3,145 LOC** | Expanded syntax |
+| Parser Generator | 2,285 LOC (Jison) | **1,047 LOC** (Solar) | Built-it, ~83x faster |
+| Compiler | 10,346 LOC (AST Nodes) | **4,738 LOC** (S-expressions) | Powerful capabilities |
+| Tools | 1,571 LOC (Repl, Cake) | **520 LOC** (Repl, Browser) | Repl's + Browser |
+| **Total** | **17,760 LOC** | **9,450 LOC** | **~50% smaller** |
 
 **Plus:**
 - ✅ **ZERO dependencies** - Everything included
@@ -1046,7 +1046,7 @@ We considered allowing `x => expr` (ES6 style) but decided consistency and simpl
 | Feature | CoffeeScript | Rip |
 |---------|-------------|------|
 | Syntax | ✅ Elegant | ✅ Elegant (inspired by CS) |
-| Implementation | 11,826 LOC | **9,173 LOC (~25% smaller)** |
+| Implementation | 17,760 LOC | **9,450 LOC (~50% smaller)** |
 | Dependencies | ❌ Multiple | ✅ **ZERO** |
 | Parser Generator | ❌ External (Jison) | ✅ **Built-in (solar.rip)** |
 | Self-Hosting | ❌ No | ✅ **Yes** |
@@ -1135,7 +1135,7 @@ Now supports both ES6 and CoffeeScript syntax:
 - ✅ v0.5.0: **COMPLETE** - Dual syntax support! Postfix spread/rest (`x...`) + legacy existential (`x ? y`)!
 - ✅ v0.5.1: **COMPLETE** - Smart comprehensions! Context-aware optimization, self-hosting, 843/843 tests!
 - ✅ v0.9.0: **COMPLETE** - Production release! Zero dependencies, complete documentation, 43KB browser bundle!
-- ✅ v1.0.0: **CURRENT** - Initial release! Ready and 25% smaller than CoffeeScript! 🎉
+- ✅ v1.0.0: **CURRENT** - Initial release! Ready and 50% smaller than CoffeeScript! 🎉
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed progress.
 
