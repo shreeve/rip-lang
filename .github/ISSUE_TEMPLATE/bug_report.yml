@@ -1,0 +1,98 @@
+name: Bug Report
+description: Report a bug or unexpected behavior in Rip
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out the sections below to help us fix the issue.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear description of what the bug is
+      placeholder: Describe what happened and what you expected to happen
+    validations:
+      required: true
+
+  - type: textarea
+    id: code
+    attributes:
+      label: Rip Code
+      description: The Rip code that triggers the bug
+      placeholder: |
+        # Example:
+        x = for i in [1..10] by 2
+          i * 2
+      render: coffeescript
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen
+      placeholder: Should compile to...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened (error message, unexpected output, etc.)
+      placeholder: |
+        Error: ...
+        or
+        Generated incorrect JavaScript: ...
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Rip Version
+      description: Run `./bin/rip --version` or check package.json
+      placeholder: "1.0.0"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: Runtime
+      description: Which JavaScript runtime are you using?
+      options:
+        - Bun
+        - Node.js
+        - Deno
+        - Browser
+        - Other
+    validations:
+      required: false
+
+  - type: textarea
+    id: debug
+    attributes:
+      label: Debug Output (Optional)
+      description: |
+        If helpful, include output from debug flags:
+        - `./bin/rip -t your-file.rip` (tokens)
+        - `./bin/rip -s your-file.rip` (s-expressions)
+        - `./bin/rip -c your-file.rip` (JavaScript output)
+      placeholder: Paste debug output here...
+      render: javascript
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any other context about the problem (CoffeeScript migration, specific use case, etc.)
+    validations:
+      required: false
