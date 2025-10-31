@@ -3802,10 +3802,11 @@ class CodeGenerator {
         const needsParens = isNumberLiteral || isObjectLiteral || isAwaitOrYield;
         const base = needsParens ? `(${objCode})` : objCode;
         if (prop instanceof String && prop.await === true) {
-          const cleanProp = prop.valueOf();
-          return `await ${base}.${cleanProp}()`;
+          const cleanProp2 = prop.valueOf();
+          return `await ${base}.${cleanProp2}()`;
         }
-        return `${base}.${prop}`;
+        const cleanProp = prop instanceof String ? prop.valueOf() : prop;
+        return `${base}.${cleanProp}`;
       }
       case "?.": {
         const [obj, prop] = rest;
@@ -3817,11 +3818,8 @@ class CodeGenerator {
         if (prop === "prototype") {
           return `${objCode}.prototype`;
         }
-        if (prop instanceof String && prop.await === true) {
-          const cleanProp = prop.valueOf();
-          return `await ${objCode}.prototype.${cleanProp}()`;
-        }
-        return `${objCode}.prototype.${prop}`;
+        const cleanProp = prop instanceof String ? prop.valueOf() : prop;
+        return `${objCode}.prototype.${cleanProp}`;
       }
       case "?::": {
         const [obj, prop] = rest;
@@ -5146,10 +5144,25 @@ export default ${target}`;
             }
           }
           let needsAwait = false;
-          if (head[0] === "." && head[2] instanceof String) {
-            needsAwait = this.shouldAwaitCall(head[2]);
+          let calleeCode;
+          if (Array.isArray(head) && (head[0] === "." || head[0] === "::") && head[2] instanceof String && head[2].await === true) {
+            needsAwait = true;
+            const [obj, prop] = head.slice(1);
+            const objCode = this.generate(obj, "value");
+            const isNumberLiteral = /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(objCode);
+            const isObjectLiteral = Array.isArray(obj) && obj[0] === "object";
+            const isAwaitOrYield = Array.isArray(obj) && (obj[0] === "await" || obj[0] === "yield");
+            const needsParens = isNumberLiteral || isObjectLiteral || isAwaitOrYield;
+            const base = needsParens ? `(${objCode})` : objCode;
+            const cleanProp = prop.valueOf();
+            if (head[0] === "::") {
+              calleeCode = `${base}.prototype.${cleanProp}`;
+            } else {
+              calleeCode = `${base}.${cleanProp}`;
+            }
+          } else {
+            calleeCode = this.generate(head, "value");
           }
-          const calleeCode = this.generate(head, "value");
           const args = rest.map((arg) => this.generate(arg, "value")).join(", ");
           const callStr = `${calleeCode}(${args})`;
           return needsAwait ? `await ${callStr}` : callStr;
