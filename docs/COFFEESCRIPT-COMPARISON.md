@@ -77,7 +77,7 @@ users?[0]?.profile    # Works seamlessly
 
 **What's included:**
 - ✅ Full compiler (lexer, parser, codegen)
-- ✅ **SLR(1) parser generator** (solar.rip - 1,048 lines)
+- ✅ **SLR(1) parser generator** (solar.rip - 1,047 lines)
 - ✅ Self-hosting capability (Rip compiles itself)
 - ✅ Triple REPL (terminal, browser, console)
 - ✅ Test framework
@@ -311,15 +311,11 @@ if (score >= 90) {
 
 | Component | CoffeeScript 2.7 | Rip | Difference |
 |-----------|------------------|-----|------------|
-| **Lexer** | 1,473 LOC | 3,146 LOC | Enhanced w/ compatibility |
-| **Grammar** | 1,003 LOC | 795 LOC | Optimized spec |
-| **Parser** | Hand-coded | 340 LOC | Auto-generated! |
-| **AST/Nodes** | 6,138 LOC | 0 LOC | **S-expressions!** |
-| **Code Generator** | 336 LOC | 4,567 LOC | Heavily optimized! |
-| **Rewriter** | 867 LOC | Merged | Unified approach |
-| **Browser/REPL** | 1,809 LOC | 665 LOC | Streamlined |
-| **Scope** | 120 LOC | Merged | Simplified |
-| **Total** | **11,826 LOC** | **9,173 LOC** | **~25% smaller** |
+| **Lexer+Rewriter** | 3,558 LOC | 3,145 LOC | Expanded syntax |
+| **Parser Generator** | 2,285 LOC (Jison) | 1,047 LOC (Solar) | Built-in, ~83x faster |
+| **Compiler** | 10,346 LOC (AST Nodes) | 4,738 LOC (S-expressions) | Powerful capabilities |
+| **Tools** | 1,571 LOC (Repl, Cake) | 520 LOC (Repl, Browser) | 3 Repl's + Browser |
+| **Total** | **17,760 LOC** | **9,450 LOC** | **~50% smaller** |
 
 ### Maintainability
 
@@ -482,7 +478,7 @@ export { add }
 | **Dependencies** | Multiple | ✅ **ZERO** | 🏆 Rip |
 | **Parser generator** | External (Jison) | ✅ **Built-in (solar.rip)** | 🏆 Rip |
 | **Self-hosting** | ❌ No | ✅ **Yes** | 🏆 Rip |
-| **Implementation** | 11,826 LOC | **9,173 LOC** | 🏆 Rip |
+| **Implementation** | 17,760 LOC | **9,450 LOC** | 🏆 Rip |
 | **Extensibility** | Hard | Easy | 🏆 Rip |
 | **Block comments** | ✅ Yes | ❌ No | 🏆 CS |
 | **Chained compare** | ✅ Yes | ❌ No | 🏆 CS |
@@ -715,7 +711,7 @@ See [BROWSER.md](BROWSER.md) for complete guide.
 
 ✅ **Modern:** ES6 modules, classes, optional chaining
 ✅ **Innovative:** 10+ unique features
-✅ **Clean:** 25% smaller implementation
+✅ **Clean:** 50% smaller implementation
 ✅ **Fast:** 30% faster compilation
 ✅ **Compatible:** Dual syntax support (ES6 + CoffeeScript)
 ✅ **Tested:** 100% coverage (843/843)

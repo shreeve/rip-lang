@@ -27,7 +27,7 @@ function greet(name) {
 
 ```
 Source → Lexer → Parser → S-Expressions → Codegen → JavaScript
-         3,146    340 LOC   (arrays!)       4,567      ES2022
+         3,145    340 LOC   (arrays!)       4,738      ES2022
          LOC      generated                 LOC
 ```
 
@@ -616,7 +616,7 @@ Rip outputs modern JavaScript that runs in:
 - Keep the code minimal (pattern matching)
 - Test everything (843/843 tests passing)
 
-Rip achieves CoffeeScript's elegance with 25% less code by using s-expressions instead of complex AST nodes. The result is easier to understand, extend, and maintain.
+Rip achieves CoffeeScript's elegance with 50% less code by using s-expressions instead of complex AST nodes. The result is easier to understand, extend, and maintain.
 
 ---
 

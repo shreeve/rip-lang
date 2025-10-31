@@ -142,7 +142,7 @@ Many grammar types are just organizational scaffolding - they route to other typ
 - ✅ **Self-hosting** (Rip compiles itself)
 
 **Code Size:**
-- **4,824 LOC** in codegen.js
+- **4,738 LOC** in codegen.js
 - **Complete implementation** of all CoffeeScript 2.7 features
 - **Plus Rip innovations** (heregex, regex+, dammit, void functions, etc.)
 

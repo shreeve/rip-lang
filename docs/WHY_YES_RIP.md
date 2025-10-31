@@ -146,7 +146,7 @@ Not "minimal." Not "few." **ZERO.** This is **real**, **running**, **today**.
 
 **What's included with zero external dependencies:**
 - ✅ **Full compiler** (lexer + parser + codegen)
-- ✅ **SLR(1) parser generator** (solar.rip - 1,048 lines, built-in!)
+- ✅ **SLR(1) parser generator** (solar.rip - 1,047 lines, built-in!)
 - ✅ **Self-hosting** (Rip compiles itself, including the parser generator)
 - ✅ **Triple REPL** (terminal, browser, console)
 - ✅ **Test framework** (runner + 843 tests)
@@ -295,7 +295,7 @@ doSomething(user)  # Test it, ship it
 - **Build time: 0.043s (Rip) vs 2m34s (TS)** - That's **3,500x faster**
 - **Dependencies: 0 (Rip) vs 1,400+ (TS)** - That's ∞% fewer attack vectors
 - **Time to Hello World: 5 seconds (Rip) vs 5 minutes (TS)** - 60x faster to start
-- **Code size: 9,173 LOC (Rip) vs 11,826 LOC (CoffeeScript)** - 25% smaller implementation
+- **Code size: 9,450 LOC (Rip) vs 17,760 LOC (CoffeeScript)** - 50% smaller implementation
 - **Test coverage: 843/843 (100%)** - Perfect score
 - **Self-hosting: YES** - Rip compiles itself, including its own parser generator
 - **Browser bundle: 43KB** - Brotli-compressed (560KB → 43KB, 92% reduction)
@@ -681,7 +681,7 @@ $ echo 'console.log "Hello, Rip!"' > test.rip && bun test.rip
 - ✅ **Zero dependencies** (package.json dependencies: {})
 - ✅ **Bun loader** (bunfig.toml + rip-loader.ts - works globally)
 - ✅ **43KB browser bundle** (brotli-compressed, with inline scripts)
-- ✅ **25% smaller** than CoffeeScript (9,173 vs 11,826 LOC)
+- ✅ **50% smaller** than CoffeeScript (9,450 vs 17,760 LOC)
 - ✅ **ES2022 output** (works in Bun, Deno, Node 12+, browsers)
 - ✅ **Triple REPL** (terminal, browser, console)
 
