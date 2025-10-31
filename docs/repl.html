@@ -193,6 +193,7 @@
 
     .editor, .output-code {
       flex: 1;
+      min-height: 0;
       padding: 15px;
       font-family: 'Monaco', 'Menlo', monospace;
       font-size: 14px;
@@ -208,6 +209,7 @@
     .output-code {
       background: #1e1e1e;
       white-space: pre;
+      overflow: auto;
     }
 
     .compiler-options {
@@ -361,7 +363,7 @@ console.log "Domain:", domain</textarea>
     const timestamp = Date.now();
     const module = await import(`./dist/rip.browser.min.js?v=${timestamp}`);
     const { compile, VERSION, BUILD_DATE } = module;
-    
+
     // Make compile available globally for the script
     window.compile = compile;
 
