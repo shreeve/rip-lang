@@ -6,6 +6,10 @@ export { parser } from './parser.js';
 export { CodeGenerator } from './codegen.js';
 export { Compiler, compile, compileToJS } from './compiler.js';
 
+// Version info (replaced during build)
+export const VERSION = "0.0.0";
+export const BUILD_DATE = "0000-00-00@00:00:00GMT";
+
 // Import compileToJS for use in rip() function
 import { compileToJS } from './compiler.js';
 

@@ -4,7 +4,7 @@ import { readFileSync, existsSync } from 'fs';
 import { join, extname } from 'path';
 
 const PORT = 3000;
-const ROOT = 'www';
+const ROOT = 'docs';
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',

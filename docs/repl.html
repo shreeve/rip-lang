@@ -357,7 +357,11 @@ console.log "Domain:", domain</textarea>
   </div>
 
   <script type="module">
-    import { compile } from './dist/rip.browser.min.js';
+    import { compile, VERSION, BUILD_DATE } from './dist/rip.browser.min.js';
+
+    // Update subtitle with version and build time
+    document.querySelector('.subtitle').textContent =
+      `Interactive environment • Version ${VERSION} • Built ${BUILD_DATE}`;
 
     // ========================================================================
     // Tab Switching
