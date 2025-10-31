@@ -17,13 +17,14 @@ Usage:
   rip                           # Start interactive REPL (no arguments)
 
 Options:
-  -h, --help          Show this help message
   -c, --compile       Show compiled JavaScript (compile mode)
-  -t, --tokens        Show token stream
-  -s, --sexpr         Show s-expressions
+  -h, --help          Show this help message
   -o, --output <file> Write JavaScript to file
   -q, --quiet         Suppress headers (with -c)
   -r, --repl          Start interactive REPL
+  -s, --sexpr         Show s-expressions
+  -t, --tokens        Show token stream
+  -v, --version       Show version number
 
 Examples:
   rip                           # Interactive REPL
@@ -44,6 +45,11 @@ async function main() {
 
   if (args.includes('-h') || args.includes('--help')) {
     printHelp();
+    process.exit(0);
+  }
+
+  if (args.includes('-v') || args.includes('--version')) {
+    console.log(`Rip ${VERSION} - ${SUMMARY}`);
     process.exit(0);
   }
 
