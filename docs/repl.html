@@ -27,10 +27,18 @@
     }
 
     h1 {
+      display: flex;
+      align-items: center;
+      gap: 12px;
       font-size: 20px;
       font-weight: 600;
       color: #cccccc;
       margin-bottom: 5px;
+    }
+
+    .logo {
+      height: 32px;
+      width: auto;
     }
 
     .subtitle {
@@ -288,7 +296,10 @@
 </head>
 <body>
   <div class="header">
-    <h1>🔮 Rip Browser REPL</h1>
+    <h1>
+      <img src="rip.svg" alt="Rip" class="logo">
+      Rip Browser REPL
+    </h1>
     <div class="subtitle">Interactive environment with REPL console and live compiler</div>
   </div>
 
@@ -545,16 +556,16 @@ console.log "Domain:", domain</textarea>
       if (evalResult.success) {
         // Show debug info if enabled
         if (replContext.showTokens) {
-          let tokenOutput = '<span class="help-text">=== TOKENS ===</span>\\n';
+          let tokenOutput = '<span class="help-text">=== TOKENS ===</span><br>';
           evalResult.result.tokens.forEach(t => {
-            tokenOutput += `${t[0].padEnd(12)} ${JSON.stringify(t[1])}\\n`;
+            tokenOutput += `${t[0].padEnd(12)} ${JSON.stringify(t[1])}<br>`;
           });
           addOutput(tokenOutput, 'command-output');
         }
 
         if (replContext.showSexp) {
-          const sexp = JSON.stringify(evalResult.result.sexpr, null, 2);
-          addOutput(`<span class="help-text">=== S-EXPRESSIONS ===</span>\\n${sexp}`, 'command-output');
+          const sexp = JSON.stringify(evalResult.result.sexpr, null, 2).replace(/\n/g, '<br>');
+          addOutput(`<span class="help-text">=== S-EXPRESSIONS ===</span><br>${sexp}`, 'command-output');
         }
 
         // Show result
@@ -657,17 +668,17 @@ console.log "Domain:", domain</textarea>
         let outputText = '';
 
         if (showTokens.checked) {
-          outputText += '=== TOKENS ===\\n';
+          outputText += '=== TOKENS ===\n';
           result.tokens.forEach(t => {
-            outputText += `${t[0].padEnd(12)} ${JSON.stringify(t[1])}\\n`;
+            outputText += `${t[0].padEnd(12)} ${JSON.stringify(t[1])}\n`;
           });
-          outputText += '\\n';
+          outputText += '\n';
         }
 
         if (showSexp.checked) {
-          outputText += '=== S-EXPRESSIONS ===\\n';
+          outputText += '=== S-EXPRESSIONS ===\n';
           outputText += JSON.stringify(result.sexpr, null, 2);
-          outputText += '\\n\\n';
+          outputText += '\n\n';
         }
 
         // JavaScript output with syntax highlighting (strip helpers for cleaner display)
