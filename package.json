@@ -1,0 +1,37 @@
+{
+  "name": "rip-lang",
+  "version": "1.0.0",
+  "description": "A lightweight scripting language that compiles to modern JavaScript",
+  "type": "module",
+  "main": "src/compiler.js",
+  "browser": "www/dist/rip.browser.js",
+  "exports": {
+    ".": {
+      "bun": "./src/compiler.js",
+      "node": "./src/compiler.js",
+      "browser": "./www/dist/rip.browser.js",
+      "default": "./src/compiler.js"
+    },
+    "./loader": "./rip-loader.ts"
+  },
+  "bin": {
+    "rip": "./bin/rip"
+  },
+  "scripts": {
+    "browser": "bun scripts/build-browser.js",
+    "parser": "bun src/grammar/solar.rip -o src/parser.js src/grammar/grammar.rip",
+    "serve": "bun scripts/serve.js",
+    "test": "bun test/runner.js"
+  },
+  "keywords": [
+    "compiler",
+    "language",
+    "s-expression",
+    "lisp",
+    "bun",
+    "browser",
+    "transpiler"
+  ],
+  "author": "",
+  "license": "MIT"
+}

@@ -1,0 +1,11 @@
+# Bun configuration for Rip
+
+# Load .rip files with current compiler
+preload = ["./rip-loader.ts"]
+
+[install]
+# Auto-install dependencies
+auto = true
+
+# Use exact versions
+exact = true

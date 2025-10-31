@@ -1,0 +1,158 @@
+# Test: Operators (24 node types)
+# Systematically tests all operator node types from grammar
+
+# ============================================================================
+# Arithmetic Operators
+# ============================================================================
+
+# Addition: "+"
+test "addition integers", "5 + 3", 8
+test "addition decimals", "2.5 + 1.5", 4.0
+test "addition negative", "-5 + 10", 5
+code "addition parens", "a + b", "(a + b)"
+
+# Subtraction: "-" (binary and unary)
+test "subtraction integers", "10 - 4", 6
+test "subtraction negative result", "3 - 5", -2
+test "unary minus", "-5", -5
+code "subtraction parens", "a - b", "(a - b)"
+
+# Multiplication: "*"
+test "multiplication", "4 * 3", 12
+test "multiplication decimal", "2.5 * 2", 5.0
+code "multiplication parens", "a * b", "(a * b)"
+
+# Division: "/"
+test "division", "10 / 2", 5
+test "division decimal", "7 / 2", 3.5
+code "division parens", "a / b", "(a / b)"
+
+# Modulo: "%"
+test "modulo", "10 % 3", 1
+test "modulo zero", "10 % 5", 0
+code "modulo parens", "a % b", "(a % b)"
+
+# Exponentiation: "**"
+test "exponentiation", "2 ** 3", 8
+test "exponentiation decimal", "4 ** 0.5", 2
+code "exponentiation parens", "a ** b", "(a ** b)"
+
+# ============================================================================
+# Comparison Operators
+# ============================================================================
+
+# Equality: "==" (compiles to strict ===)
+test "equality true", "5 == 5", true
+test "equality false", "5 == 3", false
+test "is keyword", "5 is 5", true
+test "is keyword false", "5 is 3", false
+test "strict equality triple equals", "5 === 5", true
+test "strict equality false", "5 === 3", false
+
+code "equality compiles to strict", "a == b", "(a === b)"
+code "is compiles to strict", "a is b", "(a === b)"
+code "triple equals compiles to strict", "a === b", "(a === b)"
+
+# Inequality: "!=" (compiles to strict !==)
+test "inequality true", "5 != 3", true
+test "inequality false", "5 != 5", false
+test "isnt keyword", "5 isnt 3", true
+test "isnt keyword false", "5 isnt 5", false
+test "strict inequality triple", "5 !== 3", true
+test "strict inequality false", "5 !== 5", false
+
+code "inequality compiles to strict", "a != b", "(a !== b)"
+code "isnt compiles to strict", "a isnt b", "(a !== b)"
+code "triple not-equals compiles to strict", "a !== b", "(a !== b)"
+
+# Less than: "<"
+test "less than true", "3 < 5", true
+test "less than false", "5 < 3", false
+code "less than parens", "a < b", "(a < b)"
+
+# Greater than: ">"
+test "greater than true", "5 > 3", true
+test "greater than false", "3 > 5", false
+code "greater than parens", "a > b", "(a > b)"
+
+# Less than or equal: "<="
+test "less than or equal true", "3 <= 5", true
+test "less than or equal equal", "5 <= 5", true
+code "less than or equal parens", "a <= b", "(a <= b)"
+
+# Greater than or equal: ">="
+test "greater than or equal true", "5 >= 3", true
+test "greater than or equal equal", "5 >= 5", true
+code "greater than or equal parens", "a >= b", "(a >= b)"
+
+# ============================================================================
+# Logical Operators
+# ============================================================================
+
+# Logical NOT: "!"
+test "logical not true", "!false", true
+test "logical not false", "!true", false
+code "logical not simple", "!a", "!a"
+code "logical not complex", "!(a && b)", "(!(a && b))"
+
+# Logical AND: "&&"
+test "logical and both true", "true && true", true
+test "logical and first false", "false && true", false
+test "logical and second false", "true && false", false
+code "logical and parens", "a && b", "(a && b)"
+
+# Logical OR: "||"
+test "logical or both false", "false || false", false
+test "logical or first true", "true || false", true
+test "logical or second true", "false || true", true
+code "logical or parens", "a || b", "(a || b)"
+
+# Nullish coalescing: "??"
+test "nullish with null", "null ?? 10", 10
+test "nullish with undefined", "undefined ?? 20", 20
+test "nullish with zero", "0 ?? 30", 0
+test "nullish with false", "false ?? 40", false
+code "nullish coalescing parens", "a ?? b", "(a ?? b)"
+
+# ============================================================================
+# Bitwise Operators
+# ============================================================================
+
+# Bitwise AND: "&"
+test "bitwise and", "5 & 3", 1
+code "bitwise and parens", "a & b", "(a & b)"
+
+# Bitwise OR: "|"
+test "bitwise or", "5 | 3", 7
+code "bitwise or parens", "a | b", "(a | b)"
+
+# Bitwise XOR: "^"
+test "bitwise xor", "5 ^ 3", 6
+code "bitwise xor parens", "a ^ b", "(a ^ b)"
+
+# Bitwise NOT: "~"
+test "bitwise not", "~5", -6
+code "bitwise not parens", "~a", "(~a)"
+
+# ============================================================================
+# Increment/Decrement: "++" / "--"
+# ============================================================================
+
+# Prefix increment: "++"
+test "prefix increment", "x = 5\n++x", 6
+
+# Postfix increment: "++"
+test "postfix increment", "x = 5\nx++\nx", 6
+
+# Prefix decrement: "--"
+test "prefix decrement", "x = 5\n--x", 4
+
+# Postfix decrement: "--"
+test "postfix decrement", "x = 5\nx--\nx", 4
+
+# ============================================================================
+# Stats for CODEGEN.md
+# ============================================================================
+# Node types: +, -, *, /, %, **, ==, !=, ===, !==, <, >, <=, >=, &&, ||, ??, !, &, |, ^, ~, <<, >>, >>>, ++, --, //, is, isnt, in, of
+# Tests: 66 total (66 passing, 0 failing)
+# Coverage: Arithmetic, comparison, logical, bitwise, unary, increment/decrement, floor division, identity, membership

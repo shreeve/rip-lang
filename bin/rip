@@ -1,0 +1,115 @@
+#!/usr/bin/env bun
+
+import { readFileSync, writeFileSync } from 'fs';
+import { Compiler } from '../src/compiler.js';
+import { startREPL } from '../src/repl.js';
+import packageJson from '../package.json' with { type: 'json' };
+
+const VERSION = packageJson.version;
+
+function printHelp() {
+  console.log(`
+Rip ${VERSION} - Whitespace-sensitive S-expression Language
+
+Usage:
+  rip [options] [file]
+  rip                           # Start interactive REPL (no arguments)
+
+Options:
+  -h, --help          Show this help message
+  -c, --compile       Show compiled JavaScript (compile mode)
+  -t, --tokens        Show token stream
+  -s, --sexpr         Show s-expressions
+  -o, --output <file> Write JavaScript to file
+  -q, --quiet         Suppress headers (with -c)
+  -r, --repl          Start interactive REPL
+
+Examples:
+  rip                           # Interactive REPL
+  rip example.rip               # Compile to stdout
+  rip -q example.rip            # Just the JS (for piping)
+  rip -o output.js example.rip  # Save to file
+  rip -s -t example.rip         # Show everything (debug mode)
+  echo 'x = 1 + 2' | rip        # Read from stdin
+
+To execute scripts:
+  bun script.rip                # Use Bun loader
+  #!/usr/bin/env bun            # Shebang at top of script
+`);
+}
+
+async function main() {
+  const args = process.argv.slice(2);
+
+  if (args.includes('-h') || args.includes('--help')) {
+    printHelp();
+    process.exit(0);
+  }
+
+  // Check if REPL should be started
+  // Launch REPL if: no args AND stdin is a TTY (not piped), OR explicit -r flag
+  const isTTY = process.stdin.isTTY;
+  if ((args.length === 0 && isTTY) || args.includes('-r') || args.includes('--repl')) {
+    startREPL();
+    return;
+  }
+
+  const options = {
+    compile: args.includes('-c') || args.includes('--compile'),
+    showTokens: args.includes('-t') || args.includes('--tokens'),
+    showSExpr: args.includes('-s') || args.includes('--sexpr'),
+    quiet: args.includes('-q') || args.includes('--quiet')
+  };
+
+  // Find input file (last non-option argument)
+  let inputFile = null;
+  let outputFile = null;
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '-o' || args[i] === '--output') {
+      outputFile = args[i + 1];
+      i++;
+    } else if (!args[i].startsWith('-')) {
+      inputFile = args[i];
+    }
+  }
+
+  let source;
+
+  try {
+    if (!inputFile) {
+      // Read from stdin if no file specified (file descriptor 0)
+      source = readFileSync(0, 'utf-8');
+    } else {
+      // Read source file
+      source = readFileSync(inputFile, 'utf-8');
+    }
+
+    // Compile
+    const compiler = new Compiler(options);
+    const result = compiler.compile(source);
+
+    // Output
+    if (outputFile) {
+      // Save to file
+      writeFileSync(outputFile, result.code, 'utf-8');
+      if (!options.quiet) {
+        console.log(`Compiled to ${outputFile}`);
+      }
+    } else {
+      // Default mode - compile and output to stdout
+      if (!options.quiet) {
+        console.log(`// == JavaScript output by Rip ${VERSION} == //\n`);
+      }
+      console.log(result.code);
+    }
+  } catch (error) {
+    console.error('Compilation Error:', error.message);
+    if (error.stack) {
+      console.error(error.stack);
+    }
+    process.exit(1);
+  }
+}
+
+main();

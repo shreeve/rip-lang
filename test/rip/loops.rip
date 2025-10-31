@@ -1,0 +1,111 @@
+# Test: Loops (5 node types)
+# Tests "for-in", "for-of", "while", "until", "loop" node types
+
+# ============================================================================
+# For-In Loops (Array Iteration): "for-in"
+# ============================================================================
+
+# Basic for-in
+test "for-in array", "sum = 0; for x in [1, 2, 3]\n  sum += x\nsum", 6
+test "for-in with index", "result = ''; for item, i in ['a', 'b', 'c']\n  result += i\nresult", "012"
+test "for-in range", "sum = 0; for i in [1..5]\n  sum += i\nsum", 15
+
+# Code generation
+code "for-in loop", "for x in arr\n  x", "for (const x of arr) { x; }"
+
+# ============================================================================
+# For-Of Loops (Object Iteration): "for-of"
+# ============================================================================
+
+# Basic for-of
+test "for-of object", "obj = {a: 1, b: 2}; sum = 0; for key, val of obj\n  sum += val\nsum", 3
+test "for-of keys only", "obj = {a: 1, b: 2}; keys = []; for key of obj\n  keys.push(key)\nkeys.length", 2
+
+# Code generation
+code "for-of loop", "for k, v of obj\n  v", "for (const k in obj) {\nconst v = obj[k];\nv;\n}"
+
+# ============================================================================
+# While Loops: "while"
+# ============================================================================
+
+# Basic while
+test "while loop", "i = 0; sum = 0; while i < 5\n  sum += i\n  i += 1\nsum", 10
+
+# While with guard
+test "while when", "i = 0\nsum = 0\nwhile i < 10\n  if i % 2 == 0\n    sum += i\n  i += 1\nsum", 20
+
+# Postfix while
+test "postfix while", "i = 0; i += 1 while i < 5; i", 5
+
+# Code generation
+code "while loop", "while cond\n  body", "while (cond) { body; }"
+
+# ============================================================================
+# Until Loops: "until"
+# ============================================================================
+
+# Basic until
+test "until loop", "i = 0; until i >= 5\n  i += 1\ni", 5
+
+# Until with guard
+test "until when", "i = 0\nsum = 0\nuntil i >= 10\n  if i % 2 == 0\n    sum += i\n  i += 1\nsum", 20
+
+# Postfix until
+test "postfix until", "i = 0; i += 1 until i >= 5; i", 5
+
+# Code generation
+code "until loop", "until cond\n  body", "while (!cond) { body; }"
+
+# ============================================================================
+# Infinite Loops: "loop"
+# ============================================================================
+
+# Loop with break
+test "loop with break", "i = 0; loop\n  i += 1\n  break if i >= 5\ni", 5
+
+# Loop with continue
+test "loop with continue", "i = 0; sum = 0; loop\n  i += 1\n  continue if i % 2 != 0\n  sum += i\n  break if i >= 10\nsum", 30
+
+# Code generation
+code "infinite loop", "loop\n  body", "while (true) { body; }"
+
+# ============================================================================
+# Loop Control: break and continue
+# ============================================================================
+
+# Break statement
+test "break in for-in", '''
+  sum = 0
+  for i in [1..10]
+    break if i > 5
+    sum += i
+  sum
+  ''', 15
+
+# Continue statement
+test "continue in for-in", '''
+  sum = 0
+  for i in [1..10]
+    continue if i % 2 == 0
+    sum += i
+  sum
+  ''', 25
+
+# ============================================================================
+# Nested Loops
+# ============================================================================
+
+test "nested for-in", '''
+  sum = 0
+  for i in [1, 2, 3]
+    for j in [10, 20]
+      sum += i * j
+  sum
+  ''', 180
+
+# ============================================================================
+# Stats for CODEGEN.md
+# ============================================================================
+# Node types: for-in, for-of, while, until, loop, break, continue, break-if, continue-if
+# Tests: 21 total (21 passing, 0 failing)
+# Coverage: Array iteration, object iteration, while/until, infinite loops, break, continue, nesting

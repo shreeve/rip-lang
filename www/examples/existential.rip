@@ -1,0 +1,86 @@
+# Existential and Logical Assignment Operators
+# Demonstrates the difference between nullish and falsy checks
+
+# Binary Nullish Coalescing (??)
+# Only replaces null/undefined
+def getPort(config)
+  config.port ?? 8080
+
+# Preserves 0, false, empty string
+port1 = getPort({port: 0})        # → 0 (not replaced!)
+port2 = getPort({port: null})     # → 8080 (replaced)
+port3 = getPort({})               # → 8080 (undefined)
+
+# Binary Logical OR (||)
+# Replaces ALL falsy values
+def getPortFalsy(config)
+  config.port || 8080
+
+portA = getPortFalsy({port: 0})   # → 8080 (0 is falsy)
+portB = getPortFalsy({port: null}) # → 8080 (null is falsy)
+
+# Existential Assignment (?=)
+# Assign only if null/undefined
+def initializeConfig()
+  config = {}
+  config.port ?= 8080      # Sets to 8080 (undefined)
+  config.debug ?= false    # Sets to false (undefined)
+  config.timeout ?= 0      # Sets to 0 (undefined)
+
+  # These won't change existing values
+  config.port ?= 9000      # Stays 8080
+  config.debug ?= true     # Stays false (preserves false!)
+  config.timeout ?= 5000   # Stays 0 (preserves 0!)
+
+  config
+
+# Logical OR Assignment (||=)
+# Assign if falsy
+def setDefaults(options)
+  options.name ||= "guest"     # Replaces empty string
+  options.count ||= 10         # Replaces 0
+  options.enabled ||= true     # Replaces false
+  options
+
+# Logical AND Assignment (&&=)
+# Update only if truthy
+def processIfValid(data)
+  data.value &&= data.value * 2  # Only process if exists
+  data
+
+# Real-world example: User preferences
+def getUserPreferences(user)
+  prefs = user?.preferences ?? {}
+
+  # Set defaults for missing values (existential)
+  prefs.theme ?= "dark"
+  prefs.fontSize ?= 14
+  prefs.notifications ?= true
+
+  # But replace falsy user inputs (logical)
+  prefs.username ||= "anonymous"
+
+  prefs
+
+# Chained nullish coalescing
+def getConfigValue(primary, secondary, tertiary)
+  primary ?? secondary ?? tertiary ?? "default"
+
+# Comparison table
+def demonstrateDifference()
+  testValues = [null, undefined, false, 0, "", "text", 42]
+
+  # For each value, show behavior of ?? vs ||
+  results = []
+
+  testValues.forEach((val) => {
+    nullish = val ?? "default"
+    logical = val || "default"
+    results.push({
+      value: val
+      nullish: nullish
+      logical: logical
+    })
+  })
+
+  results

@@ -1,0 +1,30 @@
+# Prototype Shortcuts - :: and ?::
+
+# Access prototype directly
+stringProto = String::
+arrayProto = Array::
+
+# Access prototype methods
+toString = Boolean::toString
+charAt = String::charAt
+
+# Use prototype methods
+result = toString.call(true)
+console.log("Boolean true:", result)
+
+# Add methods to prototypes
+String::reverse = ->
+  @split('').reverse().join('')
+
+console.log("hello".reverse())
+
+# Optional prototype access (safe)
+constructor = Array
+method = constructor?::push
+console.log("Has push:", method != undefined)
+
+# Works with any object
+MyClass = class MyClass
+  constructor: ->
+MyClass::customMethod = ->
+  "Added via ::"

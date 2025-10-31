@@ -1,0 +1,50 @@
+# Switch/When/Else Examples
+# Two modes: value-based and condition-based
+
+# Value-based switch (matches against a value)
+def getDayType(day)
+  switch day
+    when "Mon", "Tue", "Wed", "Thu", "Fri" then "weekday"
+    when "Sat", "Sun" then "weekend"
+    else "unknown"
+
+# Condition-based switch (evaluates conditions)
+def getGrade(score)
+  switch
+    when score < 60 then "F"
+    when score < 70 then "D"
+    when score < 80 then "C"
+    when score < 90 then "B"
+    else "A"
+
+# With block syntax
+def processDay(day)
+  switch day
+    when "Mon"
+      console.log("Start of week")
+      "work mode"
+    when "Fri"
+      console.log("Almost weekend!")
+      "party mode"
+    when "Sat", "Sun"
+      console.log("Weekend!")
+      "relax mode"
+    else
+      "default mode"
+
+# Switch as expression (gets wrapped in IIFE)
+def categorize(value)
+  category = switch value
+    when 1, 2, 3 then "low"
+    when 4, 5, 6 then "medium"
+    when 7, 8, 9 then "high"
+    else "out of range"
+  category
+
+# Condition-based for complex logic
+def classify(x, y)
+  switch
+    when x > 100 && y > 100 then "both large"
+    when x > 100 || y > 100 then "one large"
+    when x > 0 && y > 0 then "both positive"
+    else "other"

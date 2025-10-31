@@ -1,0 +1,167 @@
+# Test: Classes (2 node types)
+# Tests "class" and "super" node types
+
+# ============================================================================
+# Class Definitions: "class"
+# ============================================================================
+
+# Basic class
+test "basic class", "class Animal\n  constructor: (@name) ->\n  speak: -> @name\na = new Animal('Dog'); a.speak()", "Dog"
+
+# Class with methods
+test "class methods", "class Math\n  add: (a, b) -> a + b\n  multiply: (a, b) -> a * b\nm = new Math(); m.add(2, 3)", 5
+
+# Class with inheritance
+test "class inheritance", "class Animal\n  constructor: (@name) ->\nclass Dog extends Animal\n  bark: -> 'woof'\nd = new Dog('Spot'); d.name", "Spot"
+
+# Static methods
+test "static method", "class Utils\n  @square: (x) -> x * x\nUtils.square(5)", 25
+
+# Class with constructor logic
+test "constructor logic", "class Counter\n  constructor: ->\n    @count = 0\n  increment: -> @count += 1\nc = new Counter(); c.increment(); c.count", 1
+
+# Code generation
+code "simple class", "class Animal\n  constructor: (@name) ->", "class Animal { constructor(name) { this.name = name; } }"
+
+# ============================================================================
+# Super Calls: "super"
+# ============================================================================
+
+# Super in constructor
+test "super in constructor", "class Animal\n  constructor: (@name) ->\nclass Dog extends Animal\n  constructor: (name, @breed) ->\n    super(name)\nd = new Dog('Spot', 'Terrier'); d.name", "Spot"
+
+# Super method call
+test "super method call", "class Animal\n  speak: -> 'sound'\nclass Dog extends Animal\n  speak: -> super.speak() + '!'\nd = new Dog(); d.speak()", "sound!"
+
+# Super with spread arguments (Rip ES6 prefix syntax)
+test "super with spread args", '''
+  class Parent
+    method: (...args) -> args.join('-')
+
+  class Child extends Parent
+    method: -> super(...arguments)
+
+  c = new Child()
+  c.method(1, 2, 3)
+''', '1-2-3'
+
+# Code generation
+code "super call", "super(arg)", "super(arg)"
+code "super method", "super.method()", "super.method()"
+
+# ============================================================================
+# More Class Features
+# ============================================================================
+
+# Class expressions
+test 'class expression', '''
+  Animal = class
+    speak: -> 'sound'
+  new Animal().speak()
+  ''', 'sound'
+
+# Empty class
+test 'empty class', '''
+  class Empty
+  new Empty().constructor.name
+  ''', 'Empty'
+
+# Multiple @ parameters
+test 'multiple @ parameters', '''
+  class Person
+    constructor: (@first, @last) ->
+  p = new Person('John', 'Doe')
+  [p.first, p.last]
+  ''', ['John', 'Doe']
+
+# Method chaining
+test 'method chaining', '''
+  class Builder
+    setValue: (v) -> @value = v; this
+    getValue: -> @value
+  new Builder().setValue(42).getValue()
+  ''', 42
+
+# Bound methods
+test 'bound method', '''
+  class Counter
+    constructor: -> @count = 0
+    increment: => @count++
+  c = new Counter()
+  fn = c.increment
+  fn()
+  c.count
+  ''', 1
+
+# instanceof
+test 'instanceof check', '''
+  class Animal
+  a = new Animal()
+  a instanceof Animal
+  ''', true
+
+# Override method
+test 'override method', '''
+  class Animal
+    speak: -> 'sound'
+  class Dog extends Animal
+    speak: -> 'bark'
+  new Dog().speak()
+  ''', 'bark'
+
+# Constructor explicit return
+test 'constructor explicit return', '''
+  class A
+    constructor: ->
+      return {custom: 'object'}
+  new A().custom
+  ''', 'object'
+
+# Async method
+test 'async method', '''
+  class Async
+    getData: -> await Promise.resolve(42)
+  do ->
+    await new Async().getData()
+  ''', 42
+
+# Four-level inheritance
+test 'four-level inheritance', '''
+  class A
+    val: -> 'a'
+  class B extends A
+  class C extends B
+  class D extends C
+  new D().val()
+  ''', 'a'
+
+# ============================================================================
+# Meta Properties
+# ============================================================================
+
+# new.target (ES6 meta property)
+test "new.target in constructor", '''
+  class A
+    constructor: ->
+      @isNew = new.target?
+  (new A()).isNew
+  ''', true
+
+# ============================================================================
+# Soak Super Calls
+# ============================================================================
+
+test "soak super call", '''
+  class Parent
+    method: (x) -> x * 2
+  class Child extends Parent
+    method: (x) -> super?(x)
+  new Child().method(5)
+  ''', 10
+
+# ============================================================================
+# Stats for CODEGEN.md
+# ============================================================================
+# Node types: class, super, ?super, new.target
+# Tests: 23 total (23 passing, 0 failing)
+# Coverage: ES6 classes, inheritance, super calls, static methods, bound methods, @ params, soak super, new.target

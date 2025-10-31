@@ -1,0 +1,795 @@
+# ==============================================================================
+# Solar Syntax - Data-Oriented Grammar for CoffeeScript
+# ==============================================================================
+
+o = (pattern, action, options) ->
+  pattern = pattern.trim().replace /\s{2,}/g, ' '
+  [pattern, action ? 1, options]
+
+mode = 'sexp'
+
+grammar =
+
+  # The **Root** is the top-level node in the syntax tree. All parsing ends here.
+  Root: [
+    o ''    , '["program"]'
+    o 'Body', '["program", ...1]'
+  ]
+
+  # Any list of statements and expressions, separated by line breaks or semicolons.
+  Body: [
+    o 'Line'                , '[1]'
+    o 'Body TERMINATOR Line', '[...1, 3]'
+    o 'Body TERMINATOR'
+  ]
+
+  # Line is just a pass-through (default action returns the first token)
+  Line: [
+    o 'Expression'
+    o 'ExpressionLine'
+    o 'Statement'
+  ]
+
+  # Pure statements which cannot be expressions.
+  Statement: [
+    o 'Return'
+    o 'STATEMENT'  # Statements like break, continue, debugger
+    o 'Import'
+    o 'Export'
+  ]
+
+  # All the different types of expressions in our language. The basic unit of
+  # CoffeeScript is the **Expression** -- everything that can be an expression
+  # is one. Blocks serve as the building blocks of many other rules, making
+  # them somewhat circular.
+  Expression: [
+    o 'Value'
+    o 'Code'
+    o 'Operation'
+    o 'Assign'
+    o 'If'
+    o 'Try'
+    o 'While'
+    o 'For'
+    o 'Switch'
+    o 'Class'
+    o 'Throw'
+    o 'Yield'
+    o 'Def'
+  ]
+
+  # Def functions (Rip-specific syntax)
+  Def: [
+    o 'DEF Identifier CALL_START ParamList CALL_END Block', '["def", 2, 4, 6]'
+    o 'DEF Identifier Block'                              , '["def", 2, [], 3]'  # No params
+  ]
+
+  # Expressions which are written in single line and would otherwise require being
+  # wrapped in braces: E.g `a = b if do -> f a is 1`, `if f (a) -> a*2 then ...`,
+  # `for x in do (obj) -> f obj when x > 8 then f x`
+  ExpressionLine: [
+    o 'CodeLine'
+    o 'OperationLine'
+  ]
+
+  # Yield expressions (for generators)
+  Yield: [
+    o 'YIELD'                      , '["yield"]'
+    o 'YIELD Expression'           , '["yield", 2]'
+    o 'YIELD INDENT Object OUTDENT', '["yield", 3]'
+    o 'YIELD FROM Expression'      , '["yield-from", 3]'
+  ]
+
+  # An indented block of expressions. Note that the rewriter
+  # will convert some postfix forms into blocks for us, by adjusting the
+  # token stream.
+  Block: [
+    o 'INDENT OUTDENT'     , '["block"]'
+    o 'INDENT Body OUTDENT', '["block", ...2]'
+  ]
+
+  # Identifier - just return the token value (e.g., "console", "x")
+  Identifier: [
+    o 'IDENTIFIER'
+  ]
+
+  # Property - return the property name (e.g., "log", "name")
+  Property: [
+    o 'PROPERTY'
+  ]
+
+  # Alphanumerics - numbers and strings (pass through)
+  AlphaNumeric: [
+    o 'NUMBER'
+    o 'String'
+  ]
+
+  # String literals
+  String: [
+    o 'STRING'
+    o 'STRING_START Interpolations STRING_END', '["str", ...2]'
+  ]
+
+  # Interpolations accumulate parts of template strings
+  Interpolations: [
+    o 'InterpolationChunk'               , '[1]'
+    o 'Interpolations InterpolationChunk', '[...1, 2]'
+  ]
+
+  # Each chunk is either a string part or an interpolated expression
+  InterpolationChunk: [
+    o 'INTERPOLATION_START Body INTERPOLATION_END'               , 2
+    o 'INTERPOLATION_START INDENT Body OUTDENT INTERPOLATION_END', 3
+    o 'INTERPOLATION_START INTERPOLATION_END'                    , '""'
+    o 'String'
+  ]
+
+  # Regular expressions
+  Regex: [
+    o 'REGEX'  # Pass through regex literal
+    o 'REGEX_START Invocation REGEX_END', '["regex", 2]'
+  ]
+
+  # Regex with optional capture index (for regex indexing feature)
+  RegexWithIndex: [
+    o 'Regex , Expression', '["regex-index", 1, 3]'     # x[/pattern/, n] - with capture
+    o 'Regex'             , '["regex-index", 1, null]'  # x[/pattern/] - no capture
+  ]
+
+  # All immediate values - numbers, strings, booleans, etc.
+  Literal: [
+    o 'AlphaNumeric'
+    o 'JS'        # Embedded JavaScript (backticks)
+    o 'Regex'
+    o 'UNDEFINED' , '"undefined"'
+    o 'NULL'      , '"null"'
+    o 'BOOL'      # true/false pass through
+    o 'INFINITY'  # Infinity passes through
+    o 'NAN'       # NaN passes through
+  ]
+
+  # Assignment: variable = value
+  Assign: [
+    o 'Assignable = Expression'               , '["=", 1, 3]'
+    o 'Assignable = TERMINATOR Expression'    , '["=", 1, 4]'
+    o 'Assignable = INDENT Expression OUTDENT', '["=", 1, 4]'
+  ]
+
+  # Assignment when it happens within an object literal. The difference from
+  # the ordinary **Assign** is that these allow numbers and strings as keys.
+  # Returns [key, value] pairs for building object literals
+  AssignObj: [
+    o 'ObjAssignable'                                  , '[1, 1, null]'  # Property shorthand: {x} → [x, x, null]
+    o 'ObjRestValue'                                                     # Rest properties: {...rest}
+    o 'ObjAssignable : Expression'                     , '[1, 3, ":"]'   # Property: {a: 5}
+    o 'ObjAssignable : INDENT Expression OUTDENT'      , '[1, 4, ":"]'   # Property (indented)
+    o 'SimpleObjAssignable = Expression'               , '[1, 3, "="]'   # Default: {a = 5}
+    o 'SimpleObjAssignable = INDENT Expression OUTDENT', '[1, 4, "="]'   # Default (indented)
+  ]
+
+  SimpleObjAssignable: [
+    o 'Identifier'
+    o 'Property'
+    o 'ThisProperty'
+  ]
+
+  ObjAssignable: [
+    o 'SimpleObjAssignable'
+    o '[ Expression ]'  , '["computed", 2]'  # Computed property name
+    o '@ [ Expression ]', '["[]", "this", 3]'
+    o 'AlphaNumeric'
+  ]
+
+  # Object literal spread/rest properties - ES6 prefix only
+  ObjRestValue: [
+    o '... SimpleObjAssignable', '["...", 2]'  # ES6: {...rest}
+    o '... ObjSpreadExpr'      , '["...", 2]'  # ES6: {...obj}
+  ]
+
+  # Object spread expressions with accessors
+  # Merged ObjSpreadIdentifier into ObjSpreadExpr to eliminate duplication
+  ObjSpreadExpr: [
+    # Base cases
+    o 'SimpleObjAssignable'
+    o 'Object'
+    o 'Parenthetical'
+    o 'Super'
+    o 'This'
+    o 'SUPER OptFuncExist Arguments'              , '["super", ...3]'
+    o 'DYNAMIC_IMPORT Arguments'                  , '["import", ...2]'
+    o 'SimpleObjAssignable OptFuncExist Arguments', '[1, ...3]'
+    o 'ObjSpreadExpr OptFuncExist Arguments'      , '[1, ...3]'
+    # Recursive accessors (handles both base and chained cases)
+    o 'ObjSpreadExpr . Property'          , '[".", 1, 3]'
+    o 'ObjSpreadExpr ?. Property'         , '["?.", 1, 3]'
+    o 'ObjSpreadExpr :: Property'         , '["::", 1, 3]'
+    o 'ObjSpreadExpr ?:: Property'        , '["?::", 1, 3]'
+    o 'ObjSpreadExpr ::'                  , '["::", 1, "prototype"]'
+    o 'ObjSpreadExpr ?::'                 , '["?::", 1, "prototype"]'
+    o 'ObjSpreadExpr INDEX_START Expression INDEX_END'                        , '["[]", 1, 3]'
+    o 'ObjSpreadExpr INDEX_START INDENT Expression OUTDENT INDEX_END'         , '["[]", 1, 4]'
+    o 'ObjSpreadExpr INDEX_SOAK INDEX_START Expression INDEX_END'             , '["?[]", 1, 4]'
+    o 'ObjSpreadExpr INDEX_SOAK INDEX_START INDENT Expression OUTDENT INDEX_END', '["?[]", 1, 5]'
+  ]
+
+  # Return statement
+  Return: [
+    o 'RETURN Expression'           , '["return", 2]'
+    o 'RETURN INDENT Object OUTDENT', '["return", 3]'
+    o 'RETURN'                      , '["return"]'
+  ]
+
+  # Arrow functions: (params) -> body or (params) => body
+  Code: [
+    o 'PARAM_START ParamList PARAM_END FuncGlyph Block', '[4, 2, 5]'  # [arrow, params, body]
+    o 'FuncGlyph Block'                                , '[1, [], 2]'
+  ]
+
+  # Single-line arrow functions
+  CodeLine: [
+    o 'PARAM_START ParamList PARAM_END FuncGlyph Line', '[4, 2, 5]'
+    o 'FuncGlyph Line'                                , '[1, [], 2]'
+  ]
+
+  # Function arrow type: -> or =>
+  FuncGlyph: [
+    o '->'  # Returns "->"
+    o '=>'  # Returns "=>"
+  ]
+
+  # An optional, trailing comma.
+  OptComma: [
+    o ''
+    o ','
+  ]
+
+  # Parameter list accumulation
+  ParamList: [
+    o ''                                                    , '[]'
+    o 'Param'                                               , '[1]'
+    o 'ParamList , Param'                                   , '[...1, 3]'
+    o 'ParamList OptComma TERMINATOR Param'                 , '[...1, 4]'
+    o 'ParamList OptComma INDENT ParamList OptComma OUTDENT', '[...1, ...4]'
+  ]
+
+  # Individual parameters (can be identifier, destructuring, rest, or default)
+  Param: [
+    o 'ParamVar'              # Simple param
+    o '... ParamVar'         , '["rest", 2]'  # ES6 prefix rest only: ...name
+    o 'ParamVar = Expression', '["default", 1, 3]'  # Default param
+    o '...'                  , '["expansion"]'  # Expansion
+  ]
+
+  # Function Parameters
+  ParamVar: [
+    o 'Identifier'
+    o 'ThisProperty'
+    o 'Array'   # Array destructuring
+    o 'Object'  # Object destructuring
+  ]
+
+  # Spread operator (in calls and arrays) - ES6 prefix only
+  Splat: [
+    o '... Expression', '["...", 2]'  # ES6 prefix: ...expr
+  ]
+
+  # SimpleAssignable: things that can be assigned to
+  # Inlined accessor patterns for s-expression building
+  SimpleAssignable: [
+    o 'Identifier'
+    o 'ThisProperty'
+    # Value with property access
+    o 'Value . Property'    , '[".", 1, 3]'
+    o 'Value ?. Property'   , '["?.", 1, 3]'
+    o 'Value :: Property'   , '["::", 1, 3]'
+    o 'Value ?:: Property'  , '["?::", 1, 3]'
+    o 'Value ::'            , '["::", 1, "prototype"]'
+    o 'Value ?::'           , '["?::", 1, "prototype"]'
+    # Regular indexing
+    o 'Value INDEX_START Expression INDEX_END'                        , '["[]", 1, 3]'
+    o 'Value INDEX_START INDENT Expression OUTDENT INDEX_END'         , '["[]", 1, 4]'
+    o 'Value INDEX_START Slice INDEX_END'                             , '["[]", 1, 3]'
+    o 'Value INDEX_START INDENT Slice OUTDENT INDEX_END'              , '["[]", 1, 4]'
+    # Regex indexing with capture group
+    o 'Value INDEX_START RegexWithIndex INDEX_END'                    , '[$3[0], $1, ...$3.slice(1)]'
+    # CoffeeScript soak indexing (?[)
+    o 'Value INDEX_SOAK INDEX_START Expression INDEX_END'             , '["?[]", 1, 4]'
+    o 'Value INDEX_SOAK INDEX_START INDENT Expression OUTDENT INDEX_END', '["?[]", 1, 5]'
+    o 'Value INDEX_SOAK INDEX_START Slice INDEX_END'                  , '["?[]", 1, 4]'
+    o 'Value INDEX_SOAK INDEX_START INDENT Slice OUTDENT INDEX_END'   , '["?[]", 1, 5]'
+    # ES6 optional indexing (?.[)
+    o 'Value ES6_OPTIONAL_INDEX INDEX_START Expression INDEX_END'             , '["optindex", 1, 4]'
+    o 'Value ES6_OPTIONAL_INDEX INDEX_START INDENT Expression OUTDENT INDEX_END', '["optindex", 1, 5]'
+    # Code (arrow function) with accessor
+    o 'Code . Property'     , '[".", 1, 3]'
+    o 'Code ?. Property'    , '["?.", 1, 3]'
+    o 'Code :: Property'    , '["::", 1, 3]'
+    o 'Code ?:: Property'   , '["?::", 1, 3]'
+    o 'Code ::'             , '["::", 1, "prototype"]'
+    o 'Code ?::'            , '["?::", 1, "prototype"]'
+    o 'Code INDEX_START Expression INDEX_END'                        , '["[]", 1, 3]'
+    o 'Code INDEX_START INDENT Expression OUTDENT INDEX_END'         , '["[]", 1, 4]'
+    o 'Code INDEX_SOAK INDEX_START Expression INDEX_END'             , '["?[]", 1, 4]'
+    o 'Code INDEX_SOAK INDEX_START INDENT Expression OUTDENT INDEX_END', '["?[]", 1, 5]'
+  ]
+
+  # Assignable: can be identifier, array pattern, or object pattern
+  Assignable: [
+    o 'SimpleAssignable'
+    o 'Array'   # Array destructuring pattern
+    o 'Object'  # Object destructuring pattern
+  ]
+
+  # Value: expressions that produce values (all pass through)
+  Value: [
+    o 'Assignable'
+    o 'Literal'
+    o 'Parenthetical'
+    o 'Range'
+    o 'Invocation'
+    o 'DoIife'
+    o 'This'
+    o 'Super'
+    o 'MetaProperty'
+  ]
+
+  # Super property access and calls
+  Super: [
+    o 'SUPER . Property'                                     , '[".", "super", 3]'
+    o 'SUPER INDEX_START Expression INDEX_END'               , '["[]", "super", 3]'
+    o 'SUPER INDEX_START INDENT Expression OUTDENT INDEX_END', '["[]", "super", 4]'
+  ]
+
+  # Meta-properties: new.target or import.meta
+  MetaProperty: [
+    o 'NEW_TARGET . Property'  , '[".", "new", 3]'
+    o 'IMPORT_META . Property' , '[".", "import", 3]'
+  ]
+
+  # Object literals
+  Object: [
+    # Object comprehensions - must come before regular objects
+    o '{ ObjAssignable : Expression FOR ForVariables FOROF Expression OptComma }'                , '["object-comprehension", 2, 4, [["for-of", 6, 8, false]], []]'
+    o '{ ObjAssignable : Expression FOR ForVariables FOROF Expression WHEN Expression OptComma }', '["object-comprehension", 2, 4, [["for-of", 6, 8, false]], [10]]'
+    o '{ ObjAssignable : Expression FOR OWN ForVariables FOROF Expression OptComma }'            , '["object-comprehension", 2, 4, [["for-of", 7, 9, true]], []]'
+    o '{ ObjAssignable : Expression FOR OWN ForVariables FOROF Expression WHEN Expression OptComma }', '["object-comprehension", 2, 4, [["for-of", 7, 9, true]], [11]]'
+    # Regular object literals
+    o '{ AssignList OptComma }', '["object", ...2]'
+  ]
+
+  # Object property list accumulation
+  AssignList: [
+    o ''                                                      , '[]'
+    o 'AssignObj'                                             , '[1]'
+    o 'AssignList , AssignObj'                                , '[...1, 3]'
+    o 'AssignList OptComma TERMINATOR AssignObj'              , '[...1, 4]'
+    o 'AssignList OptComma INDENT AssignList OptComma OUTDENT', '[...1, ...4]'
+  ]
+
+  # Class definitions
+  Class: [
+    o 'CLASS'                                          , '["class", null, null]'
+    o 'CLASS Block'                                    , '["class", null, null, 2]'
+    o 'CLASS EXTENDS Expression'                       , '["class", null, 3]'
+    o 'CLASS EXTENDS Expression Block'                 , '["class", null, 3, 4]'
+    o 'CLASS SimpleAssignable'                         , '["class", 2, null]'
+    o 'CLASS SimpleAssignable Block'                   , '["class", 2, null, 3]'
+    o 'CLASS SimpleAssignable EXTENDS Expression'      , '["class", 2, 4]'
+    o 'CLASS SimpleAssignable EXTENDS Expression Block', '["class", 2, 4, 5]'
+  ]
+
+  # Import statements - simplified for Rip
+  Import: [
+    o 'IMPORT String'                                                         , '["import", "{}", 2]'
+    o 'IMPORT ImportDefaultSpecifier FROM String'                             , '["import", 2, 4]'
+    o 'IMPORT ImportNamespaceSpecifier FROM String'                           , '["import", 2, 4]'
+    o 'IMPORT { } FROM String'                                                , '["import", "{}", 5]'
+    o 'IMPORT { ImportSpecifierList OptComma } FROM String'                   , '["import", 3, 7]'
+    o 'IMPORT ImportDefaultSpecifier , ImportNamespaceSpecifier FROM String'  , '["import", [2, 4], 6]'
+    o 'IMPORT ImportDefaultSpecifier , { ImportSpecifierList OptComma } FROM String', '["import", [2, 5], 9]'
+  ]
+
+  ImportSpecifierList: [
+    o 'ImportSpecifier'                                                         , '[1]'
+    o 'ImportSpecifierList , ImportSpecifier'                                   , '[...1, 3]'
+    o 'ImportSpecifierList OptComma TERMINATOR ImportSpecifier'                 , '[...1, 4]'
+    o 'INDENT ImportSpecifierList OptComma OUTDENT'                             , 2
+    o 'ImportSpecifierList OptComma INDENT ImportSpecifierList OptComma OUTDENT', '[...1, ...4]'
+  ]
+
+  ImportSpecifier: [
+    o 'Identifier'               # Simple import
+    o 'Identifier AS Identifier', '[1, 3]'  # Aliased import
+    o 'DEFAULT'                  # Default import
+    o 'DEFAULT AS Identifier'    , '[1, 3]'  # Aliased default
+  ]
+
+  ImportDefaultSpecifier: [
+    o 'Identifier'
+  ]
+
+  ImportNamespaceSpecifier: [
+    o 'IMPORT_ALL AS Identifier', '["*", 3]'
+  ]
+
+  # Export statements
+  Export: [
+    o 'EXPORT { }'                                              , '["export", "{}"]'
+    o 'EXPORT { ExportSpecifierList OptComma }'                 , '["export", 3]'
+    o 'EXPORT Class'                                            , '["export", 2]'
+    o 'EXPORT Def'                                              , '["export", 2]'
+    o 'EXPORT Identifier = Expression'                          , '["export", ["=", 2, 4]]'
+    o 'EXPORT Identifier = TERMINATOR Expression'               , '["export", ["=", 2, 5]]'
+    o 'EXPORT Identifier = INDENT Expression OUTDENT'           , '["export", ["=", 2, 5]]'
+    o 'EXPORT DEFAULT Expression'                               , '["export-default", 3]'
+    o 'EXPORT DEFAULT INDENT Object OUTDENT'                    , '["export-default", 4]'
+    o 'EXPORT EXPORT_ALL FROM String'                           , '["export-all", 4]'
+    o 'EXPORT { } FROM String'                                  , '["export-from", "{}", 5]'
+    o 'EXPORT { ExportSpecifierList OptComma } FROM String'     , '["export-from", 3, 7]'
+  ]
+
+  ExportSpecifierList: [
+    o 'ExportSpecifier'                                                         , '[1]'
+    o 'ExportSpecifierList , ExportSpecifier'                                   , '[...1, 3]'
+    o 'ExportSpecifierList OptComma TERMINATOR ExportSpecifier'                 , '[...1, 4]'
+    o 'INDENT ExportSpecifierList OptComma OUTDENT'                             , 2
+    o 'ExportSpecifierList OptComma INDENT ExportSpecifierList OptComma OUTDENT', '[...1, ...4]'
+  ]
+
+  ExportSpecifier: [
+    o 'Identifier'               # Simple export
+    o 'Identifier AS Identifier', '[1, 3]'  # Aliased export
+    o 'Identifier AS DEFAULT'   , '[1, 3]'  # Export as default
+    o 'DEFAULT'                  # Export default keyword
+    o 'DEFAULT AS Identifier'   , '[1, 3]'
+  ]
+
+  # Function calls and invocations
+  Invocation: [
+    o 'Value OptFuncExist String'   , '["tagged-template", 1, 3]'  # Tagged template literal
+    o 'Value OptFuncExist Arguments', '2 ? ["?call", 1, ...3] : [1, ...3]'  # Regular/soak call
+    o 'Value ES6_OPTIONAL_CALL Arguments', '["optcall", 1, ...3]'  # ES6 optional call
+    o 'SUPER OptFuncExist Arguments', '2 ? ["?super", ...3] : ["super", ...3]'  # Super call
+    o 'DYNAMIC_IMPORT Arguments'    , '["import", ...2]'  # Dynamic import
+  ]
+
+  # Optional existence check (? operator for function calls)
+  OptFuncExist: [
+    o ''           , 'null'    # No soak
+    o 'FUNC_EXIST' , 'true'    # Has soak - mark as soak call
+  ]
+
+  # Function arguments
+  Arguments: [
+    o 'CALL_START CALL_END'                 , '[]'
+    o 'CALL_START ArgList OptComma CALL_END', 2
+  ]
+
+  # Reference to 'this'
+  This: [
+    o 'THIS', '"this"'
+    o '@'   , '"this"'
+  ]
+
+  # Reference to this.property
+  ThisProperty: [
+    o '@ Property', '[".", "this", 2]'
+  ]
+
+  # Array literals
+  Array: [
+    o '[ ]'                           , '["array"]'
+    o '[ Elisions ]'                  , '["array", ...2]'
+    o '[ ArgElisionList OptElisions ]', '["array", ...2, ...3]'
+  ]
+
+  # Range operators
+  RangeDots: [
+    o '..'  , '".."'   # Inclusive
+    o '...', '"..."'  # Exclusive
+  ]
+
+  # Range literals (CoffeeScript-style in arrays)
+  Range: [
+    o '[ Expression RangeDots Expression ]', '[3, 2, 4]'  # [from..to]
+  ]
+
+  # Array slices
+  Slice: [
+    o 'Expression RangeDots Expression', '[2, 1, 3]'     # expr..expr
+    o 'Expression RangeDots'           , '[2, 1, null]'  # expr..
+    o 'RangeDots Expression'           , '[1, null, 2]'  # ..expr
+    o 'RangeDots'                      , '[1, null, null]'  # ..
+  ]
+
+  # Argument list for function calls
+  ArgList: [
+    o 'Arg'                                             , '[1]'
+    o 'ArgList , Arg'                                   , '[...1, 3]'
+    o 'ArgList OptComma TERMINATOR Arg'                 , '[...1, 4]'
+    o 'INDENT ArgList OptComma OUTDENT'                 , 2
+    o 'ArgList OptComma INDENT ArgList OptComma OUTDENT', '[...1, ...4]'
+  ]
+
+  # Individual argument
+  Arg: [
+    o 'Expression'
+    o 'ExpressionLine'
+    o 'Splat'
+    o '...', '"..."'  # Expansion marker
+  ]
+
+  # Array elision lists (for sparse arrays with holes)
+  ArgElisionList: [
+    o 'ArgElision'
+    o 'ArgElisionList , ArgElision'                                         , '[...1, ...3]'
+    o 'ArgElisionList OptComma TERMINATOR ArgElision'                       , '[...1, ...4]'
+    o 'INDENT ArgElisionList OptElisions OUTDENT'                           , '[...2, ...3]'
+    o 'ArgElisionList OptElisions INDENT ArgElisionList OptElisions OUTDENT', '[...1, ...2, ...4, ...5]'
+  ]
+
+  ArgElision: [
+    o 'Arg'         , '[1]'
+    o 'Elisions Arg', '[...1, 2]'
+  ]
+
+  OptElisions: [
+    o 'OptComma'  , '[]'
+    o ', Elisions', '[...2]'
+  ]
+
+  Elisions: [
+    o 'Elision'         , '[1]'
+    o 'Elisions Elision', '[...1, 2]'
+  ]
+
+  Elision: [
+    o ','                 , 'null'  # Hole in array
+    o 'Elision TERMINATOR'
+  ]
+
+  # Simple argument lists for switch statements
+  SimpleArgs: [
+    o 'Expression'
+    o 'SimpleArgs , Expression', 'Array.isArray($1) ? [...$1, $3] : [$1, $3]' # Prevent splitting Strings into chars
+  ]
+
+  # Try/catch/finally exception handling
+  Try: [
+    o 'TRY Block'                    , '["try", 2]'
+    o 'TRY Block Catch'              , '["try", 2, 3]'  # Will expand Catch
+    o 'TRY Block FINALLY Block'      , '["try", 2, 4]'
+    o 'TRY Block Catch FINALLY Block', '["try", 2, 3, 5]'  # Will expand Catch
+  ]
+
+  # Catch clause
+  Catch: [
+    o 'CATCH Identifier Block', '[2, 3]'   # [param, block]
+    o 'CATCH Object Block'    , '[2, 3]'   # [pattern, block]
+    o 'CATCH Block'           , '[null, 2]'  # [null, block] - no param
+  ]
+
+  # Throw statement
+  Throw: [
+    o 'THROW Expression'           , '["throw", 2]'
+    o 'THROW INDENT Object OUTDENT', '["throw", 3]'
+  ]
+
+  # Parenthesized expressions - unwrap single-element Bodies
+  Parenthetical: [
+    o '( Body )'               , '$2.length === 1 ? $2[0] : $2'
+    o '( INDENT Body OUTDENT )', '$3.length === 1 ? $3[0] : $3'
+  ]
+
+  # While loop conditions (consolidated)
+  WhileSource: [
+    o 'WHILE Expression'                , '["while", 2]'
+    o 'WHILE Expression WHEN Expression', '["while", 2, 4]'
+    o 'UNTIL Expression'                , '["until", 2]'
+    o 'UNTIL Expression WHEN Expression', '["until", 2, 4]'
+  ]
+
+  # While loops - combine source + block
+  While: [
+    o 'WhileSource Block'      , '$1.length === 2 ? [$1[0], $1[1], $2] : [$1[0], $1[1], $1[2], $2]'
+    o 'Statement WhileSource'  , '$2.length === 2 ? [$2[0], $2[1], [$1]] : [$2[0], $2[1], $2[2], [$1]]'
+    o 'Expression WhileSource' , '$2.length === 2 ? [$2[0], $2[1], [$1]] : [$2[0], $2[1], $2[2], [$1]]'
+    o 'Loop'
+  ]
+
+  # Infinite loop
+  Loop: [
+    o 'LOOP Block'     , '["loop", 2]'
+    o 'LOOP Expression', '["loop", [2]]'
+  ]
+
+  # For loops - build complete s-expressions directly
+  # Structure: ["for-in", vars, iterable, step, guard, body]
+  # Structure: ["for-of", vars, object, guard, body]
+  For: [
+    # Block form (prefix - FOR comes first)
+    o 'FOR ForVariables FORIN Expression Block'              , '["for-in", 2, 4, null, null, 5]'
+    o 'FOR ForVariables FORIN Expression WHEN Expression Block', '["for-in", 2, 4, null, 6, 7]'
+    o 'FOR ForVariables FORIN Expression BY Expression Block', '["for-in", 2, 4, 6, null, 7]'
+    o 'FOR ForVariables FORIN Expression WHEN Expression BY Expression Block', '["for-in", 2, 4, 8, 6, 9]'
+    o 'FOR ForVariables FORIN Expression BY Expression WHEN Expression Block', '["for-in", 2, 4, 6, 8, 9]'
+    o 'FOR ForVariables FOROF Expression Block'              , '["for-of", 2, 4, false, null, 5]'
+    o 'FOR ForVariables FOROF Expression WHEN Expression Block', '["for-of", 2, 4, false, 6, 7]'
+    o 'FOR OWN ForVariables FOROF Expression Block'          , '["for-of", 3, 5, true, null, 6]'
+    o 'FOR OWN ForVariables FOROF Expression WHEN Expression Block', '["for-of", 3, 5, true, 7, 8]'
+    o 'FOR ForVariables FORFROM Expression Block'            , '["for-from", 2, 4, false, null, 5]'
+    o 'FOR ForVariables FORFROM Expression WHEN Expression Block', '["for-from", 2, 4, false, 6, 7]'
+    o 'FOR AWAIT ForVariables FORFROM Expression Block'      , '["for-from", 3, 5, true, null, 6]'
+    o 'FOR AWAIT ForVariables FORFROM Expression WHEN Expression Block', '["for-from", 3, 5, true, 7, 8]'
+    o 'FOR Range Block'               , '["for-in", [], 2, null, null, 3]'
+    o 'FOR Range BY Expression Block' , '["for-in", [], 2, 4, null, 5]'
+
+    # Postfix form / Comprehensions (expression comes BEFORE for)
+    # Note: These generate comprehensions (collect results into array)
+    # CoffeeScript handles this contextually, but for s-expressions we always collect
+    # The overhead is minimal and results can be discarded if unused
+    o 'Expression FOR ForVariables FORIN Expression'                , '["comprehension", 1, [["for-in", 3, 5, null]], []]'
+    o 'Expression FOR ForVariables FORIN Expression WHEN Expression', '["comprehension", 1, [["for-in", 3, 5, null]], [7]]'
+    o 'Expression FOR ForVariables FOROF Expression'                , '["comprehension", 1, [["for-of", 3, 5, false]], []]'
+    o 'Expression FOR ForVariables FOROF Expression WHEN Expression', '["comprehension", 1, [["for-of", 3, 5, false]], [7]]'
+    o 'Expression FOR OWN ForVariables FOROF Expression'            , '["comprehension", 1, [["for-of", 4, 6, true]], []]'
+    o 'Expression FOR OWN ForVariables FOROF Expression WHEN Expression', '["comprehension", 1, [["for-of", 4, 6, true]], [8]]'
+    o 'Expression FOR ForVariables FORFROM Expression'              , '["comprehension", 1, [["for-from", 3, 5, false, null]], []]'
+    o 'Expression FOR ForVariables FORFROM Expression WHEN Expression', '["comprehension", 1, [["for-from", 3, 5, false, null]], [7]]'
+    o 'Expression FOR AWAIT ForVariables FORFROM Expression'        , '["comprehension", 1, [["for-from", 4, 6, true, null]], []]'
+    o 'Expression FOR AWAIT ForVariables FORFROM Expression WHEN Expression', '["comprehension", 1, [["for-from", 4, 6, true, null]], [8]]'
+  ]
+
+  ForValue: [
+    o 'Identifier'
+    o 'ThisProperty'
+    o 'Array'   # Destructuring
+    o 'Object'  # Destructuring
+  ]
+
+  ForVariables: [
+    o 'ForValue'           , '[1]'
+    o 'ForValue , ForValue', '[1, 3]'
+  ]
+
+  # Switch statements
+  Switch: [
+    o 'SWITCH Expression INDENT Whens OUTDENT'            , '["switch", 2, 4, null]'
+    o 'SWITCH Expression INDENT Whens ELSE Block OUTDENT' , '["switch", 2, 4, 6]'
+    o 'SWITCH INDENT Whens OUTDENT'                       , '["switch", null, 3, null]'
+    o 'SWITCH INDENT Whens ELSE Block OUTDENT'            , '["switch", null, 3, 5]'
+  ]
+
+  # When clauses for switch (accumulate into array)
+  Whens: [
+    o 'When'      , '[1]'
+    o 'Whens When', '[...1, 2]'
+  ]
+
+  # Individual when clause
+  When: [
+    o 'LEADING_WHEN SimpleArgs Block'           , '["when", 2, 3]'
+    o 'LEADING_WHEN SimpleArgs Block TERMINATOR', '["when", 2, 3]'
+  ]
+
+  # If statements - combine condition, then, and else branches
+  IfBlock: [
+    o 'IF Expression Block'              , '["if", 2, 3]'
+    o 'IfBlock ELSE IF Expression Block' , '$1.length === 3 ? ["if", $1[1], $1[2], ["if", $4, $5]] : [...$1, ["if", $4, $5]]'
+  ]
+
+  UnlessBlock: [
+    o 'UNLESS Expression Block'              , '["unless", 2, 3]'
+    o 'UNLESS Expression Block ELSE Block'   , '["if", ["!", 2], 3, 5]'  # unless with else = if not
+  ]
+
+  If: [
+    o 'IfBlock'
+    o 'IfBlock ELSE Block'            , '$1.length === 3 ? ["if", $1[1], $1[2], $3] : [...$1, $3]'
+    o 'UnlessBlock'
+    o 'Statement POST_IF Expression'  , '["if", 3, [1]]'  # Postfix
+    o 'Expression POST_IF Expression' , '["if", 3, [1]]'  # Postfix
+    o 'Statement POST_UNLESS Expression'  , '["unless", 3, [1]]'  # Postfix unless
+    o 'Expression POST_UNLESS Expression' , '["unless", 3, [1]]'  # Postfix unless
+  ]
+
+  # Arithmetic and logical operators, working on one or more operands.
+  # Here they are grouped by order of precedence. The actual precedence rules
+  # are defined at the bottom of the page. It would be shorter if we could
+  # combine most of these rules into a single generic *Operand OpSymbol Operand*
+  # -type rule, but in order to make the precedence binding possible, separate
+  # rules are necessary.
+  OperationLine: [
+    o 'UNARY ExpressionLine', '[1, 2]'
+    o 'DO ExpressionLine'   , '["do-iife", 2]'
+    o 'DO_IIFE CodeLine'    , '["do-iife", 2]'
+  ]
+
+  # All operations - unary and binary
+  Operation: [
+    # Unary operators
+    o 'UNARY Expression'      , '[1, 2]'  # not, typeof, delete, new
+    o 'DO Expression'         , '["do-iife", 2]'
+    o 'UNARY_MATH Expression' , '[1, 2]'  # !, ~
+    o '- Expression'          , '["-", 2]', prec: 'UNARY_MATH'  # Unary minus
+    o '+ Expression'          , '["+", 2]', prec: 'UNARY_MATH'  # Unary plus
+
+    # Await
+    o 'AWAIT Expression'            , '["await", 2]'
+    o 'AWAIT INDENT Object OUTDENT' , '["await", 3]'
+
+    # Increment/decrement (with prefix/postfix flag)
+    o '-- SimpleAssignable', '["--", 2, false]'  # Prefix: --x
+    o '++ SimpleAssignable', '["++", 2, false]'  # Prefix: ++x
+    o 'SimpleAssignable --', '["--", 1, true]'   # Postfix: x--
+    o 'SimpleAssignable ++', '["++", 1, true]'   # Postfix: x++
+
+    # Existence check
+    o 'Expression ?', '["?", 1]'
+
+    # Binary operators
+    o 'Expression + Expression'        , '["+", 1, 3]'
+    o 'Expression - Expression'        , '["-", 1, 3]'
+    o 'Expression MATH Expression'     , '[2, 1, 3]'  # *, /, %, //, %%
+    o 'Expression ** Expression'       , '["**", 1, 3]'
+    o 'Expression SHIFT Expression'    , '[2, 1, 3]'  # <<, >>, >>>
+    o 'Expression COMPARE Expression'  , '[2, 1, 3]'  # ==, !=, <, >, <=, >= (== and != convert to === and !== in codegen)
+    o 'Expression & Expression'        , '["&", 1, 3]'
+    o 'Expression ^ Expression'        , '["^", 1, 3]'
+    o 'Expression | Expression'        , '["|", 1, 3]'
+    o 'Expression && Expression'       , '["&&", 1, 3]'
+    o 'Expression || Expression'       , '["||", 1, 3]'
+    o 'Expression ?? Expression'       , '["??", 1, 3]'  # Nullish coalescing
+    o 'Expression RELATION Expression' , '[2, 1, 3]'  # in, of, instanceof
+
+    # Ternary operator (uses SPACE? token = ? with space before it)
+    o 'Expression SPACE? Expression : Expression', '["?:", 1, 3, 5]'
+
+    # Compound assignment operators
+    o 'SimpleAssignable COMPOUND_ASSIGN Expression'               , '[2, 1, 3]'  # +=, -=, ||=, etc.
+    o 'SimpleAssignable COMPOUND_ASSIGN INDENT Expression OUTDENT', '[2, 1, 4]'
+    o 'SimpleAssignable COMPOUND_ASSIGN TERMINATOR Expression'    , '[2, 1, 4]'
+  ]
+
+  # Do IIFE (immediately invoked function expression)
+  DoIife: [
+    o 'DO_IIFE Code', '["do-iife", 2]'
+  ]
+
+# Precedence here is high to low
+operators = """
+  right       DO_IIFE
+  left        . ?. :: ?::
+  left        CALL_START CALL_END
+  nonassoc    ++ --
+  left        ?
+  right       UNARY DO
+  right       AWAIT
+  right       **
+  right       UNARY_MATH
+  left        MATH
+  left        + -
+  left        SHIFT
+  left        RELATION
+  left        COMPARE
+  left        &
+  left        ^
+  left        |
+  left        &&
+  left        ||
+  right       SPACE?
+  nonassoc    INDENT OUTDENT
+  right       YIELD
+  right       = : COMPOUND_ASSIGN RETURN THROW EXTENDS
+  right       FORIN FOROF FORFROM BY WHEN
+  right       IF ELSE FOR WHILE UNTIL LOOP SUPER CLASS IMPORT EXPORT DYNAMIC_IMPORT
+  left        POST_IF
+""".trim().split('\n').reverse().map (line) -> line.trim().split /\s+/
+
+# Wrapping Up
+# -----------
+
+# Export the processed grammar and operators for the parser generator. Unlike
+# the original implementation, we no longer extract and pass tokens separately,
+# the parser generator can derive them automatically from the BNF grammar.
+export default {mode, grammar, operators}

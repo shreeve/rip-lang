@@ -1,0 +1,20 @@
+# Utility functions in pure Rip
+
+export def add(a, b)
+  a + b
+
+export def multiply(a, b)
+  a * b
+
+export def greet(name)
+  "Hello, ${name}!"
+
+export calculate = (x, y) =>
+  sum: x + y
+  product: x * y
+  average: (x + y) / 2
+
+export config = {
+  version: "1.0"
+  features: ["hoisting", "implicit-returns", "arrows"]
+}

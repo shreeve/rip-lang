@@ -1,0 +1,84 @@
+# Arrow Function Examples
+
+# =============================================================================
+# Basic Arrow Functions (=> binds 'this', -> does not)
+# =============================================================================
+
+# Simple arrows
+add = (a, b) => a + b
+square = (x) => x * x
+greet = (name) => "Hello, ${name}!"
+
+# Arrow functions in objects (methods!)
+math = {
+  add: (a, b) => a + b
+  subtract: (a, b) => a - b
+  multiply: (a, b) => a * b
+  divide: (a, b) => a / b
+}
+
+# Arrow functions as callbacks
+numbers = [1, 2, 3, 4, 5]
+doubled = numbers.map((x) => x * 2)
+evens = numbers.filter((x) => x % 2 == 0)
+sum = numbers.reduce((acc, x) => acc + x, 0)
+
+# Arrow functions with object methods
+users = [
+  {name: "Alice", age: 30}
+  {name: "Bob", age: 25}
+]
+
+names = users.map((u) => u.name)
+adults = users.filter((u) => u.age >= 18)
+
+# Composing arrows
+pipeline = {
+  transform: (data) => data.map((x) => x * 2)
+  filter: (data) => data.filter((x) => x > 5)
+  process: (data) => data.reduce((sum, x) => sum + x, 0)
+}
+
+# =============================================================================
+# Implicit Object Returns (CoffeeScript-style elegance!)
+# =============================================================================
+
+# Simple implicit object (no braces needed!)
+makePoint = (x, y) =>
+  x: x
+  y: y
+
+# With shorthand (use explicit braces)
+makePoint2 = (x, y) => {x, y}
+
+# Data transformation
+enrichUser = (user) =>
+  id: user.id
+  name: user.name
+  email: user.email
+  active: true
+  joined: Date.now()
+
+# Simple API methods
+api = {
+  getUser: (id) =>
+    id: id
+    name: "User ${id}"
+    timestamp: Date.now()
+
+  createResponse: (data, status) =>
+    data: data
+    status: status
+    success: status == 200
+}
+
+# Combined - shorthand + methods + nested
+def createUser(id, name, role)
+  {
+    id
+    name
+    role
+    active: true
+    created: Date.now()
+    greet: (msg) => "Hello, ${msg}!"
+  }

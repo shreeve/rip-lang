@@ -1,0 +1,12 @@
+# Fibonacci example in Rip
+# Whitespace-sensitive s-expression syntax
+# No let/const needed, no return needed!
+
+def fibonacci(n)
+  if n <= 1
+    n
+  else
+    fibonacci(n - 1) + fibonacci(n - 2)
+
+# Test it
+result = fibonacci(10)

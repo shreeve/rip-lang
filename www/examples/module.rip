@@ -1,0 +1,38 @@
+# Module example with imports and exports
+
+# Import from other modules
+import { readFile, writeFile } from "fs"
+import * as path from "path"
+
+# Export functions
+export def processFile(filename)
+  content = readFile(filename, "utf-8")
+  lines = content.split("\n")
+  lines.length
+
+# Export arrow functions
+export parseData = (data) => JSON.parse(data)
+export formatData = (obj) => JSON.stringify(obj, null, 2)
+
+# Export variables
+export config = {
+  timeout: 5000
+  retries: 3
+  handlers: [
+    {name: "error", fn: (e) => console.error(e)}
+    {name: "success", fn: (d) => console.log(d)}
+  ]
+}
+
+# Export with shorthand
+export def createResult(data, status, message)
+  {data, status, message, timestamp: Date.now()}
+
+# Default export
+export default {
+  process: processFile
+  parse: parseData
+  format: formatData
+  config
+}
+

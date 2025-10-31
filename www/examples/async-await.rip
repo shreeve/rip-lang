@@ -1,0 +1,59 @@
+# Async/Await with the "Dammit Operator" (!)
+# Clean, visual async syntax
+
+# Simple async function
+def loadUser(id)
+  user = Db.findOne!(id)
+  user
+
+# Multiple awaits (auto-detected as async!)
+def getUserProfile(id)
+  user = Db.getUser!(id)
+  posts = Db.getPosts!(user.id)
+  friends = Db.getFriends!(user.id)
+
+  {user, posts, friends}
+
+# No arguments - auto-calls!
+def refreshCache()
+  data = fetchLatest!
+  cache = getCache!
+  cache.set!(data)
+  data
+
+# Await in conditionals
+def checkStatus(id)
+  user = Db.getUser!(id)
+
+  if user.active
+    status = Api.getStatus!(user.id)
+    {user, status, active: true}
+  else
+    {user, active: false}
+
+# Arrow functions with await
+fetchAndProcess = (id) => Api.fetch!(id).then!(processData)
+
+# Await in object methods
+api = {
+  loadData: (key) =>
+    data: Cache.get!(key)
+    timestamp: Date.now()
+
+  saveData: (key, value) =>
+    result = Cache.set!(key, value)
+    success: result.ok
+}
+
+# Complex async flow
+def processUserData(userId)
+  user = Db.getUser!(userId)
+  settings = Db.getSettings!(userId)
+  activity = Api.getActivity!(userId)
+
+  {
+    user
+    settings
+    activity
+    fetchedAt: Date.now()
+  }

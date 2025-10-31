@@ -1,0 +1,36 @@
+# Ternary Operator Examples
+# Both ? : and if/then/else syntaxes supported!
+
+# Basic ternary
+def abs(x)
+  result = x < 0 ? (0 - x) : x
+  result
+
+# Nested ternary for classification
+def classify(n)
+  n > 0 ? "positive" : n < 0 ? "negative" : "zero"
+
+# Ternary in expressions
+def max(a, b)
+  a > b ? a : b
+
+# Ternary with objects
+def makePoint(x, y)
+  x > 0 && y > 0 ? {x: x, y: y, quadrant: 1} : {x: x, y: y, quadrant: 0}
+
+# CoffeeScript-style inline if/then/else
+def greeting(isMorning)
+  if isMorning then "Good morning!" else "Good evening!"
+
+def compare(a, b)
+  if a > b then "greater" else if a < b then "less" else "equal"
+
+# Real-world example: validation
+def validateAge(age)
+  message = age >= 18 ? "Adult" : age >= 13 ? "Teen" : "Child"
+  valid = age >= 0 && age <= 120
+  {
+    age: age
+    category: message
+    valid: valid ? "yes" : "no"
+  }

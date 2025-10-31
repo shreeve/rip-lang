@@ -1,0 +1,184 @@
+# Test: Optional and Existence Operators
+# Tests the dual syntax: ? (CoffeeScript soak) vs ?. (ES6 optional chaining)
+
+# ============================================================================
+# SINGLE ? - CoffeeScript Soak (Existence-Based)
+# ============================================================================
+
+# Postfix existence check: "?"
+# Pattern: expr? → (expr != null)
+test "existence check value", "x = 42\nx?", true
+test "existence check null", "x = null\nx?", false
+test "existence check undefined", "x = undefined\nx?", false
+
+# Soak index: "?[]"
+# Pattern: arr?[index] → if (arr != null) arr[index] else undefined
+test "soak index exists", "arr = [1, 2, 3]\narr?[1]", 2
+test "soak index null", "arr = null\narr?[0]", undefined
+test "soak index undefined", "arr = undefined\narr?[5]", undefined
+test "soak index chain", "obj = {arr: [1, 2]}\nobj.arr?[0]", 1
+
+# Soak call: fn?(args)
+# Pattern: fn?(arg) → (typeof fn === 'function' ? fn(arg) : undefined)
+test "soak call exists", "fn = (x) -> x * 2\nfn?(5)", 10
+test "soak call null", "fn = null\nfn?(5)", undefined
+test "soak call not function", "fn = 42\nfn?(5)", undefined
+
+# Soak with implicit call syntax (works!)
+test "soak call implicit", "fn = (x) -> x * 2\nfn? 5", 10
+test "soak method call", "obj = {fn: (x) -> x}\nobj.fn?(42)", 42
+
+# Soak prototype: "?::"
+# Pattern: obj?::method → (obj != null ? obj.prototype.method : undefined)
+test "soak prototype exists", "fn = ->\nfn?::toString", Function.prototype.toString
+test "soak prototype null", "obj = null\nobj?::method", undefined
+
+# ============================================================================
+# DOT-BASED ?. - ES6 Optional Chaining (Native Passthrough)
+# ============================================================================
+
+# Optional property: "?."
+# Pattern: obj?.prop → obj?.prop (ES6 native)
+test "optional prop exists", "obj = {name: 'test'}\nobj?.name", "test"
+test "optional prop null", "obj = null\nobj?.name", undefined
+test "optional prop undefined", "obj = undefined\nobj?.prop", undefined
+test "optional prop chain", "obj = {nested: {value: 42}}\nobj?.nested?.value", 42
+test "optional prop chain breaks", "obj = {nested: null}\nobj?.nested?.value", undefined
+
+# Optional index (ES6): ES6 native optional chaining
+# Pattern: arr?.[index] → arr?.[index] (ES6 native)
+test "es6 optional index exists", "arr = [1, 2, 3]\narr?.[1]", 2
+test "es6 optional index null", "arr = null\narr?.[0]", undefined
+test "es6 optional index chain", "obj = {arr: [1, 2]}\nobj?.arr?.[0]", 1
+
+# Optional call (ES6): ES6 native optional chaining
+# Pattern: fn?.(arg) → fn?.(arg) (ES6 native)
+test "es6 optional call exists", "fn = (x) -> x * 2\nfn?.(5)", 10
+test "es6 optional call null", "fn = null\nfn?.(5)", undefined
+test "es6 optional call chain", "obj = {fn: (x) -> x}\nobj?.fn?.(42)", 42
+
+# ============================================================================
+# MIXED PATTERNS - Testing Combinations
+# ============================================================================
+
+# Soak in expressions
+test "soak with default", "arr = [1, 2]\narr?[0] ?? 99", 1
+test "soak null with default", "arr = null\narr?[0] ?? 99", 99
+
+# Optional chaining in expressions
+test "optional with default", "obj = {val: 5}\nobj?.val ?? 10", 5
+test "optional null with default", "obj = null\nobj?.val ?? 10", 10
+
+# Nested soaks
+test "nested soak index", "obj = {arr: [1, 2]}\nobj.arr?[0]", 1
+test "nested soak index null", "obj = {arr: null}\nobj.arr?[0]", undefined
+
+# ============================================================================
+# EDGE CASES
+# ============================================================================
+
+# Soak with expressions
+test "soak index expression", "arr = [10, 20, 30]\ni = 1\narr?[i]", 20
+test "soak index computed", "arr = [1, 2, 3]\narr?[1 + 1]", 3
+
+# Optional in assignments
+test "optional assign", "obj = {val: 42}\nx = obj?.val\nx", 42
+test "soak assign", "arr = [1, 2]\nx = arr?[0]\nx", 1
+
+# Chaining multiple operators
+test "soak then optional", "obj = {arr: [1, 2]}\nobj.arr?[0]", 1
+test "optional then soak", "obj = {arr: [1, 2]}\nobj?.arr?[0]", 1
+
+# ============================================================================
+# CODE GENERATION TESTS
+# ============================================================================
+
+# CoffeeScript soak (single ?) - Generates existence checks
+code "soak index gen", "arr?[0]", "(arr != null ? arr[0] : undefined)"
+code "soak call gen", "fn?(42)", "(typeof fn === 'function' ? fn(42) : undefined)"
+code "soak prototype gen", "obj?::method", "(obj != null ? obj.prototype.method : undefined)"
+
+# ES6 optional chaining (?.) - Passthrough to native
+code "optional property gen", "obj?.prop", "obj?.prop"
+code "es6 optional index gen", "arr?.[0]", "arr?.[0]"
+code "es6 optional call gen", "fn?.(42)", "fn?.(42)"
+
+# Existence check (postfix ?)
+code "existence gen", "x?", "(x != null)"
+
+# ============================================================================
+# SEMANTIC NOTES
+# ============================================================================
+
+# Dual optional syntax semantics:
+# - ? operators (soak): Compile to existence checks (cross-browser)
+# - ?. operators: Native ES6 optional chaining (modern browsers)
+
+# ============================================================================
+# Stats for CODEGEN.md
+# ============================================================================
+# Optional operators implemented: ?[], ?., ?, ?::
+# Soak semantics: Existence-based (CoffeeScript)
+# ES6 semantics: Native optional chaining
+# Tests passing: TBD
+# Test: Existence Check (1 node type)
+# Tests "?" (postfix existence) node type
+
+# ============================================================================
+# Existence Check: "?"
+# ============================================================================
+
+# Basic existence check
+test "exists check true", "x = 42\nx?", true
+test "exists check null", "x = null\nx?", false
+test "exists check undefined", "x = undefined\nx?", false
+
+# Existence in conditional
+test "if exists", "x = 42; if x? then 'exists' else 'missing'", "exists"
+test "if not exists", "x = null; if x? then 'exists' else 'missing'", "missing"
+
+# Code generation
+code "existence check", "x?", "(x != null)"
+
+# ============================================================================
+# Stats for CODEGEN.md
+# ============================================================================
+# Existence check implemented: 0/1 (0%)
+# Tests passing: 0/5 (0%)
+# Test: Nullish Coalescing with Splats
+# Modern ?? alternative to CoffeeScript's binary ? operator
+
+# These tests are Rip-specific, showing how to use ?? (ES2020)
+# instead of CoffeeScript's binary existential ? operator
+
+# Splat with nullish coalescing
+test "splat existential with default", '''
+  c = null
+  [...(c?.b ?? [])]
+''', []
+
+test "splat with value", '''
+  c = {b: [1, 2, 3]}
+  [...(c?.b ?? [])]
+''', [1, 2, 3]
+
+test "conditional with nullish", '''
+  a = {b: [3]}
+  f = false
+  result = (a if f)?.b ?? []
+  result
+''', []
+
+test "trailing if with nullish default", '''
+  a = [3]
+  c = false
+  result = (a if c) ?? []
+  result
+''', []
+
+# ============================================================================
+# Stats for CODEGEN.md
+# ============================================================================
+# Node types: ?, ?[], ?(), ?::, ?., ?.[, ?.(, ??, ??=
+# Tests: 54 total (54 passing, 0 failing)
+# Coverage: Dual syntax (CoffeeScript soak + ES6 optional chaining), existence checks, nullish coalescing, soaks

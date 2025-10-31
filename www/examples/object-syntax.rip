@@ -1,0 +1,74 @@
+# Object Syntax Features Demo
+
+# Feature 1: Property shorthand
+def makePoint(x, y, z)
+  {x, y, z}
+
+# Feature 2: Implicit braces (single line)
+config = host: "localhost", port: 8080, debug: true
+
+# Feature 3: Multiline objects (with braces)
+person = {
+  name: "Alice"
+  age: 30
+  city: "NYC"
+}
+
+# Feature 4: Nested objects (arbitrary depth!)
+data = {
+  user: {
+    profile: {
+      name: "Bob"
+      email: "bob@example.com"
+    }
+    settings: {
+      theme: "dark"
+      notifications: true
+    }
+  }
+  meta: {
+    version: "1.0"
+  }
+}
+
+# Feature 5: Arrays in objects
+config = {
+  servers: ["prod", "dev", "staging"]
+  ports: [8080, 8081, 8082]
+}
+
+# Feature 6: Objects in arrays
+users = [
+  {name: "Alice", age: 30}
+  {name: "Bob", age: 25}
+]
+
+# Feature 7: Complex nesting (arbitrary depth!)
+appConfig = {
+  database: {
+    hosts: ["db1", "db2"]
+    options: {ssl: true, timeout: 5000}
+  }
+  cache: {
+    servers: ["cache1", "cache2"]
+  }
+}
+
+# Feature 8: Arrow functions in objects (methods!)
+calculator = {
+  add: (a, b) => a + b
+  multiply: (a, b) => a * b
+  power: (a, b) => a ** b
+}
+
+# Feature 9: Combined - shorthand + methods + nested
+def createUser(id, name, role)
+  {
+    id
+    name
+    role
+    active: true
+    created: Date.now()
+    greet: (msg) => "Hello, ${msg}!"
+  }
+

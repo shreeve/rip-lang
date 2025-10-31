@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rip REPL - Interactive Browser Environment</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1e1e1e;
+      color: #d4d4d4;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header {
+      background: #252526;
+      padding: 15px 20px;
+      border-bottom: 1px solid #3e3e42;
+    }
+
+    h1 {
+      font-size: 20px;
+      font-weight: 600;
+      color: #cccccc;
+      margin-bottom: 5px;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: #858585;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 0;
+      background: #2d2d30;
+      border-bottom: 1px solid #3e3e42;
+    }
+
+    .tab {
+      padding: 12px 24px;
+      background: transparent;
+      border: none;
+      color: #858585;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .tab:hover {
+      color: #cccccc;
+      background: #2a2a2d;
+    }
+
+    .tab.active {
+      color: #ffffff;
+      border-bottom-color: #007acc;
+      background: #1e1e1e;
+    }
+
+    .content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .pane {
+      display: none;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .pane.active {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* REPL Styles */
+    .repl-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      overflow: hidden;
+    }
+
+    .repl-output {
+      flex: 1;
+      overflow-y: auto;
+      font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+      font-size: 14px;
+      line-height: 1.6;
+      padding: 10px;
+      background: #1e1e1e;
+      border: 1px solid #3e3e42;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+
+    .repl-line {
+      margin-bottom: 8px;
+    }
+
+    .prompt {
+      color: #4ec9b0;
+      font-weight: 600;
+    }
+
+    .prompt-continuation {
+      color: #666;
+    }
+
+    .result {
+      color: #ce9178;
+      margin-left: 20px;
+    }
+
+    .error {
+      color: #f48771;
+      margin-left: 20px;
+    }
+
+    .command-output {
+      color: #858585;
+      margin-left: 20px;
+      white-space: pre-wrap;
+    }
+
+    .repl-input-area {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #252526;
+      padding: 10px;
+      border: 1px solid #3e3e42;
+      border-radius: 4px;
+    }
+
+    .repl-prompt-text {
+      color: #4ec9b0;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .repl-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #d4d4d4;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 14px;
+    }
+
+    /* Compiler Styles */
+    .compiler-container {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      background: #3e3e42;
+      padding: 20px;
+    }
+
+    .editor-pane {
+      display: flex;
+      flex-direction: column;
+      background: #1e1e1e;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .pane-header {
+      background: #2d2d30;
+      padding: 10px 15px;
+      border-bottom: 1px solid #3e3e42;
+      font-size: 13px;
+      font-weight: 600;
+      color: #cccccc;
+    }
+
+    .editor, .output-code {
+      flex: 1;
+      padding: 15px;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 14px;
+      line-height: 1.6;
+      background: #1e1e1e;
+      color: #d4d4d4;
+      border: none;
+      outline: none;
+      resize: none;
+      overflow: auto;
+    }
+
+    .output-code {
+      background: #1e1e1e;
+      white-space: pre;
+    }
+
+    .compiler-options {
+      padding: 10px 15px;
+      background: #252526;
+      border-top: 1px solid #3e3e42;
+      display: flex;
+      gap: 15px;
+      font-size: 12px;
+    }
+
+    .compiler-options label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #cccccc;
+      cursor: pointer;
+    }
+
+    .compiler-options input[type="checkbox"] {
+      cursor: pointer;
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #1e1e1e;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #424242;
+      border-radius: 5px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #4e4e4e;
+    }
+
+    /* Welcome message */
+    .welcome {
+      color: #858585;
+      font-style: italic;
+      margin-bottom: 15px;
+    }
+
+    .help-text {
+      color: #6a9955;
+    }
+
+    .command {
+      color: #4fc1ff;
+    }
+
+    .var-name {
+      color: #9cdcfe;
+    }
+
+    .var-value {
+      color: #ce9178;
+    }
+
+    /* Syntax highlighting for JavaScript output */
+    .output-code .hl-keyword { color: #569cd6; }
+    .output-code .hl-string { color: #ce9178; }
+    .output-code .hl-number { color: #b5cea8; }
+    .output-code .hl-comment { color: #6a9955; font-style: italic; }
+    .output-code .hl-function { color: #dcdcaa; }
+    .output-code .hl-operator { color: #d4d4d4; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🔮 Rip Browser REPL</h1>
+    <div class="subtitle">Interactive environment with REPL console and live compiler</div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="repl">REPL Console</button>
+    <button class="tab" data-tab="compiler">Live Compiler</button>
+  </div>
+
+  <div class="content">
+    <!-- REPL Pane -->
+    <div class="pane active" id="repl-pane">
+      <div class="repl-container">
+        <div class="repl-output" id="repl-output">
+          <div class="welcome">
+            <strong>Rip REPL</strong> - Interactive Browser Environment<br>
+            Type <span class="command">.help</span> for commands, try Rip expressions!
+          </div>
+        </div>
+        <div class="repl-input-area">
+          <span class="repl-prompt-text" id="prompt">rip&gt;</span>
+          <input type="text" class="repl-input" id="repl-input" placeholder="Enter Rip code..." autofocus>
+        </div>
+      </div>
+    </div>
+
+    <!-- Compiler Pane -->
+    <div class="pane" id="compiler-pane">
+      <div class="compiler-container">
+        <div class="editor-pane">
+          <div class="pane-header">Rip Source</div>
+          <textarea class="editor" id="editor" spellcheck="false"># Rip code - edit me!
+def fibonacci(n)
+  if n <= 1
+    n
+  else
+    fibonacci(n - 1) + fibonacci(n - 2)
+
+# Try heregex
+pattern = ///
+  ^ \\d+      # digits
+  \\s*        # space
+  [a-z]+     # letters
+  $
+///i
+
+# Try regex features
+email = "user@example.com"
+domain = email[/@(.+)$/, 1]
+
+console.log "Fib(10):", fibonacci(10)
+console.log "Domain:", domain</textarea>
+        </div>
+
+        <div class="editor-pane">
+          <div class="pane-header">Generated JavaScript</div>
+          <pre class="output-code" id="output"></pre>
+          <div class="compiler-options">
+            <label>
+              <input type="checkbox" id="show-sexp">
+              Show S-Expressions
+            </label>
+            <label>
+              <input type="checkbox" id="show-tokens">
+              Show Tokens
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { compile } from './dist/rip.browser.min.js';
+
+    // ========================================================================
+    // Tab Switching
+    // ========================================================================
+
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const tabName = tab.dataset.tab;
+
+        // Update active tab
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+
+        // Update active pane
+        document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+        document.getElementById(`${tabName}-pane`).classList.add('active');
+
+        // Focus appropriate input
+        if (tabName === 'repl') {
+          document.getElementById('repl-input').focus();
+        } else {
+          compileCode();  // Update compiler output
+        }
+      });
+    });
+
+    // ========================================================================
+    // REPL Implementation
+    // ========================================================================
+
+    let replHistory = [];
+    let historyIndex = -1;
+    let replBuffer = '';
+    const replOutput = document.getElementById('repl-output');
+    const replInput = document.getElementById('repl-input');
+    const promptSpan = document.getElementById('prompt');
+
+    // Create isolated iframe context for REPL (like vm.createContext in Node)
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+    const replContext = iframe.contentWindow;
+
+    // Add builtins to iframe context
+    replContext.console = console;
+    replContext.showSexp = false;
+    replContext.showTokens = false;
+
+    function addOutput(content, className = '') {
+      const line = document.createElement('div');
+      line.className = `repl-line ${className}`;
+      line.innerHTML = content;
+      replOutput.appendChild(line);
+      replOutput.scrollTop = replOutput.scrollHeight;
+    }
+
+    function evaluateRip(code) {
+      try {
+        const result = compile(code);
+        let js = result.code;
+
+        // REPL strategy: Strip let/const declarations entirely
+        // Assignments will create properties on iframe's window (global scope)
+        // This allows variables to persist between eval() calls
+
+        // Remove: let x, y, z;\n
+        js = js.replace(/^let\s+[^;]+;\s*\n+/m, '');
+
+        // Remove: const x = ... (but keep the assignment)
+        js = js.replace(/^const\s+(\w+)\s*=/gm, '$1 =');
+
+        // Evaluate in iframe context - assignments create globals
+        const evalResult = replContext.eval(js);
+
+        // Store in _
+        if (evalResult !== undefined) {
+          replContext._ = evalResult;
+        }
+
+        return { success: true, value: evalResult, result };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    }
+
+    function handleCommand(cmd) {
+      switch (cmd) {
+        case '.help':
+          addOutput(`
+<span class="help-text">Rip Browser REPL Commands:</span>
+
+<span class="command">.help</span>     - Show this help
+<span class="command">.clear</span>    - Clear output
+<span class="command">.vars</span>     - Show variables
+<span class="command">.sexp</span>     - Toggle s-expression display
+<span class="command">.tokens</span>   - Toggle token display
+
+<span class="help-text">Features:</span>
+- Variables persist across evaluations
+- Previous result in <span class="var-name">_</span> variable
+- Multi-line input (type incomplete expression)
+- All Rip features: heregex, regex+, classes, etc.
+          `, 'command-output');
+          break;
+
+        case '.clear':
+          replOutput.innerHTML = '';
+          addOutput('<div class="welcome">Output cleared.</div>');
+          break;
+
+        case '.vars':
+          const builtins = ['console', 'showSexp', 'showTokens', 'eval', 'window', 'document', 'location', 'navigator', 'self', 'top', 'parent', 'frames'];
+          const vars = Object.keys(replContext).filter(k =>
+            !builtins.includes(k) && !k.startsWith('_') || k === '_'
+          );
+          if (vars.length === 0 || (vars.length === 1 && vars[0] === '_' && replContext._ === undefined)) {
+            addOutput('<span class="help-text">No variables defined</span>', 'command-output');
+          } else {
+            let output = '<span class="help-text">Variables:</span>\\n';
+            vars.forEach(v => {
+              try {
+                const val = JSON.stringify(replContext[v]);
+                output += `  <span class="var-name">${v}</span> = <span class="var-value">${val}</span>\\n`;
+              } catch {
+                output += `  <span class="var-name">${v}</span> = <span class="var-value">[object]</span>\\n`;
+              }
+            });
+            addOutput(output, 'command-output');
+          }
+          break;
+
+        case '.sexp':
+          replContext.showSexp = !replContext.showSexp;
+          addOutput(`S-expression display: ${replContext.showSexp ? 'ON' : 'OFF'}`, 'command-output');
+          break;
+
+        case '.tokens':
+          replContext.showTokens = !replContext.showTokens;
+          addOutput(`Token display: ${replContext.showTokens ? 'ON' : 'OFF'}`, 'command-output');
+          break;
+
+        default:
+          addOutput(`Unknown command: ${cmd}`, 'error');
+          addOutput('Type .help for available commands', 'help-text');
+      }
+    }
+
+    function handleLine(line) {
+      // Add to history
+      if (line.trim() && (replHistory.length === 0 || replHistory[replHistory.length - 1] !== line)) {
+        replHistory.push(line);
+      }
+      historyIndex = replHistory.length;
+
+      // Show input
+      const promptText = replBuffer ? '....>' : 'rip>';
+      addOutput(`<span class="prompt">${promptText}</span> ${escapeHtml(line)}`);
+
+      // Handle commands
+      if (line.startsWith('.')) {
+        handleCommand(line);
+        return;
+      }
+
+      // Add to buffer
+      replBuffer = replBuffer ? replBuffer + '\\n' + line : line;
+
+      // Try to evaluate
+      const evalResult = evaluateRip(replBuffer);
+
+      if (evalResult.success) {
+        // Show debug info if enabled
+        if (replContext.showTokens) {
+          let tokenOutput = '<span class="help-text">=== TOKENS ===</span>\\n';
+          evalResult.result.tokens.forEach(t => {
+            tokenOutput += `${t[0].padEnd(12)} ${JSON.stringify(t[1])}\\n`;
+          });
+          addOutput(tokenOutput, 'command-output');
+        }
+
+        if (replContext.showSexp) {
+          const sexp = JSON.stringify(evalResult.result.sexpr, null, 2);
+          addOutput(`<span class="help-text">=== S-EXPRESSIONS ===</span>\\n${sexp}`, 'command-output');
+        }
+
+        // Show result
+        if (evalResult.value !== undefined) {
+          const formatted = typeof evalResult.value === 'object'
+            ? JSON.stringify(evalResult.value, null, 2)
+            : String(evalResult.value);
+          addOutput(`<span class="result">→ ${escapeHtml(formatted)}</span>`);
+        }
+
+        replBuffer = '';
+        promptSpan.textContent = 'rip>';
+      } else if (evalResult.error.includes('Unexpected end')) {
+        // Incomplete - wait for more input
+        promptSpan.textContent = '....>';
+      } else {
+        // Real error
+        addOutput(`<span class="error">✗ ${escapeHtml(evalResult.error)}</span>`);
+        replBuffer = '';
+        promptSpan.textContent = 'rip>';
+      }
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    // REPL input handling
+    replInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const line = e.target.value;
+        e.target.value = '';
+        handleLine(line);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (historyIndex > 0) {
+          historyIndex--;
+          e.target.value = replHistory[historyIndex] || '';
+        }
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (historyIndex < replHistory.length) {
+          historyIndex++;
+          e.target.value = replHistory[historyIndex] || '';
+        }
+      }
+    });
+
+    // ========================================================================
+    // Compiler Implementation
+    // ========================================================================
+
+    const editor = document.getElementById('editor');
+    const output = document.getElementById('output');
+    const showSexp = document.getElementById('show-sexp');
+    const showTokens = document.getElementById('show-tokens');
+
+    // Strip utility helper functions for cleaner display
+    function stripHelpers(code) {
+      // Remove helper function definitions (slice, modulo, toSearchable)
+      code = code.replace(/^const slice = \[\]\.slice;\n/m, '');
+      code = code.replace(/^const modulo = \(n, d\) => \{[^}]+\};\n/m, '');
+      code = code.replace(/^const toSearchable = \(v, allowNewlines\) => \{[\s\S]+?\n\};\n/m, '');
+
+      // Remove empty lines at the start
+      code = code.replace(/^\n+/, '');
+
+      return code;
+    }
+
+    // Simple syntax highlighter for JavaScript
+    function highlightJS(code) {
+      return code
+        // Keywords
+        .replace(/\\b(def|function|async|const|let|var|if|else|return|while|for|class|extends|super|new|this|try|catch|finally|throw|switch|case|default|break|continue)\\b/g,
+          '<span class="hl-keyword">$1</span>')
+        // Strings
+        .replace(/("(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*'|`(?:[^`\\\\]|\\\\.)*`)/g,
+          '<span class="hl-string">$1</span>')
+        // Numbers
+        .replace(/\\b(\\d+\\.?\\d*|0x[0-9a-fA-F]+|0b[01]+|0o[0-7]+)\\b/g,
+          '<span class="hl-number">$1</span>')
+        // Comments
+        .replace(/(\/\/.*$|\/\*[\s\S]*?\*\/)/gm,
+          '<span class="hl-comment">$1</span>')
+        // Function names (simple: word before parenthesis)
+        .replace(/\b([a-zA-Z_$][a-zA-Z0-9_$]*)(?=\s*\()/g,
+          '<span class="hl-function">$1</span>');
+    }
+
+    function compileCode() {
+      try {
+        const source = editor.value;
+        const result = compile(source);
+
+        let outputText = '';
+
+        if (showTokens.checked) {
+          outputText += '=== TOKENS ===\\n';
+          result.tokens.forEach(t => {
+            outputText += `${t[0].padEnd(12)} ${JSON.stringify(t[1])}\\n`;
+          });
+          outputText += '\\n';
+        }
+
+        if (showSexp.checked) {
+          outputText += '=== S-EXPRESSIONS ===\\n';
+          outputText += JSON.stringify(result.sexpr, null, 2);
+          outputText += '\\n\\n';
+        }
+
+        // JavaScript output with syntax highlighting (strip helpers for cleaner display)
+        const cleanCode = stripHelpers(result.code);
+        const highlightedCode = highlightJS(cleanCode);
+        output.innerHTML = outputText.replace(/</g, '&lt;').replace(/>/g, '&gt;') + highlightedCode;
+      } catch (error) {
+        output.textContent = `Error: ${error.message}`;
+      }
+    }
+
+    // Auto-compile on changes
+    editor.addEventListener('input', compileCode);
+    showSexp.addEventListener('change', compileCode);
+    showTokens.addEventListener('change', compileCode);
+
+    // Initial compile
+    compileCode();
+  </script>
+</body>
+</html>
