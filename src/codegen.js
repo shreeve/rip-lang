@@ -932,13 +932,17 @@ export class CodeGenerator {
         const needsParens = isNumberLiteral || isObjectLiteral || isAwaitOrYield;
         const base = needsParens ? `(${objCode})` : objCode;
 
-        // DAMMIT OPERATOR on property: obj.method! → await obj.method()
+        // DAMMIT OPERATOR on property: obj.method!
+        // When property has .await metadata, it's the dammit operator (!)
+        // The ! operator always calls (even without args) and awaits
+        // This applies whether standalone or last expression in a function
         if (prop instanceof String && prop.await === true) {
           const cleanProp = prop.valueOf();
           return `await ${base}.${cleanProp}()`;
         }
 
-        return `${base}.${prop}`;
+        const cleanProp = prop instanceof String ? prop.valueOf() : prop;
+        return `${base}.${cleanProp}`;
       }
 
       case '?.': {
@@ -957,13 +961,10 @@ export class CodeGenerator {
           return `${objCode}.prototype`;
         }
 
-        // DAMMIT OPERATOR on prototype method: obj::method! → await obj.prototype.method()
-        if (prop instanceof String && prop.await === true) {
-          const cleanProp = prop.valueOf();
-          return `await ${objCode}.prototype.${cleanProp}()`;
-        }
-
-        return `${objCode}.prototype.${prop}`;
+        // DAMMIT OPERATOR on prototype method: Only applies when NOT being called
+        // If this property access is the callee of a function call, let the call case handle it
+        const cleanProp = prop instanceof String ? prop.valueOf() : prop;
+        return `${objCode}.prototype.${cleanProp}`;
       }
 
       case '?::': {
@@ -2931,13 +2932,34 @@ export class CodeGenerator {
           // Complex callee like obj.method! or arr[0]
           // For property access, check if the property has .await metadata
           let needsAwait = false;
+          let calleeCode;
 
           // Check if it's property access with await sigil on the property
-          if (head[0] === '.' && head[2] instanceof String) {
-            needsAwait = this.shouldAwaitCall(head[2]);
+          if (Array.isArray(head) && (head[0] === '.' || head[0] === '::') && head[2] instanceof String && head[2].await === true) {
+            // Property has dammit operator - need to await the call
+            needsAwait = true;
+            
+            // Generate property access without calling it (just the reference)
+            // We'll add the call with args below
+            const [obj, prop] = head.slice(1);
+            const objCode = this.generate(obj, 'value');
+            const isNumberLiteral = /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(objCode);
+            const isObjectLiteral = Array.isArray(obj) && obj[0] === 'object';
+            const isAwaitOrYield = Array.isArray(obj) && (obj[0] === 'await' || obj[0] === 'yield');
+            const needsParens = isNumberLiteral || isObjectLiteral || isAwaitOrYield;
+            const base = needsParens ? `(${objCode})` : objCode;
+            const cleanProp = prop.valueOf();
+            
+            if (head[0] === '::') {
+              calleeCode = `${base}.prototype.${cleanProp}`;
+            } else {
+              calleeCode = `${base}.${cleanProp}`;
+            }
+          } else {
+            // Normal callee - just generate it
+            calleeCode = this.generate(head, 'value');
           }
 
-          const calleeCode = this.generate(head, 'value');
           const args = rest.map(arg => this.generate(arg, 'value')).join(', ');
           const callStr = `${calleeCode}(${args})`;
 
