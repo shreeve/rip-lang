@@ -45,7 +45,7 @@ await Bun.build({
 // Replace version and build date in minified bundle
 let minified = readFileSync('./docs/dist/rip.browser.min.js', 'utf-8');
 minified = minified.replace('"0.0.0"', `"${version}"`);
-minified = minified.replace('"0000-00-00@00:00:00"', `"${buildDate}"`);
+minified = minified.replace('"0000-00-00@00:00:00GMT"', `"${buildDate}"`);
 writeFileSync('./docs/dist/rip.browser.min.js', minified);
 
 const minSize = Buffer.byteLength(minified);
