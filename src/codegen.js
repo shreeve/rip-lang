@@ -3058,17 +3058,17 @@ export class CodeGenerator {
 
         const needsParens = isSingleStmt && isObjectLiteral && hasNoVars && !isAlreadyExpression && !isObjectComprehension;
 
-        // Special case: single comprehension at program level (REPL/test mode) should return array
-        // By user's rules: "Top-level standalone statement" should be plain loop UNLESS
-        // it's the only thing (suggesting REPL evaluation or test where result matters)
-        const isSingleComprehension = isSingleStmt && isAlreadyExpression && hasNoVars;
+        // Special case: comprehension as last statement (REPL/test mode) should return array
+        // Comprehensions at the end of a program should collect results
+        const isLastStmt = index === otherStatements.length - 1;
+        const isLastComprehension = isLastStmt && isAlreadyExpression;
 
         // Generate with appropriate context
         let generated;
         if (needsParens) {
           generated = `(${this.generate(stmt, 'value')})`;
-        } else if (isSingleComprehension) {
-          // Single comprehension at top level - generate as value (builds array for REPL/testing)
+        } else if (isLastComprehension) {
+          // Last comprehension at program level - generate as value (builds array for REPL/testing)
           generated = this.generate(stmt, 'value');
         } else {
           generated = this.generate(stmt, 'statement');

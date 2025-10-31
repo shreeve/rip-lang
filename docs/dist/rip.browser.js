@@ -5242,11 +5242,12 @@ export default ${target}`;
       const isAlreadyExpression = Array.isArray(stmt) && (stmt[0] === "comprehension" || stmt[0] === "object-comprehension" || stmt[0] === "do-iife");
       const hasNoVars = this.programVars.size === 0;
       const needsParens = isSingleStmt && isObjectLiteral && hasNoVars && !isAlreadyExpression && !isObjectComprehension;
-      const isSingleComprehension = isSingleStmt && isAlreadyExpression && hasNoVars;
+      const isLastStmt = index === otherStatements.length - 1;
+      const isLastComprehension = isLastStmt && isAlreadyExpression;
       let generated;
       if (needsParens) {
         generated = `(${this.generate(stmt, "value")})`;
-      } else if (isSingleComprehension) {
+      } else if (isLastComprehension) {
         generated = this.generate(stmt, "value");
       } else {
         generated = this.generate(stmt, "statement");
@@ -6530,7 +6531,7 @@ function compileToJS(source, options = {}) {
 }
 // src/browser.js
 var VERSION = "1.0.0";
-var BUILD_DATE = "2025-10-31@22:31:29GMT";
+var BUILD_DATE = "2025-10-31@22:37:31GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
