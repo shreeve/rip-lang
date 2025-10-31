@@ -1453,8 +1453,15 @@ export class CodeGenerator {
             const startCode = this.generate(start, 'value');
             const endCode = this.generate(end, 'value');
             const comparison = isExclusive ? '<' : '<=';
+            
+            // Handle step if present
+            let increment = `${itemVarPattern}++`;
+            if (step && step !== null) {
+              const stepCode = this.generate(step, 'value');
+              increment = `${itemVarPattern} += ${stepCode}`;
+            }
 
-            let code = `for (let ${itemVarPattern} = ${startCode}; ${itemVarPattern} ${comparison} ${endCode}; ${itemVarPattern}++) `;
+            let code = `for (let ${itemVarPattern} = ${startCode}; ${itemVarPattern} ${comparison} ${endCode}; ${increment}) `;
 
             // Generate body with guard if present
             if (guard) {
@@ -2035,6 +2042,35 @@ export class CodeGenerator {
               code += this.indent() + `for (let ${indexVarName} = ${iterableCode}.length - 1; ${indexVarName} >= 0; ${indexVarName}--) {\n`;
               this.indentLevel++;
               code += this.indent() + `const ${itemVarPattern} = ${iterableCode}[${indexVarName}];\n`;
+            } else if (step && step !== null) {
+              // Forward iteration with step (by N where N > 1)
+              // Need to check if iterable is a range for optimization
+              let iterableHead = Array.isArray(iterable) && iterable[0];
+              if (iterableHead instanceof String) {
+                iterableHead = iterableHead.valueOf();
+              }
+              const isRange = iterableHead === '..' || iterableHead === '...';
+
+              if (isRange) {
+                // Optimize range with step: for i in [0...10] by 2
+                const isExclusive = iterableHead === '...';
+                const [start, end] = iterable.slice(1);
+                const startCode = this.generate(start, 'value');
+                const endCode = this.generate(end, 'value');
+                const stepCode = this.generate(step, 'value');
+                const comparison = isExclusive ? '<' : '<=';
+                const indexVarName = indexVar || '_i';
+                code += this.indent() + `for (let ${itemVarPattern} = ${startCode}; ${itemVarPattern} ${comparison} ${endCode}; ${itemVarPattern} += ${stepCode}) {\n`;
+                this.indentLevel++;
+              } else {
+                // Non-range with step: need to use index-based loop
+                const iterableCode = this.generate(iterable, 'value');
+                const indexVarName = indexVar || '_i';
+                const stepCode = this.generate(step, 'value');
+                code += this.indent() + `for (let ${indexVarName} = 0; ${indexVarName} < ${iterableCode}.length; ${indexVarName} += ${stepCode}) {\n`;
+                this.indentLevel++;
+                code += this.indent() + `const ${itemVarPattern} = ${iterableCode}[${indexVarName}];\n`;
+              }
             } else if (indexVar) {
               // Use traditional for loop with index
               const iterableCode = this.generate(iterable, 'value');
@@ -4085,8 +4121,61 @@ export class CodeGenerator {
           this.indentLevel--;
           code += this.indent() + '}';
           return code;
-        } else if (indexVar) {
-          // Without index: use for-of loop
+        } else if (step && step !== null) {
+          // Forward iteration with step (by N where N > 1)
+          let iterableHead = Array.isArray(iterable) && iterable[0];
+          if (iterableHead instanceof String) {
+            iterableHead = iterableHead.valueOf();
+          }
+          const isRange = iterableHead === '..' || iterableHead === '...';
+
+          if (isRange) {
+            // Optimize range with step
+            const isExclusive = iterableHead === '...';
+            const [start, end] = iterable.slice(1);
+            const startCode = this.generate(start, 'value');
+            const endCode = this.generate(end, 'value');
+            const stepCode = this.generate(step, 'value');
+            const comparison = isExclusive ? '<' : '<=';
+            code += `for (let ${itemVarPattern} = ${startCode}; ${itemVarPattern} ${comparison} ${endCode}; ${itemVarPattern} += ${stepCode}) `;
+          } else {
+            // Non-range with step: use index-based loop
+            const iterableCode = this.generate(iterable, 'value');
+            const indexVarName = indexVar || '_i';
+            const stepCode = this.generate(step, 'value');
+            code += `for (let ${indexVarName} = 0; ${indexVarName} < ${iterableCode}.length; ${indexVarName} += ${stepCode}) `;
+            code += '{\n';
+            this.indentLevel++;
+            code += this.indent() + `const ${itemVarPattern} = ${iterableCode}[${indexVarName}];\n`;
+          }
+
+          // Handle guards and body
+          if (isRange || step) {
+            if (guards && guards.length > 0) {
+              code += '{\n';
+              this.indentLevel++;
+              code += this.indent() + `if (${guards.map(g => this.generate(g, 'value')).join(' && ')}) {\n`;
+              this.indentLevel++;
+              code += this.indent() + this.generate(expr, 'statement') + ';\n';
+              this.indentLevel--;
+              code += this.indent() + '}\n';
+              this.indentLevel--;
+              code += this.indent() + '}';
+            } else {
+              code += '{\n';
+              this.indentLevel++;
+              code += this.indent() + this.generate(expr, 'statement') + ';\n';
+              this.indentLevel--;
+              code += this.indent() + '}';
+            }
+            if (!isRange) {
+              this.indentLevel--;
+              code += '\n' + this.indent() + '}';
+            }
+          }
+          return code;
+        } else {
+          // No step: use for-of loop
           code += `for (const ${itemVarPattern} of ${this.generate(iterable, 'value')}) `;
 
           // Handle guards
