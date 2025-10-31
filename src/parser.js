@@ -219,7 +219,20 @@ switch (yystate) {
     if (hash.recoverable)
       return this.trace(str);
     else {
-      error = new Error(str);
+      // Format error with line/column information
+      // Debug: log hash to see what data we have
+      if (typeof process !== 'undefined' && process.env?.DEBUG_PARSER) {
+        console.error('Parse error hash:', JSON.stringify(hash, null, 2));
+      }
+      
+      const line = (hash.line || 0) + 1; // Convert 0-based to 1-based
+      const col = hash.loc?.first_column || 0;
+      const token = hash.token ? ` (token: ${hash.token})` : '';
+      const text = hash.text ? ` near '${hash.text}'` : '';
+      const location = `line ${line}, column ${col}`;
+      const message = `Parse error at ${location}${token}${text}: ${str}`;
+      
+      error = new Error(message);
       error.hash = hash;
       throw error;
     }
