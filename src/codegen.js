@@ -1329,31 +1329,42 @@ export class CodeGenerator {
         const varsArray = Array.isArray(vars) ? vars : [vars];
         const [itemVar, indexVar] = varsArray;
 
-        // Check if step requires reverse iteration (by -1)
-        const isReverseStep = this.isReverseStep(step);
-
         // Check if itemVar is a destructuring pattern
         let itemVarPattern = itemVar;
         if (Array.isArray(itemVar) && (itemVar[0] === 'array' || itemVar[0] === 'object')) {
           itemVarPattern = this.generateDestructuringPattern(itemVar);
         }
 
-        // Handle reverse iteration (by -1)
-        if (isReverseStep) {
+        // Handle step (unified for both positive and negative steps)
+        if (step && step !== null) {
           const iterableCode = this.generate(iterable, 'value');
           const indexVarName = indexVar || '_i';
-
-          let code = `for (let ${indexVarName} = ${iterableCode}.length - 1; ${indexVarName} >= 0; ${indexVarName}--) `;
+          const stepCode = this.generate(step, 'value');
+          
+          // Detect if step is negative (reverse iteration)
+          const isNegativeStep = this.isNegativeStep(step);
+          
+          // Special case: -1 and 1 generate cleaner ++ and -- operators
+          const isMinusOne = isNegativeStep && (step[1] === '1' || step[1] === 1 || (step[1] instanceof String && step[1].valueOf() === '1'));
+          const isPlusOne = !isNegativeStep && (step === '1' || step === 1 || (step instanceof String && step.valueOf() === '1'));
+          
+          let loopHeader;
+          if (isMinusOne) {
+            loopHeader = `for (let ${indexVarName} = ${iterableCode}.length - 1; ${indexVarName} >= 0; ${indexVarName}--) `;
+          } else if (isPlusOne) {
+            loopHeader = `for (let ${indexVarName} = 0; ${indexVarName} < ${iterableCode}.length; ${indexVarName}++) `;
+          } else if (isNegativeStep) {
+            loopHeader = `for (let ${indexVarName} = ${iterableCode}.length - 1; ${indexVarName} >= 0; ${indexVarName} += ${stepCode}) `;
+          } else {
+            loopHeader = `for (let ${indexVarName} = 0; ${indexVarName} < ${iterableCode}.length; ${indexVarName} += ${stepCode}) `;
+          }
 
           // Generate body with item variable assignment
           if (Array.isArray(body) && body[0] === 'block') {
             const statements = body.slice(1);
             this.indentLevel++;
-
-            // Build statements array with item assignment
             const stmts = [`const ${itemVarPattern} = ${iterableCode}[${indexVarName}];`];
 
-            // If guard exists, wrap statements in guard check
             if (guard) {
               const guardCode = this.generate(guard, 'value');
               stmts.push(`if (${guardCode}) {`);
@@ -1366,21 +1377,19 @@ export class CodeGenerator {
             }
 
             this.indentLevel--;
-            code += `{\n${stmts.map(s => this.indent() + s).join('\n')}\n${this.indent()}}`;
+            return loopHeader + `{\n${stmts.map(s => this.indent() + s).join('\n')}\n${this.indent()}}`;
           } else {
             // Single statement body
             if (guard) {
               const guardCode = this.generate(guard, 'value');
-              code += `{ const ${itemVarPattern} = ${iterableCode}[${indexVarName}]; if (${guardCode}) ${this.generate(body, 'statement')}; }`;
+              return loopHeader + `{ const ${itemVarPattern} = ${iterableCode}[${indexVarName}]; if (${guardCode}) ${this.generate(body, 'statement')}; }`;
             } else {
-              code += `{ const ${itemVarPattern} = ${iterableCode}[${indexVarName}]; ${this.generate(body, 'statement')}; }`;
+              return loopHeader + `{ const ${itemVarPattern} = ${iterableCode}[${indexVarName}]; ${this.generate(body, 'statement')}; }`;
             }
           }
-
-          return code;
         }
 
-        // If index variable is provided, use traditional for loop
+        // If index variable is provided (no step), use traditional for loop
         if (indexVar) {
           const iterableCode = this.generate(iterable, 'value');
           let code = `for (let ${indexVar} = 0; ${indexVar} < ${iterableCode}.length; ${indexVar}++) `;
@@ -1389,11 +1398,8 @@ export class CodeGenerator {
           if (Array.isArray(body) && body[0] === 'block') {
             const statements = body.slice(1);
             this.indentLevel++;
-
-            // Build statements array with item assignment
             const stmts = [`const ${itemVarPattern} = ${iterableCode}[${indexVar}];`];
 
-            // If guard exists, wrap statements in guard check
             if (guard) {
               const guardCode = this.generate(guard, 'value');
               stmts.push(`if (${guardCode}) {`);
@@ -2032,19 +2038,9 @@ export class CodeGenerator {
               itemVarPattern = this.generateDestructuringPattern(firstVar);
             }
 
-            // Check for reverse iteration (by -1)
-            const isReverseStep = this.isReverseStep(step);
-
-            if (isReverseStep) {
-              // Reverse iteration
-              const iterableCode = this.generate(iterable, 'value');
-              const indexVarName = indexVar || '_i';
-              code += this.indent() + `for (let ${indexVarName} = ${iterableCode}.length - 1; ${indexVarName} >= 0; ${indexVarName}--) {\n`;
-              this.indentLevel++;
-              code += this.indent() + `const ${itemVarPattern} = ${iterableCode}[${indexVarName}];\n`;
-            } else if (step && step !== null) {
-              // Forward iteration with step (by N where N > 1)
-              // Need to check if iterable is a range for optimization
+            // Handle step (any value: positive, negative, or null)
+            if (step && step !== null) {
+              // Check if iterable is a range for optimization
               let iterableHead = Array.isArray(iterable) && iterable[0];
               if (iterableHead instanceof String) {
                 iterableHead = iterableHead.valueOf();
@@ -2052,22 +2048,30 @@ export class CodeGenerator {
               const isRange = iterableHead === '..' || iterableHead === '...';
 
               if (isRange) {
-                // Optimize range with step: for i in [0...10] by 2
+                // Optimize range with step: for i in [0...10] by 2 or by -1
                 const isExclusive = iterableHead === '...';
                 const [start, end] = iterable.slice(1);
                 const startCode = this.generate(start, 'value');
                 const endCode = this.generate(end, 'value');
                 const stepCode = this.generate(step, 'value');
                 const comparison = isExclusive ? '<' : '<=';
-                const indexVarName = indexVar || '_i';
                 code += this.indent() + `for (let ${itemVarPattern} = ${startCode}; ${itemVarPattern} ${comparison} ${endCode}; ${itemVarPattern} += ${stepCode}) {\n`;
                 this.indentLevel++;
               } else {
-                // Non-range with step: need to use index-based loop
+                // Non-range with step: use index-based loop
                 const iterableCode = this.generate(iterable, 'value');
                 const indexVarName = indexVar || '_i';
                 const stepCode = this.generate(step, 'value');
-                code += this.indent() + `for (let ${indexVarName} = 0; ${indexVarName} < ${iterableCode}.length; ${indexVarName} += ${stepCode}) {\n`;
+                
+                // Detect if step is negative (reverse iteration)
+                const isNegativeStep = this.isNegativeStep(step);
+                if (isNegativeStep) {
+                  // Reverse: start from end
+                  code += this.indent() + `for (let ${indexVarName} = ${iterableCode}.length - 1; ${indexVarName} >= 0; ${indexVarName} += ${stepCode}) {\n`;
+                } else {
+                  // Forward: start from beginning
+                  code += this.indent() + `for (let ${indexVarName} = 0; ${indexVarName} < ${iterableCode}.length; ${indexVarName} += ${stepCode}) {\n`;
+                }
                 this.indentLevel++;
                 code += this.indent() + `const ${itemVarPattern} = ${iterableCode}[${indexVarName}];\n`;
               }
@@ -4041,13 +4045,16 @@ export class CodeGenerator {
   }
 
   /**
-   * Helper: Check if step is reverse iteration (by -1)
+   * Check if step is negative (for reverse iteration)
+   * Handles any negative step: -1, -2, -3, etc.
    */
-  isReverseStep(step) {
-    return Array.isArray(step) && step.length === 2 &&
-           step[0] === '-' &&
-           (step[1] === '1' || step[1] === 1 ||
-            (step[1] instanceof String && step[1].valueOf() === '1'));
+  isNegativeStep(step) {
+    if (!Array.isArray(step)) return false;
+    if (step.length !== 2) return false;
+    
+    // Check if it's a unary minus operation
+    const head = step[0] instanceof String ? step[0].valueOf() : step[0];
+    return head === '-';
   }
 
   /**
@@ -4095,34 +4102,9 @@ export class CodeGenerator {
           itemVarPattern = this.generateDestructuringPattern(itemVar);
         }
 
-        // Check for reverse iteration (by -1)
-        const isReverseStep = this.isReverseStep(step);
-
-        // Generate loop based on step and index
-        if (isReverseStep) {
-          // Reverse iteration
-          const iterableCode = this.generate(iterable, 'value');
-          const indexVarName = indexVar || '_i';
-          code += `for (let ${indexVarName} = ${iterableCode}.length - 1; ${indexVarName} >= 0; ${indexVarName}--) `;
-          code += '{\n';
-          this.indentLevel++;
-          code += this.indent() + `const ${itemVarPattern} = ${iterableCode}[${indexVarName}];\n`;
-
-          if (guards && guards.length > 0) {
-            code += this.indent() + `if (${guards.map(g => this.generate(g, 'value')).join(' && ')}) {\n`;
-            this.indentLevel++;
-            code += this.indent() + this.generate(expr, 'statement') + ';\n';
-            this.indentLevel--;
-            code += this.indent() + '}\n';
-          } else {
-            code += this.indent() + this.generate(expr, 'statement') + ';\n';
-          }
-
-          this.indentLevel--;
-          code += this.indent() + '}';
-          return code;
-        } else if (step && step !== null) {
-          // Forward iteration with step (by N where N > 1)
+        // Handle step (any value: positive, negative, or null)
+        if (step && step !== null) {
+          // Check if iterable is a range for optimization
           let iterableHead = Array.isArray(iterable) && iterable[0];
           if (iterableHead instanceof String) {
             iterableHead = iterableHead.valueOf();
@@ -4143,37 +4125,61 @@ export class CodeGenerator {
             const iterableCode = this.generate(iterable, 'value');
             const indexVarName = indexVar || '_i';
             const stepCode = this.generate(step, 'value');
-            code += `for (let ${indexVarName} = 0; ${indexVarName} < ${iterableCode}.length; ${indexVarName} += ${stepCode}) `;
+            
+            // Detect if step is negative (reverse iteration)
+            const isNegativeStep = this.isNegativeStep(step);
+            
+            // Special case: -1 and 1 generate cleaner ++ and -- operators
+            const isMinusOne = isNegativeStep && (step[1] === '1' || step[1] === 1 || (step[1] instanceof String && step[1].valueOf() === '1'));
+            const isPlusOne = !isNegativeStep && (step === '1' || step === 1 || (step instanceof String && step.valueOf() === '1'));
+            
+            if (isMinusOne) {
+              code += `for (let ${indexVarName} = ${iterableCode}.length - 1; ${indexVarName} >= 0; ${indexVarName}--) `;
+            } else if (isPlusOne) {
+              code += `for (let ${indexVarName} = 0; ${indexVarName} < ${iterableCode}.length; ${indexVarName}++) `;
+            } else if (isNegativeStep) {
+              code += `for (let ${indexVarName} = ${iterableCode}.length - 1; ${indexVarName} >= 0; ${indexVarName} += ${stepCode}) `;
+            } else {
+              code += `for (let ${indexVarName} = 0; ${indexVarName} < ${iterableCode}.length; ${indexVarName} += ${stepCode}) `;
+            }
             code += '{\n';
             this.indentLevel++;
             code += this.indent() + `const ${itemVarPattern} = ${iterableCode}[${indexVarName}];\n`;
           }
 
           // Handle guards and body
-          if (isRange || step) {
-            if (guards && guards.length > 0) {
-              code += '{\n';
-              this.indentLevel++;
-              code += this.indent() + `if (${guards.map(g => this.generate(g, 'value')).join(' && ')}) {\n`;
-              this.indentLevel++;
-              code += this.indent() + this.generate(expr, 'statement') + ';\n';
-              this.indentLevel--;
-              code += this.indent() + '}\n';
-              this.indentLevel--;
-              code += this.indent() + '}';
-            } else {
-              code += '{\n';
-              this.indentLevel++;
-              code += this.indent() + this.generate(expr, 'statement') + ';\n';
-              this.indentLevel--;
-              code += this.indent() + '}';
-            }
-            if (!isRange) {
-              this.indentLevel--;
-              code += '\n' + this.indent() + '}';
-            }
+          if (guards && guards.length > 0) {
+            if (!isRange) code += this.indent();
+            code += '{\n';
+            this.indentLevel++;
+            code += this.indent() + `if (${guards.map(g => this.generate(g, 'value')).join(' && ')}) {\n`;
+            this.indentLevel++;
+            code += this.indent() + this.generate(expr, 'statement') + ';\n';
+            this.indentLevel--;
+            code += this.indent() + '}\n';
+            this.indentLevel--;
+            code += this.indent() + '}';
+          } else {
+            if (!isRange) code += this.indent();
+            code += '{\n';
+            this.indentLevel++;
+            code += this.indent() + this.generate(expr, 'statement') + ';\n';
+            this.indentLevel--;
+            code += this.indent() + '}';
+          }
+          
+          if (!isRange) {
+            this.indentLevel--;
+            code += '\n' + this.indent() + '}';
           }
           return code;
+        } else if (indexVar) {
+          // Use traditional for loop with index
+          const iterableCode = this.generate(iterable, 'value');
+          code += `for (let ${indexVar} = 0; ${indexVar} < ${iterableCode}.length; ${indexVar}++) `;
+          code += '{\n';
+          this.indentLevel++;
+          code += this.indent() + `const ${itemVarPattern} = ${iterableCode}[${indexVarName}];\n`;
         } else {
           // No step: use for-of loop
           code += `for (const ${itemVarPattern} of ${this.generate(iterable, 'value')}) `;
