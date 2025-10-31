@@ -25,8 +25,9 @@
 
 Rip brings CoffeeScript's elegance to modern JavaScript—but **25% smaller**, completely standalone, and self-hosting. No build tools, no external dependencies, not even a parser generator. Just clone and go.
 
+#### 💎  Elegant syntax with modern features
+
 ```coffee
-# Elegant syntax with modern features
 def parseUsers(...inputs)
   users = for input in inputs
     # Ruby-style regex with =~ operator and _ captures
@@ -41,24 +42,30 @@ fetchUser = (id) => fetch! "/api/user/${id}"
 parseUsers "alice:alice@example.com", "bob:bob@test.org"
 ```
 
+#### 🎯 Compiles to clean, modern JavaScript
+
 ```javascript
-// Compiles to clean, modern JavaScript
+let _, fetchUser;
+
 function parseUsers(...inputs) {
-  let users = [];
-  for (const input of inputs) {
-    if ((_ = input.match(/^(\w+):([^@]+@[\w.]+)$/)) != null) {
-      const name = _[1] ?? "guest";
-      const domain = ((_ = input.match(/@([\w.]+)/)) != null ? _[1] : undefined);
-      users.push({ name, domain });
+  let domain, name, users;
+  return (users = (() => {
+    const result = [];
+    for (const input of inputs) {
+      result.push((() => { if ((_ = toSearchable(input).match(/^(\w+):([^@]+@[\w.]+)$/))) {
+        name = (_[1] ?? "guest");
+        domain = (_ = toSearchable(input).match(/@([\w.]+)/)) && _[1];
+        return {name, domain};
+      } })());
     }
-  }
-  return users;
-}
-const fetchUser = (id) => await fetch(`/api/user/${id}`);
+    return result;
+  })());
+};
+fetchUser = async (id) => await fetch(`/api/user/${id}`);
 parseUsers("alice:alice@example.com", "bob:bob@test.org");
 ```
 
-Run with: **bun run example.rip**
+#### 🚀 Run with: bun run example.rip
 
 ```json
 [
