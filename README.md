@@ -28,14 +28,12 @@ Rip brings CoffeeScript's elegance to modern JavaScript—but **25% smaller**, c
 ```coffee
 # Elegant syntax with modern features
 def parseUsers(...inputs)
-  users = []
-  for input in inputs
+  users = for input in inputs
     # Ruby-style regex with =~ operator and _ captures
     if input =~ /^(\w+):([^@]+@[\w.]+)$/
       name = _[1] ?? "guest"          # Nullish coalescing
       domain = input[/@([\w.]+)/, 1]  # Regex extraction syntax
-      users.push { name, domain }
-  users
+      { name, domain }
 
 # Async with dammit operator! (call and await)
 fetchUser = (id) => fetch! "/api/user/${id}"
@@ -58,6 +56,20 @@ function parseUsers(...inputs) {
 }
 const fetchUser = (id) => await fetch(`/api/user/${id}`);
 parseUsers("alice:alice@example.com", "bob:bob@test.org");
+```
+
+**> bun run example.rip**
+
+```json
+[
+  {
+    name: "alice",
+    domain: "example.com",
+  }, {
+    name: "bob",
+    domain: "test.org",
+  }
+]
 ```
 
 **What makes Rip special?**
