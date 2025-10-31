@@ -177,7 +177,7 @@ case '+': {
 
 **Step 1: Clone the repository**
 ```bash
-git clone https://github.com/yourusername/rip.git
+git clone https://github.com/shreeve/rip-lang.git
 cd rip
 ```
 
@@ -322,9 +322,16 @@ Defined variables:
 
 **Run Rip in your browser!** Browsers are a primary target with full support:
 
+**Try it online (GitHub Pages):**
+```
+https://shreeve.github.io/rip-lang/
+# Live REPL, examples, and live compiler
+```
+
+**Or run locally:**
 ```bash
 # Build browser bundles (one-time)
-bun run build:browser
+bun run browser
 
 # Start development server
 bun run serve
