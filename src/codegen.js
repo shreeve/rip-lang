@@ -1327,7 +1327,10 @@ export class CodeGenerator {
         }
 
         const varsArray = Array.isArray(vars) ? vars : [vars];
-        const [itemVar, indexVar] = varsArray;
+        
+        // Check if no loop variable (range repetition: for [1...N])
+        const noVar = varsArray.length === 0;
+        const [itemVar, indexVar] = noVar ? ['_i', null] : varsArray;
 
         // Check if itemVar is a destructuring pattern
         let itemVarPattern = itemVar;
@@ -1363,7 +1366,12 @@ export class CodeGenerator {
           if (Array.isArray(body) && body[0] === 'block') {
             const statements = body.slice(1);
             this.indentLevel++;
-            const stmts = [`const ${itemVarPattern} = ${iterableCode}[${indexVarName}];`];
+            const stmts = [];
+            
+            // Only extract item if we have an actual loop variable (not throwaway _i for noVar)
+            if (!noVar) {
+              stmts.push(`const ${itemVarPattern} = ${iterableCode}[${indexVarName}];`);
+            }
 
             if (guard) {
               const guardCode = this.generate(guard, 'value');
@@ -1380,11 +1388,22 @@ export class CodeGenerator {
             return loopHeader + `{\n${stmts.map(s => this.indent() + s).join('\n')}\n${this.indent()}}`;
           } else {
             // Single statement body
-            if (guard) {
-              const guardCode = this.generate(guard, 'value');
-              return loopHeader + `{ const ${itemVarPattern} = ${iterableCode}[${indexVarName}]; if (${guardCode}) ${this.generate(body, 'statement')}; }`;
+            if (noVar) {
+              // No variable to extract
+              if (guard) {
+                const guardCode = this.generate(guard, 'value');
+                return loopHeader + `{ if (${guardCode}) ${this.generate(body, 'statement')}; }`;
+              } else {
+                return loopHeader + `{ ${this.generate(body, 'statement')}; }`;
+              }
             } else {
-              return loopHeader + `{ const ${itemVarPattern} = ${iterableCode}[${indexVarName}]; ${this.generate(body, 'statement')}; }`;
+              // Extract item variable
+              if (guard) {
+                const guardCode = this.generate(guard, 'value');
+                return loopHeader + `{ const ${itemVarPattern} = ${iterableCode}[${indexVarName}]; if (${guardCode}) ${this.generate(body, 'statement')}; }`;
+              } else {
+                return loopHeader + `{ const ${itemVarPattern} = ${iterableCode}[${indexVarName}]; ${this.generate(body, 'statement')}; }`;
+              }
             }
           }
         }
@@ -2029,7 +2048,10 @@ export class CodeGenerator {
           if (iterType === 'for-in') {
             const step = stepOrOwn;  // For for-in, 4th param is step
             const varsArray = Array.isArray(vars) ? vars : [vars];
-            const [firstVar, indexVar] = varsArray;
+            
+            // Check if no loop variable (range repetition: for [1...N])
+            const noVar = varsArray.length === 0;
+            const [firstVar, indexVar] = noVar ? ['_i', null] : varsArray;
 
             // Check if first var is a destructuring pattern
             let itemVarPattern = firstVar;
@@ -2073,7 +2095,10 @@ export class CodeGenerator {
                   code += this.indent() + `for (let ${indexVarName} = 0; ${indexVarName} < ${iterableCode}.length; ${indexVarName} += ${stepCode}) {\n`;
                 }
                 this.indentLevel++;
-                code += this.indent() + `const ${itemVarPattern} = ${iterableCode}[${indexVarName}];\n`;
+                // Only extract item if we have an actual loop variable (not throwaway _i for noVar)
+                if (!noVar) {
+                  code += this.indent() + `const ${itemVarPattern} = ${iterableCode}[${indexVarName}];\n`;
+                }
               }
             } else if (indexVar) {
               // Use traditional for loop with index
@@ -4094,7 +4119,10 @@ export class CodeGenerator {
       if (iterType === 'for-in') {
         const step = stepOrOwn;  // For for-in, 4th param is step
         const varsArray = Array.isArray(vars) ? vars : [vars];
-        const [itemVar, indexVar] = varsArray;
+        
+        // Check if no loop variable (range repetition: for [1...N])
+        const noVar = varsArray.length === 0;
+        const [itemVar, indexVar] = noVar ? ['_i', null] : varsArray;
 
         // Check if itemVar is destructuring
         let itemVarPattern = itemVar;
@@ -4144,7 +4172,10 @@ export class CodeGenerator {
             }
             code += '{\n';
             this.indentLevel++;
-            code += this.indent() + `const ${itemVarPattern} = ${iterableCode}[${indexVarName}];\n`;
+            // Only extract item if we have an actual loop variable (not throwaway _i for noVar)
+            if (!noVar) {
+              code += this.indent() + `const ${itemVarPattern} = ${iterableCode}[${indexVarName}];\n`;
+            }
           }
 
           // Handle guards and body
