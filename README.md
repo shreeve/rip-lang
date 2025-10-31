@@ -25,7 +25,7 @@
 
 Rip brings CoffeeScript's elegance to modern JavaScript—but **25% smaller**, completely standalone, and self-hosting. No build tools, no external dependencies, not even a parser generator. Just clone and go.
 
-```rip
+```coffee
 # Elegant syntax with modern features
 def parseUsers(...inputs)
   users = []
