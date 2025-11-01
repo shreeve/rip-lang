@@ -288,8 +288,20 @@ echo 'x = 42' | ./bin/rip -c
 
 **🚀 Fastest Way: Install from Bun Package Registry**
 
+First, install Bun if you haven't already:
+
 ```bash
-# Install globally
+# Install Bun (macOS, Linux, WSL)
+curl -fsSL https://bun.sh/install | bash
+
+# Or on Windows (PowerShell)
+powershell -c "irm bun.sh/install.ps1|iex"
+```
+
+Then install Rip globally:
+
+```bash
+# Install Rip globally
 bun add -g rip-lang
 
 # Start the REPL immediately!
