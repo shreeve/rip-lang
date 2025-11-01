@@ -124,17 +124,15 @@ class Generator
   # Grammar Processing
   # ============================================================================
 
-  processGrammar: (grammar) ->
-    @_processOperators grammar.operators
+  processGrammar!: (grammar) ->
+    @_processOperators grammar.operators if grammar.operators
     @_buildRules (grammar.grammar or grammar.bnf)
     @_augmentGrammar grammar
 
-  _processOperators: (ops) ->
-    if ops
-      for precedence, i in ops
-        for k in [1...precedence.length]
-          @operators[precedence[k]] = {precedence: i + 1, assoc: precedence[0]}
-    null # prevent comprehension building above
+  _processOperators!: (ops) ->
+    for precedence, i in ops
+      for k in [1...precedence.length]
+        @operators[precedence[k]] = {precedence: i + 1, assoc: precedence[0]}
 
   _buildRules: (grammar) ->
     actionGroups = {}
@@ -321,7 +319,7 @@ class Generator
     else
       JSON.stringify(obj)
 
-  _assignPrecedence: (rule, precedence) ->
+  _assignPrecedence!: (rule, precedence) ->
     if precedence?.prec and @operators[precedence.prec]
       rule.precedence = @operators[precedence.prec].precedence
     else if rule.precedence is 0
@@ -356,14 +354,14 @@ class Generator
       .replace(/YYABORT/g, 'return false')
       .replace(/YYACCEPT/g, 'return true')
 
-  _buildTokenMappings: ->
+  _buildTokenMappings!: ->
     @tokenNames = {}
 
     for own name, id of @symbolIds when id >= 2
       unless @types[name]
         @tokenNames[id] = name
 
-  _augmentGrammar: (grammar) ->
+  _augmentGrammar!: (grammar) ->
     throw new Error "Grammar error: no rules defined." if @rules.length is 0
 
     @start = grammar.start or @rules[0].type
@@ -382,7 +380,7 @@ class Generator
   # LR Automaton Construction
   # ============================================================================
 
-  buildLRAutomaton: ->
+  buildLRAutomaton!: ->
     acceptItem = new Item @rules[@acceptRuleIndex]
     firstState = @_closure new State(acceptItem)
     firstState.id = 0
@@ -462,7 +460,7 @@ class Generator
     if gotoSet.items.size is 0 then gotoSet else @_closure gotoSet
 
   # Insert new state into automaton
-  _insertState: (symbol, itemSet, states, stateMap) ->
+  _insertState!: (symbol, itemSet, states, stateMap) ->
     # Build kernel signature (advanced items) before computing closure
     kernel = []
     for item from itemSet.items when item.nextSymbol is symbol
@@ -491,7 +489,7 @@ class Generator
   # Lookahead Computation - SLR(1) Algorithm
   # ============================================================================
 
-  processLookaheads: ->
+  processLookaheads!: ->
     @processLookaheads = ->  # Computes once; no-op on subsequent calls
     @_computeNullableSets()  # ε-derivable symbols
     @_computeFirstSets()     # First tokens
@@ -499,7 +497,7 @@ class Generator
     @_assignItemLookaheads() # FOLLOW(A) → item lookaheads
 
   # Determine nullable symbols (can derive ε)
-  _computeNullableSets: ->
+  _computeNullableSets!: ->
     changed = true
     while changed
       changed = false
@@ -520,7 +518,7 @@ class Generator
     @types[symbol]?.nullable or false
 
   # Compute FIRST sets (tokens that can begin derivations)
-  _computeFirstSets: ->
+  _computeFirstSets!: ->
     changed = true
     while changed
       changed = false
@@ -556,7 +554,7 @@ class Generator
     firsts
 
   # Compute FOLLOW sets (tokens that can follow types)
-  _computeFollowSets: ->
+  _computeFollowSets!: ->
     changed = true
     while changed
       changed = false
@@ -668,7 +666,7 @@ class Generator
     solution
 
   # Compute default actions for single-action states
-  _computeDefaultActions: (states) ->
+  _computeDefaultActions!: (states) ->
     defaults = {}
     for state, k in states
       actionCount = 0
