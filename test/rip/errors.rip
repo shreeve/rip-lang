@@ -46,14 +46,33 @@ test "throw in function", "fn = -> throw 'error'\nresult = try\n  fn()\ncatch e\
 # Throw with expression
 fail "throw expression", "throw 'Error: ' + 'message'"
 
+# Throw in expression position (must wrap in IIFE for valid JS)
+test "throw in || expression", '''
+  fn = -> null
+  result = try
+    x = fn() || throw "error"
+  catch e
+    e
+  result
+  ''', "error"
+
+test "throw in ternary", '''
+  result = try
+    x = if false then 42 else throw "invalid"
+  catch e
+    e
+  result
+  ''', "invalid"
+
 # Code generation
 code "throw", "throw e", "throw e"
+code "throw in || wraps IIFE", 'x = (fn() || throw "err")', 'let x;\n\nx = (fn() || (() => { throw "err"; })())'
 
 # ============================================================================
 # Stats for CODEGEN.md
 # ============================================================================
-# Exception handling implemented: 0/2 (0%)
-# Tests passing: 0/17 (0%)
+# Exception handling implemented: 2/2 (100%)
+# Tests passing: 33/33 (100%)
 # Test: Error Handling
 # Tests that invalid syntax properly errors
 

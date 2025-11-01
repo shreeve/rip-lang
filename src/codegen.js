@@ -1934,7 +1934,15 @@ export class CodeGenerator {
           }
         }
 
-        return `throw ${this.generate(expr, 'value')}`;
+        // Generate throw statement
+        const throwStmt = `throw ${this.generate(expr, 'value')}`;
+        
+        // In value context, wrap in IIFE (throw is a statement, not an expression)
+        if (context === 'value') {
+          return `(() => { ${throwStmt}; })()`;
+        }
+        
+        return throwStmt;
       }
 
       case 'switch': {
