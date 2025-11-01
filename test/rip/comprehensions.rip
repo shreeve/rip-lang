@@ -88,4 +88,4 @@ code "object comprehension", "{k: v * 2 for k, v of obj}", "(() => {\n  const re
 # ============================================================================
 # Node types: comprehension, object-comprehension
 # Tests: 22 total (22 passing, 0 failing)
-# Coverage: Array comprehensions, object comprehensions, guards (when), index, destructuring, break/continue, by step
+# Coverage: Array comprehensions, object comprehensions, guards (when), index, destructuring, break/continue, by step, nested comprehensions

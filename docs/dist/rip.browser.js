@@ -3291,6 +3291,7 @@ class CodeGenerator {
     this.options = options;
     this.indentLevel = 0;
     this.indentString = "  ";
+    this.comprehensionDepth = 0;
   }
   compile(sexpr) {
     this.programVars = new Set;
@@ -4036,7 +4037,7 @@ ${this.indent()}}`;
       }
       case "for-in": {
         const [vars, iterable, step, guard, body] = rest;
-        if (context === "value") {
+        if (context === "value" && this.comprehensionDepth === 0) {
           const iterator = ["for-in", vars, iterable, step];
           const guards = guard ? [guard] : [];
           return this.generate(["comprehension", body, [iterator], guards], context);
@@ -4564,6 +4565,7 @@ ${this.indent()}}`;
         let code = `(${asyncPrefix}() => {
 `;
         this.indentLevel++;
+        this.comprehensionDepth++;
         code += this.indent() + `const result = [];
 `;
         for (const iterator of iterators) {
@@ -4685,8 +4687,14 @@ ${this.indent()}}`;
               code += this.indent() + this.generate(stmt, "statement") + `;
 `;
             } else {
-              code += this.indent() + `result.push(${this.generate(stmt, "value")});
+              const isLoopStmt = Array.isArray(stmt) && ["for-in", "for-of", "for-from", "while", "until", "loop"].includes(stmt[0]);
+              if (isLoopStmt) {
+                code += this.indent() + this.generate(stmt, "statement") + `;
 `;
+              } else {
+                code += this.indent() + `result.push(${this.generate(stmt, "value")});
+`;
+              }
             }
           }
         } else {
@@ -4694,8 +4702,14 @@ ${this.indent()}}`;
             code += this.indent() + this.generate(expr, "statement") + `;
 `;
           } else {
-            code += this.indent() + `result.push(${this.generate(expr, "value")});
+            const isLoopStmt = Array.isArray(expr) && ["for-in", "for-of", "for-from", "while", "until", "loop"].includes(expr[0]);
+            if (isLoopStmt) {
+              code += this.indent() + this.generate(expr, "statement") + `;
 `;
+            } else {
+              code += this.indent() + `result.push(${this.generate(expr, "value")});
+`;
+            }
           }
         }
         for (let i = 0;i < guards.length; i++) {
@@ -4711,6 +4725,7 @@ ${this.indent()}}`;
         code += this.indent() + `return result;
 `;
         this.indentLevel--;
+        this.comprehensionDepth--;
         code += this.indent() + "})()";
         return code;
       }
@@ -6560,7 +6575,7 @@ function compileToJS(source, options = {}) {
 }
 // src/browser.js
 var VERSION = "1.0.0";
-var BUILD_DATE = "2025-10-31@23:23:40GMT";
+var BUILD_DATE = "2025-11-01@00:44:15GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
