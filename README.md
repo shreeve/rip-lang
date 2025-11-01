@@ -189,7 +189,7 @@ case '+': {
 | Component | CoffeeScript | Rip | Notes |
 |-----------|--------------|-----|-------|
 | Lexer+Rewriter | 3,558 LOC | **3,145 LOC** | Expanded syntax |
-| Parser Generator | 2,285 LOC (Jison) | **1,047 LOC** (Solar) | Built-in, ~125× faster |
+| Parser Generator | 2,285 LOC (Jison) | **1,047 LOC** (Solar) | Built-in, ~156× faster! |
 | Compiler | 10,346 LOC (AST Nodes) | **4,738 LOC** (S-expressions) | Powerful capabilities |
 | Tools | 1,571 LOC (Repl, Cake) | **520 LOC** (Repl, Browser) | 3 Repl's + Browser |
 | **Total** | **17,760 LOC** | **9,450 LOC** | **~50% smaller** |
@@ -892,8 +892,8 @@ Both syntaxes handle `null` and `undefined` - pick the style that fits your proj
 - Solar-generated SLR(1) parser
 - Built from grammar specification
 - Generates s-expressions directly
-- Regenerate with `bun run parser` (~100ms, instant feedback!)
-- **Note:** Solar's 125× speed advantage over Jison (100ms vs 12.5s) made rapid grammar iteration possible
+- Regenerate with `bun run parser` (~80ms, instant feedback!)
+- **Note:** Solar's 156× speed advantage over Jison (80ms vs 12.5s) made rapid grammar iteration possible
 
 **3. Code Generator** (`src/codegen.js`)
 - Pattern matches on s-expressions
@@ -1377,7 +1377,7 @@ MIT
 **Inspired by:**
 - CoffeeScript (syntax and lexer)
 - Lisp/Scheme (s-expressions)
-- Solar (parser generator) - **This project wouldn't have been possible without Solar's incredible speed (100ms vs Jison's 12.5 seconds for parser generation). Solar's performance enabled rapid iteration on grammar changes with instant feedback, making development a joy.**
+- Solar (parser generator) - **This project wouldn't have been possible without Solar's incredible speed (80ms vs Jison's 12.5 seconds for parser generation). Solar's performance enabled rapid iteration on grammar changes with instant feedback, making development a joy.**
 - Ruby (regex operators, __DATA__ marker)
 
 **Built by:** Developers who believe simplicity scales
