@@ -76,18 +76,18 @@ async function main() {
     });
 
     let actualPort = null;
-    
+
     // Capture server output and extract port
     serverProcess.stdout.on('data', (data) => {
       const output = data.toString();
       process.stdout.write(output);
-      
+
       // Parse port from "Server running at http://localhost:PORT"
       if (!actualPort) {
         const match = output.match(/localhost:(\d+)/);
         if (match) {
           actualPort = match[1];
-          
+
           // Open browser once we know the port
           setTimeout(() => {
             const openCmd = process.platform === 'darwin' ? 'open' :
