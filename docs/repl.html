@@ -331,7 +331,7 @@
 <body>
   <div class="header">
     <h1>
-      <img src="rip.svg" alt="Rip" class="logo" style="background-color: #fff; border-radius: 5px; padding: 4px;">">
+      <img src="rip.svg" alt="Rip" class="logo" style="background-color: #fff; border-radius: 5px; padding: 4px;">
       Rip Browser REPL
     </h1>
     <div class="subtitle">Interactive environment with REPL console and live compiler</div>
@@ -420,11 +420,11 @@ console.log "Domain:", domain</textarea>
     // Convert GMT timestamp to local time for display
     const buildDate = BUILD_DATE; // GMT timestamp from build
     const localBuildDate = new Date(buildDate.replace('@', 'T').replace('GMT', 'Z'))
-      .toLocaleString(undefined, { 
+      .toLocaleString(undefined, {
         year: 'numeric', month: 'short', day: 'numeric',
         hour: '2-digit', minute: '2-digit', timeZoneName: 'short'
       });
-    
+
     document.querySelector('.subtitle').textContent =
       `Interactive environment • Version ${VERSION} • Built ${localBuildDate}`;
 
@@ -460,32 +460,32 @@ console.log "Domain:", domain</textarea>
     const resizer = document.getElementById('resizer');
     const leftPane = document.getElementById('editor-left');
     const rightPane = document.getElementById('editor-right');
-    
+
     if (resizer && leftPane && rightPane) {
       let isResizing = false;
-      
+
       resizer.addEventListener('mousedown', (e) => {
         isResizing = true;
         document.body.style.cursor = 'col-resize';
         e.preventDefault();
       });
-      
+
       document.addEventListener('mousemove', (e) => {
         if (!isResizing) return;
-        
+
         const container = document.querySelector('.compiler-container');
         const containerRect = container.getBoundingClientRect();
         const offsetX = e.clientX - containerRect.left;
         const containerWidth = containerRect.width;
-        
+
         // Calculate percentage (20% min, 80% max for each side)
         let leftPercent = (offsetX / containerWidth) * 100;
         leftPercent = Math.max(20, Math.min(80, leftPercent));
-        
+
         leftPane.style.flexBasis = `${leftPercent}%`;
         rightPane.style.flexBasis = `${100 - leftPercent}%`;
       });
-      
+
       document.addEventListener('mouseup', () => {
         if (isResizing) {
           isResizing = false;
