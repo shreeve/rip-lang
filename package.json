@@ -31,8 +31,22 @@
     "lisp",
     "bun",
     "browser",
-    "transpiler"
+    "transpiler",
+    "coffeescript",
+    "parser",
+    "rip"
   ],
-  "author": "",
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreeve/rip-lang.git"
+  },
+  "bugs": {
+    "url": "https://github.com/shreeve/rip-lang/issues"
+  },
+  "homepage": "https://github.com/shreeve/rip-lang#readme",
+  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT"
 }
