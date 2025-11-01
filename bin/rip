@@ -64,59 +64,29 @@ async function main() {
     process.exit(0);
   }
 
-  // Launch browser REPL with auto-shutdown
+  // Launch local browser REPL (starts server + opens browser)
   if (args.includes('-w') || args.includes('--web')) {
-    console.log('🚀 Launching Rip browser REPL...');
-
-    // Start the server on port 0 (OS assigns available port)
+    console.log('🚀 Starting local server and opening browser REPL...');
+    
+    // Start the server
     const servePath = join(__dirname, '../scripts/serve.js');
-    const server = spawn('bun', [servePath], {
-      stdio: 'pipe',
-      env: { ...process.env, PORT: '0', RIP_WEB_MODE: 'true' }
+    spawn('bun', [servePath], {
+      stdio: 'inherit',
+      detached: false
     });
-
-    // Capture the assigned port from server output
-    let assignedPort = null;
-    server.stdout.on('data', (data) => {
-      const output = data.toString();
-      // Parse port from "Server running at http://localhost:XXXXX" line
-      const match = output.match(/localhost:(\d+)/);
-      if (match) {
-        assignedPort = match[1];
-      }
-      process.stdout.write(output);
-    });
-
-    server.stderr.on('data', (data) => process.stderr.write(data));
-
-    // Wait for port assignment
-    await new Promise(resolve => {
-      const checkPort = setInterval(() => {
-        if (assignedPort) {
-          clearInterval(checkPort);
-          resolve();
-        }
-      }, 50);
-      // Timeout after 5 seconds
-      setTimeout(() => {
-        clearInterval(checkPort);
-        resolve();
-      }, 5000);
-    });
-
-    if (!assignedPort) {
-      console.error('Error: Server failed to start');
-      process.exit(1);
-    }
-
-    // Open browser directly to repl.html with auto-shutdown parameter
-    const openCmd = process.platform === 'darwin' ? 'open' :
+    
+    // Wait for server to start
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    // Open browser
+    const openCmd = process.platform === 'darwin' ? 'open' : 
                     process.platform === 'win32' ? 'start' : 'xdg-open';
-    const url = `http://localhost:${assignedPort}/repl.html?autoShutdown=true`;
-    execSync(`${openCmd} "${url}"`);
-
-    // Server will auto-shutdown when page signals
-    // (See repl.html and scripts/serve.js)
+    execSync(`${openCmd} http://localhost:3000/`);
+    
+    console.log('\n✨ Server running at http://localhost:3000/');
+    console.log('📱 Press Ctrl+C to stop\n');
+    
+    // Keep server running (don't exit)
     return;
   }
 

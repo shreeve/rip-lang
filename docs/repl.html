@@ -784,46 +784,6 @@ console.log "Domain:", domain</textarea>
     compileCode();
   </script>
 
-  <!-- Auto-shutdown for rip -w (plain JS, not Rip) -->
-  <script>
-    console.log('[DEBUG] Auto-shutdown script loaded');
-    console.log('[DEBUG] Current URL:', window.location.href);
-    console.log('[DEBUG] Search params:', window.location.search);
-
-    // Check immediately (before Rip scripts load)
-    if (window.location.search.includes('autoShutdown=true')) {
-      console.log('[Auto-shutdown] Mode detected, will signal server after load');
-
-      function sendShutdownSignal() {
-        console.log('[Auto-shutdown] Sending shutdown signal to server...');
-        fetch('/shutdown')
-          .then(response => {
-            console.log('[Auto-shutdown] Signal sent successfully, status:', response.status);
-          })
-          .catch(err => {
-            console.log('[Auto-shutdown] Signal failed:', err.message);
-          });
-
-        // Clean URL (remove ?autoShutdown=true) without reloading
-        const cleanUrl = window.location.pathname;
-        window.history.replaceState({}, '', cleanUrl);
-        console.log('[Auto-shutdown] URL cleaned');
-      }
-
-      // Check if page is already loaded
-      if (document.readyState === 'complete') {
-        console.log('[Auto-shutdown] Page already loaded, signaling in 1000ms...');
-        setTimeout(sendShutdownSignal, 1000);
-      } else {
-        // Wait for load event
-        window.addEventListener('load', () => {
-          console.log('[Auto-shutdown] Page loaded, waiting 1000ms...');
-          setTimeout(sendShutdownSignal, 1000);
-        });
-      }
-    }
-  </script>
-
   <!-- S-Expression Formatter (written in Rip!) -->
   <script type="text/rip">
     # Compact S-Expression Formatter

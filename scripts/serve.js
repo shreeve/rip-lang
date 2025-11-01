@@ -25,13 +25,6 @@ const server = Bun.serve({
     const url = new URL(req.url);
     let pathname = url.pathname;
 
-    // Special endpoint for auto-shutdown (used by rip -w)
-    if (pathname === '/shutdown') {
-      console.log('\n✅ Page loaded - shutting down server...');
-      setTimeout(() => process.exit(0), 100);
-      return new Response('OK', { status: 200 });
-    }
-
     // Default to index.html for directory requests
     if (pathname.endsWith('/')) {
       pathname += 'index.html';
@@ -73,14 +66,9 @@ const server = Bun.serve({
 
 const actualPort = server.port;
 
-// Output based on mode
 console.log(`🚀 Server running at http://localhost:${actualPort}`);
 console.log(`📁 Serving from: ${ROOT}/`);
 console.log(`🗜️  Brotli compression: enabled`);
-
-if (!process.env.RIP_WEB_MODE) {
-  // Full output for manual bun run serve
-  console.log('');
-  console.log(`✨ Rip REPL:   http://localhost:${actualPort}/`);
-  console.log(`📚 Examples:   http://localhost:${actualPort}/examples/`);
-}
+console.log('');
+console.log(`✨ Rip REPL:   http://localhost:${actualPort}/`);
+console.log(`📚 Examples:   http://localhost:${actualPort}/examples/`);
