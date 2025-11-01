@@ -3,8 +3,9 @@
 import { readFileSync, existsSync } from 'fs';
 import { join, extname } from 'path';
 
-const PORT = 3000;
 const ROOT = 'docs';
+// Port 0 = let OS assign available port (can be overridden by env var)
+const PORT = process.env.PORT || 3000;
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -17,12 +18,19 @@ const MIME_TYPES = {
   '.ico': 'image/x-icon'
 };
 
-Bun.serve({
+const server = Bun.serve({
   port: PORT,
 
   fetch(req) {
     const url = new URL(req.url);
     let pathname = url.pathname;
+
+    // Special endpoint for auto-shutdown (used by rip -w)
+    if (pathname === '/shutdown') {
+      console.log('\n✅ Page loaded - shutting down server...');
+      setTimeout(() => process.exit(0), 100);
+      return new Response('OK', { status: 200 });
+    }
 
     // Default to index.html for directory requests
     if (pathname.endsWith('/')) {
@@ -63,9 +71,15 @@ Bun.serve({
   }
 });
 
-console.log(`🚀 Server running at http://localhost:${PORT}`);
+const actualPort = server.port;
+console.log(`🚀 Server running at http://localhost:${actualPort}`);
 console.log(`📁 Serving from: ${ROOT}/`);
 console.log(`🗜️  Brotli compression: enabled`);
 console.log('');
-console.log(`✨ Rip REPL:   http://localhost:${PORT}/`);
-console.log(`📚 Examples:   http://localhost:${PORT}/examples/`);
+console.log(`✨ Rip REPL:   http://localhost:${actualPort}/`);
+console.log(`📚 Examples:   http://localhost:${actualPort}/examples/`);
+
+// Output port for rip -w to read
+if (process.env.RIP_WEB_MODE) {
+  console.log(`PORT:${actualPort}`);
+}

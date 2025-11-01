@@ -781,6 +781,19 @@ console.log "Domain:", domain</textarea>
 
     // Initial compile
     compileCode();
+
+    // Auto-shutdown signal for rip -w mode
+    if (window.location.search.includes('autoShutdown=true')) {
+      window.addEventListener('load', () => {
+        // Give a moment for everything to settle
+        setTimeout(() => {
+          fetch('/shutdown').catch(() => {});
+          // Clean URL (remove ?autoShutdown=true) without reloading
+          const cleanUrl = window.location.pathname;
+          window.history.replaceState({}, '', cleanUrl);
+        }, 500);
+      });
+    }
   </script>
 
   <!-- S-Expression Formatter (written in Rip!) -->
