@@ -789,22 +789,22 @@ console.log "Domain:", domain</textarea>
   <script type="text/rip">
     # Compact S-Expression Formatter
     # Converts nested arrays to readable indented format
-    
+
     # Check if array should be inline (parens) or block (indented)
     isInline = (arr) ->
       return false unless Array.isArray(arr)
       return false if arr.length > 3
       return false if arr.some((e) -> Array.isArray(e))
-      
+
       # Total string length check
       total = arr.reduce(((sum, e) -> sum + String(e).length), 0)
       total <= 40
-    
+
     # Format a single element
     formatElement = (elem) ->
       return elem if typeof elem is 'number'
       return '""' if elem is ''
-      
+
       # Handle quoted strings (remove outer JSON quotes)
       str = String(elem)
       if str.startsWith('"') and str.endsWith('"')
@@ -812,18 +812,18 @@ console.log "Domain:", domain</textarea>
         if str.length > 2 and str[1] is '\\'
           return str.slice(2, -2)  # Remove outer quotes and escapes
         return str  # Keep as-is
-      
+
       str
-    
+
     # Main formatter
     window.toSexpr = (arr, indent = 0, isTopLevel = true) ->
       # Inline arrays use parens
       if isInline(arr)
         return '(' + arr.map(formatElement).join(' ') + ')'
-      
+
       result = []
       needsBlank = false
-      
+
       for elem, i in arr
         if i is 0
           # First element at current indent
@@ -831,7 +831,7 @@ console.log "Domain:", domain</textarea>
         else if Array.isArray(elem)
           # Add blank line between top-level siblings (after first 2)
           result.push('') if isTopLevel and i > 2 and needsBlank
-          
+
           if isInline(elem)
             # Inline - add to current line
             result[result.length - 1] += ' ' + window.toSexpr(elem, 0, false)
@@ -842,7 +842,7 @@ console.log "Domain:", domain</textarea>
         else
           # Atom - append to current line
           result[result.length - 1] += ' ' + formatElement(elem)
-      
+
       result.join('\n')
   </script>
 </body>
