@@ -66,9 +66,9 @@ async function main() {
 
   // Launch local browser REPL (starts server + opens browser)
   if (args.includes('-w') || args.includes('--web')) {
-    console.log('🚀 Starting local server and opening browser REPL...');
+    console.log('🚀 Starting Rip browser REPL...\n');
 
-    // Start the server
+    // Start the server (inherit stdio to show server messages)
     const servePath = join(__dirname, '../scripts/serve.js');
     spawn('bun', [servePath], {
       stdio: 'inherit',
@@ -83,8 +83,7 @@ async function main() {
                     process.platform === 'win32' ? 'start' : 'xdg-open';
     execSync(`${openCmd} http://localhost:3000/`);
 
-    console.log('\n✨ Server running at http://localhost:3000/');
-    console.log('📱 Press Ctrl+C to stop\n');
+    console.log('📱 Press Ctrl+C to stop server\n');
 
     // Keep server running (don't exit)
     return;
