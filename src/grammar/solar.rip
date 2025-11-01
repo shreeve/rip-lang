@@ -394,12 +394,19 @@ class Generator
     marked = 0
     while marked < states.length
       itemSet = states[marked++]
-      symbols = new Set
-      for item from itemSet.items when symbol = item.nextSymbol
-        if symbol isnt '$end'
-          symbols.add symbol
-      for symbol from symbols
-        @_insertState symbol, itemSet, states, stateMap
+
+      # Single pass: group items by nextSymbol
+      symbolItems = new Map
+      for item from itemSet.items when item.nextSymbol and item.nextSymbol isnt '$end'
+        items = symbolItems.get(item.nextSymbol)
+        unless items
+          items = []
+          symbolItems.set(item.nextSymbol, items)
+        items.push(item)
+
+      # Process each symbol with its pre-collected items
+      for [symbol, items] from symbolItems
+        @_insertStateWithItems symbol, items, itemSet, states, stateMap
 
     @states = states
 
@@ -454,12 +461,10 @@ class Generator
 
     if gotoSet.items.size is 0 then gotoSet else @_closure gotoSet
 
-  # Insert new state into automaton
-  _insertState!: (symbol, itemSet, states, stateMap) ->
-    # Build kernel signature (advanced items) before computing closure
-    kernel = []
-    for item from itemSet.items when item.nextSymbol is symbol
-      kernel.push [item.rule.id, item.dot + 1]
+  # Insert new state into automaton (items provided - no scanning needed)
+  _insertStateWithItems!: (symbol, items, itemSet, states, stateMap) ->
+    # Build kernel signature from provided items (already filtered)
+    kernel = ([item.rule.id, item.dot + 1] for item in items)
     return unless kernel.length
 
     kernel.sort (a, b) -> (a[0] - b[0]) or (a[1] - b[1])
