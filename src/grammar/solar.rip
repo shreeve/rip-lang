@@ -7,7 +7,7 @@
 # readability, efficiency, and maintainability.
 #
 # Author: Steve Shreeve <steve.shreeve@gmail.com>
-#   Date: October 30, 2025
+#   Date: November 1, 2025
 # ==============================================================================
 
 import fs from 'fs'
@@ -384,10 +384,10 @@ class Generator
     acceptItem = new Item @rules[@acceptRuleIndex]
     firstState = @_closure new State(acceptItem)
     firstState.id = 0
-    firstState.signature = @_computeStateSignature(firstState)
+    firstState.signature = "#{acceptItem.rule.id}.#{acceptItem.dot}"
 
     states = [firstState]
-    stateMap = new Map # stateSignature -> state index
+    stateMap = new Map # kernel signature -> state index
     stateMap.set firstState.signature, 0
 
     # Build automaton by exploring all transitions
@@ -402,11 +402,6 @@ class Generator
         @_insertState symbol, itemSet, states, stateMap
 
     @states = states
-
-  # Calculate unique identifier for a state based on its items
-  _computeStateSignature: (state) ->
-    ids = (item.id for item from state.items)
-    ids.sort((a, b) -> a - b).join('|')
 
   # Compute closure of an LR item set (lookaheads assigned later using FOLLOW sets)
   _closure: (itemSet) ->
