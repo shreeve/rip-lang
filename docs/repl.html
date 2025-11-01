@@ -789,47 +789,47 @@ console.log "Domain:", domain</textarea>
   <script type="text/rip">
     # Compact S-Expression Formatter
     # Converts nested arrays to readable indented format
-    
+
     # Check if array should be inline (parens) or block (indented)
     isInline = (arr) ->
       return false unless Array.isArray(arr)
       return false if arr.length is 0 or arr.length > 4
-      
+
       # No nested arrays for inline
       for elem in arr
         return false if Array.isArray(elem)
-      
+
       # Check total string length (conservative for readability)
       total = 0
       for elem in arr
         total += String(elem).length
-      
+
       total <= 50
-    
+
     # Format a single element (non-array)
     formatAtom = (elem) ->
       return String(elem) if typeof elem is 'number'
       return '""' if elem is ''
-      
+
       str = String(elem)
       # Keep strings as-is for now
       str
-    
+
     # Main recursive formatter
     window.toSexpr = (arr, indent = 0, isTopLevel = false) ->
       # Not an array - just format the atom
       return formatAtom(arr) unless Array.isArray(arr)
-      
+
       # Inline arrays use parens
       if isInline(arr)
         parts = for elem in arr
           formatAtom(elem)
         return '(' + parts.join(' ') + ')'
-      
+
       # Block arrays use indentation
       lines = []
       spaces = ' '.repeat(indent)
-      
+
       for elem, idx in arr
         if idx is 0
           # First element is the head/operator
@@ -847,7 +847,7 @@ console.log "Domain:", domain</textarea>
         else
           # Simple atom - add to current line
           lines[lines.length - 1] += ' ' + formatAtom(elem)
-      
+
       lines.join('\n')
   </script>
 </body>
