@@ -199,6 +199,89 @@ case '+': {
 - ✅ **Self-hosting** - Rip compiles itself
 - ✅ **No external tools** - Just a JavaScript runtime
 
+### The Pipeline in Action
+
+**Here's a real example showing the complete transformation:**
+
+**Step 1: Rip Source Code**
+```rip
+# Rip code - edit me!
+def fibonacci(n)
+  if n <= 1
+    n
+  else
+    fibonacci(n - 1) + fibonacci(n - 2)
+
+# Try heregex
+pattern = ///
+  ^ \d+      # digits
+  \s*        # space
+  [a-z]+     # letters
+  $
+///i
+
+# Try regex features
+email = "user@example.com"
+domain = email[/@(.+)$/, 1]
+
+console.log "Fib(10):", fibonacci(10)
+console.log "Domain:", domain
+```
+
+**Step 2: S-Expression Intermediate Representation**
+
+The parser generates simple nested arrays:
+
+```lisp
+(program 
+  (def fibonacci (n)
+    (block
+      (if (<= n 1) (block n)
+        (block (+ (fibonacci (- n 1)) (fibonacci (- n 2)))))))
+  (= pattern "/^ \\d+\\s*[a-z]+$/i")
+  (= email "user@example.com")
+  (= domain (regex-index email /@(.+)$/ 1))
+  ((. console log) "Fib(10):" (fibonacci 10))
+  ((. console log) "Domain:" domain)
+)
+```
+
+**Key observations:**
+- Every node is just an array: `["operation", ...args]`
+- Functions: `["def", name, params, body]`
+- Binary ops: `["+", left, right]`
+- Property access: `[".", obj, prop]`
+- Regex indexing: `["regex-index", str, pattern, group]`
+
+**Step 3: Generated JavaScript**
+
+The codegen processes the s-expressions and outputs modern ES2022:
+
+```javascript
+let _, domain, email, pattern;
+
+function fibonacci(n) {
+  return ((n <= 1) ? n : (fibonacci((n - 1)) + fibonacci((n - 2))));
+};
+pattern = /^\d+\s*[a-z]+$/i;
+email = "user@example.com";
+domain = (_ = toSearchable(email).match(/@(.+)$/)) && _[1];
+console.log("Fib(10):", fibonacci(10));
+console.log("Domain:", domain);
+```
+
+**Why this works:**
+- ✅ **Simple IR** - Pattern matching on arrays instead of AST classes
+- ✅ **Easy to debug** - Print any s-expression with `JSON.stringify()`
+- ✅ **Easy to extend** - Add a new case to the switch statement
+- ✅ **Inspectable** - See exactly what the parser emits with `./bin/rip -s`
+
+**Try it yourself:**
+```bash
+./bin/rip -s yourfile.rip  # See s-expressions
+./bin/rip -c yourfile.rip  # See generated JavaScript
+```
+
 ---
 
 ## Quick Start
