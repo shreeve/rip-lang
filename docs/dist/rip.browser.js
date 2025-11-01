@@ -6508,6 +6508,127 @@ ${this.indent()}}`;
   }
 }
 // src/compiler.js
+var INLINE_FORMS = [
+  ".",
+  "?.",
+  "::",
+  "?::",
+  "[]",
+  "?[]",
+  "optindex",
+  "optcall",
+  "+",
+  "-",
+  "*",
+  "/",
+  "%",
+  "**",
+  "//",
+  "%%",
+  "==",
+  "!=",
+  "<",
+  ">",
+  "<=",
+  ">=",
+  "===",
+  "!==",
+  "&&",
+  "||",
+  "??",
+  "&",
+  "|",
+  "^",
+  "<<",
+  ">>",
+  ">>>",
+  "rest",
+  "default",
+  "...",
+  "expansion"
+];
+function isInline(arr) {
+  if (!Array.isArray(arr) || arr.length === 0)
+    return false;
+  const head = arr[0]?.valueOf ? arr[0].valueOf() : arr[0];
+  if (INLINE_FORMS.includes(head))
+    return true;
+  if (arr.length <= 4) {
+    return !arr.some((elem) => Array.isArray(elem));
+  }
+  return false;
+}
+function formatAtom(elem, indent = 0) {
+  if (Array.isArray(elem))
+    return "(???)";
+  if (typeof elem === "number")
+    return String(elem);
+  if (elem === "")
+    return '""';
+  const str = String(elem);
+  if (str[0] === "/" && str.indexOf(`
+`) >= 0) {
+    const match = str.match(/\/([gimsuvy]*)$/);
+    const flags = match ? match[1] : "";
+    let content = str.slice(1);
+    if (flags) {
+      content = content.slice(0, -flags.length - 1);
+    } else {
+      content = content.slice(0, -1);
+    }
+    const lines = content.split(`
+`);
+    const cleaned = lines.map((line) => line.replace(/#.*$/, "").trim());
+    const processed = cleaned.join("");
+    return `"/${processed}/${flags}"`;
+  }
+  return str;
+}
+function formatSExpr(arr, indent = 0, isTopLevel = false) {
+  if (!Array.isArray(arr))
+    return formatAtom(arr, indent);
+  if (isInline(arr)) {
+    const parts = arr.map((elem) => Array.isArray(elem) ? formatSExpr(elem, 0, false) : formatAtom(elem, indent));
+    return "(" + parts.join(" ") + ")";
+  }
+  if (isTopLevel && arr[0] === "program") {
+    const secondElem = arr[1];
+    const header = Array.isArray(secondElem) ? "(program" : "(program " + formatAtom(secondElem, 0);
+    const lines2 = [header];
+    const startIndex = Array.isArray(secondElem) ? 1 : 2;
+    for (let i = startIndex;i < arr.length; i++) {
+      let childFormatted = formatSExpr(arr[i], 2, false);
+      if (childFormatted[0] === "(") {
+        childFormatted = "  " + childFormatted;
+      }
+      lines2.push(childFormatted);
+    }
+    lines2.push(")");
+    return lines2.join(`
+`);
+  }
+  const lines = [];
+  const spaces = " ".repeat(indent);
+  const head = Array.isArray(arr[0]) ? formatSExpr(arr[0], 0, false) : formatAtom(arr[0], indent);
+  lines.push(spaces + "(" + head);
+  for (let i = 1;i < arr.length; i++) {
+    const elem = arr[i];
+    if (Array.isArray(elem)) {
+      const formatted = formatSExpr(elem, indent + 2, false);
+      if (isInline(elem)) {
+        lines[lines.length - 1] += " " + formatted;
+      } else {
+        lines.push(formatted);
+      }
+    } else {
+      lines[lines.length - 1] += " " + formatAtom(elem, indent);
+    }
+  }
+  lines[lines.length - 1] += ")";
+  return lines.join(`
+`);
+}
+
 class Compiler {
   constructor(options = {}) {
     this.options = {
@@ -6532,7 +6653,6 @@ class Compiler {
     const lexer = new Lexer;
     const tokens = lexer.tokenize(source);
     if (this.options.showTokens) {
-      console.log("=== TOKENS ===");
       tokens.forEach((t) => {
         console.log(`${t[0].padEnd(12)} ${JSON.stringify(t[1])}`);
       });
@@ -6563,8 +6683,7 @@ class Compiler {
       throw parseError;
     }
     if (this.options.showSExpr) {
-      console.log("=== S-EXPRESSIONS ===");
-      console.log(JSON.stringify(sexpr, null, 2));
+      console.log(formatSExpr(sexpr, 0, true));
       console.log();
     }
     const generator = new CodeGenerator;
@@ -6617,7 +6736,7 @@ function compileToJS(source, options = {}) {
 }
 // src/browser.js
 var VERSION = "1.0.0";
-var BUILD_DATE = "2025-11-01@05:06:23GMT";
+var BUILD_DATE = "2025-11-01@05:15:36GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
