@@ -869,24 +869,17 @@ See the `www/examples/` directory for working demos:
 
 **index.html** - Landing page with REPL redirect
 
-**repl.html** - Full browser REPL
-- REPL Console tab (terminal-like)
-- Live Compiler tab (split pane)
+**repl.html** - Interactive REPL and Live Compiler
+- REPL Console tab (terminal-like with commands and history)
+- Live Compiler tab (resizable split panes)
+- Beautiful canonical s-expression display
+- Tokens, s-expressions, and JavaScript views
 - All features working
-
-**browser.html** - Interactive compiler demo
-- Edit Rip code
-- See tokens, s-expressions, and JavaScript
-- Live compilation
 
 **inline-rip.html** - Auto-executing Rip scripts
 - Multiple `<script type="text/rip">` blocks
 - Functions available globally
 - Interactive buttons calling Rip functions
-
-**inline-test.html** - Simple test case
-- Minimal example of auto-execution
-- Great starting point
 
 ---
 
