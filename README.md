@@ -808,12 +808,12 @@ Both syntaxes handle `null` and `undefined` - pick the style that fits your proj
 ### The Pipeline
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Source    │────>│   Lexer     │────>│   Parser    │────>│   Codegen   │
-│   Code      │     │  (Coffee)   │     │   (Solar)   │     │   (Rip)     │
-└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
-                       3,145 LOC            1,047 LOC           4,738 LOC
-                     15 yrs tested         Generated!          Optimized!
+┌────────┐    ┌────────────┐    ┌──────────┐    ┌─────────┐
+│ Source │───>│   Lexer    │───>│  Parser  │───>│ Codegen │
+│  Code  │    │  (Coffee)  │    │  (Solar) │    │  (Rip)  │
+└────────┘    └────────────┘    └──────────┘    └─────────┘
+                 3,145 LOC        1,047 LOC       4,738 LOC
+               15 yrs tested     Generated!   S-expr Optimized!
 ```
 
 ### Components
