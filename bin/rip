@@ -24,25 +24,28 @@ Usage:
   rip                           # Start interactive REPL (no arguments)
 
 Options:
-  -c, --compile       Show compiled JavaScript (compile mode)
+  -c, --compile       Show compiled JavaScript output
   -h, --help          Show this help message
   -o, --output <file> Write JavaScript to file
-  -q, --quiet         Suppress headers (with -c)
+  -q, --quiet         Suppress headers
   -r, --repl          Start interactive REPL
-  -s, --sexpr         Show s-expressions
-  -t, --tokens        Show token stream
+  -s, --sexpr         Show s-expressions (only, unless -c also specified)
+  -t, --tokens        Show token stream (only, unless -c also specified)
   -v, --version       Show version number
-  -w, --web           Launch browser REPL (auto-shutdown server)
+  -w, --web           Launch browser REPL (auto-opens + auto-shutdown)
 
 Examples:
   rip                           # Interactive REPL (terminal)
-  rip -w                        # Launch browser REPL (auto-opens)
   rip script.rip                # Execute script (auto-detects .rip)
   rip script.rip arg1 arg2      # Execute with arguments
-  rip -c example.rip            # Compile to stdout
-  rip -q example.rip            # Just the JS (for piping)
+  rip example.rip               # Compile to stdout (default)
   rip -o output.js example.rip  # Save to file
-  rip -s -t example.rip         # Show everything (debug mode)
+  rip -s example.rip            # Show ONLY s-expressions
+  rip -t example.rip            # Show ONLY tokens
+  rip -s -c example.rip         # Show s-expressions AND JavaScript
+  rip -s -t -c example.rip      # Show everything (full debug mode)
+  rip -q example.rip            # Just the JS, no headers (for piping)
+  rip -w                        # Launch browser REPL (auto-opens)
   echo 'x = 1 + 2' | rip        # Read from stdin
 
 Shebang support:
@@ -111,11 +114,15 @@ async function main() {
     return;
   }
 
+  const showTokens = args.includes('-t') || args.includes('--tokens');
+  const showSExpr = args.includes('-s') || args.includes('--sexpr');
+  const showCompiled = args.includes('-c') || args.includes('--compile');
+  const quiet = args.includes('-q') || args.includes('--quiet');
+
   const options = {
-    compile: args.includes('-c') || args.includes('--compile'),
-    showTokens: args.includes('-t') || args.includes('--tokens'),
-    showSExpr: args.includes('-s') || args.includes('--sexpr'),
-    quiet: args.includes('-q') || args.includes('--quiet')
+    showTokens,
+    showSExpr,
+    quiet
   };
 
   // Find input file (last non-option argument)
@@ -132,7 +139,7 @@ async function main() {
   }
 
   // If .rip file without compile flags → execute instead of compile
-  const hasCompileFlag = options.compile || options.showTokens || options.showSExpr || outputFile;
+  const hasCompileFlag = showCompiled || showTokens || showSExpr || outputFile;
   if (inputFile && inputFile.endsWith('.rip') && !hasCompileFlag) {
     // Check if file exists
     if (!existsSync(inputFile)) {
@@ -177,6 +184,10 @@ async function main() {
     const compiler = new Compiler(options);
     const result = compiler.compile(source);
 
+    // Determine if we should show compiled output
+    // Show compiled JS if: -c flag, OR no debug flags (default mode), OR saving to file
+    const shouldShowCompiled = showCompiled || (!showTokens && !showSExpr) || outputFile;
+
     // Output
     if (outputFile) {
       // Save to file
@@ -184,8 +195,8 @@ async function main() {
       if (!options.quiet) {
         console.log(`Compiled to ${outputFile}`);
       }
-    } else {
-      // Default mode - compile and output to stdout
+    } else if (shouldShowCompiled) {
+      // Show compiled output to stdout
       if (!options.quiet) {
         console.log(`// == JavaScript output by Rip ${VERSION} == //\n`);
       }
