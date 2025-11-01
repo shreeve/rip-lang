@@ -36,17 +36,17 @@ Options:
 
 Examples:
   rip                           # Interactive REPL (terminal)
-  rip script.rip                # Execute script (auto-detects .rip)
+  rip script.rip                # Execute script directly
   rip script.rip arg1 arg2      # Execute with arguments
-  rip example.rip               # Compile to stdout (default)
-  rip -o output.js example.rip  # Save to file
+  rip -c example.rip            # Compile and show JavaScript
+  rip -o output.js example.rip  # Compile and save to file
   rip -s example.rip            # Show ONLY s-expressions
   rip -t example.rip            # Show ONLY tokens
   rip -s -c example.rip         # Show s-expressions AND JavaScript
   rip -s -t -c example.rip      # Show everything (full debug mode)
-  rip -q example.rip            # Just the JS, no headers (for piping)
+  rip -q -c example.rip         # Just the JS, no headers (for piping)
   rip -w                        # Launch browser REPL (auto-opens)
-  echo 'x = 1 + 2' | rip        # Read from stdin
+  echo 'x = 1 + 2' | rip -c     # Compile from stdin
 
 Shebang support:
   #!/usr/bin/env rip            # Execute with rip

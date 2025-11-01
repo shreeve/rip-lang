@@ -46,11 +46,14 @@ Source → Lexer → Parser → S-Expressions → Codegen → JavaScript
 # Run .rip files directly (Bun loader auto-compiles)
 bun script.rip
 
+# Or use rip command to execute
+./bin/rip script.rip
+
 # Interactive REPL
 ./bin/rip
 
-# Compile to JavaScript
-./bin/rip input.rip
+# Compile to JavaScript (use -c or -o flag)
+./bin/rip -c input.rip
 ./bin/rip -o output.js input.rip
 ```
 
@@ -76,7 +79,7 @@ echo 'x = 42' | ./bin/rip -t
 # See ONLY s-expressions (parser output)
 echo 'x = 42' | ./bin/rip -s
 
-# See ONLY JavaScript (codegen output, default)
+# See ONLY JavaScript (codegen output, default for stdin)
 echo 'x = 42' | ./bin/rip
 echo 'x = 42' | ./bin/rip -c
 
@@ -86,6 +89,8 @@ echo 'x = 42' | ./bin/rip -s -c
 # Full debug mode - see everything
 echo 'x = 42' | ./bin/rip -s -t -c
 ```
+
+**Note:** When piping from stdin, the default is to compile (show JavaScript). When running `.rip` files, the default is to execute them.
 
 ### Build Commands
 

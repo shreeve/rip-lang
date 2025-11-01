@@ -413,10 +413,13 @@ bun main.rip  # Works automatically!
 # Interactive REPL
 ./bin/rip
 
-# Compile to JavaScript (default)
+# Execute a Rip script (default behavior)
 ./bin/rip examples/fibonacci.rip
 
-# Save compiled output
+# Compile and show JavaScript output
+./bin/rip -c examples/fibonacci.rip
+
+# Compile and save to file
 ./bin/rip -o output.js examples/fibonacci.rip
 ```
 
@@ -441,10 +444,13 @@ Rip supports flexible debugging with flags that can be combined:
 ./bin/rip -s -t -c examples/fibonacci.rip
 
 # Pipe mode (no headers, just output)
-./bin/rip -q examples/fibonacci.rip
+./bin/rip -q -c examples/fibonacci.rip
 ```
 
 **How it works:**
+- `rip script.rip` **executes** the script (default behavior)
+- `-c` flag **compiles** and shows JavaScript output
+- `-o file.js` **compiles** and saves to file
 - `-s` or `-t` alone show **only** that output (no JavaScript)
 - Add `-c` to **also** show the compiled JavaScript
 - Mix and match as needed for debugging
