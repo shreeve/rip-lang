@@ -413,18 +413,42 @@ bun main.rip  # Works automatically!
 # Interactive REPL
 ./bin/rip
 
-# Compile to JavaScript
+# Compile to JavaScript (default)
 ./bin/rip examples/fibonacci.rip
-
-# See s-expressions (the IR)
-./bin/rip -s examples/fibonacci.rip
-
-# See tokens (from lexer)
-./bin/rip -t examples/fibonacci.rip
 
 # Save compiled output
 ./bin/rip -o output.js examples/fibonacci.rip
 ```
+
+### Debug Flags (Mix and Match!)
+
+Rip supports flexible debugging with flags that can be combined:
+
+```bash
+# Show ONLY s-expressions (no JavaScript)
+./bin/rip -s examples/fibonacci.rip
+
+# Show ONLY tokens (no JavaScript)
+./bin/rip -t examples/fibonacci.rip
+
+# Show s-expressions AND JavaScript
+./bin/rip -s -c examples/fibonacci.rip
+
+# Show tokens AND JavaScript
+./bin/rip -t -c examples/fibonacci.rip
+
+# Show EVERYTHING (full debug mode)
+./bin/rip -s -t -c examples/fibonacci.rip
+
+# Pipe mode (no headers, just output)
+./bin/rip -q examples/fibonacci.rip
+```
+
+**How it works:**
+- `-s` or `-t` alone show **only** that output (no JavaScript)
+- Add `-c` to **also** show the compiled JavaScript
+- Mix and match as needed for debugging
+- Browser REPL always shows JavaScript (checkboxes toggle `-s` and `-t`)
 
 ### Interactive REPL
 
