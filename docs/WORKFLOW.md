@@ -97,7 +97,7 @@ When tests change, update in **README.md**:
 
 ### Direct Commit to Main When:
 - 📝 **Documentation only** - No code changes
-- 🧪 **Test additions** - Documenting existing behavior  
+- 🧪 **Test additions** - Documenting existing behavior
 - 🎨 **Formatting/style** - Trivial changes
 - 🔖 **Version bumps** - Routine maintenance
 
@@ -252,7 +252,7 @@ git checkout -b feat/foundation
 # ... work ...
 gh pr create
 
-# PR #2: Building on PR #1  
+# PR #2: Building on PR #1
 git checkout -b feat/extension
 # ... work ...
 gh pr create --base feat/foundation  # ← Base on other branch!
@@ -304,4 +304,3 @@ gh pr create --base feat/foundation  # ← Base on other branch!
 ---
 
 See `../CONTRIBUTING.md` for detailed walkthrough with real examples from Issue #1/PR #2.
-
