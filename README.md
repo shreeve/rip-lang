@@ -286,13 +286,32 @@ echo 'x = 42' | ./bin/rip -c
 
 ### Installation & Setup
 
+**🚀 Fastest Way: Install from Bun Package Registry**
+
+```bash
+# Install globally
+bun add -g rip-lang
+
+# Start the REPL immediately!
+rip
+```
+
+That's it! You can now:
+- Run `rip` anywhere for an interactive REPL
+- Compile Rip files: `rip yourfile.rip`
+- Execute `.rip` files: `bun yourfile.rip`
+
+---
+
+**Alternative: Install from Source**
+
 **Step 1: Clone the repository**
 ```bash
 git clone https://github.com/shreeve/rip-lang.git
-cd rip
+cd rip-lang
 ```
 
-**Step 2: Set up global Bun loader (recommended)**
+**Step 2: Set up global Bun loader**
 ```bash
 # Link Rip globally so it's available everywhere
 bun link
@@ -325,10 +344,12 @@ cat ~/.bunfig.toml
 # Should include: preload = ["rip-lang/loader"]
 ```
 
+---
+
 **No npm install needed** - Rip has zero dependencies!
 
 **Requirements:**
-- **Bun** (recommended) - For automatic `.rip` loader
+- **Bun** (recommended) - For automatic `.rip` loader and REPL
 - **Or** any ES2022-compatible runtime: Deno, Node.js 12+, modern browsers
   - Note: Deno/Node require compilation first (`./bin/rip -o output.js input.rip`)
 
