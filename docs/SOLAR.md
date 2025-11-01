@@ -820,7 +820,7 @@ o 'FOR ForVariables IN Expression Block', '["for-in", 2, 4, null, null, 5]'
 
 ## Performance
 
-**Parse speed:** ~70ms for grammar compilation
+**Parse speed:** ~100ms for complete parser generation
 **Generated parser:** Efficient SLR(1) state machine
 **Overhead:** Minimal - simple array construction
 
