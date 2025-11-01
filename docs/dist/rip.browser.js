@@ -5390,7 +5390,22 @@ export default ${target}`;
       this.expansionAfterParams = afterExpansion;
       return paramList;
     }
+    const restIndex = params.findIndex((p) => Array.isArray(p) && p[0] === "rest");
+    if (restIndex !== -1 && restIndex < params.length - 1) {
+      const beforeRest = params.slice(0, restIndex);
+      const restParam = params[restIndex];
+      const afterRest = params.slice(restIndex + 1);
+      const beforeParams = beforeRest.map((p) => this.formatParam(p));
+      const paramList = beforeParams.length > 0 ? `${beforeParams.join(", ")}, ...${restParam[1]}` : `...${restParam[1]}`;
+      this.restMiddleParam = {
+        restName: restParam[1],
+        afterParams: afterRest,
+        beforeCount: beforeRest.length
+      };
+      return paramList;
+    }
     this.expansionAfterParams = null;
+    this.restMiddleParam = null;
     return params.map((p) => this.formatParam(p)).join(", ");
   }
   formatParam(param) {
@@ -5482,6 +5497,21 @@ export default ${target}`;
         });
         statements = [...extractions, ...statements];
         this.expansionAfterParams = null;
+      }
+      if (this.restMiddleParam) {
+        const { restName, afterParams } = this.restMiddleParam;
+        const afterCount = afterParams.length;
+        const extractions = [];
+        afterParams.forEach((param, idx) => {
+          const paramName = typeof param === "string" ? param : Array.isArray(param) && param[0] === "default" ? param[1] : JSON.stringify(param);
+          const position = afterCount - idx;
+          extractions.push(`const ${paramName} = ${restName}[${restName}.length - ${position}]`);
+        });
+        if (afterCount > 0) {
+          extractions.push(`${restName} = ${restName}.slice(0, -${afterCount})`);
+        }
+        statements = [...extractions, ...statements];
+        this.restMiddleParam = null;
       }
       this.indentLevel++;
       let code = `{
@@ -6579,7 +6609,7 @@ function compileToJS(source, options = {}) {
 }
 // src/browser.js
 var VERSION = "1.0.0";
-var BUILD_DATE = "2025-11-01@01:01:59GMT";
+var BUILD_DATE = "2025-11-01@01:55:55GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
