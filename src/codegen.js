@@ -3229,8 +3229,33 @@ export class CodeGenerator {
       return paramList;
     }
 
+    // Check for rest parameter in middle position: (first, middle..., last)
+    const restIndex = params.findIndex(p => Array.isArray(p) && p[0] === 'rest');
+    if (restIndex !== -1 && restIndex < params.length - 1) {
+      // Rest parameter is NOT last - need to use arguments slicing
+      const beforeRest = params.slice(0, restIndex);
+      const restParam = params[restIndex];
+      const afterRest = params.slice(restIndex + 1);
+      
+      // Generate: (first, ...args) then destructure in body
+      const beforeParams = beforeRest.map(p => this.formatParam(p));
+      const paramList = beforeParams.length > 0 
+        ? `${beforeParams.join(', ')}, ...${restParam[1]}` 
+        : `...${restParam[1]}`;
+      
+      // Store rest and after params for body injection
+      this.restMiddleParam = {
+        restName: restParam[1],
+        afterParams: afterRest,
+        beforeCount: beforeRest.length
+      };
+      
+      return paramList;
+    }
+
     // No expansion - normal processing
     this.expansionAfterParams = null;
+    this.restMiddleParam = null;
     return params.map(p => this.formatParam(p)).join(', ');
   }
 
@@ -3368,6 +3393,33 @@ export class CodeGenerator {
         });
         statements = [...extractions, ...statements];
         this.expansionAfterParams = null; // Clear after use
+      }
+
+      // Handle rest parameter in middle position: (first, middle..., last)
+      if (this.restMiddleParam) {
+        const {restName, afterParams} = this.restMiddleParam;
+        // Use slice to extract rest and trailing params
+        // Example: (first, middle..., b, c) with args [1,2,3,4,5]
+        // middle should be [2,3], b=4, c=5
+        const afterCount = afterParams.length;
+        const extractions = [];
+        
+        // Extract trailing params from end of rest array FIRST
+        afterParams.forEach((param, idx) => {
+          const paramName = typeof param === 'string' ? param : 
+                           (Array.isArray(param) && param[0] === 'default') ? param[1] : 
+                           JSON.stringify(param);
+          const position = afterCount - idx;
+          extractions.push(`const ${paramName} = ${restName}[${restName}.length - ${position}]`);
+        });
+        
+        // THEN slice the rest param to exclude trailing params
+        if (afterCount > 0) {
+          extractions.push(`${restName} = ${restName}.slice(0, -${afterCount})`);
+        }
+        
+        statements = [...extractions, ...statements];
+        this.restMiddleParam = null; // Clear after use
       }
 
       this.indentLevel++;

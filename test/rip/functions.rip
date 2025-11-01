@@ -149,6 +149,19 @@ code "rest params", "(first, ...rest) -> rest", "function(first, ...rest) { retu
 # Rest with no other params
 test "rest only", "fn = (...all) -> all.length\nfn(1, 2, 3)", 3
 
+# Rest in middle position (CoffeeScript expansion marker)
+test "rest in middle", '''
+  fn = (first, middle..., last) ->
+    [first, middle.length, last]
+  fn(1, 2, 3, 4, 5)
+  ''', [1, 3, 5]
+
+test "rest in middle with two after", '''
+  fn = (a, mid..., b, c) ->
+    [a, mid, b, c]
+  fn(1, 2, 3, 4, 5)
+  ''', [1, [2, 3], 4, 5]
+
 # ============================================================================
 # Default Parameters: "default"
 # ============================================================================
@@ -426,5 +439,5 @@ code "void fat arrow codegen", '''
 # Stats for CODEGEN.md
 # ============================================================================
 # Node types: def, ->, =>, function calls, rest, ..., default, return, void functions (!)
-# Tests: 79 total (71 passing, 8 new void arrow tests)
+# Tests: 81 total (81 passing, 0 failing)
 # Coverage: Function definitions, arrows, calls, parameters, returns, IIFE, closures, higher-order functions, void functions (def and arrows)
