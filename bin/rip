@@ -1,9 +1,16 @@
 #!/usr/bin/env bun
 
 import { readFileSync, writeFileSync } from 'fs';
+import { execSync } from 'child_process';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import { Compiler } from '../src/compiler.js';
 import { startREPL } from '../src/repl.js';
 import packageJson from '../package.json' with { type: 'json' };
+
+// Get the directory where this script lives
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const VERSION = packageJson.version;
 const SUMMARY = packageJson.description;
@@ -28,15 +35,17 @@ Options:
 
 Examples:
   rip                           # Interactive REPL
-  rip example.rip               # Compile to stdout
+  rip script.rip                # Execute script (auto-detects .rip)
+  rip script.rip arg1 arg2      # Execute with arguments
+  rip -c example.rip            # Compile to stdout
   rip -q example.rip            # Just the JS (for piping)
   rip -o output.js example.rip  # Save to file
   rip -s -t example.rip         # Show everything (debug mode)
   echo 'x = 1 + 2' | rip        # Read from stdin
 
-To execute scripts:
-  bun script.rip                # Use Bun loader
-  #!/usr/bin/env bun            # Shebang at top of script
+Shebang support:
+  #!/usr/bin/env rip            # Execute with rip
+  #!/usr/bin/env bun            # Execute with bun (also works)
 `);
 }
 
@@ -76,8 +85,28 @@ async function main() {
     if (args[i] === '-o' || args[i] === '--output') {
       outputFile = args[i + 1];
       i++;
-    } else if (!args[i].startsWith('-')) {
-      inputFile = args[i];
+    } else if (!args[i].startsWith('-') && !inputFile) {
+      inputFile = args[i];  // Only take first non-option as input file
+    }
+  }
+
+  // If .rip file without compile flags → execute instead of compile
+  const hasCompileFlag = options.compile || options.showTokens || options.showSExpr || outputFile;
+  if (inputFile && inputFile.endsWith('.rip') && !hasCompileFlag) {
+    // Execute the script with Bun using our loader
+    const loaderPath = join(__dirname, '../rip-loader.ts');
+    
+    // Get script arguments (everything after the input file)
+    const inputFileIndex = args.indexOf(inputFile);
+    const scriptArgs = args.slice(inputFileIndex + 1);
+    
+    try {
+      execSync(`bun --preload ${loaderPath} ${inputFile} ${scriptArgs.join(' ')}`, {
+        stdio: 'inherit'
+      });
+      process.exit(0);
+    } catch (error) {
+      process.exit(error.status || 1);
     }
   }
 
