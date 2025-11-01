@@ -30,3 +30,4 @@ coverage/
 .env
 .env.local
 notes.txt
+/.cursor
