@@ -789,7 +789,7 @@ console.log "Domain:", domain</textarea>
   <script type="text/rip">
     # Compact S-Expression Formatter
     # Optimized for Rip's s-expression structure
-    
+
     # Operators and forms that should ALWAYS be inline
     INLINE_FORMS = [
       '.', '?.', '::', '?::', '[]', '?[]', 'optindex', 'optcall'  # Property access
@@ -798,45 +798,50 @@ console.log "Domain:", domain</textarea>
       '&&', '||', '??', '&', '|', '^', '<<', '>>', '>>>'          # Logical/bitwise
       'rest', 'default', '...', 'expansion'                        # Params
     ]
-    
+
     # Check if array should be inline (parens)
     isInline = (arr) ->
       return false unless Array.isArray(arr)
       return false if arr.length is 0
-      
+
       # Special forms always inline
       head = arr[0]
       return true if INLINE_FORMS.indexOf(head) >= 0
-      
+
       # Small arrays with no nesting
       if arr.length <= 4
         hasNested = false
         for elem in arr
           hasNested = true if Array.isArray(elem)
         return true unless hasNested
-      
+
       false
-    
+
     # Format atom (non-array element)
     formatAtom = (elem) ->
       return String(elem) if typeof elem is 'number'
       return '""' if elem is ''
       String(elem)  # Keep strings as-is
-    
+
     # Main formatter
     window.toSexpr = (arr, indent = 0, isTopLevel = false) ->
       return formatAtom(arr) unless Array.isArray(arr)
-      
+
       # Inline: use parentheses
       if isInline(arr)
-        parts = (if Array.isArray(e) then window.toSexpr(e, 0, false) else formatAtom(e) for e in arr)
+        parts = []
+        for elem in arr
+          if Array.isArray(elem)
+            parts.push(window.toSexpr(elem, 0, false))
+          else
+            parts.push(formatAtom(elem))
         return '(' + parts.join(' ') + ')'
-      
+
       # Block: use indentation
       lines = []
       spaces = ' '.repeat(indent)
       currentLine = spaces
-      
+
       for elem, i in arr
         if i is 0
           # Head - start the line
@@ -844,7 +849,7 @@ console.log "Domain:", domain</textarea>
         else if Array.isArray(elem)
           # Nested array
           formatted = window.toSexpr(elem, indent + 2, false)
-          
+
           if isInline(elem)
             # Inline - add to current line
             currentLine += ' ' + formatted
@@ -857,7 +862,7 @@ console.log "Domain:", domain</textarea>
         else
           # Atom - add to line
           currentLine += ' ' + formatAtom(elem)
-      
+
       # Flush final line
       lines.push(currentLine) if currentLine.trim()
       lines.join('\n')
