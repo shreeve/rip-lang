@@ -449,6 +449,7 @@ Rip supports flexible debugging with flags that can be combined:
 
 **How it works:**
 - `rip script.rip` **executes** the script (default behavior)
+- `echo 'code' | rip` **compiles** and shows JavaScript (stdin defaults to compile mode)
 - `-c` flag **compiles** and shows JavaScript output
 - `-o file.js` **compiles** and saves to file
 - `-s` or `-t` alone show **only** that output (no JavaScript)
