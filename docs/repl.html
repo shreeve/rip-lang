@@ -412,10 +412,11 @@ console.log "Domain:", domain</textarea>
     // Add timestamp to bust browser cache for ES modules
     const timestamp = Date.now();
     const module = await import(`./dist/rip.browser.min.js?v=${timestamp}`);
-    const { compile, VERSION, BUILD_DATE } = module;
+    const { compile, formatSExpr, VERSION, BUILD_DATE } = module;
 
-    // Make compile available globally for the script
+    // Make compile and formatSExpr available globally for the script
     window.compile = compile;
+    window.toSexpr = formatSExpr;
 
     // Update subtitle with version and build time
     // Convert GMT timestamp to local time for display
@@ -782,134 +783,6 @@ console.log "Domain:", domain</textarea>
 
     // Initial compile
     compileCode();
-  </script>
-
-  <!-- S-Expression Formatter (written in Rip!) -->
-  <script type="text/rip">
-    # Compact S-Expression Formatter
-    # Optimized for Rip's s-expression structure
-
-    # Operators and forms that should ALWAYS be inline
-    INLINE_FORMS = [
-      '.', '?.', '::', '?::', '[]', '?[]', 'optindex', 'optcall'  # Property access
-      '+', '-', '*', '/', '%', '**', '//', '%%'                    # Arithmetic
-      '==', '!=', '<', '>', '<=', '>=', '===', '!=='              # Comparison
-      '&&', '||', '??', '&', '|', '^', '<<', '>>', '>>>'          # Logical/bitwise
-      'rest', 'default', '...', 'expansion'                        # Params
-    ]
-
-    # Check if array should be inline (parens)
-    isInline = (arr) ->
-      return false unless Array.isArray(arr)
-      return false if arr.length is 0
-
-      # Special forms always inline (handle String objects from parser)
-      head = if arr[0]?.valueOf then arr[0].valueOf() else arr[0]
-      return true if INLINE_FORMS.indexOf(head) >= 0
-
-      # Small arrays with no nesting
-      if arr.length <= 4
-        hasNested = false
-        for elem in arr
-          hasNested = true if Array.isArray(elem)
-        return true unless hasNested
-
-      false
-
-    # Format atom (non-array element)
-    # Pass indent for multi-line strings
-    formatAtom = (elem, indent = 0) ->
-      return '(???)' if Array.isArray(elem)
-      return String(elem) if typeof elem is 'number'
-      return '""' if elem is ''
-
-      str = String(elem)
-
-      # Handle multi-line regexes (heregex) - collapse to single line
-      if str[0] is '/' and str.indexOf('\n') >= 0
-        # Extract flags from end
-        match = str.match(/\/([gimsuvy]*)$/)
-        flags = if match then match[1] else ''
-
-        # Strip the regex delimiters and flags
-        content = str.slice(1)  # Remove leading /
-        if flags
-          content = content.slice(0, -flags.length - 1)  # Remove /flags
-        else
-          content = content.slice(0, -1)  # Remove trailing /
-
-        # Remove whitespace and comments (heregex processing)
-        lines = content.split('\n')
-        cleaned = for line in lines
-          # Strip comments (# to end of line) and whitespace
-          line.replace(/#.*$/, '').trim()
-
-        # Join and rebuild regex with quotes (it's a string value)
-        processed = cleaned.join('')
-        return '"/' + processed + '/' + flags + '"'
-
-      str
-
-    # Main formatter
-    window.toSexpr = (arr, indent = 0, isTopLevel = false) ->
-      return formatAtom(arr) unless Array.isArray(arr)
-
-      # Inline: use parentheses
-      if isInline(arr)
-        parts = []
-        for elem in arr
-          if Array.isArray(elem)
-            parts.push(window.toSexpr(elem, 0, false))
-          else
-            parts.push(formatAtom(elem))
-        return '(' + parts.join(' ') + ')'
-
-      # Block: use indentation
-      lines = []
-      spaces = ' '.repeat(indent)
-
-      # Special handling for program node
-      if isTopLevel and arr[0] is 'program'
-        lines = ['(program ' + formatAtom(arr[1], 0)]
-        for elem, i in arr when i > 1
-          # Each child at indent 2
-          childFormatted = window.toSexpr(elem, 2, false)
-          # If child is inline, it has no indent - add it
-          if childFormatted[0] is '('
-            childFormatted = '  ' + childFormatted
-          lines.push(childFormatted)
-        lines.push(')')  # Close the program on its own line
-        return lines.join('\n')
-
-      # Block: use indentation WITH parens
-      # All s-expressions use parens, just multi-line layout
-
-      # Build the opening with first element
-      if Array.isArray(arr[0])
-        head = window.toSexpr(arr[0], 0, false)
-      else
-        head = formatAtom(arr[0], indent)
-
-      lines.push(spaces + '(' + head)
-
-      # Add remaining elements
-      for elem, i in arr when i > 0
-        if Array.isArray(elem)
-          formatted = window.toSexpr(elem, indent + 2, false)
-          if isInline(elem)
-            # Inline - append to last line
-            lines[lines.length - 1] += ' ' + formatted
-          else
-            # Block - new line with indent
-            lines.push(formatted)
-        else
-          # Atom - append to last line
-          lines[lines.length - 1] += ' ' + formatAtom(elem, indent)
-
-      # Close the paren
-      lines[lines.length - 1] += ')'
-
-      lines.join('\n')
   </script>
 </body>
 </html>

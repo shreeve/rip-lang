@@ -6735,8 +6735,8 @@ function compileToJS(source, options = {}) {
   return compiler.compileToJS(source);
 }
 // src/browser.js
-var VERSION = "1.0.0";
-var BUILD_DATE = "2025-11-01@08:21:02GMT";
+var VERSION = "1.1.1";
+var BUILD_DATE = "2025-11-01@18:14:20GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
@@ -6788,6 +6788,7 @@ export {
   rip,
   processRipScripts,
   parser,
+  formatSExpr,
   compileToJS,
   compile,
   VERSION,

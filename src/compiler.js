@@ -268,3 +268,6 @@ export function compileToJS(source, options = {}) {
   const compiler = new Compiler(options);
   return compiler.compileToJS(source);
 }
+
+// Export the s-expression formatter for external use (e.g., browser REPL)
+export { formatSExpr };

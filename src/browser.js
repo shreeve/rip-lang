@@ -4,7 +4,7 @@
 export { Lexer } from './lexer.js';
 export { parser } from './parser.js';
 export { CodeGenerator } from './codegen.js';
-export { Compiler, compile, compileToJS } from './compiler.js';
+export { Compiler, compile, compileToJS, formatSExpr } from './compiler.js';
 
 // Version info (replaced during build)
 export const VERSION = "0.0.0";
