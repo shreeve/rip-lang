@@ -110,9 +110,10 @@ async function main() {
     }
 
     // Open browser directly to repl.html with auto-shutdown parameter
-    const openCmd = process.platform === 'darwin' ? 'open' : 
+    const openCmd = process.platform === 'darwin' ? 'open' :
                     process.platform === 'win32' ? 'start' : 'xdg-open';
-    execSync(`${openCmd} http://localhost:${assignedPort}/repl.html?autoShutdown=true`);
+    const url = `http://localhost:${assignedPort}/repl.html?autoShutdown=true`;
+    execSync(`${openCmd} "${url}"`);
 
     // Server will auto-shutdown when page signals
     // (See repl.html and scripts/serve.js)
