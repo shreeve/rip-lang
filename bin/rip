@@ -67,27 +67,28 @@ async function main() {
   // Launch browser REPL with auto-shutdown
   if (args.includes('-w') || args.includes('--web')) {
     console.log('🚀 Launching Rip browser REPL...');
-    
+
     // Start the server on port 0 (OS assigns available port)
     const servePath = join(__dirname, '../scripts/serve.js');
     const server = spawn('bun', [servePath], {
       stdio: 'pipe',
       env: { ...process.env, PORT: '0', RIP_WEB_MODE: 'true' }
     });
-    
+
     // Capture the assigned port from server output
     let assignedPort = null;
     server.stdout.on('data', (data) => {
       const output = data.toString();
-      const match = output.match(/PORT:(\d+)/);
+      // Parse port from "Server running at http://localhost:XXXXX" line
+      const match = output.match(/localhost:(\d+)/);
       if (match) {
         assignedPort = match[1];
       }
       process.stdout.write(output);
     });
-    
+
     server.stderr.on('data', (data) => process.stderr.write(data));
-    
+
     // Wait for port assignment
     await new Promise(resolve => {
       const checkPort = setInterval(() => {
@@ -102,17 +103,17 @@ async function main() {
         resolve();
       }, 5000);
     });
-    
+
     if (!assignedPort) {
       console.error('Error: Server failed to start');
       process.exit(1);
     }
-    
+
     // Open browser with auto-shutdown parameter
-    const openCmd = process.platform === 'darwin' ? 'open' : 
+    const openCmd = process.platform === 'darwin' ? 'open' :
                     process.platform === 'win32' ? 'start' : 'xdg-open';
     execSync(`${openCmd} http://localhost:${assignedPort}/?autoShutdown=true`);
-    
+
     // Server will auto-shutdown when page signals
     // (See repl.html and scripts/serve.js)
     return;
