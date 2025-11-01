@@ -4,6 +4,129 @@ import { Lexer } from './lexer.js';
 import { parser } from './parser.js';
 import { CodeGenerator } from './codegen.js';
 
+// ============================================================================
+// S-Expression Formatter
+// ============================================================================
+
+// Operators and forms that should ALWAYS be inline
+const INLINE_FORMS = [
+  '.', '?.', '::', '?::', '[]', '?[]', 'optindex', 'optcall',  // Property access
+  '+', '-', '*', '/', '%', '**', '//', '%%',                    // Arithmetic
+  '==', '!=', '<', '>', '<=', '>=', '===', '!==',              // Comparison
+  '&&', '||', '??', '&', '|', '^', '<<', '>>', '>>>',          // Logical/bitwise
+  'rest', 'default', '...', 'expansion'                        // Params
+];
+
+function isInline(arr) {
+  if (!Array.isArray(arr) || arr.length === 0) return false;
+
+  // Special forms always inline (handle String objects from parser)
+  const head = arr[0]?.valueOf ? arr[0].valueOf() : arr[0];
+  if (INLINE_FORMS.includes(head)) return true;
+
+  // Small arrays with no nesting
+  if (arr.length <= 4) {
+    return !arr.some(elem => Array.isArray(elem));
+  }
+
+  return false;
+}
+
+function formatAtom(elem, indent = 0) {
+  if (Array.isArray(elem)) return '(???)';
+  if (typeof elem === 'number') return String(elem);
+  if (elem === '') return '""';
+
+  const str = String(elem);
+
+  // Handle multi-line regexes (heregex) - collapse to single line
+  if (str[0] === '/' && str.indexOf('\n') >= 0) {
+    const match = str.match(/\/([gimsuvy]*)$/);
+    const flags = match ? match[1] : '';
+
+    let content = str.slice(1);
+    if (flags) {
+      content = content.slice(0, -flags.length - 1);
+    } else {
+      content = content.slice(0, -1);
+    }
+
+    // Remove whitespace and comments
+    const lines = content.split('\n');
+    const cleaned = lines.map(line => line.replace(/#.*$/, '').trim());
+    const processed = cleaned.join('');
+
+    return `"/${processed}/${flags}"`;
+  }
+
+  return str;
+}
+
+function formatSExpr(arr, indent = 0, isTopLevel = false) {
+  if (!Array.isArray(arr)) return formatAtom(arr, indent);
+
+  // Inline: use parentheses
+  if (isInline(arr)) {
+    const parts = arr.map(elem =>
+      Array.isArray(elem) ? formatSExpr(elem, 0, false) : formatAtom(elem, indent)
+    );
+    return '(' + parts.join(' ') + ')';
+  }
+
+  // Special handling for program node
+  if (isTopLevel && arr[0] === 'program') {
+    // Handle second element (could be comment string or actual code)
+    const secondElem = arr[1];
+    const header = Array.isArray(secondElem) 
+      ? '(program'  // Second element is code, no comment
+      : '(program ' + formatAtom(secondElem, 0);  // Second element is comment/empty string
+    
+    const lines = [header];
+    const startIndex = Array.isArray(secondElem) ? 1 : 2;
+    
+    for (let i = startIndex; i < arr.length; i++) {
+      let childFormatted = formatSExpr(arr[i], 2, false);
+      if (childFormatted[0] === '(') {
+        childFormatted = '  ' + childFormatted;
+      }
+      lines.push(childFormatted);
+    }
+    lines.push(')');
+    return lines.join('\n');
+  }
+
+  // Block: use indentation WITH parens
+  const lines = [];
+  const spaces = ' '.repeat(indent);
+
+  // Opening with first element
+  const head = Array.isArray(arr[0])
+    ? formatSExpr(arr[0], 0, false)
+    : formatAtom(arr[0], indent);
+
+  lines.push(spaces + '(' + head);
+
+  // Remaining elements
+  for (let i = 1; i < arr.length; i++) {
+    const elem = arr[i];
+    if (Array.isArray(elem)) {
+      const formatted = formatSExpr(elem, indent + 2, false);
+      if (isInline(elem)) {
+        lines[lines.length - 1] += ' ' + formatted;
+      } else {
+        lines.push(formatted);
+      }
+    } else {
+      lines[lines.length - 1] += ' ' + formatAtom(elem, indent);
+    }
+  }
+
+  // Closing paren
+  lines[lines.length - 1] += ')';
+
+  return lines.join('\n');
+}
+
 export class Compiler {
   constructor(options = {}) {
     this.options = {
@@ -77,7 +200,7 @@ export class Compiler {
 
     if (this.options.showSExpr) {
       console.log('=== S-EXPRESSIONS ===');
-      console.log(JSON.stringify(sexpr, null, 2));
+      console.log(formatSExpr(sexpr, 0, true));  // Pass isTopLevel=true
       console.log();
     }
 
