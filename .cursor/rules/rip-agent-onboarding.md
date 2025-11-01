@@ -31,7 +31,7 @@ echo 'your code' | ./bin/rip -s  # S-expressions (parser)
 echo 'your code' | ./bin/rip -c  # JavaScript (codegen)
 
 # Run tests
-bun run test                              # All 854 tests
+bun run test                              # All tests
 bun test/runner.js test/rip/FILE.rip     # Specific file
 bun --no-cache test/runner.js test/rip   # Clear Bun cache
 
@@ -47,13 +47,13 @@ bun run parser  # Regenerates src/parser.js from grammar.rip
 ```bash
 gh issue list
 git branch -a
-cat ISSUE-*.md  # Handoff docs for complex issues
+cat ISSUE-*.md  # Handoff docs for complex issues (if any exist)
 ```
 
-**If resuming Issue #11 (nested comprehension IIFEs):**
-- Read `ISSUE-11.md` for complete analysis
-- Branch: `fix/nested-comprehension-context`
-- See "Recommended Approach" section
+**If resuming an existing issue:**
+- Read any `ISSUE-*.md` handoff documentation
+- Check for an existing feature branch
+- Review the analysis and recommended approach
 
 ---
 
@@ -114,11 +114,11 @@ fail "name", "invalid syntax"
 test/rip/
 ├── assignment.rip       (43 tests)
 ├── async.rip            (29 tests)
-├── comprehensions.rip   (24 tests) ← Nested comprehension tests here
+├── comprehensions.rip   (24 tests)
 ├── functions.rip        (71 tests)
 ├── loops.rip            (25 tests)
 ... 15 more files
-Total: 854 tests (100% passing)
+Total: 850+ tests (100% passing)
 ```
 
 ### Test-Driven Development
@@ -174,7 +174,7 @@ bun run test
 ### Modify Parser Runtime Behavior
 
 ```bash
-# Example: Improve error messages (Issue #7)
+# Example: Improve error messages or parser behavior
 
 # 1. Edit solar.rip (NOT parser.js!)
 vim src/grammar/solar.rip
@@ -351,21 +351,22 @@ gh pr merge <number> --squash --delete-branch
 ## 🎯 Current Project Status
 
 **Version:** 1.0.0
-**Tests:** 854/854 passing (100%)
+**Tests:** 854+ passing (100%)
 **Status:** Production-ready, actively maintained
 
-**Recent Achievements:**
-- ✅ Postfix comprehensions with `by` step (Issue #1)
-- ✅ Parser error locations (Issue #7)
-- ✅ Range loops without variable (Issue #9)
-- ✅ bar.coffee compiles successfully
+**Check current status:**
+```bash
+gh issue list                    # See open issues
+git branch -a                    # See active branches
+bun run test                     # Verify test count and status
+cat README.md | grep "Tests:"    # Current test count
+```
+
+**Key achievements:**
+- ✅ Full CoffeeScript compatibility
 - ✅ 48% smaller output than CoffeeScript
-
-**Open Issues:**
-- Issue #11: Nested comprehension IIFEs (in progress, see ISSUE-11.md)
-
-**Active Branches:**
-- `fix/nested-comprehension-context` - Issue #11 work
+- ✅ Comprehensive test coverage
+- ✅ Production-ready compiler
 
 ---
 
@@ -379,7 +380,7 @@ gh pr merge <number> --squash --delete-branch
 
 **Technical Reference:**
 - `docs/CODEGEN.md` - All 110+ node types
-- `docs/COMPREHENSIONS.md` - Context rules (CRITICAL for Issue #11!)
+- `docs/COMPREHENSIONS.md` - Context rules for comprehensions
 - `docs/SOLAR.md` - Parser generator guide
 - `docs/STRING.md` - String metadata
 - `docs/REGEX-PLUS.md` - Ruby-style regex
@@ -391,7 +392,7 @@ gh pr merge <number> --squash --delete-branch
 
 ## 🎨 Code Style Principles
 
-From today's session:
+Follow these principles:
 
 1. **Keep it clean** - No ugly hacks, readable code
 2. **Keep it simple** - S-expressions over complex AST
@@ -413,16 +414,21 @@ case '+': return this.buildBinaryExpression(rest[0], rest[1], '+', {precedence: 
 
 ---
 
-## 🏆 Session History
+## 🏆 Workflow Example
 
-**Today (2025-10-31):** Completed 5 full GitHub workflows
-- Issue #1/PR #2: Postfix `by` step support
-- Issue #3/PR #4: Refactor step handling
-- Issue #5/PR #6: Comprehension context fix
-- Issue #7+#9/PR #10: Parser errors + range loops
-- Issue #11: Analysis complete, implementation pending
+**Complete workflow for any issue:**
+1. Identify the bug or feature need
+2. Create issue via `gh issue create`
+3. Create feature branch
+4. Write failing tests
+5. Implement the fix
+6. Verify all tests pass
+7. Build browser bundle (if needed)
+8. Commit with `Fixes #N` reference
+9. Create PR with `gh pr create`
+10. Merge with `gh pr merge --squash --delete-branch`
 
-**All issues auto-closed via `Fixes #N` in PR descriptions!**
+**All issues auto-close via `Fixes #N` in PR descriptions!**
 
 ---
 
@@ -513,7 +519,7 @@ git commit -m "fix bug"  # WRONG - didn't run tests!
 
 ### ✅ Always Test First
 ```bash
-bun run test  # MUST be 854/854 passing
+bun run test  # MUST be 100% passing
 git commit
 ```
 
@@ -526,7 +532,7 @@ git commit -m "Fix comprehension bug"  # WRONG - issue won't auto-close!
 ```bash
 git commit -m "Fix: Description
 
-Fixes #11  # RIGHT - auto-closes issue!
+Fixes #N  # RIGHT - auto-closes issue!
 "
 ```
 
@@ -538,7 +544,7 @@ git commit anyway  # WRONG!
 
 ### ✅ Keep 100% Pass Rate
 ```bash
-bun run test  # Must be 854/854 passing
+bun run test  # Must be 100% passing
 # If tests fail, fix them or revert your change
 ```
 
@@ -595,12 +601,11 @@ Context-aware generation = smarter, more efficient code!
 
 **When you need deep knowledge:**
 
-### For Comprehension Work (Issue #11)
+### For Comprehension Work
 1. `docs/COMPREHENSIONS.md` - Complete context rules
-2. `ISSUE-11.md` - Nested IIFE problem analysis
-3. `test/rip/comprehensions.rip` - All test cases
-4. `src/codegen.js:2025-2230` - Comprehension IIFE generation
-5. `src/codegen.js:4080-4250` - Plain loop generation
+2. `test/rip/comprehensions.rip` - All test cases
+3. Search `src/codegen.js` for `case 'comprehension':` - IIFE generation
+4. Search `src/codegen.js` for `case 'for-in':` - Plain loop generation
 
 ### For Grammar Work
 1. `docs/SOLAR.md` - Parser generator guide
@@ -614,24 +619,24 @@ Context-aware generation = smarter, more efficient code!
 
 ---
 
-## 🎯 Your First Task
+## 🎯 Getting Started
 
 **Start here:**
 
-1. ✅ Read AGENT.md (you're ready after this!)
+1. ✅ Read `AGENT.md` (you're ready after this!)
 2. ✅ Run `bun run test` (verify everything passes)
 3. ✅ Check `gh issue list` (see what's open)
-4. ✅ If Issue #11 exists, read `ISSUE-11.md`
-5. ✅ Create branch: `git checkout fix/nested-comprehension-context`
-6. ✅ Implement Solution B from ISSUE-11.md
-7. ✅ Follow the workflow in `docs/WORKFLOW.md`
+4. ✅ If handoff docs exist, read any `ISSUE-*.md` files
+5. ✅ Create appropriate branch: `git checkout -b fix/descriptive-name`
+6. ✅ Follow the test-driven workflow
+7. ✅ Reference `docs/WORKFLOW.md` for the complete process
 
 ---
 
 ## 🌟 Success Criteria
 
 **Before committing:**
-- ✅ All tests pass (854/854 or higher)
+- ✅ All tests pass (100% pass rate)
 - ✅ Code follows existing patterns
 - ✅ Documentation updated
 - ✅ Browser bundle rebuilt (if codegen changed)
@@ -649,9 +654,9 @@ Context-aware generation = smarter, more efficient code!
 
 **Resources available:**
 1. Read the docs (comprehensive!)
-2. Check closed PRs (#2, #4, #6, #10) for examples
+2. Check closed PRs for workflow examples: `gh pr list --state closed`
 3. Review test files for patterns
-4. Use debug flags extensively
+4. Use debug flags extensively (`-t`, `-s`, `-c`)
 
 **The docs are excellent** - trust them! Everything you need is documented.
 
@@ -665,9 +670,9 @@ Context-aware generation = smarter, more efficient code!
 > - Keep the IR simple (s-expressions)
 > - Keep the pipeline clear (lex → parse → generate)
 > - Keep the code minimal (pattern matching)
-> - Test everything (854/854 tests passing)
+> - Test everything (100% tests passing)
 
-**From today's session:**
+**Core practices:**
 
 > Follow the workflow.
 > Write tests first.
