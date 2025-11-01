@@ -204,7 +204,7 @@ case '+': {
 Let's see how Rip code flows through the compilation pipeline:
 
 **Step 1: Rip Source Code**
-```rip
+```coffee
 # Rip code - edit me!
 def fibonacci(n)
   if n <= 1
@@ -354,7 +354,7 @@ bun hello.rip
 
 **You can also import .rip modules directly:**
 
-```rip
+```coffee
 # utils.rip
 export def add(a, b)
   a + b
@@ -362,7 +362,7 @@ export def add(a, b)
 export multiply = (a, b) => a * b
 ```
 
-```rip
+```coffee
 # main.rip
 import { add, multiply } from "./utils.rip"
 
@@ -503,7 +503,7 @@ bun run serve     # Start dev server (REPL at localhost:3000)
 
 ### Core Syntax
 
-```rip
+```coffee
 # Variables (function-scoped, auto-hoisted)
 x = 42
 name = "Alice"
@@ -549,7 +549,7 @@ greeting = "Hello, ${name}!"
 
 ### Modern Features
 
-```rip
+```coffee
 # Destructuring
 {name, age} = person
 [first, second] = numbers
@@ -705,7 +705,7 @@ Rip provides **two distinct approaches** to safe property/method access:
 
 **Compiles to explicit null/undefined checks:**
 
-```rip
+```coffee
 # Existence check
 arr?
 # → (arr != null)
@@ -737,7 +737,7 @@ a ?= 10
 
 **Passes through to native JavaScript:**
 
-```rip
+```coffee
 # Optional property
 user?.profile?.name
 # → user?.profile?.name
@@ -769,7 +769,7 @@ a ??= 10
 
 **You can combine both styles in the same expression:**
 
-```rip
+```coffee
 # ES6 optional property + CoffeeScript soak index
 obj?.arr?[0]
 # → (obj?.arr != null ? obj?.arr[0] : undefined)
@@ -1075,7 +1075,7 @@ rip/
    ```
 
 3. **Write tests:**
-   ```rip
+   ```coffee
    test "feature name", "code", expectedResult
    ```
 
@@ -1099,7 +1099,7 @@ rip/
 
 Rip requires parentheses for ALL arrow function parameters:
 
-```rip
+```coffee
 # ✅ Always use parentheses
 () => expr           # Zero params
 (x) => expr          # One param
