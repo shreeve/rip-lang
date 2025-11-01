@@ -22,8 +22,8 @@
 
 <!-- List the specific changes -->
 
-- 
-- 
+-
+-
 
 ## Testing
 
@@ -81,4 +81,3 @@
 ## Additional Notes
 
 <!-- Any other context, concerns, or discussion points -->
-
