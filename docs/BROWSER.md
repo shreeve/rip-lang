@@ -876,10 +876,11 @@ See the `www/examples/` directory for working demos:
 - Tokens, s-expressions, and JavaScript views
 - All features working
 
-**inline-rip.html** - Auto-executing Rip scripts
+**example.html** - Auto-executing Rip scripts
 - Multiple `<script type="text/rip">` blocks
 - Functions available globally
 - Interactive buttons calling Rip functions
+- Demonstrates inline script execution
 
 ---
 

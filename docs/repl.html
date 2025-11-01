@@ -641,7 +641,7 @@ console.log "Domain:", domain</textarea>
       if (evalResult.success) {
         // Show debug info if enabled
         if (replContext.showTokens) {
-          let tokenOutput = '<span class="help-text">=== TOKENS ===</span><br>';
+          let tokenOutput = '';
           evalResult.result.tokens.forEach(t => {
             tokenOutput += `${t[0].padEnd(12)} ${JSON.stringify(t[1])}<br>`;
           });
@@ -651,7 +651,7 @@ console.log "Domain:", domain</textarea>
         if (replContext.showSexp) {
           const sexp = window.toSexpr ? window.toSexpr(evalResult.result.sexpr, 0, true) : JSON.stringify(evalResult.result.sexpr, null, 1);
           const formatted = sexp.replace(/\n/g, '<br>').replace(/ /g, '&nbsp;');
-          addOutput(`<span class="help-text">=== S-EXPRESSIONS ===</span><br>${formatted}`, 'command-output');
+          addOutput(`${formatted}`, 'command-output');
         }
 
         // Show result
@@ -754,7 +754,6 @@ console.log "Domain:", domain</textarea>
         let outputText = '';
 
         if (showTokens.checked) {
-          outputText += '=== TOKENS ===\n';
           result.tokens.forEach(t => {
             outputText += `${t[0].padEnd(12)} ${JSON.stringify(t[1])}\n`;
           });
@@ -762,7 +761,6 @@ console.log "Domain:", domain</textarea>
         }
 
         if (showSexp.checked) {
-          outputText += '=== S-EXPRESSIONS ===\n';
           outputText += window.toSexpr ? window.toSexpr(result.sexpr, 0, true) : JSON.stringify(result.sexpr, null, 1);
           outputText += '\n\n';
         }
@@ -823,32 +821,32 @@ console.log "Domain:", domain</textarea>
       return '(???)' if Array.isArray(elem)
       return String(elem) if typeof elem is 'number'
       return '""' if elem is ''
-      
+
       str = String(elem)
-      
+
       # Handle multi-line regexes (heregex) - collapse to single line
       if str[0] is '/' and str.indexOf('\n') >= 0
         # Extract flags from end
         match = str.match(/\/([gimsuvy]*)$/)
         flags = if match then match[1] else ''
-        
+
         # Strip the regex delimiters and flags
         content = str.slice(1)  # Remove leading /
         if flags
           content = content.slice(0, -flags.length - 1)  # Remove /flags
         else
           content = content.slice(0, -1)  # Remove trailing /
-        
+
         # Remove whitespace and comments (heregex processing)
         lines = content.split('\n')
         cleaned = for line in lines
           # Strip comments (# to end of line) and whitespace
           line.replace(/#.*$/, '').trim()
-        
+
         # Join and rebuild regex with quotes (it's a string value)
         processed = cleaned.join('')
         return '"/' + processed + '/' + flags + '"'
-      
+
       str
 
     # Main formatter
@@ -884,15 +882,15 @@ console.log "Domain:", domain</textarea>
 
       # Block: use indentation WITH parens
       # All s-expressions use parens, just multi-line layout
-      
+
       # Build the opening with first element
       if Array.isArray(arr[0])
         head = window.toSexpr(arr[0], 0, false)
       else
         head = formatAtom(arr[0], indent)
-      
+
       lines.push(spaces + '(' + head)
-      
+
       # Add remaining elements
       for elem, i in arr when i > 0
         if Array.isArray(elem)
@@ -906,10 +904,10 @@ console.log "Domain:", domain</textarea>
         else
           # Atom - append to last line
           lines[lines.length - 1] += ' ' + formatAtom(elem, indent)
-      
+
       # Close the paren
       lines[lines.length - 1] += ')'
-      
+
       lines.join('\n')
   </script>
 </body>
