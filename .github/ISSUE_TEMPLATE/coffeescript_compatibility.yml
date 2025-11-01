@@ -53,7 +53,7 @@ body:
       options:
         - Blocking migration
         - High - affects many files
-        - Medium - affects some files  
+        - Medium - affects some files
         - Low - easy to work around
     validations:
       required: false
@@ -83,4 +83,3 @@ body:
           required: true
         - label: I've tested with the latest version of Rip
           required: false
-

@@ -816,7 +816,7 @@ class Generator
       text = if hash.text then " near '#{hash.text}'" else ''
       location = "line #{line}, column #{col}"
       message = "Parse error at #{location}#{token}#{text}: #{str}"
-      
+
       error = new Error message
       error.hash = hash
       throw error
