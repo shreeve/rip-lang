@@ -98,14 +98,14 @@ async function main() {
       console.error(`Error: File not found: ${inputFile}`);
       process.exit(1);
     }
-    
+
     // Execute the script with Bun using our loader
     const loaderPath = join(__dirname, '../rip-loader.ts');
-    
+
     // Get script arguments (everything after the input file)
     const inputFileIndex = args.indexOf(inputFile);
     const scriptArgs = args.slice(inputFileIndex + 1);
-    
+
     try {
       execSync(`bun --preload ${loaderPath} ${inputFile} ${scriptArgs.join(' ')}`, {
         stdio: 'inherit'
