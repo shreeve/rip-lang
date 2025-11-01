@@ -199,9 +199,9 @@ case '+': {
 - ✅ **Self-hosting** - Rip compiles itself
 - ✅ **No external tools** - Just a JavaScript runtime
 
-### The Pipeline in Action
+### Real-World Example: The Complete Pipeline
 
-**Here's a real example showing the complete transformation:**
+Let's see how Rip code flows through the compilation pipeline:
 
 **Step 1: Rip Source Code**
 ```rip
@@ -230,7 +230,7 @@ console.log "Domain:", domain
 
 **Step 2: S-Expression Intermediate Representation**
 
-The parser generates simple nested arrays:
+The parser converts this to simple arrays (s-expressions):
 
 ```lisp
 (program 
@@ -246,16 +246,15 @@ The parser generates simple nested arrays:
 )
 ```
 
-**Key observations:**
-- Every node is just an array: `["operation", ...args]`
-- Functions: `["def", name, params, body]`
-- Binary ops: `["+", left, right]`
-- Property access: `[".", obj, prop]`
-- Regex indexing: `["regex-index", str, pattern, group]`
+**Key insights:**
+- Each operation is just an array: `["+", left, right]`
+- No complex AST node classes - just plain data
+- Easy to inspect, transform, and debug
+- Pattern matching in codegen is straightforward
 
-**Step 3: Generated JavaScript**
+**Step 3: JavaScript Output**
 
-The codegen processes the s-expressions and outputs modern ES2022:
+The code generator pattern-matches on s-expressions to produce clean JavaScript:
 
 ```javascript
 let _, domain, email, pattern;
@@ -270,16 +269,15 @@ console.log("Fib(10):", fibonacci(10));
 console.log("Domain:", domain);
 ```
 
-**Why this works:**
-- ✅ **Simple IR** - Pattern matching on arrays instead of AST classes
-- ✅ **Easy to debug** - Print any s-expression with `JSON.stringify()`
-- ✅ **Easy to extend** - Add a new case to the switch statement
-- ✅ **Inspectable** - See exactly what the parser emits with `./bin/rip -s`
+**The beauty:** Simple arrays in, clean JavaScript out. No complex AST traversal needed!
 
 **Try it yourself:**
 ```bash
-./bin/rip -s yourfile.rip  # See s-expressions
-./bin/rip -c yourfile.rip  # See generated JavaScript
+# See the s-expressions
+echo 'x = 42' | ./bin/rip -s
+
+# See the generated JavaScript
+echo 'x = 42' | ./bin/rip -c
 ```
 
 ---
