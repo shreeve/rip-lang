@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Rip REPL - Interactive Browser Environment</title>
+  <link rel="icon" href="data:,">
   <style>
     * {
       margin: 0;
@@ -781,23 +782,26 @@ console.log "Domain:", domain</textarea>
 
     // Initial compile
     compileCode();
+  </script>
 
-    // Auto-shutdown signal for rip -w mode
+  <!-- Auto-shutdown for rip -w (plain JS, not Rip) -->
+  <script>
+    // Check immediately (before Rip scripts load)
     if (window.location.search.includes('autoShutdown=true')) {
       console.log('[Auto-shutdown] Mode detected, will signal server after load');
       window.addEventListener('load', () => {
-        console.log('[Auto-shutdown] Page loaded, waiting 500ms...');
-        // Give a moment for everything to settle
+        console.log('[Auto-shutdown] Page loaded, waiting 1000ms...');
+        // Give a moment for everything to settle (Rip bundle to load)
         setTimeout(() => {
           console.log('[Auto-shutdown] Sending shutdown signal to server...');
           fetch('/shutdown')
             .then(() => console.log('[Auto-shutdown] Signal sent successfully'))
-            .catch(err => console.log('[Auto-shutdown] Signal failed (expected if server already down):', err.message));
+            .catch(err => console.log('[Auto-shutdown] Signal failed:', err.message));
           // Clean URL (remove ?autoShutdown=true) without reloading
           const cleanUrl = window.location.pathname;
           window.history.replaceState({}, '', cleanUrl);
           console.log('[Auto-shutdown] URL cleaned');
-        }, 500);
+        }, 1000);
       });
     }
   </script>
