@@ -233,7 +233,7 @@ console.log "Domain:", domain
 The parser converts this to simple arrays (s-expressions):
 
 ```lisp
-(program
+(program 
   (def fibonacci (n)
     (block
       (if (<= n 1) (block n)
@@ -241,8 +241,8 @@ The parser converts this to simple arrays (s-expressions):
   (= pattern "/^ \\d+\\s*[a-z]+$/i")
   (= email "user@example.com")
   (= domain (regex-index email /@(.+)$/ 1))
-  ((. console log) "Fib(10):" (fibonacci 10))
-  ((. console log) "Domain:" domain)
+  ((. console log) "Fib(10):" (fibonacci 10)))
+  ((. console log) "Domain:" domain))
 )
 ```
 
