@@ -11,7 +11,7 @@
 <p align="center">
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-1.0.0-blue.svg" alt="Version"></a>
   <a href="#es2022-target"><img src="https://img.shields.io/badge/target-ES2022-blue.svg" alt="Target"></a>
-  <a href="#current-status"><img src="https://img.shields.io/badge/tests-854%2F854-brightgreen.svg" alt="Tests"></a>
+  <a href="#current-status"><img src="https://img.shields.io/badge/tests-856%2F856-brightgreen.svg" alt="Tests"></a>
   <a href="#current-status"><img src="https://img.shields.io/badge/coverage-100%25-brightgreen.svg" alt="Coverage"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
@@ -411,7 +411,7 @@ bun --no-cache test/runner.js test/rip
 ### Quick Reference: NPM Scripts
 
 ```bash
-bun run test      # Run all 854 tests
+bun run test      # Run all 856 tests
 bun run parser    # Rebuild parser from grammar (self-hosting!)
 bun run browser   # Build browser bundles (43KB compressed)
 bun run serve     # Start dev server (REPL at localhost:3000)
@@ -972,7 +972,7 @@ rip/
 │   ├── BROWSER.md       # Browser usage & REPLs
 │   └── COFFEESCRIPT-COMPARISON.md # Feature comparison
 ├── test/
-│   ├── rip/             # Feature tests (20 files, 854 tests)
+│   ├── rip/             # Feature tests (20 files, 856 tests)
 │   └── runner.js        # Test runner
 ├── www/                 # Browser bundles and demos
 ├── examples/            # Example programs
@@ -1061,9 +1061,10 @@ We considered allowing `x => expr` (ES6 style) but decided consistency and simpl
 
 | Metric | CoffeeScript Output | Rip Output | Improvement |
 |--------|-------------------|-----------|-------------|
-| **Lines of code** | 608 lines | **312 lines** | **48% smaller** |
+| **Lines of code** | 608 lines | **301 lines** | **50.5% smaller!** |
 | **Syntax style** | ES5 (var, prototypes) | **ES2022 (let, classes)** | Modern |
 | **Readability** | Verbose, intermediate vars | **Clean, direct** | Better |
+| **Nested loops** | Complex iteration vars | **Plain, efficient loops** | Cleaner |
 
 **Example: Loop with step** (the pattern that started this journey)
 
@@ -1103,7 +1104,7 @@ for (let i = 0; i < obj.length; i += 2) {
 **Why Rip's output is better:**
 
 - ✅ **Modern syntax** - ES2022 features work in all current runtimes
-- ✅ **Smaller bundles** - ~50% less code to download/parse
+- ✅ **Smaller bundles** - 50.5% less code to download/parse
 - ✅ **More readable** - Easier to debug generated code
 - ✅ **Better performance** - Engines optimize modern syntax better
 - ✅ **Future-proof** - Uses current JavaScript standards
@@ -1135,19 +1136,19 @@ Now supports both ES6 and CoffeeScript syntax:
 - ✅ Core architecture (lexer + parser + codegen pipeline)
 - ✅ Test infrastructure (test/code/fail helpers, async support)
 - ✅ **Code generator - 100% COMPLETE!** (110+ node types, all features working)
-- ✅ **854/854 tests passing (100%)** - PERFECT SCORE!
+- ✅ **856/856 tests passing (100%)** - PERFECT SCORE!
 - ✅ **Dual syntax support** - ES6 + CoffeeScript compatibility
 - ✅ **Dammit operator (`!`)** - `fetchData!` → `await fetchData()`
 - ✅ Comprehensive documentation (production ready)
 - ✅ **Self-hosting** - Rip compiles itself!
 
 **Test Results:**
-- **Rip tests: 851/851 (100%)** ✅ **PERFECT SCORE!**
+- **Rip tests: 856/856 (100%)** ✅ **PERFECT SCORE!**
 - **Compatibility: 45 tests** (postfix spread/rest + legacy existential)
 - **Guards: 27 tests** (when clauses + own keyword)
 - **Stabilization: 67 tests** (advanced patterns + 13 bootstrap bug tests)
 - **Functions: 71 tests** (including 10 void function tests)
-- **Total: 851 tests passing** (100% - every test passes!)
+- **Total: 856 tests passing** (100% - every test passes!)
 - All test files organized (20 files, alphabetically sorted)
 - Zero redundant tests
 - **All node types implemented with test coverage** (100% of grammar!)

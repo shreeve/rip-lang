@@ -55,6 +55,19 @@ test "comprehension by 2", "(x for x in [0...10] by 2)", [0, 2, 4, 6, 8]
 test "comprehension by 3", "(x * 2 for x in [0...12] by 3)", [0, 6, 12, 18]
 test "comprehension by step with guard", "(x for x in [0...20] by 2 when x > 5)", [6, 8, 10, 12, 14, 16, 18]
 
+# Nested comprehensions should use plain loops (not nested IIFEs)
+test "nested comprehension side effects", '''
+  count = 0
+  for x in [1, 2]
+    count++ for y in [1, 2, 3]
+  count
+  ''', 6
+
+code "nested comprehension plain loops", '''
+  for x in [1, 2]
+    process(y) for y in [1, 2, 3]
+  ''', "for (const x of [1, 2]) {\n  for (const y of [1, 2, 3]) {\n    process(y);\n  }\n}"
+
 # Code generation
 code "comprehension", "(x * 2 for x in arr)", "(() => {\n  const result = [];\n  for (const x of arr) {\n    result.push((x * 2));\n  }\n  return result;\n})()"
 
@@ -87,5 +100,5 @@ code "object comprehension", "{k: v * 2 for k, v of obj}", "(() => {\n  const re
 # Stats for CODEGEN.md
 # ============================================================================
 # Node types: comprehension, object-comprehension
-# Tests: 22 total (22 passing, 0 failing)
-# Coverage: Array comprehensions, object comprehensions, guards (when), index, destructuring, break/continue, by step, nested comprehensions
+# Tests: 24 total (24 passing, 0 failing)
+# Coverage: Array comprehensions, object comprehensions, guards (when), index, destructuring, break/continue, by step, nested comprehensions (plain loops)
