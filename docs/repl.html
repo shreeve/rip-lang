@@ -176,11 +176,35 @@
     .compiler-container {
       flex: 1;
       min-height: 0;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1px;
+      display: flex;
+      gap: 0;
       background: #3e3e42;
       padding: 20px;
+      position: relative;
+    }
+
+    .resizer {
+      width: 6px;
+      background: #3e3e42;
+      cursor: col-resize;
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .resizer:hover {
+      background: #007acc;
+    }
+
+    .resizer::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 2px;
+      height: 40px;
+      background: #858585;
+      border-radius: 1px;
     }
 
     .editor-pane {
@@ -190,6 +214,16 @@
       border-radius: 4px;
       overflow: hidden;
       min-height: 0;
+      flex: 1;
+      min-width: 200px;
+    }
+
+    #editor-left {
+      flex-basis: 50%;
+    }
+
+    #editor-right {
+      flex-basis: 50%;
     }
 
     .pane-header {
@@ -328,7 +362,7 @@
     <!-- Compiler Pane -->
     <div class="pane" id="compiler-pane">
       <div class="compiler-container">
-        <div class="editor-pane">
+        <div class="editor-pane" id="editor-left">
           <div class="pane-header">Rip Source</div>
           <textarea class="editor" id="editor" spellcheck="false"># Rip code - edit me!
 def fibonacci(n)
@@ -353,7 +387,9 @@ console.log "Fib(10):", fibonacci(10)
 console.log "Domain:", domain</textarea>
         </div>
 
-        <div class="editor-pane">
+        <div class="resizer" id="resizer"></div>
+
+        <div class="editor-pane" id="editor-right">
           <div class="pane-header">Generated JavaScript</div>
           <pre class="output-code" id="output"></pre>
           <div class="compiler-options">
@@ -381,8 +417,16 @@ console.log "Domain:", domain</textarea>
     window.compile = compile;
 
     // Update subtitle with version and build time
+    // Convert GMT timestamp to local time for display
+    const buildDate = BUILD_DATE; // GMT timestamp from build
+    const localBuildDate = new Date(buildDate.replace('@', 'T').replace('GMT', 'Z'))
+      .toLocaleString(undefined, { 
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', timeZoneName: 'short'
+      });
+    
     document.querySelector('.subtitle').textContent =
-      `Interactive environment • Version ${VERSION} • Built ${BUILD_DATE}`;
+      `Interactive environment • Version ${VERSION} • Built ${localBuildDate}`;
 
     // ========================================================================
     // Tab Switching
@@ -408,6 +452,47 @@ console.log "Domain:", domain</textarea>
         }
       });
     });
+
+    // ========================================================================
+    // Resizable Panes (Live Compiler)
+    // ========================================================================
+
+    const resizer = document.getElementById('resizer');
+    const leftPane = document.getElementById('editor-left');
+    const rightPane = document.getElementById('editor-right');
+    
+    if (resizer && leftPane && rightPane) {
+      let isResizing = false;
+      
+      resizer.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        document.body.style.cursor = 'col-resize';
+        e.preventDefault();
+      });
+      
+      document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+        
+        const container = document.querySelector('.compiler-container');
+        const containerRect = container.getBoundingClientRect();
+        const offsetX = e.clientX - containerRect.left;
+        const containerWidth = containerRect.width;
+        
+        // Calculate percentage (20% min, 80% max for each side)
+        let leftPercent = (offsetX / containerWidth) * 100;
+        leftPercent = Math.max(20, Math.min(80, leftPercent));
+        
+        leftPane.style.flexBasis = `${leftPercent}%`;
+        rightPane.style.flexBasis = `${100 - leftPercent}%`;
+      });
+      
+      document.addEventListener('mouseup', () => {
+        if (isResizing) {
+          isResizing = false;
+          document.body.style.cursor = 'default';
+        }
+      });
+    }
 
     // ========================================================================
     // REPL Implementation
