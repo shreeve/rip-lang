@@ -68,22 +68,36 @@ async function main() {
   if (args.includes('-w') || args.includes('--web')) {
     console.log('🚀 Starting Rip browser REPL...\n');
 
-    // Start the server (inherit stdio to show server messages)
+    // Start the server and capture output to get the actual port
     const servePath = join(__dirname, '../scripts/serve.js');
-    spawn('bun', [servePath], {
-      stdio: 'inherit',
+    const serverProcess = spawn('bun', [servePath], {
+      stdio: ['inherit', 'pipe', 'inherit'],
       detached: false
     });
 
-    // Wait for server to start
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    // Open browser to root (auto-redirects to repl.html)
-    const openCmd = process.platform === 'darwin' ? 'open' :
-                    process.platform === 'win32' ? 'start' : 'xdg-open';
-    execSync(`${openCmd} http://localhost:${assignedPort}/`);
-
-    console.log('📱 Press Ctrl+C to stop server\n');
+    let actualPort = null;
+    
+    // Capture server output and extract port
+    serverProcess.stdout.on('data', (data) => {
+      const output = data.toString();
+      process.stdout.write(output);
+      
+      // Parse port from "Server running at http://localhost:PORT"
+      if (!actualPort) {
+        const match = output.match(/localhost:(\d+)/);
+        if (match) {
+          actualPort = match[1];
+          
+          // Open browser once we know the port
+          setTimeout(() => {
+            const openCmd = process.platform === 'darwin' ? 'open' :
+                            process.platform === 'win32' ? 'start' : 'xdg-open';
+            execSync(`${openCmd} http://localhost:${actualPort}/`);
+            console.log('\n📱 Press Ctrl+C to stop server\n');
+          }, 300);
+        }
+      }
+    });
 
     // Keep server running (don't exit)
     return;

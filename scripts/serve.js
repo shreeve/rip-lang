@@ -10,7 +10,7 @@ const __dirname = dirname(__filename);
 
 // Serve from docs/ relative to script location (works when globally installed)
 const ROOT = process.env.SERVE_DIR || join(__dirname, '../docs');
-// Port 0 = let OS assign available port (can be overridden by env var)
+// Try port 3000 first, fallback to 0 (OS-assigned)
 const PORT = process.env.PORT || 3000;
 
 const MIME_TYPES = {
@@ -24,51 +24,61 @@ const MIME_TYPES = {
   '.ico': 'image/x-icon'
 };
 
-const server = Bun.serve({
-  port: PORT,
+// Request handler for serving files
+function handleRequest(req) {
+  const url = new URL(req.url);
+  let pathname = url.pathname;
 
-  fetch(req) {
-    const url = new URL(req.url);
-    let pathname = url.pathname;
+  // Default to index.html for directory requests
+  if (pathname.endsWith('/')) {
+    pathname += 'index.html';
+  }
 
-    // Default to index.html for directory requests
-    if (pathname.endsWith('/')) {
-      pathname += 'index.html';
-    }
+  const filePath = join(ROOT, pathname);
+  const ext = extname(pathname);
+  const acceptEncoding = req.headers.get('accept-encoding') || '';
 
-    const filePath = join(ROOT, pathname);
-    const ext = extname(pathname);
-    const acceptEncoding = req.headers.get('accept-encoding') || '';
-
-    // Check for brotli compressed version (.br)
-    if (acceptEncoding.includes('br') && existsSync(filePath + '.br')) {
-      try {
-        const compressed = readFileSync(filePath + '.br');
-        return new Response(compressed, {
-          headers: {
-            'Content-Type': MIME_TYPES[ext] || 'application/octet-stream',
-            'Content-Encoding': 'br',
-            'Cache-Control': 'public, max-age=31536000'
-          }
-        });
-      } catch (e) {
-        // Fall through to regular file
-      }
-    }
-
-    // Serve regular file
+  // Check for brotli compressed version (.br)
+  if (acceptEncoding.includes('br') && existsSync(filePath + '.br')) {
     try {
-      const file = readFileSync(filePath);
-      return new Response(file, {
+      const compressed = readFileSync(filePath + '.br');
+      return new Response(compressed, {
         headers: {
-          'Content-Type': MIME_TYPES[ext] || 'application/octet-stream'
+          'Content-Type': MIME_TYPES[ext] || 'application/octet-stream',
+          'Content-Encoding': 'br',
+          'Cache-Control': 'public, max-age=31536000'
         }
       });
     } catch (e) {
-      return new Response('404 Not Found', { status: 404 });
+      // Fall through to regular file
     }
   }
-});
+
+  // Serve regular file
+  try {
+    const file = readFileSync(filePath);
+    return new Response(file, {
+      headers: {
+        'Content-Type': MIME_TYPES[ext] || 'application/octet-stream'
+      }
+    });
+  } catch (e) {
+    return new Response('404 Not Found', { status: 404 });
+  }
+}
+
+// Try to start server on preferred port, fallback to OS-assigned port
+let server;
+try {
+  server = Bun.serve({ port: PORT, fetch: handleRequest });
+} catch (err) {
+  if (err.code === 'EADDRINUSE') {
+    // Port in use, let OS assign one
+    server = Bun.serve({ port: 0, fetch: handleRequest });
+  } else {
+    throw err;
+  }
+}
 
 const actualPort = server.port;
 
