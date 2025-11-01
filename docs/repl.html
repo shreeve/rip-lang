@@ -788,66 +788,78 @@ console.log "Domain:", domain</textarea>
   <!-- S-Expression Formatter (written in Rip!) -->
   <script type="text/rip">
     # Compact S-Expression Formatter
-    # Converts nested arrays to readable indented format
-
-    # Check if array should be inline (parens) or block (indented)
+    # Optimized for Rip's s-expression structure
+    
+    # Operators and forms that should ALWAYS be inline
+    INLINE_FORMS = [
+      '.', '?.', '::', '?::', '[]', '?[]', 'optindex', 'optcall'  # Property access
+      '+', '-', '*', '/', '%', '**', '//', '%%'                    # Arithmetic
+      '==', '!=', '<', '>', '<=', '>=', '===', '!=='              # Comparison
+      '&&', '||', '??', '&', '|', '^', '<<', '>>', '>>>'          # Logical/bitwise
+      'rest', 'default', '...', 'expansion'                        # Params
+    ]
+    
+    # Check if array should be inline (parens)
     isInline = (arr) ->
       return false unless Array.isArray(arr)
-      return false if arr.length is 0 or arr.length > 4
-
-      # No nested arrays for inline
-      for elem in arr
-        return false if Array.isArray(elem)
-
-      # Check total string length (conservative for readability)
-      total = 0
-      for elem in arr
-        total += String(elem).length
-
-      total <= 50
-
-    # Format a single element (non-array)
+      return false if arr.length is 0
+      
+      # Special forms always inline
+      head = arr[0]
+      return true if INLINE_FORMS.indexOf(head) >= 0
+      
+      # Small arrays with no nesting
+      if arr.length <= 4
+        hasNested = false
+        for elem in arr
+          hasNested = true if Array.isArray(elem)
+        return true unless hasNested
+      
+      false
+    
+    # Format atom (non-array element)
     formatAtom = (elem) ->
       return String(elem) if typeof elem is 'number'
       return '""' if elem is ''
-
-      str = String(elem)
-      # Keep strings as-is for now
-      str
-
-    # Main recursive formatter
+      String(elem)  # Keep strings as-is
+    
+    # Main formatter
     window.toSexpr = (arr, indent = 0, isTopLevel = false) ->
-      # Not an array - just format the atom
       return formatAtom(arr) unless Array.isArray(arr)
-
-      # Inline arrays use parens
+      
+      # Inline: use parentheses
       if isInline(arr)
-        parts = for elem in arr
-          formatAtom(elem)
+        parts = (if Array.isArray(e) then window.toSexpr(e, 0, false) else formatAtom(e) for e in arr)
         return '(' + parts.join(' ') + ')'
-
-      # Block arrays use indentation
+      
+      # Block: use indentation
       lines = []
       spaces = ' '.repeat(indent)
-
-      for elem, idx in arr
-        if idx is 0
-          # First element is the head/operator
-          lines.push(spaces + formatAtom(elem))
+      currentLine = spaces
+      
+      for elem, i in arr
+        if i is 0
+          # Head - start the line
+          currentLine += formatAtom(elem)
         else if Array.isArray(elem)
           # Nested array
+          formatted = window.toSexpr(elem, indent + 2, false)
+          
           if isInline(elem)
-            # Add inline to current line
-            formatted = window.toSexpr(elem, 0, false)
-            lines[lines.length - 1] += ' ' + formatted
+            # Inline - add to current line
+            currentLine += ' ' + formatted
           else
-            # Block - add on new line with more indent
-            lines.push('') if isTopLevel and idx > 2  # Blank lines between top-level siblings
-            lines.push(window.toSexpr(elem, indent + 2, false))
+            # Block - flush line, add block
+            lines.push(currentLine) if currentLine.trim()
+            lines.push('') if isTopLevel and i > 2  # Spacing
+            lines.push(formatted)
+            currentLine = spaces  # Reset for next
         else
-          # Simple atom - add to current line
-          lines[lines.length - 1] += ' ' + formatAtom(elem)
-
+          # Atom - add to line
+          currentLine += ' ' + formatAtom(elem)
+      
+      # Flush final line
+      lines.push(currentLine) if currentLine.trim()
       lines.join('\n')
   </script>
 </body>
