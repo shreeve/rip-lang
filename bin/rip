@@ -78,10 +78,10 @@ async function main() {
     // Wait for server to start
     await new Promise(resolve => setTimeout(resolve, 800));
 
-    // Open browser
+    // Open browser to root (auto-redirects to repl.html)
     const openCmd = process.platform === 'darwin' ? 'open' :
                     process.platform === 'win32' ? 'start' : 'xdg-open';
-    execSync(`${openCmd} http://localhost:3000/`);
+    execSync(`${openCmd} http://localhost:${assignedPort}/`);
 
     console.log('📱 Press Ctrl+C to stop server\n');
 

@@ -1,9 +1,15 @@
 #!/usr/bin/env bun
 // Simple static file server with brotli support
 import { readFileSync, existsSync } from 'fs';
-import { join, extname } from 'path';
+import { join, extname, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
-const ROOT = 'docs';
+// Get the directory where this script lives
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Serve from docs/ relative to script location (works when globally installed)
+const ROOT = process.env.SERVE_DIR || join(__dirname, '../docs');
 // Port 0 = let OS assign available port (can be overridden by env var)
 const PORT = process.env.PORT || 3000;
 
