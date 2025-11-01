@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -93,6 +93,12 @@ async function main() {
   // If .rip file without compile flags → execute instead of compile
   const hasCompileFlag = options.compile || options.showTokens || options.showSExpr || outputFile;
   if (inputFile && inputFile.endsWith('.rip') && !hasCompileFlag) {
+    // Check if file exists
+    if (!existsSync(inputFile)) {
+      console.error(`Error: File not found: ${inputFile}`);
+      process.exit(1);
+    }
+    
     // Execute the script with Bun using our loader
     const loaderPath = join(__dirname, '../rip-loader.ts');
     
@@ -117,6 +123,11 @@ async function main() {
       // Read from stdin if no file specified (file descriptor 0)
       source = readFileSync(0, 'utf-8');
     } else {
+      // Check if file exists first
+      if (!existsSync(inputFile)) {
+        console.error(`Error: File not found: ${inputFile}`);
+        process.exit(1);
+      }
       // Read source file
       source = readFileSync(inputFile, 'utf-8');
     }
