@@ -4503,7 +4503,11 @@ ${this.indent()}}`;
             }
           }
         }
-        return `throw ${this.generate(expr, "value")}`;
+        const throwStmt = `throw ${this.generate(expr, "value")}`;
+        if (context === "value") {
+          return `(() => { ${throwStmt}; })()`;
+        }
+        return throwStmt;
       }
       case "switch": {
         const [discriminant, whens, defaultCase] = rest;
@@ -6575,7 +6579,7 @@ function compileToJS(source, options = {}) {
 }
 // src/browser.js
 var VERSION = "1.0.0";
-var BUILD_DATE = "2025-11-01@00:44:15GMT";
+var BUILD_DATE = "2025-11-01@01:01:59GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
