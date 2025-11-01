@@ -599,11 +599,10 @@ class Generator
 
       # Shift and goto actions
       for [stackSymbol, gotoState] from itemSet.transitions when @symbolIds[stackSymbol]?
-        for item from itemSet.items when item.nextSymbol is stackSymbol
-          if types[stackSymbol]
-            state[@symbolIds[stackSymbol]] = gotoState
-          else
-            state[@symbolIds[stackSymbol]] = [SHIFT, gotoState]
+        if types[stackSymbol]
+          state[@symbolIds[stackSymbol]] = gotoState
+        else
+          state[@symbolIds[stackSymbol]] = [SHIFT, gotoState]
 
       # Accept action
       for item from itemSet.items when item.nextSymbol is "$end" and @symbolIds["$end"]?
