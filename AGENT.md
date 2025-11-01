@@ -70,14 +70,21 @@ bun --no-cache test/runner.js test/rip
 ### Debugging
 
 ```bash
-# See tokens (lexer output)
+# See ONLY tokens (lexer output)
 echo 'x = 42' | ./bin/rip -t
 
-# See s-expressions (parser output)
+# See ONLY s-expressions (parser output)
 echo 'x = 42' | ./bin/rip -s
 
-# See JavaScript (codegen output)
+# See ONLY JavaScript (codegen output, default)
+echo 'x = 42' | ./bin/rip
 echo 'x = 42' | ./bin/rip -c
+
+# Mix and match - see s-expressions AND JavaScript
+echo 'x = 42' | ./bin/rip -s -c
+
+# Full debug mode - see everything
+echo 'x = 42' | ./bin/rip -s -t -c
 ```
 
 ### Build Commands
@@ -324,11 +331,12 @@ fail "name", "code"                  # Expect compilation failure
 
 ### Debugging Issues
 
-1. Use `-s` to see parser output
-2. Use `-c` to see codegen output
-3. Use `-t` to see lexer tokens
-4. Check for String object metadata
-5. Verify context parameter usage
+1. Use `-s` to see parser output (s-expressions only)
+2. Use `-t` to see lexer tokens (tokens only)
+3. Use `-s -c` to see both s-expressions and JavaScript
+4. Use `-s -t -c` to see everything (full debug mode)
+5. Check for String object metadata
+6. Verify context parameter usage
 
 ---
 
