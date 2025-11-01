@@ -1,3 +1,5 @@
+#!/usr/bin/env rip
+
 # Compact S-Expression Formatter
 # Optimized for Rip's s-expression structure
 
@@ -63,7 +65,7 @@ formatAtom = (elem, indent = 0) ->
   str
 
 # Main formatter
-window.toSexpr = (arr, indent = 0, isTopLevel = false) ->
+toSexpr = (arr, indent = 0, isTopLevel = false) ->
   return formatAtom(arr) unless Array.isArray(arr)
 
   # Inline: use parentheses
@@ -71,7 +73,7 @@ window.toSexpr = (arr, indent = 0, isTopLevel = false) ->
     parts = []
     for elem in arr
       if Array.isArray(elem)
-        parts.push(window.toSexpr(elem, 0, false))
+        parts.push(toSexpr(elem, 0, false))
       else
         parts.push(formatAtom(elem))
     return '(' + parts.join(' ') + ')'
@@ -85,7 +87,7 @@ window.toSexpr = (arr, indent = 0, isTopLevel = false) ->
     lines = ['(program ' + formatAtom(arr[1], 0)]
     for elem, i in arr when i > 1
       # Each child at indent 2
-      childFormatted = window.toSexpr(elem, 2, false)
+      childFormatted = toSexpr(elem, 2, false)
       # If child is inline, it has no indent - add it
       if childFormatted[0] is '('
         childFormatted = '  ' + childFormatted
@@ -98,7 +100,7 @@ window.toSexpr = (arr, indent = 0, isTopLevel = false) ->
 
   # Build the opening with first element
   if Array.isArray(arr[0])
-    head = window.toSexpr(arr[0], 0, false)
+    head = toSexpr(arr[0], 0, false)
   else
     head = formatAtom(arr[0], indent)
 
@@ -107,7 +109,7 @@ window.toSexpr = (arr, indent = 0, isTopLevel = false) ->
   # Add remaining elements
   for elem, i in arr when i > 0
     if Array.isArray(elem)
-      formatted = window.toSexpr(elem, indent + 2, false)
+      formatted = toSexpr(elem, indent + 2, false)
       if isInline(elem)
         # Inline - append to last line
         lines[lines.length - 1] += ' ' + formatted
@@ -122,6 +124,11 @@ window.toSexpr = (arr, indent = 0, isTopLevel = false) ->
   lines[lines.length - 1] += ')'
 
   lines.join('\n')
+
+# Parse and format the s-expression from DATA
+sexpr = JSON.parse(DATA.trim())
+formatted = toSexpr(sexpr, 0, true)
+console.log formatted
 
 __DATA__
 ["program", "", ["def", "fibonacci", ["n"], ["block", ["if", ["<=", "n", "1"], ["block", "n"], ["block", ["+", ["fibonacci", ["-", "n", "1"]], ["fibonacci", ["-", "n", "2"]]]]]]], ["=", "pattern", "/\n  ^ \\d+      # digits\n  \\s*        # space\n  [a-z]+     # letters\n  $\n/i"], ["=", "email", "\"user@example.com\""], ["=", "domain", ["regex-index", "email", "/@(.+)$/", "1"]], [[".","console","log"], "\"Fib(10):\"", ["fibonacci", "10"]], [[".","console","log"], "\"Domain:\"", "domain"]]
