@@ -27,6 +27,7 @@ export class CodeGenerator {
     this.options = options;
     this.indentLevel = 0;
     this.indentString = '  '; // 2 spaces
+    this.comprehensionDepth = 0; // Track nesting to avoid wasteful nested IIFEs
   }
 
   /**
@@ -1318,16 +1319,16 @@ export class CodeGenerator {
         const [vars, iterable, step, guard, body] = rest;
 
         // In value context, convert to comprehension (collect results)
-        if (context === 'value') {
-          // For-in in value context becomes a comprehension that collects results
-          // Note: Comprehensions can have break/continue (they just stop collecting)
+        // UNLESS we're already inside a comprehension IIFE (avoid nested IIFEs)
+        if (context === 'value' && this.comprehensionDepth === 0) {
+          // Top-level for-in in value context becomes a comprehension
           const iterator = ['for-in', vars, iterable, step];
           const guards = guard ? [guard] : [];
           return this.generate(['comprehension', body, [iterator], guards], context);
         }
 
         const varsArray = Array.isArray(vars) ? vars : [vars];
-        
+
         // Check if no loop variable (range repetition: for [1...N])
         const noVar = varsArray.length === 0;
         const [itemVar, indexVar] = noVar ? ['_i', null] : varsArray;
@@ -1343,14 +1344,14 @@ export class CodeGenerator {
           const iterableCode = this.generate(iterable, 'value');
           const indexVarName = indexVar || '_i';
           const stepCode = this.generate(step, 'value');
-          
+
           // Detect if step is negative (reverse iteration)
           const isNegativeStep = this.isNegativeStep(step);
-          
+
           // Special case: -1 and 1 generate cleaner ++ and -- operators
           const isMinusOne = isNegativeStep && (step[1] === '1' || step[1] === 1 || (step[1] instanceof String && step[1].valueOf() === '1'));
           const isPlusOne = !isNegativeStep && (step === '1' || step === 1 || (step instanceof String && step.valueOf() === '1'));
-          
+
           let loopHeader;
           if (isMinusOne) {
             loopHeader = `for (let ${indexVarName} = ${iterableCode}.length - 1; ${indexVarName} >= 0; ${indexVarName}--) `;
@@ -1367,7 +1368,7 @@ export class CodeGenerator {
             const statements = body.slice(1);
             this.indentLevel++;
             const stmts = [];
-            
+
             // Only extract item if we have an actual loop variable (not throwaway _i for noVar)
             if (!noVar) {
               stmts.push(`const ${itemVarPattern} = ${iterableCode}[${indexVarName}];`);
@@ -1478,7 +1479,7 @@ export class CodeGenerator {
             const startCode = this.generate(start, 'value');
             const endCode = this.generate(end, 'value');
             const comparison = isExclusive ? '<' : '<=';
-            
+
             // Handle step if present
             let increment = `${itemVarPattern}++`;
             if (step && step !== null) {
@@ -2039,6 +2040,7 @@ export class CodeGenerator {
         // Generate IIFE that builds array
         let code = `(${asyncPrefix}() => {\n`;
         this.indentLevel++;
+        this.comprehensionDepth++; // Track that we're inside IIFE
         code += this.indent() + 'const result = [];\n';
 
         // Generate nested loops
@@ -2048,7 +2050,7 @@ export class CodeGenerator {
           if (iterType === 'for-in') {
             const step = stepOrOwn;  // For for-in, 4th param is step
             const varsArray = Array.isArray(vars) ? vars : [vars];
-            
+
             // Check if no loop variable (range repetition: for [1...N])
             const noVar = varsArray.length === 0;
             const [firstVar, indexVar] = noVar ? ['_i', null] : varsArray;
@@ -2084,7 +2086,7 @@ export class CodeGenerator {
                 const iterableCode = this.generate(iterable, 'value');
                 const indexVarName = indexVar || '_i';
                 const stepCode = this.generate(step, 'value');
-                
+
                 // Detect if step is negative (reverse iteration)
                 const isNegativeStep = this.isNegativeStep(step);
                 if (isNegativeStep) {
@@ -2197,7 +2199,13 @@ export class CodeGenerator {
               code += this.indent() + this.generate(stmt, 'statement') + ';\n';
             } else {
               // Last statement and no control flow - push its value
-              code += this.indent() + `result.push(${this.generate(stmt, 'value')});\n`;
+              // Check if statement is a loop (for-in, for-of, while, etc.) - execute, don't push
+              const isLoopStmt = Array.isArray(stmt) && ['for-in', 'for-of', 'for-from', 'while', 'until', 'loop'].includes(stmt[0]);
+              if (isLoopStmt) {
+                code += this.indent() + this.generate(stmt, 'statement') + ';\n';
+              } else {
+                code += this.indent() + `result.push(${this.generate(stmt, 'value')});\n`;
+              }
             }
           }
         } else {
@@ -2206,8 +2214,14 @@ export class CodeGenerator {
             // Has control flow - just execute as statement (don't push)
             code += this.indent() + this.generate(expr, 'statement') + ';\n';
           } else {
-            // Normal expression - push it
-            code += this.indent() + `result.push(${this.generate(expr, 'value')});\n`;
+            // Check if expression is a loop - execute, don't push
+            const isLoopStmt = Array.isArray(expr) && ['for-in', 'for-of', 'for-from', 'while', 'until', 'loop'].includes(expr[0]);
+            if (isLoopStmt) {
+              code += this.indent() + this.generate(expr, 'statement') + ';\n';
+            } else {
+              // Normal expression - push it
+              code += this.indent() + `result.push(${this.generate(expr, 'value')});\n`;
+            }
           }
         }
 
@@ -2225,6 +2239,7 @@ export class CodeGenerator {
 
         code += this.indent() + 'return result;\n';
         this.indentLevel--;
+        this.comprehensionDepth--; // Exit IIFE nesting
         code += this.indent() + '})()';
 
         return code;
@@ -4076,7 +4091,7 @@ export class CodeGenerator {
   isNegativeStep(step) {
     if (!Array.isArray(step)) return false;
     if (step.length !== 2) return false;
-    
+
     // Check if it's a unary minus operation
     const head = step[0] instanceof String ? step[0].valueOf() : step[0];
     return head === '-';
@@ -4119,7 +4134,7 @@ export class CodeGenerator {
       if (iterType === 'for-in') {
         const step = stepOrOwn;  // For for-in, 4th param is step
         const varsArray = Array.isArray(vars) ? vars : [vars];
-        
+
         // Check if no loop variable (range repetition: for [1...N])
         const noVar = varsArray.length === 0;
         const [itemVar, indexVar] = noVar ? ['_i', null] : varsArray;
@@ -4153,14 +4168,14 @@ export class CodeGenerator {
             const iterableCode = this.generate(iterable, 'value');
             const indexVarName = indexVar || '_i';
             const stepCode = this.generate(step, 'value');
-            
+
             // Detect if step is negative (reverse iteration)
             const isNegativeStep = this.isNegativeStep(step);
-            
+
             // Special case: -1 and 1 generate cleaner ++ and -- operators
             const isMinusOne = isNegativeStep && (step[1] === '1' || step[1] === 1 || (step[1] instanceof String && step[1].valueOf() === '1'));
             const isPlusOne = !isNegativeStep && (step === '1' || step === 1 || (step instanceof String && step.valueOf() === '1'));
-            
+
             if (isMinusOne) {
               code += `for (let ${indexVarName} = ${iterableCode}.length - 1; ${indexVarName} >= 0; ${indexVarName}--) `;
             } else if (isPlusOne) {
@@ -4198,7 +4213,7 @@ export class CodeGenerator {
             this.indentLevel--;
             code += this.indent() + '}';
           }
-          
+
           if (!isRange) {
             this.indentLevel--;
             code += '\n' + this.indent() + '}';
