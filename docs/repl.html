@@ -786,6 +786,10 @@ console.log "Domain:", domain</textarea>
 
   <!-- Auto-shutdown for rip -w (plain JS, not Rip) -->
   <script>
+    console.log('[DEBUG] Auto-shutdown script loaded');
+    console.log('[DEBUG] Current URL:', window.location.href);
+    console.log('[DEBUG] Search params:', window.location.search);
+    
     // Check immediately (before Rip scripts load)
     if (window.location.search.includes('autoShutdown=true')) {
       console.log('[Auto-shutdown] Mode detected, will signal server after load');
