@@ -649,7 +649,7 @@ console.log "Domain:", domain</textarea>
         }
 
         if (replContext.showSexp) {
-          const sexp = JSON.stringify(evalResult.result.sexpr, null, 2).replace(/\n/g, '<br>');
+          const sexp = JSON.stringify(evalResult.result.sexpr, null, 1).replace(/\n/g, '<br>');
           addOutput(`<span class="help-text">=== S-EXPRESSIONS ===</span><br>${sexp}`, 'command-output');
         }
 
@@ -762,7 +762,7 @@ console.log "Domain:", domain</textarea>
 
         if (showSexp.checked) {
           outputText += '=== S-EXPRESSIONS ===\n';
-          outputText += JSON.stringify(result.sexpr, null, 2);
+          outputText += JSON.stringify(result.sexpr, null, 1);
           outputText += '\n\n';
         }
 
