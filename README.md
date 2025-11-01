@@ -29,6 +29,7 @@ Rip brings CoffeeScript's elegance to modern JavaScript—but **50% smaller**, c
 
 ```coffee
 def parseUsers(...inputs)
+  # Ruby-style regex with =~ operator and _ captures
   users = for input in inputs when input =~ /^(\w+):([^@]+@[\w.]+)$/
     name = _[1] ?? "guest"          # Nullish coalescing, _ captures
     domain = input[/@([\w.]+)/, 1]  # Regex extraction syntax
