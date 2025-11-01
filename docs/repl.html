@@ -789,7 +789,7 @@ console.log "Domain:", domain</textarea>
     // Check immediately (before Rip scripts load)
     if (window.location.search.includes('autoShutdown=true')) {
       console.log('[Auto-shutdown] Mode detected, will signal server after load');
-      
+
       function sendShutdownSignal() {
         console.log('[Auto-shutdown] Sending shutdown signal to server...');
         fetch('/shutdown')
@@ -799,13 +799,13 @@ console.log "Domain:", domain</textarea>
           .catch(err => {
             console.log('[Auto-shutdown] Signal failed:', err.message);
           });
-        
+
         // Clean URL (remove ?autoShutdown=true) without reloading
         const cleanUrl = window.location.pathname;
         window.history.replaceState({}, '', cleanUrl);
         console.log('[Auto-shutdown] URL cleaned');
       }
-      
+
       // Check if page is already loaded
       if (document.readyState === 'complete') {
         console.log('[Auto-shutdown] Page already loaded, signaling in 1000ms...');
