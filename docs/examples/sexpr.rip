@@ -12,8 +12,8 @@ INLINE_FORMS = [
   'rest', 'default', '...', 'expansion'                        # Params
 ]
 
-# Check if array should be inline (parens)
-isInline = (arr) ->
+# Check if array should be inline (parens) [shows use of def vs -> function]
+def isInline(arr)
   return false unless Array.isArray(arr)
   return false if arr.length is 0
 
