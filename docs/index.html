@@ -58,8 +58,8 @@
     <p class="note">If not redirected, <a href="repl.html">click here</a></p>
   </div>
   <script>
-    // Immediate redirect to REPL
-    window.location.href = 'repl.html';
+    // Immediate redirect to REPL (preserve query params)
+    window.location.href = 'repl.html' + window.location.search;
   </script>
 </body>
 </html>
