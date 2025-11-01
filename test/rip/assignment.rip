@@ -74,6 +74,11 @@ test "destructuring with defaults", "{a = 5, b = 10} = {a: 1}; a + b", 11
 test "array destructuring skip", "[a, , c] = [1, 2, 3]; a + c", 4
 test "destructuring swap", "a = 1; b = 2; [a, b] = [b, a]; a", 2
 
+# Array destructuring with rest in middle (CoffeeScript feature)
+test "array rest in middle", "[first, ...middle, last] = [1, 2, 3, 4, 5]; [first, middle, last]", [1, [2, 3, 4], 5]
+test "array rest in middle two after", "[a, ...mid, b, c] = [1, 2, 3, 4, 5]; [a, mid, b, c]", [1, [2, 3], 4, 5]
+test "array rest in middle empty", "[a, ...b, c] = [1, 2]; [a, b, c]", [1, [], 2]
+
 # ============================================================================
 # Rest in Destructuring
 # ============================================================================
@@ -106,5 +111,5 @@ test "computed property destructuring", '''
 # Stats for CODEGEN.md
 # ============================================================================
 # Node types: = (assignment), +=, -=, *=, /=, %=, **=, //=, &=, |=, ^=, <<=, >>=, >>>=, ||=, &&=, ??=
-# Tests: 43 total (43 passing, 0 failing)
+# Tests: 46 total (46 passing, 0 failing)
 # Coverage: Simple assignment, compound, logical, bitwise, destructuring, rest, complex patterns

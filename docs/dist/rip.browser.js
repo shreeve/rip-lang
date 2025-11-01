@@ -3701,9 +3701,17 @@ class CodeGenerator {
                 });
               };
               collectVars(elements);
-              const firstDestructure = `[${beforePattern}] = ${valueCode2}`;
-              const secondDestructure = `[${afterPattern}] = slice.call(${valueCode2}, -${afterCount})`;
-              return `${firstDestructure}, ${secondDestructure}`;
+              const restElement = elements[restIndex];
+              const restVarName = Array.isArray(restElement) && restElement[0] === "..." ? restElement[1] : null;
+              const statements = [];
+              if (beforePattern) {
+                statements.push(`[${beforePattern}] = ${valueCode2}`);
+              }
+              if (restVarName) {
+                statements.push(`[...${restVarName}] = ${valueCode2}.slice(${restIndex}, -${afterCount})`);
+              }
+              statements.push(`[${afterPattern}] = slice.call(${valueCode2}, -${afterCount})`);
+              return statements.join(", ");
             }
           }
         }
@@ -6609,7 +6617,7 @@ function compileToJS(source, options = {}) {
 }
 // src/browser.js
 var VERSION = "1.0.0";
-var BUILD_DATE = "2025-11-01@01:55:55GMT";
+var BUILD_DATE = "2025-11-01@02:15:44GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

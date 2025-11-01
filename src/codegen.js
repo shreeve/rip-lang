@@ -718,11 +718,29 @@ export class CodeGenerator {
               };
               collectVars(elements);
 
-              const firstDestructure = `[${beforePattern}] = ${valueCode}`;
-              const secondDestructure = `[${afterPattern}] = slice.call(${valueCode}, -${afterCount})`;
+              // Get the rest variable name
+              const restElement = elements[restIndex];
+              const restVarName = Array.isArray(restElement) && restElement[0] === '...' 
+                ? restElement[1] 
+                : null;
+
+              const statements = [];
+              
+              // First: destructure before rest (if any)
+              if (beforePattern) {
+                statements.push(`[${beforePattern}] = ${valueCode}`);
+              }
+              
+              // Second: assign rest variable (the middle portion)
+              if (restVarName) {
+                statements.push(`[...${restVarName}] = ${valueCode}.slice(${restIndex}, -${afterCount})`);
+              }
+              
+              // Third: destructure after rest
+              statements.push(`[${afterPattern}] = slice.call(${valueCode}, -${afterCount})`);
 
               // Return comma-separated statements
-              return `${firstDestructure}, ${secondDestructure}`;
+              return statements.join(', ');
             }
           }
         }
