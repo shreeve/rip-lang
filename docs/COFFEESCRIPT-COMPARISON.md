@@ -1,8 +1,8 @@
 # Rip vs CoffeeScript - Feature Comparison
 
 **Version:** 1.0.0 (Stable Release)
-**Last Updated:** 2025-10-31
-**Test Results:** 843/843 rip tests (100%) ✅
+**Last Updated:** 2025-11-01
+**Test Results:** 864/864 rip tests (100%) ✅
 
 ---
 
@@ -339,9 +339,9 @@ if (score >= 90) {
 Block comment
 ###
 ```
-**Status:** Not implemented
-**Workaround:** Use `#` line comments
-**Priority:** Low (line comments sufficient)
+**Status:** ✅ **Fully implemented** (handled by CoffeeScript lexer)
+**Works:** Block comments are stripped during lexing
+**Priority:** Complete - no action needed
 
 **Chained Comparisons:**
 ```coffeescript
@@ -480,22 +480,23 @@ export { add }
 | **Self-hosting** | ❌ No | ✅ **Yes** | 🏆 Rip |
 | **Implementation** | 17,760 LOC | **9,450 LOC** | 🏆 Rip |
 | **Extensibility** | Hard | Easy | 🏆 Rip |
-| **Block comments** | ✅ Yes | ❌ No | 🏆 CS |
+| **Block comments** | ✅ Yes | ✅ Yes | 🤝 Tie |
 | **Chained compare** | ✅ Yes | ❌ No | 🏆 CS |
 
-**Score:** Rip 16, CoffeeScript 2
+**Score:** Rip 16, CoffeeScript 1, Tie 1
 
 ---
 
 ## 📊 Test Coverage
 
-### Rip v0.9.0
-- **Tests:** 843/843 (100%) ✅
+### Rip v1.0.0
+- **Tests:** 864/864 (100%) ✅
 - **Files:** 20 organized test files
 - **Coverage:** 110+ node types, all features
 - **Compatibility:** 45 tests for CoffeeScript dual syntax
 - **Zero redundancy:** All tests unique
 - **Status:** Production ready
+- **Recent additions:** Postfix `by` step, nested IIFE optimization, throw/rest in middle fixes
 
 ### CoffeeScript
 - **Tests:** Thousands across many files

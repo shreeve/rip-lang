@@ -57,7 +57,7 @@ bun script.rip
 ### Testing
 
 ```bash
-# All tests (843 total)
+# All tests (864 total)
 bun run test
 
 # Specific test file
@@ -281,7 +281,7 @@ The lexer automatically converts:
 
 | Directory | Contents |
 |-----------|----------|
-| `test/rip/` | 20 test files, 843 tests total |
+| `test/rip/` | 20 test files, 864 tests total |
 | `test/runner.js` | Test framework |
 
 **Test types:**
@@ -614,7 +614,7 @@ Rip outputs modern JavaScript that runs in:
 - Keep the IR simple (s-expressions)
 - Keep the pipeline clear (lex → parse → generate)
 - Keep the code minimal (pattern matching)
-- Test everything (843/843 tests passing)
+- Test everything (864/864 tests passing)
 
 Rip achieves CoffeeScript's elegance with 50% less code by using s-expressions instead of complex AST nodes. The result is easier to understand, extend, and maintain.
 
