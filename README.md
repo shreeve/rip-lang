@@ -29,12 +29,10 @@ Rip brings CoffeeScript's elegance to modern JavaScript—but **50% smaller**, c
 
 ```coffee
 def parseUsers(...inputs)
-  users = for input in inputs
-    # Ruby-style regex with =~ operator and _ captures
-    if input =~ /^(\w+):([^@]+@[\w.]+)$/
-      name = _[1] ?? "guest"          # Nullish coalescing
-      domain = input[/@([\w.]+)/, 1]  # Regex extraction syntax
-      { name, domain }
+  users = for input in inputs when input =~ /^(\w+):([^@]+@[\w.]+)$/
+    name = _[1] ?? "guest"          # Nullish coalescing, _ captures
+    domain = input[/@([\w.]+)/, 1]  # Regex extraction syntax
+    { name, domain }
 
 # Async with dammit operator! (call and await)
 fetchUser = (id) => fetch! "/api/user/${id}"
@@ -52,11 +50,11 @@ function parseUsers(...inputs) {
   return (users = (() => {
     const result = [];
     for (const input of inputs) {
-      result.push((() => { if ((_ = toSearchable(input).match(/^(\w+):([^@]+@[\w.]+)$/))) {
+      if ((_ = toSearchable(input).match(/^(\w+):([^@]+@[\w.]+)$/))) {
         name = (_[1] ?? "guest");
         domain = (_ = toSearchable(input).match(/@([\w.]+)/)) && _[1];
-        return {name, domain};
-      } })());
+        result.push({name, domain});
+      }
     }
     return result;
   })());
