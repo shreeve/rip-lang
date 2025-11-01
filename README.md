@@ -233,7 +233,7 @@ console.log "Domain:", domain
 The parser converts this to simple arrays (s-expressions):
 
 ```lisp
-(program 
+(program
   (def fibonacci (n)
     (block
       (if (<= n 1) (block n)
