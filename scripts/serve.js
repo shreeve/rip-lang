@@ -72,14 +72,19 @@ const server = Bun.serve({
 });
 
 const actualPort = server.port;
-console.log(`🚀 Server running at http://localhost:${actualPort}`);
-console.log(`📁 Serving from: ${ROOT}/`);
-console.log(`🗜️  Brotli compression: enabled`);
-console.log('');
-console.log(`✨ Rip REPL:   http://localhost:${actualPort}/`);
-console.log(`📚 Examples:   http://localhost:${actualPort}/examples/`);
 
-// Output port for rip -w to read
 if (process.env.RIP_WEB_MODE) {
-  console.log(`PORT:${actualPort}`);
+  // Minimal output for rip -w (server will shutdown soon)
+  console.log(`🚀 Server running at http://localhost:${actualPort}`);
+  console.log(`📁 Serving from: ${ROOT}/`);
+  console.log(`🗜️  Brotli compression: enabled`);
+  console.log(`PORT:${actualPort}`);  // For rip to capture
+} else {
+  // Full output for manual bun run serve
+  console.log(`🚀 Server running at http://localhost:${actualPort}`);
+  console.log(`📁 Serving from: ${ROOT}/`);
+  console.log(`🗜️  Brotli compression: enabled`);
+  console.log('');
+  console.log(`✨ Rip REPL:   http://localhost:${actualPort}/`);
+  console.log(`📚 Examples:   http://localhost:${actualPort}/examples/`);
 }

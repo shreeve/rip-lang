@@ -784,13 +784,19 @@ console.log "Domain:", domain</textarea>
 
     // Auto-shutdown signal for rip -w mode
     if (window.location.search.includes('autoShutdown=true')) {
+      console.log('[Auto-shutdown] Mode detected, will signal server after load');
       window.addEventListener('load', () => {
+        console.log('[Auto-shutdown] Page loaded, waiting 500ms...');
         // Give a moment for everything to settle
         setTimeout(() => {
-          fetch('/shutdown').catch(() => {});
+          console.log('[Auto-shutdown] Sending shutdown signal to server...');
+          fetch('/shutdown')
+            .then(() => console.log('[Auto-shutdown] Signal sent successfully'))
+            .catch(err => console.log('[Auto-shutdown] Signal failed (expected if server already down):', err.message));
           // Clean URL (remove ?autoShutdown=true) without reloading
           const cleanUrl = window.location.pathname;
           window.history.replaceState({}, '', cleanUrl);
+          console.log('[Auto-shutdown] URL cleaned');
         }, 500);
       });
     }
