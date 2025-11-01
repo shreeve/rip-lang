@@ -77,13 +77,13 @@ function formatSExpr(arr, indent = 0, isTopLevel = false) {
   if (isTopLevel && arr[0] === 'program') {
     // Handle second element (could be comment string or actual code)
     const secondElem = arr[1];
-    const header = Array.isArray(secondElem) 
+    const header = Array.isArray(secondElem)
       ? '(program'  // Second element is code, no comment
       : '(program ' + formatAtom(secondElem, 0);  // Second element is comment/empty string
-    
+
     const lines = [header];
     const startIndex = Array.isArray(secondElem) ? 1 : 2;
-    
+
     for (let i = startIndex; i < arr.length; i++) {
       let childFormatted = formatSExpr(arr[i], 2, false);
       if (childFormatted[0] === '(') {
@@ -157,7 +157,6 @@ export class Compiler {
     const tokens = lexer.tokenize(source);
 
     if (this.options.showTokens) {
-      console.log('=== TOKENS ===');
       tokens.forEach(t => {
         console.log(`${t[0].padEnd(12)} ${JSON.stringify(t[1])}`);
       });
@@ -199,7 +198,6 @@ export class Compiler {
     }
 
     if (this.options.showSExpr) {
-      console.log('=== S-EXPRESSIONS ===');
       console.log(formatSExpr(sexpr, 0, true));  // Pass isTopLevel=true
       console.log();
     }
