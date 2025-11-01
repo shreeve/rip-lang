@@ -1936,12 +1936,12 @@ export class CodeGenerator {
 
         // Generate throw statement
         const throwStmt = `throw ${this.generate(expr, 'value')}`;
-        
+
         // In value context, wrap in IIFE (throw is a statement, not an expression)
         if (context === 'value') {
           return `(() => { ${throwStmt}; })()`;
         }
-        
+
         return throwStmt;
       }
 
@@ -3236,20 +3236,20 @@ export class CodeGenerator {
       const beforeRest = params.slice(0, restIndex);
       const restParam = params[restIndex];
       const afterRest = params.slice(restIndex + 1);
-      
+
       // Generate: (first, ...args) then destructure in body
       const beforeParams = beforeRest.map(p => this.formatParam(p));
-      const paramList = beforeParams.length > 0 
-        ? `${beforeParams.join(', ')}, ...${restParam[1]}` 
+      const paramList = beforeParams.length > 0
+        ? `${beforeParams.join(', ')}, ...${restParam[1]}`
         : `...${restParam[1]}`;
-      
+
       // Store rest and after params for body injection
       this.restMiddleParam = {
         restName: restParam[1],
         afterParams: afterRest,
         beforeCount: beforeRest.length
       };
-      
+
       return paramList;
     }
 
@@ -3403,21 +3403,21 @@ export class CodeGenerator {
         // middle should be [2,3], b=4, c=5
         const afterCount = afterParams.length;
         const extractions = [];
-        
+
         // Extract trailing params from end of rest array FIRST
         afterParams.forEach((param, idx) => {
-          const paramName = typeof param === 'string' ? param : 
-                           (Array.isArray(param) && param[0] === 'default') ? param[1] : 
+          const paramName = typeof param === 'string' ? param :
+                           (Array.isArray(param) && param[0] === 'default') ? param[1] :
                            JSON.stringify(param);
           const position = afterCount - idx;
           extractions.push(`const ${paramName} = ${restName}[${restName}.length - ${position}]`);
         });
-        
+
         // THEN slice the rest param to exclude trailing params
         if (afterCount > 0) {
           extractions.push(`${restName} = ${restName}.slice(0, -${afterCount})`);
         }
-        
+
         statements = [...extractions, ...statements];
         this.restMiddleParam = null; // Clear after use
       }
