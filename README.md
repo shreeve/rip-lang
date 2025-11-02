@@ -49,17 +49,16 @@ let _, fetchUser;
 fetchUser = async (id) => await fetch(`/api/user/${id}`);
 function parseUsers(...inputs) {
   let domain, name, users;
-  return (users = (() => {
-    const result = [];
-    for (const input of inputs) {
-      if ((_ = toSearchable(input).match(/^(\w+):([^@]+@[\w.]+)$/))) {
-        name = (_[1] ?? "guest");
-        domain = (_ = toSearchable(input).match(/@([\w.]+)/)) && _[1];
-        result.push({name, domain});
-      }
+
+  users = [];
+  for (const input of inputs) {
+    if ((_ = toSearchable(input).match(/^(\w+):([^@]+@[\w.]+)$/))) {
+      name = (_[1] ?? "guest");
+      domain = (_ = toSearchable(input).match(/@([\w.]+)/)) && _[1];
+      users.push({name, domain});
     }
-    return result;
-  })());
+  }
+  return users;
 };
 parseUsers("alice:alice@example.com", "bob:bob@test.org");
 ```
