@@ -17,12 +17,23 @@
   "bin": {
     "rip": "./bin/rip"
   },
+  "files": [
+    "bin/",
+    "src/",
+    "docs/",
+    "rip-loader.ts",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
   "scripts": {
     "browser": "bun scripts/build-browser.js",
     "parser": "bun src/grammar/solar.rip -o src/parser.js src/grammar/grammar.rip",
     "serve": "bun scripts/serve.js",
     "test": "bun test/runner.js",
-    "version": "./bin/rip -v"
+    "version": "./bin/rip -v",
+    "pack": "npm pack --dry-run",
+    "prepublishOnly": "bun run test && bun run browser"
   },
   "keywords": [
     "compiler",
