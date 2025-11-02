@@ -28,15 +28,15 @@ Rip brings CoffeeScript's elegance to modern JavaScript—but **50% smaller**, c
 #### 💎  Elegant syntax with modern features
 
 ```coffee
+# Async with dammit operator! (call and await)
+fetchUser = (id) => fetch! "/api/user/${id}"
+
 # Ruby-style regex with =~ operator and _ captures
 def parseUsers(...inputs)
   users = for input in inputs when input =~ /^(\w+):([^@]+@[\w.]+)$/
     name = _[1] ?? "guest"          # Nullish coalescing, _ captures
     domain = input[/@([\w.]+)/, 1]  # Regex extraction syntax
     { name, domain }
-
-# Async with dammit operator! (call and await)
-fetchUser = (id) => fetch! "/api/user/${id}"
 
 parseUsers "alice:alice@example.com", "bob:bob@test.org"
 ```
@@ -46,6 +46,7 @@ parseUsers "alice:alice@example.com", "bob:bob@test.org"
 ```javascript
 let _, fetchUser;
 
+fetchUser = async (id) => await fetch(`/api/user/${id}`);
 function parseUsers(...inputs) {
   let domain, name, users;
   return (users = (() => {
@@ -60,7 +61,6 @@ function parseUsers(...inputs) {
     return result;
   })());
 };
-fetchUser = async (id) => await fetch(`/api/user/${id}`);
 parseUsers("alice:alice@example.com", "bob:bob@test.org");
 ```
 
