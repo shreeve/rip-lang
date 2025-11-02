@@ -3545,6 +3545,33 @@ export class CodeGenerator {
             }
           }
 
+          // OPTIMIZATION: Last statement assignment to comprehension
+          // Transform: return (x = (() => { const result = []; ...; return result; })())
+          // Into: x = []; ...; return x;
+          // This eliminates IIFE overhead for the common pattern: fn = -> x = (for ...)
+          if (!isConstructor && !sideEffectOnly && isLast && head === '=') {
+            const [target, value] = stmt.slice(1);
+
+            // Only optimize simple variable assignments (not destructuring)
+            if (typeof target === 'string' && Array.isArray(value)) {
+              const valueHead = value[0];
+
+              // Handle comprehensions and for-in (which converts to comprehension in value context)
+              // Note: for-of and for-from don't convert to comprehensions, so exclude them
+              if (valueHead === 'comprehension' || valueHead === 'for-in') {
+                // Generate the IIFE in value context
+                const iifeCode = this.generate(value, 'value');
+
+                // Unwrap IIFE to direct array building
+                const unwrapped = this.unwrapComprehensionIIFE(iifeCode, target);
+                if (unwrapped) {
+                  code += unwrapped;
+                  return;
+                }
+              }
+            }
+          }
+
           // Constructors and void functions never get implicit returns
           const needsReturn = !isConstructor && !sideEffectOnly && isLast &&
                              !noReturnStatements.includes(head) &&
@@ -4194,6 +4221,50 @@ export class CodeGenerator {
       }
     }
     return code;
+  }
+
+  /**
+   * Unwrap comprehension IIFE into direct array building
+   *
+   * Transforms: (() => { const result = []; ...; return result; })()
+   * Into:       arrayVar = []; ...; return arrayVar;
+   *
+   * @param {string} iifeCode - Generated IIFE code from comprehension
+   * @param {string} arrayVar - Target variable name to replace 'result'
+   * @returns {string|null} Unwrapped code with proper indentation, or null if not an IIFE
+   */
+  unwrapComprehensionIIFE(iifeCode, arrayVar) {
+    // Extract IIFE body (handles sync and async)
+    const bodyMatch = iifeCode.match(/^\((?:async )?\(\) => \{([\s\S]*)\}\)\(\)$/);
+    if (!bodyMatch) return null;
+
+    let body = bodyMatch[1];
+    const lines = body.split('\n');
+
+    // Find base indentation from first non-empty line
+    let baseIndent = '';
+    for (const line of lines) {
+      if (line.trim()) {
+        baseIndent = line.match(/^(\s*)/)[1];
+        break;
+      }
+    }
+
+    // Re-indent to current level
+    const currentIndent = this.indent();
+    const reindentedLines = lines.map(line => {
+      if (!line.trim()) return '';
+      return line.startsWith(baseIndent)
+        ? currentIndent + line.slice(baseIndent.length)
+        : currentIndent + line;
+    });
+
+    // Replace 'result' with target variable
+    return reindentedLines
+      .join('\n')
+      .replace(/const result = \[\];/, `${arrayVar} = [];`)
+      .replace(/return result;/, `return ${arrayVar};`)
+      .replace(/\bresult\b/g, arrayVar);
   }
 
   /**

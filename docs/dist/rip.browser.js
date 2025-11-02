@@ -5597,6 +5597,20 @@ export default ${target}`;
               return;
             }
           }
+          if (!isConstructor && !sideEffectOnly && isLast && head === "=") {
+            const [target, value] = stmt.slice(1);
+            if (typeof target === "string" && Array.isArray(value)) {
+              const valueHead = value[0];
+              if (valueHead === "comprehension" || valueHead === "for-in") {
+                const iifeCode = this.generate(value, "value");
+                const unwrapped = this.unwrapComprehensionIIFE(iifeCode, target);
+                if (unwrapped) {
+                  code += unwrapped;
+                  return;
+                }
+              }
+            }
+          }
           const needsReturn = !isConstructor && !sideEffectOnly && isLast && !noReturnStatements.includes(head) && !loopStatements.includes(head) && !this.hasExplicitControlFlow(stmt);
           const context = needsReturn ? "value" : "statement";
           const stmtCode = this.generate(stmt, context);
@@ -6020,6 +6034,29 @@ ${this.indent()}}`;
       }
     }
     return code;
+  }
+  unwrapComprehensionIIFE(iifeCode, arrayVar) {
+    const bodyMatch = iifeCode.match(/^\((?:async )?\(\) => \{([\s\S]*)\}\)\(\)$/);
+    if (!bodyMatch)
+      return null;
+    let body = bodyMatch[1];
+    const lines = body.split(`
+`);
+    let baseIndent = "";
+    for (const line of lines) {
+      if (line.trim()) {
+        baseIndent = line.match(/^(\s*)/)[1];
+        break;
+      }
+    }
+    const currentIndent = this.indent();
+    const reindentedLines = lines.map((line) => {
+      if (!line.trim())
+        return "";
+      return line.startsWith(baseIndent) ? currentIndent + line.slice(baseIndent.length) : currentIndent + line;
+    });
+    return reindentedLines.join(`
+`).replace(/const result = \[\];/, `${arrayVar} = [];`).replace(/return result;/, `return ${arrayVar};`).replace(/\bresult\b/g, arrayVar);
   }
   generateComprehensionAsLoop(expr, iterators, guards) {
     let code = "";
@@ -6736,7 +6773,7 @@ function compileToJS(source, options = {}) {
 }
 // src/browser.js
 var VERSION = "1.1.1";
-var BUILD_DATE = "2025-11-01@18:14:20GMT";
+var BUILD_DATE = "2025-11-02@18:50:40GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
