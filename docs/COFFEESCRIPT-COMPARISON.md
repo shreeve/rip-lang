@@ -77,7 +77,7 @@ users?[0]?.profile    # Works seamlessly
 
 **What's included:**
 - ✅ Full compiler (lexer, parser, codegen)
-- ✅ **SLR(1) parser generator** (solar.rip - 987 lines)
+- ✅ **SLR(1) parser generator** (solar.rip - 928 lines)
 - ✅ Self-hosting capability (Rip compiles itself)
 - ✅ Triple REPL (terminal, browser, console)
 - ✅ Test framework
@@ -312,7 +312,7 @@ if (score >= 90) {
 | Component | CoffeeScript 2.7 | Rip | Difference |
 |-----------|------------------|-----|------------|
 | **Lexer+Rewriter** | 3,558 LOC | 3,145 LOC | Expanded syntax |
-| **Parser Generator** | 2,285 LOC (Jison) | 987 LOC (Solar) | Built-in, ~156× faster! |
+| **Parser Generator** | 2,285 LOC (Jison) | 928 LOC (Solar) | Built-in, ~156× faster! |
 | **Compiler** | 10,346 LOC (AST Nodes) | 4,738 LOC (S-expressions) | Powerful capabilities |
 | **Tools** | 1,571 LOC (Repl, Cake) | 520 LOC (Repl, Browser) | 3 Repl's + Browser |
 | **Total** | **17,760 LOC** | **9,450 LOC** | **~50% smaller** |

@@ -2,7 +2,7 @@
 
 **Solar** is a complete SLR(1) parser generator **included with Rip** - written in Rip, compiled by Rip, zero external dependencies!
 
-**Location:** `src/grammar/solar.rip` (987 lines)
+**Location:** `src/grammar/solar.rip` (928 lines)
 **Dependencies:** ZERO - Self-hosting, standalone
 **Type:** SLR(1) parser generator (similar to Yacc/Bison/Jison)
 
@@ -751,7 +751,7 @@ case '+': {
 
 ### File: `src/grammar/solar.rip`
 
-**Size:** 987 LOC
+**Size:** 928 LOC
 **Purpose:** Generates SLR(1) parsers from grammar specs
 **Features:**
 - Lexer-less (works with any token stream)
@@ -811,7 +811,7 @@ o 'FOR ForVariables IN Expression Block', '["for-in", 2, 4, null, null, 5]'
 | File | Purpose | Size | Modify? |
 |------|---------|------|---------|
 | `src/grammar/grammar.rip` | Grammar spec | 795 LOC | ✅ Yes |
-| `src/grammar/solar.rip` | Parser generator | 987 LOC | ❌ No |
+| `src/grammar/solar.rip` | Parser generator | 928 LOC | ❌ No |
 | `src/parser.js` | Generated parser | 340 LOC | ❌ No (auto-gen) |
 | `src/lexer.js` | Lexer + Rewriter | 3,145 LOC | ⚠️ Rewriter only |
 | `src/codegen.js` | Code generator | 4,738 LOC | ✅ Yes |
@@ -863,7 +863,7 @@ o 'FOR ForVariables IN Expression Block', '["for-in", 2, 4, null, null, 5]'
 | **Parse time** | 12,500ms | 80ms | **Solar 156×** |
 | **Dependencies** | Many | Zero | **Solar** |
 | **Self-hosting** | No | Yes | **Solar** |
-| **Code size** | 2,285 LOC | 987 LOC | **Solar 57% smaller** |
+| **Code size** | 2,285 LOC | 928 LOC | **Solar 59% smaller** |
 | **Output** | AST classes | S-expressions | **Solar (simpler)** |
 
 ### Iteration Speed Matters
