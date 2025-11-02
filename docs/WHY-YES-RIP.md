@@ -146,7 +146,7 @@ Not "minimal." Not "few." **ZERO.** This is **real**, **running**, **today**.
 
 **What's included with zero external dependencies:**
 - ✅ **Full compiler** (lexer + parser + codegen)
-- ✅ **SLR(1) parser generator** (solar.rip - 1,047 lines, built-in!)
+- ✅ **SLR(1) parser generator** (solar.rip - 987 lines, built-in!)
 - ✅ **Self-hosting** (Rip compiles itself, including the parser generator)
 - ✅ **Triple REPL** (terminal, browser, console)
 - ✅ **Test framework** (runner + 843 tests)
