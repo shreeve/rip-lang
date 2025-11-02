@@ -79,10 +79,8 @@ class Generator
       @mode = 'sexp'   # S-expression mode with compact syntax
     else if grammar.bnf?
       @mode = 'jison'  # Jison grammar with AST nodes (CoffeeScript compatibility)
-    else if grammar.grammar?
-      @mode = 'jison'  # Also treat as Jison mode
     else
-      throw new Error "Unknown grammar format: expected mode='sexp', 'bnf', or 'grammar' property"
+      throw new Error "Unknown grammar format: expected mode='sexp' or grammar.bnf property"
 
     # Grammar structures
     @types     = {}
