@@ -52,14 +52,17 @@ function formatAtom(elem) {
 }
 
 /**
- * Convert S-expression to formatted string
+ * Pretty-print S-expression AST
+ * @param {Array} sexp - S-expression from compile()
+ * @param {number} indent - Current indentation level (default 0)
+ * @returns {string} Formatted string
  */
-function toSexpr(arr, indent = 0) {
+function formatSExpr(arr, indent = 0) {
   if (!Array.isArray(arr)) return formatAtom(arr);
 
   // Inline format: (op arg1 arg2)
   if (isInline(arr)) {
-    const parts = arr.map(elem => Array.isArray(elem) ? toSexpr(elem) : formatAtom(elem));
+    const parts = arr.map(elem => Array.isArray(elem) ? formatSExpr(elem) : formatAtom(elem));
     return `(${parts.join(' ')})`;
   }
 
@@ -67,14 +70,14 @@ function toSexpr(arr, indent = 0) {
   const lines = [];
 
   // Format head
-  const head = Array.isArray(arr[0]) ? toSexpr(arr[0]) : formatAtom(arr[0]);
+  const head = Array.isArray(arr[0]) ? formatSExpr(arr[0]) : formatAtom(arr[0]);
   lines.push(`${spaces}(${head}`);
 
   // Format remaining elements
   for (let i = 1; i < arr.length; i++) {
     const elem = arr[i];
     if (Array.isArray(elem)) {
-      const formatted = toSexpr(elem, indent + 2);
+      const formatted = formatSExpr(elem, indent + 2);
       if (isInline(elem)) {
         lines[lines.length - 1] += ` ${formatted}`;
       } else {
@@ -87,15 +90,6 @@ function toSexpr(arr, indent = 0) {
 
   lines[lines.length - 1] += ')';
   return lines.join('\n');
-}
-
-/**
- * Pretty-print S-expression AST
- * @param {Array} sexp - S-expression from compile()
- * @returns {string} Formatted string
- */
-function formatSExpr(sexp) {
-  return toSexpr(sexp, 0);
 }
 
 export class Compiler {
