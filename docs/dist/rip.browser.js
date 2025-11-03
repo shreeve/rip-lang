@@ -6545,7 +6545,45 @@ ${this.indent()}}`;
   }
 }
 // src/compiler.js
-var INLINE_FORMS = [
+var INLINE_FORMS = new Set([
+  "+",
+  "-",
+  "*",
+  "/",
+  "\\",
+  "#",
+  "**",
+  "_",
+  "=",
+  "<",
+  ">",
+  "[",
+  "]",
+  "]]",
+  "!",
+  "&",
+  "?",
+  "'",
+  "not",
+  "var",
+  "num",
+  "str",
+  "global",
+  "naked-global",
+  "tag",
+  "entryref",
+  "assign",
+  "pass-by-ref",
+  "newline",
+  "formfeed",
+  "tab",
+  "ascii",
+  "value",
+  "read-var",
+  "read-newline",
+  "lock-var",
+  "lock-incr",
+  "lock-decr",
   ".",
   "?.",
   "::",
@@ -6554,18 +6592,11 @@ var INLINE_FORMS = [
   "?[]",
   "optindex",
   "optcall",
-  "+",
-  "-",
-  "*",
-  "/",
   "%",
-  "**",
   "//",
   "%%",
   "==",
   "!=",
-  "<",
-  ">",
   "<=",
   ">=",
   "===",
@@ -6583,82 +6614,48 @@ var INLINE_FORMS = [
   "default",
   "...",
   "expansion"
-];
+]);
 function isInline(arr) {
   if (!Array.isArray(arr) || arr.length === 0)
     return false;
-  const head = arr[0]?.valueOf ? arr[0].valueOf() : arr[0];
-  if (INLINE_FORMS.includes(head))
+  const head = arr[0]?.valueOf?.() ?? arr[0];
+  if (INLINE_FORMS.has(head))
     return true;
-  if (arr.length <= 4) {
-    return !arr.some((elem) => Array.isArray(elem));
-  }
-  return false;
+  return arr.length <= 4 && !arr.some(Array.isArray);
 }
-function formatAtom(elem, indent = 0) {
+function formatAtom(elem) {
   if (Array.isArray(elem))
     return "(???)";
   if (typeof elem === "number")
     return String(elem);
+  if (elem === null)
+    return "null";
   if (elem === "")
     return '""';
-  const str = String(elem);
-  if (str[0] === "/" && str.indexOf(`
-`) >= 0) {
-    const match = str.match(/\/([gimsuvy]*)$/);
-    const flags = match ? match[1] : "";
-    let content = str.slice(1);
-    if (flags) {
-      content = content.slice(0, -flags.length - 1);
-    } else {
-      content = content.slice(0, -1);
-    }
-    const lines = content.split(`
-`);
-    const cleaned = lines.map((line) => line.replace(/#.*$/, "").trim());
-    const processed = cleaned.join("");
-    return `"/${processed}/${flags}"`;
-  }
-  return str;
+  return String(elem);
 }
-function formatSExpr(arr, indent = 0, isTopLevel = false) {
+function formatSExpr(arr, indent = 0) {
   if (!Array.isArray(arr))
-    return formatAtom(arr, indent);
+    return formatAtom(arr);
   if (isInline(arr)) {
-    const parts = arr.map((elem) => Array.isArray(elem) ? formatSExpr(elem, 0, false) : formatAtom(elem, indent));
-    return "(" + parts.join(" ") + ")";
+    const parts = arr.map((elem) => Array.isArray(elem) ? formatSExpr(elem) : formatAtom(elem));
+    return `(${parts.join(" ")})`;
   }
-  if (isTopLevel && arr[0] === "program") {
-    const secondElem = arr[1];
-    const header = Array.isArray(secondElem) ? "(program" : "(program " + formatAtom(secondElem, 0);
-    const lines2 = [header];
-    const startIndex = Array.isArray(secondElem) ? 1 : 2;
-    for (let i = startIndex;i < arr.length; i++) {
-      let childFormatted = formatSExpr(arr[i], 2, false);
-      if (childFormatted[0] === "(") {
-        childFormatted = "  " + childFormatted;
-      }
-      lines2.push(childFormatted);
-    }
-    lines2.push(")");
-    return lines2.join(`
-`);
-  }
-  const lines = [];
   const spaces = " ".repeat(indent);
-  const head = Array.isArray(arr[0]) ? formatSExpr(arr[0], 0, false) : formatAtom(arr[0], indent);
-  lines.push(spaces + "(" + head);
+  const lines = [];
+  const head = Array.isArray(arr[0]) ? formatSExpr(arr[0]) : formatAtom(arr[0]);
+  lines.push(`${spaces}(${head}`);
   for (let i = 1;i < arr.length; i++) {
     const elem = arr[i];
     if (Array.isArray(elem)) {
-      const formatted = formatSExpr(elem, indent + 2, false);
+      const formatted = formatSExpr(elem, indent + 2);
       if (isInline(elem)) {
-        lines[lines.length - 1] += " " + formatted;
+        lines[lines.length - 1] += ` ${formatted}`;
       } else {
         lines.push(formatted);
       }
     } else {
-      lines[lines.length - 1] += " " + formatAtom(elem, indent);
+      lines[lines.length - 1] += ` ${formatAtom(elem)}`;
     }
   }
   lines[lines.length - 1] += ")";
@@ -6720,7 +6717,7 @@ class Compiler {
       throw parseError;
     }
     if (this.options.showSExpr) {
-      console.log(formatSExpr(sexpr, 0, true));
+      console.log(formatSExpr(sexpr));
       console.log();
     }
     const generator = new CodeGenerator;
@@ -6773,7 +6770,7 @@ function compileToJS(source, options = {}) {
 }
 // src/browser.js
 var VERSION = "1.1.3";
-var BUILD_DATE = "2025-11-02@20:15:22GMT";
+var BUILD_DATE = "2025-11-03@22:56:42GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
