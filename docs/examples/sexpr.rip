@@ -3,14 +3,14 @@
 # Compact S-Expression Formatter
 # Optimized for Rip's s-expression structure
 
-# Operators and forms that should ALWAYS be inline
-INLINE_FORMS = [
+# Operators and forms that should ALWAYS be inline (using Set for faster lookup)
+INLINE_FORMS = new Set([
   '.', '?.', '::', '?::', '[]', '?[]', 'optindex', 'optcall'  # Property access
   '+', '-', '*', '/', '%', '**', '//', '%%'                    # Arithmetic
   '==', '!=', '<', '>', '<=', '>=', '===', '!=='              # Comparison
   '&&', '||', '??', '&', '|', '^', '<<', '>>', '>>>'          # Logical/bitwise
   'rest', 'default', '...', 'expansion'                        # Params
-]
+])
 
 # Check if array should be inline (parens) [shows use of def vs -> function]
 def isInline(arr)
@@ -18,17 +18,11 @@ def isInline(arr)
   return false if arr.length is 0
 
   # Special forms always inline (handle String objects from parser)
-  head = if arr[0]?.valueOf then arr[0].valueOf() else arr[0]
-  return true if INLINE_FORMS.indexOf(head) >= 0
+  head = arr[0]?.valueOf?() ?? arr[0]
+  return true if INLINE_FORMS.has(head)
 
   # Small arrays with no nesting
-  if arr.length <= 4
-    hasNested = false
-    for elem in arr
-      hasNested = true if Array.isArray(elem)
-    return true unless hasNested
-
-  false
+  arr.length <= 4 and not arr.some(Array.isArray)
 
 # Format atom (non-array element)
 # Pass indent for multi-line strings
