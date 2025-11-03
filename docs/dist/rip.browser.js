@@ -6632,23 +6632,56 @@ function formatAtom(elem) {
     return "null";
   if (elem === "")
     return '""';
-  return String(elem);
+  const str = String(elem);
+  if (str[0] === "/" && str.indexOf(`
+`) >= 0) {
+    const match = str.match(/\/([gimsuvy]*)$/);
+    const flags = match ? match[1] : "";
+    let content = str.slice(1);
+    if (flags) {
+      content = content.slice(0, -flags.length - 1);
+    } else {
+      content = content.slice(0, -1);
+    }
+    const lines = content.split(`
+`);
+    const cleaned = lines.map((line) => line.replace(/#.*$/, "").trim());
+    const processed = cleaned.join("");
+    return `"/${processed}/${flags}"`;
+  }
+  return str;
 }
-function formatSExpr(arr, indent = 0) {
+function formatSExpr(arr, indent = 0, isTopLevel = false) {
   if (!Array.isArray(arr))
     return formatAtom(arr);
   if (isInline(arr)) {
-    const parts = arr.map((elem) => Array.isArray(elem) ? formatSExpr(elem) : formatAtom(elem));
+    const parts = arr.map((elem) => Array.isArray(elem) ? formatSExpr(elem, 0, false) : formatAtom(elem));
     return `(${parts.join(" ")})`;
+  }
+  if (isTopLevel && arr[0] === "program") {
+    const secondElem = arr[1];
+    const header = Array.isArray(secondElem) ? "(program" : "(program " + formatAtom(secondElem);
+    const lines2 = [header];
+    const startIndex = Array.isArray(secondElem) ? 1 : 2;
+    for (let i = startIndex;i < arr.length; i++) {
+      let childFormatted = formatSExpr(arr[i], 2, false);
+      if (childFormatted[0] === "(") {
+        childFormatted = "  " + childFormatted;
+      }
+      lines2.push(childFormatted);
+    }
+    lines2.push(")");
+    return lines2.join(`
+`);
   }
   const spaces = " ".repeat(indent);
   const lines = [];
-  const head = Array.isArray(arr[0]) ? formatSExpr(arr[0]) : formatAtom(arr[0]);
+  const head = Array.isArray(arr[0]) ? formatSExpr(arr[0], 0, false) : formatAtom(arr[0]);
   lines.push(`${spaces}(${head}`);
   for (let i = 1;i < arr.length; i++) {
     const elem = arr[i];
     if (Array.isArray(elem)) {
-      const formatted = formatSExpr(elem, indent + 2);
+      const formatted = formatSExpr(elem, indent + 2, false);
       if (isInline(elem)) {
         lines[lines.length - 1] += ` ${formatted}`;
       } else {
@@ -6717,7 +6750,7 @@ class Compiler {
       throw parseError;
     }
     if (this.options.showSExpr) {
-      console.log(formatSExpr(sexpr));
+      console.log(formatSExpr(sexpr, 0, true));
       console.log();
     }
     const generator = new CodeGenerator;
@@ -6769,8 +6802,8 @@ function compileToJS(source, options = {}) {
   return compiler.compileToJS(source);
 }
 // src/browser.js
-var VERSION = "1.1.3";
-var BUILD_DATE = "2025-11-03@22:56:42GMT";
+var VERSION = "1.1.4";
+var BUILD_DATE = "2025-11-03@23:02:09GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

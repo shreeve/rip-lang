@@ -48,36 +48,82 @@ function formatAtom(elem) {
   if (elem === null) return 'null';
   if (elem === '') return '""';
 
-  return String(elem);
+  const str = String(elem);
+
+  // Handle multi-line regexes (heregex) - collapse to single line
+  if (str[0] === '/' && str.indexOf('\n') >= 0) {
+    const match = str.match(/\/([gimsuvy]*)$/);
+    const flags = match ? match[1] : '';
+
+    let content = str.slice(1);
+    if (flags) {
+      content = content.slice(0, -flags.length - 1);
+    } else {
+      content = content.slice(0, -1);
+    }
+
+    // Remove whitespace and comments
+    const lines = content.split('\n');
+    const cleaned = lines.map(line => line.replace(/#.*$/, '').trim());
+    const processed = cleaned.join('');
+
+    return `"/${processed}/${flags}"`;
+  }
+
+  return str;
 }
 
 /**
  * Pretty-print S-expression AST
  * @param {Array} sexp - S-expression from compile()
  * @param {number} indent - Current indentation level (default 0)
+ * @param {boolean} isTopLevel - Whether this is the top-level program node
  * @returns {string} Formatted string
  */
-function formatSExpr(arr, indent = 0) {
+function formatSExpr(arr, indent = 0, isTopLevel = false) {
   if (!Array.isArray(arr)) return formatAtom(arr);
 
   // Inline format: (op arg1 arg2)
   if (isInline(arr)) {
-    const parts = arr.map(elem => Array.isArray(elem) ? formatSExpr(elem) : formatAtom(elem));
+    const parts = arr.map(elem => Array.isArray(elem) ? formatSExpr(elem, 0, false) : formatAtom(elem));
     return `(${parts.join(' ')})`;
   }
 
+  // Special handling for program node
+  if (isTopLevel && arr[0] === 'program') {
+    // Handle second element (could be comment string or actual code)
+    const secondElem = arr[1];
+    const header = Array.isArray(secondElem)
+      ? '(program'  // Second element is code, no comment
+      : '(program ' + formatAtom(secondElem);  // Second element is comment/empty string
+
+    const lines = [header];
+    const startIndex = Array.isArray(secondElem) ? 1 : 2;
+
+    for (let i = startIndex; i < arr.length; i++) {
+      let childFormatted = formatSExpr(arr[i], 2, false);
+      if (childFormatted[0] === '(') {
+        childFormatted = '  ' + childFormatted;
+      }
+      lines.push(childFormatted);
+    }
+    lines.push(')');
+    return lines.join('\n');
+  }
+
+  // Block: use indentation WITH parens
   const spaces = ' '.repeat(indent);
   const lines = [];
 
   // Format head
-  const head = Array.isArray(arr[0]) ? formatSExpr(arr[0]) : formatAtom(arr[0]);
+  const head = Array.isArray(arr[0]) ? formatSExpr(arr[0], 0, false) : formatAtom(arr[0]);
   lines.push(`${spaces}(${head}`);
 
   // Format remaining elements
   for (let i = 1; i < arr.length; i++) {
     const elem = arr[i];
     if (Array.isArray(elem)) {
-      const formatted = formatSExpr(elem, indent + 2);
+      const formatted = formatSExpr(elem, indent + 2, false);
       if (isInline(elem)) {
         lines[lines.length - 1] += ` ${formatted}`;
       } else {
@@ -163,7 +209,7 @@ export class Compiler {
     }
 
     if (this.options.showSExpr) {
-      console.log(formatSExpr(sexpr));
+      console.log(formatSExpr(sexpr, 0, true));
       console.log();
     }
 
