@@ -4,127 +4,98 @@ import { Lexer } from './lexer.js';
 import { parser } from './parser.js';
 import { CodeGenerator } from './codegen.js';
 
-// ============================================================================
-// S-Expression Formatter
-// ============================================================================
+// ==============================================================================
+// S-Expression Pretty Printer
+// ==============================================================================
 
-// Operators and forms that should ALWAYS be inline
-const INLINE_FORMS = [
-  '.', '?.', '::', '?::', '[]', '?[]', 'optindex', 'optcall',  // Property access
-  '+', '-', '*', '/', '%', '**', '//', '%%',                    // Arithmetic
-  '==', '!=', '<', '>', '<=', '>=', '===', '!==',              // Comparison
-  '&&', '||', '??', '&', '|', '^', '<<', '>>', '>>>',          // Logical/bitwise
-  'rest', 'default', '...', 'expansion'                        // Params
-];
+const INLINE_FORMS = new Set([
+  '+', '-', '*', '/', '\\', '#', '**', '_',       // Binary operators
+  '=', '<', '>', '[', ']', ']]', '!', '&', '?',   // Comparison & logical
+  '\'', 'not',                                    // Unary NOT, negated compare
+  'var', 'num', 'str', 'global', 'naked-global',  // Atoms and variables
+  'tag', 'entryref', 'assign', 'pass-by-ref',     // References and assignment
+  'newline', 'formfeed', 'tab', 'ascii',          // WRITE format codes
+  'value', 'read-var', 'read-newline',            // Simple command args
+  'lock-var', 'lock-incr', 'lock-decr',           // LOCK operations
+  '.', '?.', '::', '?::', '[]', '?[]',            // Property access (Rip)
+  'optindex', 'optcall',                          // Optional access (Rip)
+  '%', '//', '%%',                                // More arithmetic (Rip)
+  '==', '!=', '<=', '>=', '===', '!==',          // More comparison (Rip)
+  '&&', '||', '??', '&', '|', '^',               // Logical/bitwise (Rip)
+  '<<', '>>', '>>>',                              // Bitwise shifts (Rip)
+  'rest', 'default', '...', 'expansion'           // Params (Rip)
+]);
 
+/**
+ * Determine if an array should be formatted inline (single line)
+ */
 function isInline(arr) {
   if (!Array.isArray(arr) || arr.length === 0) return false;
 
-  // Special forms always inline (handle String objects from parser)
-  const head = arr[0]?.valueOf ? arr[0].valueOf() : arr[0];
-  if (INLINE_FORMS.includes(head)) return true;
+  const head = arr[0]?.valueOf?.() ?? arr[0];
+  if (INLINE_FORMS.has(head)) return true;
 
-  // Small arrays with no nesting
-  if (arr.length <= 4) {
-    return !arr.some(elem => Array.isArray(elem));
-  }
-
-  return false;
+  // Small arrays without nesting can be inline
+  return arr.length <= 4 && !arr.some(Array.isArray);
 }
 
-function formatAtom(elem, indent = 0) {
+/**
+ * Format a single atom (non-array element)
+ */
+function formatAtom(elem) {
   if (Array.isArray(elem)) return '(???)';
   if (typeof elem === 'number') return String(elem);
+  if (elem === null) return 'null';
   if (elem === '') return '""';
 
-  const str = String(elem);
-
-  // Handle multi-line regexes (heregex) - collapse to single line
-  if (str[0] === '/' && str.indexOf('\n') >= 0) {
-    const match = str.match(/\/([gimsuvy]*)$/);
-    const flags = match ? match[1] : '';
-
-    let content = str.slice(1);
-    if (flags) {
-      content = content.slice(0, -flags.length - 1);
-    } else {
-      content = content.slice(0, -1);
-    }
-
-    // Remove whitespace and comments
-    const lines = content.split('\n');
-    const cleaned = lines.map(line => line.replace(/#.*$/, '').trim());
-    const processed = cleaned.join('');
-
-    return `"/${processed}/${flags}"`;
-  }
-
-  return str;
+  return String(elem);
 }
 
-function formatSExpr(arr, indent = 0, isTopLevel = false) {
-  if (!Array.isArray(arr)) return formatAtom(arr, indent);
+/**
+ * Convert S-expression to formatted string
+ */
+function toSexpr(arr, indent = 0) {
+  if (!Array.isArray(arr)) return formatAtom(arr);
 
-  // Inline: use parentheses
+  // Inline format: (op arg1 arg2)
   if (isInline(arr)) {
-    const parts = arr.map(elem =>
-      Array.isArray(elem) ? formatSExpr(elem, 0, false) : formatAtom(elem, indent)
-    );
-    return '(' + parts.join(' ') + ')';
+    const parts = arr.map(elem => Array.isArray(elem) ? toSexpr(elem) : formatAtom(elem));
+    return `(${parts.join(' ')})`;
   }
 
-  // Special handling for program node
-  if (isTopLevel && arr[0] === 'program') {
-    // Handle second element (could be comment string or actual code)
-    const secondElem = arr[1];
-    const header = Array.isArray(secondElem)
-      ? '(program'  // Second element is code, no comment
-      : '(program ' + formatAtom(secondElem, 0);  // Second element is comment/empty string
-
-    const lines = [header];
-    const startIndex = Array.isArray(secondElem) ? 1 : 2;
-
-    for (let i = startIndex; i < arr.length; i++) {
-      let childFormatted = formatSExpr(arr[i], 2, false);
-      if (childFormatted[0] === '(') {
-        childFormatted = '  ' + childFormatted;
-      }
-      lines.push(childFormatted);
-    }
-    lines.push(')');
-    return lines.join('\n');
-  }
-
-  // Block: use indentation WITH parens
-  const lines = [];
   const spaces = ' '.repeat(indent);
+  const lines = [];
 
-  // Opening with first element
-  const head = Array.isArray(arr[0])
-    ? formatSExpr(arr[0], 0, false)
-    : formatAtom(arr[0], indent);
+  // Format head
+  const head = Array.isArray(arr[0]) ? toSexpr(arr[0]) : formatAtom(arr[0]);
+  lines.push(`${spaces}(${head}`);
 
-  lines.push(spaces + '(' + head);
-
-  // Remaining elements
+  // Format remaining elements
   for (let i = 1; i < arr.length; i++) {
     const elem = arr[i];
     if (Array.isArray(elem)) {
-      const formatted = formatSExpr(elem, indent + 2, false);
+      const formatted = toSexpr(elem, indent + 2);
       if (isInline(elem)) {
-        lines[lines.length - 1] += ' ' + formatted;
+        lines[lines.length - 1] += ` ${formatted}`;
       } else {
         lines.push(formatted);
       }
     } else {
-      lines[lines.length - 1] += ' ' + formatAtom(elem, indent);
+      lines[lines.length - 1] += ` ${formatAtom(elem)}`;
     }
   }
 
-  // Closing paren
   lines[lines.length - 1] += ')';
-
   return lines.join('\n');
+}
+
+/**
+ * Pretty-print S-expression AST
+ * @param {Array} sexp - S-expression from compile()
+ * @returns {string} Formatted string
+ */
+function formatSExpr(sexp) {
+  return toSexpr(sexp, 0);
 }
 
 export class Compiler {
@@ -198,7 +169,7 @@ export class Compiler {
     }
 
     if (this.options.showSExpr) {
-      console.log(formatSExpr(sexpr, 0, true));  // Pass isTopLevel=true
+      console.log(formatSExpr(sexpr));
       console.log();
     }
 
