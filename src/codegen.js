@@ -3323,6 +3323,12 @@ export class CodeGenerator {
         if (Array.isArray(el) && el[0] === '...') {
           return `...${el[1]}`;  // Rest
         }
+        // Handle assignment as default value in destructuring (for-loop support)
+        // Pattern: ["=", "varName", value] → varName = value
+        if (Array.isArray(el) && el[0] === '=' && typeof el[1] === 'string') {
+          const [, varName, defaultValue] = el;
+          return `${varName} = ${this.generate(defaultValue, 'value')}`;
+        }
         if (typeof el === 'string') return el;
         return this.formatParam(el);  // Nested destructuring
       });

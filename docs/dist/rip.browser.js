@@ -5463,6 +5463,10 @@ function _setDataSection() {
         if (Array.isArray(el) && el[0] === "...") {
           return `...${el[1]}`;
         }
+        if (Array.isArray(el) && el[0] === "=" && typeof el[1] === "string") {
+          const [, varName, defaultValue] = el;
+          return `${varName} = ${this.generate(defaultValue, "value")}`;
+        }
         if (typeof el === "string")
           return el;
         return this.formatParam(el);
@@ -6819,7 +6823,7 @@ function compileToJS(source, options = {}) {
 }
 // src/browser.js
 var VERSION = "1.2.2";
-var BUILD_DATE = "2025-11-04@08:29:42GMT";
+var BUILD_DATE = "2025-11-04@11:02:55GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

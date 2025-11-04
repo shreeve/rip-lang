@@ -10,6 +10,9 @@ test "for-in array", "sum = 0; for x in [1, 2, 3]\n  sum += x\nsum", 6
 test "for-in with index", "result = ''; for item, i in ['a', 'b', 'c']\n  result += i\nresult", "012"
 test "for-in range", "sum = 0; for i in [1..5]\n  sum += i\nsum", 15
 
+# For-in with destructuring and defaults
+test "for-in destructuring with defaults", "arr = [[1, 2, 3], [4, 5], [6]]\nresult = []\nfor [a, b = 99, c = 88] in arr\n  result.push(a + b + c)\nresult", [6, 97, 193]
+
 # Range loop without variable (N-time repetition)
 test "range loop without var", "result = ''; for [1...5]\n  result += 'x'\nresult", "xxxx"
 test "range loop without var with by", "result = ''; for [1...10] by 2\n  result += 'x'\nresult", "xxxxx"

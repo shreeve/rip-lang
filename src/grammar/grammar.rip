@@ -647,10 +647,15 @@ grammar =
   ]
 
   ForValue: [
+    o 'ForVar'                    # Simple variable
+    o 'ForVar = Expression', '["default", 1, 3]'  # With default value (like params)
+  ]
+
+  ForVar: [
     o 'Identifier'
     o 'ThisProperty'
-    o 'Array'   # Destructuring
-    o 'Object'  # Destructuring
+    o 'Array'   # Array destructuring
+    o 'Object'  # Object destructuring
   ]
 
   ForVariables: [
