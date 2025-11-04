@@ -213,44 +213,9 @@ export class Compiler {
       console.log();
     }
 
-    // Step 3: Generate JavaScript code
-    const generator = new CodeGenerator();
+    // Step 3: Generate JavaScript code (pass dataSection to generator)
+    const generator = new CodeGenerator({ dataSection });
     let code = generator.compile(sexpr);
-
-    // Step 4: Inject DATA variable if __DATA__ section present
-    if (dataSection !== null) {
-      // Strategy:
-      // 1. Declare let DATA; at top
-      // 2. Call setData() right after
-      // 3. Define setData() at bottom with the data string
-      // This keeps the big data blob at the bottom but DATA is available throughout
-
-      const lines = code.split('\n');
-
-      // Find where to insert let DATA and setData() call (after other declarations)
-      const insertIndex = lines.findIndex((line, i) => {
-        if (i === 0) return false;
-        return line.trim() &&
-               !line.startsWith('let ') &&
-               !line.startsWith('const ') &&
-               !line.startsWith('var ') &&
-               !line.startsWith('//');
-      });
-
-      // Insert declaration and call at top
-      const topCode = 'var DATA;\n_setDataSection();\n';
-      if (insertIndex !== -1) {
-        lines.splice(insertIndex, 0, topCode);
-      } else {
-        lines.unshift(topCode);
-      }
-
-      // Add function definition at bottom (function hoists, so available before call)
-      const bottomCode = `\nfunction _setDataSection() {\n  DATA = ${JSON.stringify(dataSection)};\n}`;
-      lines.push(bottomCode);
-
-      code = lines.join('\n');
-    }
 
     return {
       tokens,

@@ -28,6 +28,7 @@ export class CodeGenerator {
     this.indentLevel = 0;
     this.indentString = '  '; // 2 spaces
     this.comprehensionDepth = 0; // Track nesting to avoid wasteful nested IIFEs
+    this.dataSection = options.dataSection; // __DATA__ content if present
   }
 
   /**
@@ -3202,17 +3203,29 @@ export class CodeGenerator {
       needsBlankLine = true;
     }
 
-    // 4. Space between generated header and body
-    if (needsBlankLine) {
+    // 4. Initialize DATA if __DATA__ section present
+    if (this.dataSection !== null && this.dataSection !== undefined) {
+      code += 'var DATA;\n';
+      code += '_setDataSection();\n';
+      needsBlankLine = true;
+    }
+
+    // 5. Space between generated header and body (only if we generated a header)
+    if (needsBlankLine && code.length > 0) {
       code += '\n';
     }
 
-    // 5. Add statements
+    // 6. Add statements
     code += statementsCode;
 
-    // 6. Generate exports last (after all code)
+    // 7. Generate exports (after statements)
     if (exports.length > 0) {
       code += '\n' + exports.map(stmt => this.generate(stmt, 'statement') + ';').join('\n');
+    }
+
+    // 8. Define DATA initialization function at the end
+    if (this.dataSection !== null && this.dataSection !== undefined) {
+      code += `\n\nfunction _setDataSection() {\n  DATA = ${JSON.stringify(this.dataSection)};\n}`;
     }
 
     return code;
