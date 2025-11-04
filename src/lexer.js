@@ -2955,14 +2955,25 @@ Rewriter = (function() {
     // =========================================================================
     convertPostfixSpreadRest() {
       return this.scanTokens(function(token, i, tokens) {
-        var definiteSpreadNext, inIndexContext, next, nextTag, prev, prevTag, ref, validPostfixTokens;
+        var definiteSpreadNext, inIndexContext, lastIndexEnd, lastIndexStart, next, nextTag, prev, prevTag, ref, validPostfixTokens;
         // Only process ... and .. tokens
         if (token[0] !== '...' && token[0] !== '..') {
           return 1;
         }
-        // Check if we're inside INDEX_START...INDEX_END (array indexing/slicing)
-        // In that context, ... is a range/slice operator, not spread
-        inIndexContext = this.findTagsBackwards(i, ['INDEX_START']) && !this.findTagsBackwards(i, ['INDEX_END']);
+        // Check if we're inside an OPEN (unmatched) INDEX_START...INDEX_END context
+        // Count bracket depth to handle nested cases like arr[_[0].length..]
+        // where the inner _[0] has matching brackets but we're still inside the outer [...]
+        let bracketDepth = 0;
+        for (let j = i - 1; j >= 0; j--) {
+          if (tokens[j][0] === 'INDEX_END') {
+            bracketDepth++;  // Closing bracket adds to depth (going backwards)
+          }
+          if (tokens[j][0] === 'INDEX_START') {
+            bracketDepth--;  // Opening bracket reduces depth
+          }
+        }
+        // If bracketDepth < 0, we have more INDEX_START than INDEX_END = we're inside [...]
+        inIndexContext = bracketDepth < 0;
         if (inIndexContext) {
           return 1; // It's a range/slice operator, leave unchanged
         }

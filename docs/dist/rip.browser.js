@@ -2425,11 +2425,20 @@ Rewriter = function() {
     }
     convertPostfixSpreadRest() {
       return this.scanTokens(function(token, i, tokens) {
-        var definiteSpreadNext, inIndexContext, next, nextTag, prev, prevTag, ref, validPostfixTokens;
+        var definiteSpreadNext, inIndexContext, lastIndexEnd, lastIndexStart, next, nextTag, prev, prevTag, ref, validPostfixTokens;
         if (token[0] !== "..." && token[0] !== "..") {
           return 1;
         }
-        inIndexContext = this.findTagsBackwards(i, ["INDEX_START"]) && !this.findTagsBackwards(i, ["INDEX_END"]);
+        let bracketDepth = 0;
+        for (let j = i - 1;j >= 0; j--) {
+          if (tokens[j][0] === "INDEX_END") {
+            bracketDepth++;
+          }
+          if (tokens[j][0] === "INDEX_START") {
+            bracketDepth--;
+          }
+        }
+        inIndexContext = bracketDepth < 0;
         if (inIndexContext) {
           return 1;
         }
@@ -6810,7 +6819,7 @@ function compileToJS(source, options = {}) {
 }
 // src/browser.js
 var VERSION = "1.2.0";
-var BUILD_DATE = "2025-11-04@07:50:44GMT";
+var BUILD_DATE = "2025-11-04@08:07:40GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
