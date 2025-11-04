@@ -154,6 +154,10 @@ test 'slice from index to end', '[0,1,2,3,4,5][3..]', [3,4,5]
 test 'slice from beginning to index', '[0,1,2,3,4,5][...3]', [0,1,2]
 test 'slice entire array', '[0,1,2,3,4,5][..]', [0,1,2,3,4,5]
 
+# Slicing with property access as start index
+test 'slice from property to end', 'arr = [0,1,2,3,4,5]; _ = [{length: 3}]; arr[_[0].length..]', [3,4,5]
+test 'slice from nested property', 'arr = [0,1,2,3,4]; obj = {start: 2}; arr[obj.start..]', [2,3,4]
+
 # ============================================================================
 # String Slicing (using range syntax)
 # ============================================================================
