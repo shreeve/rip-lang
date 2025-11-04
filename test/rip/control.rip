@@ -111,6 +111,20 @@ test "switch no discriminant", "x = 15; result = switch\n  when x < 10 then 'low
 # Switch with blocks
 test "switch with block", "x = 2; result = switch x\n  when 1\n    'one'\n  when 2\n    'two'\n  else\n    'other'\nresult", "two"
 
+# Switch without discriminant in statement context (loop)
+test "switch in loop for side effects", '''
+  count = 0
+  for x in [1, 2, 3]
+    switch
+      when x == 1
+        count += 1
+      when x == 2
+        count += 10
+      when x == 3
+        count += 100
+  count
+''', 111
+
 # Code generation
 code "switch", "switch x\n  when 1 then 'one'\n  else 'other'", "switch (x) {\n  case 1:\n    'one';\n    break;\n  default:\n    'other';\n    break;\n}"
 
