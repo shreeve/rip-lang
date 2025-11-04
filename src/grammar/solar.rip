@@ -73,7 +73,8 @@ class Generator
     @parseParams = grammar.parseParams
     @yy          = {}
     @indent      = '  '
-    @double      = '    '
+    @double      = @indent.repeat 2
+    @triple      = @indent.repeat 3
 
     # Detect grammar mode based on export structure
     @mode = grammar.bnf? ? 'jison' : 'sexp'
@@ -182,7 +183,7 @@ class Generator
     parameters = "yytext, yyleng, yylineno, yy, yystate, $$, _$"
     parameters += ', ' + @parseParams.join(', ') if @parseParams?.length
 
-    @performAction = "function anonymous(#{parameters}) {\n#{actionsCode}\n}"
+    @performAction = "function anonymous(#{parameters}) {\n#{actionsCode}\n#{@indent}}"
 
   _parseHandle: (handle) ->
     if Array.isArray handle
@@ -273,17 +274,17 @@ class Generator
     actions = []
 
     # Add $0 variable for token position references
-    actions.push 'const $0 = $$.length - 1;'
+    actions.push @double + 'const $0 = $$.length - 1;'
 
-    actions.push 'switch (yystate) {'
+    actions.push @double + 'switch (yystate) {'
     for action, labels of actionGroups
       if '\n' in action
-        actions.push @indent + labels.join(' ')
-        actions.push @dedent action, @indent
+        actions.push @triple + labels.join(' ')
+        actions.push @dedent action, @triple
       else
-        actions.push @indent + labels.concat(action).join(' ')
-      actions.push @indent + 'break;' unless action.trimStart().startsWith('return')
-    actions.push '}'
+        actions.push @triple + labels.concat(action).join(' ')
+      actions.push @triple + 'break;' unless action.trimStart().startsWith('return')
+    actions.push @double + '}'
 
     actions.join('\n')
       .replace(/YYABORT/g, 'return false')
@@ -947,8 +948,7 @@ if isRunAsScript
 
       if options.info
         showStats generator
-
-      unless options.info
+      else
         parserCode = generator.generate()
         fs.writeFileSync options.output, parserCode
         console.log "\nParser generated: #{options.output}"
