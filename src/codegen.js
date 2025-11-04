@@ -4847,13 +4847,13 @@ export class CodeGenerator {
 
   /**
    * Generate switch without discriminant as if/else chain
+   * Context-aware: adds returns in value context, plain statements in statement context
    */
   generateSwitchAsIfChain(whens, defaultCase, context) {
     let code = '';
     for (let i = 0; i < whens.length; i++) {
       const whenClause = whens[i];
       const [, test, body] = whenClause;
-      const bodyExpr = this.extractExpression(body);
 
       if (i === 0) {
         code += `if (${this.generate(test, 'value')}) {\n`;
@@ -4861,21 +4861,44 @@ export class CodeGenerator {
         code += ` else if (${this.generate(test, 'value')}) {\n`;
       }
       this.indentLevel++;
-      code += this.indent() + `return ${bodyExpr};\n`;
+      
+      // VALUE CONTEXT: Add return (switch as expression)
+      if (context === 'value') {
+        const bodyExpr = this.extractExpression(body);
+        code += this.indent() + `return ${bodyExpr};\n`;
+      }
+      // STATEMENT CONTEXT: Just execute statements (switch for side effects)
+      else {
+        const statements = this.unwrapBlock(body);
+        for (const stmt of statements) {
+          code += this.indent() + this.generate(stmt, 'statement') + ';\n';
+        }
+      }
+      
       this.indentLevel--;
       code += this.indent() + '}';
     }
 
+    // Handle default case with same context awareness
     if (defaultCase) {
       code += ' else {\n';
       this.indentLevel++;
-      const defaultExpr = this.extractExpression(defaultCase);
-      code += this.indent() + `return ${defaultExpr};\n`;
+      
+      if (context === 'value') {
+        const defaultExpr = this.extractExpression(defaultCase);
+        code += this.indent() + `return ${defaultExpr};\n`;
+      } else {
+        const statements = this.unwrapBlock(defaultCase);
+        for (const stmt of statements) {
+          code += this.indent() + this.generate(stmt, 'statement') + ';\n';
+        }
+      }
+      
       this.indentLevel--;
       code += this.indent() + '}';
     }
 
-    // In value context, wrap in IIFE
+    // Only wrap in IIFE if in value context
     if (context === 'value') {
       return `(() => { ${code} })()`;
     }

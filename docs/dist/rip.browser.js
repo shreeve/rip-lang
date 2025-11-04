@@ -6529,7 +6529,6 @@ ${this.indent()}}`;
     for (let i = 0;i < whens.length; i++) {
       const whenClause = whens[i];
       const [, test, body] = whenClause;
-      const bodyExpr = this.extractExpression(body);
       if (i === 0) {
         code += `if (${this.generate(test, "value")}) {
 `;
@@ -6538,8 +6537,17 @@ ${this.indent()}}`;
 `;
       }
       this.indentLevel++;
-      code += this.indent() + `return ${bodyExpr};
+      if (context === "value") {
+        const bodyExpr = this.extractExpression(body);
+        code += this.indent() + `return ${bodyExpr};
 `;
+      } else {
+        const statements = this.unwrapBlock(body);
+        for (const stmt of statements) {
+          code += this.indent() + this.generate(stmt, "statement") + `;
+`;
+        }
+      }
       this.indentLevel--;
       code += this.indent() + "}";
     }
@@ -6547,9 +6555,17 @@ ${this.indent()}}`;
       code += ` else {
 `;
       this.indentLevel++;
-      const defaultExpr = this.extractExpression(defaultCase);
-      code += this.indent() + `return ${defaultExpr};
+      if (context === "value") {
+        const defaultExpr = this.extractExpression(defaultCase);
+        code += this.indent() + `return ${defaultExpr};
 `;
+      } else {
+        const statements = this.unwrapBlock(defaultCase);
+        for (const stmt of statements) {
+          code += this.indent() + this.generate(stmt, "statement") + `;
+`;
+        }
+      }
       this.indentLevel--;
       code += this.indent() + "}";
     }
@@ -6794,7 +6810,7 @@ function compileToJS(source, options = {}) {
 }
 // src/browser.js
 var VERSION = "1.1.5";
-var BUILD_DATE = "2025-11-04@07:22:32GMT";
+var BUILD_DATE = "2025-11-04@07:47:08GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
