@@ -168,6 +168,7 @@ gh issue view 1
 # Build & test
 bun run parser         # Rebuild parser from grammar
 bun run test           # Run all tests
+bun run browser        # Build browser bundle
 bun run serve          # Dev server (localhost:3000)
 ```
 
