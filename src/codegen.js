@@ -4861,7 +4861,7 @@ export class CodeGenerator {
         code += ` else if (${this.generate(test, 'value')}) {\n`;
       }
       this.indentLevel++;
-      
+
       // VALUE CONTEXT: Add return (switch as expression)
       if (context === 'value') {
         const bodyExpr = this.extractExpression(body);
@@ -4874,7 +4874,7 @@ export class CodeGenerator {
           code += this.indent() + this.generate(stmt, 'statement') + ';\n';
         }
       }
-      
+
       this.indentLevel--;
       code += this.indent() + '}';
     }
@@ -4883,7 +4883,7 @@ export class CodeGenerator {
     if (defaultCase) {
       code += ' else {\n';
       this.indentLevel++;
-      
+
       if (context === 'value') {
         const defaultExpr = this.extractExpression(defaultCase);
         code += this.indent() + `return ${defaultExpr};\n`;
@@ -4893,7 +4893,7 @@ export class CodeGenerator {
           code += this.indent() + this.generate(stmt, 'statement') + ';\n';
         }
       }
-      
+
       this.indentLevel--;
       code += this.indent() + '}';
     }
