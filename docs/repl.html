@@ -234,6 +234,38 @@
       font-size: 13px;
       font-weight: 600;
       color: #cccccc;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .pane-header-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .pane-header button {
+      background: #5a5a5d;
+      color: #ffffff;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 3px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .pane-header button:hover {
+      background: #6e6e71;
+    }
+
+    .pane-header button.active {
+      background: #007acc;
+    }
+
+    .pane-header button.active:hover {
+      background: #005a9e;
     }
 
     .editor, .output-code {
@@ -257,26 +289,6 @@
       overflow: auto;
     }
 
-    .compiler-options {
-      padding: 10px 15px;
-      background: #252526;
-      border-top: 1px solid #3e3e42;
-      display: flex;
-      gap: 15px;
-      font-size: 12px;
-    }
-
-    .compiler-options label {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      color: #cccccc;
-      cursor: pointer;
-    }
-
-    .compiler-options input[type="checkbox"] {
-      cursor: pointer;
-    }
 
     /* Scrollbar styling */
     ::-webkit-scrollbar {
@@ -339,13 +351,13 @@
   </div>
 
   <div class="tabs">
-    <button class="tab active" data-tab="repl">REPL Console</button>
-    <button class="tab" data-tab="compiler">Live Compiler</button>
+    <button class="tab active" data-tab="compiler">Live Compiler</button>
+    <button class="tab" data-tab="repl">REPL Console</button>
   </div>
 
   <div class="content">
     <!-- REPL Pane -->
-    <div class="pane active" id="repl-pane">
+    <div class="pane" id="repl-pane">
       <div class="repl-container">
         <div class="repl-output" id="repl-output">
           <div class="welcome">
@@ -361,10 +373,16 @@
     </div>
 
     <!-- Compiler Pane -->
-    <div class="pane" id="compiler-pane">
+    <div class="pane active" id="compiler-pane">
       <div class="compiler-container">
         <div class="editor-pane" id="editor-left">
-          <div class="pane-header">Rip Source</div>
+          <div class="pane-header">
+            <span>Rip Source</span>
+            <div class="pane-header-buttons">
+              <button id="clear-btn" title="Clear the editor">Clear</button>
+              <button class="active" id="run-btn" title="Execute code and output to browser console">Run</button>
+            </div>
+          </div>
           <textarea class="editor" id="editor" spellcheck="false"># Rip code - edit me!
 def fibonacci(n)
   if n <= 1
@@ -391,18 +409,14 @@ console.log "Domain:", domain</textarea>
         <div class="resizer" id="resizer"></div>
 
         <div class="editor-pane" id="editor-right">
-          <div class="pane-header">Generated JavaScript</div>
-          <pre class="output-code" id="output"></pre>
-          <div class="compiler-options">
-            <label>
-              <input type="checkbox" id="show-sexp">
-              Show S-Expressions
-            </label>
-            <label>
-              <input type="checkbox" id="show-tokens">
-              Show Tokens
-            </label>
+          <div class="pane-header">
+            <span>Generated JavaScript</span>
+            <div class="pane-header-buttons">
+              <button id="show-sexp" title="Toggle S-expression display">S-Expressions</button>
+              <button id="show-tokens" title="Toggle token stream display">Tokens</button>
+            </div>
           </div>
+          <pre class="output-code" id="output"></pre>
         </div>
       </div>
     </div>
@@ -712,8 +726,12 @@ console.log "Domain:", domain</textarea>
 
     const editor = document.getElementById('editor');
     const output = document.getElementById('output');
-    const showSexp = document.getElementById('show-sexp');
-    const showTokens = document.getElementById('show-tokens');
+    const showSexpBtn = document.getElementById('show-sexp');
+    const showTokensBtn = document.getElementById('show-tokens');
+
+    // Track toggle state
+    let showSexp = false;
+    let showTokens = false;
 
     // Strip utility helper functions for cleaner display
     function stripHelpers(code) {
@@ -755,14 +773,14 @@ console.log "Domain:", domain</textarea>
 
         let outputText = '';
 
-        if (showTokens.checked) {
+        if (showTokens) {
           result.tokens.forEach(t => {
             outputText += `${t[0].padEnd(12)} ${JSON.stringify(t[1])}\n`;
           });
           outputText += '\n';
         }
 
-        if (showSexp.checked) {
+        if (showSexp) {
           outputText += window.toSexpr ? window.toSexpr(result.sexpr, 0, true) : JSON.stringify(result.sexpr, null, 1);
           outputText += '\n\n';
         }
@@ -778,8 +796,43 @@ console.log "Domain:", domain</textarea>
 
     // Auto-compile on changes
     editor.addEventListener('input', compileCode);
-    showSexp.addEventListener('change', compileCode);
-    showTokens.addEventListener('change', compileCode);
+
+    // Toggle buttons for S-Expressions and Tokens
+    showSexpBtn.addEventListener('click', () => {
+      showSexp = !showSexp;
+      showSexpBtn.classList.toggle('active', showSexp);
+      compileCode();
+    });
+
+    showTokensBtn.addEventListener('click', () => {
+      showTokens = !showTokens;
+      showTokensBtn.classList.toggle('active', showTokens);
+      compileCode();
+    });
+
+    // Clear button - clears the Rip source editor
+    document.getElementById('clear-btn').addEventListener('click', () => {
+      editor.value = '';
+      compileCode();
+      editor.focus();
+    });
+
+    // Run button - executes the Rip code and outputs to console
+    document.getElementById('run-btn').addEventListener('click', () => {
+      try {
+        const source = editor.value;
+        const result = compile(source);
+        const js = result.code;
+
+        // Execute the compiled JavaScript and log to console
+        console.clear();
+        console.log('%c=== Rip Code Execution ===', 'color: #007acc; font-weight: bold');
+        eval(js);
+        console.log('%c=== Execution Complete ===', 'color: #4ec9b0; font-weight: bold');
+      } catch (error) {
+        console.error('Execution Error:', error);
+      }
+    });
 
     // Initial compile
     compileCode();
