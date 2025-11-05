@@ -57,18 +57,38 @@ Shebang support:
 async function main() {
   const args = process.argv.slice(2);
 
-  if (args.includes('-h') || args.includes('--help')) {
+  // Find the script file position (first non-option argument)
+  // Everything BEFORE it is rip options, everything AFTER it is script arguments
+  let scriptFileIndex = -1;
+  for (let i = 0; i < args.length; i++) {
+    // Skip option values (like -o filename)
+    if (i > 0 && (args[i - 1] === '-o' || args[i - 1] === '--output')) {
+      continue;
+    }
+    // First non-option arg is the script file
+    if (!args[i].startsWith('-')) {
+      scriptFileIndex = i;
+      break;
+    }
+  }
+
+  // Split into rip options and script arguments
+  const ripOptions = scriptFileIndex === -1 ? args : args.slice(0, scriptFileIndex);
+  const scriptArgs = scriptFileIndex === -1 ? [] : args.slice(scriptFileIndex + 1);
+
+  // Only check ripOptions for rip's flags (not script args!)
+  if (ripOptions.includes('-h') || ripOptions.includes('--help')) {
     printHelp();
     process.exit(0);
   }
 
-  if (args.includes('-v') || args.includes('--version')) {
+  if (ripOptions.includes('-v') || ripOptions.includes('--version')) {
     console.log(`Rip ${VERSION} - ${SUMMARY}`);
     process.exit(0);
   }
 
   // Launch local browser REPL (starts server + opens browser)
-  if (args.includes('-w') || args.includes('--web')) {
+  if (ripOptions.includes('-w') || ripOptions.includes('--web')) {
     console.log('🚀 Starting Rip browser REPL...\n');
 
     // Start the server and capture output to get the actual port
@@ -109,15 +129,15 @@ async function main() {
   // Check if REPL should be started
   // Launch REPL if: no args AND stdin is a TTY (not piped), OR explicit -r flag
   const isTTY = process.stdin.isTTY;
-  if ((args.length === 0 && isTTY) || args.includes('-r') || args.includes('--repl')) {
+  if ((args.length === 0 && isTTY) || ripOptions.includes('-r') || ripOptions.includes('--repl')) {
     startREPL();
     return;
   }
 
-  const showTokens = args.includes('-t') || args.includes('--tokens');
-  const showSExpr = args.includes('-s') || args.includes('--sexpr');
-  const showCompiled = args.includes('-c') || args.includes('--compile');
-  const quiet = args.includes('-q') || args.includes('--quiet');
+  const showTokens = ripOptions.includes('-t') || ripOptions.includes('--tokens');
+  const showSExpr = ripOptions.includes('-s') || ripOptions.includes('--sexpr');
+  const showCompiled = ripOptions.includes('-c') || ripOptions.includes('--compile');
+  const quiet = ripOptions.includes('-q') || ripOptions.includes('--quiet');
 
   const options = {
     showTokens,
@@ -125,16 +145,14 @@ async function main() {
     quiet
   };
 
-  // Find input file (last non-option argument)
-  let inputFile = null;
+  // Find input file and output file from ripOptions only
+  let inputFile = scriptFileIndex === -1 ? null : args[scriptFileIndex];
   let outputFile = null;
 
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === '-o' || args[i] === '--output') {
-      outputFile = args[i + 1];
+  for (let i = 0; i < ripOptions.length; i++) {
+    if (ripOptions[i] === '-o' || ripOptions[i] === '--output') {
+      outputFile = ripOptions[i + 1];
       i++;
-    } else if (!args[i].startsWith('-') && !inputFile) {
-      inputFile = args[i];  // Only take first non-option as input file
     }
   }
 
@@ -149,10 +167,6 @@ async function main() {
 
     // Execute the script with Bun using our loader
     const loaderPath = join(__dirname, '../rip-loader.ts');
-
-    // Get script arguments (everything after the input file)
-    const inputFileIndex = args.indexOf(inputFile);
-    const scriptArgs = args.slice(inputFileIndex + 1);
 
     try {
       execSync(`bun --preload ${loaderPath} ${inputFile} ${scriptArgs.join(' ')}`, {
