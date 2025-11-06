@@ -21,4 +21,3 @@ code "until condition", "until x > 10\n  x++", "while (!(x > 10)) {\n  (x++);\n}
 # ============================================================================
 
 code "for with guard", "for x in arr when x > 5\n  x", "for (const x of arr) {\n  if (x > 5) {\n    x;\n  }\n}"
-
