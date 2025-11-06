@@ -9,9 +9,9 @@
 </p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-1.1.1-blue.svg" alt="Version"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-1.3.0-blue.svg" alt="Version"></a>
   <a href="#es2022-target"><img src="https://img.shields.io/badge/target-ES2022-blue.svg" alt="Target"></a>
-  <a href="#current-status"><img src="https://img.shields.io/badge/tests-864%2F864-brightgreen.svg" alt="Tests"></a>
+  <a href="#current-status"><img src="https://img.shields.io/badge/tests-878%2F878-brightgreen.svg" alt="Tests"></a>
   <a href="#current-status"><img src="https://img.shields.io/badge/coverage-100%25-brightgreen.svg" alt="Coverage"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
@@ -634,8 +634,19 @@ user?.profile?.name    # ES6 optional chaining (native)
 arr?[0]                # CoffeeScript soak (existence check)
 fn?(arg)               # CoffeeScript soak call
 
-# Nullish coalescing
+# Nullish coalescing (?? - rejects null OR undefined)
 port = config.port ?? 8080
+
+# Otherwise operator (!? - rejects ONLY undefined)
+timeout = config.timeout !? 5000     # null and 0 are valid!
+enabled = options.enabled !? true    # false means disabled, undefined means default
+
+# Comparison:
+null ?? 'default'    # → 'default' (null fails)
+null !? 'default'    # → null (null is defined!)
+
+# Use ?? when: Both null and undefined should use default
+# Use !? when: Only undefined should use default (null/false/0 are meaningful)
 
 # Legacy existential operator (CoffeeScript compatibility)
 value = x ? y          # SPACE? syntax (auto-converts to ??)
