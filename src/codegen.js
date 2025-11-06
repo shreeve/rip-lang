@@ -822,7 +822,7 @@ export class CodeGenerator {
 
             if (valueHead === 'unless') {
               // Re-wrap for negation if needed for precedence
-              if (condCode.includes(' ') || condCode.includes('===') || condCode.includes('!==') || 
+              if (condCode.includes(' ') || condCode.includes('===') || condCode.includes('!==') ||
                   condCode.includes('>') || condCode.includes('<') || condCode.includes('&&') || condCode.includes('||')) {
                 condCode = `(${condCode})`;
               }
@@ -4637,7 +4637,7 @@ export class CodeGenerator {
   /**
    * Unwrap unnecessary outer parentheses from generated code
    * Useful for cleaning up nested expressions like (((x === 3))) → (x === 3)
-   * 
+   *
    * For logical operators in conditions, be more aggressive:
    * ((a && b) && c) → a && b && c (all outer parens removed)
    */
@@ -4675,7 +4675,7 @@ export class CodeGenerator {
   /**
    * Aggressively unwrap logical expressions for use in if/while conditions
    * Removes ALL unnecessary layers: (((a && b) && c) && d) → a && b && c && d
-   * 
+   *
    * This recursively strips parens from logical operator chains since they're
    * left-associative and the parens are redundant in condition contexts.
    */
@@ -4687,13 +4687,13 @@ export class CodeGenerator {
       // Check if removing these parens is safe
       let depth = 0;
       let minDepth = Infinity;
-      
+
       for (let i = 1; i < code.length - 1; i++) {
         if (code[i] === '(') depth++;
         if (code[i] === ')') depth--;
         minDepth = Math.min(minDepth, depth);
       }
-      
+
       // If minDepth >= 0, the outer parens are wrapping the whole expression
       if (minDepth >= 0) {
         code = code.slice(1, -1);

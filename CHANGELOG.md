@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `(((!a && !b) && !c) && d)` → `!a && !b && !c && d` (4 layers → 0!)
   - Created `unwrapLogical()` for aggressive unwrapping in conditions
   - Matches CoffeeScript clean output
-  
+
 ### Fixed
 - **Unary NOT precedence bug** - `!(a && b)` now generates correctly
   - Was: `!a && b` (wrong precedence) ❌
