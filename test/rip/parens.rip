@@ -1,0 +1,24 @@
+# Test: Clean Parentheses (no excessive parens in conditions)
+# Tests that conditions don't have unnecessary double parentheses
+
+# ============================================================================
+# If Statement Conditions
+# ============================================================================
+
+code "if simple condition", "if x > y\n  z", "if (x > y) {\n  z;\n}"
+code "if complex condition", "if x > 5 and y < 10\n  z", "if ((x > 5) && (y < 10)) {\n  z;\n}"
+code "unless condition", "unless x is 5\n  y", "if (!(x === 5)) {\n  y;\n}"
+
+# ============================================================================
+# While/Until Loops
+# ============================================================================
+
+code "while condition", "while x < 10\n  x++", "while (x < 10) {\n  (x++);\n}"
+code "until condition", "until x > 10\n  x++", "while (!(x > 10)) {\n  (x++);\n}"
+
+# ============================================================================
+# For Loop Guards
+# ============================================================================
+
+code "for with guard", "for x in arr when x > 5\n  x", "for (const x of arr) {\n  if (x > 5) {\n    x;\n  }\n}"
+

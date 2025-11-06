@@ -243,9 +243,9 @@ code 'break in for loop', '''
       break
   ''', '''
   for (const x of arr) {
-    if ((x > 5)) {
+    if (x > 5) {
       break;
-    };
+    }
   }
   '''
 

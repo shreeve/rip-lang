@@ -1315,7 +1315,13 @@ export class CodeGenerator {
         }
 
         // Statement context: generate if (!cond)
-        let code = `if (!${this.generate(condition, 'value')}) `;
+        let condCode = this.unwrap(this.generate(condition, 'value'));
+        // If condition contains operators, re-wrap for precedence with !
+        if (condCode.includes(' ') || condCode.includes('===') || condCode.includes('!==') || 
+            condCode.includes('>') || condCode.includes('<') || condCode.includes('&&') || condCode.includes('||')) {
+          condCode = `(${condCode})`;
+        }
+        let code = `if (!${condCode}) `;
         code += this.generate(body, 'statement');
 
         return code;
@@ -1771,7 +1777,8 @@ export class CodeGenerator {
         const guard = rest.length === 3 ? rest[1] : null;
         const body = rest[rest.length - 1];
 
-        let code = `while (${this.generate(condition, 'value')}) `;
+        const condCode = this.unwrap(this.generate(condition, 'value'));
+        let code = `while (${condCode}) `;
 
         // If there's a guard, wrap body in if statement
         if (guard) {
@@ -1789,7 +1796,13 @@ export class CodeGenerator {
         const guard = rest.length === 3 ? rest[1] : null;
         const body = rest[rest.length - 1];
 
-        let code = `while (!${this.generate(condition, 'value')}) `;
+        let condCode = this.unwrap(this.generate(condition, 'value'));
+        // If condition contains operators, re-wrap for precedence with !
+        if (condCode.includes(' ') || condCode.includes('===') || condCode.includes('!==') || 
+            condCode.includes('>') || condCode.includes('<') || condCode.includes('&&') || condCode.includes('||')) {
+          condCode = `(${condCode})`;
+        }
+        let code = `while (!${condCode}) `;
 
         // If there's a guard, wrap body in if statement
         if (guard) {
@@ -3757,20 +3770,15 @@ export class CodeGenerator {
   generateLoopBodyWithGuard(body, guard) {
     // Wrap body in if (guard) { body }
     // IMPORTANT: Everything in loop bodies is in statement context (loops don't have implicit returns)
+    const guardCondition = this.unwrap(this.generate(guard, 'value'));
+    
     if (!Array.isArray(body)) {
-      return `{ if (${this.generate(guard, 'value')}) ${this.generate(body, 'statement')}; }`;
+      return `{ if (${guardCondition}) ${this.generate(body, 'statement')}; }`;
     }
 
     if (body[0] === 'block' || Array.isArray(body[0])) {
       // Unwrap block or array of statements
       const statements = body[0] === 'block' ? body.slice(1) : body;
-
-      // Generate guard condition without extra parens for simple comparisons
-      let guardCondition = this.generate(guard, 'value');
-      if (guardCondition.startsWith('(') && guardCondition.endsWith(')') &&
-          !guardCondition.includes('(', 1)) {
-        guardCondition = guardCondition.slice(1, -1);
-      }
 
       const loopBodyIndent = this.withIndent(() => this.indent());
       const guardCode = `if (${guardCondition}) {\n`;
@@ -4779,7 +4787,8 @@ export class CodeGenerator {
    * Generate if statement in statement context
    */
   generateIfAsStatement(condition, thenBranch, elseBranches) {
-    let code = `if (${this.generate(condition, 'value')}) `;
+    const condCode = this.unwrap(this.generate(condition, 'value'));
+    let code = `if (${condCode}) `;
     code += this.generate(this.unwrapIfBranch(thenBranch), 'statement');
 
     for (const branch of elseBranches) {
