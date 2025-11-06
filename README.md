@@ -51,13 +51,13 @@ function parseUsers(...inputs) {
   let domain, name, users;
 
   users = [];
-  for (const input of inputs) {
-    if ((_ = toSearchable(input).match(/^(\w+):([^@]+@[\w.]+)$/))) {
-      name = (_[1] ?? "guest");
-      domain = (_ = toSearchable(input).match(/@([\w.]+)/)) && _[1];
+    for (const input of inputs) {
+      if ((_ = toSearchable(input).match(/^(\w+):([^@]+@[\w.]+)$/))) {
+        name = (_[1] ?? "guest");
+        domain = (_ = toSearchable(input).match(/@([\w.]+)/)) && _[1];
       users.push({name, domain});
+      }
     }
-  }
   return users;
 };
 parseUsers("alice:alice@example.com", "bob:bob@test.org");
