@@ -421,7 +421,8 @@ code 'ternary with typeof and or - minimal parens', '''
   action = if typeof handle[1] is 'string' or handle.length is 3 then handle[1] else null
   ''', '''
   let action;
-  action = (((typeof handle[1] === 'string') || (handle.length === 3)) ? handle[1] : null);
+
+action = ((typeof handle[1] === 'string') || (handle.length === 3) ? handle[1] : null);
   '''
 
 test 'ternary with complex condition works', '''

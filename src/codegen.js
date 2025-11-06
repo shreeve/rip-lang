@@ -446,7 +446,17 @@ export class CodeGenerator {
         if (head === '!=') op = '!==';
         // === and !== pass through as-is
 
-        return `(${this.generate(left, 'value')} ${op} ${this.generate(right, 'value')})`;
+        const leftCode = this.generate(left, 'value');
+        const rightCode = this.generate(right, 'value');
+
+        // Don't wrap logical operators - they're left-associative and commonly chained
+        // Without this, we get exponential parens: a && b && c → ((a && b) && c)
+        // CoffeeScript doesn't wrap these, and they're safe due to precedence rules
+        if (head === '&&' || head === '||' || head === '??') {
+          return `${leftCode} ${op} ${rightCode}`;
+        }
+
+        return `(${leftCode} ${op} ${rightCode})`;
       }
 
       case '%%': {
@@ -505,12 +515,12 @@ export class CodeGenerator {
         const [operand] = rest;
         const operandCode = this.generate(operand, 'value');
 
-        // Add parens only if operand is complex (already has parens or is an expression)
-        // Simple identifier/literal: !x, !true
-        // Complex expression: !(x < 5), !(a && b)
+        // Add parens if operand is complex (contains operators or spaces)
+        // Simple identifier/literal: !x, !true → !x
+        // Complex expression: !(x < 5), !(a && b) → (!(a && b))
         const needsParens = operandCode.includes('(') || operandCode.includes(' ');
 
-        return needsParens ? `(!${operandCode})` : `!${operandCode}`;
+        return needsParens ? `(!(${operandCode}))` : `!${operandCode}`;
       }
 
       case 'new': {
@@ -807,10 +817,15 @@ export class CodeGenerator {
             }
 
             const targetCode = this.generate(target, 'value');
-            const condCode = this.generate(condition, 'value');
+            let condCode = this.unwrapLogical(this.generate(condition, 'value'));
             const valueCode = this.generate(unwrappedValue, 'value');
 
             if (valueHead === 'unless') {
+              // Re-wrap for negation if needed for precedence
+              if (condCode.includes(' ') || condCode.includes('===') || condCode.includes('!==') || 
+                  condCode.includes('>') || condCode.includes('<') || condCode.includes('&&') || condCode.includes('||')) {
+                condCode = `(${condCode})`;
+              }
               return `if (!${condCode}) ${targetCode} = ${valueCode}`;
             } else {
               return `if (${condCode}) ${targetCode} = ${valueCode}`;
@@ -1462,10 +1477,10 @@ export class CodeGenerator {
             const statements = body.slice(1);
             code += '{\n';
             this.indentLevel++;
-            
+
             // Add item extraction
             code += this.indent() + `const ${itemVarPattern} = ${iterableCode}[${indexVar}];\n`;
-            
+
             if (guard) {
               // Unwrap guard to avoid double parens
               const guardCode = this.unwrap(this.generate(guard, 'value'));
@@ -1478,7 +1493,7 @@ export class CodeGenerator {
               // No guard - just generate statements
               code += this.formatStatements(statements).join('\n') + '\n';
             }
-            
+
             this.indentLevel--;
             code += this.indent() + '}';
           } else {
@@ -4622,6 +4637,9 @@ export class CodeGenerator {
   /**
    * Unwrap unnecessary outer parentheses from generated code
    * Useful for cleaning up nested expressions like (((x === 3))) → (x === 3)
+   * 
+   * For logical operators in conditions, be more aggressive:
+   * ((a && b) && c) → a && b && c (all outer parens removed)
    */
   unwrap(code) {
     if (typeof code !== 'string') return code;
@@ -4645,6 +4663,39 @@ export class CodeGenerator {
       }
 
       if (canUnwrap) {
+        code = code.slice(1, -1);
+      } else {
+        break;
+      }
+    }
+
+    return code;
+  }
+
+  /**
+   * Aggressively unwrap logical expressions for use in if/while conditions
+   * Removes ALL unnecessary layers: (((a && b) && c) && d) → a && b && c && d
+   * 
+   * This recursively strips parens from logical operator chains since they're
+   * left-associative and the parens are redundant in condition contexts.
+   */
+  unwrapLogical(code) {
+    if (typeof code !== 'string') return code;
+
+    // Remove ALL outer parens layers
+    while (code.startsWith('(') && code.endsWith(')')) {
+      // Check if removing these parens is safe
+      let depth = 0;
+      let minDepth = Infinity;
+      
+      for (let i = 1; i < code.length - 1; i++) {
+        if (code[i] === '(') depth++;
+        if (code[i] === ')') depth--;
+        minDepth = Math.min(minDepth, depth);
+      }
+      
+      // If minDepth >= 0, the outer parens are wrapping the whole expression
+      if (minDepth >= 0) {
         code = code.slice(1, -1);
       } else {
         break;

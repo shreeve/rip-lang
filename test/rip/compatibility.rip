@@ -297,9 +297,10 @@ code 'legacy existential compiles to ??', '''
   x ? y
   ''', '''
   let x, y;
-  x = null;
-  y = 5;
-  (x ?? y);
+
+x = null;
+y = 5;
+x ?? y;
   '''
 
 code 'ternary stays ternary', '''
