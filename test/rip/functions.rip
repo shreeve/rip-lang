@@ -420,7 +420,7 @@ code "void fat arrow codegen", '''
     x * 2
   ''', '''
   let process;
-  process = (x) => {
+  process = x => {
     (x * 2);
     return;
   };

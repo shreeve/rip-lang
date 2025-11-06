@@ -1,0 +1,25 @@
+# Test: Arrow Function Parameter Syntax
+# Tests that single parameters don't have unnecessary parens
+
+# ============================================================================
+# Single Parameter (NO parens)
+# ============================================================================
+
+code "arrow single param", "f = (x) => x * 2", "let f;\n\nf = x => (x * 2);"
+code "arrow single param block", "f = (x) =>\n  x * 2", "let f;\n\nf = x => (x * 2);"
+test "arrow single param execution", "f = (x) => x * 2\nf(5)", 10
+
+# ============================================================================
+# Multiple Parameters (KEEP parens)
+# ============================================================================
+
+code "arrow no params", "f = => 42", "let f;\n\nf = () => 42;"
+code "arrow two params", "f = (x, y) => x + y", "let f;\n\nf = (x, y) => (x + y);"
+
+# ============================================================================
+# Special Cases (KEEP parens)
+# ============================================================================
+
+code "arrow destructuring", "f = ({x, y}) => x + y", "let f;\n\nf = ({x, y}) => (x + y);"
+code "arrow default param", "f = (x = 5) => x", "let f;\n\nf = (x = 5) => x;"
+code "arrow rest param", "f = (...args) => args", "let f;\n\nf = (...args) => args;"
