@@ -1410,7 +1410,7 @@ export class CodeGenerator {
               this.indentLevel--;
               stmts.push(this.indent() + '}');
             } else {
-              stmts.push(...statements.map(s => this.generate(s, 'statement') + ';'));
+              stmts.push(...statements.map(s => this.addSemicolon(s, this.generate(s, 'statement'))));
             }
 
             this.indentLevel--;
@@ -1456,7 +1456,7 @@ export class CodeGenerator {
               this.indentLevel--;
               stmts.push(this.indent() + '}');
             } else {
-              stmts.push(...statements.map(s => this.generate(s, 'statement') + ';'));
+              stmts.push(...statements.map(s => this.addSemicolon(s, this.generate(s, 'statement'))));
             }
 
             this.indentLevel--;
@@ -1597,7 +1597,7 @@ export class CodeGenerator {
               const guardCondition = this.generate(guardCheck, 'value');
               this.indentLevel++;
               const innerIndent = this.indent();
-              const stmts = statements.map(s => innerIndent + this.generate(s, 'statement') + ';');
+              const stmts = statements.map(s => innerIndent + this.addSemicolon(s, this.generate(s, 'statement')));
               this.indentLevel -= 3;
               // Structure: if (own) { const v = obj[k]; if (guard) { body } }
               code += `{\n${outerIndent}if (${ownCondition}) {\n${midIndent}const ${valueVar} = ${objCode}[${keyVar}];\n${midIndent}if (${guardCondition}) {\n${stmts.join('\n')}\n${midIndent}}\n${outerIndent}}\n${this.indent()}}`;
@@ -1615,7 +1615,7 @@ export class CodeGenerator {
               const condition = this.generate(ownCheck, 'value');
               this.indentLevel++;
               const innerIndent = this.indent();
-              const stmts = statements.map(s => innerIndent + this.generate(s, 'statement') + ';');
+              const stmts = statements.map(s => innerIndent + this.addSemicolon(s, this.generate(s, 'statement')));
               this.indentLevel -= 2;
               // valueVar assignment INSIDE the own-check
               code += `{\n${loopBodyIndent}if (${condition}) {\n${innerIndent}const ${valueVar} = ${objCode}[${keyVar}];\n${stmts.join('\n')}\n${loopBodyIndent}}\n${this.indent()}}`;
@@ -1632,7 +1632,7 @@ export class CodeGenerator {
               const guardCondition = this.generate(guardCheck, 'value');
               this.indentLevel++;
               const innerIndent = this.indent();
-              const stmts = statements.map(s => innerIndent + this.generate(s, 'statement') + ';');
+              const stmts = statements.map(s => innerIndent + this.addSemicolon(s, this.generate(s, 'statement')));
               this.indentLevel -= 2;
               // valueVar assignment BEFORE guard check
               code += `{\n${loopBodyIndent}const ${valueVar} = ${objCode}[${keyVar}];\n${loopBodyIndent}if (${guardCondition}) {\n${stmts.join('\n')}\n${loopBodyIndent}}\n${this.indent()}}`;
@@ -1644,7 +1644,7 @@ export class CodeGenerator {
             if (Array.isArray(body) && body[0] === 'block') {
               const statements = body.slice(1);
               this.indentLevel++;
-              const stmts = [`const ${valueVar} = ${objCode}[${keyVar}];`, ...statements.map(s => this.generate(s, 'statement') + ';')];
+              const stmts = [`const ${valueVar} = ${objCode}[${keyVar}];`, ...statements.map(s => this.addSemicolon(s, this.generate(s, 'statement')))];
               this.indentLevel--;
               code += `{\n${stmts.map(s => this.indent() + s).join('\n')}\n${this.indent()}}`;
             } else {
@@ -3171,7 +3171,7 @@ export class CodeGenerator {
 
     // 1. Generate imports first (ES6 requirement)
     if (imports.length > 0) {
-      code += imports.map(stmt => this.generate(stmt, 'statement') + ';').join('\n');
+      code += imports.map(stmt => this.addSemicolon(stmt, this.generate(stmt, 'statement'))).join('\n');
       needsBlankLine = true;
     }
 
@@ -3229,7 +3229,7 @@ export class CodeGenerator {
 
     // 7. Generate exports (after statements)
     if (exports.length > 0) {
-      code += '\n' + exports.map(stmt => this.generate(stmt, 'statement') + ';').join('\n');
+      code += '\n' + exports.map(stmt => this.addSemicolon(stmt, this.generate(stmt, 'statement'))).join('\n');
     }
 
     // 8. Define DATA initialization function at the end
@@ -3537,7 +3537,7 @@ export class CodeGenerator {
           if (needsReturn) {
             code += this.indent() + 'return ' + stmtCode + ';\n';
           } else {
-            code += this.indent() + stmtCode + ';\n';
+            code += this.indent() + this.addSemicolon(stmt, stmtCode) + '\n';
           }
         });
       } else {
@@ -3612,7 +3612,7 @@ export class CodeGenerator {
           if (needsReturn) {
             code += this.indent() + 'return ' + stmtCode + ';\n';
           } else {
-            code += this.indent() + stmtCode + ';\n';
+            code += this.indent() + this.addSemicolon(stmt, stmtCode) + '\n';
           }
         });
       }
@@ -3744,7 +3744,7 @@ export class CodeGenerator {
             const [, expr, iterators, guards] = stmt;
             return this.indent() + this.generateComprehensionAsLoop(expr, iterators, guards);
           }
-          return this.indent() + this.generate(stmt, 'statement') + ';';
+          return this.indent() + this.addSemicolon(stmt, this.generate(stmt, 'statement'));
         });
       });
       return `{\n${stmts.join('\n')}\n${this.indent()}}`;
@@ -4141,11 +4141,32 @@ export class CodeGenerator {
   }
 
   /**
+   * Helper: Check if a statement needs a semicolon
+   * Block statements ending with } don't need semicolons
+   */
+  needsSemicolon(stmt, generated) {
+    if (!generated || generated.endsWith(';')) return false;
+    if (!generated.endsWith('}')) return true;
+    
+    // Block statements ending with } don't need semicolons
+    const head = Array.isArray(stmt) ? stmt[0] : null;
+    const blockStatements = ['def', 'class', 'if', 'unless', 'for-in', 'for-of', 'for-from', 'while', 'until', 'loop', 'switch', 'try'];
+    return !blockStatements.includes(head);
+  }
+
+  /**
+   * Helper: Add semicolon to statement if needed
+   */
+  addSemicolon(stmt, generated) {
+    return generated + (this.needsSemicolon(stmt, generated) ? ';' : '');
+  }
+
+  /**
    * Helper: Format array of statements with indentation
    */
   formatStatements(statements, context = 'statement') {
-    return statements.map(s =>
-      this.indent() + this.generate(s, context) + ';'
+    return statements.map(s => 
+      this.indent() + this.addSemicolon(s, this.generate(s, context))
     );
   }
 
