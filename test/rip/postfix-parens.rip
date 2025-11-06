@@ -1,0 +1,17 @@
+# Test: Clean Postfix Conditionals (no excessive nested parens)
+
+# ============================================================================
+# Postfix If/Unless with Multiple Operators
+# ============================================================================
+
+code "postfix if two conditions", "x = 5 if !isEmpty && isValid", "let x;\n\nif (!isEmpty && isValid) x = 5;"
+code "postfix if three conditions", "x = 5 if !isEmpty && !isPassthrough && hasPrecedence", "let x;\n\nif (!isEmpty && !isPassthrough && hasPrecedence) x = 5;"
+code "postfix if four conditions", "x = 5 if !a && !b && !c && d", "let x;\n\nif (!a && !b && !c && d) x = 5;"
+code "postfix unless with ands", "x = 5 unless isEmpty || invalid", "let x;\n\nif (!(isEmpty || invalid)) x = 5;"
+
+# ============================================================================
+# Regular Assignment with Complex Conditions
+# ============================================================================
+
+test "postfix if execution", "isEmpty = false; isValid = true; x = 5 if !isEmpty && isValid; x", 5
+test "postfix if fails", "isEmpty = true; isValid = true; x = 5 if !isEmpty && isValid; x", undefined
