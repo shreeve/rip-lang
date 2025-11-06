@@ -3155,7 +3155,7 @@ var parserInstance = {
     if (hash.recoverable)
       return this.trace(str);
     else {
-      line = (hash.line || 0) + 1;
+      line = hash.line || 1;
       col = hash.loc?.first_column || 0;
       token = hash.token ? ` (token: ${hash.token})` : "";
       text = hash.text ? ` near '${hash.text}'` : "";
@@ -3240,7 +3240,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         case 2:
           len2 = this.ruleData[action[1]][1];
           yyval.$ = val[val.length - len2];
-          [locFirst, locLast] = [loc[loc.length - (len2 || 1)], loc[loc.length - 1]];
+          [locFirst, locLast] = [loc[loc.length - len2 || 1], loc[loc.length - 1]];
           yyval._$ = { first_line: locFirst.first_line, last_line: locLast.last_line, first_column: locFirst.first_column, last_column: locLast.last_column };
           if (ranges)
             yyval._$.range = [locFirst.range[0], locLast.range[1]];
@@ -3545,16 +3545,21 @@ class CodeGenerator {
         }
         const [left2, right2] = rest;
         if (head === "!?") {
-          const leftCode = this.generate(left2, "value");
-          const rightCode = this.generate(right2, "value");
-          return `(${leftCode} !== undefined ? ${leftCode} : ${rightCode})`;
+          const leftCode2 = this.generate(left2, "value");
+          const rightCode2 = this.generate(right2, "value");
+          return `(${leftCode2} !== undefined ? ${leftCode2} : ${rightCode2})`;
         }
         let op = head;
         if (head === "==")
           op = "===";
         if (head === "!=")
           op = "!==";
-        return `(${this.generate(left2, "value")} ${op} ${this.generate(right2, "value")})`;
+        const leftCode = this.generate(left2, "value");
+        const rightCode = this.generate(right2, "value");
+        if (head === "&&" || head === "||" || head === "??") {
+          return `${leftCode} ${op} ${rightCode}`;
+        }
+        return `(${leftCode} ${op} ${rightCode})`;
       }
       case "%%": {
         const [left2, right2] = rest;
@@ -3587,7 +3592,7 @@ class CodeGenerator {
         const [operand] = rest;
         const operandCode = this.generate(operand, "value");
         const needsParens = operandCode.includes("(") || operandCode.includes(" ");
-        return needsParens ? `(!${operandCode})` : `!${operandCode}`;
+        return needsParens ? `(!(${operandCode}))` : `!${operandCode}`;
       }
       case "new": {
         const [call] = rest;
@@ -3760,9 +3765,12 @@ class CodeGenerator {
               unwrappedValue = actualValue[0];
             }
             const targetCode2 = this.generate(target, "value");
-            const condCode = this.generate(condition, "value");
+            let condCode = this.unwrapLogical(this.generate(condition, "value"));
             const valueCode2 = this.generate(unwrappedValue, "value");
             if (valueHead === "unless") {
+              if (condCode.includes(" ") || condCode.includes("===") || condCode.includes("!==") || condCode.includes(">") || condCode.includes("<") || condCode.includes("&&") || condCode.includes("||")) {
+                condCode = `(${condCode})`;
+              }
               return `if (!${condCode}) ${targetCode2} = ${valueCode2}`;
             } else {
               return `if (${condCode}) ${targetCode2} = ${valueCode2}`;
@@ -6402,6 +6410,27 @@ ${this.indent()}}`;
     }
     return code;
   }
+  unwrapLogical(code) {
+    if (typeof code !== "string")
+      return code;
+    while (code.startsWith("(") && code.endsWith(")")) {
+      let depth = 0;
+      let minDepth = Infinity;
+      for (let i = 1;i < code.length - 1; i++) {
+        if (code[i] === "(")
+          depth++;
+        if (code[i] === ")")
+          depth--;
+        minDepth = Math.min(minDepth, depth);
+      }
+      if (minDepth >= 0) {
+        code = code.slice(1, -1);
+      } else {
+        break;
+      }
+    }
+    return code;
+  }
   unwrapIfBranch(branch) {
     if (Array.isArray(branch) && branch.length === 1) {
       const elem = branch[0];
@@ -6852,8 +6881,8 @@ function compileToJS(source, options = {}) {
   return compiler.compileToJS(source);
 }
 // src/browser.js
-var VERSION = "1.3.9";
-var BUILD_DATE = "2025-11-06@23:25:50GMT";
+var VERSION = "1.3.10";
+var BUILD_DATE = "2025-11-06@23:50:13GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

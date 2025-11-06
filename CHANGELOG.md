@@ -5,6 +5,23 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.10] - 2025-11-06
+
+### Changed
+- **Eliminated exponential parentheses** (#42) - Removed paren hell in logical operator chains
+  - Stopped wrapping `&&`, `||`, `??` operators (left-associative, safe to chain)
+  - `(((!a && !b) && !c) && d)` → `!a && !b && !c && d` (4 layers → 0!)
+  - Created `unwrapLogical()` for aggressive unwrapping in conditions
+  - Matches CoffeeScript clean output
+  
+### Fixed
+- **Unary NOT precedence bug** - `!(a && b)` now generates correctly
+  - Was: `!a && b` (wrong precedence) ❌
+  - Now: `(!(a && b))` (correct precedence) ✅
+
+### Changed
+- Test count: 907 → 913 (+6 tests)
+
 ## [1.3.9] - 2025-11-06
 
 ### Fixed
