@@ -114,6 +114,18 @@ test "nullish with zero", "0 ?? 30", 0
 test "nullish with false", "false ?? 40", false
 code "nullish coalescing parens", "a ?? b", "(a ?? b)"
 
+# Otherwise operator: "!?" (undefined-only coalescing)
+test "otherwise with null", "null !? 10", null
+test "otherwise with undefined", "undefined !? 20", 20
+test "otherwise with zero", "0 !? 30", 0
+test "otherwise with false", "false !? 40", false
+test "otherwise with empty string", "'' !? 'default'", ''
+test "otherwise chain", "undefined !? undefined !? 42", 42
+test "otherwise all undefined", "undefined !? undefined !? 'fallback'", "fallback"
+test "otherwise first value", "5 !? 10 !? 15", 5
+test "otherwise second value", "undefined !? 10 !? 15", 10
+code "otherwise operator parens", "a !? b", "(a !== undefined ? a : b)"
+
 # ============================================================================
 # Bitwise Operators
 # ============================================================================
