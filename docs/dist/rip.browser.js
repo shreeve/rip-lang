@@ -4144,26 +4144,32 @@ ${this.indent()}}`;
           let code2 = `for (let ${indexVar} = 0; ${indexVar} < ${iterableCode}.length; ${indexVar}++) `;
           if (Array.isArray(body) && body[0] === "block") {
             const statements = body.slice(1);
+            code2 += `{
+`;
             this.indentLevel++;
-            const stmts = [`const ${itemVarPattern} = ${iterableCode}[${indexVar}];`];
+            code2 += this.indent() + `const ${itemVarPattern} = ${iterableCode}[${indexVar}];
+`;
             if (guard) {
-              const guardCode = this.generate(guard, "value");
-              stmts.push(`if (${guardCode}) {`);
+              const guardCode = this.unwrap(this.generate(guard, "value"));
+              code2 += this.indent() + `if (${guardCode}) {
+`;
               this.indentLevel++;
-              stmts.push(...this.formatStatements(statements));
+              code2 += this.formatStatements(statements).join(`
+`) + `
+`;
               this.indentLevel--;
-              stmts.push(this.indent() + "}");
+              code2 += this.indent() + `}
+`;
             } else {
-              stmts.push(...statements.map((s) => this.addSemicolon(s, this.generate(s, "statement"))));
+              code2 += this.formatStatements(statements).join(`
+`) + `
+`;
             }
             this.indentLevel--;
-            code2 += `{
-${stmts.map((s) => this.indent() + s).join(`
-`)}
-${this.indent()}}`;
+            code2 += this.indent() + "}";
           } else {
             if (guard) {
-              const guardCode = this.generate(guard, "value");
+              const guardCode = this.unwrap(this.generate(guard, "value"));
               code2 += `{ const ${itemVarPattern} = ${iterableCode}[${indexVar}]; if (${guardCode}) ${this.generate(body, "statement")}; }`;
             } else {
               code2 += `{ const ${itemVarPattern} = ${iterableCode}[${indexVar}]; ${this.generate(body, "statement")}; }`;
@@ -6846,8 +6852,8 @@ function compileToJS(source, options = {}) {
   return compiler.compileToJS(source);
 }
 // src/browser.js
-var VERSION = "1.3.8";
-var BUILD_DATE = "2025-11-06@21:35:45GMT";
+var VERSION = "1.3.9";
+var BUILD_DATE = "2025-11-06@23:25:50GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

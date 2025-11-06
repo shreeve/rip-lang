@@ -5,6 +5,16 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.9] - 2025-11-06
+
+### Fixed
+- **Indentation in for-in loops with index and guard** - Fixed broken indentation
+  - For-loops with both index variable and guard clause now indent correctly
+  - Root cause: Mixed array building with formatStatements causing double-indent
+  - Solution: Direct code building with explicit indent levels (Option 2)
+  - Example: `for symbol, i in arr when guard` now has perfect indentation
+  - Every statement at correct level (no 0-space or 12-space chaos)
+
 ## [1.3.8] - 2025-11-06
 
 ### Changed
