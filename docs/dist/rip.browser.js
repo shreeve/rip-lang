@@ -4108,7 +4108,7 @@ ${this.indent()}}`;
               this.indentLevel--;
               stmts.push(this.indent() + "}");
             } else {
-              stmts.push(...statements.map((s) => this.generate(s, "statement") + ";"));
+              stmts.push(...statements.map((s) => this.addSemicolon(s, this.generate(s, "statement"))));
             }
             this.indentLevel--;
             return loopHeader + `{
@@ -4148,7 +4148,7 @@ ${this.indent()}}`;
               this.indentLevel--;
               stmts.push(this.indent() + "}");
             } else {
-              stmts.push(...statements.map((s) => this.generate(s, "statement") + ";"));
+              stmts.push(...statements.map((s) => this.addSemicolon(s, this.generate(s, "statement"))));
             }
             this.indentLevel--;
             code2 += `{
@@ -4245,7 +4245,7 @@ ${this.indent()}}`;
               const guardCondition = this.generate(guardCheck, "value");
               this.indentLevel++;
               const innerIndent = this.indent();
-              const stmts = statements.map((s) => innerIndent + this.generate(s, "statement") + ";");
+              const stmts = statements.map((s) => innerIndent + this.addSemicolon(s, this.generate(s, "statement")));
               this.indentLevel -= 3;
               code += `{
 ${outerIndent}if (${ownCondition}) {
@@ -4269,7 +4269,7 @@ ${this.indent()}}`;
               const condition = this.generate(ownCheck, "value");
               this.indentLevel++;
               const innerIndent = this.indent();
-              const stmts = statements.map((s) => innerIndent + this.generate(s, "statement") + ";");
+              const stmts = statements.map((s) => innerIndent + this.addSemicolon(s, this.generate(s, "statement")));
               this.indentLevel -= 2;
               code += `{
 ${loopBodyIndent}if (${condition}) {
@@ -4289,7 +4289,7 @@ ${this.indent()}}`;
               const guardCondition = this.generate(guardCheck, "value");
               this.indentLevel++;
               const innerIndent = this.indent();
-              const stmts = statements.map((s) => innerIndent + this.generate(s, "statement") + ";");
+              const stmts = statements.map((s) => innerIndent + this.addSemicolon(s, this.generate(s, "statement")));
               this.indentLevel -= 2;
               code += `{
 ${loopBodyIndent}const ${valueVar} = ${objCode}[${keyVar}];
@@ -4305,7 +4305,7 @@ ${this.indent()}}`;
             if (Array.isArray(body) && body[0] === "block") {
               const statements = body.slice(1);
               this.indentLevel++;
-              const stmts = [`const ${valueVar} = ${objCode}[${keyVar}];`, ...statements.map((s) => this.generate(s, "statement") + ";")];
+              const stmts = [`const ${valueVar} = ${objCode}[${keyVar}];`, ...statements.map((s) => this.addSemicolon(s, this.generate(s, "statement")))];
               this.indentLevel--;
               code += `{
 ${stmts.map((s) => this.indent() + s).join(`
@@ -5337,7 +5337,7 @@ export default ${target}`;
 `);
     let needsBlankLine = false;
     if (imports.length > 0) {
-      code += imports.map((stmt) => this.generate(stmt, "statement") + ";").join(`
+      code += imports.map((stmt) => this.addSemicolon(stmt, this.generate(stmt, "statement"))).join(`
 `);
       needsBlankLine = true;
     }
@@ -5406,7 +5406,7 @@ export default ${target}`;
     code += statementsCode;
     if (exports.length > 0) {
       code += `
-` + exports.map((stmt) => this.generate(stmt, "statement") + ";").join(`
+` + exports.map((stmt) => this.addSemicolon(stmt, this.generate(stmt, "statement"))).join(`
 `);
     }
     if (this.dataSection !== null && this.dataSection !== undefined) {
@@ -5606,7 +5606,7 @@ function _setDataSection() {
             code += this.indent() + "return " + stmtCode + `;
 `;
           } else {
-            code += this.indent() + stmtCode + `;
+            code += this.indent() + this.addSemicolon(stmt, stmtCode) + `
 `;
           }
         });
@@ -5655,7 +5655,7 @@ function _setDataSection() {
             code += this.indent() + "return " + stmtCode + `;
 `;
           } else {
-            code += this.indent() + stmtCode + `;
+            code += this.indent() + this.addSemicolon(stmt, stmtCode) + `
 `;
           }
         });
@@ -5748,7 +5748,7 @@ ${this.indent()}}`;
             const [, expr, iterators, guards] = stmt;
             return this.indent() + this.generateComprehensionAsLoop(expr, iterators, guards);
           }
-          return this.indent() + this.generate(stmt, "statement") + ";";
+          return this.indent() + this.addSemicolon(stmt, this.generate(stmt, "statement"));
         });
       });
       return `{
@@ -5999,8 +5999,20 @@ ${this.indent()}}`;
       return body;
     return [body];
   }
+  needsSemicolon(stmt, generated) {
+    if (!generated || generated.endsWith(";"))
+      return false;
+    if (!generated.endsWith("}"))
+      return true;
+    const head = Array.isArray(stmt) ? stmt[0] : null;
+    const blockStatements = ["def", "class", "if", "unless", "for-in", "for-of", "for-from", "while", "until", "loop", "switch", "try"];
+    return !blockStatements.includes(head);
+  }
+  addSemicolon(stmt, generated) {
+    return generated + (this.needsSemicolon(stmt, generated) ? ";" : "");
+  }
   formatStatements(statements, context = "statement") {
-    return statements.map((s) => this.indent() + this.generate(s, context) + ";");
+    return statements.map((s) => this.indent() + this.addSemicolon(s, this.generate(s, context)));
   }
   hasExplicitControlFlow(body) {
     if (!Array.isArray(body))
@@ -6831,8 +6843,8 @@ function compileToJS(source, options = {}) {
   return compiler.compileToJS(source);
 }
 // src/browser.js
-var VERSION = "1.3.3";
-var BUILD_DATE = "2025-11-06@19:46:44GMT";
+var VERSION = "1.3.4";
+var BUILD_DATE = "2025-11-06@20:13:24GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

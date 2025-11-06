@@ -5,6 +5,19 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.4] - 2025-11-06
+
+### Fixed
+- **Semicolons in all contexts** - Extended clean semicolon removal to nested blocks
+  - Function bodies now have clean blocks (no semicolons after `}`)
+  - Method bodies now have clean blocks
+  - Loop bodies and nested contexts all clean
+  - Added helper methods: `needsSemicolon()` and `addSemicolon()`
+  - Applied smart semicolon logic to all statement generation
+
+### Changed
+- Cleaner JavaScript output throughout entire codebase, not just top-level
+
 ## [1.3.3] - 2025-11-06
 
 ### Changed
