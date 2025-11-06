@@ -5,6 +5,17 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.5] - 2025-11-06
+
+### Changed
+- **Modernized to Object.hasOwn()** (#36) - Replaced hasOwnProperty with ES2022 standard
+  - All `obj.hasOwnProperty(key)` → `Object.hasOwn(obj, key)`
+  - Cannot be shadowed by instance properties
+  - Works with null-prototype objects
+  - More readable and safer
+  - Uses clean `continue` pattern like CoffeeScript
+- Test count: 891 → 893 (+2 tests)
+
 ## [1.3.4] - 2025-11-06
 
 ### Fixed

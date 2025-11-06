@@ -3174,7 +3174,7 @@ var parserInstance = {
     lexer = Object.create(this.lexer);
     sharedState = { yy: {} };
     for (const k2 in this.yy)
-      if (this.yy.hasOwnProperty(k2)) {
+      if (Object.hasOwn(this.yy, k2)) {
         const v = this.yy[k2];
         sharedState.yy[k2] = v;
       }
@@ -3203,7 +3203,7 @@ var parserInstance = {
           expected = (() => {
             const result = [];
             for (const p2 in parseTable[state]) {
-              if (!parseTable[state].hasOwnProperty(p2))
+              if (!Object.hasOwn(parseTable[state], p2))
                 continue;
               if (this.tokenNames[p2] && p2 > TERROR)
                 result.push(`'${this.tokenNames[p2]}'`);
@@ -6862,8 +6862,8 @@ function compileToJS(source, options = {}) {
   return compiler.compileToJS(source);
 }
 // src/browser.js
-var VERSION = "1.3.4";
-var BUILD_DATE = "2025-11-06@20:33:39GMT";
+var VERSION = "1.3.5";
+var BUILD_DATE = "2025-11-06@20:36:10GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
