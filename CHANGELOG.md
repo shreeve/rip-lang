@@ -5,6 +5,17 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.8] - 2025-11-06
+
+### Changed
+- **Cleaner conditions** (#40) - Removed excessive double parentheses
+  - `if ((x > y))` → `if (x > y)` (single parens)
+  - Applied to all conditionals: if, unless, while, until, guards
+  - Used existing `unwrap()` helper for consistency
+  - Smart negation handling (keeps parens when needed for precedence)
+  - More readable, professional output
+- Test count: 901 → 907 (+6 tests)
+
 ## [1.3.7] - 2025-11-06
 
 ### Changed

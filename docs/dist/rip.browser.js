@@ -4043,7 +4043,11 @@ ${this.indent()}}`;
           const thenExpr = this.extractExpression(body);
           return `(!${this.generate(condition, "value")} ? ${thenExpr} : undefined)`;
         }
-        let code = `if (!${this.generate(condition, "value")}) `;
+        let condCode = this.unwrap(this.generate(condition, "value"));
+        if (condCode.includes(" ") || condCode.includes("===") || condCode.includes("!==") || condCode.includes(">") || condCode.includes("<") || condCode.includes("&&") || condCode.includes("||")) {
+          condCode = `(${condCode})`;
+        }
+        let code = `if (!${condCode}) `;
         code += this.generate(body, "statement");
         return code;
       }
@@ -4406,7 +4410,8 @@ ${this.indent()}}`;
         const condition = rest[0];
         const guard = rest.length === 3 ? rest[1] : null;
         const body = rest[rest.length - 1];
-        let code = `while (${this.generate(condition, "value")}) `;
+        const condCode = this.unwrap(this.generate(condition, "value"));
+        let code = `while (${condCode}) `;
         if (guard) {
           code += this.generateLoopBodyWithGuard(body, guard);
         } else {
@@ -4418,7 +4423,11 @@ ${this.indent()}}`;
         const condition = rest[0];
         const guard = rest.length === 3 ? rest[1] : null;
         const body = rest[rest.length - 1];
-        let code = `while (!${this.generate(condition, "value")}) `;
+        let condCode = this.unwrap(this.generate(condition, "value"));
+        if (condCode.includes(" ") || condCode.includes("===") || condCode.includes("!==") || condCode.includes(">") || condCode.includes("<") || condCode.includes("&&") || condCode.includes("||")) {
+          condCode = `(${condCode})`;
+        }
+        let code = `while (!${condCode}) `;
         if (guard) {
           code += this.generateLoopBodyWithGuard(body, guard);
         } else {
@@ -5755,15 +5764,12 @@ ${this.indent()}}`;
     return `{ ${this.generate(body, "statement")}; }`;
   }
   generateLoopBodyWithGuard(body, guard) {
+    const guardCondition = this.unwrap(this.generate(guard, "value"));
     if (!Array.isArray(body)) {
-      return `{ if (${this.generate(guard, "value")}) ${this.generate(body, "statement")}; }`;
+      return `{ if (${guardCondition}) ${this.generate(body, "statement")}; }`;
     }
     if (body[0] === "block" || Array.isArray(body[0])) {
       const statements = body[0] === "block" ? body.slice(1) : body;
-      let guardCondition = this.generate(guard, "value");
-      if (guardCondition.startsWith("(") && guardCondition.endsWith(")") && !guardCondition.includes("(", 1)) {
-        guardCondition = guardCondition.slice(1, -1);
-      }
       const loopBodyIndent = this.withIndent(() => this.indent());
       const guardCode = `if (${guardCondition}) {
 `;
@@ -6481,7 +6487,8 @@ ${this.indent()}}`;
     return `(${condCode} ? ${thenExpr} : ${elseExpr})`;
   }
   generateIfAsStatement(condition, thenBranch, elseBranches) {
-    let code = `if (${this.generate(condition, "value")}) `;
+    const condCode = this.unwrap(this.generate(condition, "value"));
+    let code = `if (${condCode}) `;
     code += this.generate(this.unwrapIfBranch(thenBranch), "statement");
     for (const branch of elseBranches) {
       code += ` else `;
@@ -6839,8 +6846,8 @@ function compileToJS(source, options = {}) {
   return compiler.compileToJS(source);
 }
 // src/browser.js
-var VERSION = "1.3.7";
-var BUILD_DATE = "2025-11-06@20:57:40GMT";
+var VERSION = "1.3.8";
+var BUILD_DATE = "2025-11-06@21:35:45GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
