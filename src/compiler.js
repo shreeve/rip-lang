@@ -37,7 +37,7 @@ function isInline(arr) {
 
   // Small arrays without nesting can be inline
   return arr.length <= 4 && !arr.some(Array.isArray);
-  }
+}
 
 /**
  * Format a single atom (non-array element)

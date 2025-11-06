@@ -341,7 +341,7 @@ code "void function early return no value", '''
     console.log "ok"
   ''', '''
   function validate(x) {
-    if ((x < 0)) return;
+    if (x < 0) return;
     console.log("ok");
     return;
   }

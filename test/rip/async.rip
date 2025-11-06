@@ -105,9 +105,9 @@ code "async for with break", '''
     x
 ''', '''
 for await (const x of iterable) {
-  if ((x > 10)) break;
+  if (x > 10) break;
   x;
-};
+}
 '''
 
 code "async for with continue", '''
@@ -116,9 +116,9 @@ code "async for with continue", '''
     x
 ''', '''
 for await (const x of iterable) {
-  if ((x < 5)) continue;
+  if (x < 5) continue;
   x;
-};
+}
 '''
 
 # ============================================================================
