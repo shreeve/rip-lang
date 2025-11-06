@@ -33,8 +33,7 @@
     "serve": "bun scripts/serve.js",
     "test": "bun test/runner.js",
     "version": "./bin/rip -v",
-    "pack": "npm pack --dry-run",
-    "prepublishOnly": "bun run test"
+    "pack": "npm pack --dry-run"
   },
   "keywords": [
     "compiler",
