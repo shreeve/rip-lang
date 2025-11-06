@@ -1187,6 +1187,15 @@ export class CodeGenerator {
 
         const paramList = this.generateParamList(params);
 
+        // Check if we can omit parens (single simple parameter)
+        const isSingleSimpleParam = params.length === 1 && 
+                                   typeof params[0] === 'string' &&
+                                   !paramList.includes('=') &&      // No defaults
+                                   !paramList.includes('...') &&    // No rest
+                                   !paramList.includes('[') &&      // No destructuring
+                                   !paramList.includes('{');        // No destructuring
+        const paramSyntax = isSingleSimpleParam ? paramList : `(${paramList})`;
+
         // Check if body contains await
         const isAsync = this.containsAwait(body);
         const asyncPrefix = isAsync ? 'async ' : '';
@@ -1199,20 +1208,20 @@ export class CodeGenerator {
             const expr = body[1];
             if (!Array.isArray(expr) || expr[0] !== 'return') {
               // Not already a return - use concise syntax
-              return `${asyncPrefix}(${paramList}) => ${this.generate(expr, 'value')}`;
+              return `${asyncPrefix}${paramSyntax} => ${this.generate(expr, 'value')}`;
             }
           }
 
           // Single expression not in block
           if (!Array.isArray(body) || body[0] !== 'block') {
             // Single expression - use concise arrow syntax
-            return `${asyncPrefix}(${paramList}) => ${this.generate(body, 'value')}`;
+            return `${asyncPrefix}${paramSyntax} => ${this.generate(body, 'value')}`;
           }
         }
 
         // Multi-statement block - need braces with returns
         const bodyCode = this.generateFunctionBody(body, params, sideEffectOnly);
-        return `${asyncPrefix}(${paramList}) => ${bodyCode}`;
+        return `${asyncPrefix}${paramSyntax} => ${bodyCode}`;
       }
 
       case 'return': {
