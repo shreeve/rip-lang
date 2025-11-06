@@ -3451,9 +3451,6 @@ class CodeGenerator {
     return vars;
   }
   generate(sexpr, context = "statement") {
-    if (sexpr && typeof sexpr === "object" && sexpr._pregenerated) {
-      return sexpr._pregenerated;
-    }
     if (sexpr instanceof String) {
       if (sexpr.await === true) {
         const cleanName = sexpr.valueOf();
@@ -4220,23 +4217,6 @@ ${this.indent()}}`;
         const [keyVar, valueVar] = Array.isArray(vars) ? vars : [vars];
         const objCode = this.generate(obj, "value");
         let code = `for (const ${keyVar} in ${objCode}) `;
-        let ownCheck = null;
-        let guardCheck = null;
-        if (own) {
-          const objCode2 = this.generate(obj, "value");
-          ownCheck = { _pregenerated: `Object.hasOwn(${objCode2}, ${keyVar})` };
-        }
-        if (guard) {
-          guardCheck = guard;
-        }
-        let combinedGuard = null;
-        if (!valueVar && ownCheck && guardCheck) {
-          combinedGuard = ["&&", ownCheck, guardCheck];
-        } else if (!valueVar && ownCheck) {
-          combinedGuard = ownCheck;
-        } else if (!valueVar && guardCheck) {
-          combinedGuard = guardCheck;
-        }
         if (own && !valueVar && !guard) {
           if (Array.isArray(body) && body[0] === "block") {
             const statements = body.slice(1);
@@ -4256,34 +4236,29 @@ ${this.indent()}}`;
           return code;
         }
         if (valueVar) {
-          if (ownCheck && guardCheck) {
+          if (own && guard) {
             if (Array.isArray(body) && body[0] === "block") {
               const statements = body.slice(1);
               this.indentLevel++;
               const outerIndent = this.indent();
-              const ownCondition = this.generate(ownCheck, "value");
-              this.indentLevel++;
-              const midIndent = this.indent();
-              const guardCondition = this.generate(guardCheck, "value");
+              const guardCondition = this.generate(guard, "value");
               this.indentLevel++;
               const innerIndent = this.indent();
               const stmts = statements.map((s) => innerIndent + this.addSemicolon(s, this.generate(s, "statement")));
-              this.indentLevel -= 3;
+              this.indentLevel -= 2;
               code += `{
-${outerIndent}if (${ownCondition}) {
-${midIndent}const ${valueVar} = ${objCode}[${keyVar}];
-${midIndent}if (${guardCondition}) {
+${outerIndent}if (!Object.hasOwn(${objCode}, ${keyVar})) continue;
+${outerIndent}const ${valueVar} = ${objCode}[${keyVar}];
+${outerIndent}if (${guardCondition}) {
 ${stmts.join(`
 `)}
-${midIndent}}
 ${outerIndent}}
 ${this.indent()}}`;
             } else {
-              const ownCondition = this.generate(ownCheck, "value");
-              const guardCondition = this.generate(guardCheck, "value");
-              code += `{ if (${ownCondition}) { const ${valueVar} = ${objCode}[${keyVar}]; if (${guardCondition}) ${this.generate(body, "statement")}; } }`;
+              const guardCondition = this.generate(guard, "value");
+              code += `{ if (!Object.hasOwn(${objCode}, ${keyVar})) continue; const ${valueVar} = ${objCode}[${keyVar}]; if (${guardCondition}) ${this.generate(body, "statement")}; }`;
             }
-          } else if (ownCheck) {
+          } else if (own) {
             if (Array.isArray(body) && body[0] === "block") {
               const statements = body.slice(1);
               this.indentLevel++;
@@ -4300,12 +4275,12 @@ ${this.indent()}}`;
             } else {
               code += `{ if (!Object.hasOwn(${objCode}, ${keyVar})) continue; const ${valueVar} = ${objCode}[${keyVar}]; ${this.generate(body, "statement")}; }`;
             }
-          } else if (guardCheck) {
+          } else if (guard) {
             if (Array.isArray(body) && body[0] === "block") {
               const statements = body.slice(1);
               this.indentLevel++;
               const loopBodyIndent = this.indent();
-              const guardCondition = this.generate(guardCheck, "value");
+              const guardCondition = this.generate(guard, "value");
               this.indentLevel++;
               const innerIndent = this.indent();
               const stmts = statements.map((s) => innerIndent + this.addSemicolon(s, this.generate(s, "statement")));
@@ -4318,7 +4293,7 @@ ${stmts.join(`
 ${loopBodyIndent}}
 ${this.indent()}}`;
             } else {
-              code += `{ const ${valueVar} = ${objCode}[${keyVar}]; if (${this.generate(guardCheck, "value")}) ${this.generate(body, "statement")}; }`;
+              code += `{ const ${valueVar} = ${objCode}[${keyVar}]; if (${this.generate(guard, "value")}) ${this.generate(body, "statement")}; }`;
             }
           } else {
             if (Array.isArray(body) && body[0] === "block") {
@@ -4335,8 +4310,8 @@ ${this.indent()}}`;
             }
           }
         } else {
-          if (combinedGuard) {
-            code += this.generateLoopBodyWithGuard(body, combinedGuard);
+          if (guard) {
+            code += this.generateLoopBodyWithGuard(body, guard);
           } else {
             code += this.generateLoopBody(body);
           }
@@ -6862,8 +6837,8 @@ function compileToJS(source, options = {}) {
   return compiler.compileToJS(source);
 }
 // src/browser.js
-var VERSION = "1.3.5";
-var BUILD_DATE = "2025-11-06@20:36:10GMT";
+var VERSION = "1.3.6";
+var BUILD_DATE = "2025-11-06@20:45:41GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
