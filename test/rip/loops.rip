@@ -32,6 +32,8 @@ test "for-of keys only", "obj = {a: 1, b: 2}; keys = []; for key of obj\n  keys.
 
 # Code generation
 code "for-of loop", "for k, v of obj\n  v", "for (const k in obj) {\nconst v = obj[k];\nv;\n}"
+code "for own", "for own k of obj\n  k", "for (const k in obj) {\nif (!Object.hasOwn(obj, k)) continue;\nk;\n}"
+code "for own with value", "for own k, v of obj\n  v", "for (const k in obj) {\nif (!Object.hasOwn(obj, k)) continue;\nconst v = obj[k];\nv;\n}"
 
 # ============================================================================
 # While Loops: "while"

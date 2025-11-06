@@ -3451,6 +3451,9 @@ class CodeGenerator {
     return vars;
   }
   generate(sexpr, context = "statement") {
+    if (sexpr && typeof sexpr === "object" && sexpr._pregenerated) {
+      return sexpr._pregenerated;
+    }
     if (sexpr instanceof String) {
       if (sexpr.await === true) {
         const cleanName = sexpr.valueOf();
@@ -4220,7 +4223,8 @@ ${this.indent()}}`;
         let ownCheck = null;
         let guardCheck = null;
         if (own) {
-          ownCheck = [[".", obj, "hasOwnProperty"], keyVar];
+          const objCode2 = this.generate(obj, "value");
+          ownCheck = { _pregenerated: `Object.hasOwn(${objCode2}, ${keyVar})` };
         }
         if (guard) {
           guardCheck = guard;
@@ -4232,6 +4236,24 @@ ${this.indent()}}`;
           combinedGuard = ownCheck;
         } else if (!valueVar && guardCheck) {
           combinedGuard = guardCheck;
+        }
+        if (own && !valueVar && !guard) {
+          if (Array.isArray(body) && body[0] === "block") {
+            const statements = body.slice(1);
+            this.indentLevel++;
+            const stmts = [
+              `if (!Object.hasOwn(${objCode}, ${keyVar})) continue;`,
+              ...statements.map((s) => this.addSemicolon(s, this.generate(s, "statement")))
+            ];
+            this.indentLevel--;
+            code += `{
+${stmts.map((s) => this.indent() + s).join(`
+`)}
+${this.indent()}}`;
+          } else {
+            code += `{ if (!Object.hasOwn(${objCode}, ${keyVar})) continue; ${this.generate(body, "statement")}; }`;
+          }
+          return code;
         }
         if (valueVar) {
           if (ownCheck && guardCheck) {
@@ -4265,21 +4287,18 @@ ${this.indent()}}`;
             if (Array.isArray(body) && body[0] === "block") {
               const statements = body.slice(1);
               this.indentLevel++;
-              const loopBodyIndent = this.indent();
-              const condition = this.generate(ownCheck, "value");
-              this.indentLevel++;
-              const innerIndent = this.indent();
-              const stmts = statements.map((s) => innerIndent + this.addSemicolon(s, this.generate(s, "statement")));
-              this.indentLevel -= 2;
+              const stmts = [
+                `if (!Object.hasOwn(${objCode}, ${keyVar})) continue;`,
+                `const ${valueVar} = ${objCode}[${keyVar}];`,
+                ...statements.map((s) => this.addSemicolon(s, this.generate(s, "statement")))
+              ];
+              this.indentLevel--;
               code += `{
-${loopBodyIndent}if (${condition}) {
-${innerIndent}const ${valueVar} = ${objCode}[${keyVar}];
-${stmts.join(`
+${stmts.map((s) => this.indent() + s).join(`
 `)}
-${loopBodyIndent}}
 ${this.indent()}}`;
             } else {
-              code += `{ if (${this.generate(ownCheck, "value")}) { const ${valueVar} = ${objCode}[${keyVar}]; ${this.generate(body, "statement")}; } }`;
+              code += `{ if (!Object.hasOwn(${objCode}, ${keyVar})) continue; const ${valueVar} = ${objCode}[${keyVar}]; ${this.generate(body, "statement")}; }`;
             }
           } else if (guardCheck) {
             if (Array.isArray(body) && body[0] === "block") {
@@ -4669,7 +4688,7 @@ ${this.indent()}}`;
 `;
             this.indentLevel++;
             if (own) {
-              code += this.indent() + `if (!${objCode}.hasOwnProperty(${keyVarPattern})) continue;
+              code += this.indent() + `if (!Object.hasOwn(${objCode}, ${keyVarPattern})) continue;
 `;
             }
             if (secondVar) {
@@ -4776,7 +4795,7 @@ ${this.indent()}}`;
 `;
             this.indentLevel++;
             if (own) {
-              code += this.indent() + `if (!${iterableCode}.hasOwnProperty(${keyVar})) continue;
+              code += this.indent() + `if (!Object.hasOwn(${iterableCode}, ${keyVar})) continue;
 `;
             }
             if (valueVar) {
@@ -6269,12 +6288,12 @@ ${this.indent()}}`;
 `;
         this.indentLevel++;
         if (own && !valueVar && !guards?.length) {
-          code += this.indent() + `if (!${objCode}.hasOwnProperty(${keyVar})) continue;
+          code += this.indent() + `if (!Object.hasOwn(${objCode}, ${keyVar})) continue;
 `;
           code += this.indent() + this.generate(expr, "statement") + `;
 `;
         } else if (own && valueVar && guards?.length) {
-          code += this.indent() + `if (${objCode}.hasOwnProperty(${keyVar})) {
+          code += this.indent() + `if (Object.hasOwn(${objCode}, ${keyVar})) {
 `;
           this.indentLevel++;
           code += this.indent() + `const ${valueVar} = ${objCode}[${keyVar}];
@@ -6291,7 +6310,7 @@ ${this.indent()}}`;
           code += this.indent() + `}
 `;
         } else if (own && valueVar) {
-          code += this.indent() + `if (${objCode}.hasOwnProperty(${keyVar})) {
+          code += this.indent() + `if (Object.hasOwn(${objCode}, ${keyVar})) {
 `;
           this.indentLevel++;
           code += this.indent() + `const ${valueVar} = ${objCode}[${keyVar}];
@@ -6844,7 +6863,7 @@ function compileToJS(source, options = {}) {
 }
 // src/browser.js
 var VERSION = "1.3.4";
-var BUILD_DATE = "2025-11-06@20:13:24GMT";
+var BUILD_DATE = "2025-11-06@20:33:39GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
