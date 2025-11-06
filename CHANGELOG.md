@@ -5,6 +5,16 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.7] - 2025-11-06
+
+### Changed
+- **Cleaner arrow function syntax** (#38) - Remove parens around single parameters
+  - `(x) => x * 2` → `x => x * 2` (single simple param)
+  - Keeps parens for multiple params, destructuring, defaults, rest
+  - Matches ESLint/Prettier standards
+  - More idiomatic modern JavaScript
+- Test count: 893 → 901 (+8 tests)
+
 ## [1.3.6] - 2025-11-06
 
 ### Changed

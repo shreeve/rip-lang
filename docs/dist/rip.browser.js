@@ -3970,21 +3970,23 @@ class CodeGenerator {
         const sideEffectOnly = this.nextFunctionIsVoid || false;
         this.nextFunctionIsVoid = false;
         const paramList = this.generateParamList(params);
+        const isSingleSimpleParam = params.length === 1 && typeof params[0] === "string" && !paramList.includes("=") && !paramList.includes("...") && !paramList.includes("[") && !paramList.includes("{");
+        const paramSyntax = isSingleSimpleParam ? paramList : `(${paramList})`;
         const isAsync = this.containsAwait(body);
         const asyncPrefix = isAsync ? "async " : "";
         if (!sideEffectOnly) {
           if (Array.isArray(body) && body[0] === "block" && body.length === 2) {
             const expr = body[1];
             if (!Array.isArray(expr) || expr[0] !== "return") {
-              return `${asyncPrefix}(${paramList}) => ${this.generate(expr, "value")}`;
+              return `${asyncPrefix}${paramSyntax} => ${this.generate(expr, "value")}`;
             }
           }
           if (!Array.isArray(body) || body[0] !== "block") {
-            return `${asyncPrefix}(${paramList}) => ${this.generate(body, "value")}`;
+            return `${asyncPrefix}${paramSyntax} => ${this.generate(body, "value")}`;
           }
         }
         const bodyCode = this.generateFunctionBody(body, params, sideEffectOnly);
-        return `${asyncPrefix}(${paramList}) => ${bodyCode}`;
+        return `${asyncPrefix}${paramSyntax} => ${bodyCode}`;
       }
       case "return": {
         if (rest.length === 0) {
@@ -6837,8 +6839,8 @@ function compileToJS(source, options = {}) {
   return compiler.compileToJS(source);
 }
 // src/browser.js
-var VERSION = "1.3.6";
-var BUILD_DATE = "2025-11-06@20:45:41GMT";
+var VERSION = "1.3.7";
+var BUILD_DATE = "2025-11-06@20:57:40GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
