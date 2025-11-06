@@ -5326,9 +5326,9 @@ export default ${target}`;
       }
       if (generated && !generated.endsWith(";")) {
         const head = Array.isArray(stmt) ? stmt[0] : null;
-        const controlFlowStatements = ["if", "unless", "for-in", "for-of", "while", "until", "loop", "switch", "try"];
-        const isControlFlow = controlFlowStatements.includes(head);
-        if (!isControlFlow || !generated.endsWith("}")) {
+        const blockStatements = ["def", "class", "if", "unless", "for-in", "for-of", "for-from", "while", "until", "loop", "switch", "try"];
+        const isBlockStatement = blockStatements.includes(head);
+        if (!isBlockStatement || !generated.endsWith("}")) {
           return generated + ";";
         }
       }
@@ -6832,7 +6832,7 @@ function compileToJS(source, options = {}) {
 }
 // src/browser.js
 var VERSION = "1.3.2";
-var BUILD_DATE = "2025-11-06@04:15:20GMT";
+var BUILD_DATE = "2025-11-06@19:38:15GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

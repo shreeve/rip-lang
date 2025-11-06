@@ -3154,11 +3154,11 @@ export class CodeGenerator {
         if (generated && !generated.endsWith(';')) {
           // Check if this statement type needs a semicolon
           const head = Array.isArray(stmt) ? stmt[0] : null;
-          // Control flow statements (if, for, while, switch, try) ending with } don't need semicolons
-          const controlFlowStatements = ['if', 'unless', 'for-in', 'for-of', 'while', 'until', 'loop', 'switch', 'try'];
-          const isControlFlow = controlFlowStatements.includes(head);
+          // Block statements ending with } don't need semicolons
+          const blockStatements = ['def', 'class', 'if', 'unless', 'for-in', 'for-of', 'for-from', 'while', 'until', 'loop', 'switch', 'try'];
+          const isBlockStatement = blockStatements.includes(head);
 
-          if (!isControlFlow || !generated.endsWith('}')) {
+          if (!isBlockStatement || !generated.endsWith('}')) {
             return generated + ';';
           }
         }
