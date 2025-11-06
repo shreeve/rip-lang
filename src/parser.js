@@ -221,7 +221,7 @@ const parserInstance = {
     if (hash.recoverable)
       return this.trace(str);
     else {
-      line = (hash.line || 0) + 1;
+      line = hash.line || 1;
       col = hash.loc?.first_column || 0;
       token = hash.token ? ` (token: ${hash.token})` : "";
       text = hash.text ? ` near '${hash.text}'` : "";
@@ -240,7 +240,7 @@ const parserInstance = {
     lexer = Object.create(this.lexer);
     sharedState = { yy: {} };
     for (const k in this.yy)
-      if (this.yy.hasOwnProperty(k)) {
+      if (Object.hasOwn(this.yy, k)) {
         const v = this.yy[k];
         sharedState.yy[k] = v;
       }
@@ -269,7 +269,7 @@ const parserInstance = {
           expected = (() => {
             const result = [];
             for (const p in parseTable[state]) {
-              if (!parseTable[state].hasOwnProperty(p))
+              if (!Object.hasOwn(parseTable[state], p))
                 continue;
               if (this.tokenNames[p] && p > TERROR)
                 result.push(`'${this.tokenNames[p]}'`);
@@ -306,7 +306,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         case 2:
           len = this.ruleData[action[1]][1];
           yyval.$ = val[val.length - len];
-          [locFirst, locLast] = [loc[loc.length - (len || 1)], loc[loc.length - 1]];
+          [locFirst, locLast] = [loc[loc.length - len || 1], loc[loc.length - 1]];
           yyval._$ = { first_line: locFirst.first_line, last_line: locLast.last_line, first_column: locFirst.first_column, last_column: locLast.last_column };
           if (ranges)
             yyval._$.range = [locFirst.range[0], locLast.range[1]];
