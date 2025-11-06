@@ -232,11 +232,10 @@ code 'for-of with own code', '''
     console.log k
   ''', '''
   for (const k in obj) {
-    if (obj.hasOwnProperty(k)) {
-      const v = obj[k];
-      console.log(k);
-    }
-  }
+if (!Object.hasOwn(obj, k)) continue;
+const v = obj[k];
+console.log(k);
+}
   '''
 
 # ============================================================================
