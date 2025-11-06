@@ -264,11 +264,6 @@ export class CodeGenerator {
    * @returns {string} Generated JavaScript code
    */
   generate(sexpr, context = 'statement') {
-    // Handle pre-generated code (used for Object.hasOwn and other modern JS)
-    if (sexpr && typeof sexpr === 'object' && sexpr._pregenerated) {
-      return sexpr._pregenerated;
-    }
-
     // IMPORTANT: Parser can emit String objects (not primitives)
     // String literals have .quote property - preserve original quote type
     if (sexpr instanceof String) {
@@ -1554,39 +1549,14 @@ export class CodeGenerator {
         const objCode = this.generate(obj, 'value');
         let code = `for (const ${keyVar} in ${objCode}) `;
 
-        // Build the combined condition: own check + guard
+        // Generate own-property checks and guards
         // IMPORTANT: When valueVar is present, we CANNOT combine own and guard checks
         // because the guard may reference valueVar which isn't defined yet!
         // Example: for own k, v of obj when v > 5
-        // Bad:  if (obj.hasOwnProperty(k) && (v > 5)) { const v = obj[k]; ... }  // v undefined!
-        // Good: if (obj.hasOwnProperty(k)) { const v = obj[k]; if (v > 5) { ... } }
+        // Bad:  if (Object.hasOwn(obj, k) && (v > 5)) { const v = obj[k]; ... }  // v undefined!
+        // Good: if (!Object.hasOwn(obj, k)) continue; const v = obj[k]; if (v > 5) { ... }
 
-        let ownCheck = null;
-        let guardCheck = null;
-
-        if (own) {
-          // Generate Object.hasOwn check as a pre-generated string (ES2022)
-          const objCode = this.generate(obj, 'value');
-          ownCheck = { _pregenerated: `Object.hasOwn(${objCode}, ${keyVar})` };
-        }
-
-        if (guard) {
-          guardCheck = guard;
-        }
-
-        // Only combine own and guard if there's NO valueVar (to avoid use-before-declaration)
-        let combinedGuard = null;
-        if (!valueVar && ownCheck && guardCheck) {
-          // Safe to combine: no value variable that guard might reference
-          combinedGuard = ['&&', ownCheck, guardCheck];
-        } else if (!valueVar && ownCheck) {
-          combinedGuard = ownCheck;
-        } else if (!valueVar && guardCheck) {
-          combinedGuard = guardCheck;
-        }
-
-        // Special case: Simple own-only check (no valueVar, no guards)
-        // Generate: if (!Object.hasOwn(obj, k)) continue;
+        // Simple case: own without valueVar and without guards
         if (own && !valueVar && !guard) {
           if (Array.isArray(body) && body[0] === 'block') {
             const statements = body.slice(1);
@@ -1610,28 +1580,24 @@ export class CodeGenerator {
           // 2. Assign valueVar
           // 3. Check guard (if needed) - may reference valueVar!
 
-          if (ownCheck && guardCheck) {
+          if (own && guard) {
             // Both own and guard: nest them with valueVar assignment in between
             if (Array.isArray(body) && body[0] === 'block') {
               const statements = body.slice(1);
               this.indentLevel++;
               const outerIndent = this.indent();
-              const ownCondition = this.generate(ownCheck, 'value');
-              this.indentLevel++;
-              const midIndent = this.indent();
-              const guardCondition = this.generate(guardCheck, 'value');
+              const guardCondition = this.generate(guard, 'value');
               this.indentLevel++;
               const innerIndent = this.indent();
               const stmts = statements.map(s => innerIndent + this.addSemicolon(s, this.generate(s, 'statement')));
-              this.indentLevel -= 3;
-              // Structure: if (own) { const v = obj[k]; if (guard) { body } }
-              code += `{\n${outerIndent}if (${ownCondition}) {\n${midIndent}const ${valueVar} = ${objCode}[${keyVar}];\n${midIndent}if (${guardCondition}) {\n${stmts.join('\n')}\n${midIndent}}\n${outerIndent}}\n${this.indent()}}`;
+              this.indentLevel -= 2;
+              // Structure: if (!own) continue; const v = obj[k]; if (guard) { body }
+              code += `{\n${outerIndent}if (!Object.hasOwn(${objCode}, ${keyVar})) continue;\n${outerIndent}const ${valueVar} = ${objCode}[${keyVar}];\n${outerIndent}if (${guardCondition}) {\n${stmts.join('\n')}\n${outerIndent}}\n${this.indent()}}`;
             } else {
-              const ownCondition = this.generate(ownCheck, 'value');
-              const guardCondition = this.generate(guardCheck, 'value');
-              code += `{ if (${ownCondition}) { const ${valueVar} = ${objCode}[${keyVar}]; if (${guardCondition}) ${this.generate(body, 'statement')}; } }`;
+              const guardCondition = this.generate(guard, 'value');
+              code += `{ if (!Object.hasOwn(${objCode}, ${keyVar})) continue; const ${valueVar} = ${objCode}[${keyVar}]; if (${guardCondition}) ${this.generate(body, 'statement')}; }`;
             }
-          } else if (ownCheck) {
+          } else if (own) {
             // Just own (no guard) with valueVar - use continue pattern for cleaner code
             if (Array.isArray(body) && body[0] === 'block') {
               const statements = body.slice(1);
@@ -1646,14 +1612,15 @@ export class CodeGenerator {
             } else {
               code += `{ if (!Object.hasOwn(${objCode}, ${keyVar})) continue; const ${valueVar} = ${objCode}[${keyVar}]; ${this.generate(body, 'statement')}; }`;
             }
-          } else if (guardCheck) {
+          } else if (guard) {
+            // Just guard (no own) with valueVar
             // Just guard (no own) with valueVar
             // IMPORTANT: Assign valueVar FIRST, then check guard (guard may reference valueVar!)
             if (Array.isArray(body) && body[0] === 'block') {
               const statements = body.slice(1);
               this.indentLevel++;
               const loopBodyIndent = this.indent();
-              const guardCondition = this.generate(guardCheck, 'value');
+              const guardCondition = this.generate(guard, 'value');
               this.indentLevel++;
               const innerIndent = this.indent();
               const stmts = statements.map(s => innerIndent + this.addSemicolon(s, this.generate(s, 'statement')));
@@ -1661,7 +1628,7 @@ export class CodeGenerator {
               // valueVar assignment BEFORE guard check
               code += `{\n${loopBodyIndent}const ${valueVar} = ${objCode}[${keyVar}];\n${loopBodyIndent}if (${guardCondition}) {\n${stmts.join('\n')}\n${loopBodyIndent}}\n${this.indent()}}`;
             } else {
-              code += `{ const ${valueVar} = ${objCode}[${keyVar}]; if (${this.generate(guardCheck, 'value')}) ${this.generate(body, 'statement')}; }`;
+              code += `{ const ${valueVar} = ${objCode}[${keyVar}]; if (${this.generate(guard, 'value')}) ${this.generate(body, 'statement')}; }`;
             }
           } else {
             // No checks, just valueVar assignment
@@ -1676,9 +1643,10 @@ export class CodeGenerator {
             }
           }
         } else {
-          // No value variable - generate body with combined guard if present
-          if (combinedGuard) {
-            code += this.generateLoopBodyWithGuard(body, combinedGuard);
+          // No value variable - simple loop body
+          // If own-only (no guard), handle it above; this branch is for guard-only or no checks
+          if (guard) {
+            code += this.generateLoopBodyWithGuard(body, guard);
           } else {
             code += this.generateLoopBody(body);
           }
