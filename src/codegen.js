@@ -1188,7 +1188,7 @@ export class CodeGenerator {
         const paramList = this.generateParamList(params);
 
         // Check if we can omit parens (single simple parameter)
-        const isSingleSimpleParam = params.length === 1 && 
+        const isSingleSimpleParam = params.length === 1 &&
                                    typeof params[0] === 'string' &&
                                    !paramList.includes('=') &&      // No defaults
                                    !paramList.includes('...') &&    // No rest
