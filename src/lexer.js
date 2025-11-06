@@ -1756,8 +1756,9 @@ NUMBER = /^0b[01](?:_?[01])*n?|^0o[0-7](?:_?[0-7])*n?|^0x[\da-f](?:_?[\da-f])*n?
 // decimal without support for numeric literal separators for reference:
 // \d*\.?\d+ (?:e[+-]?\d+)?
 
-OPERATOR = /^(?:[-=]>|===|!==|\?\?|=~|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?(\.|::)|\.{2,3})/; // function
+OPERATOR = /^(?:[-=]>|===|!==|!\?|\?\?|=~|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?(\.|::)|\.{2,3})/; // function
 // Added === and !== for explicit strict equality (compiles same as == and !=)
+// !? (otherwise operator) must come before ?? and before !=
 // ?? must come before single ? to match correctly
 // regex match operator
 // compound assign / compare / strict equality

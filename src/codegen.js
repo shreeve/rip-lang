@@ -413,6 +413,7 @@ export class CodeGenerator {
       case '&&':
       case '||':
       case '??':
+      case '!?':
       case '&':
       case '|':
       case '^':
@@ -429,6 +430,14 @@ export class CodeGenerator {
 
         // Binary operation (all operators)
         const [left, right] = rest;
+
+        // Special case: Otherwise operator (!?) - undefined-only coalescing
+        // Pattern: a !? b → (a !== undefined ? a : b)
+        if (head === '!?') {
+          const leftCode = this.generate(left, 'value');
+          const rightCode = this.generate(right, 'value');
+          return `(${leftCode} !== undefined ? ${leftCode} : ${rightCode})`;
+        }
 
         // Always use strict equality (CoffeeScript compatibility)
         // == → ===, != → !==, === → ===, !== → !==
