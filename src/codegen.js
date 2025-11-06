@@ -1460,26 +1460,31 @@ export class CodeGenerator {
           // Generate body with item variable assignment
           if (Array.isArray(body) && body[0] === 'block') {
             const statements = body.slice(1);
+            code += '{\n';
             this.indentLevel++;
-            const stmts = [`const ${itemVarPattern} = ${iterableCode}[${indexVar}];`];
-
+            
+            // Add item extraction
+            code += this.indent() + `const ${itemVarPattern} = ${iterableCode}[${indexVar}];\n`;
+            
             if (guard) {
-              const guardCode = this.generate(guard, 'value');
-              stmts.push(`if (${guardCode}) {`);
+              // Unwrap guard to avoid double parens
+              const guardCode = this.unwrap(this.generate(guard, 'value'));
+              code += this.indent() + `if (${guardCode}) {\n`;
               this.indentLevel++;
-              stmts.push(...this.formatStatements(statements));
+              code += this.formatStatements(statements).join('\n') + '\n';
               this.indentLevel--;
-              stmts.push(this.indent() + '}');
+              code += this.indent() + '}\n';
             } else {
-              stmts.push(...statements.map(s => this.addSemicolon(s, this.generate(s, 'statement'))));
+              // No guard - just generate statements
+              code += this.formatStatements(statements).join('\n') + '\n';
             }
-
+            
             this.indentLevel--;
-            code += `{\n${stmts.map(s => this.indent() + s).join('\n')}\n${this.indent()}}`;
+            code += this.indent() + '}';
           } else {
             // Single statement body
             if (guard) {
-              const guardCode = this.generate(guard, 'value');
+              const guardCode = this.unwrap(this.generate(guard, 'value'));
               code += `{ const ${itemVarPattern} = ${iterableCode}[${indexVar}]; if (${guardCode}) ${this.generate(body, 'statement')}; }`;
             } else {
               code += `{ const ${itemVarPattern} = ${iterableCode}[${indexVar}]; ${this.generate(body, 'statement')}; }`;
