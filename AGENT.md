@@ -19,7 +19,7 @@
 
 ```
 Rip Source → Lexer → Parser → S-Expressions → Codegen → JavaScript
-            (3,146)  (340)    (arrays!)      (6,846)    (ES2022)
+            (3,146)  (340)    (arrays!)      (5,221)    (ES2022)
 ```
 
 **Key insight:** S-expressions (simple arrays like `["=", "x", 42]`) are the IR, not complex AST nodes. This makes the compiler 50% smaller than CoffeeScript.
@@ -52,8 +52,9 @@ bun run parser  # Regenerates src/parser.js from grammar.rip
 **Recent accomplishments (November 2025):**
 - ✅ Issue #52 (Phase 1) - Dispatch table architecture, 71 cases extracted
 - ✅ Issue #54 (Phase 2) - All 110 cases in dispatch table (100% complete!)
-- ✅ Code cleanup - Removed 417 lines of dead/duplicate code
-- ✅ **Result:** 6,846 clean, organized LOC
+- ✅ Massive cleanup - Removed 2,042 lines of dead/duplicate code (28%!)
+- ✅ Issue #51 - Standardized test formatting (""" → ''')
+- ✅ **Result:** 5,221 clean, organized LOC
 
 **Check current state:**
 ```bash
@@ -73,7 +74,7 @@ bun run test                     # Verify: 931/931 tests
 │ Source │───>│   Lexer    │───>│  Parser  │───>│ Codegen │
 │  Code  │    │  (Coffee)  │    │  (Solar) │    │  (Rip)  │
 └────────┘    └────────────┘    └──────────┘    └─────────┘
-                 3,145 LOC          340 LOC       6,846 LOC
+                 3,145 LOC          340 LOC       5,221 LOC
                15 yrs tested     Generated!    Dispatch Table
 ```
 
@@ -439,11 +440,11 @@ case '+': {
 
 **Key sections:**
 ```
-Lines 17-141:    Class setup, dispatch table (GENERATORS)
-Lines 146-375:   compile(), variable collection
-Lines 379-2280:  generate() method (handles dispatch + function calls)
-Lines 2295-5422: Extracted generator methods (110 methods, organized)
-Lines 5427-7263: Helper methods (formatting, analysis, etc.)
+Lines 17-146:    Class setup, dispatch table (GENERATORS)
+Lines 148-380:   compile(), variable collection
+Lines 388-667:   generate() method (dispatch + function call handling)
+Lines 680-3350:  Extracted generator methods (110 methods, organized)
+Lines 3355-5212: Helper methods (formatting, analysis, etc.)
 ```
 
 **Finding a generator:**
@@ -967,12 +968,13 @@ bun run parser
 
 ### Code Cleanup (November 2025)
 
-**Removed 417 lines of dead/duplicate code:**
-- Duplicate inline functions
-- Old cases (`oldPropertyDot`, `oldDef`)
-- Dead switch cases
-- Error-throwing defensive code
-- **Result:** 7,263 → 6,846 LOC (5.7% cleaner)
+**Removed 2,042 lines of dead/duplicate code (28%):**
+- Duplicate inline functions (findPostfixConditional defined 2x)
+- Old cases (oldPropertyDot, oldDef) - 47 lines
+- Dead switch cases (error-throwing, forwarding) - 381 lines
+- **ALL Phase 2 duplicate cases** - 1,614 lines! (never removed after extraction)
+- Pointless switch wrapper with only default case
+- **Result:** 7,263 → 5,221 LOC (28.1% reduction!)
 
 ---
 
@@ -984,7 +986,7 @@ bun run parser
 |------|---------|-------------|-------|
 | `src/lexer.js` | Tokenization + rewriter | ⚠️ Rewriter only | 3,145 LOC |
 | `src/parser.js` | S-expression parser | ❌ Generated (don't edit) | 340 LOC |
-| `src/codegen.js` | JavaScript generator | ✅ Main work happens here | 6,846 LOC |
+| `src/codegen.js` | JavaScript generator | ✅ Main work happens here | 5,221 LOC |
 | `src/compiler.js` | Pipeline orchestration | ✅ Yes | 250 LOC |
 | `src/repl.js` | Terminal REPL | ✅ Yes | |
 | `src/browser.js` | Browser integration | ✅ Yes | |
@@ -1029,9 +1031,9 @@ fail "name", "code"                  # Expect compilation failure
 | Approach | Lines of Code | Complexity | Extensibility |
 |----------|---------------|------------|---------------|
 | Traditional AST (CoffeeScript) | 10,346 LOC | High (OOP hierarchy) | Hard |
-| S-Expressions (Rip) | 6,846 LOC | Low (pattern matching) | Easy |
+| S-Expressions (Rip) | 5,221 LOC | Low (pattern matching) | Easy |
 
-**Result: 34% smaller implementation**
+**Result: 50% smaller implementation**
 
 ### Why Context Parameter?
 
@@ -1159,9 +1161,9 @@ Rip has **zero runtime or build dependencies**. This is intentional and must be 
 **Codebase:**
 - Lexer+Rewriter: 3,145 LOC
 - Parser (generated): 340 LOC
-- Codegen: 6,846 LOC (dispatch table architecture)
+- Codegen: 5,221 LOC (dispatch table architecture)
 - Compiler: 250 LOC
-- Total: ~10,600 LOC
+- Total: ~9,000 LOC
 
 **Tests:**
 - 931 tests across 23 files

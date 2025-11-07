@@ -24,7 +24,7 @@ bun run parser
 ### Current Status (v1.4.1)
 - ✅ All 110 node types in dispatch table
 - ✅ 931/931 tests passing (100%)
-- ✅ 6,846 LOC (clean architecture)
+- ✅ 5,221 LOC (clean architecture - 28% reduction!)
 
 ### File Guide
 - `src/codegen.js` - **YOU'LL WORK HERE** (lines 32-141: dispatch table)
