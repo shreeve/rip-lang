@@ -5,6 +5,18 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.12] - 2025-11-07
+
+### Changed
+- **Cleaner output in delimited contexts** (#44) - Removed redundant outer parens
+  - Function args: `fn((expr))` → `fn(expr)`
+  - Assignments: `x = (value)` → `x = value`
+  - Array indices: `arr[(index)]` → `arr[index]`
+  - Applied unwrap() in contexts that already provide delimiters
+  - Safety preserved: `arr[len - (x || 1)]` keeps inner parens ✅
+  - Object literals still protected
+- Test count: 913 → 922 (+9 tests)
+
 ## [1.3.11] - 2025-11-07
 
 ### Fixed

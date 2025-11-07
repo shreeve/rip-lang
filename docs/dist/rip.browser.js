@@ -3604,7 +3604,7 @@ class CodeGenerator {
         if (Array.isArray(call)) {
           const [constructor, ...args] = call;
           const constructorCode = this.generate(constructor, "value");
-          const argsCode = args.map((arg) => this.generate(arg, "value")).join(", ");
+          const argsCode = args.map((arg) => this.unwrap(this.generate(arg, "value"))).join(", ");
           return `new ${constructorCode}(${argsCode})`;
         }
         return `new ${this.generate(call, "value")}()`;
@@ -3778,7 +3778,11 @@ class CodeGenerator {
         } else {
           targetCode = this.generate(target, "value");
         }
-        const valueCode = this.generate(value, "value");
+        let valueCode = this.generate(value, "value");
+        const isObjectLiteral = Array.isArray(value) && value[0] === "object";
+        if (!isObjectLiteral) {
+          valueCode = this.unwrap(valueCode);
+        }
         const needsParensForValue = context === "value";
         const needsParensForObject = context === "statement" && Array.isArray(target) && target[0] === "object";
         if (needsParensForValue || needsParensForObject) {
@@ -3923,7 +3927,8 @@ class CodeGenerator {
             }
           }
         }
-        return `${this.generate(arr, "value")}[${this.generate(index, "value")}]`;
+        const indexCode = this.unwrap(this.generate(index, "value"));
+        return `${this.generate(arr, "value")}[${indexCode}]`;
       }
       case "?[]": {
         const [arr, index] = rest;
@@ -4979,7 +4984,7 @@ ${this.indent()}}`;
           }
           return "super";
         }
-        const argsCode = rest.map((arg) => this.generate(arg, "value")).join(", ");
+        const argsCode = rest.map((arg) => this.unwrap(this.generate(arg, "value"))).join(", ");
         if (this.currentMethodName && this.currentMethodName !== "constructor") {
           return `super.${this.currentMethodName}(${argsCode})`;
         }
@@ -4992,7 +4997,7 @@ ${this.indent()}}`;
         return `(typeof ${fnCode} === 'function' ? ${fnCode}(${argsCode}) : undefined)`;
       }
       case "?super": {
-        const argsCode = rest.map((arg) => this.generate(arg, "value")).join(", ");
+        const argsCode = rest.map((arg) => this.unwrap(this.generate(arg, "value"))).join(", ");
         if (this.currentMethodName && this.currentMethodName !== "constructor") {
           return `(typeof super.${this.currentMethodName} === 'function' ? super.${this.currentMethodName}(${argsCode}) : undefined)`;
         }
@@ -5160,7 +5165,7 @@ export default ${target}`;
             return head;
           }
           if (head === "super" && this.currentMethodName && this.currentMethodName !== "constructor") {
-            const args2 = rest.map((arg) => this.generate(arg, "value")).join(", ");
+            const args2 = rest.map((arg) => this.unwrap(this.generate(arg, "value"))).join(", ");
             return `super.${this.currentMethodName}(${args2})`;
           }
           const findPostfixConditional = (expr) => {
@@ -5206,7 +5211,7 @@ export default ${target}`;
           }
           const needsAwait = headAwaitMetadata === true;
           const calleeName = this.generate(head, "value");
-          const args = rest.map((arg) => this.generate(arg, "value")).join(", ");
+          const args = rest.map((arg) => this.unwrap(this.generate(arg, "value"))).join(", ");
           const callStr = `${calleeName}(${args})`;
           return needsAwait ? `await ${callStr}` : callStr;
         }
@@ -5294,7 +5299,7 @@ export default ${target}`;
           } else {
             calleeCode = this.generate(head, "value");
           }
-          const args = rest.map((arg) => this.generate(arg, "value")).join(", ");
+          const args = rest.map((arg) => this.unwrap(this.generate(arg, "value"))).join(", ");
           const callStr = `${calleeCode}(${args})`;
           return needsAwait ? `await ${callStr}` : callStr;
         }
@@ -6876,8 +6881,8 @@ function compileToJS(source, options = {}) {
   return compiler.compileToJS(source);
 }
 // src/browser.js
-var VERSION = "1.3.11";
-var BUILD_DATE = "2025-11-07@00:29:40GMT";
+var VERSION = "1.3.12";
+var BUILD_DATE = "2025-11-07@03:05:08GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
