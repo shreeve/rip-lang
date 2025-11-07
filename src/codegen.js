@@ -2011,14 +2011,14 @@ export class CodeGenerator {
    */
   generateNot(head, rest, context, sexpr) {
     const [operand] = rest;
-    
+
     // Check operand TYPE at s-expression level (following Rip philosophy)
-    
+
     // Primitives (identifiers, numbers, keywords) - no parens needed
     if (typeof operand === 'string' || operand instanceof String) {
       return `!${this.generate(operand, 'value')}`;  // !x, !1, !true, !null
     }
-    
+
     // High-precedence s-expressions (property/array access) - no parens
     if (Array.isArray(operand)) {
       const type = operand[0];
@@ -2027,7 +2027,7 @@ export class CodeGenerator {
         return `!${this.generate(operand, 'value')}`;  // !obj.prop, !arr[0]
       }
     }
-    
+
     // Everything else - conservative (add parens for safety)
     const operandCode = this.generate(operand, 'value');
     if (operandCode.startsWith('(')) {
