@@ -141,4 +141,3 @@ Extract systematically, testing after each category:
 - [ ] No behavior changes (pure refactoring)
 - [ ] Performance doesn't regress
 - [ ] All 931 tests pass at end
-
