@@ -3155,7 +3155,7 @@ var parserInstance = {
     if (hash.recoverable)
       return this.trace(str);
     else {
-      line = hash.line || 1;
+      line = (hash.line || 0) + 1;
       col = hash.loc?.first_column || 0;
       token = hash.token ? ` (token: ${hash.token})` : "";
       text = hash.text ? ` near '${hash.text}'` : "";
@@ -3167,7 +3167,7 @@ var parserInstance = {
     }
   },
   parse(input) {
-    let EOF, TERROR, action, errStr, expected, len2, lex, lexer, loc, locFirst, locIndex, locLast, newState, p, parseTable, preErrorSymbol, r, ranges, recovering, sharedState, state, stk, symbol, val, yyleng, yylineno, yyloc, yytext, yyval;
+    let EOF, TERROR, action, errStr, expected, len2, lex, lexer, loc, locFirst, locLast, newState, p, parseTable, preErrorSymbol, r, ranges, recovering, sharedState, state, stk, symbol, val, yyleng, yylineno, yyloc, yytext, yyval;
     [stk, val, loc] = [[0], [null], []];
     [parseTable, yytext, yylineno, yyleng, recovering] = [this.parseTable, "", 0, 0, 0];
     [TERROR, EOF] = [2, 1];
@@ -3240,8 +3240,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         case 2:
           len2 = this.ruleData[action[1]][1];
           yyval.$ = val[val.length - len2];
-          locIndex = len2 || 1;
-          [locFirst, locLast] = [loc[loc.length - locIndex], loc[loc.length - 1]];
+          [locFirst, locLast] = [loc[loc.length - (len2 || 1)], loc[loc.length - 1]];
           yyval._$ = { first_line: locFirst.first_line, last_line: locLast.last_line, first_column: locFirst.first_column, last_column: locLast.last_column };
           if (ranges)
             yyval._$.range = [locFirst.range[0], locLast.range[1]];
@@ -3546,21 +3545,16 @@ class CodeGenerator {
         }
         const [left2, right2] = rest;
         if (head === "!?") {
-          const leftCode2 = this.generate(left2, "value");
-          const rightCode2 = this.generate(right2, "value");
-          return `(${leftCode2} !== undefined ? ${leftCode2} : ${rightCode2})`;
+          const leftCode = this.generate(left2, "value");
+          const rightCode = this.generate(right2, "value");
+          return `(${leftCode} !== undefined ? ${leftCode} : ${rightCode})`;
         }
         let op = head;
         if (head === "==")
           op = "===";
         if (head === "!=")
           op = "!==";
-        const leftCode = this.generate(left2, "value");
-        const rightCode = this.generate(right2, "value");
-        if (head === "&&" || head === "||" || head === "??") {
-          return `${leftCode} ${op} ${rightCode}`;
-        }
-        return `(${leftCode} ${op} ${rightCode})`;
+        return `(${this.generate(left2, "value")} ${op} ${this.generate(right2, "value")})`;
       }
       case "%%": {
         const [left2, right2] = rest;
@@ -6882,8 +6876,8 @@ function compileToJS(source, options = {}) {
   return compiler.compileToJS(source);
 }
 // src/browser.js
-var VERSION = "1.3.10";
-var BUILD_DATE = "2025-11-07@00:02:45GMT";
+var VERSION = "1.3.11";
+var BUILD_DATE = "2025-11-07@00:29:40GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

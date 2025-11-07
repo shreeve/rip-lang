@@ -5,6 +5,21 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.11] - 2025-11-07
+
+### Fixed
+- **Critical: Safe operator wrapping** - Reverted to conservative wrapping approach
+  - Always wrap `&&`, `||`, `??` operators by default (safe precedence)
+  - Unwrap only in guaranteed-safe contexts (if/while conditions)
+  - Prevents broken JavaScript: `arr[len - (x || 1)]` now preserves parens ✅
+  - Mixed precedence now safe: `a - (b || c)` preserves parens ✅
+
+### Changed
+- **Improved unwrapLogical()** - Better aggressive unwrapping for conditions
+  - `if (!isEmpty && isValid)` still clean in conditions ✅
+  - But never breaks precedence in mixed contexts ✅
+  - Best of both worlds: safety + readability
+
 ## [1.3.10] - 2025-11-06
 
 ### Changed
