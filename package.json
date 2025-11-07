@@ -15,7 +15,7 @@
     "./loader": "./rip-loader.ts"
   },
   "bin": {
-    "rip": "./bin/rip"
+    "rip": "bin/rip"
   },
   "files": [
     "bin/",
