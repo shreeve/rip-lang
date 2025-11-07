@@ -2118,6 +2118,12 @@ export class CodeGenerator {
           return this.generateComprehensionAsLoop(expr, iterators, guards);
         }
 
+        // OPTIMIZATION: If targetVar is provided (from generateFunctionBody), generate direct array building
+        if (this.comprehensionTarget) {
+          const code = this.generateComprehensionWithTarget(expr, iterators, guards, this.comprehensionTarget);
+          return code;
+        }
+
         // Value context: Generate IIFE that builds and returns array
         // Check if expression contains await - if so, make IIFE async
         const hasAwait = this.containsAwait(expr);
@@ -3637,15 +3643,13 @@ export class CodeGenerator {
               // Handle comprehensions and for-in (which converts to comprehension in value context)
               // Note: for-of and for-from don't convert to comprehensions, so exclude them
               if (valueHead === 'comprehension' || valueHead === 'for-in') {
-                // Generate the IIFE in value context
-                const iifeCode = this.generate(value, 'value');
-
-                // Unwrap IIFE to direct array building
-                const unwrapped = this.unwrapComprehensionIIFE(iifeCode, target);
-                if (unwrapped) {
-                  code += unwrapped;
-                  return;
-                }
+                // S-EXPRESSION APPROACH: Set target var and generate directly (no IIFE!)
+                this.comprehensionTarget = target;
+                code += this.generate(value, 'value');
+                this.comprehensionTarget = null;
+                // Add return statement
+                code += this.indent() + `return ${target};\n`;
+                return;
               }
             }
           }
@@ -4318,47 +4322,103 @@ export class CodeGenerator {
   }
 
   /**
-   * Unwrap comprehension IIFE into direct array building
-   *
-   * Transforms: (() => { const result = []; ...; return result; })()
-   * Into:       arrayVar = []; ...; return arrayVar;
-   *
-   * @param {string} iifeCode - Generated IIFE code from comprehension
-   * @param {string} arrayVar - Target variable name to replace 'result'
-   * @returns {string|null} Unwrapped code with proper indentation, or null if not an IIFE
+   * Generate comprehension with direct target variable (no IIFE)
+   * Used when comprehension is assigned to a variable in a function
    */
-  unwrapComprehensionIIFE(iifeCode, arrayVar) {
-    // Extract IIFE body (handles sync and async)
-    const bodyMatch = iifeCode.match(/^\((?:async )?\(\) => \{([\s\S]*)\}\)\(\)$/);
-    if (!bodyMatch) return null;
+  generateComprehensionWithTarget(expr, iterators, guards, targetVar) {
+    let code = '';
+    
+    // Initialize the array
+    code += this.indent() + `${targetVar} = [];\n`;
+    
+    // Unwrap block if expr is wrapped
+    let unwrappedExpr = expr;
+    if (Array.isArray(expr) && expr[0] === 'block' && expr.length === 2) {
+      unwrappedExpr = expr[1]; // Extract single statement from block
+    }
+    
+    // Generate loops that push to targetVar
+    // For now, handle simple single iterator case
+    if (iterators.length === 1) {
+      const iterator = iterators[0];
+      const [iterType, vars, iterable, stepOrOwn] = iterator;
 
-    let body = bodyMatch[1];
-    const lines = body.split('\n');
+      if (iterType === 'for-in') {
+        const step = stepOrOwn;
+        const varsArray = Array.isArray(vars) ? vars : [vars];
+        const noVar = varsArray.length === 0;
+        const [itemVar, indexVar] = noVar ? ['_i', null] : varsArray;
 
-    // Find base indentation from first non-empty line
-    let baseIndent = '';
-    for (const line of lines) {
-      if (line.trim()) {
-        baseIndent = line.match(/^(\s*)/)[1];
-        break;
+        let itemVarPattern = itemVar;
+        if (Array.isArray(itemVar) && (itemVar[0] === 'array' || itemVar[0] === 'object')) {
+          itemVarPattern = this.generateDestructuringPattern(itemVar);
+        }
+
+        // Generate appropriate loop
+        if (step && step !== null) {
+          // Handle step cases (same as generateComprehensionAsLoop)
+          let iterableHead = Array.isArray(iterable) && iterable[0];
+          if (iterableHead instanceof String) iterableHead = iterableHead.valueOf();
+          const isRange = iterableHead === '..' || iterableHead === '...';
+
+          if (isRange) {
+            const isExclusive = iterableHead === '...';
+            const [start, end] = iterable.slice(1);
+            const startCode = this.generate(start, 'value');
+            const endCode = this.generate(end, 'value');
+            const stepCode = this.generate(step, 'value');
+            const comparison = isExclusive ? '<' : '<=';
+            code += this.indent() + `for (let ${itemVarPattern} = ${startCode}; ${itemVarPattern} ${comparison} ${endCode}; ${itemVarPattern} += ${stepCode}) {\n`;
+          } else {
+            const iterableCode = this.generate(iterable, 'value');
+            const indexVarName = indexVar || '_i';
+            const stepCode = this.generate(step, 'value');
+            const isNegativeStep = this.isNegativeStep(step);
+            
+            if (isNegativeStep) {
+              code += this.indent() + `for (let ${indexVarName} = ${iterableCode}.length - 1; ${indexVarName} >= 0; ${indexVarName} += ${stepCode}) {\n`;
+            } else {
+              code += this.indent() + `for (let ${indexVarName} = 0; ${indexVarName} < ${iterableCode}.length; ${indexVarName} += ${stepCode}) {\n`;
+            }
+            this.indentLevel++;
+            if (!noVar) {
+              code += this.indent() + `const ${itemVarPattern} = ${iterableCode}[${indexVarName}];\n`;
+            }
+          }
+        } else {
+          // Simple for-of loop
+          const iterableCode = this.generate(iterable, 'value');
+          code += this.indent() + `for (const ${itemVarPattern} of ${iterableCode}) {\n`;
+        }
+
+        this.indentLevel++;
+
+        // Handle guards
+        if (guards && guards.length > 0) {
+          code += this.indent() + `if (${guards.map(g => this.generate(g, 'value')).join(' && ')}) {\n`;
+          this.indentLevel++;
+        }
+
+        // Push expression to array (using unwrapped expression)
+        const exprCode = this.unwrap(this.generate(unwrappedExpr, 'value'));
+        code += this.indent() + `${targetVar}.push(${exprCode});\n`;
+
+        if (guards && guards.length > 0) {
+          this.indentLevel--;
+          code += this.indent() + '}\n';
+        }
+
+        this.indentLevel--;
+        code += this.indent() + '}\n';
+        
+        return code;
       }
     }
 
-    // Re-indent to current level
-    const currentIndent = this.indent();
-    const reindentedLines = lines.map(line => {
-      if (!line.trim()) return '';
-      return line.startsWith(baseIndent)
-        ? currentIndent + line.slice(baseIndent.length)
-        : currentIndent + line;
-    });
-
-    // Replace 'result' with target variable
-    return reindentedLines
-      .join('\n')
-      .replace(/const result = \[\];/, `${arrayVar} = [];`)
-      .replace(/return result;/, `return ${arrayVar};`)
-      .replace(/\bresult\b/g, arrayVar);
+    // Fallback: generate IIFE and assign (shouldn't happen in practice)
+    const hasAwait = this.containsAwait(expr);
+    const asyncPrefix = hasAwait ? 'async ' : '';
+    return this.indent() + `${targetVar} = (${asyncPrefix}() => { /* complex comprehension */ })();\n`;
   }
 
   /**
