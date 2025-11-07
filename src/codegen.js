@@ -23,6 +23,54 @@ export class CodeGenerator {
     '>>>='
   ]);
 
+  // Generator dispatch table (O(1) lookup instead of O(n) switch)
+  // Maps s-expression head → method name
+  static GENERATORS = {
+    // Top level
+    'program': 'generateProgram',
+
+    // Logical operators (special - flatten chains)
+    '&&': 'generateLogicalAnd',
+    '||': 'generateLogicalOr',
+
+    // Binary operators (shared method)
+    '+': 'generateBinaryOp', '-': 'generateBinaryOp', '*': 'generateBinaryOp',
+    '/': 'generateBinaryOp', '%': 'generateBinaryOp', '**': 'generateBinaryOp',
+    '==': 'generateBinaryOp', '===': 'generateBinaryOp', '!=': 'generateBinaryOp',
+    '!==': 'generateBinaryOp', '<': 'generateBinaryOp', '>': 'generateBinaryOp',
+    '<=': 'generateBinaryOp', '>=': 'generateBinaryOp', '??': 'generateBinaryOp',
+    '!?': 'generateBinaryOp', '&': 'generateBinaryOp', '|': 'generateBinaryOp',
+    '^': 'generateBinaryOp', '<<': 'generateBinaryOp', '>>': 'generateBinaryOp',
+    '>>>': 'generateBinaryOp',
+
+    // Special operators (extracted)
+    '%%': 'generateModulo',
+    '//': 'generateFloorDiv',
+    '//=': 'generateFloorDivAssign',
+    '..': 'generateRange',
+    '...': 'generateRange',
+    '!': 'generateNot',
+    '~': 'generateBitwiseNot',
+    '++': 'generateIncDec',
+    '--': 'generateIncDec',
+    '=~': 'generateRegexMatch',
+    'instanceof': 'generateInstanceof',
+    'in': 'generateIn',
+    'of': 'generateOf',
+    'typeof': 'generateTypeof',
+    'delete': 'generateDelete',
+    'new': 'generateNew',
+
+    // Data structures
+    'array': 'generateArray',
+    'object': 'generateObject',
+    'block': 'generateBlock',
+    
+    // TODO: Extract remaining ~60 cases
+    // Property access, functions, control flow, classes, comprehensions, modules, etc.
+    // For now, these fall through to the switch statement
+  };
+
   constructor(options = {}) {
     this.options = options;
     this.indentLevel = 0;
@@ -383,263 +431,17 @@ export class CodeGenerator {
       head = head.valueOf();
     }
 
-    // Pattern matching on s-expression head
+    // Dispatch table lookup (O(1) instead of O(n) switch)
+    const generatorMethod = CodeGenerator.GENERATORS[head];
+    if (generatorMethod) {
+      return this[generatorMethod](head, rest, context, sexpr);
+    }
+
+    // Fallback: Handle function calls and remaining cases not yet in dispatch table
+    // Most operations are now handled by dispatch table above
     switch (head) {
-      //=====================================================================
-      // TOP LEVEL
-      //=====================================================================
 
-      case 'program':
-        return this.generateProgram(rest);
-
-      //=====================================================================
-      // OPERATORS - Binary (Arithmetic, Comparison, Logical, Bitwise)
-      //=====================================================================
-
-      case '&&':
-      case '||': {
-        // Logical operators: flatten nested chains for cleaner output
-        // Example: ["&&", ["&&", a, b], c] → ["&&", a, b, c] → a && b && c
-        const flattened = this.flattenBinaryChain(sexpr);
-        const operands = flattened.slice(1);
-
-        if (operands.length === 0) {
-          return 'true'; // Edge case: empty chain
-        }
-
-        if (operands.length === 1) {
-          return this.generate(operands[0], 'value');
-        }
-
-        // Generate flat chain: (a && b && c)
-        const parts = operands.map(op => this.generate(op, 'value'));
-        return `(${parts.join(` ${head} `)})`;
-      }
-
-      case '+':
-      case '-':
-      case '*':
-      case '/':
-      case '%':
-      case '**':
-      case '==':
-      case '===':  // Allow explicit strict equality
-      case '!=':
-      case '!==':  // Allow explicit strict inequality
-      case '<':
-      case '>':
-      case '<=':
-      case '>=':
-      case '??':
-      case '!?':
-      case '&':
-      case '|':
-      case '^':
-      case '<<':
-      case '>>':
-      case '>>>': {
-        // Binary operators: [op, left, right] → (left op right)
-        // Special case: +/- can also be unary
-        if ((head === '+' || head === '-') && rest.length === 1) {
-          // Unary plus or minus
-          const [operand] = rest;
-          return `(${head}${this.generate(operand, 'value')})`;
-        }
-
-        // Binary operation (all operators)
-        const [left, right] = rest;
-
-        // Special case: Otherwise operator (!?) - undefined-only coalescing
-        // Pattern: a !? b → (a !== undefined ? a : b)
-        if (head === '!?') {
-          const leftCode = this.generate(left, 'value');
-          const rightCode = this.generate(right, 'value');
-          return `(${leftCode} !== undefined ? ${leftCode} : ${rightCode})`;
-        }
-
-        // Always use strict equality (CoffeeScript compatibility)
-        // == → ===, != → !==, === → ===, !== → !==
-        let op = head;
-        if (head === '==') op = '===';
-        if (head === '!=') op = '!==';
-        // === and !== pass through as-is
-
-        return `(${this.generate(left, 'value')} ${op} ${this.generate(right, 'value')})`;
-      }
-
-      case '%%': {
-        // Modulo operator (different from %)
-        // % is remainder (preserves sign): -7 % 5 = -2
-        // %% is modulo (always positive): -7 %% 5 = 3
-        // Uses helper function: modulo(n, d) = (n % d + d) % d with type coercion
-        const [left, right] = rest;
-        const leftCode = this.generate(left, 'value');
-        const rightCode = this.generate(right, 'value');
-
-        // Mark that we need the modulo helper function
-        this.helpers.add('modulo');
-
-        return `modulo(${leftCode}, ${rightCode})`;
-      }
-
-      case '//': {
-        // Floor division: 7 // 2 → Math.floor(7 / 2)
-        const [left, right] = rest;
-        return `Math.floor(${this.generate(left, 'value')} / ${this.generate(right, 'value')})`;
-      }
-
-      //=====================================================================
-      // OPERATORS - Ranges
-      //=====================================================================
-
-      case '..': {
-        // Inclusive range: ["..", start, end]
-        const [start, end] = rest;
-        const startCode = this.generate(start, 'value');
-        const endCode = this.generate(end, 'value');
-        // Handle both forward and reverse ranges
-        return `((s, e) => Array.from({length: Math.abs(e - s) + 1}, (_, i) => s + (i * (s <= e ? 1 : -1))))(${startCode}, ${endCode})`;
-      }
-
-      case '...': {
-        // Two uses of ...:
-        // 1. Exclusive range: ["...", start, end] (2 args)
-        // 2. Spread operator: ["...", expression] (1 arg)
-        if (rest.length === 2) {
-          // Exclusive range - handle both forward and reverse
-          const [start, end] = rest;
-          const startCode = this.generate(start, 'value');
-          const endCode = this.generate(end, 'value');
-          return `((s, e) => Array.from({length: Math.max(0, Math.abs(e - s))}, (_, i) => s + (i * (s <= e ? 1 : -1))))(${startCode}, ${endCode})`;
-        }
-        // Spread operator
-        const [expr] = rest;
-        return `...${this.generate(expr, 'value')}`;
-      }
-
-
-      case '!': {
-        // Logical NOT (unary)
-        const [operand] = rest;
-        const operandCode = this.generate(operand, 'value');
-
-        // Add parens if operand is complex (contains operators or spaces)
-        // Simple identifier/literal: !x, !true → !x
-        // Complex expression: !(x < 5), !(a && b) → (!(a && b))
-        const needsParens = operandCode.includes('(') || operandCode.includes(' ');
-
-        return needsParens ? `(!(${operandCode}))` : `!${operandCode}`;
-      }
-
-      case 'new': {
-        // New operator: ["new", [constructor, ...args]]
-        // Special case: parser may give ["new", [".", ["Constructor"], "prop"]]
-        // for "new Constructor().prop" which should be "(new Constructor()).prop"
-        const [call] = rest;
-
-        // Check if call is a property access
-        // Pattern: ["new", [".", "obj", "klass"]] → new obj.klass
-        // Need to determine if this is:
-        //   1. new obj.klass - instantiate the class at obj.klass
-        //   2. (new obj()).klass - instantiate obj, then access klass property
-        // Parser gives us pattern 1, which is what we want most of the time
-        if (Array.isArray(call) && (call[0] === '.' || call[0] === '?.')) {
-          const [accessType, target, prop] = call;
-
-          // Check if target is itself a function call
-          if (Array.isArray(target) && !target[0].startsWith) {
-            // Target is a function call like ["fn", args]
-            // Pattern: new fn().prop → (new fn()).prop
-            const newExpr = this.generate(['new', target], 'value');
-            return `(${newExpr}).${prop}`;
-          }
-
-          // Target is simple (identifier or property access)
-          // Pattern: new obj.klass → new (obj.klass) or new obj.klass
-          const targetCode = this.generate(target, 'value');
-          const propAccess = `${targetCode}.${prop}`;
-          return `new ${propAccess}`;
-        }
-
-        if (Array.isArray(call)) {
-          const [constructor, ...args] = call;
-          const constructorCode = this.generate(constructor, 'value');
-          const argsCode = args.map(arg => this.unwrap(this.generate(arg, 'value'))).join(', ');
-          return `new ${constructorCode}(${argsCode})`;
-        }
-        // Fallback: just the constructor without args
-        return `new ${this.generate(call, 'value')}()`;
-      }
-
-      //=====================================================================
-      // OPERATORS - Unary
-      //=====================================================================
-
-      case '~': {
-        // Bitwise NOT (unary)
-        const [operand] = rest;
-        return `(~${this.generate(operand, 'value')})`;
-      }
-
-      case '++':
-      case '--': {
-        // Increment/Decrement: ["++", operand, isPostfix]
-        // Prefix: ["++", x, false] → ++x
-        // Postfix: ["++", x, true] → x++
-        const [operand, isPostfix] = rest;
-        const operandCode = this.generate(operand, 'value');
-
-        if (isPostfix) {
-          return `(${operandCode}${head})`;  // x++
-        } else {
-          return `(${head}${operandCode})`;  // ++x
-        }
-      }
-
-      case 'instanceof': {
-        // Instanceof operator: ["instanceof", expr, type]
-        const [expr, type] = rest;
-        return `(${this.generate(expr, 'value')} instanceof ${this.generate(type, 'value')})`;
-      }
-
-      case 'in': {
-        // CoffeeScript 'in' operator has dual behavior:
-        // - value in array → array.includes(value)
-        // - value in string → string.includes(value)
-        // - prop in object → (prop in object)
-        // Use runtime check to determine which approach
-        const [value, container] = rest;
-        const valueCode = this.generate(value, 'value');
-        const containerCode = this.generate(container, 'value');
-
-        // Runtime check: if array or string, use .includes(), otherwise use JavaScript's 'in'
-        return `(Array.isArray(${containerCode}) || typeof ${containerCode} === 'string' ? ${containerCode}.includes(${valueCode}) : (${valueCode} in ${containerCode}))`;
-      }
-
-      case 'of': {
-        // CoffeeScript 'of' operator: check if property is in object
-        // Pattern: key of object → key in object (JavaScript's 'in')
-        const [key, obj] = rest;
-        return `(${this.generate(key, 'value')} in ${this.generate(obj, 'value')})`;
-      }
-
-      case '=~': {
-        // Regex match operator: text =~ /pattern/
-        // Executes: (_ = toSearchable(text).match(/pattern/))
-        // Stores match result in _ for further use
-        const [left, right] = rest;
-
-        // Mark that we need the toSearchable helper and _ variable
-        this.helpers.add('toSearchable');
-        this.programVars.add('_');
-
-        // Check if regex has 'm' flag (multiline) to allow newlines in toSearchable
-        const rightCode = this.generate(right, 'value');
-        const hasMultilineFlag = rightCode.includes('/m');
-        const allowNewlines = hasMultilineFlag ? ', true' : '';
-
-        return `(_ = toSearchable(${this.generate(left, 'value')}${allowNewlines}).match(${rightCode}))`;
-      }
+      // TODO: Extract these remaining ~60 cases to dispatch table
 
       //=====================================================================
       // ASSIGNMENT
@@ -661,316 +463,22 @@ export class CodeGenerator {
       case '^=':
       case '<<=':
       case '>>=':
-      case '>>>=': {
-        // Assignment operators
-        const [target, value] = rest;
-        // Map ?= to ??= for simplicity (close semantics)
-        const op = head === '?=' ? '??=' : head;
+      case '>>>=':
+        return this.generateAssignment(head, rest, context, sexpr);
 
-        // VALIDATION: Prevent async sigils in assignment targets
-        // ! and & are for call-sites only, not variable names
-        // EXCEPTION: Allow ! sigil when assigning a function (void function syntax)
-        const isFunctionValue = Array.isArray(value) && (value[0] === '->' || value[0] === '=>' || value[0] === 'def');
-        if (target instanceof String && target.await !== undefined && !isFunctionValue) {
-          const sigil = target.await === true ? '!' : '&';
-          throw new Error(`Cannot use ${sigil} sigil in variable declaration '${target.valueOf()}'. Sigils are only for call-sites.`);
-        }
-
-        // If target has ! sigil and value is a function, mark it as side-effect only
-        const targetHasVoidSigil = target instanceof String && target.await === true;
-        if (targetHasVoidSigil && isFunctionValue) {
-          // Store the void flag so arrow functions can pick it up
-          this.nextFunctionIsVoid = true;
-        }
-
-        // Check for empty destructuring patterns - just evaluate RHS
-        const isEmptyArray = Array.isArray(target) && target[0] === 'array' && target.length === 1;
-        const isEmptyObject = Array.isArray(target) && target[0] === 'object' && target.length === 1;
-
-        if (isEmptyArray || isEmptyObject) {
-          // Empty destructuring: just evaluate the value for side effects
-          const valueCode = this.generate(value, 'value');
-          // Wrap objects in parens to avoid being interpreted as block statement
-          if (isEmptyObject && context === 'statement') {
-            return `(${valueCode})`;
-          }
-          return valueCode;
-        }
-
-        // Check for middle/leading rest in array destructuring
-        if (Array.isArray(target) && target[0] === 'array') {
-          const restIndex = target.slice(1).findIndex(el =>
-            Array.isArray(el) && el[0] === '...' ||
-            el === '...'  // Bare rest marker
-          );
-
-          if (restIndex !== -1 && restIndex < target.length - 2) {
-            // Rest is not at end - need splice approach
-            const elements = target.slice(1);
-            const elementsAfterRest = elements.slice(restIndex + 1);
-
-            // Count how many elements (including elisions) after rest
-            const afterCount = elementsAfterRest.length;
-
-            if (afterCount > 0) {
-              // Generate multi-statement destructuring
-              const valueCode = this.generate(value, 'value');
-
-              // Build pattern for everything UP TO rest (not including it)
-              const beforeRest = elements.slice(0, restIndex);
-              const beforePattern = beforeRest.map(el => {
-                if (el === ',') return '';
-                if (typeof el === 'string') return el;
-                return this.generate(el, 'value');
-              }).join(', ');
-
-              // Build pattern for elements after rest
-              const afterPattern = elementsAfterRest.map(el => {
-                if (el === ',') return '';
-                if (typeof el === 'string') return el;
-                return this.generate(el, 'value');
-              }).join(', ');
-
-              // Need slice helper
-              this.helpers.add('slice');
-
-              // Collect variables from destructuring pattern for hoisting
-              const collectVars = (els) => {
-                els.forEach(el => {
-                  if (el === ',' || el === '...') return;
-                  if (typeof el === 'string') this.programVars.add(el);
-                  else if (Array.isArray(el) && el[0] === '...') {
-                    if (typeof el[1] === 'string') this.programVars.add(el[1]);
-                  }
-                });
-              };
-              collectVars(elements);
-
-              // Get the rest variable name
-              const restElement = elements[restIndex];
-              const restVarName = Array.isArray(restElement) && restElement[0] === '...'
-                ? restElement[1]
-                : null;
-
-              const statements = [];
-
-              // First: destructure before rest (if any)
-              if (beforePattern) {
-                statements.push(`[${beforePattern}] = ${valueCode}`);
-              }
-
-              // Second: assign rest variable (the middle portion)
-              if (restVarName) {
-                statements.push(`[...${restVarName}] = ${valueCode}.slice(${restIndex}, -${afterCount})`);
-              }
-
-              // Third: destructure after rest
-              statements.push(`[${afterPattern}] = slice.call(${valueCode}, -${afterCount})`);
-
-              // Return comma-separated statements
-              return statements.join(', ');
-            }
-          }
-        }
-
-        // Special case: postfix if/unless on assignment with || operator
-        // Pattern: x = a or b unless cond → parser groups as: x = (a || (b unless cond))
-        // Should generate: if (!cond) { x = a || b }
-        // Not: x = a || (unless cond then b else undefined)
-        if (context === 'statement' && head === '=' && Array.isArray(value) &&
-            (value[0] === '||' || value[0] === '&&') && value.length === 3) {
-          const [binaryOp, left, right] = value;
-
-          // Check if right operand is postfix unless/if
-          if (Array.isArray(right) && (right[0] === 'unless' || right[0] === 'if') && right.length === 3) {
-            const [condType, condition, wrappedValue] = right;
-            // Unwrap the value
-            const unwrappedValue = Array.isArray(wrappedValue) && wrappedValue.length === 1 ? wrappedValue[0] : wrappedValue;
-
-            // Reconstruct the full binary expression without the conditional
-            const fullValue = [binaryOp, left, unwrappedValue];
-            const targetCode = this.generate(target, 'value');
-            const condCode = this.generate(condition, 'value');
-            const valueCode = this.generate(fullValue, 'value');
-
-            if (condType === 'unless') {
-              return `if (!${condCode}) ${targetCode} = ${valueCode}`;
-            } else {
-              return `if (${condCode}) ${targetCode} = ${valueCode}`;
-            }
-          }
-        }
-
-        // Special case: postfix if/unless on assignment (WITHOUT else clause)
-        // Pattern: x = 5 unless cond → if (!cond) x = 5;
-        // This prevents the broken ternary: x = (!cond ? 5 : undefined)
-        // IMPORTANT: Only for POSTFIX (simple body) - prefix if/else should use ternary!
-        if (context === 'statement' && head === '=' && Array.isArray(value) && value.length === 3) {
-          const valueHead = value[0];
-          const [_, condition, actualValue] = value;
-
-          // Check if this is POSTFIX (simple body, not a block)
-          // Postfix: x = 5 if cond → ["unless", cond, ["5"]] (array wrapping single value)
-          // Prefix:  x = if cond then 5 → ["if", cond, ["block", "5"]] (block wrapper)
-          const isPostfix = Array.isArray(actualValue) &&
-                           actualValue.length === 1 &&
-                           (!Array.isArray(actualValue[0]) || actualValue[0][0] !== 'block');
-
-          if ((valueHead === 'unless' || valueHead === 'if') && isPostfix) {
-            // Unwrap array body (postfix wraps value in array)
-            let unwrappedValue = actualValue;
-            // Unwrap one level: [["object"]] → ["object"], ["5"] → "5"
-            if (Array.isArray(actualValue) && actualValue.length === 1) {
-              unwrappedValue = actualValue[0];
-            }
-
-            const targetCode = this.generate(target, 'value');
-            let condCode = this.unwrapLogical(this.generate(condition, 'value'));
-            const valueCode = this.generate(unwrappedValue, 'value');
-
-            if (valueHead === 'unless') {
-              // Re-wrap for negation if needed for precedence
-              if (condCode.includes(' ') || condCode.includes('===') || condCode.includes('!==') ||
-                  condCode.includes('>') || condCode.includes('<') || condCode.includes('&&') || condCode.includes('||')) {
-                condCode = `(${condCode})`;
-              }
-              return `if (!${condCode}) ${targetCode} = ${valueCode}`;
-            } else {
-              return `if (${condCode}) ${targetCode} = ${valueCode}`;
-            }
-          }
-        }
-
-        // Generate target code (strip ! sigil metadata for assignment LHS)
-        let targetCode;
-        if (target instanceof String && target.await !== undefined) {
-          // Target has sigil - just use the clean name (don't apply dammit operator)
-          targetCode = target.valueOf();
-        } else {
-          targetCode = this.generate(target, 'value');
-        }
-
-        let valueCode = this.generate(value, 'value');
-
-        // Unwrap value in assignment context (= is already a delimiter)
-        // BUT keep parens for object literals to avoid ambiguity with blocks
-        const isObjectLiteral = Array.isArray(value) && value[0] === 'object';
-        if (!isObjectLiteral) {
-          valueCode = this.unwrap(valueCode);
-        }
-
-        // Assignments need parens when used as sub-expressions (in value context)
-        // Exception: Top-level assignment in assignment chain (a = b = c) doesn't need parens
-        const needsParensForValue = context === 'value';
-
-        // Object destructuring requires parens in statement context
-        // ({x, y} = obj) not {x, y} = obj
-        const needsParensForObject = context === 'statement' && Array.isArray(target) && target[0] === 'object';
-
-        if (needsParensForValue || needsParensForObject) {
-          return `(${targetCode} ${op} ${valueCode})`;
-        }
-
-        return `${targetCode} ${op} ${valueCode}`;
-      }
-
-      case '//=': {
-        // Floor division assignment: x //= 2 → x = Math.floor(x / 2)
-        const [target, value] = rest;
-        const targetCode = this.generate(target, 'value');
-        const valueCode = this.generate(value, 'value');
-        return `${targetCode} = Math.floor(${targetCode} / ${valueCode})`;
-      }
+      case '//=':
+        return this.generateFloorDivAssign(head, rest, context, sexpr);
 
       //=====================================================================
       // DATA STRUCTURES
       //=====================================================================
 
-      case 'array': {
-        // Array literal: ["array", ...elements]
-        // Check if last element is an elision that needs to be preserved
-        const hasTrailingElision = rest.length > 0 && rest[rest.length - 1] === ',';
+      case 'array':
+        return this.generateArray(head, rest, context, sexpr);
 
-        const elements = rest.map(el => {
-          // Comma token represents elision (hole) - preserve as empty
-          if (el === ',') {
-            return '';  // Empty string will create elision when joined
-          }
-          // Bare spread marker without variable (expansion marker) - skip in output
-          if (el === '...') {
-            return '';  // Will create hole, but that's intentional for expansion
-          }
-          // Check for spread with variable: ["...", expr]
-          if (Array.isArray(el) && el[0] === '...') {
-            return `...${this.generate(el[1], 'value')}`;
-          }
-          return this.generate(el, 'value');
-        }).join(', ');
+      case 'object':
+        return this.generateObject(head, rest, context, sexpr);
 
-        // If the last element was an elision, we need to add an extra comma
-        // because join() creates a trailing comma that JavaScript ignores
-        return hasTrailingElision ? `[${elements},]` : `[${elements}]`;
-      }
-
-      case 'object': {
-        // Object literal: ["object", [key, value, operator], [key, value, operator], ...]
-        // OR Object comprehension (disguised): ["object", [key, ["comprehension", ...]]]
-        // operator can be: ':', '=', or null (for shorthand)
-
-        // Check if this is actually an object comprehension
-        if (rest.length === 1 && Array.isArray(rest[0]) &&
-            Array.isArray(rest[0][1]) && rest[0][1][0] === 'comprehension') {
-          // Object comprehension pattern: ["object", [keyVar, ["comprehension", valueExpr, iterators, guards]]]
-          const [keyVar, comprehensionNode] = rest[0];
-          const [, valueExpr, iterators, guards] = comprehensionNode;
-
-          // Convert to object-comprehension
-          return this.generate(['object-comprehension', keyVar, valueExpr, iterators, guards], context);
-        }
-
-        // Regular object literal
-        const pairs = rest.map(pair => {
-          // Check for spread/rest: ["...", expr] (not a key-value pair)
-          if (Array.isArray(pair) && pair[0] === '...') {
-            // Spread/rest operator
-            return `...${this.generate(pair[1], 'value')}`;
-          }
-
-          // All regular pairs now have format: [key, value, operator]
-          const [key, value, operator] = pair;
-
-          // Check if key is computed: ["computed", expression]
-          let keyCode;
-          if (Array.isArray(key) && key[0] === 'computed') {
-            // Computed property: [expr] syntax
-            const expr = key[1];
-            keyCode = `[${this.generate(expr, 'value')}]`;
-          } else {
-            // Regular key (string or identifier)
-            keyCode = this.generate(key, 'value');
-          }
-
-          const valueCode = this.generate(value, 'value');
-
-          // Handle different operators
-          if (operator === '=') {
-            // Destructuring with default: {a = 5}
-            return `${keyCode} = ${valueCode}`;
-          } else if (operator === ':') {
-            // Explicit property: {a: 5}
-            return `${keyCode}: ${valueCode}`;
-          } else {
-            // operator is null/undefined - shorthand or inferred
-            // Shorthand property syntax: {name} instead of {name: name}
-            if (keyCode === valueCode && !Array.isArray(key)) {
-              return keyCode;
-            }
-            return `${keyCode}: ${valueCode}`;
-          }
-        }).join(', ');
-
-        return `{${pairs}}`;
-      }
 
       //=====================================================================
       // PROPERTY ACCESS
@@ -1304,11 +812,8 @@ export class CodeGenerator {
         return `return ${this.generate(expr, 'value')}`;
       }
 
-      case 'block': {
-        // Statement block: ["block", ...statements]
-        const stmts = this.withIndent(() => this.formatStatements(rest));
-        return `{\n${stmts.join('\n')}\n${this.indent()}}`;
-      }
+      case 'block':
+        return this.generateBlock(rest, context, sexpr);
 
       //=====================================================================
       // CONTROL FLOW
@@ -3147,7 +2652,16 @@ export class CodeGenerator {
    * Generate program (top-level)
    * Pattern: ["program", ...statements]
    */
-  generateProgram(statements) {
+  //===========================================================================
+  // EXTRACTED GENERATORS (from generate() method)
+  // Organized by category for clarity
+  //===========================================================================
+
+  //-------------------------------------------------------------------------
+  // TOP LEVEL
+  //-------------------------------------------------------------------------
+
+  generateProgram(head, statements, context, sexpr) {
     let code = '';
 
     // Separate imports/exports from other statements (ES6 modules require imports at top)
@@ -3295,6 +2809,599 @@ export class CodeGenerator {
 
     return code;
   }
+
+  //-------------------------------------------------------------------------
+  // OPERATORS - Binary
+  //-------------------------------------------------------------------------
+
+  /**
+   * Generate binary operators (arithmetic, comparison, bitwise, coalescing)
+   * Shared method for: +, -, *, /, %, **, ==, !=, <, >, <=, >=, ??, !?, &, |, ^, <<, >>, >>>
+   * Pattern: [op, left, right] → (left op right)
+   */
+  generateBinaryOp(op, rest, context, sexpr) {
+    // Special case: +/- can also be unary
+    if ((op === '+' || op === '-') && rest.length === 1) {
+      const [operand] = rest;
+      return `(${op}${this.generate(operand, 'value')})`;
+    }
+
+    // Binary operation
+    const [left, right] = rest;
+
+    // Special case: Otherwise operator (!?) - undefined-only coalescing
+    // Pattern: a !? b → (a !== undefined ? a : b)
+    if (op === '!?') {
+      const leftCode = this.generate(left, 'value');
+      const rightCode = this.generate(right, 'value');
+      return `(${leftCode} !== undefined ? ${leftCode} : ${rightCode})`;
+    }
+
+    // Always use strict equality (CoffeeScript compatibility)
+    // == → ===, != → !==
+    if (op === '==') op = '===';
+    if (op === '!=') op = '!==';
+
+    return `(${this.generate(left, 'value')} ${op} ${this.generate(right, 'value')})`;
+  }
+
+  /**
+   * Generate modulo operator (%%)
+   * Pattern: ["%%", left, right] → modulo(left, right)
+   */
+  generateModulo(head, rest, context, sexpr) {
+    const [left, right] = rest;
+    this.helpers.add('modulo');
+    return `modulo(${this.generate(left, 'value')}, ${this.generate(right, 'value')})`;
+  }
+
+  /**
+   * Generate floor division (//)
+   * Pattern: ["//", left, right] → Math.floor(left / right)
+   */
+  generateFloorDiv(head, rest, context, sexpr) {
+    const [left, right] = rest;
+    return `Math.floor(${this.generate(left, 'value')} / ${this.generate(right, 'value')})`;
+  }
+
+  /**
+   * Generate floor division assignment (//=)
+   * Pattern: ["//=", target, value] → target = Math.floor(target / value)
+   */
+  generateFloorDivAssign(head, rest, context, sexpr) {
+    const [target, value] = rest;
+    const targetCode = this.generate(target, 'value');
+    const valueCode = this.generate(value, 'value');
+    return `${targetCode} = Math.floor(${targetCode} / ${valueCode})`;
+  }
+
+  //-------------------------------------------------------------------------
+  // ASSIGNMENT OPERATORS
+  //-------------------------------------------------------------------------
+
+  /**
+   * Generate assignment operators (=, +=, -=, etc.)
+   * Pattern: ["=", target, value] or ["+=", target, value], etc.
+   * This is one of the most complex generators due to special cases
+   */
+  generateAssignment(head, rest, context, sexpr) {
+    const [target, value] = rest;
+    // Map ?= to ??= for simplicity (close semantics)
+    const op = head === '?=' ? '??=' : head;
+
+    // VALIDATION: Prevent async sigils in assignment targets
+    // ! and & are for call-sites only, not variable names
+    // EXCEPTION: Allow ! sigil when assigning a function (void function syntax)
+    const isFunctionValue = Array.isArray(value) && (value[0] === '->' || value[0] === '=>' || value[0] === 'def');
+    if (target instanceof String && target.await !== undefined && !isFunctionValue) {
+      const sigil = target.await === true ? '!' : '&';
+      throw new Error(`Cannot use ${sigil} sigil in variable declaration '${target.valueOf()}'. Sigils are only for call-sites.`);
+    }
+
+    // If target has ! sigil and value is a function, mark it as side-effect only
+    const targetHasVoidSigil = target instanceof String && target.await === true;
+    if (targetHasVoidSigil && isFunctionValue) {
+      // Store the void flag so arrow functions can pick it up
+      this.nextFunctionIsVoid = true;
+    }
+
+    // Check for empty destructuring patterns - just evaluate RHS
+    const isEmptyArray = Array.isArray(target) && target[0] === 'array' && target.length === 1;
+    const isEmptyObject = Array.isArray(target) && target[0] === 'object' && target.length === 1;
+
+    if (isEmptyArray || isEmptyObject) {
+      // Empty destructuring: just evaluate the value for side effects
+      const valueCode = this.generate(value, 'value');
+      // Wrap objects in parens to avoid being interpreted as block statement
+      if (isEmptyObject && context === 'statement') {
+        return `(${valueCode})`;
+      }
+      return valueCode;
+    }
+
+    // Check for middle/leading rest in array destructuring
+    if (Array.isArray(target) && target[0] === 'array') {
+      const restIndex = target.slice(1).findIndex(el =>
+        Array.isArray(el) && el[0] === '...' ||
+        el === '...'  // Bare rest marker
+      );
+
+      if (restIndex !== -1 && restIndex < target.length - 2) {
+        // Rest is not at end - need splice approach
+        const elements = target.slice(1);
+        const elementsAfterRest = elements.slice(restIndex + 1);
+
+        // Count how many elements (including elisions) after rest
+        const afterCount = elementsAfterRest.length;
+
+        if (afterCount > 0) {
+          // Generate multi-statement destructuring
+          const valueCode = this.generate(value, 'value');
+
+          // Build pattern for everything UP TO rest (not including it)
+          const beforeRest = elements.slice(0, restIndex);
+          const beforePattern = beforeRest.map(el => {
+            if (el === ',') return '';
+            if (typeof el === 'string') return el;
+            return this.generate(el, 'value');
+          }).join(', ');
+
+          // Build pattern for elements after rest
+          const afterPattern = elementsAfterRest.map(el => {
+            if (el === ',') return '';
+            if (typeof el === 'string') return el;
+            return this.generate(el, 'value');
+          }).join(', ');
+
+          // Need slice helper
+          this.helpers.add('slice');
+
+          // Collect variables from destructuring pattern for hoisting
+          const collectVars = (els) => {
+            els.forEach(el => {
+              if (el === ',' || el === '...') return;
+              if (typeof el === 'string') this.programVars.add(el);
+              else if (Array.isArray(el) && el[0] === '...') {
+                if (typeof el[1] === 'string') this.programVars.add(el[1]);
+              }
+            });
+          };
+          collectVars(elements);
+
+          // Get the rest variable name
+          const restElement = elements[restIndex];
+          const restVarName = Array.isArray(restElement) && restElement[0] === '...'
+            ? restElement[1]
+            : null;
+
+          const statements = [];
+
+          // First: destructure before rest (if any)
+          if (beforePattern) {
+            statements.push(`[${beforePattern}] = ${valueCode}`);
+          }
+
+          // Second: assign rest variable (the middle portion)
+          if (restVarName) {
+            statements.push(`[...${restVarName}] = ${valueCode}.slice(${restIndex}, -${afterCount})`);
+          }
+
+          // Third: destructure after rest
+          statements.push(`[${afterPattern}] = slice.call(${valueCode}, -${afterCount})`);
+
+          // Return comma-separated statements
+          return statements.join(', ');
+        }
+      }
+    }
+
+    // Special case: postfix if/unless on assignment with || operator
+    // Pattern: x = a or b unless cond → parser groups as: x = (a || (b unless cond))
+    // Should generate: if (!cond) { x = a || b }
+    // Not: x = a || (unless cond then b else undefined)
+    if (context === 'statement' && head === '=' && Array.isArray(value) &&
+        (value[0] === '||' || value[0] === '&&') && value.length === 3) {
+      const [binaryOp, left, right] = value;
+
+      // Check if right operand is postfix unless/if
+      if (Array.isArray(right) && (right[0] === 'unless' || right[0] === 'if') && right.length === 3) {
+        const [condType, condition, wrappedValue] = right;
+        // Unwrap the value
+        const unwrappedValue = Array.isArray(wrappedValue) && wrappedValue.length === 1 ? wrappedValue[0] : wrappedValue;
+
+        // Reconstruct the full binary expression without the conditional
+        const fullValue = [binaryOp, left, unwrappedValue];
+        const targetCode = this.generate(target, 'value');
+        const condCode = this.generate(condition, 'value');
+        const valueCode = this.generate(fullValue, 'value');
+
+        if (condType === 'unless') {
+          return `if (!${condCode}) ${targetCode} = ${valueCode}`;
+        } else {
+          return `if (${condCode}) ${targetCode} = ${valueCode}`;
+        }
+      }
+    }
+
+    // Special case: postfix if/unless on assignment (WITHOUT else clause)
+    // Pattern: x = 5 unless cond → if (!cond) x = 5;
+    // This prevents the broken ternary: x = (!cond ? 5 : undefined)
+    // IMPORTANT: Only for POSTFIX (simple body) - prefix if/else should use ternary!
+    if (context === 'statement' && head === '=' && Array.isArray(value) && value.length === 3) {
+      const valueHead = value[0];
+      const [_, condition, actualValue] = value;
+
+      // Check if this is POSTFIX (simple body, not a block)
+      // Postfix: x = 5 if cond → ["unless", cond, ["5"]] (array wrapping single value)
+      // Prefix:  x = if cond then 5 → ["if", cond, ["block", "5"]] (block wrapper)
+      const isPostfix = Array.isArray(actualValue) &&
+                       actualValue.length === 1 &&
+                       (!Array.isArray(actualValue[0]) || actualValue[0][0] !== 'block');
+
+      if ((valueHead === 'unless' || valueHead === 'if') && isPostfix) {
+        // Unwrap array body (postfix wraps value in array)
+        let unwrappedValue = actualValue;
+        // Unwrap one level: [["object"]] → ["object"], ["5"] → "5"
+        if (Array.isArray(actualValue) && actualValue.length === 1) {
+          unwrappedValue = actualValue[0];
+        }
+
+        const targetCode = this.generate(target, 'value');
+        let condCode = this.unwrapLogical(this.generate(condition, 'value'));
+        const valueCode = this.generate(unwrappedValue, 'value');
+
+        if (valueHead === 'unless') {
+          // Re-wrap for negation if needed for precedence
+          if (condCode.includes(' ') || condCode.includes('===') || condCode.includes('!==') ||
+              condCode.includes('>') || condCode.includes('<') || condCode.includes('&&') || condCode.includes('||')) {
+            condCode = `(${condCode})`;
+          }
+          return `if (!${condCode}) ${targetCode} = ${valueCode}`;
+        } else {
+          return `if (${condCode}) ${targetCode} = ${valueCode}`;
+        }
+      }
+    }
+
+    // Generate target code (strip ! sigil metadata for assignment LHS)
+    let targetCode;
+    if (target instanceof String && target.await !== undefined) {
+      // Target has sigil - just use the clean name (don't apply dammit operator)
+      targetCode = target.valueOf();
+    } else {
+      targetCode = this.generate(target, 'value');
+    }
+
+    let valueCode = this.generate(value, 'value');
+
+    // Unwrap value in assignment context (= is already a delimiter)
+    // BUT keep parens for object literals to avoid ambiguity with blocks
+    const isObjectLiteral = Array.isArray(value) && value[0] === 'object';
+    if (!isObjectLiteral) {
+      valueCode = this.unwrap(valueCode);
+    }
+
+    // Assignments need parens when used as sub-expressions (in value context)
+    // Exception: Top-level assignment in assignment chain (a = b = c) doesn't need parens
+    const needsParensForValue = context === 'value';
+
+    // Object destructuring requires parens in statement context
+    // ({x, y} = obj) not {x, y} = obj
+    const needsParensForObject = context === 'statement' && Array.isArray(target) && target[0] === 'object';
+
+    if (needsParensForValue || needsParensForObject) {
+      return `(${targetCode} ${op} ${valueCode})`;
+    }
+
+    return `${targetCode} ${op} ${valueCode}`;
+  }
+
+  /**
+   * Generate range (.. or ...)
+   * Pattern: ["..", start, end] or ["...", start, end] or ["...", expr] (spread)
+   */
+  generateRange(head, rest, context, sexpr) {
+    if (head === '...') {
+      if (rest.length === 1) {
+        // Spread operator
+        const [expr] = rest;
+        return `...${this.generate(expr, 'value')}`;
+      }
+      // Exclusive range
+      const [start, end] = rest;
+      const startCode = this.generate(start, 'value');
+      const endCode = this.generate(end, 'value');
+      return `((s, e) => Array.from({length: Math.max(0, Math.abs(e - s))}, (_, i) => s + (i * (s <= e ? 1 : -1))))(${startCode}, ${endCode})`;
+    }
+    // Inclusive range
+    const [start, end] = rest;
+    const startCode = this.generate(start, 'value');
+    const endCode = this.generate(end, 'value');
+    return `((s, e) => Array.from({length: Math.abs(e - s) + 1}, (_, i) => s + (i * (s <= e ? 1 : -1))))(${startCode}, ${endCode})`;
+  }
+
+  /**
+   * Generate logical NOT (!)
+   * Pattern: ["!", operand] → !operand
+   */
+  generateNot(head, rest, context, sexpr) {
+    const [operand] = rest;
+    const operandCode = this.generate(operand, 'value');
+
+    // No parens needed for simple identifiers or already-parenthesized expressions
+    if (/^[a-zA-Z_$][\w$]*$/.test(operandCode) || operandCode.startsWith('(')) {
+      return `!${operandCode}`;
+    }
+
+    return `(!${operandCode})`;
+  }
+
+  /**
+   * Generate bitwise NOT (~)
+   * Pattern: ["~", operand] → ~operand
+   */
+  generateBitwiseNot(head, rest, context, sexpr) {
+    const [operand] = rest;
+    return `(~${this.generate(operand, 'value')})`;
+  }
+
+  /**
+   * Generate increment/decrement (++ or --)
+   * Pattern: ["++", operand, isPostfix] or ["--", operand, isPostfix]
+   */
+  generateIncDec(head, rest, context, sexpr) {
+    const [operand, isPostfix] = rest;
+    const operandCode = this.generate(operand, 'value');
+
+    if (isPostfix) {
+      return `(${operandCode}${head})`;  // x++
+    } else {
+      return `(${head}${operandCode})`;  // ++x
+    }
+  }
+
+  /**
+   * Generate typeof operator
+   * Pattern: ["typeof", operand] → typeof operand
+   */
+  generateTypeof(head, rest, context, sexpr) {
+    const [operand] = rest;
+    return `typeof ${this.generate(operand, 'value')}`;
+  }
+
+  /**
+   * Generate delete operator
+   * Pattern: ["delete", operand] → delete operand
+   */
+  generateDelete(head, rest, context, sexpr) {
+    const [operand] = rest;
+    return `(delete ${this.generate(operand, 'value')})`;
+  }
+
+  /**
+   * Generate instanceof operator
+   * Pattern: ["instanceof", expr, type] → expr instanceof type
+   */
+  generateInstanceof(head, rest, context, sexpr) {
+    const [expr, type] = rest;
+    return `(${this.generate(expr, 'value')} instanceof ${this.generate(type, 'value')})`;
+  }
+
+  /**
+   * Generate 'in' operator
+   * Pattern: ["in", key, obj] → key in obj
+   */
+  generateIn(head, rest, context, sexpr) {
+    const [key, obj] = rest;
+    return `(${this.generate(key, 'value')} in ${this.generate(obj, 'value')})`;
+  }
+
+  /**
+   * Generate 'of' operator (existence check)
+   * Pattern: ["of", value, container] → value in container
+   */
+  generateOf(head, rest, context, sexpr) {
+    const [value, container] = rest;
+    const valueCode = this.generate(value, 'value');
+    const containerCode = this.generate(container, 'value');
+    return `(${valueCode} in ${containerCode})`;
+  }
+
+  /**
+   * Generate regex match operator (=~)
+   * Pattern: ["=~", left, right] → (_ = toSearchable(left).match(right))
+   */
+  generateRegexMatch(head, rest, context, sexpr) {
+    const [left, right] = rest;
+    
+    // Mark that we need the toSearchable helper and _ variable
+    this.helpers.add('toSearchable');
+    this.programVars.add('_');
+    
+    // Check if regex has 'm' flag (multiline) to allow newlines in toSearchable
+    const rightCode = this.generate(right, 'value');
+    const hasMultilineFlag = rightCode.includes('/m');
+    const allowNewlines = hasMultilineFlag ? ', true' : '';
+    
+    return `(_ = toSearchable(${this.generate(left, 'value')}${allowNewlines}).match(${rightCode}))`;
+  }
+
+  /**
+   * Generate new operator
+   * Pattern: ["new", [constructor, ...args]]
+   */
+  generateNew(head, rest, context, sexpr) {
+    const [call] = rest;
+
+    // Check if call is a property access
+    if (Array.isArray(call) && (call[0] === '.' || call[0] === '?.')) {
+      const [accessType, target, prop] = call;
+
+      // Check if target is itself a function call
+      if (Array.isArray(target) && !target[0].startsWith) {
+        // Pattern: new fn().prop → (new fn()).prop
+        const newExpr = this.generate(['new', target], 'value');
+        return `(${newExpr}).${prop}`;
+      }
+
+      // Pattern: new obj.klass → new obj.klass
+      const targetCode = this.generate(target, 'value');
+      return `new ${targetCode}.${prop}`;
+    }
+
+    if (Array.isArray(call)) {
+      const [constructor, ...args] = call;
+      const constructorCode = this.generate(constructor, 'value');
+      const argsCode = args.map(arg => this.unwrap(this.generate(arg, 'value'))).join(', ');
+      return `new ${constructorCode}(${argsCode})`;
+    }
+    
+    // Fallback: just the constructor without args
+    return `new ${this.generate(call, 'value')}()`;
+  }
+
+  /**
+   * Generate logical AND operator
+   * Pattern: ["&&", left, right, ...]
+   * Flattens nested chains: ["&&", ["&&", a, b], c] → a && b && c
+   */
+  generateLogicalAnd(head, rest, context, sexpr) {
+    const flattened = this.flattenBinaryChain(sexpr);
+    const operands = flattened.slice(1);
+
+    if (operands.length === 0) return 'true';
+    if (operands.length === 1) return this.generate(operands[0], 'value');
+
+    const parts = operands.map(op => this.generate(op, 'value'));
+    return `(${parts.join(' && ')})`;
+  }
+
+  /**
+   * Generate logical OR operator
+   * Pattern: ["||", left, right, ...]
+   * Flattens nested chains: ["||", ["||", a, b], c] → a || b || c
+   */
+  generateLogicalOr(head, rest, context, sexpr) {
+    const flattened = this.flattenBinaryChain(sexpr);
+    const operands = flattened.slice(1);
+
+    if (operands.length === 0) return 'true';
+    if (operands.length === 1) return this.generate(operands[0], 'value');
+
+    const parts = operands.map(op => this.generate(op, 'value'));
+    return `(${parts.join(' || ')})`;
+  }
+
+  //-------------------------------------------------------------------------
+  // DATA STRUCTURES
+  //-------------------------------------------------------------------------
+
+  /**
+   * Generate array literal
+   * Pattern: ["array", ...elements]
+   */
+  generateArray(head, elements, context, sexpr) {
+    // Check if last element is an elision that needs to be preserved
+    const hasTrailingElision = elements.length > 0 && elements[elements.length - 1] === ',';
+
+    const elementCodes = elements.map(el => {
+      // Comma token represents elision (hole) - preserve as empty
+      if (el === ',') {
+        return '';  // Empty string will create elision when joined
+      }
+      // Bare spread marker without variable (expansion marker) - skip in output
+      if (el === '...') {
+        return '';  // Will create hole, but that's intentional for expansion
+      }
+      // Check for spread with variable: ["...", expr]
+      if (Array.isArray(el) && el[0] === '...') {
+        return `...${this.generate(el[1], 'value')}`;
+      }
+      return this.generate(el, 'value');
+    }).join(', ');
+
+    // If the last element was an elision, we need to add an extra comma
+    // because join() creates a trailing comma that JavaScript ignores
+    return hasTrailingElision ? `[${elementCodes},]` : `[${elementCodes}]`;
+  }
+
+  /**
+   * Generate object literal
+   * Pattern: ["object", [key, value, operator], ...]
+   */
+  generateObject(head, pairs, context, sexpr) {
+    // Check if this is actually an object comprehension
+    if (pairs.length === 1 && Array.isArray(pairs[0]) &&
+        Array.isArray(pairs[0][1]) && pairs[0][1][0] === 'comprehension') {
+      // Object comprehension pattern: ["object", [keyVar, ["comprehension", valueExpr, iterators, guards]]]
+      const [keyVar, comprehensionNode] = pairs[0];
+      const [, valueExpr, iterators, guards] = comprehensionNode;
+
+      // Convert to object-comprehension
+      return this.generate(['object-comprehension', keyVar, valueExpr, iterators, guards], context);
+    }
+
+    // Regular object literal
+    const pairCodes = pairs.map(pair => {
+      // Check for spread/rest: ["...", expr] (not a key-value pair)
+      if (Array.isArray(pair) && pair[0] === '...') {
+        // Spread/rest operator
+        return `...${this.generate(pair[1], 'value')}`;
+      }
+
+      // All regular pairs now have format: [key, value, operator]
+      const [key, value, operator] = pair;
+
+      // Check if key is computed: ["computed", expression]
+      let keyCode;
+      if (Array.isArray(key) && key[0] === 'computed') {
+        // Computed property: [expr] syntax
+        const expr = key[1];
+        keyCode = `[${this.generate(expr, 'value')}]`;
+      } else {
+        // Regular key (string or identifier)
+        keyCode = this.generate(key, 'value');
+      }
+
+      const valueCode = this.generate(value, 'value');
+
+      // Handle different operators
+      if (operator === '=') {
+        // Destructuring with default: {a = 5}
+        return `${keyCode} = ${valueCode}`;
+      } else if (operator === ':') {
+        // Explicit property: {a: 5}
+        return `${keyCode}: ${valueCode}`;
+      } else {
+        // operator is null/undefined - shorthand or inferred
+        // Shorthand property syntax: {name} instead of {name: name}
+        if (keyCode === valueCode && !Array.isArray(key)) {
+          return keyCode;
+        }
+        return `${keyCode}: ${valueCode}`;
+      }
+    }).join(', ');
+
+    return `{${pairCodes}}`;
+  }
+
+  /**
+   * Generate block (sequence of statements)
+   * Pattern: ["block", ...statements]
+   */
+  generateBlock(head, statements, context, sexpr) {
+    // In statement context, generate as block with braces
+    if (context === 'statement') {
+      const stmts = this.withIndent(() => this.formatStatements(statements));
+      return `{\n${stmts.join('\n')}\n${this.indent()}}`;
+    }
+    // In value context, just format statements
+    return this.formatStatements(statements, context);
+  }
+
+  //-------------------------------------------------------------------------
+  // HELPER METHODS
+  //-------------------------------------------------------------------------
 
   /**
    * Generate destructuring pattern for use in for loops, etc.
