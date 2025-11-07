@@ -422,7 +422,7 @@ code 'ternary with typeof and or - minimal parens', '''
   ''', '''
   let action;
 
-action = ((typeof handle[1] === 'string') || (handle.length === 3) ? handle[1] : null);
+action = (((typeof handle[1] === 'string') || (handle.length === 3)) ? handle[1] : null);
   '''
 
 test 'ternary with complex condition works', '''

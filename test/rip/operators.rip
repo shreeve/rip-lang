@@ -93,26 +93,26 @@ code "greater than or equal parens", "a >= b", "(a >= b)"
 test "logical not true", "!false", true
 test "logical not false", "!true", false
 code "logical not simple", "!a", "!a"
-code "logical not complex", "!(a && b)", "(!(a && b))"
+code "logical not complex", "!(a && b)", "(!((a && b)))"
 
 # Logical AND: "&&"
 test "logical and both true", "true && true", true
 test "logical and first false", "false && true", false
 test "logical and second false", "true && false", false
-code "logical and parens", "a && b", "a && b"
+code "logical and parens", "a && b", "(a && b)"
 
 # Logical OR: "||"
 test "logical or both false", "false || false", false
 test "logical or first true", "true || false", true
 test "logical or second true", "false || true", true
-code "logical or parens", "a || b", "a || b"
+code "logical or parens", "a || b", "(a || b)"
 
 # Nullish coalescing: "??"
 test "nullish with null", "null ?? 10", 10
 test "nullish with undefined", "undefined ?? 20", 20
 test "nullish with zero", "0 ?? 30", 0
 test "nullish with false", "false ?? 40", false
-code "nullish coalescing parens", "a ?? b", "a ?? b"
+code "nullish coalescing parens", "a ?? b", "(a ?? b)"
 
 # Otherwise operator: "!?" (undefined-only coalescing)
 test "otherwise with null", "null !? 10", null

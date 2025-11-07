@@ -446,17 +446,7 @@ export class CodeGenerator {
         if (head === '!=') op = '!==';
         // === and !== pass through as-is
 
-        const leftCode = this.generate(left, 'value');
-        const rightCode = this.generate(right, 'value');
-
-        // Don't wrap logical operators - they're left-associative and commonly chained
-        // Without this, we get exponential parens: a && b && c → ((a && b) && c)
-        // CoffeeScript doesn't wrap these, and they're safe due to precedence rules
-        if (head === '&&' || head === '||' || head === '??') {
-          return `${leftCode} ${op} ${rightCode}`;
-        }
-
-        return `(${leftCode} ${op} ${rightCode})`;
+        return `(${this.generate(left, 'value')} ${op} ${this.generate(right, 'value')})`;
       }
 
       case '%%': {

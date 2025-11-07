@@ -66,7 +66,7 @@ test "throw in ternary", '''
 
 # Code generation
 code "throw", "throw e", "throw e"
-code "throw in || wraps IIFE", 'x = (fn() || throw "err")', 'let x;\n\nx = fn() || (() => { throw "err"; })()'
+code "throw in || wraps IIFE", 'x = (fn() || throw "err")', 'let x;\n\nx = (fn() || (() => { throw "err"; })())'
 
 # ============================================================================
 # Stats for CODEGEN.md

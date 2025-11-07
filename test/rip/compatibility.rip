@@ -300,7 +300,7 @@ code 'legacy existential compiles to ??', '''
 
 x = null;
 y = 5;
-x ?? y;
+(x ?? y);
   '''
 
 code 'ternary stays ternary', '''
