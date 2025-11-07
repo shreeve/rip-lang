@@ -14,7 +14,7 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath, pathToFileURL } from 'url'
 
-VERSION = '1.3.0'
+VERSION = '1.3.1'
 
 # Token: A terminal symbol that cannot be broken down further
 class Token
@@ -77,13 +77,14 @@ class Generator
     @triple      = @indent.repeat 3
 
     # Detect grammar mode based on export structure
-    @mode = grammar.bnf? ? 'jison' : 'sexp'
+    @mode = grammar.bnf ? 'jison' : 'sexp'
 
     # Grammar structures
     @types     = {}
     @rules     = []
     @operators = {}
     @conflicts = 0
+    @conflictDetails = []  # Track conflict details for debugging
 
     # Initialize symbol table with special symbols
     @symbolTable = new Map
@@ -530,7 +531,7 @@ class Generator
   # Parse Table Generation
   # ============================================================================
 
-  buildParseTable: (itemSets = @states) ->
+  buildParseTable!: (itemSets = @states) ->
     states = []
     {types, operators} = this
     [NONASSOC, SHIFT, REDUCE, ACCEPT] = [0, 1, 2, 3]
@@ -561,7 +562,34 @@ class Generator
             solution = @_resolveConflict item.rule, op, [REDUCE, item.rule.id], which
 
             if solution.bydefault
-              @conflicts++
+              # Categorize conflict type
+              isEmpty = item.rule.symbols.length is 0 or (item.rule.symbols.length is 1 and item.rule.symbols[0] is '')
+              isPassthrough = item.rule.symbols.length is 1 and types[item.rule.symbols[0]]  # Single nonterminal
+              hasPrecedence = op and item.rule.precedence > 0
+              isReduceReduce = which[0] is REDUCE
+
+              # Determine category
+              category = 'empty-optional' if isEmpty
+              category = 'passthrough' if !isEmpty and isPassthrough
+              category = 'precedence' if !isEmpty and !isPassthrough and hasPrecedence
+              category = 'reduce-reduce' if !isEmpty and !isPassthrough and !hasPrecedence and isReduceReduce
+              category = 'ambiguous' if !isEmpty and !isPassthrough and !hasPrecedence and !isReduceReduce
+
+              # Only count and track problematic conflicts (exclude benign ones)
+              if category is 'reduce-reduce' or category is 'ambiguous'
+                @conflicts++
+                @conflictDetails.push {
+                  state: k,
+                  lookahead: stackSymbol,
+                  lookaheadName: @tokenNames[@symbolIds[stackSymbol]] or stackSymbol,
+                  rule: item.rule.id,
+                  ruleType: item.rule.type,
+                  ruleSymbols: item.rule.symbols.join(' '),
+                  shift: if which[0] is SHIFT then which[1] else null,
+                  reduce: item.rule.id,
+                  resolution: if which[0] is SHIFT then 'shift' else 'reduce',
+                  category: category
+                }
             else
               action = solution.action
           else
@@ -759,7 +787,8 @@ class Generator
         when 2 # reduce
           len = @ruleData[action[1]][1]
           yyval.$ = val[val.length - len]
-          [locFirst, locLast] = [loc[loc.length - (len or 1)], loc[loc.length - 1]]
+          locIndex = len or 1  # Default to 1 if len is 0
+          [locFirst, locLast] = [loc[loc.length - locIndex], loc[loc.length - 1]]
           yyval._$ = {
             first_line: locFirst.first_line, last_line: locLast.last_line
             first_column: locFirst.first_column, last_column: locLast.last_column
@@ -783,7 +812,7 @@ class Generator
         when 3 # accept
           return val[val.length - 1]
 
-  trace: (msg) -> # Debug output (no-op by default)
+  trace!: (msg) -> # Debug output (no-op by default)
     console.log msg if @options?.debug
 
   createParser: ->
@@ -851,11 +880,13 @@ if isRunAsScript
         -v, --version           Show version
         -i, --info              Show grammar information
         -s, --sexpr             Show grammar as s-expression
+        -c, --conflicts         Show conflict details (use with --info)
         -o, --output <file>     Output file (default: parser.js)
 
       Examples:
         solar grammar.js
         solar --info grammar.js
+        solar --info --conflicts grammar.js
         solar --sexpr grammar.js
         solar -o parser.js grammar.js
       """
@@ -877,25 +908,35 @@ if isRunAsScript
       • Conflicts: #{conflicts}
       """
 
+      # Show conflict details if requested
+      if options.conflicts and generator.conflictDetails?.length
+        console.log "\n🔧 Conflict Details (first 30):"
+        for conflict, i in generator.conflictDetails.slice(0, 30)
+          console.log "\n  #{i + 1}. State #{conflict.state}, lookahead '#{conflict.lookaheadName}':"
+          console.log "     Rule #{conflict.rule}: #{conflict.ruleType} → #{conflict.ruleSymbols}"
+          console.log "     Resolution: #{conflict.resolution} (by default)"
+
     # Parse command line
-    options = {help: false, version: false, info: false, sexpr: false, output: 'parser.js'}
+    options = {help: false, version: false, info: false, sexpr: false, conflicts: false, output: 'parser.js'}
     grammarFile = null
     i = 0
 
     while i < process.argv.length - 2
       arg = process.argv[i + 2]
       switch arg
-        when '-h', '--help'    then options.help    = true
-        when '-v', '--version' then options.version = true
-        when '-i', '--info'    then options.info    = true
-        when '-s', '--sexpr'   then options.sexpr   = true
-        when '-o', '--output'  then options.output  = process.argv[++i + 2]
+        when '-h', '--help'      then options.help      = true
+        when '-v', '--version'   then options.version   = true
+        when '-i', '--info'      then options.info      = true
+        when '-s', '--sexpr'     then options.sexpr     = true
+        when '-c', '--conflicts' then options.conflicts = true
+        when '-o', '--output'    then options.output    = process.argv[++i + 2]
         else grammarFile = arg unless arg.startsWith('-')
       i++
 
-    if options.help    then showHelp()    ; process.exit 0
-    if options.version then showVersion() ; process.exit 0
-    if not grammarFile then showHelp()    ; process.exit 0
+    if options.help      then showHelp()    ; process.exit 0
+    if options.version   then showVersion() ; process.exit 0
+    if not grammarFile   then showHelp()    ; process.exit 0
+    if options.conflicts then options.info = true  # --conflicts implies --info
 
     try
       unless fs.existsSync grammarFile
@@ -926,7 +967,8 @@ if isRunAsScript
               action ?= 1  # Default to 1 if not provided
               actionStr = if typeof action is 'string' then action else JSON.stringify(action)
               optsStr = if opts then " #{JSON.stringify(opts)}" else ''
-              parts.push "      (#{pattern || ''} #{actionStr}#{optsStr})"
+              patternStr = if pattern is '' then '""' else pattern
+              parts.push "      (#{patternStr} #{actionStr}#{optsStr})"
             parts.push "    )"
           parts.push '  )'
 
