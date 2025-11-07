@@ -654,8 +654,8 @@ Rip achieves CoffeeScript's elegance with 50% less code by using s-expressions i
 
 ### Issue #54: Dispatch Table Phase 2 (39 remaining cases)
 
-**Status:** Ready to continue  
-**Difficulty:** Mechanical (pattern established)  
+**Status:** Ready to continue
+**Difficulty:** Mechanical (pattern established)
 **Estimated:** 4-6 hours
 
 **What's Done (Phase 1 - v1.4.0):**
