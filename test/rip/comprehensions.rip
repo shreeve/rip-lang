@@ -97,8 +97,61 @@ test 'object comprehension key-value', '''
 code "object comprehension", "{k: v * 2 for k, v of obj}", "(() => {\n  const result = {};\n  for (const k in obj) {\n    const v = obj[k];\n    result[k] = (v * 2);\n  }\n  return result;\n})()"
 
 # ============================================================================
+# Function-Local Comprehension Assignment (direct array building, no IIFE)
+# ============================================================================
+
+code "function comprehension assignment", '''
+  def makeList
+    items = (x * 2 for x in [1, 2, 3])
+  ''', '''
+  function makeList() {
+    let items;
+    items = [];
+    for (const x of [1, 2, 3]) {
+      items.push(x * 2);
+    }
+    return items;
+  }
+'''
+
+code "function for-in assignment", '''
+  def makeList
+    items = for x in [1, 2, 3]
+      x * 2
+  ''', '''
+  function makeList() {
+    let items;
+    items = [];
+    for (const x of [1, 2, 3]) {
+      items.push(x * 2);
+    }
+    return items;
+  }
+'''
+
+test "function comprehension execution", '''
+  def makeList
+    items = (x * 2 for x in [1, 2, 3])
+  makeList()
+  ''', [2, 4, 6]
+
+test "no iife in generated code", '''
+  def test
+    x = (i for i in [1, 2, 3])
+  result = test()
+  result
+  ''', [1, 2, 3]
+
+test "no iife with guard", '''
+  def test
+    x = (i for i in [1, 2, 3, 4, 5] when i > 2)
+  result = test()
+  result
+  ''', [3, 4, 5]
+
+# ============================================================================
 # Stats for CODEGEN.md
 # ============================================================================
 # Node types: comprehension, object-comprehension
-# Tests: 24 total (24 passing, 0 failing)
-# Coverage: Array comprehensions, object comprehensions, guards (when), index, destructuring, break/continue, by step, nested comprehensions (plain loops)
+# Tests: 29 total (29 passing, 0 failing)
+# Coverage: Array comprehensions, object comprehensions, guards (when), index, destructuring, break/continue, by step, nested comprehensions (plain loops), function-local optimization
