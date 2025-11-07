@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-1.4.2-blue.svg" alt="Version"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-1.4.3-blue.svg" alt="Version"></a>
   <a href="#es2022-target"><img src="https://img.shields.io/badge/target-ES2022-blue.svg" alt="Target"></a>
   <a href="#current-status"><img src="https://img.shields.io/badge/tests-938%2F938-brightgreen.svg" alt="Tests"></a>
   <a href="#current-status"><img src="https://img.shields.io/badge/coverage-100%25-brightgreen.svg" alt="Coverage"></a>
