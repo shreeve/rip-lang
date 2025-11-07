@@ -69,7 +69,7 @@ test "index expression", "arr = [10, 20]; i = 1; arr[i]", 20
 
 # Code generation
 code "array index", "arr[0]", "arr[0]"
-code "index expression", "arr[i + 1]", "arr[(i + 1)]"
+code "index expression", "arr[i + 1]", "arr[i + 1]"
 
 # Object bracket notation
 test "object bracket", 'obj = {name: "test"}; obj["name"]', "test"

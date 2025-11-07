@@ -410,9 +410,10 @@ code "void thin arrow codegen", '''
     return "hello world"
   ''', '''
   let c;
-  c = (function() {
-    return;
-  });
+
+c = function() {
+  return;
+};
   '''
 
 code "void fat arrow codegen", '''

@@ -243,9 +243,9 @@ code "yield from generates yield*", '''
   ''', '''
   let gen;
 
-  gen = (function*() {
-    return yield* other();
-  });
+gen = function*() {
+  return yield* other();
+};
   '''
 
 # ============================================================================

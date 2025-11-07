@@ -546,7 +546,7 @@ export class CodeGenerator {
         if (Array.isArray(call)) {
           const [constructor, ...args] = call;
           const constructorCode = this.generate(constructor, 'value');
-          const argsCode = args.map(arg => this.generate(arg, 'value')).join(', ');
+          const argsCode = args.map(arg => this.unwrap(this.generate(arg, 'value'))).join(', ');
           return `new ${constructorCode}(${argsCode})`;
         }
         // Fallback: just the constructor without args
@@ -832,7 +832,14 @@ export class CodeGenerator {
           targetCode = this.generate(target, 'value');
         }
 
-        const valueCode = this.generate(value, 'value');
+        let valueCode = this.generate(value, 'value');
+
+        // Unwrap value in assignment context (= is already a delimiter)
+        // BUT keep parens for object literals to avoid ambiguity with blocks
+        const isObjectLiteral = Array.isArray(value) && value[0] === 'object';
+        if (!isObjectLiteral) {
+          valueCode = this.unwrap(valueCode);
+        }
 
         // Assignments need parens when used as sub-expressions (in value context)
         // Exception: Top-level assignment in assignment chain (a = b = c) doesn't need parens
@@ -1103,7 +1110,8 @@ export class CodeGenerator {
         }
 
         // Regular indexing
-        return `${this.generate(arr, 'value')}[${this.generate(index, 'value')}]`;
+        const indexCode = this.unwrap(this.generate(index, 'value'));
+        return `${this.generate(arr, 'value')}[${indexCode}]`;
       }
 
       case '?[]': {
@@ -2590,7 +2598,7 @@ export class CodeGenerator {
         }
 
         // Super with arguments
-        const argsCode = rest.map(arg => this.generate(arg, 'value')).join(', ');
+        const argsCode = rest.map(arg => this.unwrap(this.generate(arg, 'value'))).join(', ');
 
         // If we're in a method (not constructor) and super is called with args,
         // it's calling the parent's method: super() → super.methodName()
@@ -2614,7 +2622,7 @@ export class CodeGenerator {
       case '?super': {
         // Soak super call: ["?super", ...args]
         // In methods: super?() → typeof super.method === 'function' ? super.method() : undefined
-        const argsCode = rest.map(arg => this.generate(arg, 'value')).join(', ');
+        const argsCode = rest.map(arg => this.unwrap(this.generate(arg, 'value'))).join(', ');
 
         if (this.currentMethodName && this.currentMethodName !== 'constructor') {
           // In a method - check if parent method exists
@@ -2922,7 +2930,7 @@ export class CodeGenerator {
 
           // Special case: super() in a method → super.methodName()
           if (head === 'super' && this.currentMethodName && this.currentMethodName !== 'constructor') {
-            const args = rest.map(arg => this.generate(arg, 'value')).join(', ');
+            const args = rest.map(arg => this.unwrap(this.generate(arg, 'value'))).join(', ');
             return `super.${this.currentMethodName}(${args})`;
           }
 
@@ -2991,7 +2999,7 @@ export class CodeGenerator {
 
           // Generate identifier (name already has sigils stripped by lexer)
           const calleeName = this.generate(head, 'value');
-          const args = rest.map(arg => this.generate(arg, 'value')).join(', ');
+          const args = rest.map(arg => this.unwrap(this.generate(arg, 'value'))).join(', ');
           const callStr = `${calleeName}(${args})`;
 
           return needsAwait ? `await ${callStr}` : callStr;
@@ -3100,7 +3108,7 @@ export class CodeGenerator {
             calleeCode = this.generate(head, 'value');
           }
 
-          const args = rest.map(arg => this.generate(arg, 'value')).join(', ');
+          const args = rest.map(arg => this.unwrap(this.generate(arg, 'value'))).join(', ');
           const callStr = `${calleeCode}(${args})`;
 
           return needsAwait ? `await ${callStr}` : callStr;

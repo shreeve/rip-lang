@@ -171,9 +171,10 @@ code 'postfix rest params', '''
   fn = (args...) -> args
   ''', '''
   let fn;
-  fn = (function(...args) {
-    return args;
-  });
+
+fn = function(...args) {
+  return args;
+};
   '''
 
 code 'postfix spread array', '''
