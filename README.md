@@ -9,9 +9,9 @@
 </p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-1.4.0-blue.svg" alt="Version"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-1.4.2-blue.svg" alt="Version"></a>
   <a href="#es2022-target"><img src="https://img.shields.io/badge/target-ES2022-blue.svg" alt="Target"></a>
-  <a href="#current-status"><img src="https://img.shields.io/badge/tests-931%2F931-brightgreen.svg" alt="Tests"></a>
+  <a href="#current-status"><img src="https://img.shields.io/badge/tests-938%2F938-brightgreen.svg" alt="Tests"></a>
   <a href="#current-status"><img src="https://img.shields.io/badge/coverage-100%25-brightgreen.svg" alt="Coverage"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
@@ -189,9 +189,9 @@ case '+': {
 |-----------|--------------|-----|-------|
 | Lexer+Rewriter | 3,558 LOC | **3,145 LOC** | Expanded syntax |
 | Parser Generator | 2,285 LOC (Jison) | **928 LOC** (Solar) | Built-in, ~156× faster! |
-| Compiler | 10,346 LOC (AST Nodes) | **5,221 LOC** (S-expressions) | Clean dispatch table |
+| Compiler | 10,346 LOC (AST Nodes) | **5,239 LOC** (S-expressions) | Clean dispatch table |
 | Tools | 1,571 LOC (Repl, Cake) | **520 LOC** (Repl, Browser) | 3 Repl's + Browser |
-| **Total** | **17,760 LOC** | **9,814 LOC** | **~45% smaller** |
+| **Total** | **17,760 LOC** | **9,832 LOC** | **~45% smaller** |
 
 **Plus:**
 - ✅ **ZERO dependencies** - Everything included
@@ -886,7 +886,7 @@ Both syntaxes handle `null` and `undefined` - pick the style that fits your proj
 │ Source │───>│   Lexer    │───>│  Parser  │───>│ Codegen │
 │  Code  │    │  (Coffee)  │    │  (Solar) │    │  (Rip)  │
 └────────┘    └────────────┘    └──────────┘    └─────────┘
-                 3,145 LOC          928 LOC       5,221 LOC
+                 3,145 LOC          928 LOC       5,239 LOC
                15 yrs tested     Generated!   S-expr w/Dispatch!
 ```
 
@@ -1200,10 +1200,10 @@ We considered allowing `x => expr` (ES6 style) but decided consistency and simpl
 | Feature | CoffeeScript | Rip |
 |---------|-------------|------|
 | Syntax | ✅ Elegant | ✅ Elegant (inspired by CS) |
-| Implementation | 17,760 LOC | **9,814 LOC (~45% smaller)** |
+| Implementation | 17,760 LOC | **9,832 LOC (~45% smaller)** |
 | Dependencies | ❌ Multiple | ✅ **ZERO** |
 | Parser Generator | ❌ External (Jison) | ✅ **Built-in (solar.rip)** |
-| Self-Hosting | ❌ No | ✅ **Yes** |
+| Self-Hosting | ❌ No | ✅ **Yes (fully operational)** |
 | Modules | CommonJS | ✅ ES6 native |
 | Classes | ES5 functions | ✅ ES6 classes |
 | Maintenance | Complex AST | ✅ Simple sexps |

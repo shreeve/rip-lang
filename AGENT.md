@@ -19,10 +19,10 @@
 
 ```
 Rip Source → Lexer → Parser → S-Expressions → Codegen → JavaScript
-            (3,146)  (340)    (arrays!)      (5,221)    (ES2022)
+            (3,146)  (340)    (arrays!)      (5,239)    (ES2022)
 ```
 
-**Key insight:** S-expressions (simple arrays like `["=", "x", 42]`) are the IR, not complex AST nodes. This makes the compiler 50% smaller than CoffeeScript.
+**Key insight:** S-expressions (simple arrays like `["=", "x", 42]`) are the IR, not complex AST nodes. This makes the compiler 45% smaller than CoffeeScript.
 
 ### Step 3: Essential Commands
 
@@ -45,22 +45,24 @@ bun run parser  # Regenerates src/parser.js from grammar.rip
 
 ## 🎯 Current Status
 
-**Version:** 1.4.1
-**Tests:** 931 passing (100%)
-**Status:** Production-ready, actively maintained
+**Version:** 1.4.2
+**Tests:** 938 passing (100%)
+**Status:** Production-ready, self-hosting fully operational
 
 **Recent accomplishments (November 2025):**
 - ✅ Issue #52 (Phase 1) - Dispatch table architecture, 71 cases extracted
 - ✅ Issue #54 (Phase 2) - All 110 cases in dispatch table (100% complete!)
 - ✅ Massive cleanup - Removed 2,042 lines of dead/duplicate code (28%!)
 - ✅ Issue #51 - Standardized test formatting (""" → ''')
-- ✅ **Result:** 5,221 clean, organized LOC
+- ✅ **Critical fix:** Restored self-hosting by fixing 'in' operator with string literals
+- ✅ **Result:** 5,239 clean, organized LOC
 
 **Check current state:**
 ```bash
 gh issue list                    # See open issues
 git log --oneline -10            # Recent commits
-bun run test                     # Verify: 931/931 tests
+bun run test                     # Verify: 938/938 tests
+bun run parser                   # Test self-hosting ✅
 ```
 
 ---
@@ -74,7 +76,7 @@ bun run test                     # Verify: 931/931 tests
 │ Source │───>│   Lexer    │───>│  Parser  │───>│ Codegen │
 │  Code  │    │  (Coffee)  │    │  (Solar) │    │  (Rip)  │
 └────────┘    └────────────┘    └──────────┘    └─────────┘
-                 3,145 LOC          340 LOC       5,221 LOC
+                 3,145 LOC          340 LOC       5,239 LOC
                15 yrs tested     Generated!   S-expr w/Dispatch!
 ```
 
@@ -436,7 +438,7 @@ case '+': {
 
 **Result:** 50% less code, easier to maintain!
 
-### Codegen.js Architecture (v1.4.1)
+### Codegen.js Architecture (v1.4.2)
 
 **Key sections:**
 ```
@@ -444,7 +446,7 @@ Lines 17-146:    Class setup, dispatch table (GENERATORS)
 Lines 148-380:   compile(), variable collection
 Lines 388-667:   generate() method (dispatch + function call handling)
 Lines 680-3350:  Extracted generator methods (110 methods, organized)
-Lines 3355-5212: Helper methods (formatting, analysis, etc.)
+Lines 3355-5230: Helper methods (formatting, analysis, etc.)
 ```
 
 **Finding a generator:**
@@ -974,7 +976,16 @@ bun run parser
 - Dead switch cases (error-throwing, forwarding) - 381 lines
 - **ALL Phase 2 duplicate cases** - 1,614 lines! (never removed after extraction)
 - Pointless switch wrapper with only default case
-- **Result:** 7,263 → 5,221 LOC (28.1% reduction!)
+- **Result:** 7,263 → 5,239 LOC (27.9% reduction!)
+
+### Self-Hosting Fix (v1.4.2)
+
+**Critical bug fix - Restored parser regeneration:**
+- Fixed 'in' operator with string literals
+- JavaScript's `in` checks numeric indices on strings, NOT characters!
+- Pattern: `'\n' in action` → runtime check with `.includes()` for strings/arrays
+- This broke since Phase 1 - parser regeneration (`bun run parser`) now works ✅
+- Added 7 tests for string literal behavior
 
 ---
 
@@ -986,7 +997,7 @@ bun run parser
 |------|---------|-------------|-------|
 | `src/lexer.js` | Tokenization + rewriter | ⚠️ Rewriter only | 3,145 LOC |
 | `src/parser.js` | S-expression parser | ❌ Generated (don't edit) | 340 LOC |
-| `src/codegen.js` | JavaScript generator | ✅ Main work happens here | 5,221 LOC |
+| `src/codegen.js` | JavaScript generator | ✅ Main work happens here | 5,239 LOC |
 | `src/compiler.js` | Pipeline orchestration | ✅ Yes | 250 LOC |
 | `src/repl.js` | Terminal REPL | ✅ Yes | |
 | `src/browser.js` | Browser integration | ✅ Yes | |
@@ -1031,9 +1042,9 @@ fail "name", "code"                  # Expect compilation failure
 | Approach | Lines of Code | Complexity | Extensibility |
 |----------|---------------|------------|---------------|
 | Traditional AST (CoffeeScript) | 10,346 LOC | High (OOP hierarchy) | Hard |
-| S-Expressions (Rip) | 5,221 LOC | Low (pattern matching) | Easy |
+| S-Expressions (Rip) | 5,239 LOC | Low (pattern matching) | Easy |
 
-**Result: 50% smaller implementation**
+**Result: 49% smaller implementation**
 
 ### Why Context Parameter?
 
@@ -1156,24 +1167,24 @@ Rip has **zero runtime or build dependencies**. This is intentional and must be 
 
 ---
 
-## 📊 Project Metrics (v1.4.1)
+## 📊 Project Metrics (v1.4.2)
 
 **Codebase:**
 - Lexer+Rewriter: 3,145 LOC
 - Parser (generated): 340 LOC
-- Codegen: 5,221 LOC (dispatch table architecture)
+- Codegen: 5,239 LOC (dispatch table architecture)
 - Compiler: 250 LOC
 - Total: ~9,000 LOC
 
 **Tests:**
-- 931 tests across 23 files
+- 938 tests across 23 files
 - 100% passing rate
 - Comprehensive coverage
 
 **Comparison to CoffeeScript:**
-- 50% smaller implementation
+- 45% smaller implementation
 - Zero dependencies
-- Self-hosting
+- Self-hosting (fully operational)
 - Modern ES2022 output
 
 ---
