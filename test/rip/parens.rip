@@ -52,13 +52,27 @@ code "object literal in call", "fn(({x: 1}))", "fn({x: 1});"
 test "object literal statement", "({x: 1})", {x: 1}
 
 # ============================================================================
-# Postfix If/Unless with Multiple Operators
+# Mixed Precedence Safety (must preserve parens for operators)
+# ============================================================================
+
+test "arithmetic with or preserves parens", "x = 5 - (3 || 2)", 2
+code "arithmetic mixed precedence", "x = a - (b || c)", "let x;\n\nx = a - (b || c);"
+
+# ============================================================================
+# Postfix If/Unless with Multiple Operators (clean logical chains)
 # ============================================================================
 
 code "postfix if two conditions", "x = 5 if !isEmpty && isValid", "let x;\n\nif (!isEmpty && isValid) x = 5;"
-code "postfix if three conditions", "x = 5 if !isEmpty && !isPassthrough && hasPrecedence", "let x;\n\nif ((!isEmpty && !isPassthrough) && hasPrecedence) x = 5;"
-code "postfix if four conditions", "x = 5 if !a && !b && !c && d", "let x;\n\nif (((!a && !b) && !c) && d) x = 5;"
+code "postfix if three conditions", "x = 5 if !isEmpty && !isPassthrough && hasPrecedence", "let x;\n\nif (!isEmpty && !isPassthrough && hasPrecedence) x = 5;"
+code "postfix if four conditions", "x = 5 if !a && !b && !c && d", "let x;\n\nif (!a && !b && !c && d) x = 5;"
 code "postfix unless with ands", "x = 5 unless isEmpty || invalid", "let x;\n\nif (!(isEmpty || invalid)) x = 5;"
 
 test "postfix if execution", "isEmpty = false; isValid = true; x = 5 if !isEmpty && isValid; x", 5
 test "postfix if fails", "isEmpty = true; isValid = true; x = 5 if !isEmpty && isValid; x", undefined
+
+# ============================================================================
+# Mixed Operators in Conditions (keep inner parens, unwrap outer)
+# ============================================================================
+
+code "comparison with logical", "if (x > 5) && (y < 10) then z", "if ((x > 5) && (y < 10)) {\n  z;\n}"
+test "comparison with logical execution", "x = 6; y = 8; result = 'yes' if (x > 5) && (y < 10); result", "yes"

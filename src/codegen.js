@@ -396,6 +396,26 @@ export class CodeGenerator {
       // OPERATORS - Binary (Arithmetic, Comparison, Logical, Bitwise)
       //=====================================================================
 
+      case '&&':
+      case '||': {
+        // Logical operators: flatten nested chains for cleaner output
+        // Example: ["&&", ["&&", a, b], c] → ["&&", a, b, c] → a && b && c
+        const flattened = this.flattenBinaryChain(sexpr);
+        const operands = flattened.slice(1);
+
+        if (operands.length === 0) {
+          return 'true'; // Edge case: empty chain
+        }
+
+        if (operands.length === 1) {
+          return this.generate(operands[0], 'value');
+        }
+
+        // Generate flat chain: (a && b && c)
+        const parts = operands.map(op => this.generate(op, 'value'));
+        return `(${parts.join(` ${head} `)})`;
+      }
+
       case '+':
       case '-':
       case '*':
@@ -410,8 +430,6 @@ export class CodeGenerator {
       case '>':
       case '<=':
       case '>=':
-      case '&&':
-      case '||':
       case '??':
       case '!?':
       case '&':
@@ -4671,18 +4689,58 @@ export class CodeGenerator {
   }
 
   /**
-   * Aggressively unwrap logical expressions for use in if/while conditions
-   * Removes ALL unnecessary layers: (((a && b) && c) && d) → a && b && c && d
+   * Flatten nested binary operator chains in s-expressions
+   * Example: ["&&", ["&&", a, b], c] → ["&&", a, b, c]
    *
-   * This recursively strips parens from logical operator chains since they're
-   * left-associative and the parens are redundant in condition contexts.
+   * This handles deeply nested same-operator chains that result from
+   * the parser's left-associative binary operator handling.
+   * Only flattens pure chains (all && or all ||), preserving mixed operators.
+   */
+  flattenBinaryChain(sexpr) {
+    if (!Array.isArray(sexpr) || sexpr.length < 3) {
+      return sexpr;
+    }
+
+    const [head, ...rest] = sexpr;
+
+    // Only flatten && and || chains
+    if (head !== '&&' && head !== '||') {
+      return sexpr;
+    }
+
+    // Recursively collect all operands in this chain
+    const operands = [];
+
+    const collect = (expr) => {
+      if (Array.isArray(expr) && expr[0] === head) {
+        // Same operator - flatten it
+        for (let i = 1; i < expr.length; i++) {
+          collect(expr[i]);
+        }
+      } else {
+        // Different operator or leaf - keep as-is
+        operands.push(expr);
+      }
+    };
+
+    // Collect all operands
+    for (const operand of rest) {
+      collect(operand);
+    }
+
+    // Return flattened chain
+    return [head, ...operands];
+  }
+
+  /**
+   * Unwrap outer parens from generated code when safe
+   * Used for cleaner condition generation in if/while statements
    */
   unwrapLogical(code) {
     if (typeof code !== 'string') return code;
 
-    // Remove ALL outer parens layers
+    // Remove outer parens layers
     while (code.startsWith('(') && code.endsWith(')')) {
-      // Check if removing these parens is safe
       let depth = 0;
       let minDepth = Infinity;
 
@@ -4692,7 +4750,7 @@ export class CodeGenerator {
         minDepth = Math.min(minDepth, depth);
       }
 
-      // If minDepth >= 0, the outer parens are wrapping the whole expression
+      // If minDepth >= 0, the outer parens wrap the whole expression
       if (minDepth >= 0) {
         code = code.slice(1, -1);
       } else {
