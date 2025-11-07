@@ -428,10 +428,10 @@ class Generator
 
   processLookaheads!: ->
     @processLookaheads = => {} # Computes once; no-op on subsequent calls
-    @_computeNullableSets()  # ε-derivable symbols
-    @_computeFirstSets()     # First tokens
-    @_computeFollowSets()    # Following tokens
-    @_assignItemLookaheads() # FOLLOW(A) → item lookaheads
+    @_computeNullableSets()    # ε-derivable symbols
+    @_computeFirstSets()       # First tokens
+    @_computeFollowSets()      # Following tokens
+    @_assignItemLookaheads()   # FOLLOW(A) → item lookaheads
 
   # Determine nullable symbols (can derive ε)
   _computeNullableSets!: ->
