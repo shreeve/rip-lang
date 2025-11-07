@@ -94,15 +94,15 @@ export class CodeGenerator {
     'await': 'generateAwait',
     'yield': 'generateYield',
     'yield-from': 'generateYieldFrom',
-    
-    // Control flow - Complex (TODO: extract next)
+
+    // Control flow - Complex
     'if': 'generateIf',
     'unless': 'generateIf',
-    // 'for-in': 'generateForIn',
-    // 'for-of': 'generateForOf',
-    // 'for-from': 'generateForFrom',
-    // 'while': 'generateWhile',
-    // 'until': 'generateUntil',
+    'for-in': 'generateForIn',
+    'for-of': 'generateForOf',
+    'for-from': 'generateForFrom',
+    'while': 'generateWhile',
+    'until': 'generateUntil',
     // 'try': 'generateTry',
     // 'throw': 'generateThrow',
     // 'switch': 'generateSwitch',
@@ -3647,6 +3647,415 @@ export class CodeGenerator {
     } else {
       return this.generateIfAsStatement(condition, thenBranch, elseBranches);
     }
+  }
+
+  //-------------------------------------------------------------------------
+  // CONTROL FLOW - Loops
+  //-------------------------------------------------------------------------
+
+  /**
+   * Generate for-in loop (MASSIVE - 203 lines)
+   * Pattern: ["for-in", vars, iterable, step, guard, body]
+   */
+  generateForIn(head, rest, context, sexpr) {
+    const [vars, iterable, step, guard, body] = rest;
+
+    // In value context, convert to comprehension
+    if (context === 'value' && this.comprehensionDepth === 0) {
+      const iterator = ['for-in', vars, iterable, step];
+      const guards = guard ? [guard] : [];
+      return this.generate(['comprehension', body, [iterator], guards], context);
+    }
+
+    const varsArray = Array.isArray(vars) ? vars : [vars];
+    const noVar = varsArray.length === 0;
+    const [itemVar, indexVar] = noVar ? ['_i', null] : varsArray;
+
+    let itemVarPattern = itemVar;
+    if (Array.isArray(itemVar) && (itemVar[0] === 'array' || itemVar[0] === 'object')) {
+      itemVarPattern = this.generateDestructuringPattern(itemVar);
+    }
+
+    // Handle step
+    if (step && step !== null) {
+      const iterableCode = this.generate(iterable, 'value');
+      const indexVarName = indexVar || '_i';
+      const stepCode = this.generate(step, 'value');
+
+      const isNegativeStep = this.isNegativeStep(step);
+      const isMinusOne = isNegativeStep && (step[1] === '1' || step[1] === 1 || (step[1] instanceof String && step[1].valueOf() === '1'));
+      const isPlusOne = !isNegativeStep && (step === '1' || step === 1 || (step instanceof String && step.valueOf() === '1'));
+
+      let loopHeader;
+      if (isMinusOne) {
+        loopHeader = `for (let ${indexVarName} = ${iterableCode}.length - 1; ${indexVarName} >= 0; ${indexVarName}--) `;
+      } else if (isPlusOne) {
+        loopHeader = `for (let ${indexVarName} = 0; ${indexVarName} < ${iterableCode}.length; ${indexVarName}++) `;
+      } else if (isNegativeStep) {
+        loopHeader = `for (let ${indexVarName} = ${iterableCode}.length - 1; ${indexVarName} >= 0; ${indexVarName} += ${stepCode}) `;
+      } else {
+        loopHeader = `for (let ${indexVarName} = 0; ${indexVarName} < ${iterableCode}.length; ${indexVarName} += ${stepCode}) `;
+      }
+
+      if (Array.isArray(body) && body[0] === 'block') {
+        const statements = body.slice(1);
+        this.indentLevel++;
+        const stmts = [];
+
+        if (!noVar) {
+          stmts.push(`const ${itemVarPattern} = ${iterableCode}[${indexVarName}];`);
+        }
+
+        if (guard) {
+          const guardCode = this.generate(guard, 'value');
+          stmts.push(`if (${guardCode}) {`);
+          this.indentLevel++;
+          stmts.push(...this.formatStatements(statements));
+          this.indentLevel--;
+          stmts.push(this.indent() + '}');
+        } else {
+          stmts.push(...statements.map(s => this.addSemicolon(s, this.generate(s, 'statement'))));
+        }
+
+        this.indentLevel--;
+        return loopHeader + `{\n${stmts.map(s => this.indent() + s).join('\n')}\n${this.indent()}}`;
+      } else {
+        if (noVar) {
+          if (guard) {
+            const guardCode = this.generate(guard, 'value');
+            return loopHeader + `{ if (${guardCode}) ${this.generate(body, 'statement')}; }`;
+          } else {
+            return loopHeader + `{ ${this.generate(body, 'statement')}; }`;
+          }
+        } else {
+          if (guard) {
+            const guardCode = this.generate(guard, 'value');
+            return loopHeader + `{ const ${itemVarPattern} = ${iterableCode}[${indexVarName}]; if (${guardCode}) ${this.generate(body, 'statement')}; }`;
+          } else {
+            return loopHeader + `{ const ${itemVarPattern} = ${iterableCode}[${indexVarName}]; ${this.generate(body, 'statement')}; }`;
+          }
+        }
+      }
+    }
+
+    // If index variable, use traditional for loop
+    if (indexVar) {
+      const iterableCode = this.generate(iterable, 'value');
+      let code = `for (let ${indexVar} = 0; ${indexVar} < ${iterableCode}.length; ${indexVar}++) `;
+
+      if (Array.isArray(body) && body[0] === 'block') {
+        const statements = body.slice(1);
+        code += '{\n';
+        this.indentLevel++;
+        code += this.indent() + `const ${itemVarPattern} = ${iterableCode}[${indexVar}];\n`;
+
+        if (guard) {
+          const guardCode = this.unwrap(this.generate(guard, 'value'));
+          code += this.indent() + `if (${guardCode}) {\n`;
+          this.indentLevel++;
+          code += this.formatStatements(statements).join('\n') + '\n';
+          this.indentLevel--;
+          code += this.indent() + '}\n';
+        } else {
+          code += this.formatStatements(statements).join('\n') + '\n';
+        }
+
+        this.indentLevel--;
+        code += this.indent() + '}';
+      } else {
+        if (guard) {
+          const guardCode = this.unwrap(this.generate(guard, 'value'));
+          code += `{ const ${itemVarPattern} = ${iterableCode}[${indexVar}]; if (${guardCode}) ${this.generate(body, 'statement')}; }`;
+        } else {
+          code += `{ const ${itemVarPattern} = ${iterableCode}[${indexVar}]; ${this.generate(body, 'statement')}; }`;
+        }
+      }
+
+      return code;
+    }
+
+    // Optimize range iteration
+    let iterableHead = Array.isArray(iterable) && iterable[0];
+    if (iterableHead instanceof String) {
+      iterableHead = iterableHead.valueOf();
+    }
+    const isRange = iterableHead === '..' || iterableHead === '...';
+
+    if (isRange) {
+      const isExclusive = iterableHead === '...';
+      const [start, end] = iterable.slice(1);
+
+      const isSimple = (expr) => {
+        if (typeof expr === 'number') return true;
+        if (expr instanceof String) {
+          const val = expr.valueOf();
+          return !val.includes('(');
+        }
+        if (typeof expr === 'string' && !expr.includes('(')) return true;
+        if (Array.isArray(expr) && expr[0] === '.') return true;
+        return false;
+      };
+
+      if (isSimple(start) && isSimple(end)) {
+        const startCode = this.generate(start, 'value');
+        const endCode = this.generate(end, 'value');
+        const comparison = isExclusive ? '<' : '<=';
+
+        let increment = `${itemVarPattern}++`;
+        if (step && step !== null) {
+          const stepCode = this.generate(step, 'value');
+          increment = `${itemVarPattern} += ${stepCode}`;
+        }
+
+        let code = `for (let ${itemVarPattern} = ${startCode}; ${itemVarPattern} ${comparison} ${endCode}; ${increment}) `;
+
+        if (guard) {
+          code += this.generateLoopBodyWithGuard(body, guard);
+        } else {
+          code += this.generateLoopBody(body);
+        }
+
+        return code;
+      }
+    }
+
+    // Default: use for-of
+    let code = `for (const ${itemVarPattern} of ${this.generate(iterable, 'value')}) `;
+
+    if (guard) {
+      code += this.generateLoopBodyWithGuard(body, guard);
+    } else {
+      code += this.generateLoopBody(body);
+    }
+
+    return code;
+  }
+
+  /**
+   * Generate for-of loop (object iteration) - 113 lines
+   * Pattern: ["for-of", vars, object, own, guard, body]
+   */
+  generateForOf(head, rest, context, sexpr) {
+    const [vars, obj, own, guard, body] = rest;
+    const [keyVar, valueVar] = Array.isArray(vars) ? vars : [vars];
+
+    const objCode = this.generate(obj, 'value');
+    let code = `for (const ${keyVar} in ${objCode}) `;
+
+    // Simple case: own without valueVar and without guards
+    if (own && !valueVar && !guard) {
+      if (Array.isArray(body) && body[0] === 'block') {
+        const statements = body.slice(1);
+        this.indentLevel++;
+        const stmts = [
+          `if (!Object.hasOwn(${objCode}, ${keyVar})) continue;`,
+          ...statements.map(s => this.addSemicolon(s, this.generate(s, 'statement')))
+        ];
+        this.indentLevel--;
+        code += `{\n${stmts.map(s => this.indent() + s).join('\n')}\n${this.indent()}}`;
+      } else {
+        code += `{ if (!Object.hasOwn(${objCode}, ${keyVar})) continue; ${this.generate(body, 'statement')}; }`;
+      }
+      return code;
+    }
+
+    // If valueVar is provided
+    if (valueVar) {
+      if (own && guard) {
+        // Both own and guard
+        if (Array.isArray(body) && body[0] === 'block') {
+          const statements = body.slice(1);
+          this.indentLevel++;
+          const outerIndent = this.indent();
+          const guardCondition = this.generate(guard, 'value');
+          this.indentLevel++;
+          const innerIndent = this.indent();
+          const stmts = statements.map(s => innerIndent + this.addSemicolon(s, this.generate(s, 'statement')));
+          this.indentLevel -= 2;
+          code += `{\n${outerIndent}if (!Object.hasOwn(${objCode}, ${keyVar})) continue;\n${outerIndent}const ${valueVar} = ${objCode}[${keyVar}];\n${outerIndent}if (${guardCondition}) {\n${stmts.join('\n')}\n${outerIndent}}\n${this.indent()}}`;
+        } else {
+          const guardCondition = this.generate(guard, 'value');
+          code += `{ if (!Object.hasOwn(${objCode}, ${keyVar})) continue; const ${valueVar} = ${objCode}[${keyVar}]; if (${guardCondition}) ${this.generate(body, 'statement')}; }`;
+        }
+      } else if (own) {
+        // Just own (no guard) with valueVar
+        if (Array.isArray(body) && body[0] === 'block') {
+          const statements = body.slice(1);
+          this.indentLevel++;
+          const stmts = [
+            `if (!Object.hasOwn(${objCode}, ${keyVar})) continue;`,
+            `const ${valueVar} = ${objCode}[${keyVar}];`,
+            ...statements.map(s => this.addSemicolon(s, this.generate(s, 'statement')))
+          ];
+          this.indentLevel--;
+          code += `{\n${stmts.map(s => this.indent() + s).join('\n')}\n${this.indent()}}`;
+        } else {
+          code += `{ if (!Object.hasOwn(${objCode}, ${keyVar})) continue; const ${valueVar} = ${objCode}[${keyVar}]; ${this.generate(body, 'statement')}; }`;
+        }
+      } else if (guard) {
+        // Just guard (no own) with valueVar
+        if (Array.isArray(body) && body[0] === 'block') {
+          const statements = body.slice(1);
+          this.indentLevel++;
+          const loopBodyIndent = this.indent();
+          const guardCondition = this.generate(guard, 'value');
+          this.indentLevel++;
+          const innerIndent = this.indent();
+          const stmts = statements.map(s => innerIndent + this.addSemicolon(s, this.generate(s, 'statement')));
+          this.indentLevel -= 2;
+          code += `{\n${loopBodyIndent}const ${valueVar} = ${objCode}[${keyVar}];\n${loopBodyIndent}if (${guardCondition}) {\n${stmts.join('\n')}\n${loopBodyIndent}}\n${this.indent()}}`;
+        } else {
+          code += `{ const ${valueVar} = ${objCode}[${keyVar}]; if (${this.generate(guard, 'value')}) ${this.generate(body, 'statement')}; }`;
+        }
+      } else {
+        // No checks, just valueVar assignment
+        if (Array.isArray(body) && body[0] === 'block') {
+          const statements = body.slice(1);
+          this.indentLevel++;
+          const stmts = [`const ${valueVar} = ${objCode}[${keyVar}];`, ...statements.map(s => this.addSemicolon(s, this.generate(s, 'statement')))];
+          this.indentLevel--;
+          code += `{\n${stmts.map(s => this.indent() + s).join('\n')}\n${this.indent()}}`;
+        } else {
+          code += `{ const ${valueVar} = ${objCode}[${keyVar}]; ${this.generate(body, 'statement')}; }`;
+        }
+      }
+    } else {
+      // No value variable
+      if (guard) {
+        code += this.generateLoopBodyWithGuard(body, guard);
+      } else {
+        code += this.generateLoopBody(body);
+      }
+    }
+
+    return code;
+  }
+
+  /**
+   * Generate for-from loop - 100 lines
+   * Pattern: ["for-from", vars, iterable, isAwait, guard, body]
+   */
+  generateForFrom(head, rest, context, sexpr) {
+    const varsArray = Array.isArray(rest[0]) ? rest[0] : [rest[0]];
+    const [firstVar] = varsArray;
+    const iterable = rest[1];
+    const isAwait = rest[2];
+    const guard = rest[3];
+    const body = rest[4];
+
+    // Check if firstVar is array destructuring with middle/leading rest
+    let needsTempVar = false;
+    let destructuringStatements = [];
+
+    if (Array.isArray(firstVar) && firstVar[0] === 'array') {
+      const elements = firstVar.slice(1);
+      const restIndex = elements.findIndex(el =>
+        Array.isArray(el) && el[0] === '...' || el === '...'
+      );
+
+      if (restIndex !== -1 && restIndex < elements.length - 1) {
+        needsTempVar = true;
+        const elementsAfterRest = elements.slice(restIndex + 1);
+        const afterCount = elementsAfterRest.length;
+
+        const beforeRest = elements.slice(0, restIndex);
+        const restEl = elements[restIndex];
+        const restVar = Array.isArray(restEl) && restEl[0] === '...' ? restEl[1] : '_rest';
+
+        const beforePattern = beforeRest.map(el => {
+          if (el === ',') return '';
+          if (typeof el === 'string') return el;
+          return this.generate(el, 'value');
+        }).join(', ');
+
+        const firstPattern = beforePattern ? `${beforePattern}, ...${restVar}` : `...${restVar}`;
+        const afterPattern = elementsAfterRest.map(el => {
+          if (el === ',') return '';
+          if (typeof el === 'string') return el;
+          return this.generate(el, 'value');
+        }).join(', ');
+
+        destructuringStatements.push(`[${firstPattern}] = _item`);
+        destructuringStatements.push(`[${afterPattern}] = ${restVar}.splice(-${afterCount})`);
+
+        this.helpers.add('slice');
+
+        const collectVarsFromPattern = (arr) => {
+          arr.slice(1).forEach(el => {
+            if (el === ',' || el === '...') return;
+            if (typeof el === 'string') this.programVars.add(el);
+            else if (Array.isArray(el) && el[0] === '...') {
+              if (typeof el[1] === 'string') this.programVars.add(el[1]);
+            }
+          });
+        };
+        collectVarsFromPattern(firstVar);
+      }
+    }
+
+    const iterableCode = this.generate(iterable, 'value');
+    const awaitKeyword = isAwait ? 'await ' : '';
+
+    let itemVarPattern;
+    if (needsTempVar) {
+      itemVarPattern = '_item';
+    } else if (Array.isArray(firstVar) && (firstVar[0] === 'array' || firstVar[0] === 'object')) {
+      itemVarPattern = this.generateDestructuringPattern(firstVar);
+    } else {
+      itemVarPattern = firstVar;
+    }
+
+    let code = `for ${awaitKeyword}(const ${itemVarPattern} of ${iterableCode}) `;
+
+    if (needsTempVar && destructuringStatements.length > 0) {
+      const statements = this.unwrapBlock(body);
+      const allStmts = this.withIndent(() => [
+        ...destructuringStatements.map(s => this.indent() + s + ';'),
+        ...this.formatStatements(statements)
+      ]);
+      code += `{\n${allStmts.join('\n')}\n${this.indent()}}`;
+    } else {
+      if (guard) {
+        code += this.generateLoopBodyWithGuard(body, guard);
+      } else {
+        code += this.generateLoopBody(body);
+      }
+    }
+
+    return code;
+  }
+
+  /**
+   * Generate while loop
+   * Pattern: ["while", condition, guard?, body]
+   */
+  generateWhile(head, rest, context, sexpr) {
+    const condition = rest[0];
+    const guard = rest.length === 3 ? rest[1] : null;
+    const body = rest[rest.length - 1];
+
+    const condCode = this.unwrap(this.generate(condition, 'value'));
+    let code = `while (${condCode}) `;
+
+    if (guard) {
+      code += this.generateLoopBodyWithGuard(body, guard);
+    } else {
+      code += this.generateLoopBody(body);
+    }
+
+    return code;
+  }
+
+  /**
+   * Generate until loop
+   * Pattern: ["until", condition, body]
+   */
+  generateUntil(head, rest, context, sexpr) {
+    const [condition, body] = rest;
+    const condCode = this.unwrap(this.generate(condition, 'value'));
+    let code = `while (!(${condCode})) `;
+    code += this.generateLoopBody(body);
+    return code;
   }
 
   /**
