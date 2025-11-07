@@ -2080,20 +2080,20 @@ export class CodeGenerator {
     const [key, obj] = rest;
     const keyCode = this.generate(key, 'value');
     const objCode = this.generate(obj, 'value');
-    
+
     // Special case: string literal in variable
     // Generate runtime check: Array or string → .includes(), otherwise → in
-    // Example: '\n' in action → 
+    // Example: '\n' in action →
     //   (Array.isArray(action) || typeof action === 'string' ? action.includes('\n') : ('\n' in action))
     // This is critical for bootstrap (solar.rip uses this pattern)
-    const isStringLiteral = (keyCode.startsWith("'") || keyCode.startsWith('"')) && 
+    const isStringLiteral = (keyCode.startsWith("'") || keyCode.startsWith('"')) &&
                            (keyCode.endsWith("'") || keyCode.endsWith('"'));
     const isVariable = /^[a-zA-Z_$][\w$]*$/.test(objCode);
-    
+
     if (isStringLiteral && isVariable) {
       return `(Array.isArray(${objCode}) || typeof ${objCode} === 'string' ? ${objCode}.includes(${keyCode}) : (${keyCode} in ${objCode}))`;
     }
-    
+
     return `(${keyCode} in ${objCode})`;
   }
 

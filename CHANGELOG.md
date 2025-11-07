@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added 7 tests for string literal `in` operator behavior
   - Critical for bootstrap: solar.rip uses `'\n' in action` pattern
 
-### Changed  
+### Changed
 - **Massive code cleanup** - Removed 2,042 lines of dead/duplicate code (28%)!
   - Removed ALL 37 Phase 2 duplicate switch cases (1,614 lines) - never cleaned after extraction
   - Removed old* cases (47 lines), error-throwing cases (26 lines), forwarding cases (185 lines)
