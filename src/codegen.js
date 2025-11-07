@@ -83,26 +83,31 @@ export class CodeGenerator {
     '=>': 'generateFatArrow',
     'return': 'generateReturn',
 
-    // Control flow (extracting next - 19 cases)
-    // 'if': 'generateIf',
-    // 'unless': 'generateIf',
-    // '?:': 'generateTernary',
-    // '?': 'generateExistential',
+    // Control flow - Simple statements
+    'break': 'generateBreak',
+    'break-if': 'generateBreakIf',
+    'continue': 'generateContinue',
+    'continue-if': 'generateContinueIf',
+    '?': 'generateExistential',
+    '?:': 'generateTernary',
+    'loop': 'generateLoop',
+    'await': 'generateAwait',
+    'yield': 'generateYield',
+    'yield-from': 'generateYieldFrom',
+    
+    // Control flow - Complex (TODO: extract next)
+    'if': 'generateIf',
+    'unless': 'generateIf',
     // 'for-in': 'generateForIn',
     // 'for-of': 'generateForOf',
     // 'for-from': 'generateForFrom',
     // 'while': 'generateWhile',
     // 'until': 'generateUntil',
-    // 'loop': 'generateLoop',
-    // 'break': 'generateBreak',
-    // 'break-if': 'generateBreakIf',
-    // 'continue': 'generateContinue',
-    // 'continue-if': 'generateContinueIf',
     // 'try': 'generateTry',
     // 'throw': 'generateThrow',
     // 'switch': 'generateSwitch',
     // 'when': 'generateWhen',
-    
+
     // Comprehensions (extracting next)
     // 'comprehension': 'generateComprehension',
     // 'object-comprehension': 'generateObjectComprehension',
@@ -3466,7 +3471,7 @@ export class CodeGenerator {
     if (rest.length === 0) {
       return 'return';
     }
-    
+
     let [expr] = rest;
 
     // If in a void function, convert "return expr" to just "return"
@@ -3499,6 +3504,149 @@ export class CodeGenerator {
     }
 
     return `return ${this.generate(expr, 'value')}`;
+  }
+
+  //-------------------------------------------------------------------------
+  // CONTROL FLOW - Simple Statements
+  //-------------------------------------------------------------------------
+
+  /**
+   * Generate break statement
+   * Pattern: ["break"]
+   */
+  generateBreak(head, rest, context, sexpr) {
+    return 'break';
+  }
+
+  /**
+   * Generate conditional break
+   * Pattern: ["break-if", condition]
+   */
+  generateBreakIf(head, rest, context, sexpr) {
+    const [condition] = rest;
+    return `if (${this.generate(condition, 'value')}) break`;
+  }
+
+  /**
+   * Generate continue statement
+   * Pattern: ["continue"]
+   */
+  generateContinue(head, rest, context, sexpr) {
+    return 'continue';
+  }
+
+  /**
+   * Generate conditional continue
+   * Pattern: ["continue-if", condition]
+   */
+  generateContinueIf(head, rest, context, sexpr) {
+    const [condition] = rest;
+    return `if (${this.generate(condition, 'value')}) continue`;
+  }
+
+  /**
+   * Generate existential check (?)
+   * Pattern: ["?", expr] → (expr != null)
+   */
+  generateExistential(head, rest, context, sexpr) {
+    const [expr] = rest;
+    return `(${this.generate(expr, 'value')} != null)`;
+  }
+
+  /**
+   * Generate ternary operator (?:)
+   * Pattern: ["?:", condition, thenExpr, elseExpr]
+   */
+  generateTernary(head, rest, context, sexpr) {
+    const [condition, thenExpr, elseExpr] = rest;
+    const condCode = this.unwrap(this.generate(condition, 'value'));
+    return `(${condCode} ? ${this.generate(thenExpr, 'value')} : ${this.generate(elseExpr, 'value')})`;
+  }
+
+  /**
+   * Generate infinite loop
+   * Pattern: ["loop", body]
+   */
+  generateLoop(head, rest, context, sexpr) {
+    const [body] = rest;
+    const bodyCode = this.generateLoopBody(body);
+    return `while (true) ${bodyCode}`;
+  }
+
+  /**
+   * Generate await expression
+   * Pattern: ["await", expr]
+   */
+  generateAwait(head, rest, context, sexpr) {
+    const [expr] = rest;
+    return `await ${this.generate(expr, 'value')}`;
+  }
+
+  /**
+   * Generate yield expression
+   * Pattern: ["yield"] or ["yield", expr]
+   */
+  generateYield(head, rest, context, sexpr) {
+    if (rest.length === 0) {
+      return 'yield';
+    }
+    const [expr] = rest;
+    return `yield ${this.generate(expr, 'value')}`;
+  }
+
+  /**
+   * Generate yield* delegation
+   * Pattern: ["yield-from", expr]
+   */
+  generateYieldFrom(head, rest, context, sexpr) {
+    const [expr] = rest;
+    return `yield* ${this.generate(expr, 'value')}`;
+  }
+
+  //-------------------------------------------------------------------------
+  // CONTROL FLOW - Conditionals
+  //-------------------------------------------------------------------------
+
+  /**
+   * Generate if/unless statement
+   * Pattern: ["if", condition, thenBranch, ...elseBranches] or ["unless", condition, body]
+   */
+  generateIf(head, rest, context, sexpr) {
+    if (head === 'unless') {
+      // Unless statement
+      let [condition, body] = rest;
+
+      // Unwrap single-element array body
+      if (Array.isArray(body) && body.length === 1) {
+        const elem = body[0];
+        if (!Array.isArray(elem) || elem[0] !== 'block') {
+          body = elem;
+        }
+      }
+
+      // Context-aware generation
+      if (context === 'value') {
+        const thenExpr = this.extractExpression(body);
+        return `(!${this.generate(condition, 'value')} ? ${thenExpr} : undefined)`;
+      }
+
+      // Statement context
+      let condCode = this.unwrap(this.generate(condition, 'value'));
+      if (condCode.includes(' ') || condCode.includes('===') || condCode.includes('!==') ||
+          condCode.includes('>') || condCode.includes('<') || condCode.includes('&&') || condCode.includes('||')) {
+        condCode = `(${condCode})`;
+      }
+      return `if (!${condCode}) ` + this.generate(body, 'statement');
+    }
+
+    // If statement
+    const [condition, thenBranch, ...elseBranches] = rest;
+
+    if (context === 'value') {
+      return this.generateIfAsExpression(condition, thenBranch, elseBranches);
+    } else {
+      return this.generateIfAsStatement(condition, thenBranch, elseBranches);
+    }
   }
 
   /**
