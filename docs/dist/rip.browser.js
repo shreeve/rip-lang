@@ -3299,6 +3299,82 @@ class CodeGenerator {
     ">>=",
     ">>>="
   ]);
+  static GENERATORS = {
+    program: "generateProgram",
+    "&&": "generateLogicalAnd",
+    "||": "generateLogicalOr",
+    "+": "generateBinaryOp",
+    "-": "generateBinaryOp",
+    "*": "generateBinaryOp",
+    "/": "generateBinaryOp",
+    "%": "generateBinaryOp",
+    "**": "generateBinaryOp",
+    "==": "generateBinaryOp",
+    "===": "generateBinaryOp",
+    "!=": "generateBinaryOp",
+    "!==": "generateBinaryOp",
+    "<": "generateBinaryOp",
+    ">": "generateBinaryOp",
+    "<=": "generateBinaryOp",
+    ">=": "generateBinaryOp",
+    "??": "generateBinaryOp",
+    "!?": "generateBinaryOp",
+    "&": "generateBinaryOp",
+    "|": "generateBinaryOp",
+    "^": "generateBinaryOp",
+    "<<": "generateBinaryOp",
+    ">>": "generateBinaryOp",
+    ">>>": "generateBinaryOp",
+    "%%": "generateModulo",
+    "//": "generateFloorDiv",
+    "//=": "generateFloorDivAssign",
+    "..": "generateRange",
+    "...": "generateRange",
+    "!": "generateNot",
+    "~": "generateBitwiseNot",
+    "++": "generateIncDec",
+    "--": "generateIncDec",
+    "=~": "generateRegexMatch",
+    instanceof: "generateInstanceof",
+    in: "generateIn",
+    of: "generateOf",
+    typeof: "generateTypeof",
+    delete: "generateDelete",
+    new: "generateNew",
+    array: "generateArray",
+    object: "generateObject",
+    block: "generateBlock",
+    ".": "generatePropertyAccess",
+    "?.": "generateOptionalProperty",
+    "::": "generatePrototype",
+    "?::": "generateOptionalPrototype",
+    "[]": "generateIndexAccess",
+    "?[]": "generateSoakIndex",
+    optindex: "generateOptIndex",
+    optcall: "generateOptCall",
+    "regex-index": "generateRegexIndex",
+    def: "generateDef",
+    "->": "generateThinArrow",
+    "=>": "generateFatArrow",
+    return: "generateReturn",
+    break: "generateBreak",
+    "break-if": "generateBreakIf",
+    continue: "generateContinue",
+    "continue-if": "generateContinueIf",
+    "?": "generateExistential",
+    "?:": "generateTernary",
+    loop: "generateLoop",
+    await: "generateAwait",
+    yield: "generateYield",
+    "yield-from": "generateYieldFrom",
+    if: "generateIf",
+    unless: "generateIf",
+    "for-in": "generateForIn",
+    "for-of": "generateForOf",
+    "for-from": "generateForFrom",
+    while: "generateWhile",
+    until: "generateUntil"
+  };
   constructor(options = {}) {
     this.options = options;
     this.indentLevel = 0;
@@ -3512,151 +3588,11 @@ class CodeGenerator {
     if (head instanceof String) {
       head = head.valueOf();
     }
+    const generatorMethod = CodeGenerator.GENERATORS[head];
+    if (generatorMethod) {
+      return this[generatorMethod](head, rest, context, sexpr);
+    }
     switch (head) {
-      case "program":
-        return this.generateProgram(rest);
-      case "&&":
-      case "||": {
-        const flattened = this.flattenBinaryChain(sexpr);
-        const operands = flattened.slice(1);
-        if (operands.length === 0) {
-          return "true";
-        }
-        if (operands.length === 1) {
-          return this.generate(operands[0], "value");
-        }
-        const parts = operands.map((op) => this.generate(op, "value"));
-        return `(${parts.join(` ${head} `)})`;
-      }
-      case "+":
-      case "-":
-      case "*":
-      case "/":
-      case "%":
-      case "**":
-      case "==":
-      case "===":
-      case "!=":
-      case "!==":
-      case "<":
-      case ">":
-      case "<=":
-      case ">=":
-      case "??":
-      case "!?":
-      case "&":
-      case "|":
-      case "^":
-      case "<<":
-      case ">>":
-      case ">>>": {
-        if ((head === "+" || head === "-") && rest.length === 1) {
-          const [operand] = rest;
-          return `(${head}${this.generate(operand, "value")})`;
-        }
-        const [left2, right2] = rest;
-        if (head === "!?") {
-          const leftCode = this.generate(left2, "value");
-          const rightCode = this.generate(right2, "value");
-          return `(${leftCode} !== undefined ? ${leftCode} : ${rightCode})`;
-        }
-        let op = head;
-        if (head === "==")
-          op = "===";
-        if (head === "!=")
-          op = "!==";
-        return `(${this.generate(left2, "value")} ${op} ${this.generate(right2, "value")})`;
-      }
-      case "%%": {
-        const [left2, right2] = rest;
-        const leftCode = this.generate(left2, "value");
-        const rightCode = this.generate(right2, "value");
-        this.helpers.add("modulo");
-        return `modulo(${leftCode}, ${rightCode})`;
-      }
-      case "//": {
-        const [left2, right2] = rest;
-        return `Math.floor(${this.generate(left2, "value")} / ${this.generate(right2, "value")})`;
-      }
-      case "..": {
-        const [start, end] = rest;
-        const startCode = this.generate(start, "value");
-        const endCode = this.generate(end, "value");
-        return `((s, e) => Array.from({length: Math.abs(e - s) + 1}, (_, i) => s + (i * (s <= e ? 1 : -1))))(${startCode}, ${endCode})`;
-      }
-      case "...": {
-        if (rest.length === 2) {
-          const [start, end] = rest;
-          const startCode = this.generate(start, "value");
-          const endCode = this.generate(end, "value");
-          return `((s, e) => Array.from({length: Math.max(0, Math.abs(e - s))}, (_, i) => s + (i * (s <= e ? 1 : -1))))(${startCode}, ${endCode})`;
-        }
-        const [expr] = rest;
-        return `...${this.generate(expr, "value")}`;
-      }
-      case "!": {
-        const [operand] = rest;
-        const operandCode = this.generate(operand, "value");
-        const needsParens = operandCode.includes("(") || operandCode.includes(" ");
-        return needsParens ? `(!(${operandCode}))` : `!${operandCode}`;
-      }
-      case "new": {
-        const [call] = rest;
-        if (Array.isArray(call) && (call[0] === "." || call[0] === "?.")) {
-          const [accessType, target, prop] = call;
-          if (Array.isArray(target) && !target[0].startsWith) {
-            const newExpr = this.generate(["new", target], "value");
-            return `(${newExpr}).${prop}`;
-          }
-          const targetCode = this.generate(target, "value");
-          const propAccess = `${targetCode}.${prop}`;
-          return `new ${propAccess}`;
-        }
-        if (Array.isArray(call)) {
-          const [constructor, ...args] = call;
-          const constructorCode = this.generate(constructor, "value");
-          const argsCode = args.map((arg) => this.unwrap(this.generate(arg, "value"))).join(", ");
-          return `new ${constructorCode}(${argsCode})`;
-        }
-        return `new ${this.generate(call, "value")}()`;
-      }
-      case "~": {
-        const [operand] = rest;
-        return `(~${this.generate(operand, "value")})`;
-      }
-      case "++":
-      case "--": {
-        const [operand, isPostfix] = rest;
-        const operandCode = this.generate(operand, "value");
-        if (isPostfix) {
-          return `(${operandCode}${head})`;
-        } else {
-          return `(${head}${operandCode})`;
-        }
-      }
-      case "instanceof": {
-        const [expr, type] = rest;
-        return `(${this.generate(expr, "value")} instanceof ${this.generate(type, "value")})`;
-      }
-      case "in": {
-        const [value, container] = rest;
-        const valueCode = this.generate(value, "value");
-        const containerCode = this.generate(container, "value");
-        return `(Array.isArray(${containerCode}) || typeof ${containerCode} === 'string' ? ${containerCode}.includes(${valueCode}) : (${valueCode} in ${containerCode}))`;
-      }
-      case "of": {
-        const [key2, obj] = rest;
-        return `(${this.generate(key2, "value")} in ${this.generate(obj, "value")})`;
-      }
-      case "=~": {
-        const [left2, right2] = rest;
-        this.helpers.add("toSearchable");
-        this.programVars.add("_");
-        const rightCode = this.generate(right2, "value");
-        const hasMultilineFlag = rightCode.includes("/m");
-        const allowNewlines = hasMultilineFlag ? ", true" : "";
-        return `(_ = toSearchable(${this.generate(left2, "value")}${allowNewlines}).match(${rightCode}))`;
-      }
       case "=":
       case "+=":
       case "-=":
@@ -3673,189 +3609,25 @@ class CodeGenerator {
       case "^=":
       case "<<=":
       case ">>=":
-      case ">>>=": {
-        const [target, value] = rest;
-        const op = head === "?=" ? "??=" : head;
-        const isFunctionValue = Array.isArray(value) && (value[0] === "->" || value[0] === "=>" || value[0] === "def");
-        if (target instanceof String && target.await !== undefined && !isFunctionValue) {
-          const sigil = target.await === true ? "!" : "&";
-          throw new Error(`Cannot use ${sigil} sigil in variable declaration '${target.valueOf()}'. Sigils are only for call-sites.`);
-        }
-        const targetHasVoidSigil = target instanceof String && target.await === true;
-        if (targetHasVoidSigil && isFunctionValue) {
-          this.nextFunctionIsVoid = true;
-        }
-        const isEmptyArray = Array.isArray(target) && target[0] === "array" && target.length === 1;
-        const isEmptyObject = Array.isArray(target) && target[0] === "object" && target.length === 1;
-        if (isEmptyArray || isEmptyObject) {
-          const valueCode2 = this.generate(value, "value");
-          if (isEmptyObject && context === "statement") {
-            return `(${valueCode2})`;
-          }
-          return valueCode2;
-        }
-        if (Array.isArray(target) && target[0] === "array") {
-          const restIndex = target.slice(1).findIndex((el) => Array.isArray(el) && el[0] === "..." || el === "...");
-          if (restIndex !== -1 && restIndex < target.length - 2) {
-            const elements = target.slice(1);
-            const elementsAfterRest = elements.slice(restIndex + 1);
-            const afterCount = elementsAfterRest.length;
-            if (afterCount > 0) {
-              const valueCode2 = this.generate(value, "value");
-              const beforeRest = elements.slice(0, restIndex);
-              const beforePattern = beforeRest.map((el) => {
-                if (el === ",")
-                  return "";
-                if (typeof el === "string")
-                  return el;
-                return this.generate(el, "value");
-              }).join(", ");
-              const afterPattern = elementsAfterRest.map((el) => {
-                if (el === ",")
-                  return "";
-                if (typeof el === "string")
-                  return el;
-                return this.generate(el, "value");
-              }).join(", ");
-              this.helpers.add("slice");
-              const collectVars = (els) => {
-                els.forEach((el) => {
-                  if (el === "," || el === "...")
-                    return;
-                  if (typeof el === "string")
-                    this.programVars.add(el);
-                  else if (Array.isArray(el) && el[0] === "...") {
-                    if (typeof el[1] === "string")
-                      this.programVars.add(el[1]);
-                  }
-                });
-              };
-              collectVars(elements);
-              const restElement = elements[restIndex];
-              const restVarName = Array.isArray(restElement) && restElement[0] === "..." ? restElement[1] : null;
-              const statements = [];
-              if (beforePattern) {
-                statements.push(`[${beforePattern}] = ${valueCode2}`);
-              }
-              if (restVarName) {
-                statements.push(`[...${restVarName}] = ${valueCode2}.slice(${restIndex}, -${afterCount})`);
-              }
-              statements.push(`[${afterPattern}] = slice.call(${valueCode2}, -${afterCount})`);
-              return statements.join(", ");
-            }
-          }
-        }
-        if (context === "statement" && head === "=" && Array.isArray(value) && (value[0] === "||" || value[0] === "&&") && value.length === 3) {
-          const [binaryOp, left2, right2] = value;
-          if (Array.isArray(right2) && (right2[0] === "unless" || right2[0] === "if") && right2.length === 3) {
-            const [condType, condition, wrappedValue] = right2;
-            const unwrappedValue = Array.isArray(wrappedValue) && wrappedValue.length === 1 ? wrappedValue[0] : wrappedValue;
-            const fullValue = [binaryOp, left2, unwrappedValue];
-            const targetCode2 = this.generate(target, "value");
-            const condCode = this.generate(condition, "value");
-            const valueCode2 = this.generate(fullValue, "value");
-            if (condType === "unless") {
-              return `if (!${condCode}) ${targetCode2} = ${valueCode2}`;
-            } else {
-              return `if (${condCode}) ${targetCode2} = ${valueCode2}`;
-            }
-          }
-        }
-        if (context === "statement" && head === "=" && Array.isArray(value) && value.length === 3) {
-          const valueHead = value[0];
-          const [_, condition, actualValue] = value;
-          const isPostfix = Array.isArray(actualValue) && actualValue.length === 1 && (!Array.isArray(actualValue[0]) || actualValue[0][0] !== "block");
-          if ((valueHead === "unless" || valueHead === "if") && isPostfix) {
-            let unwrappedValue = actualValue;
-            if (Array.isArray(actualValue) && actualValue.length === 1) {
-              unwrappedValue = actualValue[0];
-            }
-            const targetCode2 = this.generate(target, "value");
-            let condCode = this.unwrapLogical(this.generate(condition, "value"));
-            const valueCode2 = this.generate(unwrappedValue, "value");
-            if (valueHead === "unless") {
-              if (condCode.includes(" ") || condCode.includes("===") || condCode.includes("!==") || condCode.includes(">") || condCode.includes("<") || condCode.includes("&&") || condCode.includes("||")) {
-                condCode = `(${condCode})`;
-              }
-              return `if (!${condCode}) ${targetCode2} = ${valueCode2}`;
-            } else {
-              return `if (${condCode}) ${targetCode2} = ${valueCode2}`;
-            }
-          }
-        }
-        let targetCode;
-        if (target instanceof String && target.await !== undefined) {
-          targetCode = target.valueOf();
-        } else {
-          targetCode = this.generate(target, "value");
-        }
-        let valueCode = this.generate(value, "value");
-        const isObjectLiteral = Array.isArray(value) && value[0] === "object";
-        if (!isObjectLiteral) {
-          valueCode = this.unwrap(valueCode);
-        }
-        const needsParensForValue = context === "value";
-        const needsParensForObject = context === "statement" && Array.isArray(target) && target[0] === "object";
-        if (needsParensForValue || needsParensForObject) {
-          return `(${targetCode} ${op} ${valueCode})`;
-        }
-        return `${targetCode} ${op} ${valueCode}`;
-      }
-      case "//=": {
-        const [target, value] = rest;
-        const targetCode = this.generate(target, "value");
-        const valueCode = this.generate(value, "value");
-        return `${targetCode} = Math.floor(${targetCode} / ${valueCode})`;
-      }
-      case "array": {
-        const hasTrailingElision = rest.length > 0 && rest[rest.length - 1] === ",";
-        const elements = rest.map((el) => {
-          if (el === ",") {
-            return "";
-          }
-          if (el === "...") {
-            return "";
-          }
-          if (Array.isArray(el) && el[0] === "...") {
-            return `...${this.generate(el[1], "value")}`;
-          }
-          return this.generate(el, "value");
-        }).join(", ");
-        return hasTrailingElision ? `[${elements},]` : `[${elements}]`;
-      }
-      case "object": {
-        if (rest.length === 1 && Array.isArray(rest[0]) && Array.isArray(rest[0][1]) && rest[0][1][0] === "comprehension") {
-          const [keyVar, comprehensionNode] = rest[0];
-          const [, valueExpr, iterators, guards] = comprehensionNode;
-          return this.generate(["object-comprehension", keyVar, valueExpr, iterators, guards], context);
-        }
-        const pairs = rest.map((pair) => {
-          if (Array.isArray(pair) && pair[0] === "...") {
-            return `...${this.generate(pair[1], "value")}`;
-          }
-          const [key2, value, operator] = pair;
-          let keyCode;
-          if (Array.isArray(key2) && key2[0] === "computed") {
-            const expr = key2[1];
-            keyCode = `[${this.generate(expr, "value")}]`;
-          } else {
-            keyCode = this.generate(key2, "value");
-          }
-          const valueCode = this.generate(value, "value");
-          if (operator === "=") {
-            return `${keyCode} = ${valueCode}`;
-          } else if (operator === ":") {
-            return `${keyCode}: ${valueCode}`;
-          } else {
-            if (keyCode === valueCode && !Array.isArray(key2)) {
-              return keyCode;
-            }
-            return `${keyCode}: ${valueCode}`;
-          }
-        }).join(", ");
-        return `{${pairs}}`;
-      }
-      case ".": {
+      case ">>>=":
+        return this.generateAssignment(head, rest, context, sexpr);
+      case "//=":
+        return this.generateFloorDivAssign(head, rest, context, sexpr);
+      case "array":
+        return this.generateArray(head, rest, context, sexpr);
+      case "object":
+        return this.generateObject(head, rest, context, sexpr);
+      case ".":
+      case "?.":
+      case "::":
+      case "?::":
+      case "regex-index":
+      case "[]":
+      case "?[]":
+      case "optindex":
+      case "optcall":
+        throw new Error(`[BUG] ${head} should be handled by dispatch table`);
+      case "oldPropertyDot": {
         const [obj, prop] = rest;
         const objCode = this.generate(obj, "value");
         const isNumberLiteral = /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(objCode);
@@ -3959,7 +3731,14 @@ class CodeGenerator {
         const argsCode = args.map((arg) => this.generate(arg, "value")).join(", ");
         return `${fnCode}?.(${argsCode})`;
       }
-      case "def": {
+      case "def":
+      case "->":
+      case "=>":
+      case "return":
+        throw new Error(`[BUG] ${head} should be handled by dispatch table`);
+      case "block":
+        return this.generateBlock(head, rest, context, sexpr);
+      case "oldDef": {
         const [name, params, body] = rest;
         const sideEffectOnly = name instanceof String && name.await === true;
         const cleanName = name instanceof String ? name.valueOf() : name;
@@ -4035,13 +3814,8 @@ class CodeGenerator {
         }
         return `return ${this.generate(expr, "value")}`;
       }
-      case "block": {
-        const stmts = this.withIndent(() => this.formatStatements(rest));
-        return `{
-${stmts.join(`
-`)}
-${this.indent()}}`;
-      }
+      case "block":
+        return this.generateBlock(rest, context, sexpr);
       case "if": {
         const [condition, thenBranch, ...elseBranches] = rest;
         if (context === "value") {
@@ -5322,17 +5096,17 @@ export default ${target}`;
       }
     }
   }
-  generateProgram(statements) {
+  generateProgram(head, statements, context, sexpr) {
     let code = "";
     const imports = [];
     const exports = [];
     const otherStatements = [];
     statements.forEach((stmt) => {
       if (Array.isArray(stmt)) {
-        const head = stmt[0];
-        if (head === "import") {
+        const head2 = stmt[0];
+        if (head2 === "import") {
           imports.push(stmt);
-        } else if (head === "export" || head === "export-default" || head === "export-all" || head === "export-from") {
+        } else if (head2 === "export" || head2 === "export-default" || head2 === "export-all" || head2 === "export-from") {
           exports.push(stmt);
         } else {
           otherStatements.push(stmt);
@@ -5359,9 +5133,9 @@ export default ${target}`;
         generated = this.generate(stmt, "statement");
       }
       if (generated && !generated.endsWith(";")) {
-        const head = Array.isArray(stmt) ? stmt[0] : null;
+        const head2 = Array.isArray(stmt) ? stmt[0] : null;
         const blockStatements = ["def", "class", "if", "unless", "for-in", "for-of", "for-from", "while", "until", "loop", "switch", "try"];
-        const isBlockStatement = blockStatements.includes(head);
+        const isBlockStatement = blockStatements.includes(head2);
         if (!isBlockStatement || !generated.endsWith("}")) {
           return generated + ";";
         }
@@ -5451,6 +5225,944 @@ function _setDataSection() {
 }`;
     }
     return code;
+  }
+  generateBinaryOp(op, rest, context, sexpr) {
+    if ((op === "+" || op === "-") && rest.length === 1) {
+      const [operand] = rest;
+      return `(${op}${this.generate(operand, "value")})`;
+    }
+    const [left2, right2] = rest;
+    if (op === "!?") {
+      const leftCode = this.generate(left2, "value");
+      const rightCode = this.generate(right2, "value");
+      return `(${leftCode} !== undefined ? ${leftCode} : ${rightCode})`;
+    }
+    if (op === "==")
+      op = "===";
+    if (op === "!=")
+      op = "!==";
+    return `(${this.generate(left2, "value")} ${op} ${this.generate(right2, "value")})`;
+  }
+  generateModulo(head, rest, context, sexpr) {
+    const [left2, right2] = rest;
+    this.helpers.add("modulo");
+    return `modulo(${this.generate(left2, "value")}, ${this.generate(right2, "value")})`;
+  }
+  generateFloorDiv(head, rest, context, sexpr) {
+    const [left2, right2] = rest;
+    return `Math.floor(${this.generate(left2, "value")} / ${this.generate(right2, "value")})`;
+  }
+  generateFloorDivAssign(head, rest, context, sexpr) {
+    const [target, value] = rest;
+    const targetCode = this.generate(target, "value");
+    const valueCode = this.generate(value, "value");
+    return `${targetCode} = Math.floor(${targetCode} / ${valueCode})`;
+  }
+  generateAssignment(head, rest, context, sexpr) {
+    const [target, value] = rest;
+    const op = head === "?=" ? "??=" : head;
+    const isFunctionValue = Array.isArray(value) && (value[0] === "->" || value[0] === "=>" || value[0] === "def");
+    if (target instanceof String && target.await !== undefined && !isFunctionValue) {
+      const sigil = target.await === true ? "!" : "&";
+      throw new Error(`Cannot use ${sigil} sigil in variable declaration '${target.valueOf()}'. Sigils are only for call-sites.`);
+    }
+    const targetHasVoidSigil = target instanceof String && target.await === true;
+    if (targetHasVoidSigil && isFunctionValue) {
+      this.nextFunctionIsVoid = true;
+    }
+    const isEmptyArray = Array.isArray(target) && target[0] === "array" && target.length === 1;
+    const isEmptyObject = Array.isArray(target) && target[0] === "object" && target.length === 1;
+    if (isEmptyArray || isEmptyObject) {
+      const valueCode2 = this.generate(value, "value");
+      if (isEmptyObject && context === "statement") {
+        return `(${valueCode2})`;
+      }
+      return valueCode2;
+    }
+    if (Array.isArray(target) && target[0] === "array") {
+      const restIndex = target.slice(1).findIndex((el) => Array.isArray(el) && el[0] === "..." || el === "...");
+      if (restIndex !== -1 && restIndex < target.length - 2) {
+        const elements = target.slice(1);
+        const elementsAfterRest = elements.slice(restIndex + 1);
+        const afterCount = elementsAfterRest.length;
+        if (afterCount > 0) {
+          const valueCode2 = this.generate(value, "value");
+          const beforeRest = elements.slice(0, restIndex);
+          const beforePattern = beforeRest.map((el) => {
+            if (el === ",")
+              return "";
+            if (typeof el === "string")
+              return el;
+            return this.generate(el, "value");
+          }).join(", ");
+          const afterPattern = elementsAfterRest.map((el) => {
+            if (el === ",")
+              return "";
+            if (typeof el === "string")
+              return el;
+            return this.generate(el, "value");
+          }).join(", ");
+          this.helpers.add("slice");
+          const collectVars = (els) => {
+            els.forEach((el) => {
+              if (el === "," || el === "...")
+                return;
+              if (typeof el === "string")
+                this.programVars.add(el);
+              else if (Array.isArray(el) && el[0] === "...") {
+                if (typeof el[1] === "string")
+                  this.programVars.add(el[1]);
+              }
+            });
+          };
+          collectVars(elements);
+          const restElement = elements[restIndex];
+          const restVarName = Array.isArray(restElement) && restElement[0] === "..." ? restElement[1] : null;
+          const statements = [];
+          if (beforePattern) {
+            statements.push(`[${beforePattern}] = ${valueCode2}`);
+          }
+          if (restVarName) {
+            statements.push(`[...${restVarName}] = ${valueCode2}.slice(${restIndex}, -${afterCount})`);
+          }
+          statements.push(`[${afterPattern}] = slice.call(${valueCode2}, -${afterCount})`);
+          return statements.join(", ");
+        }
+      }
+    }
+    if (context === "statement" && head === "=" && Array.isArray(value) && (value[0] === "||" || value[0] === "&&") && value.length === 3) {
+      const [binaryOp, left2, right2] = value;
+      if (Array.isArray(right2) && (right2[0] === "unless" || right2[0] === "if") && right2.length === 3) {
+        const [condType, condition, wrappedValue] = right2;
+        const unwrappedValue = Array.isArray(wrappedValue) && wrappedValue.length === 1 ? wrappedValue[0] : wrappedValue;
+        const fullValue = [binaryOp, left2, unwrappedValue];
+        const targetCode2 = this.generate(target, "value");
+        const condCode = this.generate(condition, "value");
+        const valueCode2 = this.generate(fullValue, "value");
+        if (condType === "unless") {
+          return `if (!${condCode}) ${targetCode2} = ${valueCode2}`;
+        } else {
+          return `if (${condCode}) ${targetCode2} = ${valueCode2}`;
+        }
+      }
+    }
+    if (context === "statement" && head === "=" && Array.isArray(value) && value.length === 3) {
+      const valueHead = value[0];
+      const [_, condition, actualValue] = value;
+      const isPostfix = Array.isArray(actualValue) && actualValue.length === 1 && (!Array.isArray(actualValue[0]) || actualValue[0][0] !== "block");
+      if ((valueHead === "unless" || valueHead === "if") && isPostfix) {
+        let unwrappedValue = actualValue;
+        if (Array.isArray(actualValue) && actualValue.length === 1) {
+          unwrappedValue = actualValue[0];
+        }
+        const targetCode2 = this.generate(target, "value");
+        let condCode = this.unwrapLogical(this.generate(condition, "value"));
+        const valueCode2 = this.generate(unwrappedValue, "value");
+        if (valueHead === "unless") {
+          if (condCode.includes(" ") || condCode.includes("===") || condCode.includes("!==") || condCode.includes(">") || condCode.includes("<") || condCode.includes("&&") || condCode.includes("||")) {
+            condCode = `(${condCode})`;
+          }
+          return `if (!${condCode}) ${targetCode2} = ${valueCode2}`;
+        } else {
+          return `if (${condCode}) ${targetCode2} = ${valueCode2}`;
+        }
+      }
+    }
+    let targetCode;
+    if (target instanceof String && target.await !== undefined) {
+      targetCode = target.valueOf();
+    } else {
+      targetCode = this.generate(target, "value");
+    }
+    let valueCode = this.generate(value, "value");
+    const isObjectLiteral = Array.isArray(value) && value[0] === "object";
+    if (!isObjectLiteral) {
+      valueCode = this.unwrap(valueCode);
+    }
+    const needsParensForValue = context === "value";
+    const needsParensForObject = context === "statement" && Array.isArray(target) && target[0] === "object";
+    if (needsParensForValue || needsParensForObject) {
+      return `(${targetCode} ${op} ${valueCode})`;
+    }
+    return `${targetCode} ${op} ${valueCode}`;
+  }
+  generatePropertyAccess(head, rest, context, sexpr) {
+    const [obj, prop] = rest;
+    const objCode = this.generate(obj, "value");
+    const isNumberLiteral = /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(objCode);
+    const isObjectLiteral = Array.isArray(obj) && obj[0] === "object";
+    const isAwaitOrYield = Array.isArray(obj) && (obj[0] === "await" || obj[0] === "yield");
+    const needsParens = isNumberLiteral || isObjectLiteral || isAwaitOrYield;
+    const base = needsParens ? `(${objCode})` : objCode;
+    if (prop instanceof String && prop.await === true) {
+      const cleanProp2 = prop.valueOf();
+      return `await ${base}.${cleanProp2}()`;
+    }
+    const cleanProp = prop instanceof String ? prop.valueOf() : prop;
+    return `${base}.${cleanProp}`;
+  }
+  generateOptionalProperty(head, rest, context, sexpr) {
+    const [obj, prop] = rest;
+    return `${this.generate(obj, "value")}?.${prop}`;
+  }
+  generatePrototype(head, rest, context, sexpr) {
+    const [obj, prop] = rest;
+    const objCode = this.generate(obj, "value");
+    if (prop === "prototype") {
+      return `${objCode}.prototype`;
+    }
+    const cleanProp = prop instanceof String ? prop.valueOf() : prop;
+    return `${objCode}.prototype.${cleanProp}`;
+  }
+  generateOptionalPrototype(head, rest, context, sexpr) {
+    const [obj, prop] = rest;
+    const objCode = this.generate(obj, "value");
+    if (prop === "prototype") {
+      return `(${objCode} != null ? ${objCode}.prototype : undefined)`;
+    }
+    return `(${objCode} != null ? ${objCode}.prototype.${prop} : undefined)`;
+  }
+  generateRegexIndex(head, rest, context, sexpr) {
+    const [value, regex, captureIndex] = rest;
+    this.helpers.add("toSearchable");
+    this.programVars.add("_");
+    const valueCode = this.generate(value, "value");
+    const regexCode = this.generate(regex, "value");
+    const indexCode = captureIndex !== null ? this.generate(captureIndex, "value") : "0";
+    const hasMultilineFlag = regexCode.includes("/m");
+    const allowNewlines = hasMultilineFlag ? ", true" : "";
+    return `(_ = toSearchable(${valueCode}${allowNewlines}).match(${regexCode})) && _[${indexCode}]`;
+  }
+  generateIndexAccess(head, rest, context, sexpr) {
+    const [arr, index] = rest;
+    if (Array.isArray(index) && (index[0] === ".." || index[0] === "...")) {
+      const isInclusive = index[0] === "..";
+      const arrCode = this.generate(arr, "value");
+      const [start, end] = index.slice(1);
+      if (start === null && end === null) {
+        return `${arrCode}.slice()`;
+      } else if (start === null) {
+        const isNegativeOne = Array.isArray(end) && end[0] === "-" && end.length === 2 && (end[1] === "1" || end[1] === 1 || end[1] instanceof String && end[1].valueOf() === "1");
+        if (isInclusive && isNegativeOne) {
+          return `${arrCode}.slice(0)`;
+        }
+        const endCode = this.generate(end, "value");
+        if (isInclusive) {
+          return `${arrCode}.slice(0, +${endCode} + 1 || 9e9)`;
+        } else {
+          return `${arrCode}.slice(0, ${endCode})`;
+        }
+      } else if (end === null) {
+        const startCode = this.generate(start, "value");
+        return `${arrCode}.slice(${startCode})`;
+      } else {
+        const startCode = this.generate(start, "value");
+        const isNegativeOneLiteral = Array.isArray(end) && end[0] === "-" && end.length === 2 && (end[1] === "1" || end[1] === 1 || end[1] instanceof String && end[1].valueOf() === "1");
+        if (isInclusive && isNegativeOneLiteral) {
+          return `${arrCode}.slice(${startCode})`;
+        }
+        const endCode = this.generate(end, "value");
+        if (isInclusive) {
+          return `${arrCode}.slice(${startCode}, +${endCode} + 1 || 9e9)`;
+        } else {
+          return `${arrCode}.slice(${startCode}, ${endCode})`;
+        }
+      }
+    }
+    const indexCode = this.unwrap(this.generate(index, "value"));
+    return `${this.generate(arr, "value")}[${indexCode}]`;
+  }
+  generateSoakIndex(head, rest, context, sexpr) {
+    const [arr, index] = rest;
+    const arrCode = this.generate(arr, "value");
+    const indexCode = this.generate(index, "value");
+    return `(${arrCode} != null ? ${arrCode}[${indexCode}] : undefined)`;
+  }
+  generateOptIndex(head, rest, context, sexpr) {
+    const [arr, index] = rest;
+    const arrCode = this.generate(arr, "value");
+    const indexCode = this.generate(index, "value");
+    return `${arrCode}?.[${indexCode}]`;
+  }
+  generateOptCall(head, rest, context, sexpr) {
+    const [fn, ...args] = rest;
+    const fnCode = this.generate(fn, "value");
+    const argsCode = args.map((arg) => this.generate(arg, "value")).join(", ");
+    return `${fnCode}?.(${argsCode})`;
+  }
+  generateDef(head, rest, context, sexpr) {
+    const [name, params, body] = rest;
+    const sideEffectOnly = name instanceof String && name.await === true;
+    const cleanName = name instanceof String ? name.valueOf() : name;
+    const paramList = this.generateParamList(params);
+    const bodyCode = this.generateFunctionBody(body, params, sideEffectOnly);
+    const isAsync = this.containsAwait(body);
+    const isGenerator = this.containsYield(body);
+    const asyncPrefix = isAsync ? "async " : "";
+    const generatorSuffix = isGenerator ? "*" : "";
+    return `${asyncPrefix}function${generatorSuffix} ${cleanName}(${paramList}) ${bodyCode}`;
+  }
+  generateThinArrow(head, rest, context, sexpr) {
+    const [params, body] = rest;
+    const sideEffectOnly = this.nextFunctionIsVoid || false;
+    this.nextFunctionIsVoid = false;
+    const paramList = this.generateParamList(params);
+    const bodyCode = this.generateFunctionBody(body, params, sideEffectOnly);
+    const isAsync = this.containsAwait(body);
+    const isGenerator = this.containsYield(body);
+    const asyncPrefix = isAsync ? "async " : "";
+    const generatorSuffix = isGenerator ? "*" : "";
+    const fnCode = `${asyncPrefix}function${generatorSuffix}(${paramList}) ${bodyCode}`;
+    return context === "value" ? `(${fnCode})` : fnCode;
+  }
+  generateFatArrow(head, rest, context, sexpr) {
+    const [params, body] = rest;
+    const sideEffectOnly = this.nextFunctionIsVoid || false;
+    this.nextFunctionIsVoid = false;
+    const paramList = this.generateParamList(params);
+    const isSingleSimpleParam = params.length === 1 && typeof params[0] === "string" && !paramList.includes("=") && !paramList.includes("...") && !paramList.includes("[") && !paramList.includes("{");
+    const paramSyntax = isSingleSimpleParam ? paramList : `(${paramList})`;
+    const isAsync = this.containsAwait(body);
+    const asyncPrefix = isAsync ? "async " : "";
+    if (!sideEffectOnly) {
+      if (Array.isArray(body) && body[0] === "block" && body.length === 2) {
+        const expr = body[1];
+        if (!Array.isArray(expr) || expr[0] !== "return") {
+          return `${asyncPrefix}${paramSyntax} => ${this.generate(expr, "value")}`;
+        }
+      }
+      if (!Array.isArray(body) || body[0] !== "block") {
+        return `${asyncPrefix}${paramSyntax} => ${this.generate(body, "value")}`;
+      }
+    }
+    const bodyCode = this.generateFunctionBody(body, params, sideEffectOnly);
+    return `${asyncPrefix}${paramSyntax} => ${bodyCode}`;
+  }
+  generateReturn(head, rest, context, sexpr) {
+    if (rest.length === 0) {
+      return "return";
+    }
+    let [expr] = rest;
+    if (this.sideEffectOnly) {
+      return "return";
+    }
+    if (Array.isArray(expr) && expr[0] === "unless") {
+      const [, condition, body] = expr;
+      const value = Array.isArray(body) && body.length === 1 ? body[0] : body;
+      return `if (!${this.generate(condition, "value")}) return ${this.generate(value, "value")}`;
+    }
+    if (Array.isArray(expr) && expr[0] === "if") {
+      const [, condition, body, ...elseParts] = expr;
+      if (elseParts.length === 0) {
+        const value = Array.isArray(body) && body.length === 1 ? body[0] : body;
+        return `if (${this.generate(condition, "value")}) return ${this.generate(value, "value")}`;
+      }
+    }
+    if (Array.isArray(expr) && expr[0] === "new" && Array.isArray(expr[1]) && expr[1][0] === "unless") {
+      const [, unlessNode] = expr;
+      const [, condition, body] = unlessNode;
+      const value = Array.isArray(body) && body.length === 1 ? body[0] : body;
+      return `if (!${this.generate(condition, "value")}) return ${this.generate(["new", value], "value")}`;
+    }
+    return `return ${this.generate(expr, "value")}`;
+  }
+  generateBreak(head, rest, context, sexpr) {
+    return "break";
+  }
+  generateBreakIf(head, rest, context, sexpr) {
+    const [condition] = rest;
+    return `if (${this.generate(condition, "value")}) break`;
+  }
+  generateContinue(head, rest, context, sexpr) {
+    return "continue";
+  }
+  generateContinueIf(head, rest, context, sexpr) {
+    const [condition] = rest;
+    return `if (${this.generate(condition, "value")}) continue`;
+  }
+  generateExistential(head, rest, context, sexpr) {
+    const [expr] = rest;
+    return `(${this.generate(expr, "value")} != null)`;
+  }
+  generateTernary(head, rest, context, sexpr) {
+    const [condition, thenExpr, elseExpr] = rest;
+    const condCode = this.unwrap(this.generate(condition, "value"));
+    return `(${condCode} ? ${this.generate(thenExpr, "value")} : ${this.generate(elseExpr, "value")})`;
+  }
+  generateLoop(head, rest, context, sexpr) {
+    const [body] = rest;
+    const bodyCode = this.generateLoopBody(body);
+    return `while (true) ${bodyCode}`;
+  }
+  generateAwait(head, rest, context, sexpr) {
+    const [expr] = rest;
+    return `await ${this.generate(expr, "value")}`;
+  }
+  generateYield(head, rest, context, sexpr) {
+    if (rest.length === 0) {
+      return "yield";
+    }
+    const [expr] = rest;
+    return `yield ${this.generate(expr, "value")}`;
+  }
+  generateYieldFrom(head, rest, context, sexpr) {
+    const [expr] = rest;
+    return `yield* ${this.generate(expr, "value")}`;
+  }
+  generateIf(head, rest, context, sexpr) {
+    if (head === "unless") {
+      let [condition2, body] = rest;
+      if (Array.isArray(body) && body.length === 1) {
+        const elem = body[0];
+        if (!Array.isArray(elem) || elem[0] !== "block") {
+          body = elem;
+        }
+      }
+      if (context === "value") {
+        const thenExpr = this.extractExpression(body);
+        return `(!${this.generate(condition2, "value")} ? ${thenExpr} : undefined)`;
+      }
+      let condCode = this.unwrap(this.generate(condition2, "value"));
+      if (condCode.includes(" ") || condCode.includes("===") || condCode.includes("!==") || condCode.includes(">") || condCode.includes("<") || condCode.includes("&&") || condCode.includes("||")) {
+        condCode = `(${condCode})`;
+      }
+      return `if (!${condCode}) ` + this.generate(body, "statement");
+    }
+    const [condition, thenBranch, ...elseBranches] = rest;
+    if (context === "value") {
+      return this.generateIfAsExpression(condition, thenBranch, elseBranches);
+    } else {
+      return this.generateIfAsStatement(condition, thenBranch, elseBranches);
+    }
+  }
+  generateForIn(head, rest, context, sexpr) {
+    const [vars, iterable, step, guard, body] = rest;
+    if (context === "value" && this.comprehensionDepth === 0) {
+      const iterator = ["for-in", vars, iterable, step];
+      const guards = guard ? [guard] : [];
+      return this.generate(["comprehension", body, [iterator], guards], context);
+    }
+    const varsArray = Array.isArray(vars) ? vars : [vars];
+    const noVar = varsArray.length === 0;
+    const [itemVar, indexVar] = noVar ? ["_i", null] : varsArray;
+    let itemVarPattern = itemVar;
+    if (Array.isArray(itemVar) && (itemVar[0] === "array" || itemVar[0] === "object")) {
+      itemVarPattern = this.generateDestructuringPattern(itemVar);
+    }
+    if (step && step !== null) {
+      const iterableCode = this.generate(iterable, "value");
+      const indexVarName2 = indexVar || "_i";
+      const stepCode = this.generate(step, "value");
+      const isNegativeStep = this.isNegativeStep(step);
+      const isMinusOne = isNegativeStep && (step[1] === "1" || step[1] === 1 || step[1] instanceof String && step[1].valueOf() === "1");
+      const isPlusOne = !isNegativeStep && (step === "1" || step === 1 || step instanceof String && step.valueOf() === "1");
+      let loopHeader;
+      if (isMinusOne) {
+        loopHeader = `for (let ${indexVarName2} = ${iterableCode}.length - 1; ${indexVarName2} >= 0; ${indexVarName2}--) `;
+      } else if (isPlusOne) {
+        loopHeader = `for (let ${indexVarName2} = 0; ${indexVarName2} < ${iterableCode}.length; ${indexVarName2}++) `;
+      } else if (isNegativeStep) {
+        loopHeader = `for (let ${indexVarName2} = ${iterableCode}.length - 1; ${indexVarName2} >= 0; ${indexVarName2} += ${stepCode}) `;
+      } else {
+        loopHeader = `for (let ${indexVarName2} = 0; ${indexVarName2} < ${iterableCode}.length; ${indexVarName2} += ${stepCode}) `;
+      }
+      if (Array.isArray(body) && body[0] === "block") {
+        const statements = body.slice(1);
+        this.indentLevel++;
+        const stmts = [];
+        if (!noVar) {
+          stmts.push(`const ${itemVarPattern} = ${iterableCode}[${indexVarName2}];`);
+        }
+        if (guard) {
+          const guardCode = this.generate(guard, "value");
+          stmts.push(`if (${guardCode}) {`);
+          this.indentLevel++;
+          stmts.push(...this.formatStatements(statements));
+          this.indentLevel--;
+          stmts.push(this.indent() + "}");
+        } else {
+          stmts.push(...statements.map((s) => this.addSemicolon(s, this.generate(s, "statement"))));
+        }
+        this.indentLevel--;
+        return loopHeader + `{
+${stmts.map((s) => this.indent() + s).join(`
+`)}
+${this.indent()}}`;
+      } else {
+        if (noVar) {
+          if (guard) {
+            const guardCode = this.generate(guard, "value");
+            return loopHeader + `{ if (${guardCode}) ${this.generate(body, "statement")}; }`;
+          } else {
+            return loopHeader + `{ ${this.generate(body, "statement")}; }`;
+          }
+        } else {
+          if (guard) {
+            const guardCode = this.generate(guard, "value");
+            return loopHeader + `{ const ${itemVarPattern} = ${iterableCode}[${indexVarName2}]; if (${guardCode}) ${this.generate(body, "statement")}; }`;
+          } else {
+            return loopHeader + `{ const ${itemVarPattern} = ${iterableCode}[${indexVarName2}]; ${this.generate(body, "statement")}; }`;
+          }
+        }
+      }
+    }
+    if (indexVar) {
+      const iterableCode = this.generate(iterable, "value");
+      let code2 = `for (let ${indexVar} = 0; ${indexVar} < ${iterableCode}.length; ${indexVar}++) `;
+      if (Array.isArray(body) && body[0] === "block") {
+        const statements = body.slice(1);
+        code2 += `{
+`;
+        this.indentLevel++;
+        code2 += this.indent() + `const ${itemVarPattern} = ${iterableCode}[${indexVar}];
+`;
+        if (guard) {
+          const guardCode = this.unwrap(this.generate(guard, "value"));
+          code2 += this.indent() + `if (${guardCode}) {
+`;
+          this.indentLevel++;
+          code2 += this.formatStatements(statements).join(`
+`) + `
+`;
+          this.indentLevel--;
+          code2 += this.indent() + `}
+`;
+        } else {
+          code2 += this.formatStatements(statements).join(`
+`) + `
+`;
+        }
+        this.indentLevel--;
+        code2 += this.indent() + "}";
+      } else {
+        if (guard) {
+          const guardCode = this.unwrap(this.generate(guard, "value"));
+          code2 += `{ const ${itemVarPattern} = ${iterableCode}[${indexVar}]; if (${guardCode}) ${this.generate(body, "statement")}; }`;
+        } else {
+          code2 += `{ const ${itemVarPattern} = ${iterableCode}[${indexVar}]; ${this.generate(body, "statement")}; }`;
+        }
+      }
+      return code2;
+    }
+    let iterableHead = Array.isArray(iterable) && iterable[0];
+    if (iterableHead instanceof String) {
+      iterableHead = iterableHead.valueOf();
+    }
+    const isRange = iterableHead === ".." || iterableHead === "...";
+    if (isRange) {
+      const isExclusive = iterableHead === "...";
+      const [start, end] = iterable.slice(1);
+      const isSimple = (expr) => {
+        if (typeof expr === "number")
+          return true;
+        if (expr instanceof String) {
+          const val = expr.valueOf();
+          return !val.includes("(");
+        }
+        if (typeof expr === "string" && !expr.includes("("))
+          return true;
+        if (Array.isArray(expr) && expr[0] === ".")
+          return true;
+        return false;
+      };
+      if (isSimple(start) && isSimple(end)) {
+        const startCode = this.generate(start, "value");
+        const endCode = this.generate(end, "value");
+        const comparison = isExclusive ? "<" : "<=";
+        let increment = `${itemVarPattern}++`;
+        if (step && step !== null) {
+          const stepCode = this.generate(step, "value");
+          increment = `${itemVarPattern} += ${stepCode}`;
+        }
+        let code2 = `for (let ${itemVarPattern} = ${startCode}; ${itemVarPattern} ${comparison} ${endCode}; ${increment}) `;
+        if (guard) {
+          code2 += this.generateLoopBodyWithGuard(body, guard);
+        } else {
+          code2 += this.generateLoopBody(body);
+        }
+        return code2;
+      }
+    }
+    let code = `for (const ${itemVarPattern} of ${this.generate(iterable, "value")}) `;
+    if (guard) {
+      code += this.generateLoopBodyWithGuard(body, guard);
+    } else {
+      code += this.generateLoopBody(body);
+    }
+    return code;
+  }
+  generateForOf(head, rest, context, sexpr) {
+    const [vars, obj, own, guard, body] = rest;
+    const [keyVar, valueVar] = Array.isArray(vars) ? vars : [vars];
+    const objCode = this.generate(obj, "value");
+    let code = `for (const ${keyVar} in ${objCode}) `;
+    if (own && !valueVar && !guard) {
+      if (Array.isArray(body) && body[0] === "block") {
+        const statements = body.slice(1);
+        this.indentLevel++;
+        const stmts = [
+          `if (!Object.hasOwn(${objCode}, ${keyVar})) continue;`,
+          ...statements.map((s) => this.addSemicolon(s, this.generate(s, "statement")))
+        ];
+        this.indentLevel--;
+        code += `{
+${stmts.map((s) => this.indent() + s).join(`
+`)}
+${this.indent()}}`;
+      } else {
+        code += `{ if (!Object.hasOwn(${objCode}, ${keyVar})) continue; ${this.generate(body, "statement")}; }`;
+      }
+      return code;
+    }
+    if (valueVar) {
+      if (own && guard) {
+        if (Array.isArray(body) && body[0] === "block") {
+          const statements = body.slice(1);
+          this.indentLevel++;
+          const outerIndent = this.indent();
+          const guardCondition = this.generate(guard, "value");
+          this.indentLevel++;
+          const innerIndent = this.indent();
+          const stmts = statements.map((s) => innerIndent + this.addSemicolon(s, this.generate(s, "statement")));
+          this.indentLevel -= 2;
+          code += `{
+${outerIndent}if (!Object.hasOwn(${objCode}, ${keyVar})) continue;
+${outerIndent}const ${valueVar} = ${objCode}[${keyVar}];
+${outerIndent}if (${guardCondition}) {
+${stmts.join(`
+`)}
+${outerIndent}}
+${this.indent()}}`;
+        } else {
+          const guardCondition = this.generate(guard, "value");
+          code += `{ if (!Object.hasOwn(${objCode}, ${keyVar})) continue; const ${valueVar} = ${objCode}[${keyVar}]; if (${guardCondition}) ${this.generate(body, "statement")}; }`;
+        }
+      } else if (own) {
+        if (Array.isArray(body) && body[0] === "block") {
+          const statements = body.slice(1);
+          this.indentLevel++;
+          const stmts = [
+            `if (!Object.hasOwn(${objCode}, ${keyVar})) continue;`,
+            `const ${valueVar} = ${objCode}[${keyVar}];`,
+            ...statements.map((s) => this.addSemicolon(s, this.generate(s, "statement")))
+          ];
+          this.indentLevel--;
+          code += `{
+${stmts.map((s) => this.indent() + s).join(`
+`)}
+${this.indent()}}`;
+        } else {
+          code += `{ if (!Object.hasOwn(${objCode}, ${keyVar})) continue; const ${valueVar} = ${objCode}[${keyVar}]; ${this.generate(body, "statement")}; }`;
+        }
+      } else if (guard) {
+        if (Array.isArray(body) && body[0] === "block") {
+          const statements = body.slice(1);
+          this.indentLevel++;
+          const loopBodyIndent = this.indent();
+          const guardCondition = this.generate(guard, "value");
+          this.indentLevel++;
+          const innerIndent = this.indent();
+          const stmts = statements.map((s) => innerIndent + this.addSemicolon(s, this.generate(s, "statement")));
+          this.indentLevel -= 2;
+          code += `{
+${loopBodyIndent}const ${valueVar} = ${objCode}[${keyVar}];
+${loopBodyIndent}if (${guardCondition}) {
+${stmts.join(`
+`)}
+${loopBodyIndent}}
+${this.indent()}}`;
+        } else {
+          code += `{ const ${valueVar} = ${objCode}[${keyVar}]; if (${this.generate(guard, "value")}) ${this.generate(body, "statement")}; }`;
+        }
+      } else {
+        if (Array.isArray(body) && body[0] === "block") {
+          const statements = body.slice(1);
+          this.indentLevel++;
+          const stmts = [`const ${valueVar} = ${objCode}[${keyVar}];`, ...statements.map((s) => this.addSemicolon(s, this.generate(s, "statement")))];
+          this.indentLevel--;
+          code += `{
+${stmts.map((s) => this.indent() + s).join(`
+`)}
+${this.indent()}}`;
+        } else {
+          code += `{ const ${valueVar} = ${objCode}[${keyVar}]; ${this.generate(body, "statement")}; }`;
+        }
+      }
+    } else {
+      if (guard) {
+        code += this.generateLoopBodyWithGuard(body, guard);
+      } else {
+        code += this.generateLoopBody(body);
+      }
+    }
+    return code;
+  }
+  generateForFrom(head, rest, context, sexpr) {
+    const varsArray = Array.isArray(rest[0]) ? rest[0] : [rest[0]];
+    const [firstVar] = varsArray;
+    const iterable = rest[1];
+    const isAwait = rest[2];
+    const guard = rest[3];
+    const body = rest[4];
+    let needsTempVar = false;
+    let destructuringStatements = [];
+    if (Array.isArray(firstVar) && firstVar[0] === "array") {
+      const elements = firstVar.slice(1);
+      const restIndex = elements.findIndex((el) => Array.isArray(el) && el[0] === "..." || el === "...");
+      if (restIndex !== -1 && restIndex < elements.length - 1) {
+        needsTempVar = true;
+        const elementsAfterRest = elements.slice(restIndex + 1);
+        const afterCount = elementsAfterRest.length;
+        const beforeRest = elements.slice(0, restIndex);
+        const restEl = elements[restIndex];
+        const restVar = Array.isArray(restEl) && restEl[0] === "..." ? restEl[1] : "_rest";
+        const beforePattern = beforeRest.map((el) => {
+          if (el === ",")
+            return "";
+          if (typeof el === "string")
+            return el;
+          return this.generate(el, "value");
+        }).join(", ");
+        const firstPattern = beforePattern ? `${beforePattern}, ...${restVar}` : `...${restVar}`;
+        const afterPattern = elementsAfterRest.map((el) => {
+          if (el === ",")
+            return "";
+          if (typeof el === "string")
+            return el;
+          return this.generate(el, "value");
+        }).join(", ");
+        destructuringStatements.push(`[${firstPattern}] = _item`);
+        destructuringStatements.push(`[${afterPattern}] = ${restVar}.splice(-${afterCount})`);
+        this.helpers.add("slice");
+        const collectVarsFromPattern = (arr) => {
+          arr.slice(1).forEach((el) => {
+            if (el === "," || el === "...")
+              return;
+            if (typeof el === "string")
+              this.programVars.add(el);
+            else if (Array.isArray(el) && el[0] === "...") {
+              if (typeof el[1] === "string")
+                this.programVars.add(el[1]);
+            }
+          });
+        };
+        collectVarsFromPattern(firstVar);
+      }
+    }
+    const iterableCode = this.generate(iterable, "value");
+    const awaitKeyword = isAwait ? "await " : "";
+    let itemVarPattern;
+    if (needsTempVar) {
+      itemVarPattern = "_item";
+    } else if (Array.isArray(firstVar) && (firstVar[0] === "array" || firstVar[0] === "object")) {
+      itemVarPattern = this.generateDestructuringPattern(firstVar);
+    } else {
+      itemVarPattern = firstVar;
+    }
+    let code = `for ${awaitKeyword}(const ${itemVarPattern} of ${iterableCode}) `;
+    if (needsTempVar && destructuringStatements.length > 0) {
+      const statements = this.unwrapBlock(body);
+      const allStmts = this.withIndent(() => [
+        ...destructuringStatements.map((s) => this.indent() + s + ";"),
+        ...this.formatStatements(statements)
+      ]);
+      code += `{
+${allStmts.join(`
+`)}
+${this.indent()}}`;
+    } else {
+      if (guard) {
+        code += this.generateLoopBodyWithGuard(body, guard);
+      } else {
+        code += this.generateLoopBody(body);
+      }
+    }
+    return code;
+  }
+  generateWhile(head, rest, context, sexpr) {
+    const condition = rest[0];
+    const guard = rest.length === 3 ? rest[1] : null;
+    const body = rest[rest.length - 1];
+    const condCode = this.unwrap(this.generate(condition, "value"));
+    let code = `while (${condCode}) `;
+    if (guard) {
+      code += this.generateLoopBodyWithGuard(body, guard);
+    } else {
+      code += this.generateLoopBody(body);
+    }
+    return code;
+  }
+  generateUntil(head, rest, context, sexpr) {
+    const [condition, body] = rest;
+    const condCode = this.unwrap(this.generate(condition, "value"));
+    let code = `while (!(${condCode})) `;
+    code += this.generateLoopBody(body);
+    return code;
+  }
+  generateRange(head, rest, context, sexpr) {
+    if (head === "...") {
+      if (rest.length === 1) {
+        const [expr] = rest;
+        return `...${this.generate(expr, "value")}`;
+      }
+      const [start2, end2] = rest;
+      const startCode2 = this.generate(start2, "value");
+      const endCode2 = this.generate(end2, "value");
+      return `((s, e) => Array.from({length: Math.max(0, Math.abs(e - s))}, (_, i) => s + (i * (s <= e ? 1 : -1))))(${startCode2}, ${endCode2})`;
+    }
+    const [start, end] = rest;
+    const startCode = this.generate(start, "value");
+    const endCode = this.generate(end, "value");
+    return `((s, e) => Array.from({length: Math.abs(e - s) + 1}, (_, i) => s + (i * (s <= e ? 1 : -1))))(${startCode}, ${endCode})`;
+  }
+  generateNot(head, rest, context, sexpr) {
+    const [operand] = rest;
+    const operandCode = this.generate(operand, "value");
+    if (/^[a-zA-Z_$][\w$]*$/.test(operandCode) || operandCode.startsWith("(")) {
+      return `!${operandCode}`;
+    }
+    return `(!${operandCode})`;
+  }
+  generateBitwiseNot(head, rest, context, sexpr) {
+    const [operand] = rest;
+    return `(~${this.generate(operand, "value")})`;
+  }
+  generateIncDec(head, rest, context, sexpr) {
+    const [operand, isPostfix] = rest;
+    const operandCode = this.generate(operand, "value");
+    if (isPostfix) {
+      return `(${operandCode}${head})`;
+    } else {
+      return `(${head}${operandCode})`;
+    }
+  }
+  generateTypeof(head, rest, context, sexpr) {
+    const [operand] = rest;
+    return `typeof ${this.generate(operand, "value")}`;
+  }
+  generateDelete(head, rest, context, sexpr) {
+    const [operand] = rest;
+    return `(delete ${this.generate(operand, "value")})`;
+  }
+  generateInstanceof(head, rest, context, sexpr) {
+    const [expr, type] = rest;
+    return `(${this.generate(expr, "value")} instanceof ${this.generate(type, "value")})`;
+  }
+  generateIn(head, rest, context, sexpr) {
+    const [key2, obj] = rest;
+    return `(${this.generate(key2, "value")} in ${this.generate(obj, "value")})`;
+  }
+  generateOf(head, rest, context, sexpr) {
+    const [value, container] = rest;
+    const valueCode = this.generate(value, "value");
+    const containerCode = this.generate(container, "value");
+    return `(${valueCode} in ${containerCode})`;
+  }
+  generateRegexMatch(head, rest, context, sexpr) {
+    const [left2, right2] = rest;
+    this.helpers.add("toSearchable");
+    this.programVars.add("_");
+    const rightCode = this.generate(right2, "value");
+    const hasMultilineFlag = rightCode.includes("/m");
+    const allowNewlines = hasMultilineFlag ? ", true" : "";
+    return `(_ = toSearchable(${this.generate(left2, "value")}${allowNewlines}).match(${rightCode}))`;
+  }
+  generateNew(head, rest, context, sexpr) {
+    const [call] = rest;
+    if (Array.isArray(call) && (call[0] === "." || call[0] === "?.")) {
+      const [accessType, target, prop] = call;
+      if (Array.isArray(target) && !target[0].startsWith) {
+        const newExpr = this.generate(["new", target], "value");
+        return `(${newExpr}).${prop}`;
+      }
+      const targetCode = this.generate(target, "value");
+      return `new ${targetCode}.${prop}`;
+    }
+    if (Array.isArray(call)) {
+      const [constructor, ...args] = call;
+      const constructorCode = this.generate(constructor, "value");
+      const argsCode = args.map((arg) => this.unwrap(this.generate(arg, "value"))).join(", ");
+      return `new ${constructorCode}(${argsCode})`;
+    }
+    return `new ${this.generate(call, "value")}()`;
+  }
+  generateLogicalAnd(head, rest, context, sexpr) {
+    const flattened = this.flattenBinaryChain(sexpr);
+    const operands = flattened.slice(1);
+    if (operands.length === 0)
+      return "true";
+    if (operands.length === 1)
+      return this.generate(operands[0], "value");
+    const parts = operands.map((op) => this.generate(op, "value"));
+    return `(${parts.join(" && ")})`;
+  }
+  generateLogicalOr(head, rest, context, sexpr) {
+    const flattened = this.flattenBinaryChain(sexpr);
+    const operands = flattened.slice(1);
+    if (operands.length === 0)
+      return "true";
+    if (operands.length === 1)
+      return this.generate(operands[0], "value");
+    const parts = operands.map((op) => this.generate(op, "value"));
+    return `(${parts.join(" || ")})`;
+  }
+  generateArray(head, elements, context, sexpr) {
+    const hasTrailingElision = elements.length > 0 && elements[elements.length - 1] === ",";
+    const elementCodes = elements.map((el) => {
+      if (el === ",") {
+        return "";
+      }
+      if (el === "...") {
+        return "";
+      }
+      if (Array.isArray(el) && el[0] === "...") {
+        return `...${this.generate(el[1], "value")}`;
+      }
+      return this.generate(el, "value");
+    }).join(", ");
+    return hasTrailingElision ? `[${elementCodes},]` : `[${elementCodes}]`;
+  }
+  generateObject(head, pairs, context, sexpr) {
+    if (pairs.length === 1 && Array.isArray(pairs[0]) && Array.isArray(pairs[0][1]) && pairs[0][1][0] === "comprehension") {
+      const [keyVar, comprehensionNode] = pairs[0];
+      const [, valueExpr, iterators, guards] = comprehensionNode;
+      return this.generate(["object-comprehension", keyVar, valueExpr, iterators, guards], context);
+    }
+    const pairCodes = pairs.map((pair) => {
+      if (Array.isArray(pair) && pair[0] === "...") {
+        return `...${this.generate(pair[1], "value")}`;
+      }
+      const [key2, value, operator] = pair;
+      let keyCode;
+      if (Array.isArray(key2) && key2[0] === "computed") {
+        const expr = key2[1];
+        keyCode = `[${this.generate(expr, "value")}]`;
+      } else {
+        keyCode = this.generate(key2, "value");
+      }
+      const valueCode = this.generate(value, "value");
+      if (operator === "=") {
+        return `${keyCode} = ${valueCode}`;
+      } else if (operator === ":") {
+        return `${keyCode}: ${valueCode}`;
+      } else {
+        if (keyCode === valueCode && !Array.isArray(key2)) {
+          return keyCode;
+        }
+        return `${keyCode}: ${valueCode}`;
+      }
+    }).join(", ");
+    return `{${pairCodes}}`;
+  }
+  generateBlock(head, statements, context, sexpr) {
+    if (context === "statement") {
+      const stmts = this.withIndent(() => this.formatStatements(statements));
+      return `{
+${stmts.join(`
+`)}
+${this.indent()}}`;
+    }
+    return this.formatStatements(statements, context);
   }
   generateDestructuringPattern(pattern) {
     return this.formatParam(pattern);
@@ -6978,8 +7690,8 @@ function compileToJS(source, options = {}) {
   return compiler.compileToJS(source);
 }
 // src/browser.js
-var VERSION = "1.3.14";
-var BUILD_DATE = "2025-11-07@05:04:01GMT";
+var VERSION = "1.4.0";
+var BUILD_DATE = "2025-11-07@06:37:09GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
