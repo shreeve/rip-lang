@@ -5,6 +5,37 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.2] - 2025-11-07
+
+### Fixed
+- **Critical: Fix 'in' operator with string literals** - Restores self-hosting!
+  - JavaScript's `in` operator checks numeric indices on strings, NOT characters
+  - `'\n' in "text"` incorrectly returns `false` (should check if newline exists)
+  - Fixed `generateIn()` to detect string literal checks and use `.includes()`
+  - Pattern: `'x' in variable` → runtime type check with `.includes()` for strings/arrays
+  - **This broke parser regeneration since Phase 1!** (`bun run parser` now works ✅)
+  - Added 7 tests for string literal `in` operator behavior
+  - Critical for bootstrap: solar.rip uses `'\n' in action` pattern
+
+### Changed  
+- **Massive code cleanup** - Removed 2,042 lines of dead/duplicate code (28%)!
+  - Removed ALL 37 Phase 2 duplicate switch cases (1,614 lines) - never cleaned after extraction
+  - Removed old* cases (47 lines), error-throwing cases (26 lines), forwarding cases (185 lines)
+  - Removed duplicate property cases (149 lines), function cases (185 lines)
+  - Eliminated pointless switch wrapper with only default case (4 lines)
+  - Extracted duplicate `findPostfixConditional` helper (DRY principle)
+  - Added missing assignment operators to dispatch table
+  - Centralized number literal regex patterns
+  - Result: 7,263 → 5,239 LOC (27.9% reduction!)
+
+### Documentation
+- Consolidated AI agent docs into single AGENT.md (removed duplicate rip-agent-onboarding.md)
+- Updated all LOC references (5,239 LOC, ~45% smaller than CoffeeScript)
+- Cleaned up 8 obsolete planning docs
+- Created simple .cursor/rules/rip-quick-start.md pointer
+
+All 938 tests passing (100%) ✅
+
 ## [1.4.1] - 2025-11-07
 
 ### Changed
