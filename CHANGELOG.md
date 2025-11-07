@@ -5,6 +5,21 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2025-11-07
+
+### Changed
+- **Major refactoring: Dispatch table architecture** (#52 Phase 1) - Extracted 71/110 cases (65%)
+  - Added O(1) dispatch table (was O(n) switch with 110 cases)
+  - Extracted 71 generator methods organized by category
+  - Shared methods for similar operations (DRY principle)
+  - Binary operators: 20+ cases → 1 shared method
+  - Assignment operators: 17 cases → 1 shared method
+  - All operators, property access, functions, loops, exception handling extracted
+  - ~1,500 lines reorganized into categorized methods
+  - Clear organization: operators, property access, functions, control flow, etc.
+  - Remaining 39 cases documented for Phase 2
+- Test count: 926 → 931 (+5 tests from Issue #49)
+
 ## [1.3.14] - 2025-11-07
 
 ### Changed
