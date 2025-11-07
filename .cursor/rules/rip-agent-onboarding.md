@@ -223,6 +223,27 @@ if (Array.isArray(body) && body[0] === 'block') {
 }
 ```
 
+### 3. Parentheses Management (Issue #46)
+
+**Helper functions** in codegen.js (~line 4634):
+- `unwrap(code)` - Removes ONE layer of outer parens if safe
+- `unwrapLogical(code)` - For logical operator chains in conditions
+
+**Open Issue**: Deeply nested same-operator chains still verbose:
+- Current: `if (((!a && !b) && !c) && d)`
+- Target: `if (!a && !b && !c && d)`
+
+**Critical safety** (must preserve):
+- `arr[len - (x || 1)]` - Mixed arithmetic/logical
+- `(a && b) || c` - Mixed &&/||
+- `a - (b || c)` - Arithmetic precedence
+
+**Test coverage**: 
+- `test/rip/parens.rip` - Comprehensive safety tests (all passing)
+- Branch `fix/unwrap-all-logical-layers` - Has test/rip/logical-unwrap.rip
+
+**Context**: We safely improved 95% of cases. Remaining 5% (deeply nested same-operator chains) needs algorithm that recursively unwraps while preserving mixed-precedence safety.
+
 ### 3. String Object Metadata
 
 Lexer attaches metadata to String objects (not primitives):
