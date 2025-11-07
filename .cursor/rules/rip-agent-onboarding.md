@@ -17,7 +17,7 @@
 
 ```
 Rip Source → Lexer → Parser → S-Expressions → Codegen → JavaScript
-            (3,146)  (340)    (arrays!)      (4,738)    (ES2022)
+            (3,146)  (340)    (arrays!)      (5,016)    (ES2022)
 ```
 
 **Key insight:** S-expressions (simple arrays like `["=", "x", 42]`) are the IR, not complex AST nodes. This makes the compiler 50% smaller than CoffeeScript.
