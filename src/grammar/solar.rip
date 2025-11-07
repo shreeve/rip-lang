@@ -787,7 +787,7 @@ class Generator
         when 2 # reduce
           len = @ruleData[action[1]][1]
           yyval.$ = val[val.length - len]
-          locIndex = len or 1  # Default to 1 if len is 0
+          locIndex = len or 1  # Avoid precedence issues with || in array index
           [locFirst, locLast] = [loc[loc.length - locIndex], loc[loc.length - 1]]
           yyval._$ = {
             first_line: locFirst.first_line, last_line: locLast.last_line
