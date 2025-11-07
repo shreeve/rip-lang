@@ -83,7 +83,7 @@ code "throw in || wraps IIFE", 'x = (fn() || throw "err")', 'let x;\n\nx = fn() 
 fail 'unmatched closing brace', '''
   normalObject = {}
   insideOutObject = }{
-  '''
+'''
 
 fail 'unexpected in', 'foo in bar or in baz'
 fail 'unexpected comma', 'a:, b'

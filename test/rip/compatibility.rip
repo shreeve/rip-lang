@@ -165,17 +165,16 @@ code 'postfix rest array', '''
   ''', '''
   let a, rest;
   [a, ...rest] = arr;
-  '''
+'''
 
 code 'postfix rest params', '''
   fn = (args...) -> args
   ''', '''
   let fn;
-
-fn = function(...args) {
-  return args;
-};
-  '''
+  fn = function(...args) {
+    return args;
+  };
+'''
 
 code 'postfix spread array', '''
   arr = [1, 2]
@@ -184,26 +183,26 @@ code 'postfix spread array', '''
   let arr;
   arr = [1, 2];
   [0, ...arr, 3];
-  '''
+'''
 
 code 'postfix spread call', '''
   fn(args...)
   ''', '''
   fn(...args);
-  '''
+'''
 
 code 'postfix object rest', '''
   {a, rest...} = obj
   ''', '''
   let a, rest;
   ({a, ...rest} = obj);
-  '''
+'''
 
 code 'range not transformed', '''
   [1...10]
   ''', '''
   ((s, e) => Array.from({length: Math.max(0, Math.abs(e - s))}, (_, i) => s + (i * (s <= e ? 1 : -1))))(1, 10);
-  '''
+'''
 
 # -----------------------------------------------------------------------------
 # Edge Cases
@@ -298,11 +297,10 @@ code 'legacy existential compiles to ??', '''
   x ? y
   ''', '''
   let x, y;
-
-x = null;
-y = 5;
-(x ?? y);
-  '''
+  x = null;
+  y = 5;
+  (x ?? y);
+'''
 
 code 'ternary stays ternary', '''
   x = true
@@ -311,7 +309,7 @@ code 'ternary stays ternary', '''
   let x;
   x = true;
   (x ? 1 : 2);
-  '''
+'''
 
 # ==============================================================================
 # COMBINED COMPATIBILITY FEATURES

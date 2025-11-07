@@ -213,7 +213,7 @@ code 'for-in guard code', '''
       console.log(x);
     }
   }
-  '''
+'''
 
 code 'for-of guard code', '''
   for k, v of obj when v > 0
@@ -225,7 +225,7 @@ code 'for-of guard code', '''
       console.log(k);
     }
   }
-  '''
+'''
 
 code 'for-of with own code', '''
   for own k, v of obj
@@ -236,7 +236,7 @@ if (!Object.hasOwn(obj, k)) continue;
 const v = obj[k];
 console.log(k);
 }
-  '''
+'''
 
 # ============================================================================
 # Stats for CODEGEN.md

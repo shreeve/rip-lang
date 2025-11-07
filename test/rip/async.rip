@@ -242,11 +242,10 @@ code "yield from generates yield*", '''
     yield from other()
   ''', '''
   let gen;
-
-gen = function*() {
-  return yield* other();
-};
-  '''
+  gen = function*() {
+    return yield* other();
+  };
+'''
 
 # ============================================================================
 # Dammit Operator (! suffix forces await)

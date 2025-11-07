@@ -405,7 +405,7 @@ code 'heregex codegen', '''
   let pattern;
 
   pattern = /\d+/;
-  '''
+'''
 
 # Heregex with flags in output
 code 'heregex flags codegen', '''
@@ -416,7 +416,7 @@ code 'heregex flags codegen', '''
   let pattern;
 
   pattern = /test/gi;
-  '''
+'''
 
 # Heregex with comments completely removed
 code 'heregex comment removal', '''
@@ -427,7 +427,7 @@ code 'heregex comment removal', '''
   let pattern;
 
   pattern = /\d+/;
-  '''
+'''
 
 # Heregex character class preserved
 code 'heregex char class codegen', '''
@@ -438,7 +438,7 @@ code 'heregex char class codegen', '''
   let pattern;
 
   pattern = /[ \t]+/;
-  '''
+'''
 
 # Interpolation generates template literal
 code 'interpolation codegen', '"Hello #{name}"', '`Hello ${name}`'
@@ -454,7 +454,7 @@ code 'heredoc codegen', '''
 
   x = `line1
   line2`;
-  '''
+'''
 
 # JavaScript-style ${} interpolation (for JS refugees)
 test 'dollar sign interpolation', '"x = ${5}"', 'x = 5'

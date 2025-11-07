@@ -229,14 +229,13 @@ code 'switch with explicit return', '''
         return "A"
   ''', '''
   let fn;
-
-fn = function(x) {
-  switch (x) {
-    case 'a':
-      return "A";
-  }
-};
-  '''
+  fn = function(x) {
+    switch (x) {
+      case 'a':
+        return "A";
+    }
+  };
+'''
 
 code 'break in for loop', '''
   for x in arr
@@ -248,17 +247,16 @@ code 'break in for loop', '''
       break;
     }
   }
-  '''
+'''
 
 code 'return with postfix unless', '''
   fn = -> return 5 unless x
   ''', '''
   let fn;
-
-fn = function() {
-  if (!x) return 5;
-};
-  '''
+  fn = function() {
+    if (!x) return 5;
+  };
+'''
 
 # ==============================================================================
 # BUG #7: Dynamic Import in Conditional
@@ -275,16 +273,15 @@ code 'dynamic import in if expression', '''
     null
   ''', '''
   let x;
-
-x = cond ? (await import(url)).default : null;
-  '''
+  x = cond ? (await import(url)).default : null;
+'''
 
 code 'dynamic import property access', '''
   x = (await import(url)).default
   ''', '''
   let x;
   x = (await import(url)).default;
-  '''
+'''
 
 # ==============================================================================
 # BUG #8: Switch with Code After (Statement Context)
@@ -336,23 +333,22 @@ code 'switch statement with code after', '''
     return result
   ''', '''
   let fn;
-
-fn = function(x) {
-  let result;
-  switch (x) {
-    case 1:
-      result = 'one';
-      break;
-    case 2:
-      result = 'two';
-      break;
-    default:
-      result = 'other';
-      break;
-  }
-  return result;
-};
-  '''
+  fn = function(x) {
+    let result;
+    switch (x) {
+      case 1:
+        result = 'one';
+        break;
+      case 2:
+        result = 'two';
+        break;
+      default:
+        result = 'other';
+        break;
+    }
+    return result;
+  };
+'''
 
 # ==============================================================================
 # BUG #9: Unnecessary IIFE for If/Else as Last Statement
@@ -410,7 +406,7 @@ code 'if/else last statement uses early returns not IIFE', '''
       return [symbols, null];
     }
 };
-  '''
+'''
 
 # ==============================================================================
 # BUG #11: Excessive Parentheses in Ternary Operators
@@ -424,9 +420,8 @@ code 'ternary with typeof and or - minimal parens', '''
   action = if typeof handle[1] is 'string' or handle.length is 3 then handle[1] else null
   ''', '''
   let action;
-
-action = ((typeof handle[1] === 'string') || (handle.length === 3)) ? handle[1] : null;
-  '''
+  action = ((typeof handle[1] === 'string') || (handle.length === 3)) ? handle[1] : null;
+'''
 
 test 'ternary with complex condition works', '''
   fn = (handle) ->
@@ -495,7 +490,7 @@ code "if-else-if generates proper chain", '''
   ''', '''
   let x;
   x = a ? 1 : (b ? 2 : (c ? 3 : 4));
-  '''
+'''
 
 # ==============================================================================
 # Postfix Return Tests (Codegen Fix)
@@ -557,7 +552,7 @@ code 'postfix unless on call generates if statement', '''
   for (const item of arr) {
     if (!(item > 3)) actions.push(item);
   }
-  '''
+'''
 
 test 'postfix unless with binary op in argument', '''
   actions = []
@@ -626,7 +621,7 @@ code 'throw in else block', '''
       throw new Error("bad");
     } })();
 };
-  '''
+'''
 
 # ==============================================================================
 # Variable Declaration Tests
@@ -712,7 +707,7 @@ code 'range loop generates traditional for', '''
   for (let k = 1; k < 10; k++) {
     console.log(k);
   }
-  '''
+'''
 
 # ==============================================================================
 # BUG #2: Reverse Iteration (by -1) Not Implemented
@@ -755,7 +750,7 @@ code 'reverse iteration generates countdown', '''
     const x = arr[_i];
     console.log(x);
   }
-  '''
+'''
 
 # ==============================================================================
 # BUG #3: Postfix Unless on Assignment with || Mis-compiled
@@ -818,7 +813,7 @@ code 'if-else in value context uses ternary not IIFE for simple branches', '''
   ''', '''
   let x;
   x = cond ? "yes" : "no";
-  '''
+'''
 
 # ============================================================================
 # Stats for CODEGEN.md

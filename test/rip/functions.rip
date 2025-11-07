@@ -333,7 +333,7 @@ code "void function no implicit return in codegen", '''
     (x * 2);
     return;
   }
-  '''
+'''
 
 code "void function early return no value", '''
   def validate!(x)
@@ -345,7 +345,7 @@ code "void function early return no value", '''
     console.log("ok");
     return;
   }
-  '''
+'''
 
 code "void function strips return value", '''
   def compute!(x)
@@ -354,7 +354,7 @@ code "void function strips return value", '''
   function compute(x) {
     return;
   }
-  '''
+'''
 
 # ============================================================================
 # Void Arrow Functions (! with -> and =>)
@@ -410,11 +410,10 @@ code "void thin arrow codegen", '''
     return "hello world"
   ''', '''
   let c;
-
-c = function() {
-  return;
-};
-  '''
+  c = function() {
+    return;
+  };
+'''
 
 code "void fat arrow codegen", '''
   process! = (x) =>
@@ -425,7 +424,7 @@ code "void fat arrow codegen", '''
     (x * 2);
     return;
   };
-  '''
+'''
 
 # NOTE: Object method void syntax (fn!:) not yet supported by parser
 # test "void arrow in object method", '''

@@ -118,7 +118,7 @@ code 'data marker codegen', '''
   function _setDataSection() {
     DATA = "test data\\n";
   }
-  '''
+'''
 
 # Verify hoisting works
 code 'data marker hoisting', '''
@@ -134,7 +134,7 @@ code 'data marker hoisting', '''
   function _setDataSection() {
     DATA = "hoisted!\\n";
   }
-  '''
+'''
 
 # ============================================================================
 # Edge Cases
