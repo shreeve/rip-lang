@@ -2007,16 +2007,32 @@ export class CodeGenerator {
   /**
    * Generate logical NOT (!)
    * Pattern: ["!", operand] → !operand
+   * S-expression approach: Check operand TYPE (IR level, not generated string)
    */
   generateNot(head, rest, context, sexpr) {
     const [operand] = rest;
-    const operandCode = this.generate(operand, 'value');
-
-    // No parens needed for simple identifiers or already-parenthesized expressions
-    if (/^[a-zA-Z_$][\w$]*$/.test(operandCode) || operandCode.startsWith('(')) {
-      return `!${operandCode}`;
+    
+    // Check operand TYPE at s-expression level (following Rip philosophy)
+    
+    // Primitives (identifiers, numbers, keywords) - no parens needed
+    if (typeof operand === 'string' || operand instanceof String) {
+      return `!${this.generate(operand, 'value')}`;  // !x, !1, !true, !null
     }
-
+    
+    // High-precedence s-expressions (property/array access) - no parens
+    if (Array.isArray(operand)) {
+      const type = operand[0];
+      const highPrecedence = ['.', '?.', '::', '?::', '[]', '?[]', 'optindex', 'optcall'];
+      if (highPrecedence.includes(type)) {
+        return `!${this.generate(operand, 'value')}`;  // !obj.prop, !arr[0]
+      }
+    }
+    
+    // Everything else - conservative (add parens for safety)
+    const operandCode = this.generate(operand, 'value');
+    if (operandCode.startsWith('(')) {
+      return `!${operandCode}`;  // Already has parens: !(a + b)
+    }
     return `(!${operandCode})`;
   }
 
