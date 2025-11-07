@@ -221,7 +221,7 @@ const parserInstance = {
     if (hash.recoverable)
       return this.trace(str);
     else {
-      line = hash.line || 1;
+      line = (hash.line || 0) + 1;
       col = hash.loc?.first_column || 0;
       token = hash.token ? ` (token: ${hash.token})` : "";
       text = hash.text ? ` near '${hash.text}'` : "";
@@ -233,7 +233,7 @@ const parserInstance = {
     }
   },
   parse(input) {
-    let EOF, TERROR, action, errStr, expected, len, lex, lexer, loc, locFirst, locIndex, locLast, newState, p, parseTable, preErrorSymbol, r, ranges, recovering, sharedState, state, stk, symbol, val, yyleng, yylineno, yyloc, yytext, yyval;
+    let EOF, TERROR, action, errStr, expected, len, lex, lexer, loc, locFirst, locLast, newState, p, parseTable, preErrorSymbol, r, ranges, recovering, sharedState, state, stk, symbol, val, yyleng, yylineno, yyloc, yytext, yyval;
     [stk, val, loc] = [[0], [null], []];
     [parseTable, yytext, yylineno, yyleng, recovering] = [this.parseTable, "", 0, 0, 0];
     [TERROR, EOF] = [2, 1];
@@ -306,8 +306,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         case 2:
           len = this.ruleData[action[1]][1];
           yyval.$ = val[val.length - len];
-          locIndex = len || 1;
-          [locFirst, locLast] = [loc[loc.length - locIndex], loc[loc.length - 1]];
+          [locFirst, locLast] = [loc[loc.length - (len || 1)], loc[loc.length - 1]];
           yyval._$ = { first_line: locFirst.first_line, last_line: locLast.last_line, first_column: locFirst.first_column, last_column: locLast.last_column };
           if (ranges)
             yyval._$.range = [locFirst.range[0], locLast.range[1]];
