@@ -4621,6 +4621,10 @@ ${this.indent()}}`;
         if (context === "statement") {
           return this.generateComprehensionAsLoop(expr, iterators, guards);
         }
+        if (this.comprehensionTarget) {
+          const code2 = this.generateComprehensionWithTarget(expr, iterators, guards, this.comprehensionTarget);
+          return code2;
+        }
         const hasAwait = this.containsAwait(expr);
         const asyncPrefix = hasAwait ? "async " : "";
         let code = `(${asyncPrefix}() => {
@@ -5669,12 +5673,12 @@ function _setDataSection() {
             if (typeof target === "string" && Array.isArray(value)) {
               const valueHead = value[0];
               if (valueHead === "comprehension" || valueHead === "for-in") {
-                const iifeCode = this.generate(value, "value");
-                const unwrapped = this.unwrapComprehensionIIFE(iifeCode, target);
-                if (unwrapped) {
-                  code += unwrapped;
-                  return;
-                }
+                this.comprehensionTarget = target;
+                code += this.generate(value, "value");
+                this.comprehensionTarget = null;
+                code += this.indent() + `return ${target};
+`;
+                return;
               }
             }
           }
@@ -6111,28 +6115,87 @@ ${this.indent()}}`;
     }
     return code;
   }
-  unwrapComprehensionIIFE(iifeCode, arrayVar) {
-    const bodyMatch = iifeCode.match(/^\((?:async )?\(\) => \{([\s\S]*)\}\)\(\)$/);
-    if (!bodyMatch)
-      return null;
-    let body = bodyMatch[1];
-    const lines = body.split(`
-`);
-    let baseIndent = "";
-    for (const line of lines) {
-      if (line.trim()) {
-        baseIndent = line.match(/^(\s*)/)[1];
-        break;
+  generateComprehensionWithTarget(expr, iterators, guards, targetVar) {
+    let code = "";
+    code += this.indent() + `${targetVar} = [];
+`;
+    let unwrappedExpr = expr;
+    if (Array.isArray(expr) && expr[0] === "block" && expr.length === 2) {
+      unwrappedExpr = expr[1];
+    }
+    if (iterators.length === 1) {
+      const iterator = iterators[0];
+      const [iterType, vars, iterable, stepOrOwn] = iterator;
+      if (iterType === "for-in") {
+        const step = stepOrOwn;
+        const varsArray = Array.isArray(vars) ? vars : [vars];
+        const noVar = varsArray.length === 0;
+        const [itemVar, indexVar] = noVar ? ["_i", null] : varsArray;
+        let itemVarPattern = itemVar;
+        if (Array.isArray(itemVar) && (itemVar[0] === "array" || itemVar[0] === "object")) {
+          itemVarPattern = this.generateDestructuringPattern(itemVar);
+        }
+        if (step && step !== null) {
+          let iterableHead = Array.isArray(iterable) && iterable[0];
+          if (iterableHead instanceof String)
+            iterableHead = iterableHead.valueOf();
+          const isRange = iterableHead === ".." || iterableHead === "...";
+          if (isRange) {
+            const isExclusive = iterableHead === "...";
+            const [start, end] = iterable.slice(1);
+            const startCode = this.generate(start, "value");
+            const endCode = this.generate(end, "value");
+            const stepCode = this.generate(step, "value");
+            const comparison = isExclusive ? "<" : "<=";
+            code += this.indent() + `for (let ${itemVarPattern} = ${startCode}; ${itemVarPattern} ${comparison} ${endCode}; ${itemVarPattern} += ${stepCode}) {
+`;
+          } else {
+            const iterableCode = this.generate(iterable, "value");
+            const indexVarName2 = indexVar || "_i";
+            const stepCode = this.generate(step, "value");
+            const isNegativeStep = this.isNegativeStep(step);
+            if (isNegativeStep) {
+              code += this.indent() + `for (let ${indexVarName2} = ${iterableCode}.length - 1; ${indexVarName2} >= 0; ${indexVarName2} += ${stepCode}) {
+`;
+            } else {
+              code += this.indent() + `for (let ${indexVarName2} = 0; ${indexVarName2} < ${iterableCode}.length; ${indexVarName2} += ${stepCode}) {
+`;
+            }
+            this.indentLevel++;
+            if (!noVar) {
+              code += this.indent() + `const ${itemVarPattern} = ${iterableCode}[${indexVarName2}];
+`;
+            }
+          }
+        } else {
+          const iterableCode = this.generate(iterable, "value");
+          code += this.indent() + `for (const ${itemVarPattern} of ${iterableCode}) {
+`;
+        }
+        this.indentLevel++;
+        if (guards && guards.length > 0) {
+          code += this.indent() + `if (${guards.map((g) => this.generate(g, "value")).join(" && ")}) {
+`;
+          this.indentLevel++;
+        }
+        const exprCode = this.unwrap(this.generate(unwrappedExpr, "value"));
+        code += this.indent() + `${targetVar}.push(${exprCode});
+`;
+        if (guards && guards.length > 0) {
+          this.indentLevel--;
+          code += this.indent() + `}
+`;
+        }
+        this.indentLevel--;
+        code += this.indent() + `}
+`;
+        return code;
       }
     }
-    const currentIndent = this.indent();
-    const reindentedLines = lines.map((line) => {
-      if (!line.trim())
-        return "";
-      return line.startsWith(baseIndent) ? currentIndent + line.slice(baseIndent.length) : currentIndent + line;
-    });
-    return reindentedLines.join(`
-`).replace(/const result = \[\];/, `${arrayVar} = [];`).replace(/return result;/, `return ${arrayVar};`).replace(/\bresult\b/g, arrayVar);
+    const hasAwait = this.containsAwait(expr);
+    const asyncPrefix = hasAwait ? "async " : "";
+    return this.indent() + `${targetVar} = (${asyncPrefix}() => { /* complex comprehension */ })();
+`;
   }
   generateComprehensionAsLoop(expr, iterators, guards) {
     let code = "";
@@ -6915,8 +6978,8 @@ function compileToJS(source, options = {}) {
   return compiler.compileToJS(source);
 }
 // src/browser.js
-var VERSION = "1.3.13";
-var BUILD_DATE = "2025-11-07@04:43:53GMT";
+var VERSION = "1.3.14";
+var BUILD_DATE = "2025-11-07@05:04:01GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

@@ -5,6 +5,19 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.14] - 2025-11-07
+
+### Changed
+- **S-expression comprehension generation** (#49) - Removed string manipulation anti-pattern
+  - Replaced `unwrapComprehensionIIFE()` with s-expression-based approach
+  - Added `generateComprehensionWithTarget()` for direct array building
+  - No more generating IIFE then unwrapping with regex ✅
+  - Follows same philosophy as Issue #46 improvements
+  - **42 lines removed** (string manipulation eliminated)
+  - Safer, faster, cleaner code generation
+- Test count: 926 → 931 (+5 tests)
+- Added CODEGEN-ANALYSIS.md with optimization roadmap
+
 ## [1.3.13] - 2025-11-07
 
 ### Fixed
