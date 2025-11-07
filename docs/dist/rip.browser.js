@@ -3373,7 +3373,26 @@ class CodeGenerator {
     "for-of": "generateForOf",
     "for-from": "generateForFrom",
     while: "generateWhile",
-    until: "generateUntil"
+    until: "generateUntil",
+    try: "generateTry",
+    throw: "generateThrow",
+    switch: "generateSwitch",
+    when: "generateWhen",
+    comprehension: "generateComprehension",
+    "object-comprehension": "generateObjectComprehension",
+    class: "generateClass",
+    super: "generateSuper",
+    "?call": "generateSoakCall",
+    "?super": "generateOptionalSuper",
+    import: "generateImport",
+    export: "generateExport",
+    "export-default": "generateExportDefault",
+    "export-all": "generateExportAll",
+    "export-from": "generateExportFrom",
+    "do-iife": "generateDoIIFE",
+    regex: "generateRegex",
+    "tagged-template": "generateTaggedTemplate",
+    str: "generateString"
   };
   constructor(options = {}) {
     this.options = options;
@@ -6164,6 +6183,684 @@ ${this.indent()}}`;
     }
     return this.formatStatements(statements, context);
   }
+  generateTry(head, rest, context, sexpr) {
+    const needsReturns = context === "value";
+    let tryCode = "try ";
+    const tryBlock = rest[0];
+    if (needsReturns && Array.isArray(tryBlock) && tryBlock[0] === "block") {
+      tryCode += this.generateBlockWithReturns(tryBlock);
+    } else {
+      tryCode += this.generate(tryBlock, "statement");
+    }
+    if (rest.length >= 2 && Array.isArray(rest[1]) && rest[1].length === 2 && rest[1][0] !== "block") {
+      let [param, catchBlock] = rest[1];
+      tryCode += " catch";
+      if (param && Array.isArray(param) && (param[0] === "object" || param[0] === "array")) {
+        const tempVar = "error";
+        tryCode += ` (${tempVar})`;
+        const destructPattern = this.generate(param, "value");
+        const destructStmt = `(${destructPattern} = ${tempVar})`;
+        if (Array.isArray(catchBlock) && catchBlock[0] === "block") {
+          catchBlock = ["block", destructStmt, ...catchBlock.slice(1)];
+        } else {
+          catchBlock = ["block", destructStmt, catchBlock];
+        }
+      } else if (param) {
+        tryCode += ` (${param})`;
+      }
+      if (needsReturns && Array.isArray(catchBlock) && catchBlock[0] === "block") {
+        tryCode += " " + this.generateBlockWithReturns(catchBlock);
+      } else {
+        tryCode += " " + this.generate(catchBlock, "statement");
+      }
+    } else if (rest.length === 2) {
+      tryCode += " finally " + this.generate(rest[1], "statement");
+    }
+    if (rest.length === 3) {
+      tryCode += " finally " + this.generate(rest[2], "statement");
+    }
+    if (needsReturns) {
+      const isAsync = this.containsAwait(rest[0]) || rest[1] && this.containsAwait(rest[1]);
+      const asyncPrefix = isAsync ? "async " : "";
+      return `(${asyncPrefix}() => { ${tryCode} })()`;
+    }
+    return tryCode;
+  }
+  generateThrow(head, rest, context, sexpr) {
+    let [expr] = rest;
+    let extractedCond = null;
+    if (Array.isArray(expr)) {
+      let checkExpr = expr;
+      let wrapperType = null;
+      if (expr[0] === "new" && Array.isArray(expr[1]) && (expr[1][0] === "if" || expr[1][0] === "unless")) {
+        wrapperType = "new";
+        checkExpr = expr[1];
+      } else if (expr[0] === "if" || expr[0] === "unless") {
+        checkExpr = expr;
+      }
+      if (checkExpr[0] === "if" || checkExpr[0] === "unless") {
+        const [condType, condition, body] = checkExpr;
+        const isUnless = condType === "unless";
+        let unwrappedBody = body;
+        if (Array.isArray(body) && body.length === 1) {
+          unwrappedBody = body[0];
+        }
+        if (wrapperType === "new") {
+          expr = ["new", unwrappedBody];
+        } else {
+          expr = unwrappedBody;
+        }
+        const condCode = this.generate(condition, "value");
+        const throwCode = `throw ${this.generate(expr, "value")}`;
+        if (isUnless) {
+          return `if (!(${condCode})) {
+${this.indent()}  ${throwCode};
+${this.indent()}}`;
+        } else {
+          return `if (${condCode}) {
+${this.indent()}  ${throwCode};
+${this.indent()}}`;
+        }
+      }
+    }
+    const throwStmt = `throw ${this.generate(expr, "value")}`;
+    if (context === "value") {
+      return `(() => { ${throwStmt}; })()`;
+    }
+    return throwStmt;
+  }
+  generateSwitch(head, rest, context, sexpr) {
+    const [discriminant, whens, defaultCase] = rest;
+    if (discriminant === null) {
+      return this.generateSwitchAsIfChain(whens, defaultCase, context);
+    }
+    let switchBody = `switch (${this.generate(discriminant, "value")}) {
+`;
+    this.indentLevel++;
+    const normalize = (v) => v instanceof String ? v.valueOf() : v;
+    for (const whenClause of whens) {
+      const [, test, body] = whenClause;
+      const firstTest = normalize(Array.isArray(test) && test.length > 0 ? test[0] : null);
+      const isTestList = Array.isArray(test) && test.length > 0 && typeof firstTest === "string" && !firstTest.match(/^[-+*\/%<>=!&|^~]$|^(typeof|delete|new|not|await|yield)$/);
+      const tests = isTestList ? test : [test];
+      for (const t of tests) {
+        const tValue = normalize(t);
+        let caseValue;
+        if (Array.isArray(tValue)) {
+          caseValue = this.generate(tValue, "value");
+        } else if (typeof tValue === "string" && (tValue.startsWith('"') || tValue.startsWith("'"))) {
+          caseValue = `'${tValue.slice(1, -1)}'`;
+        } else {
+          caseValue = this.generate(tValue, "value");
+        }
+        switchBody += this.indent() + `case ${caseValue}:
+`;
+      }
+      this.indentLevel++;
+      switchBody += this.generateSwitchCaseBody(body, context);
+      this.indentLevel--;
+    }
+    if (defaultCase) {
+      switchBody += this.indent() + `default:
+`;
+      this.indentLevel++;
+      switchBody += this.generateSwitchCaseBody(defaultCase, context);
+      this.indentLevel--;
+    }
+    this.indentLevel--;
+    switchBody += this.indent() + "}";
+    if (context === "value") {
+      const containsAwait = whens.some((w) => this.containsAwait(w[2])) || defaultCase && this.containsAwait(defaultCase);
+      const asyncPrefix = containsAwait ? "async " : "";
+      return `(${asyncPrefix}() => { ${switchBody} })()`;
+    }
+    return switchBody;
+  }
+  generateWhen(head, rest, context, sexpr) {
+    throw new Error("when clause should be handled by switch");
+  }
+  generateComprehension(head, rest, context, sexpr) {
+    const [expr, iterators, guards] = rest;
+    if (context === "statement") {
+      return this.generateComprehensionAsLoop(expr, iterators, guards);
+    }
+    if (this.comprehensionTarget) {
+      const code2 = this.generateComprehensionWithTarget(expr, iterators, guards, this.comprehensionTarget);
+      return code2;
+    }
+    const hasAwait = this.containsAwait(expr);
+    const asyncPrefix = hasAwait ? "async " : "";
+    let code = `(${asyncPrefix}() => {
+`;
+    this.indentLevel++;
+    this.comprehensionDepth++;
+    code += this.indent() + `const result = [];
+`;
+    for (const iterator of iterators) {
+      const [iterType, vars, iterable, stepOrOwn] = iterator;
+      if (iterType === "for-in") {
+        const step = stepOrOwn;
+        const varsArray = Array.isArray(vars) ? vars : [vars];
+        const noVar = varsArray.length === 0;
+        const [firstVar, indexVar] = noVar ? ["_i", null] : varsArray;
+        let itemVarPattern = firstVar;
+        if (Array.isArray(firstVar) && (firstVar[0] === "array" || firstVar[0] === "object")) {
+          itemVarPattern = this.generateDestructuringPattern(firstVar);
+        }
+        if (step && step !== null) {
+          let iterableHead = Array.isArray(iterable) && iterable[0];
+          if (iterableHead instanceof String) {
+            iterableHead = iterableHead.valueOf();
+          }
+          const isRange = iterableHead === ".." || iterableHead === "...";
+          if (isRange) {
+            const isExclusive = iterableHead === "...";
+            const [start, end] = iterable.slice(1);
+            const startCode = this.generate(start, "value");
+            const endCode = this.generate(end, "value");
+            const stepCode = this.generate(step, "value");
+            const comparison = isExclusive ? "<" : "<=";
+            code += this.indent() + `for (let ${itemVarPattern} = ${startCode}; ${itemVarPattern} ${comparison} ${endCode}; ${itemVarPattern} += ${stepCode}) {
+`;
+            this.indentLevel++;
+          } else {
+            const iterableCode = this.generate(iterable, "value");
+            const indexVarName2 = indexVar || "_i";
+            const stepCode = this.generate(step, "value");
+            const isNegativeStep = this.isNegativeStep(step);
+            if (isNegativeStep) {
+              code += this.indent() + `for (let ${indexVarName2} = ${iterableCode}.length - 1; ${indexVarName2} >= 0; ${indexVarName2} += ${stepCode}) {
+`;
+            } else {
+              code += this.indent() + `for (let ${indexVarName2} = 0; ${indexVarName2} < ${iterableCode}.length; ${indexVarName2} += ${stepCode}) {
+`;
+            }
+            this.indentLevel++;
+            if (!noVar) {
+              code += this.indent() + `const ${itemVarPattern} = ${iterableCode}[${indexVarName2}];
+`;
+            }
+          }
+        } else if (indexVar) {
+          const iterableCode = this.generate(iterable, "value");
+          code += this.indent() + `for (let ${indexVar} = 0; ${indexVar} < ${iterableCode}.length; ${indexVar}++) {
+`;
+          this.indentLevel++;
+          code += this.indent() + `const ${itemVarPattern} = ${iterableCode}[${indexVar}];
+`;
+        } else {
+          code += this.indent() + `for (const ${itemVarPattern} of ${this.generate(iterable, "value")}) {
+`;
+          this.indentLevel++;
+        }
+      } else if (iterType === "for-of") {
+        const own = stepOrOwn;
+        const varsArray = Array.isArray(vars) ? vars : [vars];
+        const [firstVar, secondVar] = varsArray;
+        let keyVarPattern = firstVar;
+        if (Array.isArray(firstVar) && (firstVar[0] === "array" || firstVar[0] === "object")) {
+          keyVarPattern = this.generateDestructuringPattern(firstVar);
+        }
+        const objCode = this.generate(iterable, "value");
+        code += this.indent() + `for (const ${keyVarPattern} in ${objCode}) {
+`;
+        this.indentLevel++;
+        if (own) {
+          code += this.indent() + `if (!Object.hasOwn(${objCode}, ${keyVarPattern})) continue;
+`;
+        }
+        if (secondVar) {
+          code += this.indent() + `const ${secondVar} = ${objCode}[${keyVarPattern}];
+`;
+        }
+      } else if (iterType === "for-from") {
+        const isAwait = iterator[3];
+        const varsArray = Array.isArray(vars) ? vars : [vars];
+        const [firstVar] = varsArray;
+        let itemVarPattern = firstVar;
+        if (Array.isArray(firstVar) && (firstVar[0] === "array" || firstVar[0] === "object")) {
+          itemVarPattern = this.generateDestructuringPattern(firstVar);
+        }
+        const awaitKeyword = isAwait ? "await " : "";
+        code += this.indent() + `for ${awaitKeyword}(const ${itemVarPattern} of ${this.generate(iterable, "value")}) {
+`;
+        this.indentLevel++;
+      }
+    }
+    for (const guard of guards) {
+      code += this.indent() + `if (${this.generate(guard, "value")}) {
+`;
+      this.indentLevel++;
+    }
+    const hasControlFlow = (node) => {
+      if (typeof node === "string" && (node === "break" || node === "continue")) {
+        return true;
+      }
+      if (!Array.isArray(node))
+        return false;
+      if (node[0] === "break" || node[0] === "continue" || node[0] === "break-if" || node[0] === "continue-if" || node[0] === "return" || node[0] === "throw")
+        return true;
+      if (node[0] === "if" || node[0] === "unless") {
+        return node.slice(1).some((child) => hasControlFlow(child));
+      }
+      return node.some((child) => hasControlFlow(child));
+    };
+    if (Array.isArray(expr) && expr[0] === "block") {
+      const statements = expr.slice(1);
+      for (let i = 0;i < statements.length; i++) {
+        const stmt = statements[i];
+        const isLast = i === statements.length - 1;
+        const stmtHasControlFlow = hasControlFlow(stmt);
+        if (!isLast || stmtHasControlFlow) {
+          code += this.indent() + this.generate(stmt, "statement") + `;
+`;
+        } else {
+          const isLoopStmt = Array.isArray(stmt) && ["for-in", "for-of", "for-from", "while", "until", "loop"].includes(stmt[0]);
+          if (isLoopStmt) {
+            code += this.indent() + this.generate(stmt, "statement") + `;
+`;
+          } else {
+            code += this.indent() + `result.push(${this.generate(stmt, "value")});
+`;
+          }
+        }
+      }
+    } else {
+      if (hasControlFlow(expr)) {
+        code += this.indent() + this.generate(expr, "statement") + `;
+`;
+      } else {
+        const isLoopStmt = Array.isArray(expr) && ["for-in", "for-of", "for-from", "while", "until", "loop"].includes(expr[0]);
+        if (isLoopStmt) {
+          code += this.indent() + this.generate(expr, "statement") + `;
+`;
+        } else {
+          code += this.indent() + `result.push(${this.generate(expr, "value")});
+`;
+        }
+      }
+    }
+    for (let i = 0;i < guards.length; i++) {
+      this.indentLevel--;
+      code += this.indent() + `}
+`;
+    }
+    for (let i = 0;i < iterators.length; i++) {
+      this.indentLevel--;
+      code += this.indent() + `}
+`;
+    }
+    code += this.indent() + `return result;
+`;
+    this.indentLevel--;
+    this.comprehensionDepth--;
+    code += this.indent() + "})()";
+    return code;
+  }
+  generateObjectComprehension(head, rest, context, sexpr) {
+    const [keyExpr, valueExpr, iterators, guards] = rest;
+    let code = `(() => {
+`;
+    this.indentLevel++;
+    code += this.indent() + `const result = {};
+`;
+    for (const iterator of iterators) {
+      const [iterType, vars, iterable, own] = iterator;
+      if (iterType === "for-of") {
+        const [keyVar, valueVar] = vars;
+        const iterableCode = this.generate(iterable, "value");
+        code += this.indent() + `for (const ${keyVar} in ${iterableCode}) {
+`;
+        this.indentLevel++;
+        if (own) {
+          code += this.indent() + `if (!Object.hasOwn(${iterableCode}, ${keyVar})) continue;
+`;
+        }
+        if (valueVar) {
+          code += this.indent() + `const ${valueVar} = ${iterableCode}[${keyVar}];
+`;
+        }
+      }
+    }
+    for (const guard of guards) {
+      code += this.indent() + `if (${this.generate(guard, "value")}) {
+`;
+      this.indentLevel++;
+    }
+    const key2 = this.generate(keyExpr, "value");
+    const value = this.generate(valueExpr, "value");
+    code += this.indent() + `result[${key2}] = ${value};
+`;
+    for (let i = 0;i < guards.length; i++) {
+      this.indentLevel--;
+      code += this.indent() + `}
+`;
+    }
+    for (let i = 0;i < iterators.length; i++) {
+      this.indentLevel--;
+      code += this.indent() + `}
+`;
+    }
+    code += this.indent() + `return result;
+`;
+    this.indentLevel--;
+    code += this.indent() + "})()";
+    return code;
+  }
+  generateClass(head, rest, context, sexpr) {
+    const [className, parentClass, ...bodyParts] = rest;
+    let code = className ? `class ${className}` : "class";
+    if (parentClass) {
+      code += ` extends ${this.generate(parentClass, "value")}`;
+    }
+    code += ` {
+`;
+    if (bodyParts.length > 0 && Array.isArray(bodyParts[0])) {
+      const bodyBlock = bodyParts[0];
+      if (bodyBlock[0] === "block") {
+        const bodyStatements = bodyBlock.slice(1);
+        const hasObjectFirst = bodyStatements.length > 0 && Array.isArray(bodyStatements[0]) && bodyStatements[0][0] === "object";
+        if (hasObjectFirst && bodyStatements.length === 1) {
+          const objectLiteral = bodyStatements[0];
+          const members = objectLiteral.slice(1);
+          this.indentLevel++;
+          const boundMethods = [];
+          for (const [memberKey, memberValue] of members) {
+            const isStatic = this.isStaticMember(memberKey);
+            const isComputed = this.isComputedMember(memberKey);
+            const methodName = this.extractMemberName(memberKey);
+            if (this.isBoundMethod(memberValue) && !isStatic && !isComputed && methodName !== "constructor") {
+              boundMethods.push(methodName);
+            }
+          }
+          for (const [memberKey, memberValue] of members) {
+            const isStatic = this.isStaticMember(memberKey);
+            const isComputed = this.isComputedMember(memberKey);
+            const methodName = this.extractMemberName(memberKey);
+            if (Array.isArray(memberValue) && (memberValue[0] === "->" || memberValue[0] === "=>")) {
+              const [arrowType, params, body] = memberValue;
+              const containsAwait = this.containsAwait(body);
+              const containsYield = this.containsYield(body);
+              let cleanParams = params;
+              let autoAssignments = [];
+              if (methodName === "constructor") {
+                cleanParams = params.map((param) => {
+                  if (Array.isArray(param) && param[0] === "." && param[1] === "this") {
+                    const propName = param[2];
+                    autoAssignments.push(`this.${propName} = ${propName}`);
+                    return propName;
+                  }
+                  return param;
+                });
+                for (const boundMethod of boundMethods) {
+                  autoAssignments.unshift(`this.${boundMethod} = this.${boundMethod}.bind(this)`);
+                }
+              }
+              const paramList = this.generateParamList(cleanParams);
+              const asyncPrefix = containsAwait ? "async " : "";
+              const generatorSuffix = containsYield ? "*" : "";
+              if (isStatic) {
+                code += this.indent() + `static ${asyncPrefix}${generatorSuffix}${methodName}(${paramList}) `;
+              } else {
+                code += this.indent() + `${asyncPrefix}${generatorSuffix}${methodName}(${paramList}) `;
+              }
+              const isConstructorMethod = methodName === "constructor";
+              if (!isComputed) {
+                this.currentMethodName = methodName;
+              }
+              code += this.generateMethodBody(body, autoAssignments, isConstructorMethod, cleanParams);
+              this.currentMethodName = null;
+              code += `
+`;
+            } else if (isStatic) {
+              const propValue = this.generate(memberValue, "value");
+              code += this.indent() + `static ${methodName} = ${propValue};
+`;
+            } else {
+              const propValue = this.generate(memberValue, "value");
+              code += this.indent() + `${methodName} = ${propValue};
+`;
+            }
+          }
+          this.indentLevel--;
+        } else if (hasObjectFirst) {
+          const objectLiteral = bodyStatements[0];
+          const members = objectLiteral.slice(1);
+          const additionalStatements = bodyStatements.slice(1);
+          this.indentLevel++;
+          for (const [memberKey, memberValue] of members) {
+            const isStatic = this.isStaticMember(memberKey);
+            const isComputed = this.isComputedMember(memberKey);
+            const methodName = this.extractMemberName(memberKey);
+            if (Array.isArray(memberValue) && (memberValue[0] === "->" || memberValue[0] === "=>")) {
+              const [arrowType, params, body] = memberValue;
+              const containsAwait = this.containsAwait(body);
+              const containsYield = this.containsYield(body);
+              const paramList = this.generateParamList(params);
+              const asyncPrefix = containsAwait ? "async " : "";
+              const generatorSuffix = containsYield ? "*" : "";
+              if (isStatic) {
+                code += this.indent() + `static ${asyncPrefix}${generatorSuffix}${methodName}(${paramList}) `;
+              } else {
+                code += this.indent() + `${asyncPrefix}${generatorSuffix}${methodName}(${paramList}) `;
+              }
+              this.currentMethodName = methodName;
+              code += this.generateMethodBody(body, [], methodName === "constructor", params);
+              this.currentMethodName = null;
+              code += `
+`;
+            } else if (isStatic) {
+              const propValue = this.generate(memberValue, "value");
+              code += this.indent() + `static ${methodName} = ${propValue};
+`;
+            } else {
+              const propValue = this.generate(memberValue, "value");
+              code += this.indent() + `${methodName} = ${propValue};
+`;
+            }
+          }
+          for (const stmt of additionalStatements) {
+            if (Array.isArray(stmt) && stmt[0] === "class") {
+              const [, nestedName, parent, ...nestedBody] = stmt;
+              if (Array.isArray(nestedName) && nestedName[0] === "." && nestedName[1] === "this") {
+                const innerName = nestedName[2];
+                code += this.indent() + `static ${innerName} = `;
+                const classCode = this.generate(["class", null, parent, ...nestedBody], "value");
+                code += classCode + `;
+`;
+              }
+            } else {
+              code += this.indent() + this.generate(stmt, "statement") + `;
+`;
+            }
+          }
+          this.indentLevel--;
+        } else {
+          this.indentLevel++;
+          for (const stmt of bodyStatements) {
+            if (Array.isArray(stmt) && stmt[0] === "=" && Array.isArray(stmt[1]) && stmt[1][0] === "." && stmt[1][1] === "this") {
+              const propName = stmt[1][2];
+              const value = this.generate(stmt[2], "value");
+              code += this.indent() + `static ${propName} = ${value};
+`;
+            } else {
+              code += this.indent() + this.generate(stmt, "statement") + `;
+`;
+            }
+          }
+          this.indentLevel--;
+        }
+      }
+    }
+    code += this.indent() + "}";
+    return code;
+  }
+  generateSuper(head, rest, context, sexpr) {
+    if (rest.length === 0) {
+      if (this.currentMethodName && this.currentMethodName !== "constructor") {
+        return `super.${this.currentMethodName}()`;
+      }
+      return "super";
+    }
+    const argsCode = rest.map((arg) => this.unwrap(this.generate(arg, "value"))).join(", ");
+    if (this.currentMethodName && this.currentMethodName !== "constructor") {
+      return `super.${this.currentMethodName}(${argsCode})`;
+    }
+    return `super(${argsCode})`;
+  }
+  generateSoakCall(head, rest, context, sexpr) {
+    const [fn, ...args] = rest;
+    const fnCode = this.generate(fn, "value");
+    const argsCode = args.map((arg) => this.generate(arg, "value")).join(", ");
+    return `(typeof ${fnCode} === 'function' ? ${fnCode}(${argsCode}) : undefined)`;
+  }
+  generateOptionalSuper(head, rest, context, sexpr) {
+    const argsCode = rest.map((arg) => this.unwrap(this.generate(arg, "value"))).join(", ");
+    if (this.currentMethodName && this.currentMethodName !== "constructor") {
+      return `(typeof super.${this.currentMethodName} === 'function' ? super.${this.currentMethodName}(${argsCode}) : undefined)`;
+    }
+    return `super(${argsCode})`;
+  }
+  generateImport(head, rest, context, sexpr) {
+    if (rest.length === 1) {
+      const [urlExpr] = rest;
+      return `import(${this.generate(urlExpr, "value")})`;
+    }
+    const [specifier, source] = rest;
+    const fixedSource = this.addJsExtensionAndAssertions(source);
+    if (typeof specifier === "string") {
+      return `import ${specifier} from ${fixedSource}`;
+    }
+    if (Array.isArray(specifier)) {
+      if (specifier[0] === "*" && specifier.length === 2) {
+        return `import * as ${specifier[1]} from ${fixedSource}`;
+      }
+      if (typeof specifier[0] === "string" && Array.isArray(specifier[1])) {
+        const defaultImport = specifier[0];
+        const secondPart = specifier[1];
+        if (secondPart[0] === "*" && secondPart.length === 2) {
+          return `import ${defaultImport}, * as ${secondPart[1]} from ${fixedSource}`;
+        }
+        const names2 = (Array.isArray(secondPart) ? secondPart : [secondPart]).map((item) => {
+          if (Array.isArray(item) && item.length === 2) {
+            return `${item[0]} as ${item[1]}`;
+          }
+          return item;
+        }).join(", ");
+        return `import ${defaultImport}, { ${names2} } from ${fixedSource}`;
+      }
+      const names = specifier.map((item) => {
+        if (Array.isArray(item) && item.length === 2) {
+          return `${item[0]} as ${item[1]}`;
+        }
+        return item;
+      }).join(", ");
+      return `import { ${names} } from ${fixedSource}`;
+    }
+    return `import ${this.generate(specifier, "value")} from ${fixedSource}`;
+  }
+  generateExport(head, rest, context, sexpr) {
+    const [declaration] = rest;
+    if (Array.isArray(declaration) && declaration.every((item) => typeof item === "string")) {
+      const names = declaration.join(", ");
+      return `export { ${names} }`;
+    }
+    if (Array.isArray(declaration) && declaration[0] === "=") {
+      const [, target, value] = declaration;
+      return `export const ${target} = ${this.generate(value, "value")}`;
+    }
+    return `export ${this.generate(declaration, "statement")}`;
+  }
+  generateExportDefault(head, rest, context, sexpr) {
+    const [expr] = rest;
+    if (Array.isArray(expr) && expr[0] === "=") {
+      const [, target, value] = expr;
+      const assignCode = `const ${target} = ${this.generate(value, "value")}`;
+      return `${assignCode};
+export default ${target}`;
+    }
+    return `export default ${this.generate(expr, "statement")}`;
+  }
+  generateExportAll(head, rest, context, sexpr) {
+    const [source] = rest;
+    const fixedSource = this.addJsExtensionAndAssertions(source);
+    return `export * from ${fixedSource}`;
+  }
+  generateExportFrom(head, rest, context, sexpr) {
+    const [specifiers, source] = rest;
+    const fixedSource = this.addJsExtensionAndAssertions(source);
+    if (Array.isArray(specifiers)) {
+      const names = specifiers.map((item) => {
+        if (Array.isArray(item) && item.length === 2) {
+          return `${item[0]} as ${item[1]}`;
+        }
+        return item;
+      }).join(", ");
+      return `export { ${names} } from ${fixedSource}`;
+    }
+    return `export ${specifiers} from ${fixedSource}`;
+  }
+  generateDoIIFE(head, rest, context, sexpr) {
+    const [arrowFn] = rest;
+    const fnCode = this.generate(arrowFn, "statement");
+    return `(${fnCode})()`;
+  }
+  generateRegex(head, rest, context, sexpr) {
+    if (rest.length === 0) {
+      return head;
+    }
+    const [pattern] = rest;
+    return this.generate(pattern, "value");
+  }
+  generateTaggedTemplate(head, rest, context, sexpr) {
+    const [tag, str] = rest;
+    const tagCode = this.generate(tag, "value");
+    let templateContent = this.generate(str, "value");
+    if (templateContent.startsWith("`")) {
+      return `${tagCode}${templateContent}`;
+    }
+    if (templateContent.startsWith('"') || templateContent.startsWith("'")) {
+      const content = templateContent.slice(1, -1);
+      return `${tagCode}\`${content}\``;
+    }
+    return `${tagCode}\`${templateContent}\``;
+  }
+  generateString(head, rest, context, sexpr) {
+    let result = "`";
+    for (let i = 0;i < rest.length; i++) {
+      const part = rest[i];
+      if (part instanceof String) {
+        result += this.extractStringContent(part);
+      } else if (typeof part === "string") {
+        if (part.startsWith('"') || part.startsWith("'")) {
+          if (this.options.debug) {
+            console.warn("[RIP] Unexpected quoted primitive in str interpolation:", part);
+          }
+          result += part.slice(1, -1);
+        } else {
+          result += part;
+        }
+      } else if (Array.isArray(part)) {
+        if (part.length === 1 && typeof part[0] === "string" && !Array.isArray(part[0])) {
+          const value = part[0];
+          const isLiteral = /^[\d"']/.test(value);
+          if (isLiteral) {
+            result += "${" + this.generate(value, "value") + "}";
+          } else {
+            result += "${" + value + "}";
+          }
+        } else {
+          let expr = part;
+          if (part.length === 1 && Array.isArray(part[0])) {
+            expr = part[0];
+          }
+          result += "${" + this.generate(expr, "value") + "}";
+        }
+      }
+    }
+    result += "`";
+    return result;
+  }
   generateDestructuringPattern(pattern) {
     return this.formatParam(pattern);
   }
@@ -7690,8 +8387,8 @@ function compileToJS(source, options = {}) {
   return compiler.compileToJS(source);
 }
 // src/browser.js
-var VERSION = "1.4.0";
-var BUILD_DATE = "2025-11-07@06:37:09GMT";
+var VERSION = "1.4.1";
+var BUILD_DATE = "2025-11-07@07:23:14GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

@@ -103,38 +103,33 @@ export class CodeGenerator {
     'for-from': 'generateForFrom',
     'while': 'generateWhile',
     'until': 'generateUntil',
-    // 'try': 'generateTry',
-    // 'throw': 'generateThrow',
-    // 'switch': 'generateSwitch',
-    // 'when': 'generateWhen',
+    'try': 'generateTry',
+    'throw': 'generateThrow',
+    'switch': 'generateSwitch',
+    'when': 'generateWhen',
 
-    // Comprehensions (extracting next)
-    // 'comprehension': 'generateComprehension',
-    // 'object-comprehension': 'generateObjectComprehension',
+    // Comprehensions
+    'comprehension': 'generateComprehension',
+    'object-comprehension': 'generateObjectComprehension',
 
-    // Classes (to be extracted in Phase 2)
-    // 'class': 'generateClass',
-    // 'super': 'generateSuper',
-    // '?call': 'generateSoakCall',
-    // '?super': 'generateOptionalSuper',
+    // Classes
+    'class': 'generateClass',
+    'super': 'generateSuper',
+    '?call': 'generateSoakCall',
+    '?super': 'generateOptionalSuper',
 
-    // Async/Generators (to be extracted in Phase 2)
-    // 'await': 'generateAwait',
-    // 'yield': 'generateYield',
-    // 'yield-from': 'generateYieldFrom',
+    // Modules
+    'import': 'generateImport',
+    'export': 'generateExport',
+    'export-default': 'generateExportDefault',
+    'export-all': 'generateExportAll',
+    'export-from': 'generateExportFrom',
 
-    // Modules (to be extracted in Phase 2)
-    // 'import': 'generateImport',
-    // 'export': 'generateExport',
-    // 'export-default': 'generateExportDefault',
-    // 'export-all': 'generateExportAll',
-    // 'export-from': 'generateExportFrom',
-
-    // Special forms (to be extracted in Phase 2)
-    // 'do-iife': 'generateDoIIFE',
-    // 'regex': 'generateRegex',
-    // 'tagged-template': 'generateTaggedTemplate',
-    // 'str': 'generateString',
+    // Special forms
+    'do-iife': 'generateDoIIFE',
+    'regex': 'generateRegex',
+    'tagged-template': 'generateTaggedTemplate',
+    'str': 'generateString',
   };
 
   constructor(options = {}) {
@@ -4359,6 +4354,1071 @@ export class CodeGenerator {
     }
     // In value context, just format statements
     return this.formatStatements(statements, context);
+  }
+
+  /**
+   * Generate try/catch/finally statement
+   * Pattern: ["try", tryBlock, catchClause?, finallyBlock?]
+   */
+  generateTry(head, rest, context, sexpr) {
+    // In value context, need implicit returns
+    const needsReturns = context === 'value';
+
+    // Build try statement
+    let tryCode = 'try ';
+
+    // Generate try block with implicit return if needed
+    const tryBlock = rest[0];
+    if (needsReturns && Array.isArray(tryBlock) && tryBlock[0] === 'block') {
+      tryCode += this.generateBlockWithReturns(tryBlock);
+    } else {
+      tryCode += this.generate(tryBlock, 'statement');
+    }
+
+    // Check for catch clause (distinguish from finally block)
+    // Catch: [param, block] where param is a string or null or destructuring pattern
+    // Finally: ["block", ...] directly
+    if (rest.length >= 2 && Array.isArray(rest[1]) && rest[1].length === 2 && rest[1][0] !== 'block') {
+      // Has catch: [param, block]
+      let [param, catchBlock] = rest[1];
+      tryCode += ' catch';
+
+      // Check if param is a destructuring pattern (object or array)
+      if (param && Array.isArray(param) && (param[0] === 'object' || param[0] === 'array')) {
+        // Destructuring: catch (error) { ({code} = error); ... }
+        const tempVar = 'error';
+        tryCode += ` (${tempVar})`;
+
+        // Create destructuring statement (needs parens for object destructuring)
+        const destructPattern = this.generate(param, 'value');
+        const destructStmt = `(${destructPattern} = ${tempVar})`;
+
+        // Prepend to catch block
+        if (Array.isArray(catchBlock) && catchBlock[0] === 'block') {
+          catchBlock = ['block', destructStmt, ...catchBlock.slice(1)];
+        } else {
+          catchBlock = ['block', destructStmt, catchBlock];
+        }
+      } else if (param) {
+        // Simple param
+        tryCode += ` (${param})`;
+      }
+
+      // Generate catch block with implicit return if needed
+      if (needsReturns && Array.isArray(catchBlock) && catchBlock[0] === 'block') {
+        tryCode += ' ' + this.generateBlockWithReturns(catchBlock);
+      } else {
+        tryCode += ' ' + this.generate(catchBlock, 'statement');
+      }
+    } else if (rest.length === 2) {
+      // Just finally (no catch)
+      tryCode += ' finally ' + this.generate(rest[1], 'statement');
+    }
+
+    // Check for finally (after catch)
+    if (rest.length === 3) {
+      tryCode += ' finally ' + this.generate(rest[2], 'statement');
+    }
+
+    // In value context, wrap in IIFE
+    if (needsReturns) {
+      // Check if try block contains await - if so, make IIFE async
+      const isAsync = this.containsAwait(rest[0]) ||
+                     (rest[1] && this.containsAwait(rest[1]));
+      const asyncPrefix = isAsync ? 'async ' : '';
+      return `(${asyncPrefix}() => { ${tryCode} })()`;
+    }
+
+    return tryCode;
+  }
+
+  /**
+   * Generate throw statement
+   * Pattern: ["throw", expression]
+   */
+  generateThrow(head, rest, context, sexpr) {
+    let [expr] = rest;
+
+    // Check if we need to extract a conditional wrapper
+    // Pattern: ["throw", ["new", ["unless", condition, body]]]
+    let extractedCond = null;
+
+    if (Array.isArray(expr)) {
+      // Check if the expression contains if/unless at the top level or nested in new
+      let checkExpr = expr;
+      let wrapperType = null;
+
+      // If it's new, check what new wraps
+      if (expr[0] === 'new' && Array.isArray(expr[1]) && (expr[1][0] === 'if' || expr[1][0] === 'unless')) {
+        wrapperType = 'new';
+        checkExpr = expr[1];
+      } else if (expr[0] === 'if' || expr[0] === 'unless') {
+        checkExpr = expr;
+      }
+
+      if (checkExpr[0] === 'if' || checkExpr[0] === 'unless') {
+        const [condType, condition, body] = checkExpr;
+        const isUnless = condType === 'unless';
+
+        // Unwrap the body from the conditional
+        let unwrappedBody = body;
+        // Body might be wrapped in array
+        if (Array.isArray(body) && body.length === 1) {
+          unwrappedBody = body[0];
+        }
+
+        // Reconstruct the throw expression without the conditional
+        if (wrapperType === 'new') {
+          expr = ['new', unwrappedBody];
+        } else {
+          expr = unwrappedBody;
+        }
+
+        // Generate the throw wrapped in conditional
+        const condCode = this.generate(condition, 'value');
+        const throwCode = `throw ${this.generate(expr, 'value')}`;
+
+        if (isUnless) {
+          return `if (!(${condCode})) {\n${this.indent()}  ${throwCode};\n${this.indent()}}`;
+        } else {
+          return `if (${condCode}) {\n${this.indent()}  ${throwCode};\n${this.indent()}}`;
+        }
+      }
+    }
+
+    // Generate throw statement
+    const throwStmt = `throw ${this.generate(expr, 'value')}`;
+
+    // In value context, wrap in IIFE (throw is a statement, not an expression)
+    if (context === 'value') {
+      return `(() => { ${throwStmt}; })()`;
+    }
+
+    return throwStmt;
+  }
+
+  /**
+   * Generate switch statement
+   * Pattern: ["switch", discriminant, whens, defaultCase]
+   */
+  generateSwitch(head, rest, context, sexpr) {
+    const [discriminant, whens, defaultCase] = rest;
+
+    // No discriminant: use if/else if instead
+    if (discriminant === null) {
+      return this.generateSwitchAsIfChain(whens, defaultCase, context);
+    }
+
+    // Build switch body
+    let switchBody = `switch (${this.generate(discriminant, 'value')}) {\n`;
+    this.indentLevel++;
+
+    // Helper: Normalize String objects to primitives
+    const normalize = (v) => v instanceof String ? v.valueOf() : v;
+
+    // Generate when clauses
+    for (const whenClause of whens) {
+      const [, test, body] = whenClause;
+
+      // Handle multiple test values (when 1, 2, 3)
+      // Need to distinguish:
+      //   ["-", "1"] → single s-expression (unary minus)
+      //   ["a", "b"] → multiple string/number values
+      // Check if first element is an operator (s-expression) or a value (list)
+      const firstTest = normalize(Array.isArray(test) && test.length > 0 ? test[0] : null);
+      const isTestList = Array.isArray(test) && test.length > 0 &&
+                        typeof firstTest === 'string' &&
+                        !firstTest.match(/^[-+*\/%<>=!&|^~]$|^(typeof|delete|new|not|await|yield)$/);
+      const tests = isTestList ? test : [test];
+
+      for (const t of tests) {
+        const tValue = normalize(t);
+        let caseValue;
+
+        if (Array.isArray(tValue)) {
+          // S-expression (like unary minus: ["-", "1"])
+          caseValue = this.generate(tValue, 'value');
+        } else if (typeof tValue === 'string' && (tValue.startsWith('"') || tValue.startsWith("'"))) {
+          // Quoted string from parser (like "\"a\"")
+          caseValue = `'${tValue.slice(1, -1)}'`;  // Extract content, requote
+        } else {
+          // Numbers, identifiers, etc.
+          caseValue = this.generate(tValue, 'value');
+        }
+
+        switchBody += this.indent() + `case ${caseValue}:\n`;
+      }
+
+      this.indentLevel++;
+      switchBody += this.generateSwitchCaseBody(body, context);
+      this.indentLevel--;
+    }
+
+    // Generate default case
+    if (defaultCase) {
+      switchBody += this.indent() + 'default:\n';
+      this.indentLevel++;
+      switchBody += this.generateSwitchCaseBody(defaultCase, context);
+      this.indentLevel--;
+    }
+
+    this.indentLevel--;
+    switchBody += this.indent() + '}';
+
+    // In value context, wrap in IIFE
+    if (context === 'value') {
+      // Check if switch contains await - if so, make IIFE async
+      const containsAwait = whens.some(w => this.containsAwait(w[2])) ||
+                           (defaultCase && this.containsAwait(defaultCase));
+      const asyncPrefix = containsAwait ? 'async ' : '';
+      return `(${asyncPrefix}() => { ${switchBody} })()`;
+    }
+
+    return switchBody;
+  }
+
+  /**
+   * Generate when clause (error - should be handled by switch)
+   * Pattern: ["when", ...] - standalone when is an error
+   */
+  generateWhen(head, rest, context, sexpr) {
+    throw new Error('when clause should be handled by switch');
+  }
+
+  /**
+   * Generate array comprehension
+   * Pattern: ["comprehension", expr, iterators, guards]
+   */
+  generateComprehension(head, rest, context, sexpr) {
+    const [expr, iterators, guards] = rest;
+
+    // OPTIMIZATION: If in statement context, generate plain loop (result unused)
+    if (context === 'statement') {
+      return this.generateComprehensionAsLoop(expr, iterators, guards);
+    }
+
+    // OPTIMIZATION: If targetVar is provided (from generateFunctionBody), generate direct array building
+    if (this.comprehensionTarget) {
+      const code = this.generateComprehensionWithTarget(expr, iterators, guards, this.comprehensionTarget);
+      return code;
+    }
+
+    // Value context: Generate IIFE that builds and returns array
+    // Check if expression contains await - if so, make IIFE async
+    const hasAwait = this.containsAwait(expr);
+    const asyncPrefix = hasAwait ? 'async ' : '';
+
+    // Generate IIFE that builds array
+    let code = `(${asyncPrefix}() => {\n`;
+    this.indentLevel++;
+    this.comprehensionDepth++; // Track that we're inside IIFE
+    code += this.indent() + 'const result = [];\n';
+
+    // Generate nested loops
+    for (const iterator of iterators) {
+      const [iterType, vars, iterable, stepOrOwn] = iterator;
+
+      if (iterType === 'for-in') {
+        const step = stepOrOwn;  // For for-in, 4th param is step
+        const varsArray = Array.isArray(vars) ? vars : [vars];
+
+        // Check if no loop variable (range repetition: for [1...N])
+        const noVar = varsArray.length === 0;
+        const [firstVar, indexVar] = noVar ? ['_i', null] : varsArray;
+
+        // Check if first var is a destructuring pattern
+        let itemVarPattern = firstVar;
+        if (Array.isArray(firstVar) && (firstVar[0] === 'array' || firstVar[0] === 'object')) {
+          // Generate destructuring pattern
+          itemVarPattern = this.generateDestructuringPattern(firstVar);
+        }
+
+        // Handle step (any value: positive, negative, or null)
+        if (step && step !== null) {
+          // Check if iterable is a range for optimization
+          let iterableHead = Array.isArray(iterable) && iterable[0];
+          if (iterableHead instanceof String) {
+            iterableHead = iterableHead.valueOf();
+          }
+          const isRange = iterableHead === '..' || iterableHead === '...';
+
+          if (isRange) {
+            // Optimize range with step: for i in [0...10] by 2 or by -1
+            const isExclusive = iterableHead === '...';
+            const [start, end] = iterable.slice(1);
+            const startCode = this.generate(start, 'value');
+            const endCode = this.generate(end, 'value');
+            const stepCode = this.generate(step, 'value');
+            const comparison = isExclusive ? '<' : '<=';
+            code += this.indent() + `for (let ${itemVarPattern} = ${startCode}; ${itemVarPattern} ${comparison} ${endCode}; ${itemVarPattern} += ${stepCode}) {\n`;
+            this.indentLevel++;
+          } else {
+            // Non-range with step: use index-based loop
+            const iterableCode = this.generate(iterable, 'value');
+            const indexVarName = indexVar || '_i';
+            const stepCode = this.generate(step, 'value');
+
+            // Detect if step is negative (reverse iteration)
+            const isNegativeStep = this.isNegativeStep(step);
+            if (isNegativeStep) {
+              // Reverse: start from end
+              code += this.indent() + `for (let ${indexVarName} = ${iterableCode}.length - 1; ${indexVarName} >= 0; ${indexVarName} += ${stepCode}) {\n`;
+            } else {
+              // Forward: start from beginning
+              code += this.indent() + `for (let ${indexVarName} = 0; ${indexVarName} < ${iterableCode}.length; ${indexVarName} += ${stepCode}) {\n`;
+            }
+            this.indentLevel++;
+            // Only extract item if we have an actual loop variable (not throwaway _i for noVar)
+            if (!noVar) {
+              code += this.indent() + `const ${itemVarPattern} = ${iterableCode}[${indexVarName}];\n`;
+            }
+          }
+        } else if (indexVar) {
+          // Use traditional for loop with index
+          const iterableCode = this.generate(iterable, 'value');
+          code += this.indent() + `for (let ${indexVar} = 0; ${indexVar} < ${iterableCode}.length; ${indexVar}++) {\n`;
+          this.indentLevel++;
+          code += this.indent() + `const ${itemVarPattern} = ${iterableCode}[${indexVar}];\n`;
+        } else {
+          // Use for-of
+          code += this.indent() + `for (const ${itemVarPattern} of ${this.generate(iterable, 'value')}) {\n`;
+          this.indentLevel++;
+        }
+      } else if (iterType === 'for-of') {
+        const own = stepOrOwn;  // For for-of, 4th param is own flag
+        const varsArray = Array.isArray(vars) ? vars : [vars];
+        const [firstVar, secondVar] = varsArray;
+
+        // Check if first var is a destructuring pattern
+        let keyVarPattern = firstVar;
+        if (Array.isArray(firstVar) && (firstVar[0] === 'array' || firstVar[0] === 'object')) {
+          // Generate destructuring pattern for the key variable
+          keyVarPattern = this.generateDestructuringPattern(firstVar);
+        }
+
+        const objCode = this.generate(iterable, 'value');
+        code += this.indent() + `for (const ${keyVarPattern} in ${objCode}) {\n`;
+        this.indentLevel++;
+
+        // Add own check if needed
+        if (own) {
+          code += this.indent() + `if (!Object.hasOwn(${objCode}, ${keyVarPattern})) continue;\n`;
+        }
+
+        if (secondVar) {
+          code += this.indent() + `const ${secondVar} = ${objCode}[${keyVarPattern}];\n`;
+        }
+      } else if (iterType === 'for-from') {
+        // For-from iteration (may or may not be async)
+        // iterator structure: ["for-from", vars, iterable, isAwait, guard]
+        const isAwait = iterator[3];
+        const varsArray = Array.isArray(vars) ? vars : [vars];
+        const [firstVar] = varsArray;
+
+        // Check if first var is a destructuring pattern
+        let itemVarPattern = firstVar;
+        if (Array.isArray(firstVar) && (firstVar[0] === 'array' || firstVar[0] === 'object')) {
+          itemVarPattern = this.generateDestructuringPattern(firstVar);
+        }
+
+        const awaitKeyword = isAwait ? 'await ' : '';
+        code += this.indent() + `for ${awaitKeyword}(const ${itemVarPattern} of ${this.generate(iterable, 'value')}) {\n`;
+        this.indentLevel++;
+      }
+    }
+
+    // Generate guard conditions
+    for (const guard of guards) {
+      code += this.indent() + `if (${this.generate(guard, 'value')}) {\n`;
+      this.indentLevel++;
+    }
+
+    // Helper: Recursively check if node contains control flow
+    const hasControlFlow = (node) => {
+      // Check if node itself is a control flow keyword (string)
+      if (typeof node === 'string' && (node === 'break' || node === 'continue')) {
+        return true;
+      }
+
+      if (!Array.isArray(node)) return false;
+
+      // Direct control flow (array form)
+      if (node[0] === 'break' || node[0] === 'continue' ||
+          node[0] === 'break-if' || node[0] === 'continue-if' ||
+          node[0] === 'return' || node[0] === 'throw') return true;
+
+      // Check if if/unless contains control flow in branches
+      if (node[0] === 'if' || node[0] === 'unless') {
+        return node.slice(1).some(child => hasControlFlow(child));
+      }
+
+      // Recursively check children
+      return node.some(child => hasControlFlow(child));
+    };
+
+    // Handle expression - could be single expression or block with statements
+    if (Array.isArray(expr) && expr[0] === 'block') {
+      // Multi-statement block - execute all, push last (unless it has control flow)
+      const statements = expr.slice(1);
+      for (let i = 0; i < statements.length; i++) {
+        const stmt = statements[i];
+        const isLast = i === statements.length - 1;
+        const stmtHasControlFlow = hasControlFlow(stmt);
+
+        if (!isLast || stmtHasControlFlow) {
+          // Not last, or has control flow - execute as statement (don't push)
+          code += this.indent() + this.generate(stmt, 'statement') + ';\n';
+        } else {
+          // Last statement and no control flow - push its value
+          // Check if statement is a loop (for-in, for-of, while, etc.) - execute, don't push
+          const isLoopStmt = Array.isArray(stmt) && ['for-in', 'for-of', 'for-from', 'while', 'until', 'loop'].includes(stmt[0]);
+          if (isLoopStmt) {
+            code += this.indent() + this.generate(stmt, 'statement') + ';\n';
+          } else {
+            code += this.indent() + `result.push(${this.generate(stmt, 'value')});\n`;
+          }
+        }
+      }
+    } else {
+      // Single expression - use the helper to check for control flow
+      if (hasControlFlow(expr)) {
+        // Has control flow - just execute as statement (don't push)
+        code += this.indent() + this.generate(expr, 'statement') + ';\n';
+      } else {
+        // Check if expression is a loop - execute, don't push
+        const isLoopStmt = Array.isArray(expr) && ['for-in', 'for-of', 'for-from', 'while', 'until', 'loop'].includes(expr[0]);
+        if (isLoopStmt) {
+          code += this.indent() + this.generate(expr, 'statement') + ';\n';
+        } else {
+          // Normal expression - push it
+          code += this.indent() + `result.push(${this.generate(expr, 'value')});\n`;
+        }
+      }
+    }
+
+    // Close guards
+    for (let i = 0; i < guards.length; i++) {
+      this.indentLevel--;
+      code += this.indent() + '}\n';
+    }
+
+    // Close loops
+    for (let i = 0; i < iterators.length; i++) {
+      this.indentLevel--;
+      code += this.indent() + '}\n';
+    }
+
+    code += this.indent() + 'return result;\n';
+    this.indentLevel--;
+    this.comprehensionDepth--; // Exit IIFE nesting
+    code += this.indent() + '})()';
+
+    return code;
+  }
+
+  /**
+   * Generate object comprehension
+   * Pattern: ["object-comprehension", keyExpr, valueExpr, iterators, guards]
+   */
+  generateObjectComprehension(head, rest, context, sexpr) {
+    const [keyExpr, valueExpr, iterators, guards] = rest;
+
+    // Generate IIFE that builds object
+    let code = '(() => {\n';
+    this.indentLevel++;
+    code += this.indent() + 'const result = {};\n';
+
+    // Generate nested loops (typically just one for object comprehensions)
+    for (const iterator of iterators) {
+      const [iterType, vars, iterable, own] = iterator;
+
+      if (iterType === 'for-of') {
+        const [keyVar, valueVar] = vars;
+        const iterableCode = this.generate(iterable, 'value');
+        code += this.indent() + `for (const ${keyVar} in ${iterableCode}) {\n`;
+        this.indentLevel++;
+
+        // Add own check if needed
+        if (own) {
+          code += this.indent() + `if (!Object.hasOwn(${iterableCode}, ${keyVar})) continue;\n`;
+        }
+
+        if (valueVar) {
+          code += this.indent() + `const ${valueVar} = ${iterableCode}[${keyVar}];\n`;
+        }
+      }
+    }
+
+    // Generate guard conditions
+    for (const guard of guards) {
+      code += this.indent() + `if (${this.generate(guard, 'value')}) {\n`;
+      this.indentLevel++;
+    }
+
+    // Add to result object
+    const key = this.generate(keyExpr, 'value');
+    const value = this.generate(valueExpr, 'value');
+    code += this.indent() + `result[${key}] = ${value};\n`;
+
+    // Close guards
+    for (let i = 0; i < guards.length; i++) {
+      this.indentLevel--;
+      code += this.indent() + '}\n';
+    }
+
+    // Close loops
+    for (let i = 0; i < iterators.length; i++) {
+      this.indentLevel--;
+      code += this.indent() + '}\n';
+    }
+
+    code += this.indent() + 'return result;\n';
+    this.indentLevel--;
+    code += this.indent() + '})()';
+
+    return code;
+  }
+
+  /**
+   * Generate class declaration
+   * Pattern: ["class", name, parent, body]
+   */
+  generateClass(head, rest, context, sexpr) {
+    const [className, parentClass, ...bodyParts] = rest;
+
+    // Anonymous class if className is null
+    let code = className ? `class ${className}` : 'class';
+    if (parentClass) {
+      code += ` extends ${this.generate(parentClass, 'value')}`;
+    }
+    code += ' {\n';
+
+    // Unwrap body: ["block", ...]
+    if (bodyParts.length > 0 && Array.isArray(bodyParts[0])) {
+      const bodyBlock = bodyParts[0];
+      if (bodyBlock[0] === 'block') {
+        const bodyStatements = bodyBlock.slice(1); // Skip 'block' tag
+
+        // Check if first statement is an object literal (standard class with methods)
+        const hasObjectFirst = bodyStatements.length > 0 &&
+                               Array.isArray(bodyStatements[0]) &&
+                               bodyStatements[0][0] === 'object';
+
+        if (hasObjectFirst && bodyStatements.length === 1) {
+          // Simple case: ["block", ["object", ...]]
+          const objectLiteral = bodyStatements[0];
+          const members = objectLiteral.slice(1); // Skip 'object' tag
+
+          this.indentLevel++;
+
+        // First pass: identify bound methods (fat arrow =>)
+        const boundMethods = [];
+        for (const [memberKey, memberValue] of members) {
+          const isStatic = this.isStaticMember(memberKey);
+          const isComputed = this.isComputedMember(memberKey);
+          const methodName = this.extractMemberName(memberKey);
+
+          // Only track non-computed bound methods (need static name for .bind)
+          if (this.isBoundMethod(memberValue) && !isStatic && !isComputed && methodName !== 'constructor') {
+            boundMethods.push(methodName);
+          }
+        }
+
+        // Second pass: generate members
+        for (const [memberKey, memberValue] of members) {
+          const isStatic = this.isStaticMember(memberKey);
+          const isComputed = this.isComputedMember(memberKey);
+          const methodName = this.extractMemberName(memberKey);
+
+          // Check if memberValue is a function or a property value
+          if (Array.isArray(memberValue) && (memberValue[0] === '->' || memberValue[0] === '=>')) {
+            // It's a method
+            const [arrowType, params, body] = memberValue;
+
+            // Check if method contains await or yield
+            const containsAwait = this.containsAwait(body);
+            const containsYield = this.containsYield(body);
+
+            // Handle @ parameters in constructor
+            let cleanParams = params;
+            let autoAssignments = [];
+
+            if (methodName === 'constructor') {
+              cleanParams = params.map(param => {
+                if (Array.isArray(param) && param[0] === '.' && param[1] === 'this') {
+                  // @ parameter: [".", "this", "name"]
+                  const propName = param[2];
+                  autoAssignments.push(`this.${propName} = ${propName}`);
+                  return propName; // Clean param name
+                }
+                return param;
+              });
+
+              // Add .bind(this) calls for bound methods at start of constructor
+              for (const boundMethod of boundMethods) {
+                autoAssignments.unshift(`this.${boundMethod} = this.${boundMethod}.bind(this)`);
+              }
+            }
+
+            const paramList = this.generateParamList(cleanParams);
+
+            // Generate method with async/generator prefix
+            const asyncPrefix = containsAwait ? 'async ' : '';
+            const generatorSuffix = containsYield ? '*' : '';
+
+            // Generate method
+            if (isStatic) {
+              code += this.indent() + `static ${asyncPrefix}${generatorSuffix}${methodName}(${paramList}) `;
+            } else {
+              code += this.indent() + `${asyncPrefix}${generatorSuffix}${methodName}(${paramList}) `;
+            }
+
+            // Generate body with @ assignments
+            // Constructors never get implicit returns
+            const isConstructorMethod = methodName === 'constructor';
+
+            // Track current method name for super() calls (only for non-computed)
+            if (!isComputed) {
+              this.currentMethodName = methodName;
+            }
+            code += this.generateMethodBody(body, autoAssignments, isConstructorMethod, cleanParams);
+            this.currentMethodName = null;
+
+            code += '\n';
+          } else if (isStatic) {
+            // Static property (not a method)
+            // @count: 0 → static count = 0;
+            const propValue = this.generate(memberValue, 'value');
+            code += this.indent() + `static ${methodName} = ${propValue};\n`;
+          } else {
+            // Instance property (ES2022 class field)
+            // prop: value → prop = value;
+            const propValue = this.generate(memberValue, 'value');
+            code += this.indent() + `${methodName} = ${propValue};\n`;
+          }
+        }
+
+        this.indentLevel--;
+        } else if (hasObjectFirst) {
+          // Mixed body: object with methods + other statements (like nested classes)
+          // Process the object first, then additional statements
+          const objectLiteral = bodyStatements[0];
+          const members = objectLiteral.slice(1);
+          const additionalStatements = bodyStatements.slice(1);
+
+          this.indentLevel++;
+
+          // Generate methods from the object
+          for (const [memberKey, memberValue] of members) {
+            const isStatic = this.isStaticMember(memberKey);
+            const isComputed = this.isComputedMember(memberKey);
+            const methodName = this.extractMemberName(memberKey);
+
+            if (Array.isArray(memberValue) && (memberValue[0] === '->' || memberValue[0] === '=>')) {
+              // Generate method (simplified - no bound method tracking for mixed bodies)
+              const [arrowType, params, body] = memberValue;
+              const containsAwait = this.containsAwait(body);
+              const containsYield = this.containsYield(body);
+              const paramList = this.generateParamList(params);
+              const asyncPrefix = containsAwait ? 'async ' : '';
+              const generatorSuffix = containsYield ? '*' : '';
+
+              if (isStatic) {
+                code += this.indent() + `static ${asyncPrefix}${generatorSuffix}${methodName}(${paramList}) `;
+              } else {
+                code += this.indent() + `${asyncPrefix}${generatorSuffix}${methodName}(${paramList}) `;
+              }
+
+              this.currentMethodName = methodName;
+              code += this.generateMethodBody(body, [], methodName === 'constructor', params);
+              this.currentMethodName = null;
+              code += '\n';
+            } else if (isStatic) {
+              const propValue = this.generate(memberValue, 'value');
+              code += this.indent() + `static ${methodName} = ${propValue};\n`;
+            } else {
+              const propValue = this.generate(memberValue, 'value');
+              code += this.indent() + `${methodName} = ${propValue};\n`;
+            }
+          }
+
+          // Generate additional statements (like nested classes)
+          for (const stmt of additionalStatements) {
+            if (Array.isArray(stmt) && stmt[0] === 'class') {
+              // Nested class: class @Inner → static Inner = class { }
+              const [, nestedName, parent, ...nestedBody] = stmt;
+              if (Array.isArray(nestedName) && nestedName[0] === '.' && nestedName[1] === 'this') {
+                // Static nested class
+                const innerName = nestedName[2];
+                code += this.indent() + `static ${innerName} = `;
+                // Generate the class without the name (anonymous)
+                const classCode = this.generate(['class', null, parent, ...nestedBody], 'value');
+                code += classCode + ';\n';
+              }
+            } else {
+              // Other statements
+              code += this.indent() + this.generate(stmt, 'statement') + ';\n';
+            }
+          }
+
+          this.indentLevel--;
+        } else {
+          // Executable class body - contains statements like @static = {...}
+          // These become static initializers or assignments
+          this.indentLevel++;
+          for (const stmt of bodyStatements) {
+            // Check if it's a static assignment: ["=", [".", "this", "propName"], value]
+            if (Array.isArray(stmt) && stmt[0] === '=' &&
+                Array.isArray(stmt[1]) && stmt[1][0] === '.' && stmt[1][1] === 'this') {
+              // Static property assignment
+              const propName = stmt[1][2];
+              const value = this.generate(stmt[2], 'value');
+              code += this.indent() + `static ${propName} = ${value};\n`;
+            } else {
+              // Other statement - generate as-is
+              code += this.indent() + this.generate(stmt, 'statement') + ';\n';
+            }
+          }
+          this.indentLevel--;
+        }
+      }
+    }
+
+    code += this.indent() + '}';
+    return code;
+  }
+
+  /**
+   * Generate super call or access
+   * Pattern: ["super", ...args]
+   */
+  generateSuper(head, rest, context, sexpr) {
+    // No args: super (for property access like super.method())
+    // With args: super(...args) (for constructor calls OR parent method calls)
+    if (rest.length === 0) {
+      // No arguments - could be super.method() or just super keyword
+      // If we're in a method context, this is likely super() being called
+      // CoffeeScript converts super() → super.methodName()
+      if (this.currentMethodName && this.currentMethodName !== 'constructor') {
+        return `super.${this.currentMethodName}()`;
+      }
+      return 'super';
+    }
+
+    // Super with arguments
+    const argsCode = rest.map(arg => this.unwrap(this.generate(arg, 'value'))).join(', ');
+
+    // If we're in a method (not constructor) and super is called with args,
+    // it's calling the parent's method: super() → super.methodName()
+    if (this.currentMethodName && this.currentMethodName !== 'constructor') {
+      return `super.${this.currentMethodName}(${argsCode})`;
+    }
+
+    // In constructor or standalone: super(args)
+    return `super(${argsCode})`;
+  }
+
+  /**
+   * Generate soak call (CoffeeScript style)
+   * Pattern: ["?call", fn, ...args]
+   */
+  generateSoakCall(head, rest, context, sexpr) {
+    // Pattern: fn?(arg) → (typeof fn === 'function' ? fn(arg) : undefined)
+    const [fn, ...args] = rest;
+    const fnCode = this.generate(fn, 'value');
+    const argsCode = args.map(arg => this.generate(arg, 'value')).join(', ');
+    return `(typeof ${fnCode} === 'function' ? ${fnCode}(${argsCode}) : undefined)`;
+  }
+
+  /**
+   * Generate optional super call
+   * Pattern: ["?super", ...args]
+   */
+  generateOptionalSuper(head, rest, context, sexpr) {
+    // In methods: super?() → typeof super.method === 'function' ? super.method() : undefined
+    const argsCode = rest.map(arg => this.unwrap(this.generate(arg, 'value'))).join(', ');
+
+    if (this.currentMethodName && this.currentMethodName !== 'constructor') {
+      // In a method - check if parent method exists
+      return `(typeof super.${this.currentMethodName} === 'function' ? super.${this.currentMethodName}(${argsCode}) : undefined)`;
+    }
+
+    // In constructor or standalone - can't really soak super
+    return `super(${argsCode})`;
+  }
+
+  /**
+   * Generate import statement
+   * Pattern: ["import", specifier, source] or ["import", url] (dynamic)
+   */
+  generateImport(head, rest, context, sexpr) {
+    // Two forms:
+    // 1. Dynamic import (expression): ["import", url] → import(url)
+    // 2. Import statement: ["import", specifier, source] → import X from "Y"
+
+    // Dynamic import - single argument (from DYNAMIC_IMPORT in grammar)
+    if (rest.length === 1) {
+      const [urlExpr] = rest;
+      return `import(${this.generate(urlExpr, 'value')})`;
+    }
+
+    // Import statement: ["import", specifier, source]
+    // Patterns:
+    // - Default: ["import", "React", "\"react\""]
+    // - Named: ["import", ["useState"], "\"react\""]
+    // - Namespace: ["import", ["*", "Utils"], "\"react\""]
+    const [specifier, source] = rest;
+
+    // Add .js extension to local paths and JSON assertions if needed
+    const fixedSource = this.addJsExtensionAndAssertions(source);
+
+    // Default import
+    if (typeof specifier === 'string') {
+      return `import ${specifier} from ${fixedSource}`;
+    }
+
+    // Named or namespace import
+    if (Array.isArray(specifier)) {
+      // Namespace: ["*", "alias"]
+      if (specifier[0] === '*' && specifier.length === 2) {
+        return `import * as ${specifier[1]} from ${fixedSource}`;
+      }
+
+      // Mixed default + something: ["React", [...]]
+      if (typeof specifier[0] === 'string' && Array.isArray(specifier[1])) {
+        const defaultImport = specifier[0];
+        const secondPart = specifier[1];
+
+        // Check if second part is namespace: ["*", "alias"]
+        if (secondPart[0] === '*' && secondPart.length === 2) {
+          return `import ${defaultImport}, * as ${secondPart[1]} from ${fixedSource}`;
+        }
+
+        // Otherwise it's named imports (might have aliases)
+        const names = (Array.isArray(secondPart) ? secondPart : [secondPart]).map(item => {
+          if (Array.isArray(item) && item.length === 2) {
+            return `${item[0]} as ${item[1]}`;
+          }
+          return item;
+        }).join(', ');
+
+        return `import ${defaultImport}, { ${names} } from ${fixedSource}`;
+      }
+
+      // Named imports: check if we have aliases
+      // Simple: ["useState", "useEffect"]
+      // With alias: [["useState", "useS"], ["useEffect", "useE"]]
+      const names = specifier.map(item => {
+        if (Array.isArray(item) && item.length === 2) {
+          // Import with alias: ["useState", "useS"] → "useState as useS"
+          return `${item[0]} as ${item[1]}`;
+        }
+        // Simple import
+        return item;
+      }).join(', ');
+
+      return `import { ${names} } from ${fixedSource}`;
+    }
+
+    return `import ${this.generate(specifier, 'value')} from ${fixedSource}`;
+  }
+
+  /**
+   * Generate export statement
+   * Pattern: ["export", declaration]
+   */
+  generateExport(head, rest, context, sexpr) {
+    // Patterns:
+    // - Export declaration: ["export", ["=", "x", 42]]
+    // - Named exports: ["export", ["x", "y"]]
+    const [declaration] = rest;
+
+    // If declaration is array of strings, it's named exports: { x, y }
+    if (Array.isArray(declaration) && declaration.every(item => typeof item === 'string')) {
+      const names = declaration.join(', ');
+      return `export { ${names} }`;
+    }
+
+    // Check if it's an assignment (export x = 42)
+    if (Array.isArray(declaration) && declaration[0] === '=') {
+      const [, target, value] = declaration;
+      return `export const ${target} = ${this.generate(value, 'value')}`;
+    }
+
+    // Otherwise it's an export declaration (class, function, etc.)
+    return `export ${this.generate(declaration, 'statement')}`;
+  }
+
+  /**
+   * Generate export default
+   * Pattern: ["export-default", expression]
+   */
+  generateExportDefault(head, rest, context, sexpr) {
+    const [expr] = rest;
+
+    // Check if it's an assignment (export default x = {...})
+    if (Array.isArray(expr) && expr[0] === '=') {
+      const [, target, value] = expr;
+      // Generate as: const x = ...; export default x;
+      const assignCode = `const ${target} = ${this.generate(value, 'value')}`;
+      return `${assignCode};\nexport default ${target}`;
+    }
+
+    return `export default ${this.generate(expr, 'statement')}`;
+  }
+
+  /**
+   * Generate export all
+   * Pattern: ["export-all", source]
+   */
+  generateExportAll(head, rest, context, sexpr) {
+    const [source] = rest;
+    const fixedSource = this.addJsExtensionAndAssertions(source);
+    return `export * from ${fixedSource}`;
+  }
+
+  /**
+   * Generate export from
+   * Pattern: ["export-from", specifiers, source]
+   */
+  generateExportFrom(head, rest, context, sexpr) {
+    // Pattern: export { add, multiply } from "./math"
+    // With alias: [["add", "sum"]] → export { add as sum }
+    const [specifiers, source] = rest;
+    const fixedSource = this.addJsExtensionAndAssertions(source);
+
+    if (Array.isArray(specifiers)) {
+      const names = specifiers.map(item => {
+        if (Array.isArray(item) && item.length === 2) {
+          // Export with alias: ["add", "sum"] → "add as sum"
+          return `${item[0]} as ${item[1]}`;
+        }
+        // Simple export
+        return item;
+      }).join(', ');
+
+      return `export { ${names} } from ${fixedSource}`;
+    }
+
+    return `export ${specifiers} from ${fixedSource}`;
+  }
+
+  /**
+   * Generate do-iife expression
+   * Pattern: ["do-iife", arrowFn]
+   */
+  generateDoIIFE(head, rest, context, sexpr) {
+    const [arrowFn] = rest;
+    // Generate the arrow function (in statement context to avoid double-wrapping)
+    // then wrap it ourselves for the IIFE
+    const fnCode = this.generate(arrowFn, 'statement');
+    return `(${fnCode})()`;
+  }
+
+  /**
+   * Generate regex literal
+   * Pattern: ["regex", pattern]
+   */
+  generateRegex(head, rest, context, sexpr) {
+    // Regex literal: just pass through
+    // Parser emits regex as string with slashes
+    if (rest.length === 0) {
+      // Simple regex from REGEX token
+      return head; // Shouldn't happen, but fallback
+    }
+    const [pattern] = rest;
+    return this.generate(pattern, 'value');
+  }
+
+  /**
+   * Generate tagged template literal
+   * Pattern: ["tagged-template", tag, string]
+   */
+  generateTaggedTemplate(head, rest, context, sexpr) {
+    // Pattern: tag"hello #{name}" → tag`hello ${name}`
+    const [tag, str] = rest;
+    const tagCode = this.generate(tag, 'value');
+
+    // The string might be a regular string or an interpolated str node
+    let templateContent = this.generate(str, 'value');
+
+    // If it's already a template literal from str interpolation, use as-is
+    if (templateContent.startsWith('`')) {
+      return `${tagCode}${templateContent}`;
+    }
+
+    // If it's a quoted string, convert quotes to backticks
+    if (templateContent.startsWith('"') || templateContent.startsWith("'")) {
+      const content = templateContent.slice(1, -1);
+      return `${tagCode}\`${content}\``;
+    }
+
+    // Fallback: wrap in backticks
+    return `${tagCode}\`${templateContent}\``;
+  }
+
+  /**
+   * Generate string interpolation
+   * Pattern: ["str", ...parts]
+   */
+  generateString(head, rest, context, sexpr) {
+    // String interpolation: ["str", ...parts]
+    // Parts are either String objects (with metadata), primitive strings, or expression arrays
+    // This is the ONLY place we build template literals from parts
+    let result = '`';
+
+    for (let i = 0; i < rest.length; i++) {
+      const part = rest[i];
+
+      // String object - extract content using helper
+      if (part instanceof String) {
+        result += this.extractStringContent(part);
+      }
+      // Primitive string (shouldn't have quotes - already processed)
+      else if (typeof part === 'string') {
+        // Should be bare content without quotes
+        // If it has quotes, warn and strip them
+        if (part.startsWith('"') || part.startsWith("'")) {
+          if (this.options.debug) {
+            console.warn('[RIP] Unexpected quoted primitive in str interpolation:', part);
+          }
+          result += part.slice(1, -1);
+        } else {
+          result += part;
+        }
+      }
+      // Expression to interpolate
+      else if (Array.isArray(part)) {
+        // Expression wrapped in ${}
+        // Special case: single-element array with string = simple identifier
+        // Don't generate() it or it becomes a function call!
+        if (part.length === 1 && typeof part[0] === 'string' && !Array.isArray(part[0])) {
+          const value = part[0];
+          // Check if it's a literal (number or quoted string)
+          const isLiteral = /^[\d"']/.test(value);
+          if (isLiteral) {
+            // Generate it properly (handles numbers, string literals, etc.)
+            result += '${' + this.generate(value, 'value') + '}';
+          } else {
+            // Simple identifier - use as-is (don't call generate or it becomes a function call)
+            result += '${' + value + '}';
+          }
+        } else {
+          // Complex expression or function call
+          // Unwrap if it's a single-element array containing another array (parser wraps expressions)
+          let expr = part;
+          if (part.length === 1 && Array.isArray(part[0])) {
+            expr = part[0];
+          }
+
+          // Generate the expression
+          result += '${' + this.generate(expr, 'value') + '}';
+        }
+      }
+    }
+
+    result += '`';
+    return result;
   }
 
   //-------------------------------------------------------------------------

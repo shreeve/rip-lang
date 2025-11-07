@@ -5,6 +5,21 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] - 2025-11-07
+
+### Changed
+- **Dispatch table Phase 2 complete** (#54) - Extracted all remaining 39 cases (100% complete!)
+  - Exception handling: `try`, `throw` (2 cases)
+  - Switch statements: `switch`, `when` (2 cases)
+  - Comprehensions: `comprehension`, `object-comprehension` (2 cases)
+  - Classes: `class`, `super`, `?call`, `?super` (4 cases)
+  - Modules: `import`, `export`, `export-default`, `export-all`, `export-from` (5 cases)
+  - Special forms: `do-iife`, `regex`, `tagged-template`, `str` (4 cases)
+  - **All 110 node types now in dispatch table** - Perfect O(1) lookup ✅
+  - Codegen organization complete - Easy to navigate and maintain
+  - File size: 6,203 → 7,263 LOC (+1,060 lines from extraction)
+  - All 931 tests passing (100%) ✅
+
 ## [1.4.0] - 2025-11-07
 
 ### Changed
