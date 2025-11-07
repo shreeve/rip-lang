@@ -3515,6 +3515,19 @@ class CodeGenerator {
     switch (head) {
       case "program":
         return this.generateProgram(rest);
+      case "&&":
+      case "||": {
+        const flattened = this.flattenBinaryChain(sexpr);
+        const operands = flattened.slice(1);
+        if (operands.length === 0) {
+          return "true";
+        }
+        if (operands.length === 1) {
+          return this.generate(operands[0], "value");
+        }
+        const parts = operands.map((op) => this.generate(op, "value"));
+        return `(${parts.join(` ${head} `)})`;
+      }
       case "+":
       case "-":
       case "*":
@@ -3529,8 +3542,6 @@ class CodeGenerator {
       case ">":
       case "<=":
       case ">=":
-      case "&&":
-      case "||":
       case "??":
       case "!?":
       case "&":
@@ -6410,6 +6421,29 @@ ${this.indent()}}`;
     }
     return code;
   }
+  flattenBinaryChain(sexpr) {
+    if (!Array.isArray(sexpr) || sexpr.length < 3) {
+      return sexpr;
+    }
+    const [head, ...rest] = sexpr;
+    if (head !== "&&" && head !== "||") {
+      return sexpr;
+    }
+    const operands = [];
+    const collect = (expr) => {
+      if (Array.isArray(expr) && expr[0] === head) {
+        for (let i = 1;i < expr.length; i++) {
+          collect(expr[i]);
+        }
+      } else {
+        operands.push(expr);
+      }
+    };
+    for (const operand of rest) {
+      collect(operand);
+    }
+    return [head, ...operands];
+  }
   unwrapLogical(code) {
     if (typeof code !== "string")
       return code;
@@ -6881,8 +6915,8 @@ function compileToJS(source, options = {}) {
   return compiler.compileToJS(source);
 }
 // src/browser.js
-var VERSION = "1.3.12";
-var BUILD_DATE = "2025-11-07@03:05:08GMT";
+var VERSION = "1.3.13";
+var BUILD_DATE = "2025-11-07@04:43:53GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

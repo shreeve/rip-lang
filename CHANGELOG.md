@@ -5,6 +5,18 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.13] - 2025-11-07
+
+### Fixed
+- **Clean logical chains** (#46) - Flatten nested logical operators at s-expression level
+  - Transforms deeply nested chains: `if (((!a && !b) && !c) && d)` → `if (!a && !b && !c && d)`
+  - Works by flattening s-expression tree BEFORE code generation (Rip philosophy!)
+  - Added `flattenBinaryChain()` to recursively flatten same-operator chains
+  - Pure chains unwrap completely, mixed precedence stays safe ✅
+  - Example: `arr[len - (x || 1)]` preserves inner parens
+  - Much cleaner than regex string manipulation (50 lines vs 100+)
+- Test count: 922 → 926 (+4 tests)
+
 ## [1.3.12] - 2025-11-07
 
 ### Changed
