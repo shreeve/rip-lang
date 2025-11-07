@@ -27,9 +27,12 @@ function greet(name) {
 
 ```
 Source → Lexer → Parser → S-Expressions → Codegen → JavaScript
-         3,145    340 LOC   (arrays!)       4,738      ES2022
+         3,145    340 LOC   (arrays!)       6,203      ES2022
          LOC      generated                 LOC
 ```
+
+**Note:** Codegen grew from 5,073 to 6,203 LOC due to dispatch table refactoring (v1.4.0).
+This is GOOD - monolithic method became organized, categorized methods.
 
 **Components:**
 1. **Lexer** (`src/lexer.js`) - CoffeeScript 2.7 lexer (battle-tested, 15 years)
@@ -271,14 +274,20 @@ The lexer automatically converts:
 
 ### Main Source Files
 
-| File | Purpose | Can Modify? |
-|------|---------|-------------|
-| `src/lexer.js` | Tokenization + rewriter | ⚠️ Rewriter only |
-| `src/parser.js` | S-expression parser | ❌ Generated (don't edit) |
-| `src/codegen.js` | JavaScript generator | ✅ Main work happens here |
-| `src/compiler.js` | Pipeline orchestration | ✅ Yes |
-| `src/repl.js` | Terminal REPL | ✅ Yes |
-| `src/browser.js` | Browser integration | ✅ Yes |
+| File | Purpose | Can Modify? | Notes |
+|------|---------|-------------|-------|
+| `src/lexer.js` | Tokenization + rewriter | ⚠️ Rewriter only | 3,145 LOC |
+| `src/parser.js` | S-expression parser | ❌ Generated (don't edit) | 340 LOC |
+| `src/codegen.js` | JavaScript generator | ✅ Main work happens here | 6,203 LOC (v1.4.0) |
+| `src/compiler.js` | Pipeline orchestration | ✅ Yes | 250 LOC |
+| `src/repl.js` | Terminal REPL | ✅ Yes | |
+| `src/browser.js` | Browser integration | ✅ Yes | |
+
+**Codegen v1.4.0 Changes:**
+- Now uses dispatch table architecture (Issue #52)
+- 71 extracted generator methods (organized by category)
+- Dispatch table at lines 28-150
+- Check `GENERATORS` to find which method handles each case
 
 ### Grammar and Generator
 
@@ -539,10 +548,18 @@ bun run parser
 ### Most Common Task: Fix or Extend Codegen
 
 1. Determine the s-expression pattern: `echo 'code' | ./bin/rip -s`
-2. Find or add the case in `src/codegen.js`
+2. Find the case in `src/codegen.js`:
+   - **NEW (v1.4.0):** Check dispatch table first (lines 28-150)
+   - If in dispatch: Find `generateXXX` method
+   - If not in dispatch: Check switch statement
 3. Implement the generation logic
 4. Test: `bun run test`
 5. Commit
+
+**Note:** As of v1.4.0, codegen uses **dispatch table architecture**:
+- 71/110 cases extracted to dedicated methods
+- Check `GENERATORS` table to see which method handles each case
+- Remaining 39 cases still in switch (Issue #54 - Phase 2)
 
 ### Less Common: Modify Grammar
 
@@ -633,4 +650,40 @@ Rip achieves CoffeeScript's elegance with 50% less code by using s-expressions i
 
 ---
 
+## 🔄 Handoff: Active Work (November 2025)
+
+### Issue #54: Dispatch Table Phase 2 (39 remaining cases)
+
+**Status:** Ready to continue  
+**Difficulty:** Mechanical (pattern established)  
+**Estimated:** 4-6 hours
+
+**What's Done (Phase 1 - v1.4.0):**
+- ✅ Dispatch table infrastructure complete
+- ✅ 71/110 cases extracted (65%)
+- ✅ All operators, property access, functions, loops, exceptions
+- ✅ Pattern proven, all tests passing
+
+**What Remains (Phase 2):**
+- 📋 Switch (2): switch, when
+- 📋 Comprehensions (2): comprehension (227L), object-comprehension (63L)
+- 📋 Classes (4): class (205L), super, ?call, ?super
+- 📋 Modules (5): import, export variants
+- 📋 Special forms (4): do-iife, regex, tagged-template, str (344L!)
+
+**To Continue:**
+1. Read `PHASE-1-COMPLETE.md` - See what's done
+2. Read `PHASE-2-PLAN.md` - See detailed roadmap
+3. Read `docs/WHY-S-EXPRESSIONS.md` - Understand philosophy
+4. Follow the extraction pattern (proven in Phase 1)
+5. Extract remaining 39 cases systematically
+6. Test after each batch
+7. Ship Phase 2 when complete!
+
+**Key Insight:** Work at s-expression level, not string level!
+
+---
+
 **For AI Assistants:** You have everything needed to work with Rip. The code is well-tested, the architecture is clear, and the documentation is comprehensive. Trust the tests, use the debug tools, and follow the patterns already established.
+
+**If continuing Phase 2:** The pattern is proven, extraction is mechanical, just requires time. You've got this! 🚀
