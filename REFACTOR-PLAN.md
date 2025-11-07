@@ -1,14 +1,38 @@
 # Refactoring Plan: Extract Dispatch Table (Issue #52)
 
-## Current State
+## ✅ Phase 1 COMPLETE (71/110 cases - 65%)
+
+**Status:** Shipped in v1.4.0, PR #53 merged
+
+**Achievement:**
+- Dispatch table infrastructure working
+- 71 cases extracted to organized methods
+- All operators, property access, functions, loops, exception handling complete
+- All 931 tests passing
+
+See `PHASE-1-COMPLETE.md` for full details.
+
+## 📋 Phase 2 Remaining (39/110 cases - 35%)
+
+**Tracked in:** Issue #54
+
+**Remaining cases documented in** `PHASE-2-PLAN.md`:
+- Switch (2), Comprehensions (2), Classes (4)
+- Modules (5), Special forms (4)
+- ~1,140 LOC to extract
+- Estimated: 4-6 hours
+
+## Original Plan (For Reference)
+
+### Starting State (Before Phase 1)
 - **Method:** `generate()` at lines 266-3144
 - **Size:** 2,879 LOC (57% of file!)
 - **Cases:** 110 total
 
-## Target State
-- **Dispatcher:** ~50 LOC with lookup table
-- **Methods:** 110 focused methods (~25 LOC average)
-- **Organization:** Grouped by category
+### Target State (After Phase 2)
+- **Dispatcher:** ~50 LOC with lookup table ✅ DONE
+- **Methods:** 110 focused methods (~25 LOC average) - 71/110 done
+- **Organization:** Grouped by category ✅ DONE
 
 ---
 

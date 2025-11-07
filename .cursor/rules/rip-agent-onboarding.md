@@ -225,24 +225,44 @@ if (Array.isArray(body) && body[0] === 'block') {
 
 ### 3. Parentheses Management (Issue #46)
 
-**Helper functions** in codegen.js (~line 4634):
-- `unwrap(code)` - Removes ONE layer of outer parens if safe
-- `unwrapLogical(code)` - For logical operator chains in conditions
+### 3. Dispatch Table Architecture (Issue #52)
 
-**Open Issue**: Deeply nested same-operator chains still verbose:
-- Current: `if (((!a && !b) && !c) && d)`
-- Target: `if (!a && !b && !c && d)`
+**Major refactoring in progress** - codegen.js (~line 28-150):
+- `GENERATORS` dispatch table - O(1) lookup for all operations
+- 71/110 cases extracted to dedicated methods (Phase 1 complete ✅)
+- Remaining 39 cases in switch (Phase 2 - Issue #54 📋)
 
-**Critical safety** (must preserve):
-- `arr[len - (x || 1)]` - Mixed arithmetic/logical
-- `(a && b) || c` - Mixed &&/||
-- `a - (b || c)` - Arithmetic precedence
+**Extracted categories (Phase 1):**
+- ✅ All operators (28) - Binary, unary, logical (shared methods!)
+- ✅ All assignments (17) - One shared method
+- ✅ All property access (9)
+- ✅ All functions (4)
+- ✅ All loops (5 massive: for-in 203L, for-of 113L, for-from 100L, while, until)
+- ✅ Exception handling (2)
+- 📋 Remaining: switch, comprehensions, classes, modules, special forms
 
-**Test coverage**: 
-- `test/rip/parens.rip` - Comprehensive safety tests (all passing)
-- Branch `fix/unwrap-all-logical-layers` - Has test/rip/logical-unwrap.rip
+**Pattern for extraction:**
+```javascript
+// 1. Read case from switch
+case 'foo': { /* body */ }
 
-**Context**: We safely improved 95% of cases. Remaining 5% (deeply nested same-operator chains) needs algorithm that recursively unwraps while preserving mixed-precedence safety.
+// 2. Extract to method
+generateFoo(head, rest, context, sexpr) { /* body */ }
+
+// 3. Add to dispatch table
+'foo': 'generateFoo',
+
+// 4. Update switch (or mark as dead code)
+case 'foo': return this.generateFoo(head, rest, context, sexpr);
+```
+
+**Documentation:**
+- `PHASE-1-COMPLETE.md` - What's done (71 cases)
+- `PHASE-2-PLAN.md` - What remains (39 cases)
+- `REFACTOR-PLAN.md` - Overall strategy
+- `docs/WHY-S-EXPRESSIONS.md` - Philosophy
+
+**If continuing Phase 2:** Read those docs first, then extract remaining 39 cases!
 
 ### 3. String Object Metadata
 
@@ -371,21 +391,29 @@ gh pr merge <number> --squash --delete-branch
 
 ## 🎯 Current Project Status
 
-**Version:** 1.0.0
-**Tests:** 854+ passing (100%)
+**Version:** 1.4.0
+**Tests:** 931 passing (100%)
 **Status:** Production-ready, actively maintained
+
+**Recent Major Work (Nov 2025):**
+- ✅ Issue #46 - Flattened logical chains at s-expression level
+- ✅ Issue #49 - Removed unwrapComprehensionIIFE string manipulation
+- ✅ Issue #52 Phase 1 - Dispatch table architecture (71/110 cases extracted)
+- 📋 Issue #54 - Phase 2 extraction (39 remaining cases)
 
 **Check current status:**
 ```bash
 gh issue list                    # See open issues
 git branch -a                    # See active branches
 bun run test                     # Verify test count and status
-cat README.md | grep "Tests:"    # Current test count
+cat README.md | grep "Tests:"    # Current test count: 931/931
 ```
 
 **Key achievements:**
 - ✅ Full CoffeeScript compatibility
 - ✅ 48% smaller output than CoffeeScript
+- ✅ Dispatch table architecture (65% complete)
+- ✅ S-expression philosophy applied throughout
 - ✅ Comprehensive test coverage
 - ✅ Production-ready compiler
 
@@ -703,5 +731,45 @@ Context-aware generation = smarter, more efficient code!
 ---
 
 **You have everything you need. The codebase is well-tested, well-documented, and ready for you. Trust the process, follow the patterns, and keep those tests passing!** ✨
+
+---
+
+## 🔄 ACTIVE WORK: Dispatch Table Refactoring
+
+### Issue #54: Phase 2 - Extract Remaining 39 Cases
+
+**If you're here to continue Phase 2 extraction:**
+
+1. ✅ Read `PHASE-1-COMPLETE.md` - Understand what's done (71/110 cases)
+2. ✅ Read `PHASE-2-PLAN.md` - See the 39 remaining cases
+3. ✅ Read `docs/WHY-S-EXPRESSIONS.md` - Understand the philosophy
+4. ✅ Review dispatch table in `src/codegen.js` lines 28-150
+5. ✅ Follow the extraction pattern established in Phase 1
+6. ✅ Extract cases in batches, test frequently
+7. ✅ Complete when all 110 cases are in dispatch table!
+
+**Pattern (proven in Phase 1):**
+```javascript
+// 1. Find case in switch
+case 'foo': { /* 50-300 lines */ }
+
+// 2. Extract to method after other generators
+generateFoo(head, rest, context, sexpr) { /* same body */ }
+
+// 3. Uncomment in dispatch table
+'foo': 'generateFoo',
+
+// 4. Test!
+bun --no-cache run test
+```
+
+**Remaining categories:**
+- Switch (2 cases)
+- Comprehensions (2 cases, already have helpers!)
+- Classes (4 cases)
+- Modules (5 cases)
+- Special forms (4 cases)
+
+**Estimated:** 4-6 hours of mechanical extraction
 
 **Good luck!** 🎉
