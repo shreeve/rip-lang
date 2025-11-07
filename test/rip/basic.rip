@@ -25,14 +25,14 @@ test "array length property", "[1, 2, 3].length", 3
 
 # Trailing commas
 test "trailing comma simple", "[1, 2, 3,].length", 3
-test "trailing comma multiline", """
+test "trailing comma multiline", '''
   arr = [
     1, 2, 3,
     4, 5, 6
     7, 8, 9,
   ]
   arr.length
-  """, 9
+  ''', 9
 
 # Array elisions (sparse arrays)
 test "elision at start", "[,1].length", 2
