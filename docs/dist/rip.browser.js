@@ -3167,7 +3167,7 @@ var parserInstance = {
     }
   },
   parse(input) {
-    let EOF, TERROR, action, errStr, expected, len2, lex, lexer, loc, locFirst, locLast, newState, p, parseTable, preErrorSymbol, r, ranges, recovering, sharedState, state, stk, symbol, val, yyleng, yylineno, yyloc, yytext, yyval;
+    let EOF, TERROR, action, errStr, expected, len2, lex, lexer, loc, locFirst, locIndex, locLast, newState, p, parseTable, preErrorSymbol, r, ranges, recovering, sharedState, state, stk, symbol, val, yyleng, yylineno, yyloc, yytext, yyval;
     [stk, val, loc] = [[0], [null], []];
     [parseTable, yytext, yylineno, yyleng, recovering] = [this.parseTable, "", 0, 0, 0];
     [TERROR, EOF] = [2, 1];
@@ -3240,7 +3240,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         case 2:
           len2 = this.ruleData[action[1]][1];
           yyval.$ = val[val.length - len2];
-          [locFirst, locLast] = [loc[loc.length - len2 || 1], loc[loc.length - 1]];
+          locIndex = len2 || 1;
+          [locFirst, locLast] = [loc[loc.length - locIndex], loc[loc.length - 1]];
           yyval._$ = { first_line: locFirst.first_line, last_line: locLast.last_line, first_column: locFirst.first_column, last_column: locLast.last_column };
           if (ranges)
             yyval._$.range = [locFirst.range[0], locLast.range[1]];
@@ -6882,7 +6883,7 @@ function compileToJS(source, options = {}) {
 }
 // src/browser.js
 var VERSION = "1.3.10";
-var BUILD_DATE = "2025-11-06@23:50:13GMT";
+var BUILD_DATE = "2025-11-07@00:02:45GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

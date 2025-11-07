@@ -427,7 +427,7 @@ class Generator
   # ============================================================================
 
   processLookaheads!: ->
-    @processLookaheads = ->  # Computes once; no-op on subsequent calls
+    @processLookaheads = => {} # Computes once; no-op on subsequent calls
     @_computeNullableSets()  # ε-derivable symbols
     @_computeFirstSets()     # First tokens
     @_computeFollowSets()    # Following tokens
