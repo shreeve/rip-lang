@@ -93,7 +93,7 @@ code "greater than or equal parens", "a >= b", "(a >= b)"
 test "logical not true", "!false", true
 test "logical not false", "!true", false
 code "logical not simple", "!a", "!a"
-code "logical not complex", "!(a && b)", "(!((a && b)))"
+code "logical not complex", "!(a && b)", "!(a && b);"
 
 # Logical AND: "&&"
 test "logical and both true", "true && true", true

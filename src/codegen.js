@@ -23,6 +23,120 @@ export class CodeGenerator {
     '>>>='
   ]);
 
+  // Generator dispatch table (O(1) lookup instead of O(n) switch)
+  // Maps s-expression head → method name
+  static GENERATORS = {
+    // Top level
+    'program': 'generateProgram',
+
+    // Logical operators (special - flatten chains)
+    '&&': 'generateLogicalAnd',
+    '||': 'generateLogicalOr',
+
+    // Binary operators (shared method)
+    '+': 'generateBinaryOp', '-': 'generateBinaryOp', '*': 'generateBinaryOp',
+    '/': 'generateBinaryOp', '%': 'generateBinaryOp', '**': 'generateBinaryOp',
+    '==': 'generateBinaryOp', '===': 'generateBinaryOp', '!=': 'generateBinaryOp',
+    '!==': 'generateBinaryOp', '<': 'generateBinaryOp', '>': 'generateBinaryOp',
+    '<=': 'generateBinaryOp', '>=': 'generateBinaryOp', '??': 'generateBinaryOp',
+    '!?': 'generateBinaryOp', '&': 'generateBinaryOp', '|': 'generateBinaryOp',
+    '^': 'generateBinaryOp', '<<': 'generateBinaryOp', '>>': 'generateBinaryOp',
+    '>>>': 'generateBinaryOp',
+
+    // Special operators (extracted)
+    '%%': 'generateModulo',
+    '//': 'generateFloorDiv',
+    '//=': 'generateFloorDivAssign',
+    '..': 'generateRange',
+    '...': 'generateRange',
+    '!': 'generateNot',
+    '~': 'generateBitwiseNot',
+    '++': 'generateIncDec',
+    '--': 'generateIncDec',
+    '=~': 'generateRegexMatch',
+    'instanceof': 'generateInstanceof',
+    'in': 'generateIn',
+    'of': 'generateOf',
+    'typeof': 'generateTypeof',
+    'delete': 'generateDelete',
+    'new': 'generateNew',
+
+    // Data structures
+    'array': 'generateArray',
+    'object': 'generateObject',
+    'block': 'generateBlock',
+
+    // Property access
+    '.': 'generatePropertyAccess',
+    '?.': 'generateOptionalProperty',
+    '::': 'generatePrototype',
+    '?::': 'generateOptionalPrototype',
+    '[]': 'generateIndexAccess',
+    '?[]': 'generateSoakIndex',
+    'optindex': 'generateOptIndex',
+    'optcall': 'generateOptCall',
+    'regex-index': 'generateRegexIndex',
+
+    // Functions
+    'def': 'generateDef',
+    '->': 'generateThinArrow',
+    '=>': 'generateFatArrow',
+    'return': 'generateReturn',
+
+    // Control flow - Simple statements
+    'break': 'generateBreak',
+    'break-if': 'generateBreakIf',
+    'continue': 'generateContinue',
+    'continue-if': 'generateContinueIf',
+    '?': 'generateExistential',
+    '?:': 'generateTernary',
+    'loop': 'generateLoop',
+    'await': 'generateAwait',
+    'yield': 'generateYield',
+    'yield-from': 'generateYieldFrom',
+
+    // Control flow - Complex
+    'if': 'generateIf',
+    'unless': 'generateIf',
+    'for-in': 'generateForIn',
+    'for-of': 'generateForOf',
+    'for-from': 'generateForFrom',
+    'while': 'generateWhile',
+    'until': 'generateUntil',
+    // 'try': 'generateTry',
+    // 'throw': 'generateThrow',
+    // 'switch': 'generateSwitch',
+    // 'when': 'generateWhen',
+
+    // Comprehensions (extracting next)
+    // 'comprehension': 'generateComprehension',
+    // 'object-comprehension': 'generateObjectComprehension',
+
+    // Classes (to be extracted in Phase 2)
+    // 'class': 'generateClass',
+    // 'super': 'generateSuper',
+    // '?call': 'generateSoakCall',
+    // '?super': 'generateOptionalSuper',
+
+    // Async/Generators (to be extracted in Phase 2)
+    // 'await': 'generateAwait',
+    // 'yield': 'generateYield',
+    // 'yield-from': 'generateYieldFrom',
+
+    // Modules (to be extracted in Phase 2)
+    // 'import': 'generateImport',
+    // 'export': 'generateExport',
+    // 'export-default': 'generateExportDefault',
+    // 'export-all': 'generateExportAll',
+    // 'export-from': 'generateExportFrom',
+
+    // Special forms (to be extracted in Phase 2)
+    // 'do-iife': 'generateDoIIFE',
+    // 'regex': 'generateRegex',
+    // 'tagged-template': 'generateTaggedTemplate',
+    // 'str': 'generateString',
+  };
+
   constructor(options = {}) {
     this.options = options;
     this.indentLevel = 0;
@@ -383,263 +497,17 @@ export class CodeGenerator {
       head = head.valueOf();
     }
 
-    // Pattern matching on s-expression head
+    // Dispatch table lookup (O(1) instead of O(n) switch)
+    const generatorMethod = CodeGenerator.GENERATORS[head];
+    if (generatorMethod) {
+      return this[generatorMethod](head, rest, context, sexpr);
+    }
+
+    // Fallback: Handle function calls and remaining cases not yet in dispatch table
+    // Most operations are now handled by dispatch table above
     switch (head) {
-      //=====================================================================
-      // TOP LEVEL
-      //=====================================================================
 
-      case 'program':
-        return this.generateProgram(rest);
-
-      //=====================================================================
-      // OPERATORS - Binary (Arithmetic, Comparison, Logical, Bitwise)
-      //=====================================================================
-
-      case '&&':
-      case '||': {
-        // Logical operators: flatten nested chains for cleaner output
-        // Example: ["&&", ["&&", a, b], c] → ["&&", a, b, c] → a && b && c
-        const flattened = this.flattenBinaryChain(sexpr);
-        const operands = flattened.slice(1);
-
-        if (operands.length === 0) {
-          return 'true'; // Edge case: empty chain
-        }
-
-        if (operands.length === 1) {
-          return this.generate(operands[0], 'value');
-        }
-
-        // Generate flat chain: (a && b && c)
-        const parts = operands.map(op => this.generate(op, 'value'));
-        return `(${parts.join(` ${head} `)})`;
-      }
-
-      case '+':
-      case '-':
-      case '*':
-      case '/':
-      case '%':
-      case '**':
-      case '==':
-      case '===':  // Allow explicit strict equality
-      case '!=':
-      case '!==':  // Allow explicit strict inequality
-      case '<':
-      case '>':
-      case '<=':
-      case '>=':
-      case '??':
-      case '!?':
-      case '&':
-      case '|':
-      case '^':
-      case '<<':
-      case '>>':
-      case '>>>': {
-        // Binary operators: [op, left, right] → (left op right)
-        // Special case: +/- can also be unary
-        if ((head === '+' || head === '-') && rest.length === 1) {
-          // Unary plus or minus
-          const [operand] = rest;
-          return `(${head}${this.generate(operand, 'value')})`;
-        }
-
-        // Binary operation (all operators)
-        const [left, right] = rest;
-
-        // Special case: Otherwise operator (!?) - undefined-only coalescing
-        // Pattern: a !? b → (a !== undefined ? a : b)
-        if (head === '!?') {
-          const leftCode = this.generate(left, 'value');
-          const rightCode = this.generate(right, 'value');
-          return `(${leftCode} !== undefined ? ${leftCode} : ${rightCode})`;
-        }
-
-        // Always use strict equality (CoffeeScript compatibility)
-        // == → ===, != → !==, === → ===, !== → !==
-        let op = head;
-        if (head === '==') op = '===';
-        if (head === '!=') op = '!==';
-        // === and !== pass through as-is
-
-        return `(${this.generate(left, 'value')} ${op} ${this.generate(right, 'value')})`;
-      }
-
-      case '%%': {
-        // Modulo operator (different from %)
-        // % is remainder (preserves sign): -7 % 5 = -2
-        // %% is modulo (always positive): -7 %% 5 = 3
-        // Uses helper function: modulo(n, d) = (n % d + d) % d with type coercion
-        const [left, right] = rest;
-        const leftCode = this.generate(left, 'value');
-        const rightCode = this.generate(right, 'value');
-
-        // Mark that we need the modulo helper function
-        this.helpers.add('modulo');
-
-        return `modulo(${leftCode}, ${rightCode})`;
-      }
-
-      case '//': {
-        // Floor division: 7 // 2 → Math.floor(7 / 2)
-        const [left, right] = rest;
-        return `Math.floor(${this.generate(left, 'value')} / ${this.generate(right, 'value')})`;
-      }
-
-      //=====================================================================
-      // OPERATORS - Ranges
-      //=====================================================================
-
-      case '..': {
-        // Inclusive range: ["..", start, end]
-        const [start, end] = rest;
-        const startCode = this.generate(start, 'value');
-        const endCode = this.generate(end, 'value');
-        // Handle both forward and reverse ranges
-        return `((s, e) => Array.from({length: Math.abs(e - s) + 1}, (_, i) => s + (i * (s <= e ? 1 : -1))))(${startCode}, ${endCode})`;
-      }
-
-      case '...': {
-        // Two uses of ...:
-        // 1. Exclusive range: ["...", start, end] (2 args)
-        // 2. Spread operator: ["...", expression] (1 arg)
-        if (rest.length === 2) {
-          // Exclusive range - handle both forward and reverse
-          const [start, end] = rest;
-          const startCode = this.generate(start, 'value');
-          const endCode = this.generate(end, 'value');
-          return `((s, e) => Array.from({length: Math.max(0, Math.abs(e - s))}, (_, i) => s + (i * (s <= e ? 1 : -1))))(${startCode}, ${endCode})`;
-        }
-        // Spread operator
-        const [expr] = rest;
-        return `...${this.generate(expr, 'value')}`;
-      }
-
-
-      case '!': {
-        // Logical NOT (unary)
-        const [operand] = rest;
-        const operandCode = this.generate(operand, 'value');
-
-        // Add parens if operand is complex (contains operators or spaces)
-        // Simple identifier/literal: !x, !true → !x
-        // Complex expression: !(x < 5), !(a && b) → (!(a && b))
-        const needsParens = operandCode.includes('(') || operandCode.includes(' ');
-
-        return needsParens ? `(!(${operandCode}))` : `!${operandCode}`;
-      }
-
-      case 'new': {
-        // New operator: ["new", [constructor, ...args]]
-        // Special case: parser may give ["new", [".", ["Constructor"], "prop"]]
-        // for "new Constructor().prop" which should be "(new Constructor()).prop"
-        const [call] = rest;
-
-        // Check if call is a property access
-        // Pattern: ["new", [".", "obj", "klass"]] → new obj.klass
-        // Need to determine if this is:
-        //   1. new obj.klass - instantiate the class at obj.klass
-        //   2. (new obj()).klass - instantiate obj, then access klass property
-        // Parser gives us pattern 1, which is what we want most of the time
-        if (Array.isArray(call) && (call[0] === '.' || call[0] === '?.')) {
-          const [accessType, target, prop] = call;
-
-          // Check if target is itself a function call
-          if (Array.isArray(target) && !target[0].startsWith) {
-            // Target is a function call like ["fn", args]
-            // Pattern: new fn().prop → (new fn()).prop
-            const newExpr = this.generate(['new', target], 'value');
-            return `(${newExpr}).${prop}`;
-          }
-
-          // Target is simple (identifier or property access)
-          // Pattern: new obj.klass → new (obj.klass) or new obj.klass
-          const targetCode = this.generate(target, 'value');
-          const propAccess = `${targetCode}.${prop}`;
-          return `new ${propAccess}`;
-        }
-
-        if (Array.isArray(call)) {
-          const [constructor, ...args] = call;
-          const constructorCode = this.generate(constructor, 'value');
-          const argsCode = args.map(arg => this.unwrap(this.generate(arg, 'value'))).join(', ');
-          return `new ${constructorCode}(${argsCode})`;
-        }
-        // Fallback: just the constructor without args
-        return `new ${this.generate(call, 'value')}()`;
-      }
-
-      //=====================================================================
-      // OPERATORS - Unary
-      //=====================================================================
-
-      case '~': {
-        // Bitwise NOT (unary)
-        const [operand] = rest;
-        return `(~${this.generate(operand, 'value')})`;
-      }
-
-      case '++':
-      case '--': {
-        // Increment/Decrement: ["++", operand, isPostfix]
-        // Prefix: ["++", x, false] → ++x
-        // Postfix: ["++", x, true] → x++
-        const [operand, isPostfix] = rest;
-        const operandCode = this.generate(operand, 'value');
-
-        if (isPostfix) {
-          return `(${operandCode}${head})`;  // x++
-        } else {
-          return `(${head}${operandCode})`;  // ++x
-        }
-      }
-
-      case 'instanceof': {
-        // Instanceof operator: ["instanceof", expr, type]
-        const [expr, type] = rest;
-        return `(${this.generate(expr, 'value')} instanceof ${this.generate(type, 'value')})`;
-      }
-
-      case 'in': {
-        // CoffeeScript 'in' operator has dual behavior:
-        // - value in array → array.includes(value)
-        // - value in string → string.includes(value)
-        // - prop in object → (prop in object)
-        // Use runtime check to determine which approach
-        const [value, container] = rest;
-        const valueCode = this.generate(value, 'value');
-        const containerCode = this.generate(container, 'value');
-
-        // Runtime check: if array or string, use .includes(), otherwise use JavaScript's 'in'
-        return `(Array.isArray(${containerCode}) || typeof ${containerCode} === 'string' ? ${containerCode}.includes(${valueCode}) : (${valueCode} in ${containerCode}))`;
-      }
-
-      case 'of': {
-        // CoffeeScript 'of' operator: check if property is in object
-        // Pattern: key of object → key in object (JavaScript's 'in')
-        const [key, obj] = rest;
-        return `(${this.generate(key, 'value')} in ${this.generate(obj, 'value')})`;
-      }
-
-      case '=~': {
-        // Regex match operator: text =~ /pattern/
-        // Executes: (_ = toSearchable(text).match(/pattern/))
-        // Stores match result in _ for further use
-        const [left, right] = rest;
-
-        // Mark that we need the toSearchable helper and _ variable
-        this.helpers.add('toSearchable');
-        this.programVars.add('_');
-
-        // Check if regex has 'm' flag (multiline) to allow newlines in toSearchable
-        const rightCode = this.generate(right, 'value');
-        const hasMultilineFlag = rightCode.includes('/m');
-        const allowNewlines = hasMultilineFlag ? ', true' : '';
-
-        return `(_ = toSearchable(${this.generate(left, 'value')}${allowNewlines}).match(${rightCode}))`;
-      }
+      // TODO: Extract these remaining ~60 cases to dispatch table
 
       //=====================================================================
       // ASSIGNMENT
@@ -661,322 +529,40 @@ export class CodeGenerator {
       case '^=':
       case '<<=':
       case '>>=':
-      case '>>>=': {
-        // Assignment operators
-        const [target, value] = rest;
-        // Map ?= to ??= for simplicity (close semantics)
-        const op = head === '?=' ? '??=' : head;
+      case '>>>=':
+        return this.generateAssignment(head, rest, context, sexpr);
 
-        // VALIDATION: Prevent async sigils in assignment targets
-        // ! and & are for call-sites only, not variable names
-        // EXCEPTION: Allow ! sigil when assigning a function (void function syntax)
-        const isFunctionValue = Array.isArray(value) && (value[0] === '->' || value[0] === '=>' || value[0] === 'def');
-        if (target instanceof String && target.await !== undefined && !isFunctionValue) {
-          const sigil = target.await === true ? '!' : '&';
-          throw new Error(`Cannot use ${sigil} sigil in variable declaration '${target.valueOf()}'. Sigils are only for call-sites.`);
-        }
-
-        // If target has ! sigil and value is a function, mark it as side-effect only
-        const targetHasVoidSigil = target instanceof String && target.await === true;
-        if (targetHasVoidSigil && isFunctionValue) {
-          // Store the void flag so arrow functions can pick it up
-          this.nextFunctionIsVoid = true;
-        }
-
-        // Check for empty destructuring patterns - just evaluate RHS
-        const isEmptyArray = Array.isArray(target) && target[0] === 'array' && target.length === 1;
-        const isEmptyObject = Array.isArray(target) && target[0] === 'object' && target.length === 1;
-
-        if (isEmptyArray || isEmptyObject) {
-          // Empty destructuring: just evaluate the value for side effects
-          const valueCode = this.generate(value, 'value');
-          // Wrap objects in parens to avoid being interpreted as block statement
-          if (isEmptyObject && context === 'statement') {
-            return `(${valueCode})`;
-          }
-          return valueCode;
-        }
-
-        // Check for middle/leading rest in array destructuring
-        if (Array.isArray(target) && target[0] === 'array') {
-          const restIndex = target.slice(1).findIndex(el =>
-            Array.isArray(el) && el[0] === '...' ||
-            el === '...'  // Bare rest marker
-          );
-
-          if (restIndex !== -1 && restIndex < target.length - 2) {
-            // Rest is not at end - need splice approach
-            const elements = target.slice(1);
-            const elementsAfterRest = elements.slice(restIndex + 1);
-
-            // Count how many elements (including elisions) after rest
-            const afterCount = elementsAfterRest.length;
-
-            if (afterCount > 0) {
-              // Generate multi-statement destructuring
-              const valueCode = this.generate(value, 'value');
-
-              // Build pattern for everything UP TO rest (not including it)
-              const beforeRest = elements.slice(0, restIndex);
-              const beforePattern = beforeRest.map(el => {
-                if (el === ',') return '';
-                if (typeof el === 'string') return el;
-                return this.generate(el, 'value');
-              }).join(', ');
-
-              // Build pattern for elements after rest
-              const afterPattern = elementsAfterRest.map(el => {
-                if (el === ',') return '';
-                if (typeof el === 'string') return el;
-                return this.generate(el, 'value');
-              }).join(', ');
-
-              // Need slice helper
-              this.helpers.add('slice');
-
-              // Collect variables from destructuring pattern for hoisting
-              const collectVars = (els) => {
-                els.forEach(el => {
-                  if (el === ',' || el === '...') return;
-                  if (typeof el === 'string') this.programVars.add(el);
-                  else if (Array.isArray(el) && el[0] === '...') {
-                    if (typeof el[1] === 'string') this.programVars.add(el[1]);
-                  }
-                });
-              };
-              collectVars(elements);
-
-              // Get the rest variable name
-              const restElement = elements[restIndex];
-              const restVarName = Array.isArray(restElement) && restElement[0] === '...'
-                ? restElement[1]
-                : null;
-
-              const statements = [];
-
-              // First: destructure before rest (if any)
-              if (beforePattern) {
-                statements.push(`[${beforePattern}] = ${valueCode}`);
-              }
-
-              // Second: assign rest variable (the middle portion)
-              if (restVarName) {
-                statements.push(`[...${restVarName}] = ${valueCode}.slice(${restIndex}, -${afterCount})`);
-              }
-
-              // Third: destructure after rest
-              statements.push(`[${afterPattern}] = slice.call(${valueCode}, -${afterCount})`);
-
-              // Return comma-separated statements
-              return statements.join(', ');
-            }
-          }
-        }
-
-        // Special case: postfix if/unless on assignment with || operator
-        // Pattern: x = a or b unless cond → parser groups as: x = (a || (b unless cond))
-        // Should generate: if (!cond) { x = a || b }
-        // Not: x = a || (unless cond then b else undefined)
-        if (context === 'statement' && head === '=' && Array.isArray(value) &&
-            (value[0] === '||' || value[0] === '&&') && value.length === 3) {
-          const [binaryOp, left, right] = value;
-
-          // Check if right operand is postfix unless/if
-          if (Array.isArray(right) && (right[0] === 'unless' || right[0] === 'if') && right.length === 3) {
-            const [condType, condition, wrappedValue] = right;
-            // Unwrap the value
-            const unwrappedValue = Array.isArray(wrappedValue) && wrappedValue.length === 1 ? wrappedValue[0] : wrappedValue;
-
-            // Reconstruct the full binary expression without the conditional
-            const fullValue = [binaryOp, left, unwrappedValue];
-            const targetCode = this.generate(target, 'value');
-            const condCode = this.generate(condition, 'value');
-            const valueCode = this.generate(fullValue, 'value');
-
-            if (condType === 'unless') {
-              return `if (!${condCode}) ${targetCode} = ${valueCode}`;
-            } else {
-              return `if (${condCode}) ${targetCode} = ${valueCode}`;
-            }
-          }
-        }
-
-        // Special case: postfix if/unless on assignment (WITHOUT else clause)
-        // Pattern: x = 5 unless cond → if (!cond) x = 5;
-        // This prevents the broken ternary: x = (!cond ? 5 : undefined)
-        // IMPORTANT: Only for POSTFIX (simple body) - prefix if/else should use ternary!
-        if (context === 'statement' && head === '=' && Array.isArray(value) && value.length === 3) {
-          const valueHead = value[0];
-          const [_, condition, actualValue] = value;
-
-          // Check if this is POSTFIX (simple body, not a block)
-          // Postfix: x = 5 if cond → ["unless", cond, ["5"]] (array wrapping single value)
-          // Prefix:  x = if cond then 5 → ["if", cond, ["block", "5"]] (block wrapper)
-          const isPostfix = Array.isArray(actualValue) &&
-                           actualValue.length === 1 &&
-                           (!Array.isArray(actualValue[0]) || actualValue[0][0] !== 'block');
-
-          if ((valueHead === 'unless' || valueHead === 'if') && isPostfix) {
-            // Unwrap array body (postfix wraps value in array)
-            let unwrappedValue = actualValue;
-            // Unwrap one level: [["object"]] → ["object"], ["5"] → "5"
-            if (Array.isArray(actualValue) && actualValue.length === 1) {
-              unwrappedValue = actualValue[0];
-            }
-
-            const targetCode = this.generate(target, 'value');
-            let condCode = this.unwrapLogical(this.generate(condition, 'value'));
-            const valueCode = this.generate(unwrappedValue, 'value');
-
-            if (valueHead === 'unless') {
-              // Re-wrap for negation if needed for precedence
-              if (condCode.includes(' ') || condCode.includes('===') || condCode.includes('!==') ||
-                  condCode.includes('>') || condCode.includes('<') || condCode.includes('&&') || condCode.includes('||')) {
-                condCode = `(${condCode})`;
-              }
-              return `if (!${condCode}) ${targetCode} = ${valueCode}`;
-            } else {
-              return `if (${condCode}) ${targetCode} = ${valueCode}`;
-            }
-          }
-        }
-
-        // Generate target code (strip ! sigil metadata for assignment LHS)
-        let targetCode;
-        if (target instanceof String && target.await !== undefined) {
-          // Target has sigil - just use the clean name (don't apply dammit operator)
-          targetCode = target.valueOf();
-        } else {
-          targetCode = this.generate(target, 'value');
-        }
-
-        let valueCode = this.generate(value, 'value');
-
-        // Unwrap value in assignment context (= is already a delimiter)
-        // BUT keep parens for object literals to avoid ambiguity with blocks
-        const isObjectLiteral = Array.isArray(value) && value[0] === 'object';
-        if (!isObjectLiteral) {
-          valueCode = this.unwrap(valueCode);
-        }
-
-        // Assignments need parens when used as sub-expressions (in value context)
-        // Exception: Top-level assignment in assignment chain (a = b = c) doesn't need parens
-        const needsParensForValue = context === 'value';
-
-        // Object destructuring requires parens in statement context
-        // ({x, y} = obj) not {x, y} = obj
-        const needsParensForObject = context === 'statement' && Array.isArray(target) && target[0] === 'object';
-
-        if (needsParensForValue || needsParensForObject) {
-          return `(${targetCode} ${op} ${valueCode})`;
-        }
-
-        return `${targetCode} ${op} ${valueCode}`;
-      }
-
-      case '//=': {
-        // Floor division assignment: x //= 2 → x = Math.floor(x / 2)
-        const [target, value] = rest;
-        const targetCode = this.generate(target, 'value');
-        const valueCode = this.generate(value, 'value');
-        return `${targetCode} = Math.floor(${targetCode} / ${valueCode})`;
-      }
+      case '//=':
+        return this.generateFloorDivAssign(head, rest, context, sexpr);
 
       //=====================================================================
       // DATA STRUCTURES
       //=====================================================================
 
-      case 'array': {
-        // Array literal: ["array", ...elements]
-        // Check if last element is an elision that needs to be preserved
-        const hasTrailingElision = rest.length > 0 && rest[rest.length - 1] === ',';
+      case 'array':
+        return this.generateArray(head, rest, context, sexpr);
 
-        const elements = rest.map(el => {
-          // Comma token represents elision (hole) - preserve as empty
-          if (el === ',') {
-            return '';  // Empty string will create elision when joined
-          }
-          // Bare spread marker without variable (expansion marker) - skip in output
-          if (el === '...') {
-            return '';  // Will create hole, but that's intentional for expansion
-          }
-          // Check for spread with variable: ["...", expr]
-          if (Array.isArray(el) && el[0] === '...') {
-            return `...${this.generate(el[1], 'value')}`;
-          }
-          return this.generate(el, 'value');
-        }).join(', ');
+      case 'object':
+        return this.generateObject(head, rest, context, sexpr);
 
-        // If the last element was an elision, we need to add an extra comma
-        // because join() creates a trailing comma that JavaScript ignores
-        return hasTrailingElision ? `[${elements},]` : `[${elements}]`;
-      }
-
-      case 'object': {
-        // Object literal: ["object", [key, value, operator], [key, value, operator], ...]
-        // OR Object comprehension (disguised): ["object", [key, ["comprehension", ...]]]
-        // operator can be: ':', '=', or null (for shorthand)
-
-        // Check if this is actually an object comprehension
-        if (rest.length === 1 && Array.isArray(rest[0]) &&
-            Array.isArray(rest[0][1]) && rest[0][1][0] === 'comprehension') {
-          // Object comprehension pattern: ["object", [keyVar, ["comprehension", valueExpr, iterators, guards]]]
-          const [keyVar, comprehensionNode] = rest[0];
-          const [, valueExpr, iterators, guards] = comprehensionNode;
-
-          // Convert to object-comprehension
-          return this.generate(['object-comprehension', keyVar, valueExpr, iterators, guards], context);
-        }
-
-        // Regular object literal
-        const pairs = rest.map(pair => {
-          // Check for spread/rest: ["...", expr] (not a key-value pair)
-          if (Array.isArray(pair) && pair[0] === '...') {
-            // Spread/rest operator
-            return `...${this.generate(pair[1], 'value')}`;
-          }
-
-          // All regular pairs now have format: [key, value, operator]
-          const [key, value, operator] = pair;
-
-          // Check if key is computed: ["computed", expression]
-          let keyCode;
-          if (Array.isArray(key) && key[0] === 'computed') {
-            // Computed property: [expr] syntax
-            const expr = key[1];
-            keyCode = `[${this.generate(expr, 'value')}]`;
-          } else {
-            // Regular key (string or identifier)
-            keyCode = this.generate(key, 'value');
-          }
-
-          const valueCode = this.generate(value, 'value');
-
-          // Handle different operators
-          if (operator === '=') {
-            // Destructuring with default: {a = 5}
-            return `${keyCode} = ${valueCode}`;
-          } else if (operator === ':') {
-            // Explicit property: {a: 5}
-            return `${keyCode}: ${valueCode}`;
-          } else {
-            // operator is null/undefined - shorthand or inferred
-            // Shorthand property syntax: {name} instead of {name: name}
-            if (keyCode === valueCode && !Array.isArray(key)) {
-              return keyCode;
-            }
-            return `${keyCode}: ${valueCode}`;
-          }
-        }).join(', ');
-
-        return `{${pairs}}`;
-      }
 
       //=====================================================================
       // PROPERTY ACCESS
       //=====================================================================
 
-      case '.': {
+      case '.':
+      case '?.':
+      case '::':
+      case '?::':
+      case 'regex-index':
+      case '[]':
+      case '?[]':
+      case 'optindex':
+      case 'optcall':
+        // All handled by dispatch table now
+        throw new Error(`[BUG] ${head} should be handled by dispatch table`);
+
+      case 'oldPropertyDot': {
         // Property access: [".", object, "property"]
         const [obj, prop] = rest;
         const objCode = this.generate(obj, 'value');
@@ -1163,7 +749,17 @@ export class CodeGenerator {
       // FUNCTIONS
       //=====================================================================
 
-      case 'def': {
+      case 'def':
+      case '->':
+      case '=>':
+      case 'return':
+        // All handled by dispatch table now (dead code)
+        throw new Error(`[BUG] ${head} should be handled by dispatch table`);
+
+      case 'block':
+        return this.generateBlock(head, rest, context, sexpr);
+
+      case 'oldDef': {
         // Function definition: ["def", name, params, body]
         const [name, params, body] = rest;
 
@@ -1304,11 +900,8 @@ export class CodeGenerator {
         return `return ${this.generate(expr, 'value')}`;
       }
 
-      case 'block': {
-        // Statement block: ["block", ...statements]
-        const stmts = this.withIndent(() => this.formatStatements(rest));
-        return `{\n${stmts.join('\n')}\n${this.indent()}}`;
-      }
+      case 'block':
+        return this.generateBlock(rest, context, sexpr);
 
       //=====================================================================
       // CONTROL FLOW
@@ -3147,7 +2740,16 @@ export class CodeGenerator {
    * Generate program (top-level)
    * Pattern: ["program", ...statements]
    */
-  generateProgram(statements) {
+  //===========================================================================
+  // EXTRACTED GENERATORS (from generate() method)
+  // Organized by category for clarity
+  //===========================================================================
+
+  //-------------------------------------------------------------------------
+  // TOP LEVEL
+  //-------------------------------------------------------------------------
+
+  generateProgram(head, statements, context, sexpr) {
     let code = '';
 
     // Separate imports/exports from other statements (ES6 modules require imports at top)
@@ -3295,6 +2897,1473 @@ export class CodeGenerator {
 
     return code;
   }
+
+  //-------------------------------------------------------------------------
+  // OPERATORS - Binary
+  //-------------------------------------------------------------------------
+
+  /**
+   * Generate binary operators (arithmetic, comparison, bitwise, coalescing)
+   * Shared method for: +, -, *, /, %, **, ==, !=, <, >, <=, >=, ??, !?, &, |, ^, <<, >>, >>>
+   * Pattern: [op, left, right] → (left op right)
+   */
+  generateBinaryOp(op, rest, context, sexpr) {
+    // Special case: +/- can also be unary
+    if ((op === '+' || op === '-') && rest.length === 1) {
+      const [operand] = rest;
+      return `(${op}${this.generate(operand, 'value')})`;
+    }
+
+    // Binary operation
+    const [left, right] = rest;
+
+    // Special case: Otherwise operator (!?) - undefined-only coalescing
+    // Pattern: a !? b → (a !== undefined ? a : b)
+    if (op === '!?') {
+      const leftCode = this.generate(left, 'value');
+      const rightCode = this.generate(right, 'value');
+      return `(${leftCode} !== undefined ? ${leftCode} : ${rightCode})`;
+    }
+
+    // Always use strict equality (CoffeeScript compatibility)
+    // == → ===, != → !==
+    if (op === '==') op = '===';
+    if (op === '!=') op = '!==';
+
+    return `(${this.generate(left, 'value')} ${op} ${this.generate(right, 'value')})`;
+  }
+
+  /**
+   * Generate modulo operator (%%)
+   * Pattern: ["%%", left, right] → modulo(left, right)
+   */
+  generateModulo(head, rest, context, sexpr) {
+    const [left, right] = rest;
+    this.helpers.add('modulo');
+    return `modulo(${this.generate(left, 'value')}, ${this.generate(right, 'value')})`;
+  }
+
+  /**
+   * Generate floor division (//)
+   * Pattern: ["//", left, right] → Math.floor(left / right)
+   */
+  generateFloorDiv(head, rest, context, sexpr) {
+    const [left, right] = rest;
+    return `Math.floor(${this.generate(left, 'value')} / ${this.generate(right, 'value')})`;
+  }
+
+  /**
+   * Generate floor division assignment (//=)
+   * Pattern: ["//=", target, value] → target = Math.floor(target / value)
+   */
+  generateFloorDivAssign(head, rest, context, sexpr) {
+    const [target, value] = rest;
+    const targetCode = this.generate(target, 'value');
+    const valueCode = this.generate(value, 'value');
+    return `${targetCode} = Math.floor(${targetCode} / ${valueCode})`;
+  }
+
+  //-------------------------------------------------------------------------
+  // ASSIGNMENT OPERATORS
+  //-------------------------------------------------------------------------
+
+  /**
+   * Generate assignment operators (=, +=, -=, etc.)
+   * Pattern: ["=", target, value] or ["+=", target, value], etc.
+   * This is one of the most complex generators due to special cases
+   */
+  generateAssignment(head, rest, context, sexpr) {
+    const [target, value] = rest;
+    // Map ?= to ??= for simplicity (close semantics)
+    const op = head === '?=' ? '??=' : head;
+
+    // VALIDATION: Prevent async sigils in assignment targets
+    // ! and & are for call-sites only, not variable names
+    // EXCEPTION: Allow ! sigil when assigning a function (void function syntax)
+    const isFunctionValue = Array.isArray(value) && (value[0] === '->' || value[0] === '=>' || value[0] === 'def');
+    if (target instanceof String && target.await !== undefined && !isFunctionValue) {
+      const sigil = target.await === true ? '!' : '&';
+      throw new Error(`Cannot use ${sigil} sigil in variable declaration '${target.valueOf()}'. Sigils are only for call-sites.`);
+    }
+
+    // If target has ! sigil and value is a function, mark it as side-effect only
+    const targetHasVoidSigil = target instanceof String && target.await === true;
+    if (targetHasVoidSigil && isFunctionValue) {
+      // Store the void flag so arrow functions can pick it up
+      this.nextFunctionIsVoid = true;
+    }
+
+    // Check for empty destructuring patterns - just evaluate RHS
+    const isEmptyArray = Array.isArray(target) && target[0] === 'array' && target.length === 1;
+    const isEmptyObject = Array.isArray(target) && target[0] === 'object' && target.length === 1;
+
+    if (isEmptyArray || isEmptyObject) {
+      // Empty destructuring: just evaluate the value for side effects
+      const valueCode = this.generate(value, 'value');
+      // Wrap objects in parens to avoid being interpreted as block statement
+      if (isEmptyObject && context === 'statement') {
+        return `(${valueCode})`;
+      }
+      return valueCode;
+    }
+
+    // Check for middle/leading rest in array destructuring
+    if (Array.isArray(target) && target[0] === 'array') {
+      const restIndex = target.slice(1).findIndex(el =>
+        Array.isArray(el) && el[0] === '...' ||
+        el === '...'  // Bare rest marker
+      );
+
+      if (restIndex !== -1 && restIndex < target.length - 2) {
+        // Rest is not at end - need splice approach
+        const elements = target.slice(1);
+        const elementsAfterRest = elements.slice(restIndex + 1);
+
+        // Count how many elements (including elisions) after rest
+        const afterCount = elementsAfterRest.length;
+
+        if (afterCount > 0) {
+          // Generate multi-statement destructuring
+          const valueCode = this.generate(value, 'value');
+
+          // Build pattern for everything UP TO rest (not including it)
+          const beforeRest = elements.slice(0, restIndex);
+          const beforePattern = beforeRest.map(el => {
+            if (el === ',') return '';
+            if (typeof el === 'string') return el;
+            return this.generate(el, 'value');
+          }).join(', ');
+
+          // Build pattern for elements after rest
+          const afterPattern = elementsAfterRest.map(el => {
+            if (el === ',') return '';
+            if (typeof el === 'string') return el;
+            return this.generate(el, 'value');
+          }).join(', ');
+
+          // Need slice helper
+          this.helpers.add('slice');
+
+          // Collect variables from destructuring pattern for hoisting
+          const collectVars = (els) => {
+            els.forEach(el => {
+              if (el === ',' || el === '...') return;
+              if (typeof el === 'string') this.programVars.add(el);
+              else if (Array.isArray(el) && el[0] === '...') {
+                if (typeof el[1] === 'string') this.programVars.add(el[1]);
+              }
+            });
+          };
+          collectVars(elements);
+
+          // Get the rest variable name
+          const restElement = elements[restIndex];
+          const restVarName = Array.isArray(restElement) && restElement[0] === '...'
+            ? restElement[1]
+            : null;
+
+          const statements = [];
+
+          // First: destructure before rest (if any)
+          if (beforePattern) {
+            statements.push(`[${beforePattern}] = ${valueCode}`);
+          }
+
+          // Second: assign rest variable (the middle portion)
+          if (restVarName) {
+            statements.push(`[...${restVarName}] = ${valueCode}.slice(${restIndex}, -${afterCount})`);
+          }
+
+          // Third: destructure after rest
+          statements.push(`[${afterPattern}] = slice.call(${valueCode}, -${afterCount})`);
+
+          // Return comma-separated statements
+          return statements.join(', ');
+        }
+      }
+    }
+
+    // Special case: postfix if/unless on assignment with || operator
+    // Pattern: x = a or b unless cond → parser groups as: x = (a || (b unless cond))
+    // Should generate: if (!cond) { x = a || b }
+    // Not: x = a || (unless cond then b else undefined)
+    if (context === 'statement' && head === '=' && Array.isArray(value) &&
+        (value[0] === '||' || value[0] === '&&') && value.length === 3) {
+      const [binaryOp, left, right] = value;
+
+      // Check if right operand is postfix unless/if
+      if (Array.isArray(right) && (right[0] === 'unless' || right[0] === 'if') && right.length === 3) {
+        const [condType, condition, wrappedValue] = right;
+        // Unwrap the value
+        const unwrappedValue = Array.isArray(wrappedValue) && wrappedValue.length === 1 ? wrappedValue[0] : wrappedValue;
+
+        // Reconstruct the full binary expression without the conditional
+        const fullValue = [binaryOp, left, unwrappedValue];
+        const targetCode = this.generate(target, 'value');
+        const condCode = this.generate(condition, 'value');
+        const valueCode = this.generate(fullValue, 'value');
+
+        if (condType === 'unless') {
+          return `if (!${condCode}) ${targetCode} = ${valueCode}`;
+        } else {
+          return `if (${condCode}) ${targetCode} = ${valueCode}`;
+        }
+      }
+    }
+
+    // Special case: postfix if/unless on assignment (WITHOUT else clause)
+    // Pattern: x = 5 unless cond → if (!cond) x = 5;
+    // This prevents the broken ternary: x = (!cond ? 5 : undefined)
+    // IMPORTANT: Only for POSTFIX (simple body) - prefix if/else should use ternary!
+    if (context === 'statement' && head === '=' && Array.isArray(value) && value.length === 3) {
+      const valueHead = value[0];
+      const [_, condition, actualValue] = value;
+
+      // Check if this is POSTFIX (simple body, not a block)
+      // Postfix: x = 5 if cond → ["unless", cond, ["5"]] (array wrapping single value)
+      // Prefix:  x = if cond then 5 → ["if", cond, ["block", "5"]] (block wrapper)
+      const isPostfix = Array.isArray(actualValue) &&
+                       actualValue.length === 1 &&
+                       (!Array.isArray(actualValue[0]) || actualValue[0][0] !== 'block');
+
+      if ((valueHead === 'unless' || valueHead === 'if') && isPostfix) {
+        // Unwrap array body (postfix wraps value in array)
+        let unwrappedValue = actualValue;
+        // Unwrap one level: [["object"]] → ["object"], ["5"] → "5"
+        if (Array.isArray(actualValue) && actualValue.length === 1) {
+          unwrappedValue = actualValue[0];
+        }
+
+        const targetCode = this.generate(target, 'value');
+        let condCode = this.unwrapLogical(this.generate(condition, 'value'));
+        const valueCode = this.generate(unwrappedValue, 'value');
+
+        if (valueHead === 'unless') {
+          // Re-wrap for negation if needed for precedence
+          if (condCode.includes(' ') || condCode.includes('===') || condCode.includes('!==') ||
+              condCode.includes('>') || condCode.includes('<') || condCode.includes('&&') || condCode.includes('||')) {
+            condCode = `(${condCode})`;
+          }
+          return `if (!${condCode}) ${targetCode} = ${valueCode}`;
+        } else {
+          return `if (${condCode}) ${targetCode} = ${valueCode}`;
+        }
+      }
+    }
+
+    // Generate target code (strip ! sigil metadata for assignment LHS)
+    let targetCode;
+    if (target instanceof String && target.await !== undefined) {
+      // Target has sigil - just use the clean name (don't apply dammit operator)
+      targetCode = target.valueOf();
+    } else {
+      targetCode = this.generate(target, 'value');
+    }
+
+    let valueCode = this.generate(value, 'value');
+
+    // Unwrap value in assignment context (= is already a delimiter)
+    // BUT keep parens for object literals to avoid ambiguity with blocks
+    const isObjectLiteral = Array.isArray(value) && value[0] === 'object';
+    if (!isObjectLiteral) {
+      valueCode = this.unwrap(valueCode);
+    }
+
+    // Assignments need parens when used as sub-expressions (in value context)
+    // Exception: Top-level assignment in assignment chain (a = b = c) doesn't need parens
+    const needsParensForValue = context === 'value';
+
+    // Object destructuring requires parens in statement context
+    // ({x, y} = obj) not {x, y} = obj
+    const needsParensForObject = context === 'statement' && Array.isArray(target) && target[0] === 'object';
+
+    if (needsParensForValue || needsParensForObject) {
+      return `(${targetCode} ${op} ${valueCode})`;
+    }
+
+    return `${targetCode} ${op} ${valueCode}`;
+  }
+
+  //-------------------------------------------------------------------------
+  // PROPERTY ACCESS
+  //-------------------------------------------------------------------------
+
+  /**
+   * Generate property access (.)
+   * Pattern: [".", object, "property"]
+   */
+  generatePropertyAccess(head, rest, context, sexpr) {
+    const [obj, prop] = rest;
+    const objCode = this.generate(obj, 'value');
+
+    // Wrap numeric literals, object literals, await, and yield in parens
+    const isNumberLiteral = /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(objCode);
+    const isObjectLiteral = Array.isArray(obj) && obj[0] === 'object';
+    const isAwaitOrYield = Array.isArray(obj) && (obj[0] === 'await' || obj[0] === 'yield');
+    const needsParens = isNumberLiteral || isObjectLiteral || isAwaitOrYield;
+    const base = needsParens ? `(${objCode})` : objCode;
+
+    // DAMMIT OPERATOR on property: obj.method!
+    if (prop instanceof String && prop.await === true) {
+      const cleanProp = prop.valueOf();
+      return `await ${base}.${cleanProp}()`;
+    }
+
+    const cleanProp = prop instanceof String ? prop.valueOf() : prop;
+    return `${base}.${cleanProp}`;
+  }
+
+  /**
+   * Generate optional property access (?.)
+   * Pattern: ["?.", object, "property"]
+   */
+  generateOptionalProperty(head, rest, context, sexpr) {
+    const [obj, prop] = rest;
+    return `${this.generate(obj, 'value')}?.${prop}`;
+  }
+
+  /**
+   * Generate prototype access (::)
+   * Pattern: ["::", object, "property"]
+   */
+  generatePrototype(head, rest, context, sexpr) {
+    const [obj, prop] = rest;
+    const objCode = this.generate(obj, 'value');
+
+    if (prop === 'prototype') {
+      return `${objCode}.prototype`;
+    }
+
+    const cleanProp = prop instanceof String ? prop.valueOf() : prop;
+    return `${objCode}.prototype.${cleanProp}`;
+  }
+
+  /**
+   * Generate soak prototype (?::)
+   * Pattern: ["?::", object, "property"]
+   */
+  generateOptionalPrototype(head, rest, context, sexpr) {
+    const [obj, prop] = rest;
+    const objCode = this.generate(obj, 'value');
+
+    if (prop === 'prototype') {
+      return `(${objCode} != null ? ${objCode}.prototype : undefined)`;
+    }
+    return `(${objCode} != null ? ${objCode}.prototype.${prop} : undefined)`;
+  }
+
+  /**
+   * Generate regex index
+   * Pattern: ["regex-index", value, regex, captureIndex]
+   */
+  generateRegexIndex(head, rest, context, sexpr) {
+    const [value, regex, captureIndex] = rest;
+
+    this.helpers.add('toSearchable');
+    this.programVars.add('_');
+
+    const valueCode = this.generate(value, 'value');
+    const regexCode = this.generate(regex, 'value');
+    const indexCode = captureIndex !== null ? this.generate(captureIndex, 'value') : '0';
+
+    const hasMultilineFlag = regexCode.includes('/m');
+    const allowNewlines = hasMultilineFlag ? ', true' : '';
+
+    return `(_ = toSearchable(${valueCode}${allowNewlines}).match(${regexCode})) && _[${indexCode}]`;
+  }
+
+  /**
+   * Generate index access ([])
+   * Pattern: ["[]", array, index] or ["[]", array, range]
+   */
+  generateIndexAccess(head, rest, context, sexpr) {
+    const [arr, index] = rest;
+
+    // Check if index is a range (slicing operation)
+    if (Array.isArray(index) && (index[0] === '..' || index[0] === '...')) {
+      const isInclusive = index[0] === '..';
+      const arrCode = this.generate(arr, 'value');
+      const [start, end] = index.slice(1);
+
+      // Handle different slice patterns
+      if (start === null && end === null) {
+        return `${arrCode}.slice()`;
+      } else if (start === null) {
+        const isNegativeOne = Array.isArray(end) && end[0] === '-' &&
+                              end.length === 2 &&
+                              (end[1] === '1' || end[1] === 1 || (end[1] instanceof String && end[1].valueOf() === '1'));
+
+        if (isInclusive && isNegativeOne) {
+          return `${arrCode}.slice(0)`;
+        }
+
+        const endCode = this.generate(end, 'value');
+        if (isInclusive) {
+          return `${arrCode}.slice(0, +${endCode} + 1 || 9e9)`;
+        } else {
+          return `${arrCode}.slice(0, ${endCode})`;
+        }
+      } else if (end === null) {
+        const startCode = this.generate(start, 'value');
+        return `${arrCode}.slice(${startCode})`;
+      } else {
+        const startCode = this.generate(start, 'value');
+        const isNegativeOneLiteral = Array.isArray(end) && end[0] === '-' &&
+                              end.length === 2 &&
+                              (end[1] === '1' || end[1] === 1 || (end[1] instanceof String && end[1].valueOf() === '1'));
+
+        if (isInclusive && isNegativeOneLiteral) {
+          return `${arrCode}.slice(${startCode})`;
+        }
+
+        const endCode = this.generate(end, 'value');
+        if (isInclusive) {
+          return `${arrCode}.slice(${startCode}, +${endCode} + 1 || 9e9)`;
+        } else {
+          return `${arrCode}.slice(${startCode}, ${endCode})`;
+        }
+      }
+    }
+
+    // Regular indexing
+    const indexCode = this.unwrap(this.generate(index, 'value'));
+    return `${this.generate(arr, 'value')}[${indexCode}]`;
+  }
+
+  /**
+   * Generate soak index (?[])
+   * Pattern: ["?[]", array, index]
+   */
+  generateSoakIndex(head, rest, context, sexpr) {
+    const [arr, index] = rest;
+    const arrCode = this.generate(arr, 'value');
+    const indexCode = this.generate(index, 'value');
+    return `(${arrCode} != null ? ${arrCode}[${indexCode}] : undefined)`;
+  }
+
+  /**
+   * Generate optional index (optindex)
+   * Pattern: ["optindex", array, index]
+   */
+  generateOptIndex(head, rest, context, sexpr) {
+    const [arr, index] = rest;
+    const arrCode = this.generate(arr, 'value');
+    const indexCode = this.generate(index, 'value');
+    return `${arrCode}?.[${indexCode}]`;
+  }
+
+  /**
+   * Generate optional call (optcall)
+   * Pattern: ["optcall", fn, ...args]
+   */
+  generateOptCall(head, rest, context, sexpr) {
+    const [fn, ...args] = rest;
+    const fnCode = this.generate(fn, 'value');
+    const argsCode = args.map(arg => this.generate(arg, 'value')).join(', ');
+    return `${fnCode}?.(${argsCode})`;
+  }
+
+  //-------------------------------------------------------------------------
+  // FUNCTIONS
+  //-------------------------------------------------------------------------
+
+  /**
+   * Generate function definition (def)
+   * Pattern: ["def", name, params, body]
+   */
+  generateDef(head, rest, context, sexpr) {
+    const [name, params, body] = rest;
+
+    // Check for ! sigil: suppresses implicit returns (side-effect only function)
+    const sideEffectOnly = name instanceof String && name.await === true;
+    const cleanName = name instanceof String ? name.valueOf() : name;
+
+    const paramList = this.generateParamList(params);
+    const bodyCode = this.generateFunctionBody(body, params, sideEffectOnly);
+
+    // Check if body contains await or yield
+    const isAsync = this.containsAwait(body);
+    const isGenerator = this.containsYield(body);
+    const asyncPrefix = isAsync ? 'async ' : '';
+    const generatorSuffix = isGenerator ? '*' : '';
+
+    return `${asyncPrefix}function${generatorSuffix} ${cleanName}(${paramList}) ${bodyCode}`;
+  }
+
+  /**
+   * Generate thin arrow (->)
+   * Pattern: ["->", params, body]
+   */
+  generateThinArrow(head, rest, context, sexpr) {
+    const [params, body] = rest;
+
+    // Check for void function flag (set by assignment with ! sigil)
+    const sideEffectOnly = this.nextFunctionIsVoid || false;
+    this.nextFunctionIsVoid = false;
+
+    const paramList = this.generateParamList(params);
+    const bodyCode = this.generateFunctionBody(body, params, sideEffectOnly);
+
+    // Check if body contains await or yield
+    const isAsync = this.containsAwait(body);
+    const isGenerator = this.containsYield(body);
+    const asyncPrefix = isAsync ? 'async ' : '';
+    const generatorSuffix = isGenerator ? '*' : '';
+
+    const fnCode = `${asyncPrefix}function${generatorSuffix}(${paramList}) ${bodyCode}`;
+
+    // In value context, wrap in parens
+    return context === 'value' ? `(${fnCode})` : fnCode;
+  }
+
+  /**
+   * Generate fat arrow (=>)
+   * Pattern: ["=>", params, body]
+   */
+  generateFatArrow(head, rest, context, sexpr) {
+    const [params, body] = rest;
+
+    // Check for void function flag
+    const sideEffectOnly = this.nextFunctionIsVoid || false;
+    this.nextFunctionIsVoid = false;
+
+    const paramList = this.generateParamList(params);
+
+    // Check if we can omit parens (single simple parameter)
+    const isSingleSimpleParam = params.length === 1 &&
+                               typeof params[0] === 'string' &&
+                               !paramList.includes('=') &&
+                               !paramList.includes('...') &&
+                               !paramList.includes('[') &&
+                               !paramList.includes('{');
+    const paramSyntax = isSingleSimpleParam ? paramList : `(${paramList})`;
+
+    // Check if body contains await
+    const isAsync = this.containsAwait(body);
+    const asyncPrefix = isAsync ? 'async ' : '';
+
+    // If sideEffectOnly, always use block form
+    if (!sideEffectOnly) {
+      // Check if body is a block with single expression
+      if (Array.isArray(body) && body[0] === 'block' && body.length === 2) {
+        const expr = body[1];
+        if (!Array.isArray(expr) || expr[0] !== 'return') {
+          return `${asyncPrefix}${paramSyntax} => ${this.generate(expr, 'value')}`;
+        }
+      }
+
+      // Single expression not in block
+      if (!Array.isArray(body) || body[0] !== 'block') {
+        return `${asyncPrefix}${paramSyntax} => ${this.generate(body, 'value')}`;
+      }
+    }
+
+    // Multi-statement block
+    const bodyCode = this.generateFunctionBody(body, params, sideEffectOnly);
+    return `${asyncPrefix}${paramSyntax} => ${bodyCode}`;
+  }
+
+  /**
+   * Generate return statement
+   * Pattern: ["return"] or ["return", expr]
+   */
+  generateReturn(head, rest, context, sexpr) {
+    if (rest.length === 0) {
+      return 'return';
+    }
+
+    let [expr] = rest;
+
+    // If in a void function, convert "return expr" to just "return"
+    if (this.sideEffectOnly) {
+      return 'return';
+    }
+
+    // Handle postfix unless/if with return
+    if (Array.isArray(expr) && expr[0] === 'unless') {
+      const [, condition, body] = expr;
+      const value = Array.isArray(body) && body.length === 1 ? body[0] : body;
+      return `if (!${this.generate(condition, 'value')}) return ${this.generate(value, 'value')}`;
+    }
+
+    if (Array.isArray(expr) && expr[0] === 'if') {
+      const [, condition, body, ...elseParts] = expr;
+      if (elseParts.length === 0) {
+        const value = Array.isArray(body) && body.length === 1 ? body[0] : body;
+        return `if (${this.generate(condition, 'value')}) return ${this.generate(value, 'value')}`;
+      }
+    }
+
+    // Handle special case: return new X unless condition
+    if (Array.isArray(expr) && expr[0] === 'new' &&
+        Array.isArray(expr[1]) && expr[1][0] === 'unless') {
+      const [, unlessNode] = expr;
+      const [, condition, body] = unlessNode;
+      const value = Array.isArray(body) && body.length === 1 ? body[0] : body;
+      return `if (!${this.generate(condition, 'value')}) return ${this.generate(['new', value], 'value')}`;
+    }
+
+    return `return ${this.generate(expr, 'value')}`;
+  }
+
+  //-------------------------------------------------------------------------
+  // CONTROL FLOW - Simple Statements
+  //-------------------------------------------------------------------------
+
+  /**
+   * Generate break statement
+   * Pattern: ["break"]
+   */
+  generateBreak(head, rest, context, sexpr) {
+    return 'break';
+  }
+
+  /**
+   * Generate conditional break
+   * Pattern: ["break-if", condition]
+   */
+  generateBreakIf(head, rest, context, sexpr) {
+    const [condition] = rest;
+    return `if (${this.generate(condition, 'value')}) break`;
+  }
+
+  /**
+   * Generate continue statement
+   * Pattern: ["continue"]
+   */
+  generateContinue(head, rest, context, sexpr) {
+    return 'continue';
+  }
+
+  /**
+   * Generate conditional continue
+   * Pattern: ["continue-if", condition]
+   */
+  generateContinueIf(head, rest, context, sexpr) {
+    const [condition] = rest;
+    return `if (${this.generate(condition, 'value')}) continue`;
+  }
+
+  /**
+   * Generate existential check (?)
+   * Pattern: ["?", expr] → (expr != null)
+   */
+  generateExistential(head, rest, context, sexpr) {
+    const [expr] = rest;
+    return `(${this.generate(expr, 'value')} != null)`;
+  }
+
+  /**
+   * Generate ternary operator (?:)
+   * Pattern: ["?:", condition, thenExpr, elseExpr]
+   */
+  generateTernary(head, rest, context, sexpr) {
+    const [condition, thenExpr, elseExpr] = rest;
+    const condCode = this.unwrap(this.generate(condition, 'value'));
+    return `(${condCode} ? ${this.generate(thenExpr, 'value')} : ${this.generate(elseExpr, 'value')})`;
+  }
+
+  /**
+   * Generate infinite loop
+   * Pattern: ["loop", body]
+   */
+  generateLoop(head, rest, context, sexpr) {
+    const [body] = rest;
+    const bodyCode = this.generateLoopBody(body);
+    return `while (true) ${bodyCode}`;
+  }
+
+  /**
+   * Generate await expression
+   * Pattern: ["await", expr]
+   */
+  generateAwait(head, rest, context, sexpr) {
+    const [expr] = rest;
+    return `await ${this.generate(expr, 'value')}`;
+  }
+
+  /**
+   * Generate yield expression
+   * Pattern: ["yield"] or ["yield", expr]
+   */
+  generateYield(head, rest, context, sexpr) {
+    if (rest.length === 0) {
+      return 'yield';
+    }
+    const [expr] = rest;
+    return `yield ${this.generate(expr, 'value')}`;
+  }
+
+  /**
+   * Generate yield* delegation
+   * Pattern: ["yield-from", expr]
+   */
+  generateYieldFrom(head, rest, context, sexpr) {
+    const [expr] = rest;
+    return `yield* ${this.generate(expr, 'value')}`;
+  }
+
+  //-------------------------------------------------------------------------
+  // CONTROL FLOW - Conditionals
+  //-------------------------------------------------------------------------
+
+  /**
+   * Generate if/unless statement
+   * Pattern: ["if", condition, thenBranch, ...elseBranches] or ["unless", condition, body]
+   */
+  generateIf(head, rest, context, sexpr) {
+    if (head === 'unless') {
+      // Unless statement
+      let [condition, body] = rest;
+
+      // Unwrap single-element array body
+      if (Array.isArray(body) && body.length === 1) {
+        const elem = body[0];
+        if (!Array.isArray(elem) || elem[0] !== 'block') {
+          body = elem;
+        }
+      }
+
+      // Context-aware generation
+      if (context === 'value') {
+        const thenExpr = this.extractExpression(body);
+        return `(!${this.generate(condition, 'value')} ? ${thenExpr} : undefined)`;
+      }
+
+      // Statement context
+      let condCode = this.unwrap(this.generate(condition, 'value'));
+      if (condCode.includes(' ') || condCode.includes('===') || condCode.includes('!==') ||
+          condCode.includes('>') || condCode.includes('<') || condCode.includes('&&') || condCode.includes('||')) {
+        condCode = `(${condCode})`;
+      }
+      return `if (!${condCode}) ` + this.generate(body, 'statement');
+    }
+
+    // If statement
+    const [condition, thenBranch, ...elseBranches] = rest;
+
+    if (context === 'value') {
+      return this.generateIfAsExpression(condition, thenBranch, elseBranches);
+    } else {
+      return this.generateIfAsStatement(condition, thenBranch, elseBranches);
+    }
+  }
+
+  //-------------------------------------------------------------------------
+  // CONTROL FLOW - Loops
+  //-------------------------------------------------------------------------
+
+  /**
+   * Generate for-in loop (MASSIVE - 203 lines)
+   * Pattern: ["for-in", vars, iterable, step, guard, body]
+   */
+  generateForIn(head, rest, context, sexpr) {
+    const [vars, iterable, step, guard, body] = rest;
+
+    // In value context, convert to comprehension
+    if (context === 'value' && this.comprehensionDepth === 0) {
+      const iterator = ['for-in', vars, iterable, step];
+      const guards = guard ? [guard] : [];
+      return this.generate(['comprehension', body, [iterator], guards], context);
+    }
+
+    const varsArray = Array.isArray(vars) ? vars : [vars];
+    const noVar = varsArray.length === 0;
+    const [itemVar, indexVar] = noVar ? ['_i', null] : varsArray;
+
+    let itemVarPattern = itemVar;
+    if (Array.isArray(itemVar) && (itemVar[0] === 'array' || itemVar[0] === 'object')) {
+      itemVarPattern = this.generateDestructuringPattern(itemVar);
+    }
+
+    // Handle step
+    if (step && step !== null) {
+      const iterableCode = this.generate(iterable, 'value');
+      const indexVarName = indexVar || '_i';
+      const stepCode = this.generate(step, 'value');
+
+      const isNegativeStep = this.isNegativeStep(step);
+      const isMinusOne = isNegativeStep && (step[1] === '1' || step[1] === 1 || (step[1] instanceof String && step[1].valueOf() === '1'));
+      const isPlusOne = !isNegativeStep && (step === '1' || step === 1 || (step instanceof String && step.valueOf() === '1'));
+
+      let loopHeader;
+      if (isMinusOne) {
+        loopHeader = `for (let ${indexVarName} = ${iterableCode}.length - 1; ${indexVarName} >= 0; ${indexVarName}--) `;
+      } else if (isPlusOne) {
+        loopHeader = `for (let ${indexVarName} = 0; ${indexVarName} < ${iterableCode}.length; ${indexVarName}++) `;
+      } else if (isNegativeStep) {
+        loopHeader = `for (let ${indexVarName} = ${iterableCode}.length - 1; ${indexVarName} >= 0; ${indexVarName} += ${stepCode}) `;
+      } else {
+        loopHeader = `for (let ${indexVarName} = 0; ${indexVarName} < ${iterableCode}.length; ${indexVarName} += ${stepCode}) `;
+      }
+
+      if (Array.isArray(body) && body[0] === 'block') {
+        const statements = body.slice(1);
+        this.indentLevel++;
+        const stmts = [];
+
+        if (!noVar) {
+          stmts.push(`const ${itemVarPattern} = ${iterableCode}[${indexVarName}];`);
+        }
+
+        if (guard) {
+          const guardCode = this.generate(guard, 'value');
+          stmts.push(`if (${guardCode}) {`);
+          this.indentLevel++;
+          stmts.push(...this.formatStatements(statements));
+          this.indentLevel--;
+          stmts.push(this.indent() + '}');
+        } else {
+          stmts.push(...statements.map(s => this.addSemicolon(s, this.generate(s, 'statement'))));
+        }
+
+        this.indentLevel--;
+        return loopHeader + `{\n${stmts.map(s => this.indent() + s).join('\n')}\n${this.indent()}}`;
+      } else {
+        if (noVar) {
+          if (guard) {
+            const guardCode = this.generate(guard, 'value');
+            return loopHeader + `{ if (${guardCode}) ${this.generate(body, 'statement')}; }`;
+          } else {
+            return loopHeader + `{ ${this.generate(body, 'statement')}; }`;
+          }
+        } else {
+          if (guard) {
+            const guardCode = this.generate(guard, 'value');
+            return loopHeader + `{ const ${itemVarPattern} = ${iterableCode}[${indexVarName}]; if (${guardCode}) ${this.generate(body, 'statement')}; }`;
+          } else {
+            return loopHeader + `{ const ${itemVarPattern} = ${iterableCode}[${indexVarName}]; ${this.generate(body, 'statement')}; }`;
+          }
+        }
+      }
+    }
+
+    // If index variable, use traditional for loop
+    if (indexVar) {
+      const iterableCode = this.generate(iterable, 'value');
+      let code = `for (let ${indexVar} = 0; ${indexVar} < ${iterableCode}.length; ${indexVar}++) `;
+
+      if (Array.isArray(body) && body[0] === 'block') {
+        const statements = body.slice(1);
+        code += '{\n';
+        this.indentLevel++;
+        code += this.indent() + `const ${itemVarPattern} = ${iterableCode}[${indexVar}];\n`;
+
+        if (guard) {
+          const guardCode = this.unwrap(this.generate(guard, 'value'));
+          code += this.indent() + `if (${guardCode}) {\n`;
+          this.indentLevel++;
+          code += this.formatStatements(statements).join('\n') + '\n';
+          this.indentLevel--;
+          code += this.indent() + '}\n';
+        } else {
+          code += this.formatStatements(statements).join('\n') + '\n';
+        }
+
+        this.indentLevel--;
+        code += this.indent() + '}';
+      } else {
+        if (guard) {
+          const guardCode = this.unwrap(this.generate(guard, 'value'));
+          code += `{ const ${itemVarPattern} = ${iterableCode}[${indexVar}]; if (${guardCode}) ${this.generate(body, 'statement')}; }`;
+        } else {
+          code += `{ const ${itemVarPattern} = ${iterableCode}[${indexVar}]; ${this.generate(body, 'statement')}; }`;
+        }
+      }
+
+      return code;
+    }
+
+    // Optimize range iteration
+    let iterableHead = Array.isArray(iterable) && iterable[0];
+    if (iterableHead instanceof String) {
+      iterableHead = iterableHead.valueOf();
+    }
+    const isRange = iterableHead === '..' || iterableHead === '...';
+
+    if (isRange) {
+      const isExclusive = iterableHead === '...';
+      const [start, end] = iterable.slice(1);
+
+      const isSimple = (expr) => {
+        if (typeof expr === 'number') return true;
+        if (expr instanceof String) {
+          const val = expr.valueOf();
+          return !val.includes('(');
+        }
+        if (typeof expr === 'string' && !expr.includes('(')) return true;
+        if (Array.isArray(expr) && expr[0] === '.') return true;
+        return false;
+      };
+
+      if (isSimple(start) && isSimple(end)) {
+        const startCode = this.generate(start, 'value');
+        const endCode = this.generate(end, 'value');
+        const comparison = isExclusive ? '<' : '<=';
+
+        let increment = `${itemVarPattern}++`;
+        if (step && step !== null) {
+          const stepCode = this.generate(step, 'value');
+          increment = `${itemVarPattern} += ${stepCode}`;
+        }
+
+        let code = `for (let ${itemVarPattern} = ${startCode}; ${itemVarPattern} ${comparison} ${endCode}; ${increment}) `;
+
+        if (guard) {
+          code += this.generateLoopBodyWithGuard(body, guard);
+        } else {
+          code += this.generateLoopBody(body);
+        }
+
+        return code;
+      }
+    }
+
+    // Default: use for-of
+    let code = `for (const ${itemVarPattern} of ${this.generate(iterable, 'value')}) `;
+
+    if (guard) {
+      code += this.generateLoopBodyWithGuard(body, guard);
+    } else {
+      code += this.generateLoopBody(body);
+    }
+
+    return code;
+  }
+
+  /**
+   * Generate for-of loop (object iteration) - 113 lines
+   * Pattern: ["for-of", vars, object, own, guard, body]
+   */
+  generateForOf(head, rest, context, sexpr) {
+    const [vars, obj, own, guard, body] = rest;
+    const [keyVar, valueVar] = Array.isArray(vars) ? vars : [vars];
+
+    const objCode = this.generate(obj, 'value');
+    let code = `for (const ${keyVar} in ${objCode}) `;
+
+    // Simple case: own without valueVar and without guards
+    if (own && !valueVar && !guard) {
+      if (Array.isArray(body) && body[0] === 'block') {
+        const statements = body.slice(1);
+        this.indentLevel++;
+        const stmts = [
+          `if (!Object.hasOwn(${objCode}, ${keyVar})) continue;`,
+          ...statements.map(s => this.addSemicolon(s, this.generate(s, 'statement')))
+        ];
+        this.indentLevel--;
+        code += `{\n${stmts.map(s => this.indent() + s).join('\n')}\n${this.indent()}}`;
+      } else {
+        code += `{ if (!Object.hasOwn(${objCode}, ${keyVar})) continue; ${this.generate(body, 'statement')}; }`;
+      }
+      return code;
+    }
+
+    // If valueVar is provided
+    if (valueVar) {
+      if (own && guard) {
+        // Both own and guard
+        if (Array.isArray(body) && body[0] === 'block') {
+          const statements = body.slice(1);
+          this.indentLevel++;
+          const outerIndent = this.indent();
+          const guardCondition = this.generate(guard, 'value');
+          this.indentLevel++;
+          const innerIndent = this.indent();
+          const stmts = statements.map(s => innerIndent + this.addSemicolon(s, this.generate(s, 'statement')));
+          this.indentLevel -= 2;
+          code += `{\n${outerIndent}if (!Object.hasOwn(${objCode}, ${keyVar})) continue;\n${outerIndent}const ${valueVar} = ${objCode}[${keyVar}];\n${outerIndent}if (${guardCondition}) {\n${stmts.join('\n')}\n${outerIndent}}\n${this.indent()}}`;
+        } else {
+          const guardCondition = this.generate(guard, 'value');
+          code += `{ if (!Object.hasOwn(${objCode}, ${keyVar})) continue; const ${valueVar} = ${objCode}[${keyVar}]; if (${guardCondition}) ${this.generate(body, 'statement')}; }`;
+        }
+      } else if (own) {
+        // Just own (no guard) with valueVar
+        if (Array.isArray(body) && body[0] === 'block') {
+          const statements = body.slice(1);
+          this.indentLevel++;
+          const stmts = [
+            `if (!Object.hasOwn(${objCode}, ${keyVar})) continue;`,
+            `const ${valueVar} = ${objCode}[${keyVar}];`,
+            ...statements.map(s => this.addSemicolon(s, this.generate(s, 'statement')))
+          ];
+          this.indentLevel--;
+          code += `{\n${stmts.map(s => this.indent() + s).join('\n')}\n${this.indent()}}`;
+        } else {
+          code += `{ if (!Object.hasOwn(${objCode}, ${keyVar})) continue; const ${valueVar} = ${objCode}[${keyVar}]; ${this.generate(body, 'statement')}; }`;
+        }
+      } else if (guard) {
+        // Just guard (no own) with valueVar
+        if (Array.isArray(body) && body[0] === 'block') {
+          const statements = body.slice(1);
+          this.indentLevel++;
+          const loopBodyIndent = this.indent();
+          const guardCondition = this.generate(guard, 'value');
+          this.indentLevel++;
+          const innerIndent = this.indent();
+          const stmts = statements.map(s => innerIndent + this.addSemicolon(s, this.generate(s, 'statement')));
+          this.indentLevel -= 2;
+          code += `{\n${loopBodyIndent}const ${valueVar} = ${objCode}[${keyVar}];\n${loopBodyIndent}if (${guardCondition}) {\n${stmts.join('\n')}\n${loopBodyIndent}}\n${this.indent()}}`;
+        } else {
+          code += `{ const ${valueVar} = ${objCode}[${keyVar}]; if (${this.generate(guard, 'value')}) ${this.generate(body, 'statement')}; }`;
+        }
+      } else {
+        // No checks, just valueVar assignment
+        if (Array.isArray(body) && body[0] === 'block') {
+          const statements = body.slice(1);
+          this.indentLevel++;
+          const stmts = [`const ${valueVar} = ${objCode}[${keyVar}];`, ...statements.map(s => this.addSemicolon(s, this.generate(s, 'statement')))];
+          this.indentLevel--;
+          code += `{\n${stmts.map(s => this.indent() + s).join('\n')}\n${this.indent()}}`;
+        } else {
+          code += `{ const ${valueVar} = ${objCode}[${keyVar}]; ${this.generate(body, 'statement')}; }`;
+        }
+      }
+    } else {
+      // No value variable
+      if (guard) {
+        code += this.generateLoopBodyWithGuard(body, guard);
+      } else {
+        code += this.generateLoopBody(body);
+      }
+    }
+
+    return code;
+  }
+
+  /**
+   * Generate for-from loop - 100 lines
+   * Pattern: ["for-from", vars, iterable, isAwait, guard, body]
+   */
+  generateForFrom(head, rest, context, sexpr) {
+    const varsArray = Array.isArray(rest[0]) ? rest[0] : [rest[0]];
+    const [firstVar] = varsArray;
+    const iterable = rest[1];
+    const isAwait = rest[2];
+    const guard = rest[3];
+    const body = rest[4];
+
+    // Check if firstVar is array destructuring with middle/leading rest
+    let needsTempVar = false;
+    let destructuringStatements = [];
+
+    if (Array.isArray(firstVar) && firstVar[0] === 'array') {
+      const elements = firstVar.slice(1);
+      const restIndex = elements.findIndex(el =>
+        Array.isArray(el) && el[0] === '...' || el === '...'
+      );
+
+      if (restIndex !== -1 && restIndex < elements.length - 1) {
+        needsTempVar = true;
+        const elementsAfterRest = elements.slice(restIndex + 1);
+        const afterCount = elementsAfterRest.length;
+
+        const beforeRest = elements.slice(0, restIndex);
+        const restEl = elements[restIndex];
+        const restVar = Array.isArray(restEl) && restEl[0] === '...' ? restEl[1] : '_rest';
+
+        const beforePattern = beforeRest.map(el => {
+          if (el === ',') return '';
+          if (typeof el === 'string') return el;
+          return this.generate(el, 'value');
+        }).join(', ');
+
+        const firstPattern = beforePattern ? `${beforePattern}, ...${restVar}` : `...${restVar}`;
+        const afterPattern = elementsAfterRest.map(el => {
+          if (el === ',') return '';
+          if (typeof el === 'string') return el;
+          return this.generate(el, 'value');
+        }).join(', ');
+
+        destructuringStatements.push(`[${firstPattern}] = _item`);
+        destructuringStatements.push(`[${afterPattern}] = ${restVar}.splice(-${afterCount})`);
+
+        this.helpers.add('slice');
+
+        const collectVarsFromPattern = (arr) => {
+          arr.slice(1).forEach(el => {
+            if (el === ',' || el === '...') return;
+            if (typeof el === 'string') this.programVars.add(el);
+            else if (Array.isArray(el) && el[0] === '...') {
+              if (typeof el[1] === 'string') this.programVars.add(el[1]);
+            }
+          });
+        };
+        collectVarsFromPattern(firstVar);
+      }
+    }
+
+    const iterableCode = this.generate(iterable, 'value');
+    const awaitKeyword = isAwait ? 'await ' : '';
+
+    let itemVarPattern;
+    if (needsTempVar) {
+      itemVarPattern = '_item';
+    } else if (Array.isArray(firstVar) && (firstVar[0] === 'array' || firstVar[0] === 'object')) {
+      itemVarPattern = this.generateDestructuringPattern(firstVar);
+    } else {
+      itemVarPattern = firstVar;
+    }
+
+    let code = `for ${awaitKeyword}(const ${itemVarPattern} of ${iterableCode}) `;
+
+    if (needsTempVar && destructuringStatements.length > 0) {
+      const statements = this.unwrapBlock(body);
+      const allStmts = this.withIndent(() => [
+        ...destructuringStatements.map(s => this.indent() + s + ';'),
+        ...this.formatStatements(statements)
+      ]);
+      code += `{\n${allStmts.join('\n')}\n${this.indent()}}`;
+    } else {
+      if (guard) {
+        code += this.generateLoopBodyWithGuard(body, guard);
+      } else {
+        code += this.generateLoopBody(body);
+      }
+    }
+
+    return code;
+  }
+
+  /**
+   * Generate while loop
+   * Pattern: ["while", condition, guard?, body]
+   */
+  generateWhile(head, rest, context, sexpr) {
+    const condition = rest[0];
+    const guard = rest.length === 3 ? rest[1] : null;
+    const body = rest[rest.length - 1];
+
+    const condCode = this.unwrap(this.generate(condition, 'value'));
+    let code = `while (${condCode}) `;
+
+    if (guard) {
+      code += this.generateLoopBodyWithGuard(body, guard);
+    } else {
+      code += this.generateLoopBody(body);
+    }
+
+    return code;
+  }
+
+  /**
+   * Generate until loop
+   * Pattern: ["until", condition, body]
+   */
+  generateUntil(head, rest, context, sexpr) {
+    const [condition, body] = rest;
+    const condCode = this.unwrap(this.generate(condition, 'value'));
+    let code = `while (!(${condCode})) `;
+    code += this.generateLoopBody(body);
+    return code;
+  }
+
+  /**
+   * Generate range (.. or ...)
+   * Pattern: ["..", start, end] or ["...", start, end] or ["...", expr] (spread)
+   */
+  generateRange(head, rest, context, sexpr) {
+    if (head === '...') {
+      if (rest.length === 1) {
+        // Spread operator
+        const [expr] = rest;
+        return `...${this.generate(expr, 'value')}`;
+      }
+      // Exclusive range
+      const [start, end] = rest;
+      const startCode = this.generate(start, 'value');
+      const endCode = this.generate(end, 'value');
+      return `((s, e) => Array.from({length: Math.max(0, Math.abs(e - s))}, (_, i) => s + (i * (s <= e ? 1 : -1))))(${startCode}, ${endCode})`;
+    }
+    // Inclusive range
+    const [start, end] = rest;
+    const startCode = this.generate(start, 'value');
+    const endCode = this.generate(end, 'value');
+    return `((s, e) => Array.from({length: Math.abs(e - s) + 1}, (_, i) => s + (i * (s <= e ? 1 : -1))))(${startCode}, ${endCode})`;
+  }
+
+  /**
+   * Generate logical NOT (!)
+   * Pattern: ["!", operand] → !operand
+   */
+  generateNot(head, rest, context, sexpr) {
+    const [operand] = rest;
+    const operandCode = this.generate(operand, 'value');
+
+    // No parens needed for simple identifiers or already-parenthesized expressions
+    if (/^[a-zA-Z_$][\w$]*$/.test(operandCode) || operandCode.startsWith('(')) {
+      return `!${operandCode}`;
+    }
+
+    return `(!${operandCode})`;
+  }
+
+  /**
+   * Generate bitwise NOT (~)
+   * Pattern: ["~", operand] → ~operand
+   */
+  generateBitwiseNot(head, rest, context, sexpr) {
+    const [operand] = rest;
+    return `(~${this.generate(operand, 'value')})`;
+  }
+
+  /**
+   * Generate increment/decrement (++ or --)
+   * Pattern: ["++", operand, isPostfix] or ["--", operand, isPostfix]
+   */
+  generateIncDec(head, rest, context, sexpr) {
+    const [operand, isPostfix] = rest;
+    const operandCode = this.generate(operand, 'value');
+
+    if (isPostfix) {
+      return `(${operandCode}${head})`;  // x++
+    } else {
+      return `(${head}${operandCode})`;  // ++x
+    }
+  }
+
+  /**
+   * Generate typeof operator
+   * Pattern: ["typeof", operand] → typeof operand
+   */
+  generateTypeof(head, rest, context, sexpr) {
+    const [operand] = rest;
+    return `typeof ${this.generate(operand, 'value')}`;
+  }
+
+  /**
+   * Generate delete operator
+   * Pattern: ["delete", operand] → delete operand
+   */
+  generateDelete(head, rest, context, sexpr) {
+    const [operand] = rest;
+    return `(delete ${this.generate(operand, 'value')})`;
+  }
+
+  /**
+   * Generate instanceof operator
+   * Pattern: ["instanceof", expr, type] → expr instanceof type
+   */
+  generateInstanceof(head, rest, context, sexpr) {
+    const [expr, type] = rest;
+    return `(${this.generate(expr, 'value')} instanceof ${this.generate(type, 'value')})`;
+  }
+
+  /**
+   * Generate 'in' operator
+   * Pattern: ["in", key, obj] → key in obj
+   */
+  generateIn(head, rest, context, sexpr) {
+    const [key, obj] = rest;
+    return `(${this.generate(key, 'value')} in ${this.generate(obj, 'value')})`;
+  }
+
+  /**
+   * Generate 'of' operator (existence check)
+   * Pattern: ["of", value, container] → value in container
+   */
+  generateOf(head, rest, context, sexpr) {
+    const [value, container] = rest;
+    const valueCode = this.generate(value, 'value');
+    const containerCode = this.generate(container, 'value');
+    return `(${valueCode} in ${containerCode})`;
+  }
+
+  /**
+   * Generate regex match operator (=~)
+   * Pattern: ["=~", left, right] → (_ = toSearchable(left).match(right))
+   */
+  generateRegexMatch(head, rest, context, sexpr) {
+    const [left, right] = rest;
+
+    // Mark that we need the toSearchable helper and _ variable
+    this.helpers.add('toSearchable');
+    this.programVars.add('_');
+
+    // Check if regex has 'm' flag (multiline) to allow newlines in toSearchable
+    const rightCode = this.generate(right, 'value');
+    const hasMultilineFlag = rightCode.includes('/m');
+    const allowNewlines = hasMultilineFlag ? ', true' : '';
+
+    return `(_ = toSearchable(${this.generate(left, 'value')}${allowNewlines}).match(${rightCode}))`;
+  }
+
+  /**
+   * Generate new operator
+   * Pattern: ["new", [constructor, ...args]]
+   */
+  generateNew(head, rest, context, sexpr) {
+    const [call] = rest;
+
+    // Check if call is a property access
+    if (Array.isArray(call) && (call[0] === '.' || call[0] === '?.')) {
+      const [accessType, target, prop] = call;
+
+      // Check if target is itself a function call
+      if (Array.isArray(target) && !target[0].startsWith) {
+        // Pattern: new fn().prop → (new fn()).prop
+        const newExpr = this.generate(['new', target], 'value');
+        return `(${newExpr}).${prop}`;
+      }
+
+      // Pattern: new obj.klass → new obj.klass
+      const targetCode = this.generate(target, 'value');
+      return `new ${targetCode}.${prop}`;
+    }
+
+    if (Array.isArray(call)) {
+      const [constructor, ...args] = call;
+      const constructorCode = this.generate(constructor, 'value');
+      const argsCode = args.map(arg => this.unwrap(this.generate(arg, 'value'))).join(', ');
+      return `new ${constructorCode}(${argsCode})`;
+    }
+
+    // Fallback: just the constructor without args
+    return `new ${this.generate(call, 'value')}()`;
+  }
+
+  /**
+   * Generate logical AND operator
+   * Pattern: ["&&", left, right, ...]
+   * Flattens nested chains: ["&&", ["&&", a, b], c] → a && b && c
+   */
+  generateLogicalAnd(head, rest, context, sexpr) {
+    const flattened = this.flattenBinaryChain(sexpr);
+    const operands = flattened.slice(1);
+
+    if (operands.length === 0) return 'true';
+    if (operands.length === 1) return this.generate(operands[0], 'value');
+
+    const parts = operands.map(op => this.generate(op, 'value'));
+    return `(${parts.join(' && ')})`;
+  }
+
+  /**
+   * Generate logical OR operator
+   * Pattern: ["||", left, right, ...]
+   * Flattens nested chains: ["||", ["||", a, b], c] → a || b || c
+   */
+  generateLogicalOr(head, rest, context, sexpr) {
+    const flattened = this.flattenBinaryChain(sexpr);
+    const operands = flattened.slice(1);
+
+    if (operands.length === 0) return 'true';
+    if (operands.length === 1) return this.generate(operands[0], 'value');
+
+    const parts = operands.map(op => this.generate(op, 'value'));
+    return `(${parts.join(' || ')})`;
+  }
+
+  //-------------------------------------------------------------------------
+  // DATA STRUCTURES
+  //-------------------------------------------------------------------------
+
+  /**
+   * Generate array literal
+   * Pattern: ["array", ...elements]
+   */
+  generateArray(head, elements, context, sexpr) {
+    // Check if last element is an elision that needs to be preserved
+    const hasTrailingElision = elements.length > 0 && elements[elements.length - 1] === ',';
+
+    const elementCodes = elements.map(el => {
+      // Comma token represents elision (hole) - preserve as empty
+      if (el === ',') {
+        return '';  // Empty string will create elision when joined
+      }
+      // Bare spread marker without variable (expansion marker) - skip in output
+      if (el === '...') {
+        return '';  // Will create hole, but that's intentional for expansion
+      }
+      // Check for spread with variable: ["...", expr]
+      if (Array.isArray(el) && el[0] === '...') {
+        return `...${this.generate(el[1], 'value')}`;
+      }
+      return this.generate(el, 'value');
+    }).join(', ');
+
+    // If the last element was an elision, we need to add an extra comma
+    // because join() creates a trailing comma that JavaScript ignores
+    return hasTrailingElision ? `[${elementCodes},]` : `[${elementCodes}]`;
+  }
+
+  /**
+   * Generate object literal
+   * Pattern: ["object", [key, value, operator], ...]
+   */
+  generateObject(head, pairs, context, sexpr) {
+    // Check if this is actually an object comprehension
+    if (pairs.length === 1 && Array.isArray(pairs[0]) &&
+        Array.isArray(pairs[0][1]) && pairs[0][1][0] === 'comprehension') {
+      // Object comprehension pattern: ["object", [keyVar, ["comprehension", valueExpr, iterators, guards]]]
+      const [keyVar, comprehensionNode] = pairs[0];
+      const [, valueExpr, iterators, guards] = comprehensionNode;
+
+      // Convert to object-comprehension
+      return this.generate(['object-comprehension', keyVar, valueExpr, iterators, guards], context);
+    }
+
+    // Regular object literal
+    const pairCodes = pairs.map(pair => {
+      // Check for spread/rest: ["...", expr] (not a key-value pair)
+      if (Array.isArray(pair) && pair[0] === '...') {
+        // Spread/rest operator
+        return `...${this.generate(pair[1], 'value')}`;
+      }
+
+      // All regular pairs now have format: [key, value, operator]
+      const [key, value, operator] = pair;
+
+      // Check if key is computed: ["computed", expression]
+      let keyCode;
+      if (Array.isArray(key) && key[0] === 'computed') {
+        // Computed property: [expr] syntax
+        const expr = key[1];
+        keyCode = `[${this.generate(expr, 'value')}]`;
+      } else {
+        // Regular key (string or identifier)
+        keyCode = this.generate(key, 'value');
+      }
+
+      const valueCode = this.generate(value, 'value');
+
+      // Handle different operators
+      if (operator === '=') {
+        // Destructuring with default: {a = 5}
+        return `${keyCode} = ${valueCode}`;
+      } else if (operator === ':') {
+        // Explicit property: {a: 5}
+        return `${keyCode}: ${valueCode}`;
+      } else {
+        // operator is null/undefined - shorthand or inferred
+        // Shorthand property syntax: {name} instead of {name: name}
+        if (keyCode === valueCode && !Array.isArray(key)) {
+          return keyCode;
+        }
+        return `${keyCode}: ${valueCode}`;
+      }
+    }).join(', ');
+
+    return `{${pairCodes}}`;
+  }
+
+  /**
+   * Generate block (sequence of statements)
+   * Pattern: ["block", ...statements]
+   */
+  generateBlock(head, statements, context, sexpr) {
+    // In statement context, generate as block with braces
+    if (context === 'statement') {
+      const stmts = this.withIndent(() => this.formatStatements(statements));
+      return `{\n${stmts.join('\n')}\n${this.indent()}}`;
+    }
+    // In value context, just format statements
+    return this.formatStatements(statements, context);
+  }
+
+  //-------------------------------------------------------------------------
+  // HELPER METHODS
+  //-------------------------------------------------------------------------
 
   /**
    * Generate destructuring pattern for use in for loops, etc.
