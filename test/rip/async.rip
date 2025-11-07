@@ -30,31 +30,31 @@ test "async returns promise", "a = -> await Promise.resolve(5)\na().constructor.
 # Async with Parameters
 # ============================================================================
 
-test "async with params", """
+test "async with params", '''
   add = (a, b) -> await Promise.resolve(a + b)
   add(5, 3)
-  """, 8
+  ''', 8
 
-test "async with destructuring", """
+test "async with destructuring", '''
   fn = (a, [b, c]) ->
     arr = [a, b, c]
     await Promise.resolve(arr)
   do ->
     await fn(1, [2, 3])
-  """, [1, 2, 3]
+  ''', [1, 2, 3]
 
 # ============================================================================
 # Async Error Handling
 # ============================================================================
 
-test "async with catch", """
+test "async with catch", '''
   fn = ->
     try
       await Promise.reject('error')
     catch e
       e
   fn()
-  """, "error"
+  ''', "error"
 
 # ============================================================================
 # Stats for CODEGEN.md

@@ -444,17 +444,17 @@ code 'heregex char class codegen', '''
 code 'interpolation codegen', '"Hello #{name}"', '`Hello ${name}`'
 
 # Heredoc generates template literal
-code 'heredoc codegen', '''
-  x = """
+code 'heredoc codegen', """
+  x = '''
     line1
     line2
-    """
-  ''', '''
+    '''
+  """, """
   let x;
 
   x = `line1
   line2`;
-'''
+"""
 
 # JavaScript-style ${} interpolation (for JS refugees)
 test 'dollar sign interpolation', '"x = ${5}"', 'x = 5'
