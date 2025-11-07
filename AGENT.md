@@ -75,7 +75,7 @@ bun run test                     # Verify: 931/931 tests
 │  Code  │    │  (Coffee)  │    │  (Solar) │    │  (Rip)  │
 └────────┘    └────────────┘    └──────────┘    └─────────┘
                  3,145 LOC          340 LOC       5,221 LOC
-               15 yrs tested     Generated!    Dispatch Table
+               15 yrs tested     Generated!   S-expr w/Dispatch!
 ```
 
 ### Files You'll Modify
