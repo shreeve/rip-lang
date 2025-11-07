@@ -5,6 +5,20 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.3] - 2025-11-07
+
+### Refactored
+- **Convert generateNot to s-expression approach** - Following Rip philosophy!
+  - Check operand TYPE at s-expression level (not regex on generated code)
+  - Handles primitives: `!1`, `!x`, `!true` (clean output without extra parens)
+  - Handles property access: `!obj.prop`, `!arr[0]` (clean output)
+  - Conservative for complex expressions: `!(a + b)` (keeps parens)
+  - Simple, maintainable logic (~26 lines)
+  - Follows philosophy from Issues #46 (flattenBinaryChain) and #49 (unwrapComprehensionIIFE)
+  - **Work at IR level, not string level!**
+
+All 938 tests passing (100%) ✅
+
 ## [1.4.2] - 2025-11-07
 
 ### Fixed

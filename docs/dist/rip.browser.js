@@ -4656,8 +4656,18 @@ ${this.indent()}}`;
   }
   generateNot(head, rest, context, sexpr) {
     const [operand] = rest;
+    if (typeof operand === "string" || operand instanceof String) {
+      return `!${this.generate(operand, "value")}`;
+    }
+    if (Array.isArray(operand)) {
+      const type = operand[0];
+      const highPrecedence = [".", "?.", "::", "?::", "[]", "?[]", "optindex", "optcall"];
+      if (highPrecedence.includes(type)) {
+        return `!${this.generate(operand, "value")}`;
+      }
+    }
     const operandCode = this.generate(operand, "value");
-    if (/^[a-zA-Z_$][\w$]*$/.test(operandCode) || operandCode.startsWith("(")) {
+    if (operandCode.startsWith("(")) {
       return `!${operandCode}`;
     }
     return `(!${operandCode})`;
@@ -7034,8 +7044,8 @@ function compileToJS(source, options = {}) {
   return compiler.compileToJS(source);
 }
 // src/browser.js
-var VERSION = "1.4.2";
-var BUILD_DATE = "2025-11-07@09:43:31GMT";
+var VERSION = "1.4.3";
+var BUILD_DATE = "2025-11-07@10:29:23GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
