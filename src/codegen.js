@@ -2546,38 +2546,11 @@ export class CodeGenerator {
             return `super.${this.currentMethodName}(${args})`;
           }
 
-          // Helper: find postfix unless/if in an expression tree
-          const findPostfixConditional = (expr) => {
-            if (!Array.isArray(expr)) return null;
-            const head = expr[0];
-
-            // Direct postfix unless/if (length 3, no else clause)
-            if ((head === 'unless' || head === 'if') && expr.length === 3) {
-              return {type: head, condition: expr[1], value: expr[2]};
-            }
-
-            // Recursively check binary operations
-            if (head === '+' || head === '-' || head === '*' || head === '/') {
-              for (let i = 1; i < expr.length; i++) {
-                const found = findPostfixConditional(expr[i]);
-                if (found) {
-                  // Return with info about which operand has the conditional
-                  found.parentOp = head;
-                  found.operandIndex = i;
-                  found.otherOperands = expr.slice(1).filter((_, idx) => idx !== i - 1);
-                  return found;
-                }
-              }
-            }
-
-            return null;
-          };
-
           // Check if any argument has postfix unless/if (including nested in binary ops)
           // Pattern: f(val unless cond) → if (!cond) f(val)
           // Pattern: f(x + val unless cond) → if (!cond) f(x + val)
           if (context === 'statement' && rest.length === 1) {
-            const conditional = findPostfixConditional(rest[0]);
+            const conditional = this.findPostfixConditional(rest[0]);
             if (conditional) {
               // Rebuild the argument without the conditional
               let argWithoutConditional;
@@ -2633,37 +2606,11 @@ export class CodeGenerator {
 
         // Also handle case where head is itself an expression (like property access)
         if (Array.isArray(head)) {
-          // Helper: find postfix unless/if in an expression tree (same as above)
-          const findPostfixConditional = (expr) => {
-            if (!Array.isArray(expr)) return null;
-            const head = expr[0];
-
-            // Direct postfix unless/if (length 3, no else clause)
-            if ((head === 'unless' || head === 'if') && expr.length === 3) {
-              return {type: head, condition: expr[1], value: expr[2]};
-            }
-
-            // Recursively check binary operations
-            if (head === '+' || head === '-' || head === '*' || head === '/') {
-              for (let i = 1; i < expr.length; i++) {
-                const found = findPostfixConditional(expr[i]);
-                if (found) {
-                  found.parentOp = head;
-                  found.operandIndex = i;
-                  found.otherOperands = expr.slice(1).filter((_, idx) => idx !== i - 1);
-                  return found;
-                }
-              }
-            }
-
-            return null;
-          };
-
           // Check if any argument has postfix unless/if (including nested)
           // Pattern: obj.method(val unless cond) → if (!cond) obj.method(val)
           // Pattern: obj.method(x + val unless cond) → if (!cond) obj.method(x + val)
           if (context === 'statement' && rest.length === 1) {
-            const conditional = findPostfixConditional(rest[0]);
+            const conditional = this.findPostfixConditional(rest[0]);
             if (conditional) {
               // Rebuild the argument without the conditional
               let argWithoutConditional;
@@ -5424,6 +5371,38 @@ export class CodeGenerator {
   //-------------------------------------------------------------------------
   // HELPER METHODS
   //-------------------------------------------------------------------------
+
+  /**
+   * Find postfix conditional (if/unless) in an expression tree
+   * Used for extracting postfix conditionals from function call arguments
+   * Pattern: f(val unless cond) → if (!cond) f(val)
+   * Pattern: f(x + val unless cond) → if (!cond) f(x + val)
+   */
+  findPostfixConditional(expr) {
+    if (!Array.isArray(expr)) return null;
+    const head = expr[0];
+
+    // Direct postfix unless/if (length 3, no else clause)
+    if ((head === 'unless' || head === 'if') && expr.length === 3) {
+      return {type: head, condition: expr[1], value: expr[2]};
+    }
+
+    // Recursively check binary operations
+    if (head === '+' || head === '-' || head === '*' || head === '/') {
+      for (let i = 1; i < expr.length; i++) {
+        const found = this.findPostfixConditional(expr[i]);
+        if (found) {
+          // Return with info about which operand has the conditional
+          found.parentOp = head;
+          found.operandIndex = i;
+          found.otherOperands = expr.slice(1).filter((_, idx) => idx !== i - 1);
+          return found;
+        }
+      }
+    }
+
+    return null;
+  }
 
   /**
    * Generate destructuring pattern for use in for loops, etc.
