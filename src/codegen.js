@@ -4327,16 +4327,16 @@ export class CodeGenerator {
    */
   generateComprehensionWithTarget(expr, iterators, guards, targetVar) {
     let code = '';
-    
+
     // Initialize the array
     code += this.indent() + `${targetVar} = [];\n`;
-    
+
     // Unwrap block if expr is wrapped
     let unwrappedExpr = expr;
     if (Array.isArray(expr) && expr[0] === 'block' && expr.length === 2) {
       unwrappedExpr = expr[1]; // Extract single statement from block
     }
-    
+
     // Generate loops that push to targetVar
     // For now, handle simple single iterator case
     if (iterators.length === 1) {
@@ -4374,7 +4374,7 @@ export class CodeGenerator {
             const indexVarName = indexVar || '_i';
             const stepCode = this.generate(step, 'value');
             const isNegativeStep = this.isNegativeStep(step);
-            
+
             if (isNegativeStep) {
               code += this.indent() + `for (let ${indexVarName} = ${iterableCode}.length - 1; ${indexVarName} >= 0; ${indexVarName} += ${stepCode}) {\n`;
             } else {
@@ -4410,7 +4410,7 @@ export class CodeGenerator {
 
         this.indentLevel--;
         code += this.indent() + '}\n';
-        
+
         return code;
       }
     }
