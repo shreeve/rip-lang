@@ -23,7 +23,7 @@
 
 **Write less. Do more. Zero dependencies.**
 
-Rip brings CoffeeScript's elegance to modern JavaScript—but **45% smaller**, completely standalone, and self-hosting. No build tools, no external dependencies, not even a parser generator. Just clone and go.
+Rip brings CoffeeScript's elegance to modern JavaScript—but **~50% smaller**, completely standalone, and self-hosting. No build tools, no external dependencies, not even a parser generator. Just clone and go.
 
 #### 💎  Elegant syntax with modern features
 
@@ -183,7 +183,7 @@ case '+': {
 }
 ```
 
-**Result: 45% smaller implementation**
+**Result: ~50% smaller implementation**
 
 | Component | CoffeeScript | Rip | Notes |
 |-----------|--------------|-----|-------|
@@ -191,7 +191,7 @@ case '+': {
 | Parser Generator | 2,285 LOC (Jison) | **928 LOC** (Solar) | Built-in, ~156× faster! |
 | Compiler | 10,346 LOC (AST Nodes) | **5,239 LOC** (S-expressions) | Clean dispatch table |
 | Tools | 1,571 LOC (Repl, Cake) | **520 LOC** (Repl, Browser) | 3 Repl's + Browser |
-| **Total** | **17,760 LOC** | **9,832 LOC** | **~45% smaller** |
+| **Total** | **17,760 LOC** | **9,832 LOC** | **~50% smaller** |
 
 **Plus:**
 - ✅ **ZERO dependencies** - Everything included
@@ -1200,7 +1200,7 @@ We considered allowing `x => expr` (ES6 style) but decided consistency and simpl
 | Feature | CoffeeScript | Rip |
 |---------|-------------|------|
 | Syntax | ✅ Elegant | ✅ Elegant (inspired by CS) |
-| Implementation | 17,760 LOC | **9,832 LOC (~45% smaller)** |
+| Implementation | 17,760 LOC | **9,832 LOC (~50% smaller)** |
 | Dependencies | ❌ Multiple | ✅ **ZERO** |
 | Parser Generator | ❌ External (Jison) | ✅ **Built-in (solar.rip)** |
 | Self-Hosting | ❌ No | ✅ **Yes (fully operational)** |
@@ -1345,7 +1345,7 @@ Now supports both ES6 and CoffeeScript syntax:
 - ✅ v0.5.0: **COMPLETE** - Dual syntax support! Postfix spread/rest (`x...`) + legacy existential (`x ? y`)!
 - ✅ v0.5.1: **COMPLETE** - Smart comprehensions! Context-aware optimization, self-hosting, 843/843 tests!
 - ✅ v0.9.0: **COMPLETE** - Production release! Zero dependencies, complete documentation, 43KB browser bundle!
-- ✅ v1.0.0: **RELEASED** - Initial release! ~45% smaller than CoffeeScript! 🎉
+- ✅ v1.0.0: **RELEASED** - Initial release! ~50% smaller than CoffeeScript! 🎉
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed progress.
 

@@ -22,7 +22,7 @@ Rip Source → Lexer → Parser → S-Expressions → Codegen → JavaScript
             (3,146)  (340)    (arrays!)      (5,239)    (ES2022)
 ```
 
-**Key insight:** S-expressions (simple arrays like `["=", "x", 42]`) are the IR, not complex AST nodes. This makes the compiler 45% smaller than CoffeeScript.
+**Key insight:** S-expressions (simple arrays like `["=", "x", 42]`) are the IR, not complex AST nodes. This makes the compiler ~50% smaller than CoffeeScript.
 
 ### Step 3: Essential Commands
 
@@ -1044,7 +1044,7 @@ fail "name", "code"                  # Expect compilation failure
 | Traditional AST (CoffeeScript) | 10,346 LOC | High (OOP hierarchy) | Hard |
 | S-Expressions (Rip) | 5,239 LOC | Low (pattern matching) | Easy |
 
-**Result: 49% smaller implementation**
+**Result: ~50% smaller implementation**
 
 ### Why Context Parameter?
 
@@ -1182,7 +1182,7 @@ Rip has **zero runtime or build dependencies**. This is intentional and must be 
 - Comprehensive coverage
 
 **Comparison to CoffeeScript:**
-- 45% smaller implementation
+- ~50% smaller implementation
 - Zero dependencies
 - Self-hosting (fully operational)
 - Modern ES2022 output
