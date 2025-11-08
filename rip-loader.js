@@ -18,7 +18,7 @@ await plugin({
           contents: js,
           loader: "js",
         };
-      } catch (err: any) {
+      } catch (err) {
         console.error(`Error compiling ${args.path}:`, err.message);
         throw err;
       }

@@ -1,6 +1,6 @@
 {
   "name": "rip-lang",
-  "version": "1.4.4",
+  "version": "1.4.5",
   "description": "A lightweight scripting language that compiles to modern JavaScript",
   "type": "module",
   "main": "src/compiler.js",
@@ -12,7 +12,7 @@
       "browser": "./www/dist/rip.browser.js",
       "default": "./src/compiler.js"
     },
-    "./loader": "./rip-loader.ts"
+    "./loader": "./rip-loader.js"
   },
   "bin": {
     "rip": "bin/rip"
@@ -22,7 +22,7 @@
     "src/",
     "docs/",
     "scripts/serve.js",
-    "rip-loader.ts",
+    "rip-loader.js",
     "README.md",
     "LICENSE",
     "CHANGELOG.md"

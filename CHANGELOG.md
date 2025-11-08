@@ -5,6 +5,22 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.5] - 2025-11-08
+
+### Changed
+- **Renamed rip-loader.ts → rip-loader.js** - Pure JavaScript, no TypeScript
+  - Removed fake TypeScript annotation (`err: any` → `err`)
+  - Updated `bunfig.toml` to reference `.js` file
+  - Updated `package.json` exports and files array
+  - Honest about what the file is - simplicity and clarity
+
+- **Completed CODEGEN-FINAL-ANALYSIS recommendations**
+  - Extracted `isNegativeOneLiteral()` helper method (DRY principle)
+  - Removed duplicate negative-one literal checks
+  - Deleted analysis document (all work complete)
+
+All 938 tests passing (100%) ✅
+
 ## [1.4.4] - 2025-11-08
 
 ### Changed

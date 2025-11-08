@@ -4081,8 +4081,7 @@ function _setDataSection() {
       if (start === null && end === null) {
         return `${arrCode}.slice()`;
       } else if (start === null) {
-        const isNegativeOne = Array.isArray(end) && end[0] === "-" && end.length === 2 && (end[1] === "1" || end[1] === 1 || end[1] instanceof String && end[1].valueOf() === "1");
-        if (isInclusive && isNegativeOne) {
+        if (isInclusive && this.isNegativeOneLiteral(end)) {
           return `${arrCode}.slice(0)`;
         }
         const endCode = this.generate(end, "value");
@@ -4096,8 +4095,7 @@ function _setDataSection() {
         return `${arrCode}.slice(${startCode})`;
       } else {
         const startCode = this.generate(start, "value");
-        const isNegativeOneLiteral = Array.isArray(end) && end[0] === "-" && end.length === 2 && (end[1] === "1" || end[1] === 1 || end[1] instanceof String && end[1].valueOf() === "1");
-        if (isInclusive && isNegativeOneLiteral) {
+        if (isInclusive && this.isNegativeOneLiteral(end)) {
           return `${arrCode}.slice(${startCode})`;
         }
         const endCode = this.generate(end, "value");
@@ -6603,6 +6601,9 @@ ${this.indent()}}`;
     }
     return branch;
   }
+  isNegativeOneLiteral(sexpr) {
+    return Array.isArray(sexpr) && sexpr[0] === "-" && sexpr.length === 2 && (sexpr[1] === "1" || sexpr[1] === 1 || sexpr[1] instanceof String && sexpr[1].valueOf() === "1");
+  }
   hasStatementInBranch(branch) {
     if (!Array.isArray(branch))
       return false;
@@ -7040,8 +7041,8 @@ function compileToJS(source, options = {}) {
   return compiler.compileToJS(source);
 }
 // src/browser.js
-var VERSION = "1.4.4";
-var BUILD_DATE = "2025-11-08@03:32:25GMT";
+var VERSION = "1.4.5";
+var BUILD_DATE = "2025-11-08@03:44:52GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
