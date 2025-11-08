@@ -45,8 +45,8 @@ bun run parser  # Regenerates src/parser.js from grammar.rip
 
 ## 🎯 Current Status
 
-**Version:** 1.4.3  
-**Tests:** 938 passing (100%)  
+**Version:** 1.4.3
+**Tests:** 938 passing (100%)
 **Status:** Production-ready, self-hosting fully operational
 
 **Recent accomplishments (November 2025):**

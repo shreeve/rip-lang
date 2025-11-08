@@ -121,7 +121,7 @@ function formatSExpr(arr, indent = 0, isTopLevel = false) {
 
   // Track if we've started adding content after the opening
   const baseIndent = indent;
-  
+
   // Format remaining elements
   for (let i = 1; i < arr.length; i++) {
     const elem = arr[i];
