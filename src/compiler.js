@@ -8,22 +8,21 @@ import { CodeGenerator } from './codegen.js';
 // S-Expression Pretty Printer
 // ==============================================================================
 
+/**
+ * Forms that should stay on a single line when possible.
+ * These are simple operations that are more readable inline.
+ *
+ * RULE: Only include operators that are ALWAYS simple enough for one line.
+ * Function calls, constructors, and complex forms should NOT be here.
+ */
 const INLINE_FORMS = new Set([
-  '+', '-', '*', '/', '\\', '#', '**', '_',       // Binary operators
-  '=', '<', '>', '[', ']', ']]', '!', '&', '?',   // Comparison & logical
-  '\'', 'not',                                    // Unary NOT, negated compare
-  'var', 'num', 'str', 'global', 'naked-global',  // Atoms and variables
-  'tag', 'entryref', 'assign', 'pass-by-ref',     // References and assignment
-  'newline', 'formfeed', 'tab', 'ascii',          // WRITE format codes
-  'value', 'read-var', 'read-newline',            // Simple command args
-  'lock-var', 'lock-incr', 'lock-decr',           // LOCK operations
-  '.', '?.', '::', '?::', '[]', '?[]',            // Property access (Rip)
-  'optindex', 'optcall',                          // Optional access (Rip)
-  '%', '//', '%%',                                // More arithmetic (Rip)
-  '==', '!=', '<=', '>=', '===', '!==',          // More comparison (Rip)
-  '&&', '||', '??', '&', '|', '^',               // Logical/bitwise (Rip)
-  '<<', '>>', '>>>',                              // Bitwise shifts (Rip)
-  'rest', 'default', '...', 'expansion'           // Params (Rip)
+  '+', '-', '*', '/', '%', '//', '%%', '**',         // Arithmetic
+  '==', '!=', '<', '>', '<=', '>=', '===', '!==',    // Comparison
+  '&&', '||', '??', '!?', 'not',                     // Logical
+  '&', '|', '^', '<<', '>>', '>>>',                  // Bitwise and shifts
+  '=', '.', '?.', '[]', '?[]', '::', '?::',          // Assignment & properties
+  '!', 'typeof', 'void', 'delete', 'new',            // Prefix operators
+  '...', 'rest', 'expansion', 'optindex', 'optcall', // Spread/rest & optionals
 ]);
 
 /**
@@ -74,72 +73,110 @@ function formatAtom(elem) {
 }
 
 /**
- * Pretty-print S-expression AST
- * @param {Array} sexp - S-expression from compile()
- * @param {number} indent - Current indentation level (default 0)
+ * Pretty-print S-expression AST (Clean Room Implementation)
+ *
+ * RULES:
+ * 1. Inline forms stay on one line: (+ 1 2) (. obj prop)
+ * 2. Block forms have children on separate lines (each child indented +2)
+ * 3. 'block' nodes ALWAYS format children on separate lines
+ * 4. Children are ALWAYS indented more than parents (no column alignment)
+ *
+ * @param {Array} arr - S-expression to format
+ * @param {number} indent - Current indentation level (spaces)
  * @param {boolean} isTopLevel - Whether this is the top-level program node
  * @returns {string} Formatted string
  */
 function formatSExpr(arr, indent = 0, isTopLevel = false) {
+  // Base case: atom
   if (!Array.isArray(arr)) return formatAtom(arr);
 
-  // Inline format: (op arg1 arg2)
-  if (isInline(arr)) {
-    const parts = arr.map(elem => Array.isArray(elem) ? formatSExpr(elem, 0, false) : formatAtom(elem));
-    return `(${parts.join(' ')})`;
-  }
-
-  // Special handling for program node
+  // Special case: top-level program node
   if (isTopLevel && arr[0] === 'program') {
-    // Handle second element (could be comment string or actual code)
     const secondElem = arr[1];
     const header = Array.isArray(secondElem)
-      ? '(program'  // Second element is code, no comment
-      : '(program ' + formatAtom(secondElem);  // Second element is comment/empty string
+      ? '(program'
+      : '(program ' + formatAtom(secondElem);
 
     const lines = [header];
     const startIndex = Array.isArray(secondElem) ? 1 : 2;
 
     for (let i = startIndex; i < arr.length; i++) {
-      let childFormatted = formatSExpr(arr[i], 2, false);
-      if (childFormatted[0] === '(') {
-        childFormatted = '  ' + childFormatted;
-      }
-      lines.push(childFormatted);
+      const child = formatSExpr(arr[i], 2, false);
+      lines.push(child[0] === '(' ? '  ' + child : child);
     }
     lines.push(')');
     return lines.join('\n');
   }
 
-  // Block: use indentation WITH parens
+  // Check if this can be truly inline (single line, no complex children)
+  const head = arr[0];
+  const canBeInline = isInline(arr) && arr.slice(1).every(elem =>
+    !Array.isArray(elem) || isInline(elem)
+  );
+
+  if (canBeInline) {
+    // Try formatting as inline
+    const parts = arr.map(elem =>
+      Array.isArray(elem) ? formatSExpr(elem, 0, false) : formatAtom(elem)
+    );
+    const inline = `(${parts.join(' ')})`;
+
+    // If result is truly single-line, use it
+    if (!inline.includes('\n')) {
+      return ' '.repeat(indent) + inline;
+    }
+    // Otherwise fall through to block formatting
+  }
+
+  // Block formatting: head on first line, children on subsequent lines
   const spaces = ' '.repeat(indent);
-  const lines = [];
 
-  // Format head
-  const head = Array.isArray(arr[0]) ? formatSExpr(arr[0], 0, false) : formatAtom(arr[0]);
-  lines.push(`${spaces}(${head}`);
+  // Format the head
+  let formattedHead;
+  if (Array.isArray(head)) {
+    formattedHead = formatSExpr(head, 0, false);
+    // If head spans multiple lines, re-indent continuation lines to match parent indent
+    if (formattedHead.includes('\n')) {
+      const headLines = formattedHead.split('\n');
+      formattedHead = headLines.map((line, i) =>
+        i === 0 ? line : ' '.repeat(indent + 2) + line
+      ).join('\n');
+    }
+  } else {
+    formattedHead = formatAtom(head);
+  }
 
-  // Track if we've started adding content after the opening
-  const baseIndent = indent;
+  const lines = [`${spaces}(${formattedHead}`];
 
-  // Format remaining elements
+  // Determine if children should be inline or on separate lines
+  const forceChildrenOnNewLines = head === 'block';
+
   for (let i = 1; i < arr.length; i++) {
     const elem = arr[i];
-    if (Array.isArray(elem)) {
-      if (isInline(elem)) {
-        // Inline - append to current line
-        const formatted = formatSExpr(elem, 0, false);
-        lines[lines.length - 1] += ` ${formatted}`;
-      } else {
-        // Non-inline - needs new line with proper indentation
-        const formatted = formatSExpr(elem, baseIndent + 2, false);
-        lines.push(formatted);
-      }
+
+    if (!Array.isArray(elem)) {
+      // Atom - append to current line
+      lines[lines.length - 1] += ' ' + formatAtom(elem);
     } else {
-      lines[lines.length - 1] += ` ${formatAtom(elem)}`;
+      // Array child - check if it can be inlined
+      const childInline = isInline(elem) && elem.every(e => !Array.isArray(e) || isInline(e));
+
+      if (!forceChildrenOnNewLines && childInline) {
+        // Try inline
+        const formatted = formatSExpr(elem, 0, false);
+        if (!formatted.includes('\n')) {
+          lines[lines.length - 1] += ' ' + formatted;
+          continue;
+        }
+      }
+
+      // Format as block child (new line, properly indented)
+      const formatted = formatSExpr(elem, indent + 2, false);
+      lines.push(formatted);
     }
   }
 
+  // Close paren on last line
   lines[lines.length - 1] += ')';
   return lines.join('\n');
 }
