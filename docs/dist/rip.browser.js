@@ -6816,53 +6816,14 @@ var INLINE_FORMS = new Set([
   "-",
   "*",
   "/",
-  "\\",
-  "#",
-  "**",
-  "_",
-  "=",
-  "<",
-  ">",
-  "[",
-  "]",
-  "]]",
-  "!",
-  "&",
-  "?",
-  "'",
-  "not",
-  "var",
-  "num",
-  "str",
-  "global",
-  "naked-global",
-  "tag",
-  "entryref",
-  "assign",
-  "pass-by-ref",
-  "newline",
-  "formfeed",
-  "tab",
-  "ascii",
-  "value",
-  "read-var",
-  "read-newline",
-  "lock-var",
-  "lock-incr",
-  "lock-decr",
-  ".",
-  "?.",
-  "::",
-  "?::",
-  "[]",
-  "?[]",
-  "optindex",
-  "optcall",
   "%",
   "//",
   "%%",
+  "**",
   "==",
   "!=",
+  "<",
+  ">",
   "<=",
   ">=",
   "===",
@@ -6870,16 +6831,31 @@ var INLINE_FORMS = new Set([
   "&&",
   "||",
   "??",
+  "!?",
+  "not",
   "&",
   "|",
   "^",
   "<<",
   ">>",
   ">>>",
-  "rest",
-  "default",
+  "=",
+  ".",
+  "?.",
+  "[]",
+  "?[]",
+  "::",
+  "?::",
+  "!",
+  "typeof",
+  "void",
+  "delete",
+  "new",
   "...",
-  "expansion"
+  "rest",
+  "expansion",
+  "optindex",
+  "optcall"
 ]);
 function isInline(arr) {
   if (!Array.isArray(arr) || arr.length === 0)
@@ -6920,41 +6896,61 @@ function formatAtom(elem) {
 function formatSExpr(arr, indent = 0, isTopLevel = false) {
   if (!Array.isArray(arr))
     return formatAtom(arr);
-  if (isInline(arr)) {
-    const parts = arr.map((elem) => Array.isArray(elem) ? formatSExpr(elem, 0, false) : formatAtom(elem));
-    return `(${parts.join(" ")})`;
-  }
   if (isTopLevel && arr[0] === "program") {
     const secondElem = arr[1];
     const header = Array.isArray(secondElem) ? "(program" : "(program " + formatAtom(secondElem);
     const lines2 = [header];
     const startIndex = Array.isArray(secondElem) ? 1 : 2;
     for (let i = startIndex;i < arr.length; i++) {
-      let childFormatted = formatSExpr(arr[i], 2, false);
-      if (childFormatted[0] === "(") {
-        childFormatted = "  " + childFormatted;
-      }
-      lines2.push(childFormatted);
+      const child = formatSExpr(arr[i], 2, false);
+      lines2.push(child[0] === "(" ? "  " + child : child);
     }
     lines2.push(")");
     return lines2.join(`
 `);
   }
+  const head = arr[0];
+  const canBeInline = isInline(arr) && arr.slice(1).every((elem) => !Array.isArray(elem) || isInline(elem));
+  if (canBeInline) {
+    const parts = arr.map((elem) => Array.isArray(elem) ? formatSExpr(elem, 0, false) : formatAtom(elem));
+    const inline = `(${parts.join(" ")})`;
+    if (!inline.includes(`
+`)) {
+      return " ".repeat(indent) + inline;
+    }
+  }
   const spaces = " ".repeat(indent);
-  const lines = [];
-  const head = Array.isArray(arr[0]) ? formatSExpr(arr[0], 0, false) : formatAtom(arr[0]);
-  lines.push(`${spaces}(${head}`);
+  let formattedHead;
+  if (Array.isArray(head)) {
+    formattedHead = formatSExpr(head, 0, false);
+    if (formattedHead.includes(`
+`)) {
+      const headLines = formattedHead.split(`
+`);
+      formattedHead = headLines.map((line, i) => i === 0 ? line : " ".repeat(indent + 2) + line).join(`
+`);
+    }
+  } else {
+    formattedHead = formatAtom(head);
+  }
+  const lines = [`${spaces}(${formattedHead}`];
+  const forceChildrenOnNewLines = head === "block";
   for (let i = 1;i < arr.length; i++) {
     const elem = arr[i];
-    if (Array.isArray(elem)) {
-      const formatted = formatSExpr(elem, indent + 2, false);
-      if (isInline(elem)) {
-        lines[lines.length - 1] += ` ${formatted}`;
-      } else {
-        lines.push(formatted);
-      }
+    if (!Array.isArray(elem)) {
+      lines[lines.length - 1] += " " + formatAtom(elem);
     } else {
-      lines[lines.length - 1] += ` ${formatAtom(elem)}`;
+      const childInline = isInline(elem) && elem.every((e) => !Array.isArray(e) || isInline(e));
+      if (!forceChildrenOnNewLines && childInline) {
+        const formatted2 = formatSExpr(elem, 0, false);
+        if (!formatted2.includes(`
+`)) {
+          lines[lines.length - 1] += " " + formatted2;
+          continue;
+        }
+      }
+      const formatted = formatSExpr(elem, indent + 2, false);
+      lines.push(formatted);
     }
   }
   lines[lines.length - 1] += ")";
@@ -7044,8 +7040,8 @@ function compileToJS(source, options = {}) {
   return compiler.compileToJS(source);
 }
 // src/browser.js
-var VERSION = "1.4.3";
-var BUILD_DATE = "2025-11-07@10:29:23GMT";
+var VERSION = "1.4.4";
+var BUILD_DATE = "2025-11-08@03:32:25GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

@@ -5,6 +5,32 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.4] - 2025-11-08
+
+### Changed
+- **S-expression formatter - Clean room rebuild**
+  - Complete rewrite of `formatSExpr()` with clear, simple rules
+  - Fixed indentation hierarchy: children ALWAYS indented more than parents
+  - Fixed method chaining indentation (`.` operator in call heads)
+  - Multi-line heads now properly re-indented to maintain hierarchy
+  - Block nodes always expand children on separate lines
+  - Removed all column-based continuation complexity
+  - +89 lines added, -52 lines removed (net +37 for clarity)
+
+- **INLINE_FORMS cleanup**
+  - Removed legacy MUMPS cruft (tag, entryref, lock-*, newline, etc.)
+  - Organized by category with aligned comments
+  - Added `new` to inline forms for compact constructor calls
+  - Clear documentation of what belongs and why
+
+### Improved
+- S-expression output is now beautifully formatted with perfect hierarchy
+- Method chaining like `s.replace().trim()` displays correctly
+- Simple constructors stay compact: `(new (Date))`
+- Complex constructors expand naturally: `(new (Set (...)))`
+
+All 938 tests passing (100%) ✅
+
 ## [1.4.3] - 2025-11-07
 
 ### Refactored
