@@ -48,8 +48,8 @@ result = parseEmail "alice@example.com"
 
 ```javascript
 let _;
-const fetchUser = async (id) => await fetch(`/api/user/${id}`);
 
+const fetchUser = async (id) => await fetch(`/api/user/${id}`);
 function parseEmail(input) {
   if (!(_ = toSearchable(input).match(/^(\w+)@([\w.]+)$/))) return;
   return {user: _[1], domain: _[2]};
