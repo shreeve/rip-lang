@@ -5,1365 +5,462 @@
 <h1 align="center">Rip</h1>
 
 <p align="center">
-  <strong>Elegant scripting language → Modern JavaScript (ES2022)</strong>
+  <strong>Elegant CoffeeScript-inspired language → Modern JavaScript (ES2022)</strong>
 </p>
 
 <p align="center">
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-1.4.3-blue.svg" alt="Version"></a>
-  <a href="#es2022-target"><img src="https://img.shields.io/badge/target-ES2022-blue.svg" alt="Target"></a>
-  <a href="#current-status"><img src="https://img.shields.io/badge/tests-938%2F938-brightgreen.svg" alt="Tests"></a>
-  <a href="#current-status"><img src="https://img.shields.io/badge/coverage-100%25-brightgreen.svg" alt="Coverage"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
+  <a href="#status"><img src="https://img.shields.io/badge/tests-938%2F938-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
 </p>
 
 ---
 
-## Why Rip?
+## What is Rip?
 
-**Write less. Do more. Zero dependencies.**
+A clean-room **CoffeeScript-inspired compiler** that produces modern JavaScript (ES2022). Built from scratch with an elegant S-expression architecture.
 
-Rip brings CoffeeScript's elegance to modern JavaScript—but **~50% smaller**, completely standalone, and self-hosting. No build tools, no external dependencies, not even a parser generator. Just clone and go.
+**Key differentiators:**
+- 🎯 **Zero dependencies** - Completely standalone (includes its own parser generator)
+- 🚀 **Self-hosting** - Rip compiles itself (`bun run parser` works!)
+- ⚡ **~50% smaller** than CoffeeScript (9,839 LOC vs 17,760 LOC)
+- 🎨 **Modern output** - ES2022 with classes, modules, optional chaining
+- ✅ **Production-ready** - 938/938 tests passing (100%)
 
-#### 💎  Elegant syntax with modern features
+---
+
+## Quick Example
 
 ```coffee
 # Async with dammit operator! (call and await)
 fetchUser = (id) => fetch! "/api/user/${id}"
 
-# Ruby-style regex with =~ operator and _ captures
-def parseUsers(...inputs)
-  users = for input in inputs when input =~ /^(\w+):([^@]+@[\w.]+)$/
-    name = _[1] ?? "guest"          # Nullish coalescing, _ captures
-    domain = input[/@([\w.]+)/, 1]  # Regex extraction syntax
-    { name, domain }
+# Ruby-style regex with =~ operator
+def parseEmail(input)
+  return unless input =~ /^(\w+)@([\w.]+)$/
+  { user: _[1], domain: _[2] }  # _ captures match groups
 
-parseUsers "alice:alice@example.com", "bob:bob@test.org"
+result = parseEmail "alice@example.com"
 ```
 
-#### 🎯 Compiles to clean, modern JavaScript
+**Compiles to clean ES2022:**
 
 ```javascript
-let _, fetchUser;
+let _;
+const fetchUser = async (id) => await fetch(`/api/user/${id}`);
 
-fetchUser = async (id) => await fetch(`/api/user/${id}`);
-function parseUsers(...inputs) {
-  let domain, name, users;
-
-  users = [];
-  for (const input of inputs) {
-    if ((_ = toSearchable(input).match(/^(\w+):([^@]+@[\w.]+)$/))) {
-      name = (_[1] ?? "guest");
-      domain = (_ = toSearchable(input).match(/@([\w.]+)/)) && _[1];
-    users.push({name, domain});
-    }
-  }
-  return users;
+function parseEmail(input) {
+  if (!(_ = toSearchable(input).match(/^(\w+)@([\w.]+)$/))) return;
+  return {user: _[1], domain: _[2]};
 };
-parseUsers("alice:alice@example.com", "bob:bob@test.org");
+const result = parseEmail("alice@example.com");
 ```
-
-#### 🚀 Run with: bun run example.rip
-
-```json
-[
-  {
-    "name": "alice",
-    "domain": "example.com",
-  }, {
-    "name": "bob",
-    "domain": "test.org",
-  }
-]
-```
-
-**What makes Rip special?**
-
-- 🎯 **Zero Dependencies** - Includes its own SLR(1) parser generator (solar.rip)
-- 🚀 **Self-Hosting** - Rip compiles itself, including the parser generator
-- ⚡ **Just Run It** - `bun your-script.rip` works instantly (automatic loader via bunfig.toml)
-- 🎨 **Elegant** - Beautiful syntax, implicit returns, no semicolons
-- 🧠 **Smart** - Context-aware comprehensions, range optimizations, auto-async
-- 📦 **Complete** - Full compiler, triple REPL (terminal/browser/console), test framework
-- 🔧 **Modern** - ES2022 output with classes, modules, optional chaining
 
 ---
 
-## Runtime Compatibility
+## Installation
 
-**Primary Targets:**
-- 🎯 **Bun** - First-class support with automatic `.rip` loader (recommended)
-- 🌐 **Browsers** - 43KB bundle, inline `<script type="text/rip">`, REPL
+### Option 1: Install Globally (Recommended)
 
-**Also Supported:**
-- ✅ **Deno** - ES2022 output works natively
-- ✅ **Node.js 12+** - Full compatibility with modern Node
-
-### ES2022 Target
-
-Rip compiles to **modern JavaScript (ES2022)** for clean, efficient output:
-
-**Features Used:**
-- ✅ **ES2015 (ES6):** classes, let/const, arrow functions, template literals, destructuring
-- ✅ **ES2018:** async iteration (for await...of)
-- ✅ **ES2020:** optional chaining (`?.`), nullish coalescing (`??`)
-- ✅ **ES2022:** static class fields, top-level await
-
-**Not Used:**
-- ❌ Private fields (`#var`) - not commonly needed
-- ❌ WeakRefs, FinalizationRegistry - specialized use cases
-
-**Why ES2022?** Modern output means smaller code, native features, and excellent performance across all runtimes.
-
----
-
-## Zero Dependencies
-
-**Rip is completely standalone with ZERO runtime or build dependencies!**
-
-```json
-{
-  "dependencies": {}    // ← Completely empty!
-}
-```
-
-**What's included:**
-- ✅ **Full compiler** - Lexer, parser, code generator (all built-in)
-- ✅ **Parser generator** - Complete SLR(1) parser generator (solar.rip)
-- ✅ **Self-hosting** - Rip compiles itself, including the parser generator
-- ✅ **Triple REPL** - Terminal, browser, and console REPLs built-in
-- ✅ **Browser bundle** - 43KB self-contained compiler
-- ✅ **Test runner** - Full test framework included
-
-**What you need:**
-- JavaScript runtime (Bun, Node.js, or browser)
-- **That's it!**
-
-**Self-hosting verification:**
 ```bash
-# ONE COMMAND rebuilds the parser from scratch
-bun run parser
+# Install Bun if needed
+curl -fsSL https://bun.sh/install | bash
 
-# What this does:
-# - Runs solar.rip (parser generator, written in Rip)
-# - Reads grammar.rip (grammar spec, written in Rip)
-# - Outputs parser.js (complete parser)
-# Complete bootstrap loop with ZERO external tools ✅
+# Install Rip
+bun add -g rip-lang
+
+# Start using it!
+rip                    # Interactive REPL
+rip yourfile.rip       # Compile a file
+bun yourfile.rip       # Execute directly
 ```
 
-**No external compilers, no build tools, no transpilers** - just a JavaScript runtime and Rip itself!
+### Option 2: Clone from Source
 
----
-
-## How It Works
-
-**The secret: S-expressions as intermediate representation**
-
-Traditional compilers use complex AST node classes. Rip uses simple arrays:
-
-```
-Source → Tokens → S-Expressions → JavaScript
-                  ["=", "x", 42]
-                  Simple arrays!
-```
-
-**Before (Traditional AST):**
-```javascript
-class BinaryOp {
-  constructor(op, left, right) { ... }
-  compile() { /* complex logic */ }
-}
-```
-
-**After (S-Expressions):**
-```javascript
-case '+': {
-  const [left, right] = rest;
-  return `(${this.generate(left)} + ${this.generate(right)})`;
-}
-```
-
-**Result: ~50% smaller implementation**
-
-| Component | CoffeeScript | Rip | Notes |
-|-----------|--------------|-----|-------|
-| Lexer+Rewriter | 3,558 LOC | **3,145 LOC** | Expanded syntax |
-| Parser Generator | 2,285 LOC (Jison) | **928 LOC** (Solar) | Built-in, ~156× faster! |
-| Compiler | 10,346 LOC (AST Nodes) | **5,246 LOC** (S-expressions) | Clean dispatch table |
-| Tools | 1,571 LOC (Repl, Cake) | **520 LOC** (Repl, Browser) | 3 Repl's + Browser |
-| **Total** | **17,760 LOC** | **9,839 LOC** | **~50% smaller** |
-
-**Plus:**
-- ✅ **ZERO dependencies** - Everything included
-- ✅ **Self-hosting** - Rip compiles itself
-- ✅ **No external tools** - Just a JavaScript runtime
-
-### Real-World Example: The Complete Pipeline
-
-Let's see how Rip code flows through the compilation pipeline:
-
-**Step 1: Rip Source Code**
-```coffee
-# Rip code - edit me!
-def fibonacci(n)
-  if n <= 1
-    n
-  else
-    fibonacci(n - 1) + fibonacci(n - 2)
-
-# Try heregex
-pattern = ///
-  ^ \d+      # digits
-  \s*        # space
-  [a-z]+     # letters
-  $
-///i
-
-# Try regex features
-email = "user@example.com"
-domain = email[/@(.+)$/, 1]
-
-console.log "Fib(10):", fibonacci(10)
-console.log "Domain:", domain
-```
-
-**Step 2: S-Expression Intermediate Representation**
-
-The parser converts this to simple arrays (s-expressions):
-
-```lisp
-(program
-  (def fibonacci (n)
-    (block
-      (if (<= n 1) (block n)
-        (block (+ (fibonacci (- n 1)) (fibonacci (- n 2)))))))
-  (= pattern "/^ \\d+\\s*[a-z]+$/i")
-  (= email "user@example.com")
-  (= domain (regex-index email /@(.+)$/ 1))
-  ((. console log) "Fib(10):" (fibonacci 10))
-  ((. console log) "Domain:" domain)
-)
-```
-
-**Key insights:**
-- Each operation is just an array: `["+", left, right]`
-- No complex AST node classes - just plain data
-- Easy to inspect, transform, and debug
-- Pattern matching in codegen is straightforward
-
-**Step 3: JavaScript Output**
-
-The code generator pattern-matches on s-expressions to produce clean JavaScript:
-
-```javascript
-let _, domain, email, pattern;
-
-function fibonacci(n) {
-  return ((n <= 1) ? n : (fibonacci((n - 1)) + fibonacci((n - 2))));
-};
-pattern = /^\d+\s*[a-z]+$/i;
-email = "user@example.com";
-domain = (_ = toSearchable(email).match(/@(.+)$/)) && _[1];
-console.log("Fib(10):", fibonacci(10));
-console.log("Domain:", domain);
-```
-
-**The beauty:** Simple arrays in, clean JavaScript out. No complex AST traversal needed!
-
-**Try it yourself:**
 ```bash
-# See the s-expressions
-echo 'x = 42' | ./bin/rip -s
+git clone https://github.com/shreeve/rip-lang.git
+cd rip-lang
 
-# See the generated JavaScript
-echo 'x = 42' | ./bin/rip -c
+# Link globally
+bun link
+
+# Add to global Bun config
+echo 'preload = ["rip-lang/loader"]' >> ~/.bunfig.toml
+
+# Run .rip files from anywhere
+bun your-script.rip
 ```
 
 ---
 
 ## Quick Start
 
-### Installation & Setup
-
-**🚀 Fastest Way: Install from Bun Package Registry**
-
-First, install Bun if you haven't already:
-
-```bash
-# Install Bun (macOS, Linux, WSL)
-curl -fsSL https://bun.sh/install | bash
-
-# Or on Windows (PowerShell)
-powershell -c "irm bun.sh/install.ps1|iex"
-```
-
-Then install Rip globally:
-
-```bash
-# Install Rip globally
-bun add -g rip-lang
-
-# Start the REPL immediately!
-rip
-```
-
-That's it! You can now:
-- Run `rip` anywhere for an interactive REPL
-- Compile Rip files: `rip yourfile.rip`
-- Execute `.rip` files: `bun yourfile.rip`
-
----
-
-**Alternative: Install from Source**
-
-**Step 1: Clone the repository**
-```bash
-git clone https://github.com/shreeve/rip-lang.git
-cd rip-lang
-```
-
-**Step 2: Set up global Bun loader**
-```bash
-# Link Rip globally so it's available everywhere
-bun link
-
-# Add to global Bun config
-echo 'preload = ["rip-lang/loader"]' >> ~/.bunfig.toml
-```
-
-**That's it!** Now you can run `.rip` files from anywhere:
-```bash
-cd ~/any-project
-
-# Create a test file
-echo 'def greet(name)
-  "Hello, ${name}!"
-
-console.log greet("World")' > test.rip
-
-# Run it!
-bun test.rip  # → Hello, World! ✨
-```
-
-**Verify your setup:**
-```bash
-# Check that rip-lang is linked
-bun pm ls --global | grep rip-lang
-
-# Check your global config
-cat ~/.bunfig.toml
-# Should include: preload = ["rip-lang/loader"]
-```
-
----
-
-**No npm install needed** - Rip has zero dependencies!
-
-**Requirements:**
-- **Bun** (recommended) - For automatic `.rip` loader and REPL
-- **Or** any ES2022-compatible runtime: Deno, Node.js 12+, modern browsers
-  - Note: Deno/Node require compilation first (`./bin/rip -o output.js input.rip`)
-
-### Usage
-
-**The easiest way: Run .rip files directly with Bun**
-
-```bash
-# Just run it! The loader is automatic via bunfig.toml
-bun your-script.rip
-
-# Example
-echo 'def greet(name)
-  console.log "Hello, ${name}!"
-
-greet "World"' > hello.rip
-
-bun hello.rip
-# → Hello, World!
-```
-
-**How it works:** The `bunfig.toml` preloads `rip-loader.ts`, which registers a Bun plugin that automatically compiles `.rip` files on-the-fly. No build step, no manual compilation—just run your code!
-
-**You can also import .rip modules directly:**
-
-```coffee
-# utils.rip
-export def add(a, b)
-  a + b
-
-export multiply = (a, b) => a * b
-```
-
-```coffee
-# main.rip
-import { add, multiply } from "./utils.rip"
-
-console.log add(5, 3)      # 8
-console.log multiply(4, 7) # 28
-```
-
-```bash
-bun main.rip  # Works automatically!
-```
-
-**Other commands:**
-
 ```bash
 # Interactive REPL
 ./bin/rip
 
-# Execute a Rip script (default behavior)
+# Execute a file
 ./bin/rip examples/fibonacci.rip
 
-# Compile and show JavaScript output
+# Compile to JavaScript
 ./bin/rip -c examples/fibonacci.rip
 
-# Compile and save to file
+# Save to file
 ./bin/rip -o output.js examples/fibonacci.rip
-```
 
-### Debug Flags (Mix and Match!)
-
-Rip supports flexible debugging with flags that can be combined:
-
-```bash
-# Show ONLY s-expressions (no JavaScript)
-./bin/rip -s examples/fibonacci.rip
-
-# Show ONLY tokens (no JavaScript)
-./bin/rip -t examples/fibonacci.rip
-
-# Show s-expressions AND JavaScript
-./bin/rip -s -c examples/fibonacci.rip
-
-# Show tokens AND JavaScript
-./bin/rip -t -c examples/fibonacci.rip
-
-# Show EVERYTHING (full debug mode)
-./bin/rip -s -t -c examples/fibonacci.rip
-
-# Pipe mode (no headers, just output)
-./bin/rip -q -c examples/fibonacci.rip
-```
-
-**How it works:**
-- `rip script.rip` **executes** the script (default behavior)
-- `echo 'code' | rip` **compiles** and shows JavaScript (stdin defaults to compile mode)
-- `-c` flag **compiles** and shows JavaScript output
-- `-o file.js` **compiles** and saves to file
-- `-s` or `-t` alone show **only** that output (no JavaScript)
-- Add `-c` to **also** show the compiled JavaScript
-- Mix and match as needed for debugging
-- Browser REPL always shows JavaScript (checkboxes toggle `-s` and `-t`)
-
-### Interactive REPL
-
-Rip includes a full-featured REPL for interactive development:
-
-```bash
-$ ./bin/rip
-Rip 1.0.0 - Interactive REPL
-Type .help for commands, Ctrl+C to exit
-
-rip> x = 42
-→ 42
-
-rip> pattern = ///
-....>   \d+      # digits
-....>   [a-z]+   # letters
-....> ///
-→ /\d+[a-z]+/
-
-rip> pattern.test('123abc')
-→ true
-
-rip> .vars
-Defined variables:
-  x = 42
-  pattern = /\d+[a-z]+/
-```
-
-**REPL Features:**
-- ✅ Variable persistence across evaluations
-- ✅ Multi-line input (automatic detection)
-- ✅ Command history (arrow keys)
-- ✅ Special commands (.help, .vars, .clear, .history, .exit)
-- ✅ Debug modes (.tokens, .sexp, .js)
-- ✅ Pretty-printed output with colors
-- ✅ Last result in `_` variable
-
-### Browser REPL & Bundle
-
-**Run Rip in your browser!** Browsers are a primary target with full support:
-
-**Try it online (GitHub Pages):**
-```
-https://shreeve.github.io/rip-lang/
-# Live REPL, examples, and live compiler
-```
-
-**Or run locally:**
-```bash
-# Build browser bundles (one-time)
-bun run browser
-
-# Start development server
-bun run serve
-
-# Open in browser
-http://localhost:3000/
-# (auto-redirects to REPL)
-```
-
-**What you get:**
-- **REPL Console** - Terminal-like with commands, history, multi-line
-- **Live Compiler** - Split pane showing Rip → JavaScript in real-time
-- **43KB bundle** - Brotli-compressed (560KB → 43KB, 92% reduction!)
-- **Inline scripts** - `<script type="text/rip">` auto-executes
-- **Syntax highlighting** - Colored JavaScript output
-- **All features work** - Heregex, regex+, classes, async, dammit operator, everything!
-
-**Use in production:**
-```html
-<script src="https://cdn.example.com/rip.browser.min.js"></script>
-<script type="text/rip">
-  def greet(name)
-    console.log "Hello, ${name}!"
-  greet "Browser"
-</script>
-```
-
-See [docs/BROWSER.md](docs/BROWSER.md) for complete browser guide.
-
-### Running Tests
-
-```bash
-# All tests (recommended)
-bun run test
-
-# Or run directly
-bun test/runner.js test/rip
-
-# Specific file
-bun test/runner.js test/rip/functions.rip
-
-# Use --no-cache during active development
-bun --no-cache test/runner.js test/rip
-```
-
-### Quick Reference: NPM Scripts
-
-```bash
-bun run test      # Run all 864 tests
-bun run parser    # Rebuild parser from grammar (self-hosting!)
-bun run browser   # Build browser bundles (43KB compressed)
-bun run serve     # Start dev server (REPL at localhost:3000)
+# Debug flags (mix and match!)
+./bin/rip -s examples/fibonacci.rip        # Show s-expressions
+./bin/rip -t examples/fibonacci.rip        # Show tokens
+./bin/rip -s -c examples/fibonacci.rip     # Show both
 ```
 
 ---
 
-## Language Features
+## Key Features
 
-### Core Syntax
+### Elegant Syntax
 
 ```coffee
-# Variables (function-scoped, auto-hoisted)
-x = 42
-name = "Alice"
+# Functions (three styles)
+def greet(name)              # Named, hoisted
+  "Hello, ${name}!"
 
-# Note: Variables hoist to top of their scope (program or function)
-# Functions access outer variables via closure (CoffeeScript semantics)
-
-# Functions (three styles - each has distinct behavior)
-def add(a, b)         # Named, unbound this, hoisted
+calculate = (a, b) ->        # Thin arrow (unbound this)
   a + b
 
-multiply = (a, b) ->  # Anonymous, unbound this, not hoisted
-  a * b
+handler = (event) =>         # Fat arrow (bound this)
+  @process event
 
-divide = (a, b) =>    # Anonymous, bound this, not hoisted
-  a / b
+# Comprehensions (context-aware!)
+squares = (x * x for x in [1..10])     # IIFE (result used)
 
-# Important: Arrow functions ALWAYS require parentheses
-# () => expr    (x) => expr    (x, y) => expr
-# Consistency over saving 2 characters!
-
-# Conditionals
-if x > 0
-  "positive"
-else
-  "negative"
-
-# Loops
-for item in [1, 2, 3]
-  console.log item
-
-# Objects
-person =
-  name: "Bob"
-  age: 30
-
-# Arrays
-numbers = [1, 2, 3, 4, 5]
-
-# String interpolation
-greeting = "Hello, ${name}!"
+processItem x for x in items           # Plain loop (result unused)
+doMore()
 ```
 
-### Modern Features
+### Modern JavaScript Features
 
 ```coffee
 # Destructuring
 {name, age} = person
-[first, second] = numbers
+[first, ...rest] = array
 
-# Spread/rest (dual syntax - prefix or postfix)
-combined = [...arr1, ...arr2]   # ES6 prefix (recommended)
-combined = [arr1..., arr2...]   # CoffeeScript postfix (compatibility)
-def fn(first, ...rest)           # ES6 prefix rest params
-def fn(first, rest...)           # CoffeeScript postfix rest params
-{name, ...props} = person        # ES6 prefix object rest
-{name, props...} = person        # CoffeeScript postfix object rest
+# Optional chaining (dual syntax)
+user?.profile?.name          # ES6 native
+arr?[0]                      # CoffeeScript soak
+fn?(arg)                     # Soak call
 
-# Note: Both syntaxes compile to the same ES6 JavaScript.
-# Postfix syntax (x...) is for CoffeeScript compatibility.
-# New code should use prefix syntax (...x) for clarity.
-
-# Optional operators (dual syntax)
-user?.profile?.name    # ES6 optional chaining (native)
-arr?[0]                # CoffeeScript soak (existence check)
-fn?(arg)               # CoffeeScript soak call
-
-# Nullish coalescing (?? - rejects null OR undefined)
+# Nullish coalescing
 port = config.port ?? 8080
 
-# Otherwise operator (!? - rejects ONLY undefined)
-timeout = config.timeout !? 5000     # null and 0 are valid!
-enabled = options.enabled !? true    # false means disabled, undefined means default
+# Async/await auto-detection
+def fetchData
+  data = await fetch "/api/data"
+  data.json()
+# → async function fetchData() { ... }
+```
 
-# Comparison:
-null ?? 'default'    # → 'default' (null fails)
-null !? 'default'    # → null (null is defined!)
+### Unique Features
 
-# Use ?? when: Both null and undefined should use default
-# Use !? when: Only undefined should use default (null/false/0 are meaningful)
+```coffee
+# Dammit operator! - Call and await
+result = fetchData!         # → await fetchData()
+user = getUser!(id)         # → await getUser(id)
 
-# Legacy existential operator (CoffeeScript compatibility)
-value = x ? y          # SPACE? syntax (auto-converts to ??)
-value = x ?? y         # Preferred modern syntax
+# Void functions - No implicit returns
+def process!                # Always returns undefined
+  doWork()
+  # No return value
 
-# Note: "x ? y" (with space before ?) automatically converts to "x ?? y"
-# This provides backwards compatibility with CoffeeScript's existential operator.
-# Ternary operators (x ? y : z) are unaffected.
-# New code should use ?? explicitly for clarity.
+# Ruby-style regex
+email =~ /(.+)@(.+)/        # Match with _ capture
+username = _[1]             # Extract first group
+domain = email[/@(.+)/, 1]  # Inline extraction
 
-# ============================================================================
-# Sigil Operators - ! has dual meaning based on context
-# ============================================================================
-
-# 1. DAMMIT OPERATOR (!) - At Call-Site (Forces Await)
-result = fetchData!      # → await fetchData() (calls AND awaits)
-user = getUser!(id)      # → await getUser(id)
-data = api.get!          # → await api.get()
-
-# The ! at call-site does TWO things:
-# 1. Calls the function (even without parens)
-# 2. Prepends await to the call
-
-# 2. VOID OPERATOR (!) - At Definition-Site (Suppresses Returns)
-def processItems!        # Side-effect only (always returns undefined)
-  for item in items
-    item.update()
-  # ← Executes all statements, then returns undefined
-
-def validate!(x)
-  return if x < 0        # → Just "return" (no value)
-  console.log "valid"
-  # ← Executes, then returns undefined
-
-# Works with all function types:
-c! = (x) ->              # Void thin arrow
-  x * 2                  # Executes but doesn't return value
-
-process! = (data) =>     # Void fat arrow
-  data.toUpperCase()     # Executes but returns undefined
-
-# The ! at definition means:
-# - All statements execute (side effects preserved)
-# - Final "return;" added automatically
-# - Explicit "return expr" becomes just "return"
-# - Always returns undefined
-
-# 3. PUNT OPERATOR (&) - At Call-Site (Prevents Await) [FUTURE]
-# &fetchData → fetchData() (no await)
-# Used in future implicit await mode
-
-# Heregex - Extended regular expressions
+# Heregex - Extended regex with comments
 pattern = ///
   ^ \d+      # starts with digits
   \s*        # optional whitespace
   [a-z]+     # followed by letters
-  $          # end of string
-  ///i
-# Compiles to: /^\d+\s*[a-z]+$/i
-# Whitespace and comments automatically stripped!
-
-# Ruby-style regex (Rip innovation!)
-email =~ /(.+)@(.+)/     # Match with automatic _ capture
-username = _[1]          # Extract captures easily
-domain = _[2]
-
-zip = "12345-6789"[/^(\d{5})/, 1]  # Inline extraction: "12345"
+  $
+///i
 
 # __DATA__ marker (Ruby-inspired)
-# Embed data directly in source files
 config = parseConfig(DATA)
 
 __DATA__
 host=localhost
 port=8080
-debug=true
-
-# Classes
-class Animal
-  constructor: (@name) ->
-
-  speak: ->
-    "${@name} says hello"
-
-# Comprehensions (Context-Aware Optimization!)
-# Rip intelligently chooses IIFE (array building) vs plain loop (side effects)
-
-# IIFE when result is USED (value context):
-result = (x * 2 for x in items)        # Assignment
-console.log(x * 2 for x in items)      # Function argument
-fn = -> (x * 2 for x in items)         # Last statement (implicit return)
-(x * 2 for x in [1,2,3])               # Single statement (REPL mode)
-
-# Plain loop when result is DISCARDED (statement context):
-fn = ->
-  processItem x for x in items         # NOT last statement
-  doSomething()                        # Result unused, no IIFE!
-# → for (const x of items) { processItem(x); }
-
-# One-liner and multi-line are IDENTICAL when result unused:
-processItem x for x in items           # Same as ↓
-for x in items                         # Same as ↑
-  processItem x
-# Both → for (const x of items) { processItem(x); }
-
-# Critical: Proper ordering with guards and value variables
-for own k, v of obj when v > 5
-  process k, v
-# → for (const k in obj) {
-#     if (obj.hasOwnProperty(k)) {
-#       const v = obj[k];     // Assign BEFORE guard check!
-#       if (v > 5) {          // Guard can reference v
-#         process(k, v);
-#       }
-#     }
-#   }
 ```
-
-**Rip is smarter than CoffeeScript:** Comprehensions automatically optimize to plain loops when the result isn't used, avoiding unnecessary array building and IIFE overhead. CoffeeScript always generates IIFE for comprehension syntax, even when wasteful!
-
-**See [docs/COMPREHENSIONS.md](docs/COMPREHENSIONS.md) for complete specification of context rules and edge cases.**
 
 ---
 
-## Optional Operators - Dual Syntax
+## Why S-Expressions?
 
-Rip provides **two distinct approaches** to safe property/method access:
-
-### Single `?` - CoffeeScript Soak (Existence Checks)
-
-**Compiles to explicit null/undefined checks:**
-
-```coffee
-# Existence check
-arr?
-# → (arr != null)
-
-# Soak indexing
-arr?[0]
-# → (arr != null ? arr[0] : undefined)
-
-# Soak call
-fn?(arg)
-# → (typeof fn === 'function' ? fn(arg) : undefined)
-
-# Soak prototype
-obj?::toString
-# → (obj != null ? obj.prototype.toString : undefined)
-
-# Existential assignment
-a ?= 10
-# → a ??= 10
-```
-
-**Benefits:**
-- Works in all browsers (transpiles to standard checks)
-- Clear, explicit null/undefined handling
-- CoffeeScript compatible
-- Type-aware function checks
-
-### Dot-based `?.` - ES6 Optional Chaining (Native)
-
-**Passes through to native JavaScript:**
-
-```coffee
-# Optional property
-user?.profile?.name
-# → user?.profile?.name
-
-# Optional index
-arr?.[0]
-# → arr?.[0]
-
-# Optional call
-fn?.(arg)
-# → fn?.(arg)
-
-# Nullish coalescing
-x ?? defaultValue
-# → x ?? defaultValue
-
-# Nullish assignment
-a ??= 10
-# → a ??= 10
-```
-
-**Benefits:**
-- Modern, concise syntax
-- Native browser optimization
-- Short-circuit evaluation
-- Standard JavaScript (ES2020+)
-
-### Mix and Match
-
-**You can combine both styles in the same expression:**
-
-```coffee
-# ES6 optional property + CoffeeScript soak index
-obj?.arr?[0]
-# → (obj?.arr != null ? obj?.arr[0] : undefined)
-
-# CoffeeScript soak + ES6 optional
-users?[0]?.name
-# → (users != null ? users[0] : undefined)?.name
-```
-
-### When to Use Which
-
-**Use `?` (CoffeeScript soak) when:**
-- Need older browser support (transpiles to checks)
-- Want function type checking (`fn?()` validates it's callable)
-- Following CoffeeScript patterns
-- Debugging (explicit checks are clearer)
-
-**Use `?.` (ES6 optional) when:**
-- Targeting modern browsers (ES2020+)
-- Want clean, concise native output
-- Using standard JavaScript patterns
-- Performance matters (native is faster)
-
-**Use `?=` vs `??=`:**
-- Both compile to ES6 `??=` (nullish coalescing assignment)
-- `?=` is CoffeeScript-style syntax
-- `??=` is ES6-style syntax
-- Choose based on your team's preferences
-
-Both syntaxes handle `null` and `undefined` - pick the style that fits your project!
-
----
-
-## Architecture
-
-### The Pipeline
+Traditional compilers use complex AST classes. Rip uses **simple arrays**:
 
 ```
-┌────────┐    ┌────────────┐    ┌──────────┐    ┌─────────┐
-│ Source │───>│   Lexer    │───>│  Parser  │───>│ Codegen │
-│  Code  │    │  (Coffee)  │    │  (Solar) │    │  (Rip)  │
-└────────┘    └────────────┘    └──────────┘    └─────────┘
-                 3,145 LOC          928 LOC       5,246 LOC
-               15 yrs tested     Generated!   S-expr w/Dispatch!
+Source → Tokens → S-Expressions → JavaScript
+                  ["=", "x", 42]
 ```
 
-### Components
-
-**1. Lexer** (`src/lexer.js`)
-- CoffeeScript 2.7 production lexer
-- Handles all tokenization
-- 15 years of edge cases handled
-- Enhanced with compatibility features
-
-**2. Parser** (`src/parser.js`)
-- Solar-generated SLR(1) parser
-- Built from grammar specification
-- Generates s-expressions directly
-- Regenerate with `bun run parser` (~80ms, instant feedback!)
-- **Note:** Solar's 156× speed advantage over Jison (80ms vs 12.5s) made rapid grammar iteration possible
-
-**3. Code Generator** (`src/codegen.js`)
-- Pattern matches on s-expressions
-- Generates JavaScript code
-- 110+ node types implemented
-- Clean-room implementation
-
-### Why This Works
-
-**S-expressions simplify everything:**
-
+**Traditional AST approach:**
 ```javascript
-// Traditional AST approach
 class BinaryOp {
   constructor(op, left, right) { ... }
-  compile() { /* complex logic */ }
+  compile() { /* 50+ lines */ }
 }
+```
 
-// S-expression approach
+**Rip's S-expression approach:**
+```javascript
 case '+': {
   const [left, right] = rest;
   return `(${this.generate(left)} + ${this.generate(right)})`;
 }
 ```
 
-Simple pattern matching beats complex OOP hierarchies!
+**Result: ~50% smaller compiler**
+
+| Component | CoffeeScript | Rip |
+|-----------|--------------|-----|
+| Lexer+Rewriter | 3,558 LOC | **3,145 LOC** |
+| Parser Generator | 2,285 LOC (Jison) | **928 LOC** (Solar, built-in) |
+| Compiler | 10,346 LOC (AST) | **5,246 LOC** (S-expr) |
+| **Total** | **17,760 LOC** | **9,839 LOC** |
 
 ---
 
-## Bun Integration
+## Zero Dependencies
 
-Rip works seamlessly with Bun through automatic loader support!
+**Rip is completely standalone** - no runtime or build dependencies:
 
-### Quick Setup (3 Options)
-
-#### Option 1: Use Globally (Recommended)
-
-Set up Rip loader to work in **all** your projects:
-
-```bash
-# Install Rip globally
-cd /path/to/rip-lang
-bun link
-
-# Create global Bun config (or add to existing ~/.bunfig.toml)
-echo 'preload = ["rip-lang/loader"]' >> ~/.bunfig.toml
-
-# Now run .rip files from anywhere!
-cd ~/my-project
-bun script.rip  # Works! ✨
-```
-
-#### Option 2: Per-Project (From NPM - Coming Soon)
-
-```bash
-# In your project directory
-bun add -d rip-lang
-
-# Create bunfig.toml
-echo 'preload = ["rip-lang/loader"]' > bunfig.toml
-
-# Run
-bun your-script.rip
-```
-
-#### Option 3: Per-Project (Local Development)
-
-```bash
-# Copy files to your project
-cp /path/to/rip-lang/bunfig.toml .
-cp /path/to/rip-lang/rip-loader.ts .
-cp -r /path/to/rip-lang/src .
-
-# Run
-bun your-script.rip
-```
-
-### How It Works
-
-Two files enable automatic `.rip` file execution:
-
-**1. `bunfig.toml`** - Tells Bun to preload the loader:
-```toml
-preload = ["rip-lang/loader"]  # From package
-# or
-preload = ["./rip-loader.ts"]  # Local file
-```
-
-**2. `rip-loader.ts`** - Bun plugin that compiles `.rip` files on-the-fly:
-```typescript
-import { plugin } from "bun";
-import { compileToJS } from "./src/compiler.js";
-
-await plugin({
-  name: "rip-loader",
-  async setup(build) {
-    build.onLoad({ filter: /\.rip$/ }, async (args) => {
-      const source = readFileSync(args.path, "utf-8");
-      const js = compileToJS(source);
-      return { contents: js, loader: "js" };
-    });
-  },
-});
-```
-
-### What You Get
-
-- ✅ **Direct execution** - `bun script.rip` just works
-- ✅ **Module imports** - `import { fn } from "./utils.rip"`
-- ✅ **Hot reloading** - Changes compile automatically
-- ✅ **Full ES6 modules** - Named exports, default exports, re-exports
-- ✅ **Error messages** - Compilation errors show source file and line
-- ✅ **Zero config** - Once set up globally, works everywhere
-
-### Using with Deno
-
-Deno works great with Rip's ES2022 output:
-
-```bash
-# Compile first
-./bin/rip -o script.js your-script.rip
-
-# Run with Deno
-deno run script.js
-
-# Or use ES6 modules
-./bin/rip -o utils.js utils.rip
-deno run --allow-read main.js  # imports from utils.js
-```
-
-### Using with Node.js
-
-Node.js 12+ supports all ES2022 features Rip uses:
-
-```bash
-# Compile first
-./bin/rip -o script.js your-script.rip
-
-# Run with Node
-node script.js
-
-# Or add to package.json scripts
+```json
 {
-  "scripts": {
-    "build": "./bin/rip -o dist/app.js src/app.rip",
-    "start": "node dist/app.js"
-  }
+  "dependencies": {}    // ← Empty!
 }
 ```
 
-**Note:** Bun's automatic loader is the recommended approach. For Deno/Node, compile `.rip` → `.js` first, then run the compiled output.
+**What's included:**
+- ✅ Full compiler (lexer, parser, codegen)
+- ✅ Parser generator (solar.rip - SLR(1))
+- ✅ Triple REPL (terminal, browser, console)
+- ✅ Browser bundle (43KB compressed)
+- ✅ Test framework
 
-### Troubleshooting
-
-**Problem: `bun script.rip` doesn't work**
-
+**Self-hosting verification:**
 ```bash
-# 1. Check if rip-lang is linked globally
-bun pm ls --global
-# Should show "rip-lang"
-
-# 2. Check if global config exists
-cat ~/.bunfig.toml
-# Should include: preload = ["rip-lang/loader"]
-
-# 3. Re-link if needed
-cd /path/to/rip-lang
-bun link
-
-# 4. Test from the rip-lang directory first
-cd /path/to/rip-lang
-bun www/examples/fibonacci.rip
-# This should always work (uses local bunfig.toml)
+bun run parser    # Rebuilds parser from scratch (solar.rip + grammar.rip)
+# Complete bootstrap loop - ZERO external tools! ✅
 ```
 
-**Problem: Imports not working**
+---
+
+## Browser Support
+
+**Run Rip in the browser!** Try it live: **[https://shreeve.github.io/rip-lang/](https://shreeve.github.io/rip-lang/)**
 
 ```bash
-# Make sure you're using .rip extension in imports
-import { fn } from "./utils.rip"  # ✅ Good
-import { fn } from "./utils"      # ❌ Won't work
+# Build browser bundle
+bun run browser
+
+# Start dev server
+bun run serve       # → http://localhost:3000
 ```
 
-**Problem: "Cannot find package rip-lang"**
+**Features:**
+- 43KB bundle (brotli-compressed)
+- Interactive REPL console
+- Live compiler with syntax highlighting
+- Inline `<script type="text/rip">` support
 
-```bash
-# The package needs to be linked first
-cd /path/to/rip-lang
-bun link
-
-# Verify it worked
-bun pm ls --global | grep rip-lang
+```html
+<script src="https://cdn.example.com/rip.browser.min.js"></script>
+<script type="text/rip">
+  def greet(name)
+    console.log "Hello, ${name}!"
+  greet "World"
+</script>
 ```
+
+See [docs/BROWSER.md](docs/BROWSER.md) for details.
+
+---
+
+## Runtime Compatibility
+
+**Primary targets:**
+- 🎯 **Bun** - First-class support with automatic `.rip` loader
+- 🌐 **Browsers** - 43KB bundle with REPL
+
+**Also supported:**
+- ✅ **Deno** - ES2022 output works natively
+- ✅ **Node.js 12+** - Full compatibility
+
+**ES2022 features used:**
+- ES2015: classes, let/const, arrow functions, template literals, destructuring
+- ES2018: async iteration (for await...of)
+- ES2020: optional chaining (`?.`), nullish coalescing (`??`)
+- ES2022: static class fields, top-level await
+
+---
+
+## Documentation
+
+**For users:**
+- [README.md](README.md) - This file (overview and quick start)
+- [docs/examples/](docs/examples/) - Example programs
+- [CHANGELOG.md](CHANGELOG.md) - Version history
+
+**Technical references:**
+- [AGENT.md](AGENT.md) - **Complete developer/AI agent guide** (start here!)
+- [docs/CODEGEN.md](docs/CODEGEN.md) - All 110+ node types
+- [docs/COMPREHENSIONS.md](docs/COMPREHENSIONS.md) - Context-aware comprehension rules
+- [docs/SOLAR.md](docs/SOLAR.md) - Parser generator guide
+- [docs/STRING.md](docs/STRING.md) - String metadata reference
+- [docs/REGEX-PLUS.md](docs/REGEX-PLUS.md) - Ruby-style regex features
+- [docs/BROWSER.md](docs/BROWSER.md) - Browser usage & REPLs
+
+**For contributors:**
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Development workflow
+- [docs/WORKFLOW.md](docs/WORKFLOW.md) - Command reference
+
+---
+
+## Status
+
+**Version:** 1.4.3 - **PRODUCTION READY** 🎉
+
+**Test results:**
+- ✅ 938/938 tests passing (100%)
+- ✅ Self-hosting operational
+- ✅ All 110 node types implemented
+- ✅ Browser bundle working
+
+**Recent accomplishments (Nov 2025):**
+- ✅ Dispatch table refactoring - All 110 operations use O(1) lookup
+- ✅ Code cleanup - Removed 2,017 lines of dead code (28% reduction)
+- ✅ Self-hosting restored - Fixed 'in' operator edge case
+- ✅ S-expression approach - IR-level transforms, not string manipulation
+
+**Roadmap:**
+- ✅ v1.0.0 - Initial release
+- ✅ v1.4.3 - **CURRENT** - Production-ready, self-hosting
+- 🔜 Continuous refinement based on community feedback
+
+See [CHANGELOG.md](CHANGELOG.md) for detailed history.
 
 ---
 
 ## Development
+
+### Running Tests
+
+```bash
+# All tests
+bun run test
+
+# Specific file
+bun test/runner.js test/rip/functions.rip
+
+# Clear cache
+bun --no-cache test/runner.js test/rip
+```
+
+### Build Commands
+
+```bash
+bun run parser    # Rebuild parser from grammar (self-hosting!)
+bun run browser   # Build 43KB browser bundle
+bun run serve     # Start dev server (REPL at localhost:3000)
+```
 
 ### Project Structure
 
 ```
 rip/
 ├── src/
-│   ├── lexer.js         # CoffeeScript lexer (given)
+│   ├── lexer.js         # CoffeeScript lexer (adapted)
 │   ├── parser.js        # Solar parser (generated)
-│   ├── codegen.js       # Code generator (our work!)
-│   ├── compiler.js      # Main pipeline
-│   ├── browser.js       # Browser entry point
-│   ├── repl.js          # Terminal REPL
+│   ├── codegen.js       # Code generator (S-expression dispatch)
+│   ├── compiler.js      # Pipeline orchestration
 │   └── grammar/
 │       ├── grammar.rip  # Grammar specification
 │       └── solar.rip    # Parser generator
-├── docs/                # Documentation
-│   ├── CODEGEN.md       # Pattern reference
-│   ├── COMPREHENSIONS.md # Comprehension spec
-│   ├── SOLAR.md         # Parser generator guide
-│   ├── STRING.md        # String metadata reference
-│   ├── REGEX-PLUS.md    # Ruby-style regex features
-│   ├── DAMMIT-OPERATOR.md # Async shorthand
-│   ├── BROWSER.md       # Browser usage & REPLs
-│   └── COFFEESCRIPT-COMPARISON.md # Feature comparison
-├── test/
-│   ├── rip/             # Feature tests (20 files, 864 tests)
-│   └── runner.js        # Test runner
-├── www/                 # Browser bundles and demos
-├── examples/            # Example programs
-├── AGENT.md             # AI agent handbook
+├── docs/                # Complete documentation
+├── test/rip/            # 23 test files, 938 tests
+├── AGENT.md             # Complete developer guide
 └── README.md            # This file
 ```
 
-### Adding Features
+### Contributing
 
-1. **Check parser output:**
-   ```bash
-   echo 'your code' | ./bin/rip -s
-   ```
+1. Read [AGENT.md](AGENT.md) - Complete guide for developers and AI agents
+2. Check [CONTRIBUTING.md](CONTRIBUTING.md) - Workflow with examples
+3. Write tests first (test-driven development)
+4. Run `bun run test` before committing
+5. Follow existing patterns in [docs/CODEGEN.md](docs/CODEGEN.md)
 
-2. **Add to codegen:**
-   ```javascript
-   case 'your-pattern': {
-     // Generate code
-   }
-   ```
+**Quick workflow:**
+```bash
+# 1. Check what parser emits
+echo 'your code' | ./bin/rip -s
 
-3. **Write tests:**
-   ```coffee
-   test "feature name", "code", expectedResult
-   ```
+# 2. Implement in src/codegen.js (check dispatch table)
+# 3. Write tests in test/rip/
 
-4. **Run tests:**
-   ```bash
-   bun test/runner.js test/rip/your-test.rip
-   ```
+# 4. Run tests
+bun test/runner.js test/rip/your-test.rip
 
-5. **Document in docs/CODEGEN.md**
-
-### Philosophy
-
-> **Simplicity scales.**
-> Keep the IR simple (s-expressions)
-> Keep the pipeline clear (lex → parse → generate)
-> Keep the code minimal (pattern matching)
-
-### Design Decisions
-
-**Arrow Functions: Parentheses Always Required**
-
-Rip requires parentheses for ALL arrow function parameters:
-
-```coffee
-# ✅ Always use parentheses
-() => expr           # Zero params
-(x) => expr          # One param
-(x, y) => expr       # Multiple params
-
-# ❌ Never omit (even though ES6 allows it)
-x => expr            # Not supported
+# 5. Verify all tests pass
+bun run test
 ```
-
-**Why?**
-- **Consistency:** One simple rule - no special cases
-- **Clarity:** Parameter lists are always obvious
-- **Simplicity:** Less cognitive overhead for developers
-- **Maintainability:** Simpler compiler implementation
-
-We considered allowing `x => expr` (ES6 style) but decided consistency and simplicity were more valuable than saving 2 characters.
 
 ---
 
-## Comparison
-
-### vs CoffeeScript
+## Comparison to CoffeeScript
 
 | Feature | CoffeeScript | Rip |
 |---------|-------------|------|
-| Syntax | ✅ Elegant | ✅ Elegant (inspired by CS) |
-| Implementation | 17,760 LOC | **9,839 LOC (~50% smaller)** |
-| Dependencies | ❌ Multiple | ✅ **ZERO** |
-| Parser Generator | ❌ External (Jison) | ✅ **Built-in (solar.rip)** |
-| Self-Hosting | ❌ No | ✅ **Yes (fully operational)** |
-| Modules | CommonJS | ✅ ES6 native |
-| Classes | ES5 functions | ✅ ES6 classes |
-| Maintenance | Complex AST | ✅ Simple sexps |
-| Extensibility | Hard | ✅ Easy (add a case) |
+| **Implementation** | 17,760 LOC | **9,839 LOC (~50% smaller)** |
+| **Dependencies** | Multiple | **ZERO** |
+| **Parser Generator** | External (Jison) | **Built-in (solar.rip)** |
+| **Self-Hosting** | No | **Yes** |
+| **Output** | ES5 (var, prototypes) | **ES2022 (let, classes)** |
+| **Modules** | CommonJS | **ES6** |
+| **Maintenance** | Complex AST | **Simple S-expressions** |
 
-### Real-World Output Comparison
+**Real-world output comparison:**
 
-**The numbers don't lie.** When compiling a typical 400-line CoffeeScript file with classes, nested switches, comprehensions, and complex loops:
+Compiling a 400-line CoffeeScript file with classes, nested switches, and loops:
 
-| Metric | CoffeeScript Output | Rip Output | Improvement |
-|--------|-------------------|-----------|-------------|
-| **Lines of code** | 608 lines | **304 lines** | **50% smaller!** |
-| **Syntax style** | ES5 (var, prototypes) | **ES2022 (let, classes)** | Modern |
-| **Readability** | Verbose, intermediate vars | **Clean, direct** | Better |
-| **Nested loops** | Complex iteration vars | **Plain, efficient loops** | Cleaner |
+| Metric | CoffeeScript | Rip |
+|--------|--------------|-----|
+| Lines of code | 608 lines | **304 lines (50% smaller)** |
+| Syntax | ES5 (var, prototypes) | **ES2022 (let, classes)** |
+| Readability | Verbose with intermediate vars | **Clean and direct** |
 
-**Example: Loop with step** (the pattern that started this journey)
-
-```coffeescript
-# Source: CoffeeScript/Rip
-@data(obj[i], obj[i+1]) for i in [0...obj.length] by 2
-```
-
-**CoffeeScript output** (verbose):
-```javascript
-for (i = k = 0, ref = obj.length; k < ref; i = k += 2) {
-  this.data(obj[i], obj[i + 1]);
-}
-// Uses intermediate variable 'k', ref variable, complex initialization
-```
-
-**Rip output** (clean):
-```javascript
-for (let i = 0; i < obj.length; i += 2) {
-  this.data(obj[i], obj[(i + 1)]);
-}
-// Modern let, direct loop, readable
-```
-
-**Both are functionally equivalent** - Rip just generates cleaner, more maintainable code! ✅
-
-**More comparisons:**
-
-| Pattern | CoffeeScript Style | Rip Style |
-|---------|-------------------|-----------|
-| **Variables** | `var x, y, z;` (function-scoped) | `let x, y, z;` (block-scoped) |
-| **Classes** | `Bar.prototype.method = function() {...}` | `class Bar { method() {...} }` |
-| **Null checks** | `ref = obj.prop; ref != null ? ref : void 0` | `obj?.prop` (native) |
-| **Loops** | Intermediate loop variables | Direct modern loops |
-| **Arrays** | `[].splice.call(array)` | Native `array.splice()` |
-
-**Why Rip's output is better:**
-
-- ✅ **Modern syntax** - ES2022 features work in all current runtimes
-- ✅ **Smaller bundles** - 50% less code to download/parse
-- ✅ **More readable** - Easier to debug generated code
-- ✅ **Better performance** - Engines optimize modern syntax better
-- ✅ **Future-proof** - Uses current JavaScript standards
-
-**Bottom line:** Rip compiles elegant source code to elegant JavaScript. CoffeeScript compiles elegant source to verbose ES5.
-
-### vs TypeScript
-
-**TypeScript:** Type safety, large ecosystem
-**Rip:** Simplicity, elegance, easy to extend
-
-**Use TypeScript when:** You need types, big team, enterprise
-**Use Rip when:** You value elegance, simple tooling, small projects
+**Both are functionally equivalent** - Rip just generates cleaner code!
 
 ---
 
-## Current Status
+## Why Rip?
 
-**Version:** 1.4.3 - **PRODUCTION READY!** 🎉
+**For users:**
+- ✅ Elegant syntax without verbosity
+- ✅ Modern JavaScript output
+- ✅ Zero build tool complexity
+- ✅ Browser support included
 
-**🌟 PRODUCTION-READY COMPILER WITH ZERO DEPENDENCIES!**
+**For developers:**
+- ✅ Simple architecture (S-expressions)
+- ✅ Easy to extend (add a case!)
+- ✅ Well-tested (938 tests)
+- ✅ Well-documented (see AGENT.md)
 
-Latest enhancements (v1.4.x series):
-- ✅ **Perfect dispatch table** - All 110 operations use O(1) lookup
-- ✅ **Massive cleanup** - Removed 2,017 lines of technical debt (28%)
-- ✅ **Self-hosting operational** - Parser regeneration works flawlessly
-- ✅ **S-expression approach** - IR-level transforms, not string manipulation
-- ✅ **938/938 tests passing** - PERFECT SCORE!
-
-**Core Features:**
-- ✅ **Dual syntax support** - ES6 + CoffeeScript compatibility
-- ✅ **Dammit operator (`!`)** - `fetchData!` → `await fetchData()`
-- ✅ **Zero dependencies** - Completely standalone
-- ✅ **Self-hosting** - Rip compiles itself (including parser generator!)
-- ✅ **Triple REPL** - Terminal, browser, and console
-- ✅ **Browser bundle** - 45.6KB compressed (92% reduction)
-
-**Test Results:**
-- **Rip tests: 938/938 (100%)** ✅ **PERFECT SCORE!**
-- **Operators: 73 tests** (including 7 new 'in' operator tests)
-- **Compatibility: 45 tests** (postfix spread/rest + legacy existential)
-- **Guards: 27 tests** (when clauses + own keyword)
-- **Stabilization: 67 tests** (advanced patterns + bootstrap tests)
-- **Functions: 86 tests** (including void functions with ! sigil)
-- **Total: 938 tests passing** (100% - every test passes!)
-- All test files organized (23 files, alphabetically sorted)
-- Zero redundant tests
-- **All 110 node types** implemented with full test coverage
-- **Self-hosting verified** - `bun run parser` works perfectly
-
-**Key Features:**
-- ✅ **ZERO Dependencies** - Completely standalone, self-hosting compiler
-- ✅ **Parser Generator Included** - Full SLR(1) parser generator (solar.rip) built-in
-- ✅ **Triple REPL Support** - Terminal (`./bin/rip`), Browser (repl.html), Console (`rip()`)
-- ✅ **Browser Bundle** - 43KB brotli-compressed (560KB → 43KB, 92% reduction!)
-- ✅ **Dammit Operator (`!`)** - Call and await shorthand: `fetchData!` → `await fetchData()`
-- ✅ **Void Functions (`!`)** - Side-effect only: `def process!` → no implicit returns
-- ✅ **Heregex** - Extended regex with comments/whitespace (`///...///`)
-- ✅ **Ruby-style Regex** - `=~` operator and `x[/pattern/, n]` indexing
-- ✅ **__DATA__ Marker** - Ruby-inspired inline data sections
-- ✅ **toSearchable()** - Universal type coercion utility with security
-- ✅ Dual optional syntax (CoffeeScript soak + ES6 optional chaining) - 10 operators!
-- ✅ Complete ES6 modules with smart defaults
-- ✅ Async/await auto-detection (including for-await)
-- ✅ Generator auto-detection
-- ✅ Tagged template literals
-- ✅ Catch destructuring
-- ✅ Expansion markers
-- ✅ Heredoc strings (triple-quoted with dedenting)
-- ✅ Quote preservation
-- ✅ Per-function variable scoping
-- ✅ And 75+ more features!
-
-**Roadmap:**
-- ✅ v0.1.0 - v0.9.0: Foundation, features, dual syntax, comprehensions
-- ✅ v1.0.0: Initial release! ~50% smaller than CoffeeScript
-- ✅ v1.4.1: Phase 2 complete - All 110 operations in dispatch table
-- ✅ v1.4.2: Self-hosting restored - Fixed 'in' operator critical bug
-- ✅ v1.4.3: **CURRENT** - S-expression refactoring, 938 tests, production-ready!
-
-**What's next:**
-- Issue #57: Polish s-expression formatter (low priority cosmetic)
-- Continuous refinement and optimization
-- Community feedback and enhancements
-
-See [CHANGELOG.md](CHANGELOG.md) for detailed progress.
-
----
-
-## Contributing
-
-We're building this clean-room style! Check out:
-- [AGENT.md](AGENT.md) - For AI agents/developers
-- [docs/CODEGEN.md](docs/CODEGEN.md) - Pattern reference
-- [docs/COMPREHENSIONS.md](docs/COMPREHENSIONS.md) - Comprehension context specification
-- [docs/](docs/) - Complete documentation library
-
-### Development Workflow
-
-1. Pick a pattern to implement
-2. Check parser output with `-s` flag
-3. Implement in `src/codegen.js`
-4. Write tests in `test/rip/`
-5. Document in `docs/CODEGEN.md`
-6. Commit!
+**Philosophy:**
+> Simplicity scales. Keep the IR simple (s-expressions), keep the pipeline clear (lex → parse → generate), keep the code minimal (pattern matching).
 
 ---
 
@@ -1373,19 +470,13 @@ MIT
 
 ---
 
-## Note 🤖
-
-*Some of the promotional language in this README was generated with AI assistance and may be... "enthusiastic". The code, tests, and technical claims are real and verifiable. If anything sounds too good to be true, please check the actual implementation—it's all there in the source. This is a practical tool, not a crusade. :)*
-
----
-
 ## Credits
 
 **Inspired by:**
-- CoffeeScript (syntax and lexer)
-- Lisp/Scheme (s-expressions)
-- Solar (parser generator) - **This project wouldn't have been possible without Solar's incredible speed (80ms vs Jison's 12.5 seconds for parser generation). Solar's performance enabled rapid iteration on grammar changes with instant feedback, making development a joy.**
-- Ruby (regex operators, __DATA__ marker)
+- **CoffeeScript** - Syntax and lexer foundation
+- **Lisp/Scheme** - S-expression approach
+- **Solar** - Lightning-fast parser generator (80ms vs Jison's 12.5s!)
+- **Ruby** - Regex operators, __DATA__ marker
 
 **Built by:** Developers who believe simplicity scales
 
