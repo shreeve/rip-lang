@@ -119,14 +119,20 @@ function formatSExpr(arr, indent = 0, isTopLevel = false) {
   const head = Array.isArray(arr[0]) ? formatSExpr(arr[0], 0, false) : formatAtom(arr[0]);
   lines.push(`${spaces}(${head}`);
 
+  // Track if we've started adding content after the opening
+  const baseIndent = indent;
+  
   // Format remaining elements
   for (let i = 1; i < arr.length; i++) {
     const elem = arr[i];
     if (Array.isArray(elem)) {
-      const formatted = formatSExpr(elem, indent + 2, false);
       if (isInline(elem)) {
+        // Inline - append to current line
+        const formatted = formatSExpr(elem, 0, false);
         lines[lines.length - 1] += ` ${formatted}`;
       } else {
+        // Non-inline - needs new line with proper indentation
+        const formatted = formatSExpr(elem, baseIndent + 2, false);
         lines.push(formatted);
       }
     } else {
