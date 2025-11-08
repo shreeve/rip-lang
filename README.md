@@ -136,7 +136,6 @@ handler = (event) =>         # Fat arrow (bound this)
 squares = (x * x for x in [1..10])     # IIFE (result used)
 
 processItem x for x in items           # Plain loop (result unused)
-doMore()
 ```
 
 ### Modern JavaScript Features
