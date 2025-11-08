@@ -1,0 +1,105 @@
+Follow the official workflow:
+
+• Create a GitHub issue
+• Create a new git branch
+• Create several tests, which should all fail
+• Fix the problem
+• When done, run the tests, to show it's passing
+• Create a GitHub PR, merge it, then close the ticket.
+• Bump the patch version (the z in x.y.z) of package.json
+• Run "bun run parser && bun run browser"
+• Add an entry to the CHANGELOG.md file
+• Commit and push to GitHub
+• Do not push to GitHub yet
+
+==
+
+Follow the surgical workflow:
+
+• Create several tests, which should all fail
+• Fix the problem
+• When done, run the tests, to show it's passing
+• Bump the version's patch number (the z in x.y.z) of package.json
+• Run "bun run parser && bun run browser"
+• Add an entry to the CHANGELOG.md file
+• Commit and push to GitHub
+
+==
+
+Release a new version of Rip:
+
+• bump the patch number (the z in x.y.z) of package.json
+• bun run parser && bun run browser
+• update the CHANGELOG.md file
+• commit and push
+• npm publish
+
+==
+
+Update the AGENT.md file with all the information a new AI needs to get fully
+up to speed on this project and to begin working immediately. Also, update the
+README.md file to provide a GitHub developer with a quick and informative
+overview of this project, why it exists, what problems it solves, and how to
+use for that purpose.
+
+==
+
+Can you DEEPLY analyze codegen.js to see if there are areas that we can
+optimize? Is there dead code? Functions that are never called? Are there
+functions that do things the regex/string processing way, when they could
+also be doing s-expression work? Are there ways to reduce the number of
+lines of code in codegen.js to make it snappier and more succinct? Are
+there major or minor refactorings that we could do? Should the code be
+organized differently? What would you do to make codegen.js be a
+MODEL FOR BEAUTIFUL AND EFFICIENT SOFTWARE?
+
+Do one DEEP DIVE PASS on the whole file to see if there are areas where
+it can be optimized or improved? Have we eliminated all (or most of?)
+the string processing and replaced with s-expression based logic and
+processing? Are there areas of redundancy or code that is not being used?
+Can we use slightly different algorithms in some places that would make
+things more efficient? What recommendations do you have with this code?
+Does it seem high quality and clean?
+
+==
+
+Lexer+Rewriter
+    1943    8247   75721 lexer.js
+    1138    5765   49855 rewriter.js
+     477    2073   16702 helpers.js
+
+Compiler
+     187     846    6131 scope.js
+     229    1023    8585 sourcemap.js
+    9204   33365  327152 nodes.js
+     217     908    7991 index.js
+     409    1905   16476 coffeescript.js
+     100     387    3557 register.js
+
+Tools
+     230    1067    8423 optparse.js
+     750    2939   25896 command.js
+     151     709    5613 browser.js
+     135     558    4493 cake.js
+     305    1189   11070 repl.js
+
+    2496    6603   64357 grammar.js
+    1343    4966  192198 parser.js
+
+   19314   72550  824220 total
+
+==
+
+Lexer+Rewriter (1 file):
+    3145   14810  123696 src/lexer.js
+
+Compiler (2 files):
+     149     575    4768 src/compiler.js
+    4808   21188  191464 src/codegen.js
+
+Tools (2 files):
+      97     347    2821 src/browser.js
+     423    1256   11969 src/repl.js
+
+Totals:
+    8973   40498  620883 total
