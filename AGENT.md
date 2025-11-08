@@ -45,7 +45,7 @@ bun run parser  # Regenerates src/parser.js from grammar.rip
 
 ## 🎯 Current Status
 
-**Version:** 1.4.3
+**Version:** 1.4.6
 **Tests:** 938 passing (100%)
 **Status:** Production-ready, self-hosting fully operational
 
@@ -145,7 +145,7 @@ test/rip/
 ├── functions.rip        (86 tests)
 ├── loops.rip            (27 tests)
 ... 18 more files
-Total: 931 tests (100% passing)
+Total: 938 tests (100% passing)
 ```
 
 ### Test-Driven Development
@@ -333,7 +333,7 @@ git commit -m "Fix: ...
 
 Fixes #N  ← Auto-closes issue!
 
-All tests passing: 931/931 (100%)"
+All tests passing: 938/938 (100%)"
 
 # 10. PR and merge
 git push origin fix/issue-name
@@ -444,7 +444,7 @@ case '+': {
 
 **Result:** 50% less code, easier to maintain!
 
-### Codegen.js Architecture (v1.4.3)
+### Codegen.js Architecture (v1.4.6)
 
 **Key sections:**
 ```
@@ -737,7 +737,7 @@ git commit -m "fix bug"  # WRONG - didn't run tests!
 
 ### ✅ Always Test First
 ```bash
-bun run test  # MUST be 931/931 passing
+bun run test  # MUST be 938/938 passing
 git commit
 ```
 
@@ -778,7 +778,7 @@ bun script.rip
 ### Testing
 
 ```bash
-# All tests (931 total)
+# All tests (938 total)
 bun run test
 
 # Specific test file
@@ -955,7 +955,7 @@ bun run parser
 
    Fixes #N
 
-   All tests passing: 931/931 (100%)"
+   All tests passing: 938/938 (100%)"
    ```
 
 ---
@@ -1039,7 +1039,7 @@ bun run parser
 
 | Directory | Contents |
 |-----------|----------|
-| `test/rip/` | 23 test files, 931 tests total |
+| `test/rip/` | 23 test files, 938 tests total |
 | `test/runner.js` | Test framework |
 
 **Test types:**
@@ -1109,7 +1109,7 @@ Rip has **zero runtime or build dependencies**. This is intentional and must be 
 > - Keep the IR simple (s-expressions)
 > - Keep the pipeline clear (lex → parse → generate)
 > - Keep the code minimal (pattern matching)
-> - Test everything (931/931 tests passing)
+> - Test everything (938/938 tests passing)
 
 **Core practices:**
 
@@ -1158,7 +1158,7 @@ Rip has **zero runtime or build dependencies**. This is intentional and must be 
 ## ✅ Success Criteria
 
 **Before committing:**
-- ✅ All tests pass (931/931 = 100%)
+- ✅ All tests pass (938/938 = 100%)
 - ✅ Code follows existing patterns
 - ✅ Documentation updated (if needed)
 - ✅ Browser bundle rebuilt (if codegen changed)
@@ -1185,7 +1185,7 @@ Rip has **zero runtime or build dependencies**. This is intentional and must be 
 
 ---
 
-## 📊 Project Metrics (v1.4.3)
+## 📊 Project Metrics (v1.4.6)
 
 **Codebase:**
 - Lexer+Rewriter: 3,145 LOC

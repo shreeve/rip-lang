@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-1.4.5-blue.svg" alt="Version"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-1.4.6-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
   <a href="#status"><img src="https://img.shields.io/badge/tests-938%2F938-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
@@ -329,7 +329,7 @@ See [docs/BROWSER.md](docs/BROWSER.md) for details.
 
 ## Status
 
-**Version:** 1.4.3 - **PRODUCTION READY** 🎉
+**Version:** 1.4.6 - **PRODUCTION READY** 🎉
 
 **Test results:**
 - ✅ 938/938 tests passing (100%)

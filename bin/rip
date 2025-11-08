@@ -166,7 +166,7 @@ async function main() {
     }
 
     // Execute the script with Bun using our loader
-    const loaderPath = join(__dirname, '../rip-loader.ts');
+    const loaderPath = join(__dirname, '../rip-loader.js');
 
     try {
       execSync(`bun --preload ${loaderPath} ${inputFile} ${scriptArgs.join(' ')}`, {

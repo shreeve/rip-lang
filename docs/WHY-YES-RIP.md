@@ -679,7 +679,7 @@ $ echo 'console.log "Hello, Rip!"' > test.rip && bun test.rip
 - ✅ **843/843 tests passing** (100% coverage)
 - ✅ **Self-hosting** (Rip compiles itself + its parser generator)
 - ✅ **Zero dependencies** (package.json dependencies: {})
-- ✅ **Bun loader** (bunfig.toml + rip-loader.ts - works globally)
+- ✅ **Bun loader** (bunfig.toml + rip-loader.js - works globally)
 - ✅ **43KB browser bundle** (brotli-compressed, with inline scripts)
 - ✅ **50% smaller** than CoffeeScript (9,450 vs 17,760 LOC)
 - ✅ **ES2022 output** (works in Bun, Deno, Node 12+, browsers)

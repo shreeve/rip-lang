@@ -1,5 +1,5 @@
 # ==============================================================================
-# Solar Syntax - Data-Oriented Grammar for CoffeeScript
+# Solar Syntax - S-Expression Grammar for Rip
 # ==============================================================================
 
 o = (pattern, action, options) ->

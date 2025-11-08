@@ -92,7 +92,7 @@ Simple utility module (pairs with module.rip):
 **Easiest way - Direct execution with Bun:**
 
 ```bash
-# Just run it! (thanks to bunfig.toml + rip-loader.ts)
+# Just run it! (thanks to bunfig.toml + rip-loader.js)
 bun www/examples/fibonacci.rip
 
 # Import and use modules
