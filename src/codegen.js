@@ -1211,11 +1211,7 @@ export class CodeGenerator {
       if (start === null && end === null) {
         return `${arrCode}.slice()`;
       } else if (start === null) {
-        const isNegativeOne = Array.isArray(end) && end[0] === '-' &&
-                              end.length === 2 &&
-                              (end[1] === '1' || end[1] === 1 || (end[1] instanceof String && end[1].valueOf() === '1'));
-
-        if (isInclusive && isNegativeOne) {
+        if (isInclusive && this.isNegativeOneLiteral(end)) {
           return `${arrCode}.slice(0)`;
         }
 
@@ -1230,11 +1226,8 @@ export class CodeGenerator {
         return `${arrCode}.slice(${startCode})`;
       } else {
         const startCode = this.generate(start, 'value');
-        const isNegativeOneLiteral = Array.isArray(end) && end[0] === '-' &&
-                              end.length === 2 &&
-                              (end[1] === '1' || end[1] === 1 || (end[1] instanceof String && end[1].valueOf() === '1'));
 
-        if (isInclusive && isNegativeOneLiteral) {
+        if (isInclusive && this.isNegativeOneLiteral(end)) {
           return `${arrCode}.slice(${startCode})`;
         }
 
@@ -4953,6 +4946,17 @@ export class CodeGenerator {
       }
     }
     return branch;
+  }
+
+  /**
+   * Check if s-expression represents literal -1
+   * Pattern: ["-", "1"] or ["-", 1] or ["-", String("1")]
+   * Used for range optimizations: arr[0..-1] → arr.slice(0)
+   */
+  isNegativeOneLiteral(sexpr) {
+    return Array.isArray(sexpr) && sexpr[0] === '-' &&
+           sexpr.length === 2 &&
+           (sexpr[1] === '1' || sexpr[1] === 1 || (sexpr[1] instanceof String && sexpr[1].valueOf() === '1'));
   }
 
   /**
