@@ -189,9 +189,9 @@ case '+': {
 |-----------|--------------|-----|-------|
 | Lexer+Rewriter | 3,558 LOC | **3,145 LOC** | Expanded syntax |
 | Parser Generator | 2,285 LOC (Jison) | **928 LOC** (Solar) | Built-in, ~156× faster! |
-| Compiler | 10,346 LOC (AST Nodes) | **5,239 LOC** (S-expressions) | Clean dispatch table |
+| Compiler | 10,346 LOC (AST Nodes) | **5,246 LOC** (S-expressions) | Clean dispatch table |
 | Tools | 1,571 LOC (Repl, Cake) | **520 LOC** (Repl, Browser) | 3 Repl's + Browser |
-| **Total** | **17,760 LOC** | **9,832 LOC** | **~50% smaller** |
+| **Total** | **17,760 LOC** | **9,839 LOC** | **~50% smaller** |
 
 **Plus:**
 - ✅ **ZERO dependencies** - Everything included
@@ -886,7 +886,7 @@ Both syntaxes handle `null` and `undefined` - pick the style that fits your proj
 │ Source │───>│   Lexer    │───>│  Parser  │───>│ Codegen │
 │  Code  │    │  (Coffee)  │    │  (Solar) │    │  (Rip)  │
 └────────┘    └────────────┘    └──────────┘    └─────────┘
-                 3,145 LOC          928 LOC       5,239 LOC
+                 3,145 LOC          928 LOC       5,246 LOC
                15 yrs tested     Generated!   S-expr w/Dispatch!
 ```
 
@@ -1200,7 +1200,7 @@ We considered allowing `x => expr` (ES6 style) but decided consistency and simpl
 | Feature | CoffeeScript | Rip |
 |---------|-------------|------|
 | Syntax | ✅ Elegant | ✅ Elegant (inspired by CS) |
-| Implementation | 17,760 LOC | **9,832 LOC (~50% smaller)** |
+| Implementation | 17,760 LOC | **9,839 LOC (~50% smaller)** |
 | Dependencies | ❌ Multiple | ✅ **ZERO** |
 | Parser Generator | ❌ External (Jison) | ✅ **Built-in (solar.rip)** |
 | Self-Hosting | ❌ No | ✅ **Yes (fully operational)** |
@@ -1277,41 +1277,37 @@ for (let i = 0; i < obj.length; i += 2) {
 
 ## Current Status
 
-**Version:** 1.1.0 - **ENHANCED RELEASE!** 🎉
+**Version:** 1.4.3 - **PRODUCTION READY!** 🎉
 
-**⚡ NEW: DUAL SYNTAX SUPPORT - CoffeeScript Compatibility!**
+**🌟 PRODUCTION-READY COMPILER WITH ZERO DEPENDENCIES!**
 
-Now supports both ES6 and CoffeeScript syntax:
-- ✅ **Postfix spread/rest:** `args...` or `...args` (both work!)
-- ✅ **Legacy existential:** `x ? y` or `x ?? y` (both work!)
-- ✅ **Dual optional:** `x?.y` and `x?[y]` (both work!)
+Latest enhancements (v1.4.x series):
+- ✅ **Perfect dispatch table** - All 110 operations use O(1) lookup
+- ✅ **Massive cleanup** - Removed 2,017 lines of technical debt (28%)
+- ✅ **Self-hosting operational** - Parser regeneration works flawlessly
+- ✅ **S-expression approach** - IR-level transforms, not string manipulation
+- ✅ **938/938 tests passing** - PERFECT SCORE!
 
-**Implemented:**
-- ✅ Core architecture (lexer + parser + codegen pipeline)
-- ✅ Test infrastructure (test/code/fail helpers, async support)
-- ✅ **Code generator - 100% COMPLETE!** (110+ node types, all features working)
-- ✅ **864/864 tests passing (100%)** - PERFECT SCORE!
+**Core Features:**
 - ✅ **Dual syntax support** - ES6 + CoffeeScript compatibility
 - ✅ **Dammit operator (`!`)** - `fetchData!` → `await fetchData()`
-- ✅ Comprehensive documentation (production ready)
-- ✅ **Self-hosting** - Rip compiles itself!
+- ✅ **Zero dependencies** - Completely standalone
+- ✅ **Self-hosting** - Rip compiles itself (including parser generator!)
+- ✅ **Triple REPL** - Terminal, browser, and console
+- ✅ **Browser bundle** - 45.6KB compressed (92% reduction)
 
 **Test Results:**
-- **Rip tests: 864/864 (100%)** ✅ **PERFECT SCORE!**
+- **Rip tests: 938/938 (100%)** ✅ **PERFECT SCORE!**
+- **Operators: 73 tests** (including 7 new 'in' operator tests)
 - **Compatibility: 45 tests** (postfix spread/rest + legacy existential)
 - **Guards: 27 tests** (when clauses + own keyword)
-- **Stabilization: 67 tests** (advanced patterns + 13 bootstrap bug tests)
-- **Functions: 71 tests** (including 10 void function tests)
-- **Total: 864 tests passing** (100% - every test passes!)
-- All test files organized (20 files, alphabetically sorted)
+- **Stabilization: 67 tests** (advanced patterns + bootstrap tests)
+- **Functions: 86 tests** (including void functions with ! sigil)
+- **Total: 938 tests passing** (100% - every test passes!)
+- All test files organized (23 files, alphabetically sorted)
 - Zero redundant tests
-- **All node types implemented with test coverage** (100% of grammar!)
-- **New:** Dammit operator (call and await at call-site)
-- **New:** Void functions (side-effect only with ! at definition)
-- **New:** Smart comprehension optimization (context-aware)
-- **New:** Range loop optimization (73% smaller code)
-- **New:** Reverse iteration support (by -1)
-- **New:** Self-hosting complete (Rip compiles itself!)
+- **All 110 node types** implemented with full test coverage
+- **Self-hosting verified** - `bun run parser` works perfectly
 
 **Key Features:**
 - ✅ **ZERO Dependencies** - Completely standalone, self-hosting compiler
@@ -1337,15 +1333,16 @@ Now supports both ES6 and CoffeeScript syntax:
 - ✅ And 75+ more features!
 
 **Roadmap:**
-- ✅ v0.1.0: **COMPLETE** - All 63 node types, 82% tests
-- ✅ v0.2.0: **COMPLETE** - 100% Rip coverage, 79% CS2
-- ✅ v0.3.0: **COMPLETE** - 90%+ CS2 compatibility, ES2022 target!
-- ✅ v0.3.3: **COMPLETE** - CS2 migration complete, 666 comprehensive tests, perfect organization!
-- ✅ v0.3.4: **COMPLETE** - Dammit operator (`!`), call-and-await shorthand!
-- ✅ v0.5.0: **COMPLETE** - Dual syntax support! Postfix spread/rest (`x...`) + legacy existential (`x ? y`)!
-- ✅ v0.5.1: **COMPLETE** - Smart comprehensions! Context-aware optimization, self-hosting, 843/843 tests!
-- ✅ v0.9.0: **COMPLETE** - Production release! Zero dependencies, complete documentation, 43KB browser bundle!
-- ✅ v1.0.0: **RELEASED** - Initial release! ~50% smaller than CoffeeScript! 🎉
+- ✅ v0.1.0 - v0.9.0: Foundation, features, dual syntax, comprehensions
+- ✅ v1.0.0: Initial release! ~50% smaller than CoffeeScript
+- ✅ v1.4.1: Phase 2 complete - All 110 operations in dispatch table
+- ✅ v1.4.2: Self-hosting restored - Fixed 'in' operator critical bug
+- ✅ v1.4.3: **CURRENT** - S-expression refactoring, 938 tests, production-ready!
+
+**What's next:**
+- Issue #57: Polish s-expression formatter (low priority cosmetic)
+- Continuous refinement and optimization
+- Community feedback and enhancements
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed progress.
 

@@ -19,7 +19,7 @@
 
 ```
 Rip Source → Lexer → Parser → S-Expressions → Codegen → JavaScript
-            (3,146)  (340)    (arrays!)      (5,239)    (ES2022)
+            (3,146)  (340)    (arrays!)      (5,246)    (ES2022)
 ```
 
 **Key insight:** S-expressions (simple arrays like `["=", "x", 42]`) are the IR, not complex AST nodes. This makes the compiler ~50% smaller than CoffeeScript.
@@ -45,21 +45,27 @@ bun run parser  # Regenerates src/parser.js from grammar.rip
 
 ## 🎯 Current Status
 
-**Version:** 1.4.2
-**Tests:** 938 passing (100%)
+**Version:** 1.4.3  
+**Tests:** 938 passing (100%)  
 **Status:** Production-ready, self-hosting fully operational
 
 **Recent accomplishments (November 2025):**
 - ✅ Issue #52 (Phase 1) - Dispatch table architecture, 71 cases extracted
 - ✅ Issue #54 (Phase 2) - All 110 cases in dispatch table (100% complete!)
-- ✅ Massive cleanup - Removed 2,042 lines of dead/duplicate code (28%!)
+- ✅ Massive cleanup - Removed 2,017 lines of dead/duplicate code (28%!)
 - ✅ Issue #51 - Standardized test formatting (""" → ''')
-- ✅ **Critical fix:** Restored self-hosting by fixing 'in' operator with string literals
-- ✅ **Result:** 5,239 clean, organized LOC
+- ✅ **Critical fix:** Restored self-hosting by fixing 'in' operator (v1.4.2)
+- ✅ **S-expression refactoring:** generateNot, generateIn use IR-level checks (v1.4.3)
+- ✅ **Result:** 5,246 clean, organized LOC
+
+**Key principles demonstrated:**
+- Work at s-expression level, NOT string manipulation (Issues #46, #49)
+- Simple pattern matching beats complex logic
+- All 110 operations in dispatch table (O(1) lookup)
 
 **Check current state:**
 ```bash
-gh issue list                    # See open issues
+gh issue list                    # See open issues (Issue #57 - formatter polish)
 git log --oneline -10            # Recent commits
 bun run test                     # Verify: 938/938 tests
 bun run parser                   # Test self-hosting ✅
@@ -76,7 +82,7 @@ bun run parser                   # Test self-hosting ✅
 │ Source │───>│   Lexer    │───>│  Parser  │───>│ Codegen │
 │  Code  │    │  (Coffee)  │    │  (Solar) │    │  (Rip)  │
 └────────┘    └────────────┘    └──────────┘    └─────────┘
-                 3,145 LOC          340 LOC       5,239 LOC
+                 3,145 LOC          340 LOC       5,246 LOC
                15 yrs tested     Generated!   S-expr w/Dispatch!
 ```
 
@@ -438,7 +444,7 @@ case '+': {
 
 **Result:** 50% less code, easier to maintain!
 
-### Codegen.js Architecture (v1.4.2)
+### Codegen.js Architecture (v1.4.3)
 
 **Key sections:**
 ```
@@ -446,8 +452,14 @@ Lines 17-146:    Class setup, dispatch table (GENERATORS)
 Lines 148-380:   compile(), variable collection
 Lines 388-667:   generate() method (dispatch + function call handling)
 Lines 680-3350:  Extracted generator methods (110 methods, organized)
-Lines 3355-5230: Helper methods (formatting, analysis, etc.)
+Lines 3355-5237: Helper methods (formatting, analysis, etc.)
 ```
+
+**Notable generator methods (s-expression approach):**
+- `generateIn()` - Runtime type check for string literals (critical for bootstrap!)
+- `generateNot()` - IR-level precedence checking (clean output)
+- `flattenBinaryChain()` - S-expression transform (Issue #46)
+- `generateComprehensionWithTarget()` - Direct array building (Issue #49)
 
 **Finding a generator:**
 1. Check dispatch table (lines 32-141) - maps operator → method name
@@ -970,22 +982,28 @@ bun run parser
 
 ### Code Cleanup (November 2025)
 
-**Removed 2,042 lines of dead/duplicate code (28%):**
+**Removed 2,017 lines of dead/duplicate code (28%):**
 - Duplicate inline functions (findPostfixConditional defined 2x)
 - Old cases (oldPropertyDot, oldDef) - 47 lines
 - Dead switch cases (error-throwing, forwarding) - 381 lines
 - **ALL Phase 2 duplicate cases** - 1,614 lines! (never removed after extraction)
 - Pointless switch wrapper with only default case
-- **Result:** 7,263 → 5,239 LOC (27.9% reduction!)
+- **Result:** 7,263 → 5,246 LOC (27.8% reduction!)
 
-### Self-Hosting Fix (v1.4.2)
+### Critical Fixes & Refactoring
 
-**Critical bug fix - Restored parser regeneration:**
+**v1.4.2 - Self-hosting restored:**
 - Fixed 'in' operator with string literals
 - JavaScript's `in` checks numeric indices on strings, NOT characters!
 - Pattern: `'\n' in action` → runtime check with `.includes()` for strings/arrays
-- This broke since Phase 1 - parser regeneration (`bun run parser`) now works ✅
+- Parser regeneration (`bun run parser`) works ✅
 - Added 7 tests for string literal behavior
+
+**v1.4.3 - S-expression refactoring:**
+- Converted generateNot() to check operand TYPE at IR level
+- No regex on generated code (following Issues #46, #49 philosophy)
+- Clean output: `!1`, `!x`, `!obj.prop` (no extra parens)
+- Conservative for complex: `!(a + b)` (keeps parens for safety)
 
 ---
 
@@ -997,7 +1015,7 @@ bun run parser
 |------|---------|-------------|-------|
 | `src/lexer.js` | Tokenization + rewriter | ⚠️ Rewriter only | 3,145 LOC |
 | `src/parser.js` | S-expression parser | ❌ Generated (don't edit) | 340 LOC |
-| `src/codegen.js` | JavaScript generator | ✅ Main work happens here | 5,239 LOC |
+| `src/codegen.js` | JavaScript generator | ✅ Main work happens here | 5,246 LOC |
 | `src/compiler.js` | Pipeline orchestration | ✅ Yes | 250 LOC |
 | `src/repl.js` | Terminal REPL | ✅ Yes | |
 | `src/browser.js` | Browser integration | ✅ Yes | |
@@ -1042,7 +1060,7 @@ fail "name", "code"                  # Expect compilation failure
 | Approach | Lines of Code | Complexity | Extensibility |
 |----------|---------------|------------|---------------|
 | Traditional AST (CoffeeScript) | 10,346 LOC | High (OOP hierarchy) | Hard |
-| S-Expressions (Rip) | 5,239 LOC | Low (pattern matching) | Easy |
+| S-Expressions (Rip) | 5,246 LOC | Low (pattern matching) | Easy |
 
 **Result: ~50% smaller implementation**
 
@@ -1167,12 +1185,12 @@ Rip has **zero runtime or build dependencies**. This is intentional and must be 
 
 ---
 
-## 📊 Project Metrics (v1.4.2)
+## 📊 Project Metrics (v1.4.3)
 
 **Codebase:**
 - Lexer+Rewriter: 3,145 LOC
 - Parser (generated): 340 LOC
-- Codegen: 5,239 LOC (dispatch table architecture)
+- Codegen: 5,246 LOC (dispatch table + s-expression approach)
 - Compiler: 250 LOC
 - Total: ~9,000 LOC
 

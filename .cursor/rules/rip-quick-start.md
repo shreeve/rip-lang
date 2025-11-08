@@ -21,11 +21,12 @@ bun test/runner.js test/rip/FILE.rip   # Specific
 bun run parser
 ```
 
-### Current Status (v1.4.2)
+### Current Status (v1.4.3)
 - ✅ All 110 node types in dispatch table
 - ✅ 938/938 tests passing (100%)
-- ✅ 5,239 LOC (clean architecture - 28% reduction!)
-- ✅ Self-hosting fully operational ✅
+- ✅ 5,246 LOC (clean architecture - 28% reduction!)
+- ✅ Self-hosting fully operational
+- ✅ S-expression approach throughout (no string manipulation!)
 
 ### File Guide
 - `src/codegen.js` - **YOU'LL WORK HERE** (lines 32-141: dispatch table)
