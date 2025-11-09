@@ -54,8 +54,7 @@ const parserInstance = {
 
     parseRoot() {
   switch (this.la.kind) {
-      case '':
-        return this._match('');
+      case '': return this._match('');
   
       case 'IDENTIFIER':
       case '@':
@@ -114,35 +113,33 @@ const parserInstance = {
   },
   
   parseBody() {
-  return this.parseLine();
+  const items = [this.parseLine()];
+  while (this.la.kind === 'TERMINATOR') {
+    this._match('TERMINATOR');
+    if (this._check('$end', 'TERMINATOR', 'OUTDENT', 'INTERPOLATION_END', ')')) break;
+    items.push(this.parseLine());
+  }
+  return items;
   },
   
-  parseLine() {
-  return this.parseExpression();
-  },
+  parseLine() { return this.parseExpression(); },
   
   parseStatement() {
   switch (this.la.kind) {
-      case 'RETURN':
-        return this.parseReturn();
+      case 'RETURN': return this.parseReturn();
   
-      case 'STATEMENT':
-        return this._match('STATEMENT');
+      case 'STATEMENT': return this._match('STATEMENT');
   
-      case 'IMPORT':
-        return this.parseImport();
+      case 'IMPORT': return this.parseImport();
   
-      case 'EXPORT':
-        return this.parseExport();
+      case 'EXPORT': return this.parseExport();
   
     default:
       this._error('Expected Statement, got ' + this.la.kind);
   }
   },
   
-  parseExpression() {
-  return this.parseValue();
-  },
+  parseExpression() { return this.parseValue(); },
   
   parseDef() {
   this._match('DEF');
@@ -156,49 +153,28 @@ const parserInstance = {
   
   parseExpressionLine() {
   switch (this.la.kind) {
-      case 'PARAM_START':
-      case '->':
-      case '=>':
-        return this.parseCodeLine();
+      case 'PARAM_START': case '->': case '=>': return this.parseCodeLine();
   
-      case 'UNARY':
-      case 'DO':
-      case 'DO_IIFE':
-        return this.parseOperationLine();
+      case 'UNARY': case 'DO': case 'DO_IIFE': return this.parseOperationLine();
   
     default:
       this._error('Expected ExpressionLine, got ' + this.la.kind);
   }
   },
   
-  parseYield() {
-  return this.parseYIELD();
-  },
+  parseYield() { return this._match('YIELD'); },
   
-  parseBlock() {
-  this._match('INDENT');
-    this._match('OUTDENT');
-  return items;
-  },
+  parseBlock() { this._match('INDENT'); this._match('OUTDENT'); return items; },
   
-  parseIdentifier() {
-  this._match('IDENTIFIER');
-  return items;
-  },
+  parseIdentifier() { this._match('IDENTIFIER'); return items; },
   
-  parseProperty() {
-  this._match('PROPERTY');
-  return items;
-  },
+  parseProperty() { this._match('PROPERTY'); return items; },
   
   parseAlphaNumeric() {
   switch (this.la.kind) {
-      case 'NUMBER':
-        return this._match('NUMBER');
+      case 'NUMBER': return this._match('NUMBER');
   
-      case 'STRING':
-      case 'STRING_START':
-        return this.parseString();
+      case 'STRING': case 'STRING_START': return this.parseString();
   
     default:
       this._error('Expected AlphaNumeric, got ' + this.la.kind);
@@ -207,8 +183,7 @@ const parserInstance = {
   
   parseString() {
   switch (this.la.kind) {
-      case 'STRING':
-        return this._match('STRING');
+      case 'STRING': return this._match('STRING');
   
       case 'STRING_START':
         { this._match('STRING_START'); const _1_2 = this.parseInterpolations(); this._match('STRING_END'); return items; }
@@ -220,25 +195,15 @@ const parserInstance = {
   
   parseInterpolations() {
   const items = [this.parseInterpolationChunk()];
-  
-  while (this._canParse('InterpolationChunk')) {
-    items.push(this.parseInterpolationChunk());
-  }
-  
+  while (this._canParse('InterpolationChunk')) items.push(this.parseInterpolationChunk());
   return items;
   },
   
-  parseInterpolationChunk() {
-  this._match('INTERPOLATION_START');
-    const $2 = this.parseBody();
-    this._match('INTERPOLATION_END');
-  return items;
-  },
+  parseInterpolationChunk() { this._match('INTERPOLATION_START'); const $2 = this.parseBody(); this._match('INTERPOLATION_END'); return items; },
   
   parseRegex() {
   switch (this.la.kind) {
-      case 'REGEX':
-        return this._match('REGEX');
+      case 'REGEX': return this._match('REGEX');
   
       case 'REGEX_START':
         { this._match('REGEX_START'); const _1_2 = this.parseInvocation(); this._match('REGEX_END'); return items; }
@@ -248,93 +213,55 @@ const parserInstance = {
   }
   },
   
-  parseRegexWithIndex() {
-  const $1 = this.parseRegex();
-    this._match(',');
-    const $3 = this.parseExpression();
-  return items;
-  },
+  parseRegexWithIndex() { const $1 = this.parseRegex(); this._match(','); const $3 = this.parseExpression(); return items; },
   
   parseLiteral() {
   switch (this.la.kind) {
-      case 'NUMBER':
-      case 'STRING':
-      case 'STRING_START':
-        return this.parseAlphaNumeric();
+      case 'NUMBER': case 'STRING': case 'STRING_START': return this.parseAlphaNumeric();
   
-      case 'JS':
-        return this._match('JS');
+      case 'JS': return this._match('JS');
   
-      case 'REGEX':
-      case 'REGEX_START':
-        return this.parseRegex();
+      case 'REGEX': case 'REGEX_START': return this.parseRegex();
   
-      case 'UNDEFINED':
-        return this._match('UNDEFINED');
+      case 'UNDEFINED': return this._match('UNDEFINED');
   
-      case 'NULL':
-        return this._match('NULL');
+      case 'NULL': return this._match('NULL');
   
-      case 'BOOL':
-        return this._match('BOOL');
+      case 'BOOL': return this._match('BOOL');
   
-      case 'INFINITY':
-        return this._match('INFINITY');
+      case 'INFINITY': return this._match('INFINITY');
   
-      case 'NAN':
-        return this._match('NAN');
+      case 'NAN': return this._match('NAN');
   
     default:
       this._error('Expected Literal, got ' + this.la.kind);
   }
   },
   
-  parseAssign() {
-  const $1 = this.parseAssignable();
-    this._match('=');
-    const $3 = this.parseExpression();
-  return items;
-  },
+  parseAssign() { const $1 = this.parseAssignable(); this._match('='); const $3 = this.parseExpression(); return items; },
   
-  parseAssignObj() {
-  return this.parseObjAssignable();
-  },
+  parseAssignObj() { return this.parseObjAssignable(); },
   
   parseSimpleObjAssignable() {
   switch (this.la.kind) {
-      case 'IDENTIFIER':
-        return this.parseIdentifier();
+      case 'IDENTIFIER': return this.parseIdentifier();
   
-      case 'PROPERTY':
-        return this.parseProperty();
+      case 'PROPERTY': return this.parseProperty();
   
-      case '@':
-        return this.parseThisProperty();
+      case '@': return this.parseThisProperty();
   
     default:
       this._error('Expected SimpleObjAssignable, got ' + this.la.kind);
   }
   },
   
-  parseObjAssignable() {
-  return this.parseSimpleObjAssignable();
-  },
+  parseObjAssignable() { return this.parseSimpleObjAssignable(); },
   
-  parseObjRestValue() {
-  this._match('...');
-    const $2 = this.parseSimpleObjAssignable();
-  return items;
-  },
+  parseObjRestValue() { this._match('...'); const $2 = this.parseSimpleObjAssignable(); return items; },
   
-  parseObjSpreadExpr() {
-  return this.parseSimpleObjAssignable();
-  },
+  parseObjSpreadExpr() { return this.parseSimpleObjAssignable(); },
   
-  parseReturn() {
-  this._match('RETURN');
-    const $2 = this.parseExpression();
-  return items;
-  },
+  parseReturn() { this._match('RETURN'); const $2 = this.parseExpression(); return items; },
   
   parseCode() {
   switch (this.la.kind) {
@@ -366,11 +293,9 @@ const parserInstance = {
   
   parseFuncGlyph() {
   switch (this.la.kind) {
-      case '->':
-        return this._match('->');
+      case '->': return this._match('->');
   
-      case '=>':
-        return this._match('=>');
+      case '=>': return this._match('=>');
   
     default:
       this._error('Expected FuncGlyph, got ' + this.la.kind);
@@ -379,68 +304,43 @@ const parserInstance = {
   
   parseOptComma() {
   switch (this.la.kind) {
-      case '':
-        return this._match('');
+      case '': return this._match('');
   
-      case ',':
-        return this._match(',');
+      case ',': return this._match(',');
   
     default:
       this._error('Expected OptComma, got ' + this.la.kind);
   }
   },
   
-  parseParamList() {
-  return this.parse();
-  },
+  parseParamList() { return this._match(''); },
   
-  parseParam() {
-  return this.parseParamVar();
-  },
+  parseParam() { return this.parseParamVar(); },
   
   parseParamVar() {
   switch (this.la.kind) {
-      case 'IDENTIFIER':
-        return this.parseIdentifier();
+      case 'IDENTIFIER': return this.parseIdentifier();
   
-      case '@':
-        return this.parseThisProperty();
+      case '@': return this.parseThisProperty();
   
-      case '[':
-        return this.parseArray();
+      case '[': return this.parseArray();
   
-      case '{':
-        return this.parseObject();
+      case '{': return this.parseObject();
   
     default:
       this._error('Expected ParamVar, got ' + this.la.kind);
   }
   },
   
-  parseSplat() {
-  this._match('...');
-    const $2 = this.parseExpression();
-  return items;
-  },
+  parseSplat() { this._match('...'); const $2 = this.parseExpression(); return items; },
   
-  parseSimpleAssignable() {
-  return this.parseIdentifier();
-  },
+  parseSimpleAssignable() { return this.parseIdentifier(); },
   
-  parseAssignable() {
-  return this.parseSimpleAssignable();
-  },
+  parseAssignable() { return this.parseSimpleAssignable(); },
   
-  parseValue() {
-  return this.parseAssignable();
-  },
+  parseValue() { return this.parseAssignable(); },
   
-  parseSuper() {
-  this._match('SUPER');
-    this._match('.');
-    const $3 = this.parseProperty();
-  return items;
-  },
+  parseSuper() { this._match('SUPER'); this._match('.'); const $3 = this.parseProperty(); return items; },
   
   parseMetaProperty() {
   switch (this.la.kind) {
@@ -469,113 +369,61 @@ const parserInstance = {
   return items;
   },
   
-  parseAssignList() {
-  return this.parse();
-  },
+  parseAssignList() { return this._match(''); },
   
-  parseClass() {
-  return this.parseCLASS();
-  },
+  parseClass() { return this._match('CLASS'); },
   
-  parseImport() {
-  this._match('IMPORT');
-    const $2 = this.parseString();
-  return items;
-  },
+  parseImport() { this._match('IMPORT'); const $2 = this.parseString(); return items; },
   
-  parseImportSpecifierList() {
-  return this.parseImportSpecifier();
-  },
+  parseImportSpecifierList() { return this.parseImportSpecifier(); },
   
-  parseImportSpecifier() {
-  return this.parseIdentifier();
-  },
+  parseImportSpecifier() { return this.parseIdentifier(); },
   
-  parseImportDefaultSpecifier() {
-  const $1 = this.parseIdentifier();
-  return items;
-  },
+  parseImportDefaultSpecifier() { const $1 = this.parseIdentifier(); return items; },
   
-  parseImportNamespaceSpecifier() {
-  this._match('IMPORT_ALL');
-    this._match('AS');
-    const $3 = this.parseIdentifier();
-  return items;
-  },
+  parseImportNamespaceSpecifier() { this._match('IMPORT_ALL'); this._match('AS'); const $3 = this.parseIdentifier(); return items; },
   
-  parseExport() {
-  this._match('EXPORT');
-    this._match('{');
-    this._match('}');
-  return items;
-  },
+  parseExport() { this._match('EXPORT'); this._match('{'); this._match('}'); return items; },
   
-  parseExportSpecifierList() {
-  return this.parseExportSpecifier();
-  },
+  parseExportSpecifierList() { return this.parseExportSpecifier(); },
   
-  parseExportSpecifier() {
-  return this.parseIdentifier();
-  },
+  parseExportSpecifier() { return this.parseIdentifier(); },
   
-  parseInvocation() {
-  const $1 = this.parseValue();
-    const $2 = this.parseOptFuncExist();
-    const $3 = this.parseString();
-  return items;
-  },
+  parseInvocation() { const $1 = this.parseValue(); const $2 = this.parseOptFuncExist(); const $3 = this.parseString(); return items; },
   
   parseOptFuncExist() {
   switch (this.la.kind) {
-      case '':
-        return this._match('');
+      case '': return this._match('');
   
-      case 'FUNC_EXIST':
-        return this._match('FUNC_EXIST');
+      case 'FUNC_EXIST': return this._match('FUNC_EXIST');
   
     default:
       this._error('Expected OptFuncExist, got ' + this.la.kind);
   }
   },
   
-  parseArguments() {
-  this._match('CALL_START');
-    this._match('CALL_END');
-  return items;
-  },
+  parseArguments() { this._match('CALL_START'); this._match('CALL_END'); return items; },
   
   parseThis() {
   switch (this.la.kind) {
-      case 'THIS':
-        return this._match('THIS');
+      case 'THIS': return this._match('THIS');
   
-      case '@':
-        return this._match('@');
+      case '@': return this._match('@');
   
     default:
       this._error('Expected This, got ' + this.la.kind);
   }
   },
   
-  parseThisProperty() {
-  this._match('@');
-    const $2 = this.parseProperty();
-  return items;
-  },
+  parseThisProperty() { this._match('@'); const $2 = this.parseProperty(); return items; },
   
-  parseArray() {
-  this._match('[');
-    this._match(']');
-  return items;
-  },
+  parseArray() { this._match('['); this._match(']'); return items; },
   
   parseRangeDots() {
   switch (this.la.kind) {
-      case '..':
-        return this._match('..');
+      case '..': return this._match('..');
   
-      case '...':
-        return this._match('...');
+      case '...': return this._match('...');
   
     default:
       this._error('Expected RangeDots, got ' + this.la.kind);
@@ -591,24 +439,13 @@ const parserInstance = {
   return items;
   },
   
-  parseSlice() {
-  const $1 = this.parseExpression();
-    const $2 = this.parseRangeDots();
-    const $3 = this.parseExpression();
-  return items;
-  },
+  parseSlice() { const $1 = this.parseExpression(); const $2 = this.parseRangeDots(); const $3 = this.parseExpression(); return items; },
   
-  parseArgList() {
-  return this.parseArg();
-  },
+  parseArgList() { return this.parseArg(); },
   
-  parseArg() {
-  return this.parseExpression();
-  },
+  parseArg() { return this.parseExpression(); },
   
-  parseArgElisionList() {
-  return this.parseArgElision();
-  },
+  parseArgElisionList() { return this.parseArgElision(); },
   
   parseArgElision() {
   switch (this.la.kind) {
@@ -672,88 +509,39 @@ const parserInstance = {
   }
   },
   
-  parseOptElisions() {
-  return this.parseOptComma();
-  },
+  parseOptElisions() { return this.parseOptComma(); },
   
   parseElisions() {
   const items = [this.parseElision()];
-  
-  while (this._canParse('Elision')) {
-    items.push(this.parseElision());
-  }
-  
+  while (this._canParse('Elision')) items.push(this.parseElision());
   return items;
   },
   
-  parseElision() {
-  const items = [this._match(',')];
-  
-  while (this.la.kind === 'TERMINATOR') {
-    items.push(this._match('TERMINATOR'));
-  }
-  
-  return items;
-  },
+  parseElision() { return this._match(','); },
   
   parseSimpleArgs() {
   const items = [this.parseExpression()];
-  
   while (this.la.kind === ',') {
     this._match(',');
-    
-    // Check FOLLOW set for trailing separator
     if (this._check(',', 'INDENT')) break;
-    
     items.push(this.parseExpression());
   }
-  
   return items;
   },
   
-  parseTry() {
-  this._match('TRY');
-    const $2 = this.parseBlock();
-  return items;
-  },
+  parseTry() { this._match('TRY'); const $2 = this.parseBlock(); return items; },
   
-  parseCatch() {
-  this._match('CATCH');
-    const $2 = this.parseIdentifier();
-    const $3 = this.parseBlock();
-  return items;
-  },
+  parseCatch() { this._match('CATCH'); const $2 = this.parseIdentifier(); const $3 = this.parseBlock(); return items; },
   
-  parseThrow() {
-  this._match('THROW');
-    const $2 = this.parseExpression();
-  return items;
-  },
+  parseThrow() { this._match('THROW'); const $2 = this.parseExpression(); return items; },
   
-  parseParenthetical() {
-  this._match('(');
-    const $2 = this.parseBody();
-    this._match(')');
-  return items;
-  },
+  parseParenthetical() { this._match('('); const $2 = this.parseBody(); this._match(')'); return items; },
   
-  parseWhileSource() {
-  this._match('WHILE');
-    const $2 = this.parseExpression();
-  return items;
-  },
+  parseWhileSource() { this._match('WHILE'); const $2 = this.parseExpression(); return items; },
   
-  parseWhile() {
-  const $1 = this.parseWhileSource();
-    const $2 = this.parseBlock();
-  return items;
-  },
+  parseWhile() { const $1 = this.parseWhileSource(); const $2 = this.parseBlock(); return items; },
   
-  parseLoop() {
-  this._match('LOOP');
-    const $2 = this.parseBlock();
-  return items;
-  },
+  parseLoop() { this._match('LOOP'); const $2 = this.parseBlock(); return items; },
   
   parseFor() {
   this._match('FOR');
@@ -764,32 +552,24 @@ const parserInstance = {
   return items;
   },
   
-  parseForValue() {
-  return this.parseForVar();
-  },
+  parseForValue() { return this.parseForVar(); },
   
   parseForVar() {
   switch (this.la.kind) {
-      case 'IDENTIFIER':
-        return this.parseIdentifier();
+      case 'IDENTIFIER': return this.parseIdentifier();
   
-      case '@':
-        return this.parseThisProperty();
+      case '@': return this.parseThisProperty();
   
-      case '[':
-        return this.parseArray();
+      case '[': return this.parseArray();
   
-      case '{':
-        return this.parseObject();
+      case '{': return this.parseObject();
   
     default:
       this._error('Expected ForVar, got ' + this.la.kind);
   }
   },
   
-  parseForVariables() {
-  return this.parseForValue();
-  },
+  parseForVariables() { return this.parseForValue(); },
   
   parseSwitch() {
   this._match('SWITCH');
@@ -802,38 +582,17 @@ const parserInstance = {
   
   parseWhens() {
   const items = [this.parseWhen()];
-  
-  while (this._canParse('When')) {
-    items.push(this.parseWhen());
-  }
-  
+  while (this._canParse('When')) items.push(this.parseWhen());
   return items;
   },
   
-  parseWhen() {
-  this._match('LEADING_WHEN');
-    const $2 = this.parseSimpleArgs();
-    const $3 = this.parseBlock();
-  return items;
-  },
+  parseWhen() { this._match('LEADING_WHEN'); const $2 = this.parseSimpleArgs(); const $3 = this.parseBlock(); return items; },
   
-  parseIfBlock() {
-  this._match('IF');
-    const $2 = this.parseExpression();
-    const $3 = this.parseBlock();
-  return items;
-  },
+  parseIfBlock() { this._match('IF'); const $2 = this.parseExpression(); const $3 = this.parseBlock(); return items; },
   
-  parseUnlessBlock() {
-  this._match('UNLESS');
-    const $2 = this.parseExpression();
-    const $3 = this.parseBlock();
-  return items;
-  },
+  parseUnlessBlock() { this._match('UNLESS'); const $2 = this.parseExpression(); const $3 = this.parseBlock(); return items; },
   
-  parseIf() {
-  return this.parseIfBlock();
-  },
+  parseIf() { return this.parseIfBlock(); },
   
   parseOperationLine() {
   switch (this.la.kind) {
@@ -851,17 +610,9 @@ const parserInstance = {
   }
   },
   
-  parseOperation() {
-  this._match('UNARY');
-    const $2 = this.parseExpression();
-  return items;
-  },
+  parseOperation() { this._match('UNARY'); const $2 = this.parseExpression(); return items; },
   
-  parseDoIife() {
-  this._match('DO_IIFE');
-    const $2 = this.parseCode();
-  return items;
-  }
+  parseDoIife() { this._match('DO_IIFE'); const $2 = this.parseCode(); return items; }
 };
 
 function createParser(yyInit = {}) {
