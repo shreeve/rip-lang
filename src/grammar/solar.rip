@@ -701,61 +701,61 @@ class Generator
   # Main entry point for PRD generation
   generateRecursiveDescent: ->
     console.log "\n🚀 Generating Predictive Recursive Descent Parser..."
-    
+
     # Classify all grammar rules by pattern
     patterns = @_classifyGrammarPatterns()
-    
+
     # Generate parse functions for each nonterminal
     parseFunctions = @_generateParseFunctions patterns
-    
+
     # Generate runtime helpers and lexer interface
     runtime = @_generatePRDRuntime()
-    
+
     # Assemble complete parser
     @_assemblePRDParser parseFunctions, runtime
 
   # Classify each grammar rule into a pattern category
   _classifyGrammarPatterns: ->
     patterns = {}
-    
+
     for own typeName, type of @types when typeName isnt '$accept'
       pattern = @_detectPattern typeName, type.rules
       patterns[typeName] = pattern
       console.log "  #{typeName}: #{pattern.type}"
-    
+
     patterns
 
   # Detect what pattern a rule set matches
   _detectPattern: (typeName, rules) ->
     return {type: 'epsilon'} if rules.length is 0
-    
+
     # Try left recursion detection first (most common)
     if leftRec = @_detectLeftRecursion(typeName, rules)
       return leftRec
-    
+
     # Try alternatives with disjoint FIRST sets
     if rules.length > 1
       firstSets = rules.map (r) => @_computeFirst r.symbols
       disjoint = @_areDisjoint firstSets
       if disjoint
         return {type: 'alternatives', rules, firstSets}
-    
+
     # Single production = sequence
     if rules.length is 1
       return {type: 'sequence', rule: rules[0]}
-    
+
     # Fallback: sequential alternatives (try each in order)
     {type: 'sequential', rules}
 
   # Detect left recursion pattern: A → B | A sep B
   _detectLeftRecursion: (typeName, rules) ->
     return null unless rules.length is 2
-    
+
     [rule1, rule2] = rules
-    
+
     # Check if rule2 starts with typeName (left recursive)
     return null unless rule2.symbols[0] is typeName
-    
+
     # Pattern: A → base | A separator element
     # Example: Body → Line | Body TERMINATOR Line
     if rule1.symbols.length is 1 and rule2.symbols.length is 3
@@ -767,7 +767,7 @@ class Generator
         baseAction: rule1
         accumAction: rule2
       }
-    
+
     # Pattern: A → base | A element (no separator)
     # Example: Whens → When | Whens When
     if rule1.symbols.length is 1 and rule2.symbols.length is 2
@@ -779,7 +779,7 @@ class Generator
         baseAction: rule1
         accumAction: rule2
       }
-    
+
     null
 
   # Check if FIRST sets are mutually disjoint
@@ -798,12 +798,13 @@ class Generator
       fn = @_emitParseFunction typeName, pattern
       functions.push fn if fn
     
-    functions.join '\n\n'
+    # Join with commas (object literal methods)
+    functions.join ',\n\n'
 
   # Emit a parse function for a specific pattern
   _emitParseFunction: (typeName, pattern) ->
     methodName = "parse#{typeName}"
-    
+
     switch pattern.type
       when 'left-recursive'
         @_emitLeftRecursive typeName, pattern
@@ -820,20 +821,32 @@ class Generator
   # Emit left-recursive pattern (while loop with accumulator)
   _emitLeftRecursive: (typeName, pattern) ->
     {base, separator, element, baseAction, accumAction} = pattern
-    
+
     # Get action code for base and accumulation
     baseActionCode = @_getActionCode baseAction
     accumActionCode = @_getActionCode accumAction
-    
+
     # Build FOLLOW set check for trailing separator
     followTokens = Array.from(@types[typeName].follows).map (t) => "'#{t}'"
     followCheck = if followTokens.length then "this._check(#{followTokens.join(', ')})" else "false"
+
+    # Check if base is terminal or nonterminal
+    baseCall = if @types[base]
+      "this.parse#{base}()"
+    else
+      "this._match('#{base}')"
+    
+    # Check if element is terminal or nonterminal
+    elementCall = if @types[element]
+      "this.parse#{element}()"
+    else
+      "this._match('#{element}')"
     
     if separator
       # With separator (like Body → Line | Body TERMINATOR Line)
       """
       parse#{typeName}() {
-        const items = [this.parse#{base}()];
+        const items = [#{baseCall}];
         
         while (this.la.kind === '#{separator}') {
           this._match('#{separator}');
@@ -841,7 +854,7 @@ class Generator
           // Check FOLLOW set for trailing separator
           if (#{followCheck}) break;
           
-          items.push(this.parse#{element}());
+          items.push(#{elementCall});
         }
         
         #{accumActionCode}
@@ -849,12 +862,18 @@ class Generator
       """
     else
       # Without separator (like Whens → When | Whens When)
+      # Need to check lookahead for element
+      elementCheck = if @types[element]
+        "this._canParse('#{element}')"
+      else
+        "this.la.kind === '#{element}'"
+      
       """
       parse#{typeName}() {
-        const items = [this.parse#{base}()];
+        const items = [#{baseCall}];
         
-        while (this._canParse('#{element}')) {
-          items.push(this.parse#{element}());
+        while (#{elementCheck}) {
+          items.push(#{elementCall});
         }
         
         #{accumActionCode}
@@ -874,10 +893,16 @@ class Generator
       # Get symbol to parse (usually single nonterminal, or sequence)
       if rule.symbols.length is 1
         symbol = rule.symbols[0]
-        parseCall = "return this.parse#{symbol}();"
+        # Check if it's a nonterminal or terminal
+        if @types[symbol]
+          parseCall = "return this.parse#{symbol}();"
+        else
+          # Terminal - match and return the value
+          parseCall = "return this._match('#{symbol}');"
       else
-        # Sequence - need to generate sequence parsing
-        parseCall = @_emitSequenceInline rule
+        # Sequence - generate with block scope to avoid variable conflicts
+        seqCode = @_emitSequenceInline rule, i
+        parseCall = "{ #{seqCode} }"
       
       # Generate case labels for each FIRST token
       for token from firstSet
@@ -894,7 +919,7 @@ class Generator
       switch (this.la.kind) {
     #{casesCode}
         default:
-          this._error(\`Expected #{typeName}, got \${this.la.kind}\`);
+          this._error('Expected #{typeName}, got ' + this.la.kind);
       }
     }
     """
@@ -903,7 +928,7 @@ class Generator
   _emitSequence: (typeName, pattern) ->
     {rule} = pattern
     action = @_getActionCode rule
-    
+
     # Generate parse calls for each symbol
     parseCalls = []
     for symbol, i in rule.symbols
@@ -913,9 +938,9 @@ class Generator
       else
         # Terminal - match token
         parseCalls.push "this._match('#{symbol}');"
-    
+
     parseCode = parseCalls.join '\n    '
-    
+
     """
     parse#{typeName}() {
       #{parseCode}
@@ -926,12 +951,12 @@ class Generator
   # Emit sequential alternatives (try each in order)
   _emitSequential: (typeName, pattern) ->
     {rules} = pattern
-    
+
     # For now, try first alternative (fallback pattern)
     # TODO: Implement proper sequential trying
     rule = rules[0]
     action = @_getActionCode rule
-    
+
     if rule.symbols.length is 1
       symbol = rule.symbols[0]
       """
@@ -943,11 +968,12 @@ class Generator
       @_emitSequence typeName, {rule}
 
   # Emit sequence parsing inline (for alternatives)
-  _emitSequenceInline: (rule) ->
+  _emitSequenceInline: (rule, ruleIndex = 0) ->
     parseCalls = []
     for symbol, i in rule.symbols
       if @types[symbol]
-        parseCalls.push "const $#{i + 1} = this.parse#{symbol}();"
+        # Use rule-specific variable names to avoid conflicts
+        parseCalls.push "const _#{ruleIndex}_#{i + 1} = this.parse#{symbol}();"
       else
         parseCalls.push "this._match('#{symbol}');"
     
@@ -961,14 +987,13 @@ class Generator
     # For now, return simple result
     # The action code is embedded in performAction function
     # We need to extract it for the specific rule
-    
+
     # Simplified for POC: just return the result array
     "return items;"
 
-  # Generate PRD runtime helpers
+  # Generate PRD runtime helpers (using ''' - no interpolation needed here)
   _generatePRDRuntime: ->
     '''
-    // Lexer interface
     _match(kind) {
       if (this.la.kind !== kind) {
         this._error(`Expected ${kind}, got ${this.la.kind}`);
@@ -976,17 +1001,17 @@ class Generator
       const token = this.la;
       this._advance();
       return token.value;
-    }
+    },
     
     _check(...kinds) {
       return kinds.includes(this.la.kind);
-    }
+    },
     
     _canParse(typeName) {
       // Check if lookahead is in FIRST set of typeName
       // For POC, simplified check
       return true; // TODO: Implement proper FIRST set lookup
-    }
+    },
     
     _advance() {
       if (this.pos >= this.tokens.length) {
@@ -995,11 +1020,10 @@ class Generator
         const token = this.tokens[this.pos++];
         this.la = { kind: token[0], value: token[1], loc: token[2] };
       }
-    }
-    
+    },
     _error(msg) {
       throw new Error(`Parse error: ${msg}`);
-    }
+    },
     
     parse(input) {
       // Set up lexer
@@ -1013,7 +1037,7 @@ class Generator
       
       // Parse root
       return this.parseRoot();
-    }
+    },
     '''
 
   # Assemble complete PRD parser
@@ -1021,18 +1045,18 @@ class Generator
     """
     // Predictive Recursive Descent Parser generated by Solar #{VERSION}
     // Generated from SLR(1) grammar without grammar modifications!
-    
+
     const parserInstance = {
       lexer: null,
       tokens: [],
       pos: 0,
       la: null,
-      
+
       #{@dedent runtime, '  '}
-      
+
       #{@dedent parseFunctions, '  '}
     };
-    
+
     function createParser(yyInit = {}) {
       const p = Object.create(parserInstance);
       Object.defineProperty(p, "yy", {
@@ -1043,9 +1067,9 @@ class Generator
       });
       return p;
     }
-    
+
     const parser = /*#__PURE__*/createParser();
-    
+
     export { parser };
     export const Parser = createParser;
     export const parse = parser.parse.bind(parser);
@@ -1352,7 +1376,7 @@ if isRunAsScript
           generator.generateRecursiveDescent()
         else
           generator.generate()
-        
+
         fs.writeFileSync options.output, parserCode
         console.log "\nParser generated: #{options.output}"
 
