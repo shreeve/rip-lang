@@ -5,11 +5,11 @@ Follow the official workflow:
 • Create several tests, which should all fail
 • Fix the problem
 • When done, run the tests, to show it's passing
-• Create a GitHub PR, merge it, then close the ticket.
 • Bump the patch version (the z in x.y.z) of package.json
 • Run "bun run parser && bun run browser"
 • Add an entry to the CHANGELOG.md file
 • Commit and push to GitHub
+• Create a GitHub PR, merge it, then close the ticket.
 • Do not push to GitHub yet
 
 ==
