@@ -750,12 +750,12 @@ class Generator
   # Detect left recursion pattern: A → B | A sep B | A sep (with trailing sep)
   _detectLeftRecursion: (typeName, rules) ->
     return null unless rules.length in [2, 3]
-    
+
     # Find base case (non-recursive rule with single symbol)
     baseRule = null
     accumRule = null
     trailingRule = null
-    
+
     for rule in rules
       if rule.symbols.length is 1
         baseRule = rule
@@ -767,9 +767,9 @@ class Generator
             accumRule = rule  # A → A B (no separator)
           else
             trailingRule = rule  # A → A sep (trailing separator)
-    
+
     return null unless baseRule and accumRule
-    
+
     # Extract pattern parts
     if accumRule.symbols.length is 3
       # With separator: A → base | A sep element | A sep
@@ -791,7 +791,7 @@ class Generator
         baseAction: baseRule
         accumAction: accumRule
       }
-    
+
     null
 
   # Check if FIRST sets are mutually disjoint
