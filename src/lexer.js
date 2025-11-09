@@ -748,8 +748,30 @@ export var Lexer = class Lexer {
     } = this.matchWithInterpolations(regex, quote));
     heredoc = quote.length === 3;
     if (heredoc) {
-      // Find the smallest indentation. It will be removed from all lines later.
-      indent = null;
+      // NEW: Check if closing delimiter has only whitespace before it
+      // If so, use its column position as the dedenting baseline
+      let useClosingColumn = false;
+      let closingColumn = 0;
+
+      const closingPos = end - quote.length;
+
+      // Find the start of the line containing the closing delimiter
+      let lineStart = closingPos - 1;
+      while (lineStart >= 0 && this.chunk[lineStart] !== '\n') {
+        lineStart--;
+      }
+      lineStart++;  // Position after \n (or 0 if no \n)
+
+      // Get text between line start and closing delimiter
+      const beforeClosing = this.chunk.slice(lineStart, closingPos);
+
+      // If only whitespace, use closing column as baseline
+      if (/^\s*$/.test(beforeClosing)) {
+        useClosingColumn = true;
+        closingColumn = beforeClosing.length;
+      }
+
+      // Get document content
       doc = ((function() {
         var k, len, results;
         results = [];
@@ -761,10 +783,19 @@ export var Lexer = class Lexer {
         }
         return results;
       })()).join('#{}');
-      while (match = HEREDOC_INDENT.exec(doc)) {
-        attempt = match[1];
-        if (indent === null || (0 < (ref = attempt.length) && ref < indent.length)) {
-          indent = attempt;
+
+      // Determine indentation to strip
+      if (useClosingColumn) {
+        // Use closing delimiter column as baseline
+        indent = ' '.repeat(closingColumn);
+      } else {
+        // Fall back to current behavior: find minimum indentation
+        indent = null;
+        while (match = HEREDOC_INDENT.exec(doc)) {
+          attempt = match[1];
+          if (indent === null || (0 < (ref = attempt.length) && ref < indent.length)) {
+            indent = attempt;
+          }
         }
       }
     }

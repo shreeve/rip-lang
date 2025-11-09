@@ -3,7 +3,7 @@
 /**
  * Rip Test Runner
  *
- * Runs .ripp test files with three test types:
+ * Runs .rip test files with three test types:
  * - test(name, code, expected) - Execute and compare result
  * - code(name, code, expected) - Compile and compare generated code
  * - fail(name, code) - Expect compilation/execution to fail
@@ -132,7 +132,7 @@ function code(name, sourceCode, expectedCode) {
   } catch (error) {
     fileTests.fail++;
     totalTests.fail++;
-    console.log(`  ${colors.red}✗${colors.reset} ${name}`);
+    console.log(`  ${colors.red}✗${colors.reset} ${name} - ${error.message.split('\n')[0]}`);
     failures.push({
       file: currentFile,
       test: name,
@@ -229,15 +229,9 @@ function findTestFiles(path) {
     }
 
     if (stats.isDirectory()) {
-      // Skip fixtures directory
-      if (path.includes('/fixtures')) {
-        return [];
-      }
-
+      if (path.includes('/fixtures')) return [];
       const entries = readdirSync(path).sort();
-      return entries.flatMap(entry =>
-        findTestFiles(join(path, entry))
-      );
+      return entries.flatMap(entry => findTestFiles(join(path, entry)));
     }
   } catch (error) {
     console.error(`${colors.red}Error reading path: ${path}${colors.reset}`);
@@ -247,17 +241,16 @@ function findTestFiles(path) {
   return [];
 }
 
-// Print failure details
+// Print failure summary
 function printFailures() {
   if (failures.length === 0) return;
 
   console.log(`\n${colors.bright}${colors.red}Failure Details:${colors.reset}\n`);
 
-  failures.forEach((failure, index) => {
+  failures.slice(0, 20).forEach((failure, index) => {
     console.log(`${colors.bright}${index + 1}. ${failure.file} - ${failure.test}${colors.reset}`);
-
     if (failure.error) {
-      console.log(`   Error: ${failure.error}`);
+      console.log(`   Error: ${failure.error.split('\n')[0]}`);
     }
 
     if (failure.type === 'test') {
@@ -278,6 +271,10 @@ function printFailures() {
 
     console.log('');
   });
+
+  if (failures.length > 20) {
+    console.log(`   ... and ${failures.length - 20} more failures\n`);
+  }
 }
 
 // Main entry point
@@ -310,12 +307,19 @@ async function main(args) {
     console.log(`${colors.red}${colors.bright}Test failures detected${colors.reset}`);
     printFailures();
   } else {
-    console.log(`${colors.green}${colors.bright}All tests passed!${colors.reset}`);
+    console.log(`${colors.green}${colors.bright}🎉 ALL TESTS PASSED!${colors.reset}`);
   }
 
   console.log(`${colors.green}✓ ${totalTests.pass} passing${colors.reset}`);
   if (totalTests.fail > 0) {
     console.log(`${colors.red}✗ ${totalTests.fail} failing${colors.reset}`);
+  }
+
+  // Calculate and display percentage
+  const total = totalTests.pass + totalTests.fail;
+  if (total > 0) {
+    const percentage = ((totalTests.pass / total) * 100).toFixed(1);
+    console.log(`${colors.bright}★ ${percentage}% passing${colors.reset}`);
   }
 
   process.exit(totalTests.fail > 0 ? 1 : 0);

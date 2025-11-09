@@ -99,6 +99,107 @@ test 'empty heredoc', 'x = """\n"""\nx', ''
 test 'heredoc newlines only', 'x = """\n\n\n"""\nx', '\n'
 
 # ============================================================================
+# Heredoc Closing Delimiter Position (NEW in v1.5.0)
+# ============================================================================
+
+# When closing delimiter has ONLY whitespace before it, use its column as baseline
+
+# Closing at column 0 - preserve all indentation
+test 'heredoc closing at column 0', '''
+  x = \'\'\'
+    line 1
+      line 2
+  \'\'\'
+  x
+  ''', '  line 1\n    line 2'
+
+# Closing at column 2 - strip 2 spaces
+test 'heredoc closing at column 2', '''
+  x = \'\'\'
+    line 1
+      line 2
+    \'\'\'
+  x
+  ''', 'line 1\n  line 2'
+
+# Closing at column 4 - strip 4 spaces
+test 'heredoc closing at column 4', '''
+  x = \'\'\'
+      line 1
+        line 2
+      line 3
+      \'\'\'
+  x
+  ''', 'line 1\n  line 2\nline 3'
+
+# Closing inline (non-whitespace before) - fallback to minimum behavior
+test 'heredoc closing inline fallback', '''
+  x = \'\'\'
+    line 1
+      line 2
+    \'\'\'; y = 5
+  x
+  ''', 'line 1\n  line 2'
+
+# Empty heredoc with closing at column 2 (just whitespace content)
+test 'heredoc empty with closing indent', '''
+  x = \'\'\'
+
+    \'\'\'
+  x
+  ''', ''
+
+# Code generation use case - preserve base indent
+test 'heredoc codegen preserve indent', '''
+  generateCode = ->
+    \'\'\'
+      if (x) {
+        return y;
+      }
+    \'\'\'
+  generateCode()
+  ''', '  if (x) {\n    return y;\n  }'
+
+# Code generation use case - strip to flush left (closing at content level)
+test 'heredoc codegen strip indent', '''
+  generateCode = ->
+    \'\'\'
+      if (x) {
+        return y;
+      }
+      \'\'\'
+  generateCode()
+  ''', 'if (x) {\n  return y;\n}'
+
+# Mixed indentation levels
+test 'heredoc mixed indentation', '''
+  x = \'\'\'
+      deep
+    shallow
+      deep again
+    \'\'\'
+  x
+  ''', '  deep\nshallow\n  deep again'
+
+# Double-quote heredoc - closing at column 2
+test 'double-quote heredoc closing at column 2', '''
+  x = """
+    line 1
+      line 2
+    """
+  x
+  ''', 'line 1\n  line 2'
+
+# Double-quote heredoc - closing at column 0 (preserve indent)
+test 'double-quote heredoc closing at column 0', '''
+  x = """
+    line 1
+      line 2
+  """
+  x
+  ''', '  line 1\n    line 2'
+
+# ============================================================================
 # Heregex (Extended Regular Expressions) - The Star Feature!
 # ============================================================================
 
