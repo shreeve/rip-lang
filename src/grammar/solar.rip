@@ -705,13 +705,13 @@ class Generator
     console.log "\n🚀 Generating Direct Table-to-Code Parser..."
     console.log "  States: #{@parseTable.length}"
     console.log "  Rules: #{@rules.length}"
-    
+
     # Generate a function for each state
     stateFunctions = @_generateStateFunctions()
-    
+
     # Generate runtime helpers (shift, reduce, goto)
     runtime = @_generateDirectRuntime()
-    
+
     # Assemble complete parser
     @_assembleDirectParser stateFunctions, runtime
 
@@ -719,48 +719,48 @@ class Generator
   _generateStateFunctions: ->
     [SHIFT, REDUCE, ACCEPT] = [1, 2, 3]
     functions = []
-    
+
     for state, stateNum in @parseTable
       cases = []
       defaultAction = null
-      
+
       # Check for default action (single reduce action for all tokens)
       if @defaultActions[stateNum]
         defaultAction = @defaultActions[stateNum]
-      
+
       # Generate case for each action in this state
       for own tokenId, action of state when tokenId isnt 'undefined'
         continue if typeof action is 'number'  # Skip goto entries (nonterminal IDs)
-        
+
         tokenName = @tokenNames[tokenId] or tokenId
         continue unless tokenName  # Skip if no token name
-        
+
         if Array.isArray(action) and action[0] is SHIFT
           # Shift action: match token, push state, go to next state
           nextState = action[1]
           cases.push "      case '#{tokenName}': this._match('#{tokenName}'); this.stateStack.push(#{nextState}); return this.state#{nextState}();"
-        
+
         else if Array.isArray(action) and action[0] is REDUCE
           # Reduce action: pop, apply action, goto
           ruleId = action[1]
           rule = @rules[ruleId - 1]  # Rules are 1-indexed
           cases.push "      case '#{tokenName}': return this._reduce(#{ruleId});"
-        
+
         else if Array.isArray(action) and action[0] is ACCEPT
           # Accept: return result
           cases.push "      case '#{tokenName}': return this.valueStack[0];"
-      
+
       # Build function
       if cases.length > 0
         casesCode = cases.join '\n'
-        
+
         # Add default action if present
         defaultCode = if defaultAction and defaultAction[0] is REDUCE
           ruleId = defaultAction[1]
           "return this._reduce(#{ruleId});"
         else
           "this._error('Unexpected token ' + this.la.kind + ' in state #{stateNum}');"
-        
+
         functions.push """
         state#{stateNum}() {
           switch (this.la.kind) {
@@ -770,7 +770,7 @@ class Generator
           }
         }
         """
-    
+
     functions.join ',\n\n'
 
   # Classify each grammar rule into a pattern category (OLD - keeping for reference)
@@ -1022,10 +1022,10 @@ class Generator
   # Use parse table analysis to extract lookahead discrimination
   _emitSequential: (typeName, pattern) ->
     {rules} = pattern
-    
+
     # Extract lookahead conditions from parse table
     lookaheadMap = @_extractLookaheadConditions typeName, rules
-    
+
     if lookaheadMap.size > 0
       # Generate decision tree with lookahead
       @_emitLookaheadDecisionTree typeName, rules, lookaheadMap
@@ -1033,7 +1033,7 @@ class Generator
       # Fallback: try first alternative (shouldn't happen often)
       console.log "  ⚠️  No lookahead conditions extracted for #{typeName}, using first alternative"
       rule = rules[0]
-      
+
       if rule.symbols.length is 1
         symbol = rule.symbols[0]
         if @types[symbol]
@@ -1047,39 +1047,39 @@ class Generator
   # Returns Map: first_token → { peek_tokens_needed, production_map }
   _extractLookaheadConditions: (typeName, rules) ->
     lookaheadMap = new Map
-    
+
     # For each rule, find its distinguishing tokens
     for rule in rules
       # Get FIRST set for this production
       firstSet = @_computeFirst rule.symbols
-      
+
       for token from firstSet
         unless lookaheadMap.has token
           lookaheadMap.set token, {rule, firstToken: token}
-    
+
     lookaheadMap
 
   # Generate decision tree with lookahead for ambiguous alternatives
   _emitLookaheadDecisionTree: (typeName, rules, lookaheadMap) ->
     # Group rules by first token
     tokenGroups = new Map
-    
+
     for rule in rules
       firstSet = @_computeFirst rule.symbols
       for token from firstSet
         unless tokenGroups.has token
           tokenGroups.set token, []
         tokenGroups.get(token).push rule
-    
+
     # Build switch cases
     cases = []
-    
+
     for [token, rulesForToken] from tokenGroups
       if rulesForToken.length is 1
         # Unambiguous - direct dispatch
         rule = rulesForToken[0]
         action = @_getActionCode rule
-        
+
         if rule.symbols.length is 1
           symbol = rule.symbols[0]
           if @types[symbol]
@@ -1098,10 +1098,10 @@ class Generator
         # Build decision tree based on second token
         cases.push "      case '#{token}':"
         cases.push "        // Multiple productions possible, check lookahead"
-        
+
         # Try to discriminate based on what follows
         hasDiscriminator = false
-        
+
         for rule, idx in rulesForToken
           # Check if this rule has a distinctive second token
           if rule.symbols.length >= 2 and not @types[rule.symbols[1]]
@@ -1109,7 +1109,7 @@ class Generator
             peekToken = rule.symbols[1]
             isLast = idx is rulesForToken.length - 1
             hasDiscriminator = true
-            
+
             if isLast
               # Last option - no need to check, just do it
               seqCode = @_generateSequenceCode rule
@@ -1120,7 +1120,7 @@ class Generator
               seqCode = @_generateSequenceCode rule
               cases.push "          #{seqCode}"
               cases.push "        }"
-        
+
         # If no distinctive tokens found, fall back to first rule
         unless hasDiscriminator
           firstRule = rulesForToken[0]
@@ -1130,9 +1130,9 @@ class Generator
           else
             seqCode = @_generateSequenceCode firstRule
             cases.push "        { #{seqCode} }"
-    
+
     casesCode = cases.join '\n'
-    
+
     """
     parse#{typeName}() {
       switch (this.la.kind) {
@@ -1151,7 +1151,7 @@ class Generator
         parseCalls.push "const $#{i + 1} = this.parse#{symbol}();"
       else
         parseCalls.push "const $#{i + 1} = this._match('#{symbol}');"
-    
+
     action = @_getActionCode rule
     code = parseCalls.join(' ')
     "#{code} #{action}"
@@ -1165,7 +1165,7 @@ class Generator
         parseCalls.push "const _#{ruleIndex}_#{i + 1} = this.parse#{symbol}();"
       else
         parseCalls.push "this._match('#{symbol}');"
-    
+
     action = @_getActionCode rule
     code = parseCalls.join(' ')
     "#{code} #{action}"
@@ -1263,23 +1263,23 @@ class Generator
       this._advance();
       return token.value;
     },
-    
+
     _check(...kinds) {
       return kinds.includes(this.la.kind);
     },
-    
+
     _peek(n = 1) {
       const idx = this.pos + n - 1;
       if (idx >= this.tokens.length) return '$end';
       return this.tokens[idx][0];
     },
-    
+
     _canParse(typeName) {
       // Check if lookahead is in FIRST set of typeName
       // For POC, simplified check
       return true; // TODO: Implement proper FIRST set lookup
     },
-    
+
     _advance() {
       if (this.pos >= this.tokens.length) {
         this.la = { kind: '$end', value: null };
@@ -1288,21 +1288,21 @@ class Generator
         this.la = { kind: token[0], value: token[1], loc: token[2] };
       }
     },
-    
+
     _error(msg) {
       throw new Error(`Parse error: ${msg}`);
     },
-    
+
     parse(input) {
       // Set up lexer
       if (!this.lexer) {
         throw new Error('Lexer not set');
       }
-      
+
       this.tokens = this.lexer.tokens;
       this.pos = 0;
       this._advance(); // Initialize lookahead
-      
+
       // Parse root
       return this.parseRoot();
     },
@@ -1313,7 +1313,7 @@ class Generator
     '''
     valueStack: [],
     stateStack: [],
-    
+
     _match(kind) {
       if (this.la.kind !== kind) {
         this._error('Expected ' + kind + ', got ' + this.la.kind);
@@ -1323,7 +1323,7 @@ class Generator
       this._advance();
       return value;
     },
-    
+
     _advance() {
       if (this.pos >= this.tokens.length) {
         this.la = { kind: '$end', value: null };
@@ -1332,17 +1332,17 @@ class Generator
         this.la = { kind: token[0], value: token[1], loc: token[2] };
       }
     },
-    
+
     _reduce(ruleId) {
       // Pop values and states from stack (matching production length)
       const len = this.ruleData[ruleId][1];
       const $$ = this.valueStack.splice(-len, len);
-      
+
       // Pop states (one for each symbol in production)
       if (len > 0) {
         this.stateStack.splice(-len, len);
       }
-      
+
       // Call performAction with standard parameters
       // performAction signature: (yytext, yyleng, yylineno, yy, yystate, $$, _$)
       const result = this.performAction.call(
@@ -1355,38 +1355,38 @@ class Generator
         $$,                     // $$ (values array)
         {}                      // _$ (location data)
       );
-      
+
       this.valueStack.push(result);
-      
+
       // Goto: find next state based on nonterminal
       const ntId = this.ruleData[ruleId][0];
       const currentState = this.stateStack[this.stateStack.length - 1];
       const gotoState = this.gotoTable[currentState][ntId];
-      
+
       if (gotoState !== undefined) {
         this.stateStack.push(gotoState);
         return this['state' + gotoState]();
       }
-      
+
       // No goto found - might be accept state
       return result;
     },
-    
+
     _error(msg) {
       throw new Error('Parse error: ' + msg);
     },
-    
+
     parse(input) {
       if (!this.lexer) {
         throw new Error('Lexer not set');
       }
-      
+
       this.tokens = this.lexer.tokens;
       this.pos = 0;
       this.valueStack = [];
       this.stateStack = [0];
       this._advance();
-      
+
       return this.state0();
     },
     '''
@@ -1396,11 +1396,11 @@ class Generator
     # Build goto table for reduce actions
     gotoTable = @_buildGotoTable()
     gotoTableCode = JSON.stringify(gotoTable).replace /"(\d+)":/g, "$1:"
-    
+
     """
     // Direct Table-to-Code Parser generated by Solar #{VERSION}
     // Each state is a function - no table lookups at runtime!
-    
+
     const parserInstance = {
       lexer: null,
       tokens: [],
@@ -1409,12 +1409,12 @@ class Generator
       ruleData: #{JSON.stringify @ruleData},
       gotoTable: #{gotoTableCode},
       performAction: #{@performAction},
-      
+
       #{@dedent runtime, '  '}
-      
+
       #{@dedent stateFunctions, '  '}
     };
-    
+
     function createParser(yyInit = {}) {
       const p = Object.create(parserInstance);
       Object.defineProperty(p, "yy", {
@@ -1425,9 +1425,9 @@ class Generator
       });
       return p;
     }
-    
+
     const parser = /*#__PURE__*/createParser();
-    
+
     export { parser };
     export const Parser = createParser;
     export const parse = parser.parse.bind(parser);
@@ -1437,16 +1437,16 @@ class Generator
   # Build goto table (state, nonterminal) → nextState
   _buildGotoTable: ->
     gotoTable = []
-    
+
     for state, stateNum in @parseTable
       gotoTable[stateNum] = {}
-      
+
       for own tokenId, action of state
         # Goto entries are plain numbers (not arrays)
         if typeof action is 'number'
           # This is a goto entry (nonterminal transition)
           gotoTable[stateNum][tokenId] = action
-    
+
     gotoTable
 
   # OLD pattern-based code (keeping for reference, not used in direct approach)
