@@ -1214,8 +1214,7 @@ class Generator
         // Disambiguate based on next token
         switch (this.la.id) {
     #{cases}
-          default:
-            this._error([#{@_getExpectedTokens name}], this.la.id);
+          default: this._error([#{@_getExpectedTokens name}], this.la.id);
         }
       }
     """
