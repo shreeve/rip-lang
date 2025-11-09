@@ -5,6 +5,20 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.2] - 2025-11-09
+
+### Fixed
+- **Fixed 'in' operator to check array VALUES instead of INDICES** (#60)
+  - JavaScript's `in` operator checks indices: `'apple' in ['apple', 'banana']` returns `false`
+  - Previous fix (v1.4.2) only handled string literal in variable case
+  - Now handles ALL cases: variable in variable, literal in literal, variable in literal
+  - Uses runtime dispatch: arrays/strings → `.includes()`, objects → `in` operator
+  - Added 15 comprehensive tests (12 execution + 3 code generation)
+  - Critical fix: prevents silent bugs where membership checks return wrong results
+  - Example: `val = 'apple'; val in ['apple', 'banana']` now correctly returns `true`
+
+All 962 tests passing (100%) ✅
+
 ## [1.5.1] - 2025-11-09
 
 ### Fixed
