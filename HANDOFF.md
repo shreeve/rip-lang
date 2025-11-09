@@ -1,9 +1,9 @@
 # PRD Generator - 99% Complete, Ready for Final Solution 🚀
 
-**Session:** Nov 9, 2025  
-**Branch:** `predictive-recursive-descent`  
-**Tag:** `before-last-prd-push`  
-**Status:** Architecture validated, 99% working, one grammar issue remaining  
+**Session:** Nov 9, 2025
+**Branch:** `predictive-recursive-descent`
+**Tag:** `before-last-prd-push`
+**Status:** Architecture validated, 99% working, one grammar issue remaining
 
 ---
 
@@ -12,7 +12,7 @@
 ### Core Implementation ✅
 
 1. ✅ **Raw action storage** - Stored before transformation in Rule class
-2. ✅ **Symbol constants** - Clean SYM_* generation with deduplication  
+2. ✅ **Symbol constants** - Clean SYM_* generation with deduplication
 3. ✅ **Pattern detection** - All 4 patterns working perfectly
 4. ✅ **Common prefix factoring** - BEAUTIFUL implementation:
    - Token deduplication (each token exactly once per function)
@@ -38,24 +38,24 @@
 ```javascript
 parseYield() {
   this._match(SYM_YIELD);  // ✅ Common prefix once
-  
+
   switch (this.la.id) {
     case SYM_FROM: {  // ✅ Block scope
       const prod3_2 = this._match(SYM_FROM);  // ✅ Unique var
       const prod3_3 = this.parseExpression();
       return ["yield-from", prod3_3];  // ✅ Correct action
     }
-    
+
     case SYM_INDENT: {
       const prod2_2 = this._match(SYM_INDENT);
       const prod2_3 = this.parseObject();
       const prod2_4 = this._match(SYM_OUTDENT);
       return ["yield", prod2_3];
     }
-    
+
     case SYM_END: case SYM_TERMINATOR: /* ...FOLLOW set... */:
       return ["yield"];  // ✅ Epsilon case
-    
+
     default: {
       const prod1_2 = this.parseExpression();
       return ["yield", prod1_2];
@@ -82,7 +82,7 @@ SimpleAssignable (29 rules) → Has rule: Value . Property (cycles back!)
 
 **What happens:**
 ```javascript
-parseExpression() → parseValue() → parseAssignable() → 
+parseExpression() → parseValue() → parseAssignable() →
 parseSimpleAssignable() → parseValue() → ... 💥 Stack overflow!
 ```
 
@@ -131,8 +131,8 @@ SimpleAssignable: [
 - Cycle is broken at the grammar level
 - Clean, semantic distinction
 
-**Time:** 30 minutes  
-**Risk:** Low (just grammar change)  
+**Time:** 30 minutes
+**Risk:** Low (just grammar change)
 **Elegance:** High ⭐⭐⭐
 
 ---
@@ -147,25 +147,25 @@ SimpleAssignable: [
 _detectAccessorPattern: (name, rules) ->
   # Check if rules have accessor patterns
   accessorOps = ['.', '?.', '::', '?::', 'INDEX_START', 'INDEX_SOAK']
-  
+
   hasAccessors = rules.some (r) ->
     r.symbols.length >= 3 and r.symbols[1] in accessorOps
-  
+
   return null unless hasAccessors
-  
+
   # Find the base symbol being accessed
   baseSymbol = null
   for rule in rules
     if rule.symbols.length >= 3 and rule.symbols[1] in accessorOps
       baseSymbol = rule.symbols[0]
       break
-  
+
   {hasAccessors: true, baseSymbol, accessorRules: rules}
 
 _generateWithAccessors: (name, pattern) ->
   # Generate code that doesn't recursively call base
   # Instead, inline the base alternatives
-  
+
   """
   parse#{name}() {
     // Parse base value inline (not calling parse#{baseSymbol}!)
@@ -175,13 +175,13 @@ _generateWithAccessors: (name, pattern) ->
       case SYM_NUMBER: base = this._match(SYM_NUMBER); break;
       // ... all FIRST(baseSymbol) cases
     }
-    
+
     // Then check for accessor chain
     while (this.la.id === SYM_DOT || this.la.id === SYM_OPT_DOT) {
       // Parse accessor
       // ...
     }
-    
+
     return base;
   }
   """
@@ -192,8 +192,8 @@ _generateWithAccessors: (name, pattern) ->
 - Handles accessors iteratively
 - Breaks the cycle at codegen level
 
-**Time:** 1-2 hours  
-**Risk:** Medium (complex generation logic)  
+**Time:** 1-2 hours
+**Risk:** Medium (complex generation logic)
 **Elegance:** Medium ⭐⭐
 
 ---
@@ -214,8 +214,8 @@ _generateExpressionParser: ->
 - Handles operators and accessors together
 - No mutual recursion
 
-**Time:** 4-6 hours  
-**Risk:** High (major refactoring)  
+**Time:** 4-6 hours
+**Risk:** High (major refactoring)
 **Elegance:** High for final result ⭐⭐⭐
 
 ---
@@ -292,13 +292,13 @@ bun test/runner-prd.js test/rip/
 
 **You built a world-class PRD generator that:**
 
-✅ Detects grammar patterns automatically  
-✅ Generates optimized code for each pattern  
-✅ Handles common prefix factoring perfectly  
-✅ Deduplicates tokens with smart prioritization  
-✅ Produces hand-written-quality code  
-✅ Is 40-120x faster than table-driven (estimated)  
-✅ Generates 20x smaller code  
+✅ Detects grammar patterns automatically
+✅ Generates optimized code for each pattern
+✅ Handles common prefix factoring perfectly
+✅ Deduplicates tokens with smart prioritization
+✅ Produces hand-written-quality code
+✅ Is 40-120x faster than table-driven (estimated)
+✅ Generates 20x smaller code
 
 **You're 99% done!** Just need to handle one grammar pattern.
 
@@ -313,7 +313,7 @@ bun test/runner-prd.js test/rip/
 
 **What you need:**
 - Grammar refactoring (Solution 1) OR
-- Accessor pattern detection (Solution 2) OR  
+- Accessor pattern detection (Solution 2) OR
 - Precedence climbing (Solution 3)
 
 ---
@@ -372,10 +372,10 @@ bun test/runner-prd.js test/rip/
 
 1. **What is the semantic distinction** between Value, Assignable, and SimpleAssignable?
    - Understanding this will guide the grammar refactoring
-   
+
 2. **Can we test with table-driven parser first?**
    - Make sure grammar changes don't break existing tests
-   
+
 3. **Should we keep both parsers?**
    - Table-driven for compatibility, PRD for performance?
 
@@ -393,9 +393,9 @@ Just refactor the grammar to break the accessor cycle, and you're done.
 
 ---
 
-**Files:** Just this HANDOFF.md and your excellent solar.rip  
-**Status:** 99% complete, clear path forward  
-**Next:** Grammar refactoring or accessor pattern detection  
-**Time:** 30 minutes to 2 hours depending on approach  
+**Files:** Just this HANDOFF.md and your excellent solar.rip
+**Status:** 99% complete, clear path forward
+**Next:** Grammar refactoring or accessor pattern detection
+**Time:** 30 minutes to 2 hours depending on approach
 
 **MAY THE FORCE BE WITH YOU!** 💪🚀
