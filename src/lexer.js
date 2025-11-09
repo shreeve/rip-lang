@@ -752,25 +752,25 @@ export var Lexer = class Lexer {
       // If so, use its column position as the dedenting baseline
       let useClosingColumn = false;
       let closingColumn = 0;
-      
+
       const closingPos = end - quote.length;
-      
+
       // Find the start of the line containing the closing delimiter
       let lineStart = closingPos - 1;
       while (lineStart >= 0 && this.chunk[lineStart] !== '\n') {
         lineStart--;
       }
       lineStart++;  // Position after \n (or 0 if no \n)
-      
+
       // Get text between line start and closing delimiter
       const beforeClosing = this.chunk.slice(lineStart, closingPos);
-      
+
       // If only whitespace, use closing column as baseline
       if (/^\s*$/.test(beforeClosing)) {
         useClosingColumn = true;
         closingColumn = beforeClosing.length;
       }
-      
+
       // Get document content
       doc = ((function() {
         var k, len, results;
@@ -783,7 +783,7 @@ export var Lexer = class Lexer {
         }
         return results;
       })()).join('#{}');
-      
+
       // Determine indentation to strip
       if (useClosingColumn) {
         // Use closing delimiter column as baseline
