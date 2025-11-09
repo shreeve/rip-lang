@@ -793,11 +793,11 @@ class Generator
   # Generate all parse functions
   _generateParseFunctions: (patterns) ->
     functions = []
-    
+
     for own typeName, pattern of patterns
       fn = @_emitParseFunction typeName, pattern
       functions.push fn if fn
-    
+
     # Join with commas (object literal methods)
     functions.join ',\n\n'
 
@@ -835,28 +835,28 @@ class Generator
       "this.parse#{base}()"
     else
       "this._match('#{base}')"
-    
+
     # Check if element is terminal or nonterminal
     elementCall = if @types[element]
       "this.parse#{element}()"
     else
       "this._match('#{element}')"
-    
+
     if separator
       # With separator (like Body → Line | Body TERMINATOR Line)
       """
       parse#{typeName}() {
         const items = [#{baseCall}];
-        
+
         while (this.la.kind === '#{separator}') {
           this._match('#{separator}');
-          
+
           // Check FOLLOW set for trailing separator
           if (#{followCheck}) break;
-          
+
           items.push(#{elementCall});
         }
-        
+
         #{accumActionCode}
       }
       """
@@ -867,15 +867,15 @@ class Generator
         "this._canParse('#{element}')"
       else
         "this.la.kind === '#{element}'"
-      
+
       """
       parse#{typeName}() {
         const items = [#{baseCall}];
-        
+
         while (#{elementCheck}) {
           items.push(#{elementCall});
         }
-        
+
         #{accumActionCode}
       }
       """
@@ -883,13 +883,13 @@ class Generator
   # Emit alternatives with disjoint FIRST sets (switch statement)
   _emitAlternatives: (typeName, pattern) ->
     {rules, firstSets} = pattern
-    
+
     # Build switch cases from FIRST sets
     cases = []
     for rule, i in rules
       firstSet = firstSets[i]
       action = @_getActionCode rule
-      
+
       # Get symbol to parse (usually single nonterminal, or sequence)
       if rule.symbols.length is 1
         symbol = rule.symbols[0]
@@ -903,17 +903,17 @@ class Generator
         # Sequence - generate with block scope to avoid variable conflicts
         seqCode = @_emitSequenceInline rule, i
         parseCall = "{ #{seqCode} }"
-      
+
       # Generate case labels for each FIRST token
       for token from firstSet
         cases.push "      case '#{token}':"
-      
+
       # Add the parse action (shared by all tokens in FIRST set)
       cases.push "        #{parseCall}"
       cases.push ""  # Blank line between cases
-    
+
     casesCode = cases.join '\n'
-    
+
     """
     parse#{typeName}() {
       switch (this.la.kind) {
@@ -976,7 +976,7 @@ class Generator
         parseCalls.push "const _#{ruleIndex}_#{i + 1} = this.parse#{symbol}();"
       else
         parseCalls.push "this._match('#{symbol}');"
-    
+
     action = @_getActionCode rule
     code = parseCalls.join(' ')
     "#{code} #{action}"
@@ -1002,17 +1002,17 @@ class Generator
       this._advance();
       return token.value;
     },
-    
+
     _check(...kinds) {
       return kinds.includes(this.la.kind);
     },
-    
+
     _canParse(typeName) {
       // Check if lookahead is in FIRST set of typeName
       // For POC, simplified check
       return true; // TODO: Implement proper FIRST set lookup
     },
-    
+
     _advance() {
       if (this.pos >= this.tokens.length) {
         this.la = { kind: '$end', value: null };
@@ -1024,17 +1024,17 @@ class Generator
     _error(msg) {
       throw new Error(`Parse error: ${msg}`);
     },
-    
+
     parse(input) {
       // Set up lexer
       if (!this.lexer) {
         throw new Error('Lexer not set');
       }
-      
+
       this.tokens = this.lexer.tokens;
       this.pos = 0;
       this._advance(); // Initialize lookahead
-      
+
       // Parse root
       return this.parseRoot();
     },
