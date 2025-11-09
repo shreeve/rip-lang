@@ -575,6 +575,7 @@ class Parser {
       }
       case SYM_STRING_START: {
         const r1_1 = this._match(SYM_STRING_START);
+        // Warning: potential cycle with Interpolations
         const r1_2 = this.parseInterpolations();
         const r1_3 = this._match(SYM_STRING_END);
         return ["str", ...r1_2];
@@ -603,6 +604,7 @@ class Parser {
         return r0_2;
       }
       case SYM_STRING: case SYM_STRING_START: {
+        // Warning: potential cycle with String
         const r3_1 = this.parseString();
         return r3_1;
       }
@@ -619,6 +621,7 @@ class Parser {
       }
       case SYM_REGEX_START: {
         const r1_1 = this._match(SYM_REGEX_START);
+        // Warning: potential cycle with Invocation
         const r1_2 = this.parseInvocation();
         const r1_3 = this._match(SYM_REGEX_END);
         return ["regex", r1_2];
@@ -695,6 +698,7 @@ class Parser {
         return [r0_1, r0_1, null];
       }
       case SYM_ELLIPSIS: {
+        // Warning: potential cycle with ObjRestValue
         const r1_1 = this.parseObjRestValue();
         return r1_1;
       }
@@ -721,6 +725,7 @@ class Parser {
       }
       case SYM_LBRACKET: {
         const r1_1 = this._match(SYM_LBRACKET);
+        // Warning: potential cycle with Expression
         const r1_2 = this.parseExpression();
         const r1_3 = this._match(SYM_RBRACKET);
         return ["computed", r1_2];
@@ -798,11 +803,13 @@ class Parser {
         const r0_2 = this.parseParamList();
         const r0_3 = this._match(SYM_PARAM_END);
         const r0_4 = this.parseFuncGlyph();
+        // Warning: potential cycle with Block
         const r0_5 = this.parseBlock();
         return [r0_4, r0_2, r0_5];
       }
       case SYM_ARROW: case SYM_FAT_ARROW: {
         const r1_1 = this.parseFuncGlyph();
+        // Warning: potential cycle with Block
         const r1_2 = this.parseBlock();
         return [r1_1, [], r1_2];
       }
@@ -818,11 +825,13 @@ class Parser {
         const r0_2 = this.parseParamList();
         const r0_3 = this._match(SYM_PARAM_END);
         const r0_4 = this.parseFuncGlyph();
+        // Warning: potential cycle with Line
         const r0_5 = this.parseLine();
         return [r0_4, r0_2, r0_5];
       }
       case SYM_ARROW: case SYM_FAT_ARROW: {
         const r1_1 = this.parseFuncGlyph();
+        // Warning: potential cycle with Line
         const r1_2 = this.parseLine();
         return [r1_1, [], r1_2];
       }
@@ -907,6 +916,7 @@ class Parser {
         return r1_1;
       }
       case SYM_PARAM_START: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_ARROW: case SYM_FAT_ARROW: {
+        // Warning: potential cycle with Value
         const r2_1 = this.parseValue();
         const r2_2 = this._match(SYM_DOT);
         const r2_3 = this.parseProperty();
@@ -1185,6 +1195,7 @@ class Parser {
   parseInvocation() {
     switch (this.la.id) {
       case SYM_IDENTIFIER: case SYM_AT: case SYM_PARAM_START: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_ARROW: case SYM_FAT_ARROW: {
+        // Warning: potential cycle with Value
         const r0_1 = this.parseValue();
         const r0_2 = this.parseOptFuncExist();
         const r0_3 = this.parseString();
@@ -1286,13 +1297,16 @@ class Parser {
   parseSlice() {
     switch (this.la.id) {
       case SYM_IDENTIFIER: case SYM_AT: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_STRING: case SYM_STRING_START: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: {
+        // Warning: potential cycle with Expression
         const r0_1 = this.parseExpression();
         const r0_2 = this.parseRangeDots();
+        // Warning: potential cycle with Expression
         const r0_3 = this.parseExpression();
         return [r0_2, r0_1, r0_3];
       }
       case SYM_DOTDOT: case SYM_ELLIPSIS: {
         const r2_1 = this.parseRangeDots();
+        // Warning: potential cycle with Expression
         const r2_2 = this.parseExpression();
         return [r2_1, null, r2_2];
       }
@@ -1499,11 +1513,13 @@ class Parser {
     switch (this.la.id) {
       case SYM_WHILE: {
         const r0_1 = this._match(SYM_WHILE);
+        // Warning: potential cycle with Expression
         const r0_2 = this.parseExpression();
         return ["while", r0_2];
       }
       case SYM_UNTIL: {
         const r2_1 = this._match(SYM_UNTIL);
+        // Warning: potential cycle with Expression
         const r2_2 = this.parseExpression();
         return ["until", r2_2];
       }
@@ -1515,17 +1531,23 @@ class Parser {
   parseWhile() {
     switch (this.la.id) {
       case SYM_WHILE: case SYM_UNTIL: {
+        // Warning: potential cycle with WhileSource
         const r0_1 = this.parseWhileSource();
+        // Warning: potential cycle with Block
         const r0_2 = this.parseBlock();
         return $r0_1.length === r0_2 ? [$r0_1[0], $r0_1[r0_1], $r0_2]   : [$r0_1[0], $r0_1[r0_1], $r0_1[r0_2], $r0_2];
       }
       case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: {
+        // Warning: potential cycle with Statement
         const r1_1 = this.parseStatement();
+        // Warning: potential cycle with WhileSource
         const r1_2 = this.parseWhileSource();
         return $r1_2.length === r1_2 ? [$r1_2[0], $r1_2[r1_1], [$r1_1]] : [$r1_2[0], $r1_2[r1_1], $r1_2[r1_2], [$r1_1]];
       }
       case SYM_IDENTIFIER: case SYM_AT: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_STRING: case SYM_STRING_START: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_LOOP: {
+        // Warning: potential cycle with Expression
         const r2_1 = this.parseExpression();
+        // Warning: potential cycle with WhileSource
         const r2_2 = this.parseWhileSource();
         return $r2_2.length === r2_2 ? [$r2_2[0], $r2_2[r2_1], [$r2_1]] : [$r2_2[0], $r2_2[r2_1], $r2_2[r2_2], [$r2_1]];
       }
@@ -1559,15 +1581,19 @@ class Parser {
         const r0_1 = this._match(SYM_FOR);
         const r0_2 = this.parseForVariables();
         const r0_3 = this._match(SYM_FORIN);
+        // Warning: potential cycle with Expression
         const r0_4 = this.parseExpression();
+        // Warning: potential cycle with Block
         const r0_5 = this.parseBlock();
         return ["for-in"  , r0_2, r0_4, null, null, r0_5];
       }
       case SYM_IDENTIFIER: case SYM_AT: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_STRING: case SYM_STRING_START: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: {
+        // Warning: potential cycle with Expression
         const r15_1 = this.parseExpression();
         const r15_2 = this._match(SYM_FOR);
         const r15_3 = this.parseForVariables();
         const r15_4 = this._match(SYM_FORIN);
+        // Warning: potential cycle with Expression
         const r15_5 = this.parseExpression();
         return ["comprehension", r15_1, [["for-in"  , r15_3, r15_5, null]], []];
       }
@@ -1714,22 +1740,28 @@ class Parser {
   parseIf() {
     switch (this.la.id) {
       case SYM_IF: {
+        // Warning: potential cycle with IfBlock
         const r0_1 = this.parseIfBlock();
         return r0_1;
       }
       case SYM_UNLESS: {
+        // Warning: potential cycle with UnlessBlock
         const r2_1 = this.parseUnlessBlock();
         return r2_1;
       }
       case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: {
+        // Warning: potential cycle with Statement
         const r3_1 = this.parseStatement();
         const r3_2 = this._match(SYM_POST_IF);
+        // Warning: potential cycle with Expression
         const r3_3 = this.parseExpression();
         return ["if", r3_3, [r3_1]];
       }
       case SYM_IDENTIFIER: case SYM_AT: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_STRING: case SYM_STRING_START: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: {
+        // Warning: potential cycle with Expression
         const r4_1 = this.parseExpression();
         const r4_2 = this._match(SYM_POST_IF);
+        // Warning: potential cycle with Expression
         const r4_3 = this.parseExpression();
         return ["if", r4_3, [r4_1]];
       }
@@ -1742,16 +1774,19 @@ class Parser {
     switch (this.la.id) {
       case SYM_UNARY: {
         const r0_1 = this._match(SYM_UNARY);
+        // Warning: potential cycle with ExpressionLine
         const r0_2 = this.parseExpressionLine();
         return [r0_1, r0_2];
       }
       case SYM_DO: {
         const r1_1 = this._match(SYM_DO);
+        // Warning: potential cycle with ExpressionLine
         const r1_2 = this.parseExpressionLine();
         return ["do-iife", r1_2];
       }
       case SYM_DO_IIFE: {
         const r2_1 = this._match(SYM_DO_IIFE);
+        // Warning: potential cycle with CodeLine
         const r2_2 = this.parseCodeLine();
         return ["do-iife", r2_2];
       }
@@ -1764,31 +1799,37 @@ class Parser {
     switch (this.la.id) {
       case SYM_UNARY: {
         const r0_1 = this._match(SYM_UNARY);
+        // Warning: potential cycle with Expression
         const r0_2 = this.parseExpression();
         return [r0_1, r0_2];
       }
       case SYM_DO: {
         const r1_1 = this._match(SYM_DO);
+        // Warning: potential cycle with Expression
         const r1_2 = this.parseExpression();
         return ["do-iife", r1_2];
       }
       case SYM_UNARY_MATH: {
         const r2_1 = this._match(SYM_UNARY_MATH);
+        // Warning: potential cycle with Expression
         const r2_2 = this.parseExpression();
         return [r2_1, r2_2];
       }
       case SYM_MINUS: {
         const r3_1 = this._match(SYM_MINUS);
+        // Warning: potential cycle with Expression
         const r3_2 = this.parseExpression();
         return ["-", r3_2];
       }
       case SYM_PLUS: {
         const r4_1 = this._match(SYM_PLUS);
+        // Warning: potential cycle with Expression
         const r4_2 = this.parseExpression();
         return ["+", r4_2];
       }
       case SYM_AWAIT: {
         const r5_1 = this._match(SYM_AWAIT);
+        // Warning: potential cycle with Expression
         const r5_2 = this.parseExpression();
         return ["await", r5_2];
       }
@@ -1808,6 +1849,7 @@ class Parser {
         return ["--", r9_1, true];
       }
       case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: {
+        // Warning: potential cycle with Expression
         const r11_1 = this.parseExpression();
         const r11_2 = this._match(SYM_QUESTION);
         return ["?", r11_1];

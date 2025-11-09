@@ -1498,8 +1498,8 @@ class Generator
       constNames = tokens.map (t) => @_toConstantName t
       caseLabels = constNames.map((c) -> "case #{c}").join(': ')
 
-      # Generate body that parses ENTIRE rule
-      body = @_generateRuleBody rule, parseInt(prodIdx)
+      # Generate body that parses ENTIRE rule (pass parent name for cycle detection!)
+      body = @_generateRuleBody rule, parseInt(prodIdx), name
       caseLines.push "      #{caseLabels}: {#{body}\n      }"
 
     """
@@ -1513,7 +1513,7 @@ class Generator
     """
 
   # Generate code to parse complete rule and apply action
-  _generateRuleBody: (rule, prodIdx) ->
+  _generateRuleBody: (rule, prodIdx, parentNt = null) ->
     lines = []
     vars = []
 
@@ -1523,7 +1523,19 @@ class Generator
       vars.push varName
 
       if @types[symbol]
-        lines.push "\n        const #{varName} = #{@_getParseCall symbol};"
+        # Check for potential cycle: Would this call eventually route back to parent?
+        if parentNt and @_wouldCycle(parentNt, symbol)
+          # CYCLE DETECTED! Inline through the chain starting from symbol
+          inlinedTarget = @_inlinePassThroughChain(symbol, symbol)
+          if inlinedTarget isnt symbol
+            lines.push "\n        // Cycle detected: inlined #{symbol} → #{inlinedTarget}"
+            lines.push "\n        const #{varName} = this.parse#{inlinedTarget}();"
+          else
+            # Can't inline further - call directly and hope for the best
+            lines.push "\n        // Warning: potential cycle with #{symbol}"
+            lines.push "\n        const #{varName} = #{@_getParseCall symbol};"
+        else
+          lines.push "\n        const #{varName} = #{@_getParseCall symbol};"
       else
         constName = @_toConstantName symbol
         lines.push "\n        const #{varName} = this._match(#{constName});"
@@ -1533,6 +1545,24 @@ class Generator
     lines.push "\n        return #{actionCode};"
 
     lines.join ''
+  
+  # Check if calling target from parent would create a cycle
+  _wouldCycle: (parentNt, targetNt, visited = new Set(), depth = 0) ->
+    return false if depth > 5
+    return true if targetNt is parentNt  # Cycle!
+    return false if visited.has(targetNt)
+    
+    visited.add(targetNt)
+    
+    # Check if any of target's rules eventually call parent
+    targetRules = @types[targetNt]?.rules
+    return false unless targetRules
+    
+    for rule in targetRules
+      for symbol in rule.symbols when @types[symbol]
+        return true if @_wouldCycle(parentNt, symbol, visited, depth + 1)
+    
+    false
 
   # ============================================================================
   # HYBRID PRD GENERATOR - READY FOR IMPLEMENTATION
