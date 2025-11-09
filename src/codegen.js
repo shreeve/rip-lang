@@ -129,7 +129,6 @@ export class CodeGenerator {
     'class': 'generateClass',
     'super': 'generateSuper',
     '?call': 'generateSoakCall',
-    '?super': 'generateOptionalSuper',
 
     // Modules
     'import': 'generateImport',
@@ -3081,23 +3080,6 @@ export class CodeGenerator {
     const fnCode = this.generate(fn, 'value');
     const argsCode = args.map(arg => this.generate(arg, 'value')).join(', ');
     return `(typeof ${fnCode} === 'function' ? ${fnCode}(${argsCode}) : undefined)`;
-  }
-
-  /**
-   * Generate optional super call
-   * Pattern: ["?super", ...args]
-   */
-  generateOptionalSuper(head, rest, context, sexpr) {
-    // In methods: super?() → typeof super.method === 'function' ? super.method() : undefined
-    const argsCode = rest.map(arg => this.unwrap(this.generate(arg, 'value'))).join(', ');
-
-    if (this.currentMethodName && this.currentMethodName !== 'constructor') {
-      // In a method - check if parent method exists
-      return `(typeof super.${this.currentMethodName} === 'function' ? super.${this.currentMethodName}(${argsCode}) : undefined)`;
-    }
-
-    // In constructor or standalone - can't really soak super
-    return `super(${argsCode})`;
   }
 
   /**

@@ -148,20 +148,8 @@ test "new.target in constructor", '''
   ''', true
 
 # ============================================================================
-# Soak Super Calls
-# ============================================================================
-
-test "soak super call", '''
-  class Parent
-    method: (x) -> x * 2
-  class Child extends Parent
-    method: (x) -> super?(x)
-  new Child().method(5)
-  ''', 10
-
-# ============================================================================
 # Stats for CODEGEN.md
 # ============================================================================
-# Node types: class, super, ?super, new.target
-# Tests: 23 total (23 passing, 0 failing)
-# Coverage: ES6 classes, inheritance, super calls, static methods, bound methods, @ params, soak super, new.target
+# Node types: class, super, new.target
+# Tests: 22 total (22 passing, 0 failing)
+# Coverage: ES6 classes, inheritance, super calls, static methods, bound methods, @ params, new.target

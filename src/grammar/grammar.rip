@@ -449,7 +449,7 @@ grammar =
     o 'Value OptFuncExist String'        , '["tagged-template", 1, 3]'               # Tagged template literal
     o 'Value OptFuncExist Arguments'     , '2 ? ["?call", 1, ...3] : [1, ...3]'      # Regular/soak call
     o 'Value ES6_OPTIONAL_CALL Arguments', '["optcall", 1, ...3]'                    # ES6 optional call
-    o 'SUPER OptFuncExist Arguments'     , '2 ? ["?super", ...3] : ["super", ...3]'  # Super call
+    o 'SUPER Arguments'                  , '["super", ...2]'                         # Super call (no soak support)
     o 'DYNAMIC_IMPORT Arguments'         , '["import", ...2]'                        # Dynamic import
   ]
 
