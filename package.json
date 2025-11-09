@@ -30,8 +30,10 @@
   "scripts": {
     "browser": "bun scripts/build-browser.js",
     "parser": "bun src/grammar/solar.rip -o src/parser.js src/grammar/grammar.rip",
+    "parser-prd": "bun src/grammar/solar.rip -r -o src/parser-prd.js src/grammar/grammar.rip",
     "serve": "bun scripts/serve.js",
     "test": "bun test/runner.js",
+    "test-prd": "bun test/runner-prd.js",
     "version": "./bin/rip -v",
     "pack": "npm pack --dry-run"
   },
