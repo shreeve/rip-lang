@@ -101,6 +101,7 @@ Rip includes **all of CoffeeScript's beloved features** plus modern enhancements
 | **Traditional ternary** | `x > 0 ? 'pos' : 'neg'` | JavaScript-style (plus CoffeeScript's if/then/else) |
 | **Ruby-style regex** | `str =~ /pattern/`, `_[1]` | Match with capture, inline extraction |
 | **Heregex** | `///pattern # comment///` | Extended regex (CoffeeScript deprecated it) |
+| **Heredoc indent control** | Closing `'''` position = baseline | Visual margin control for code generation |
 | **10 optional operators** | `obj?.prop` + `arr?[0]` | Both ES6 and CoffeeScript styles work! |
 | **__DATA__ marker** | `__DATA__\nconfig...` | Ruby-style inline data sections |
 
@@ -288,6 +289,21 @@ pattern = ///
   [a-z]+     # followed by letters
   $
 ///i
+
+# Heredocs - Visual indentation control
+code = '''
+  if (x) {
+    return y;
+  }
+  '''                        # Closing position sets the baseline
+# Output: "if (x) {\n  return y;\n}"  (strips 2 spaces)
+
+code = '''
+  if (x) {
+    return y;
+  }
+'''                          # Closing at column 0 preserves all indent
+# Output: "  if (x) {\n    return y;\n  }"
 
 # Traditional ternary (plus CoffeeScript's if/then/else)
 result = x > 0 ? 'positive' : 'negative'
