@@ -5,6 +5,20 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.3] - 2025-11-09
+
+### Added
+- **Keyboard shortcuts for Run button in browser REPL** (repl.html)
+  - **F5** - Execute code (all platforms)
+  - **Cmd+Enter** - Execute code (Mac)
+  - **Ctrl+Enter** - Execute code (Windows/Linux)
+  - Refactored Run button handler into reusable `runCode()` function
+  - Added global keyboard event listener with preventDefault to avoid conflicts
+  - Updated Run button tooltip to show available shortcuts
+  - Improves workflow for quick code execution without mouse clicks
+
+All 962 tests passing (100%) ✅
+
 ## [1.5.2] - 2025-11-09
 
 ### Fixed
