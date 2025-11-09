@@ -2082,29 +2082,29 @@ export class CodeGenerator {
   /**
    * Generate 'in' operator
    * Pattern: ["in", key, container] → membership check
-   * 
+   *
    * JavaScript's 'in' checks INDICES in arrays, not VALUES!
    * So we need to dispatch based on container type:
    * - Arrays/strings → .includes() (check values)
    * - Objects → 'in' operator (check properties)
-   * 
+   *
    * Strategy:
    * - Object literals: Use JavaScript 'in' directly
    * - Everything else: Runtime check with .includes() for arrays/strings
-   * 
+   *
    * Issue #60: Previous implementation only handled string literal in variable
    */
   generateIn(head, rest, context, sexpr) {
     const [key, container] = rest;
     const keyCode = this.generate(key, 'value');
-    
+
     // Object literal → Use JavaScript 'in' for property checks
     // Pattern: ["in", key, ["object", ...pairs]]
     if (Array.isArray(container) && container[0] === 'object') {
       const objCode = this.generate(container, 'value');
       return `(${keyCode} in ${objCode})`;
     }
-    
+
     // Everything else (arrays, strings, variables) → Runtime check
     // This handles:
     // - Array literals: 'x' in ['a', 'b']
