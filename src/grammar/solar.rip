@@ -731,19 +731,19 @@ class Generator
       # Generate case for each action in this state
       for own tokenId, action of state when tokenId isnt 'undefined'
         continue if typeof action is 'number'  # Skip goto entries (nonterminal IDs)
-        
+
         # Convert tokenId to token name
         # tokenId is a string representation of the numeric ID
         numericId = parseInt tokenId, 10
         tokenName = @tokenNames[numericId]
-        
+
         # Handle special tokens (not in tokenNames)
         unless tokenName
           tokenName = switch numericId
             when 1 then '$end'
             when 2 then 'error'
             else tokenId
-        
+
         continue unless tokenName  # Skip if still no token name
 
         if Array.isArray(action) and action[0] is SHIFT
