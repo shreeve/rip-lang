@@ -706,7 +706,20 @@ ${line}`;
     } = this.matchWithInterpolations(regex, quote));
     heredoc = quote.length === 3;
     if (heredoc) {
-      indent = null;
+      let useClosingColumn = false;
+      let closingColumn = 0;
+      const closingPos = end - quote.length;
+      let lineStart = closingPos - 1;
+      while (lineStart >= 0 && this.chunk[lineStart] !== `
+`) {
+        lineStart--;
+      }
+      lineStart++;
+      const beforeClosing = this.chunk.slice(lineStart, closingPos);
+      if (/^\s*$/.test(beforeClosing)) {
+        useClosingColumn = true;
+        closingColumn = beforeClosing.length;
+      }
       doc = function() {
         var k2, len2, results;
         results = [];
@@ -718,10 +731,15 @@ ${line}`;
         }
         return results;
       }().join("#{}");
-      while (match = HEREDOC_INDENT.exec(doc)) {
-        attempt = match[1];
-        if (indent === null || 0 < (ref = attempt.length) && ref < indent.length) {
-          indent = attempt;
+      if (useClosingColumn) {
+        indent = " ".repeat(closingColumn);
+      } else {
+        indent = null;
+        while (match = HEREDOC_INDENT.exec(doc)) {
+          attempt = match[1];
+          if (indent === null || 0 < (ref = attempt.length) && ref < indent.length) {
+            indent = attempt;
+          }
         }
       }
     }
@@ -7032,8 +7050,8 @@ function compileToJS(source, options = {}) {
   return compiler.compileToJS(source);
 }
 // src/browser.js
-var VERSION = "1.4.6";
-var BUILD_DATE = "2025-11-09@02:10:07GMT";
+var VERSION = "1.5.0";
+var BUILD_DATE = "2025-11-09@05:26:51GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

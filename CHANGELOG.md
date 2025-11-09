@@ -5,6 +5,33 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2025-11-09
+
+### Added
+- **Heredoc closing delimiter position determines dedenting baseline** (#58)
+  - When closing `'''` or `"""` has only whitespace before it, use its column as baseline
+  - Strip that exact amount from all content lines
+  - Preserve additional indentation beyond baseline
+  - Falls back to minimum-indent behavior when non-whitespace precedes closing delimiter
+  - Visual control: Move closing delimiter left/right to control stripping
+  - Perfect for code generation use cases
+  - Works with both single (`'''`) and double (`"""`) quote heredocs
+  - Added 10 comprehensive tests covering all edge cases
+
+### Removed
+- **Soak super syntax** (`super?()`) - Removed for clarity and simplicity
+  - Semantically questionable (parent methods always exist in practice)
+  - Zero real-world usage (one test only)
+  - Makes `super?()` a parse error (clearer than silently handling)
+  - Removed `generateOptionalSuper` method from codegen
+  - Removed `?super` from dispatch table
+  - Removed test from test/rip/classes.rip
+
+### Changed
+- Test count: 938 → 947 (+10 heredoc tests, -1 soak super test)
+
+All 947 tests passing (100%) ✅
+
 ## [1.4.6] - 2025-11-08
 
 ### Changed
