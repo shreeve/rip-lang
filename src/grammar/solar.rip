@@ -875,7 +875,7 @@ class Generator
       # Special case: single pass-through to another nonterminal
       if rules.length is 1
         target = rules[0].symbols[0]
-        
+
         # AGGRESSIVE INLINING: Follow pass-through chains to break cycles
         if @types[target]
           inlinedTarget = @_inlinePassThroughChain(name, target)
@@ -886,7 +886,7 @@ class Generator
                 return this.parse#{inlinedTarget}();
               }
             """
-      
+
       console.log "      → Pass-through dispatch"
       return @_generatePassThroughDispatch name, rules
 
@@ -1381,22 +1381,22 @@ class Generator
     return targetNt if depth > 5
     return targetNt if visited.has(targetNt)
     return targetNt if targetNt is startNt  # Detect cycle back to start
-    
+
     visited.add(targetNt)
-    
+
     # Check if target is also a single-rule pass-through
     targetRules = @types[targetNt]?.rules
     return targetNt unless targetRules
-    
+
     # If target has multiple rules or isn't a pass-through, stop here
     return targetNt unless targetRules.length is 1
     return targetNt unless targetRules[0].symbols.length is 1
-    
+
     nextSymbol = targetRules[0].symbols[0]
-    
+
     # If next symbol is a terminal, stop
     return targetNt unless @types[nextSymbol]
-    
+
     # Recursively inline
     @_inlinePassThroughChain(startNt, nextSymbol, visited, depth + 1)
 
@@ -1545,23 +1545,23 @@ class Generator
     lines.push "\n        return #{actionCode};"
 
     lines.join ''
-  
+
   # Check if calling target from parent would create a cycle
   _wouldCycle: (parentNt, targetNt, visited = new Set(), depth = 0) ->
     return false if depth > 5
     return true if targetNt is parentNt  # Cycle!
     return false if visited.has(targetNt)
-    
+
     visited.add(targetNt)
-    
+
     # Check if any of target's rules eventually call parent
     targetRules = @types[targetNt]?.rules
     return false unless targetRules
-    
+
     for rule in targetRules
       for symbol in rule.symbols when @types[symbol]
         return true if @_wouldCycle(parentNt, symbol, visited, depth + 1)
-    
+
     false
 
   # ============================================================================
