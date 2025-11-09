@@ -872,6 +872,21 @@ class Generator
 
     # Check if all rules are single-symbol pass-throughs
     if rules.every((r) -> r.symbols.length is 1)
+      # Special case: single pass-through to another nonterminal
+      if rules.length is 1
+        target = rules[0].symbols[0]
+        
+        # AGGRESSIVE INLINING: Follow pass-through chains to break cycles
+        if @types[target]
+          inlinedTarget = @_inlinePassThroughChain(name, target)
+          if inlinedTarget isnt target
+            console.log "      → Pass-through (inlined #{name} → #{inlinedTarget})"
+            return """
+              parse#{name}() {
+                return this.parse#{inlinedTarget}();
+              }
+            """
+      
       console.log "      → Pass-through dispatch"
       return @_generatePassThroughDispatch name, rules
 
@@ -1357,43 +1372,40 @@ class Generator
   # Pass-Through Dispatch (Simple Alternatives)
   # ============================================================================
 
+  # ============================================================================
+  # Pass-Through Chain Inlining (breaks mutual left-recursion cycles)
+  # ============================================================================
+
+  _inlinePassThroughChain: (startNt, targetNt, visited = new Set(), depth = 0) ->
+    # Prevent infinite loops
+    return targetNt if depth > 5
+    return targetNt if visited.has(targetNt)
+    return targetNt if targetNt is startNt  # Detect cycle back to start
+    
+    visited.add(targetNt)
+    
+    # Check if target is also a single-rule pass-through
+    targetRules = @types[targetNt]?.rules
+    return targetNt unless targetRules
+    
+    # If target has multiple rules or isn't a pass-through, stop here
+    return targetNt unless targetRules.length is 1
+    return targetNt unless targetRules[0].symbols.length is 1
+    
+    nextSymbol = targetRules[0].symbols[0]
+    
+    # If next symbol is a terminal, stop
+    return targetNt unless @types[nextSymbol]
+    
+    # Recursively inline
+    @_inlinePassThroughChain(startNt, nextSymbol, visited, depth + 1)
+
+  # ============================================================================
+  # Pass-Through Dispatch
+  # ============================================================================
+
   _generatePassThroughDispatch: (name, rules) ->
-    # Check for single pass-through (potential cycle!)
-    if rules.length is 1 and rules[0].symbols.length is 1
-      target = rules[0].symbols[0]
-
-      unless @types[target]
-        # Terminal - just match it
-        return """
-          parse#{name}() {
-            return #{@_getParseCall target};
-          }
-        """
-
-      # AGGRESSIVE INLINING: Follow pass-through chain to avoid cycles
-      targetRules = @types[target]?.rules
-      inlineDepth = 0
-      visited = new Set([name])  # Track visited to detect cycles
-
-      while targetRules?.length is 1 and targetRules[0].symbols.length is 1 and inlineDepth < 10
-        nextTarget = targetRules[0].symbols[0]
-        break unless @types[nextTarget]  # Stop at terminals
-        break if visited.has(nextTarget)  # Cycle detected!
-
-        target = nextTarget
-        visited.add(target)
-        targetRules = @types[target]?.rules
-        inlineDepth++
-
-      console.log "        Inlined #{name} → #{target} (depth #{inlineDepth})" if inlineDepth > 0
-
-      return """
-        parse#{name}() {
-          return this.parse#{target}();
-        }
-      """
-
-    # Multiple alternatives - dispatch on FIRST sets
+    # Group rules by FIRST token (with deduplication)
     tokenToProd = {}
 
     for rule, idx in rules

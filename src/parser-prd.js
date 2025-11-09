@@ -404,7 +404,7 @@ class Parser {
     this.la = null;    // Current lookahead token
     this.lexer = null; // Lexer instance
   }
-  
+
   parse(input) {
     // Initialize lookahead
     this.la = this._nextToken();
@@ -421,16 +421,16 @@ class Parser {
 
   parseBody() {
     const items = [this.parseLine()];
-    
+
     while (this.la.id === SYM_TERMINATOR) {
       this._match(SYM_TERMINATOR);
-      
+
       // Check FOLLOW set for trailing separator
       if (this.la.id === SYM_END || this.la.id === SYM_TERMINATOR || this.la.id === SYM_OUTDENT || this.la.id === SYM_INTERPOLATION_END || this.la.id === SYM_RPAREN) break;
-      
+
       items.push(this.parseLine());
     }
-    
+
     return items;
   }
 
@@ -466,7 +466,7 @@ class Parser {
     // Parse common prefix: DEF Identifier
     this._match(SYM_DEF);
     const _prefix2 = this.parseIdentifier();
-    
+
     // Disambiguate based on next token
     switch (this.la.id) {
       case SYM_CALL_START: {
@@ -497,7 +497,7 @@ class Parser {
   parseYield() {
     // Parse common prefix: YIELD
     this._match(SYM_YIELD);
-    
+
     // Disambiguate based on next token
     switch (this.la.id) {
       case SYM_END: case SYM_TERMINATOR: case SYM_OUTDENT: case SYM_RBRACKET: case SYM_INDEX_END: case SYM_CALL_END: case SYM_PARAM_END: case SYM_COMMA: case SYM_: case SYM_RBRACE: case SYM_WHEN: case SYM_DOTDOT: case SYM_ELLIPSIS: case SYM_BY: case SYM_POST_IF: case SYM_POST_UNLESS: case SYM_QUESTION: case SYM_MATH: case SYM_POWER: case SYM_SHIFT: case SYM_COMPARE: case SYM_AMPERSAND: case SYM_CARET: case SYM_PIPE: case SYM_AND: case SYM_OR: case SYM_NULLISH: case SYM_OTHERWISE: case SYM_RELATION: case SYM_SPACE_QUESTION: case SYM_COLON: case SYM_INTERPOLATION_END: case SYM_RPAREN: case SYM_FOROF: case SYM_FORIN: case SYM_FORFROM:
@@ -525,7 +525,7 @@ class Parser {
   parseBlock() {
     // Parse common prefix: INDENT
     this._match(SYM_INDENT);
-    
+
     // Disambiguate based on next token
     switch (this.la.id) {
       case SYM_OUTDENT: {
@@ -543,19 +543,11 @@ class Parser {
   }
 
   parseIdentifier() {
-    switch (this.la.id) {
-      case SYM_IDENTIFIER: return this._match(SYM_IDENTIFIER);
-      default:
-        this._error([40], this.la.id);
-    }
+    return this._match(SYM_IDENTIFIER);
   }
 
   parseProperty() {
-    switch (this.la.id) {
-      case SYM_PROPERTY: return this._match(SYM_PROPERTY);
-      default:
-        this._error([42], this.la.id);
-    }
+    return this._match(SYM_PROPERTY);
   }
 
   parseAlphaNumeric() {
@@ -585,14 +577,13 @@ class Parser {
   }
 
   parseInterpolations() {
-    switch (this.la.id) {
-      case SYM_INTERPOLATION_START: case SYM_STRING: case SYM_STRING_START: {
-        const r0_1 = this.parseInterpolationChunk();
-        return [r0_1];
-      }
-      default:
-        this._error([51, 46, 47], this.la.id);
+    const items = [this.parseInterpolationChunk()];
+
+    while (this.la.id === SYM_INTERPOLATIONCHUNK) {
+      items.push(this.parseInterpolationChunk());
     }
+
+    return items;
   }
 
   parseInterpolationChunk() {
@@ -632,7 +623,7 @@ class Parser {
   parseRegexWithIndex() {
     // Parse common prefix: Regex
     const _prefix1 = this.parseRegex();
-    
+
     // Disambiguate based on next token
     switch (this.la.id) {
       case SYM_COMMA: {
@@ -666,7 +657,7 @@ class Parser {
     // Parse common prefix: Assignable =
     const _prefix1 = this.parseAssignable();
     this._match(SYM_EQUALS);
-    
+
     // Disambiguate based on next token
     switch (this.la.id) {
       case SYM_IDENTIFIER: case SYM_AT: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_STRING: case SYM_STRING_START: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: {
@@ -738,7 +729,7 @@ class Parser {
   parseObjRestValue() {
     // Parse common prefix: ...
     this._match(SYM_ELLIPSIS);
-    
+
     // Disambiguate based on next token
     switch (this.la.id) {
       case SYM_IDENTIFIER: case SYM_PROPERTY: case SYM_AT: {
@@ -756,23 +747,23 @@ class Parser {
 
   parseObjSpreadExpr() {
     const items = [this.parseSimpleObjAssignable()];
-    
+
     while (this.la.id === SYM_INDEX_SOAK) {
       this._match(SYM_INDEX_SOAK);
-      
+
       // Check FOLLOW set for trailing separator
       if (this.la.id === SYM_ || this.la.id === SYM_FUNC_EXIST || this.la.id === SYM_CALL_START || this.la.id === SYM_DOT || this.la.id === SYM_OPT_DOT || this.la.id === SYM_PROTO || this.la.id === SYM_OPT_PROTO || this.la.id === SYM_INDEX_START || this.la.id === SYM_INDEX_SOAK || this.la.id === SYM_COMMA || this.la.id === SYM_RBRACE || this.la.id === SYM_TERMINATOR || this.la.id === SYM_INDENT || this.la.id === SYM_OUTDENT) break;
-      
+
       items.push(this.parseSimpleObjAssignable());
     }
-    
+
     return items;
   }
 
   parseReturn() {
     // Parse common prefix: RETURN
     this._match(SYM_RETURN);
-    
+
     // Disambiguate based on next token
     switch (this.la.id) {
       case SYM_IDENTIFIER: case SYM_AT: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_STRING: case SYM_STRING_START: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: {
@@ -851,16 +842,16 @@ class Parser {
 
   parseParamList() {
     const items = [this.parseParam()];
-    
+
     while (this.la.id === SYM_OPTCOMMA) {
       this._match(SYM_OPTCOMMA);
-      
+
       // Check FOLLOW set for trailing separator
       if (this.la.id === SYM_CALL_END || this.la.id === SYM_PARAM_END || this.la.id === SYM_COMMA || this.la.id === SYM_ || this.la.id === SYM_TERMINATOR || this.la.id === SYM_INDENT || this.la.id === SYM_OUTDENT) break;
-      
+
       items.push(this.parseParam());
     }
-    
+
     return items;
   }
 
@@ -937,7 +928,7 @@ class Parser {
   parseSuper() {
     // Parse common prefix: SUPER
     this._match(SYM_SUPER);
-    
+
     // Disambiguate based on next token
     switch (this.la.id) {
       case SYM_DOT: {
@@ -978,7 +969,7 @@ class Parser {
   parseObject() {
     // Parse common prefix: {
     this._match(SYM_LBRACE);
-    
+
     // Disambiguate based on next token
     switch (this.la.id) {
       case SYM_: case SYM_IDENTIFIER: case SYM_PROPERTY: case SYM_AT: case SYM_LBRACKET: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_ELLIPSIS: case SYM_COMMA: case SYM_TERMINATOR: case SYM_INDENT: {
@@ -994,23 +985,23 @@ class Parser {
 
   parseAssignList() {
     const items = [this.parseAssignObj()];
-    
+
     while (this.la.id === SYM_OPTCOMMA) {
       this._match(SYM_OPTCOMMA);
-      
+
       // Check FOLLOW set for trailing separator
       if (this.la.id === SYM_ || this.la.id === SYM_COMMA || this.la.id === SYM_RBRACE || this.la.id === SYM_TERMINATOR || this.la.id === SYM_INDENT || this.la.id === SYM_OUTDENT) break;
-      
+
       items.push(this.parseAssignObj());
     }
-    
+
     return items;
   }
 
   parseClass() {
     // Parse common prefix: CLASS
     this._match(SYM_CLASS);
-    
+
     // Disambiguate based on next token
     switch (this.la.id) {
       case SYM_END: case SYM_TERMINATOR: case SYM_OUTDENT: case SYM_RBRACKET: case SYM_INDEX_END: case SYM_CALL_END: case SYM_PARAM_END: case SYM_COMMA: case SYM_: case SYM_FOR: case SYM_RBRACE: case SYM_WHEN: case SYM_DOTDOT: case SYM_ELLIPSIS: case SYM_WHILE: case SYM_UNTIL: case SYM_BY: case SYM_POST_IF: case SYM_POST_UNLESS: case SYM_QUESTION: case SYM_PLUS: case SYM_MINUS: case SYM_MATH: case SYM_POWER: case SYM_SHIFT: case SYM_COMPARE: case SYM_AMPERSAND: case SYM_CARET: case SYM_PIPE: case SYM_AND: case SYM_OR: case SYM_NULLISH: case SYM_OTHERWISE: case SYM_RELATION: case SYM_SPACE_QUESTION: case SYM_COLON: case SYM_INTERPOLATION_END: case SYM_RPAREN: case SYM_FOROF: case SYM_FORIN: case SYM_FORFROM:
@@ -1036,7 +1027,7 @@ class Parser {
   parseImport() {
     // Parse common prefix: IMPORT
     this._match(SYM_IMPORT);
-    
+
     // Disambiguate based on next token
     switch (this.la.id) {
       case SYM_STRING: case SYM_STRING_START: {
@@ -1069,16 +1060,16 @@ class Parser {
 
   parseImportSpecifierList() {
     const items = [this._match(SYM_INDENT)];
-    
+
     while (this.la.id === SYM_OPTCOMMA) {
       this._match(SYM_OPTCOMMA);
-      
+
       // Check FOLLOW set for trailing separator
       if (this.la.id === SYM_ || this.la.id === SYM_COMMA || this.la.id === SYM_RBRACE || this.la.id === SYM_TERMINATOR || this.la.id === SYM_OUTDENT || this.la.id === SYM_INDENT) break;
-      
+
       items.push(this._match(SYM_INDENT));
     }
-    
+
     return items;
   }
 
@@ -1098,11 +1089,7 @@ class Parser {
   }
 
   parseImportDefaultSpecifier() {
-    switch (this.la.id) {
-      case SYM_IDENTIFIER: return this.parseIdentifier();
-      default:
-        this._error([40], this.la.id);
-    }
+    return this.parseIdentifier();
   }
 
   parseImportNamespaceSpecifier() {
@@ -1115,7 +1102,7 @@ class Parser {
   parseExport() {
     // Parse common prefix: EXPORT
     this._match(SYM_EXPORT);
-    
+
     // Disambiguate based on next token
     switch (this.la.id) {
       case SYM_LBRACE: {
@@ -1155,16 +1142,16 @@ class Parser {
 
   parseExportSpecifierList() {
     const items = [this._match(SYM_INDENT)];
-    
+
     while (this.la.id === SYM_OPTCOMMA) {
       this._match(SYM_OPTCOMMA);
-      
+
       // Check FOLLOW set for trailing separator
       if (this.la.id === SYM_ || this.la.id === SYM_COMMA || this.la.id === SYM_RBRACE || this.la.id === SYM_TERMINATOR || this.la.id === SYM_OUTDENT || this.la.id === SYM_INDENT) break;
-      
+
       items.push(this._match(SYM_INDENT));
     }
-    
+
     return items;
   }
 
@@ -1207,7 +1194,7 @@ class Parser {
   parseArguments() {
     // Parse common prefix: CALL_START
     this._match(SYM_CALL_START);
-    
+
     // Disambiguate based on next token
     switch (this.la.id) {
       case SYM_CALL_END: {
@@ -1243,7 +1230,7 @@ class Parser {
   parseArray() {
     // Parse common prefix: [
     this._match(SYM_LBRACKET);
-    
+
     // Disambiguate based on next token
     switch (this.la.id) {
       case SYM_RBRACKET: {
@@ -1304,16 +1291,16 @@ class Parser {
 
   parseArgList() {
     const items = [this._match(SYM_INDENT)];
-    
+
     while (this.la.id === SYM_OPTCOMMA) {
       this._match(SYM_OPTCOMMA);
-      
+
       // Check FOLLOW set for trailing separator
       if (this.la.id === SYM_ || this.la.id === SYM_COMMA || this.la.id === SYM_CALL_END || this.la.id === SYM_TERMINATOR || this.la.id === SYM_OUTDENT || this.la.id === SYM_INDENT) break;
-      
+
       items.push(this._match(SYM_INDENT));
     }
-    
+
     return items;
   }
 
@@ -1328,16 +1315,16 @@ class Parser {
 
   parseArgElisionList() {
     const items = [this._match(SYM_INDENT)];
-    
+
     while (this.la.id === SYM_OPTELISIONS) {
       this._match(SYM_OPTELISIONS);
-      
+
       // Check FOLLOW set for trailing separator
       if (this.la.id === SYM_ || this.la.id === SYM_COMMA || this.la.id === SYM_RBRACKET || this.la.id === SYM_TERMINATOR || this.la.id === SYM_OUTDENT || this.la.id === SYM_INDENT) break;
-      
+
       items.push(this._match(SYM_INDENT));
     }
-    
+
     return items;
   }
 
@@ -1369,14 +1356,13 @@ class Parser {
   }
 
   parseElisions() {
-    switch (this.la.id) {
-      case SYM_COMMA: {
-        const r0_1 = this.parseElision();
-        return [r0_1];
-      }
-      default:
-        this._error([59], this.la.id);
+    const items = [this.parseElision()];
+
+    while (this.la.id === SYM_ELISION) {
+      items.push(this.parseElision());
     }
+
+    return items;
   }
 
   parseElision() {
@@ -1392,16 +1378,16 @@ class Parser {
 
   parseSimpleArgs() {
     const items = [this.parseExpression()];
-    
+
     while (this.la.id === SYM_COMMA) {
       this._match(SYM_COMMA);
-      
+
       // Check FOLLOW set for trailing separator
       if (this.la.id === SYM_COMMA || this.la.id === SYM_INDENT) break;
-      
+
       items.push(this.parseExpression());
     }
-    
+
     return items;
   }
 
@@ -1409,7 +1395,7 @@ class Parser {
     // Parse common prefix: TRY Block
     this._match(SYM_TRY);
     const _prefix2 = this.parseBlock();
-    
+
     // Disambiguate based on next token
     switch (this.la.id) {
       case SYM_END: case SYM_TERMINATOR: case SYM_OUTDENT: case SYM_RBRACKET: case SYM_INDEX_END: case SYM_CALL_END: case SYM_PARAM_END: case SYM_COMMA: case SYM_: case SYM_FOR: case SYM_RBRACE: case SYM_WHEN: case SYM_INDENT: case SYM_DOTDOT: case SYM_ELLIPSIS: case SYM_WHILE: case SYM_UNTIL: case SYM_BY: case SYM_POST_IF: case SYM_POST_UNLESS: case SYM_QUESTION: case SYM_PLUS: case SYM_MINUS: case SYM_MATH: case SYM_POWER: case SYM_SHIFT: case SYM_COMPARE: case SYM_AMPERSAND: case SYM_CARET: case SYM_PIPE: case SYM_AND: case SYM_OR: case SYM_NULLISH: case SYM_OTHERWISE: case SYM_RELATION: case SYM_SPACE_QUESTION: case SYM_COLON: case SYM_INTERPOLATION_END: case SYM_RPAREN: case SYM_FOROF: case SYM_FORIN: case SYM_FORFROM:
@@ -1431,7 +1417,7 @@ class Parser {
   parseCatch() {
     // Parse common prefix: CATCH
     this._match(SYM_CATCH);
-    
+
     // Disambiguate based on next token
     switch (this.la.id) {
       case SYM_IDENTIFIER: {
@@ -1456,7 +1442,7 @@ class Parser {
   parseThrow() {
     // Parse common prefix: THROW
     this._match(SYM_THROW);
-    
+
     // Disambiguate based on next token
     switch (this.la.id) {
       case SYM_IDENTIFIER: case SYM_AT: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_STRING: case SYM_STRING_START: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: {
@@ -1477,7 +1463,7 @@ class Parser {
   parseParenthetical() {
     // Parse common prefix: (
     this._match(SYM_LPAREN);
-    
+
     // Disambiguate based on next token
     switch (this.la.id) {
       case SYM_IDENTIFIER: case SYM_AT: case SYM_PARAM_START: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: {
@@ -1539,7 +1525,7 @@ class Parser {
   parseLoop() {
     // Parse common prefix: LOOP
     this._match(SYM_LOOP);
-    
+
     // Disambiguate based on next token
     switch (this.la.id) {
       case SYM_INDENT: {
@@ -1581,7 +1567,7 @@ class Parser {
   parseForValue() {
     // Parse common prefix: ForVar
     const _prefix1 = this.parseForVar();
-    
+
     // Disambiguate based on next token
     switch (this.la.id) {
       case SYM_FOROF: case SYM_FORIN: case SYM_FORFROM: case SYM_COMMA:
@@ -1610,7 +1596,7 @@ class Parser {
   parseForVariables() {
     // Parse common prefix: ForValue
     const _prefix1 = this.parseForValue();
-    
+
     // Disambiguate based on next token
     switch (this.la.id) {
       case SYM_FOROF: case SYM_FORIN: case SYM_FORFROM:
@@ -1628,7 +1614,7 @@ class Parser {
   parseSwitch() {
     // Parse common prefix: SWITCH
     this._match(SYM_SWITCH);
-    
+
     // Disambiguate based on next token
     switch (this.la.id) {
       case SYM_IDENTIFIER: case SYM_AT: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_STRING: case SYM_STRING_START: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: {
@@ -1650,14 +1636,13 @@ class Parser {
   }
 
   parseWhens() {
-    switch (this.la.id) {
-      case SYM_LEADING_WHEN: {
-        const r0_1 = this.parseWhen();
-        return [r0_1];
-      }
-      default:
-        this._error([170], this.la.id);
+    const items = [this.parseWhen()];
+
+    while (this.la.id === SYM_WHEN) {
+      items.push(this.parseWhen());
     }
+
+    return items;
   }
 
   parseWhen() {
@@ -1665,7 +1650,7 @@ class Parser {
     this._match(SYM_LEADING_WHEN);
     const _prefix2 = this.parseSimpleArgs();
     const _prefix3 = this.parseBlock();
-    
+
     // Disambiguate based on next token
     switch (this.la.id) {
       case SYM_OUTDENT: case SYM_ELSE: case SYM_LEADING_WHEN:
@@ -1681,16 +1666,16 @@ class Parser {
 
   parseIfBlock() {
     const items = [this._match(SYM_IF)];
-    
+
     while (this.la.id === SYM_ELSE) {
       this._match(SYM_ELSE);
-      
+
       // Check FOLLOW set for trailing separator
       if (this.la.id === SYM_ELSE || this.la.id === SYM_END || this.la.id === SYM_TERMINATOR || this.la.id === SYM_OUTDENT || this.la.id === SYM_RBRACKET || this.la.id === SYM_INDEX_END || this.la.id === SYM_CALL_END || this.la.id === SYM_PARAM_END || this.la.id === SYM_COMMA || this.la.id === SYM_ || this.la.id === SYM_FOR || this.la.id === SYM_RBRACE || this.la.id === SYM_WHEN || this.la.id === SYM_INDENT || this.la.id === SYM_DOTDOT || this.la.id === SYM_ELLIPSIS || this.la.id === SYM_WHILE || this.la.id === SYM_UNTIL || this.la.id === SYM_BY || this.la.id === SYM_POST_IF || this.la.id === SYM_POST_UNLESS || this.la.id === SYM_QUESTION || this.la.id === SYM_PLUS || this.la.id === SYM_MINUS || this.la.id === SYM_MATH || this.la.id === SYM_POWER || this.la.id === SYM_SHIFT || this.la.id === SYM_COMPARE || this.la.id === SYM_AMPERSAND || this.la.id === SYM_CARET || this.la.id === SYM_PIPE || this.la.id === SYM_AND || this.la.id === SYM_OR || this.la.id === SYM_NULLISH || this.la.id === SYM_OTHERWISE || this.la.id === SYM_RELATION || this.la.id === SYM_SPACE_QUESTION || this.la.id === SYM_COLON || this.la.id === SYM_INTERPOLATION_END || this.la.id === SYM_RPAREN || this.la.id === SYM_FOROF || this.la.id === SYM_FORIN || this.la.id === SYM_FORFROM) break;
-      
+
       items.push(this._match(SYM_IF));
     }
-    
+
     return items;
   }
 
@@ -1699,7 +1684,7 @@ class Parser {
     this._match(SYM_UNLESS);
     const _prefix2 = this.parseExpression();
     const _prefix3 = this.parseBlock();
-    
+
     // Disambiguate based on next token
     switch (this.la.id) {
       case SYM_END: case SYM_TERMINATOR: case SYM_OUTDENT: case SYM_RBRACKET: case SYM_INDEX_END: case SYM_CALL_END: case SYM_PARAM_END: case SYM_COMMA: case SYM_: case SYM_FOR: case SYM_RBRACE: case SYM_WHEN: case SYM_INDENT: case SYM_DOTDOT: case SYM_ELLIPSIS: case SYM_WHILE: case SYM_UNTIL: case SYM_BY: case SYM_POST_IF: case SYM_POST_UNLESS: case SYM_QUESTION: case SYM_PLUS: case SYM_MINUS: case SYM_MATH: case SYM_POWER: case SYM_SHIFT: case SYM_COMPARE: case SYM_AMPERSAND: case SYM_CARET: case SYM_PIPE: case SYM_AND: case SYM_OR: case SYM_NULLISH: case SYM_OTHERWISE: case SYM_RELATION: case SYM_SPACE_QUESTION: case SYM_COLON: case SYM_INTERPOLATION_END: case SYM_RPAREN: case SYM_FOROF: case SYM_FORIN: case SYM_FORFROM:
@@ -1835,13 +1820,13 @@ _nextToken() {
   if (this.lexer.pos >= this.lexer.tokens.length) {
     return { id: SYM_END, kind: '$end', value: '', line: 0, column: 0 };
   }
-  
+
   const token = this.lexer.tokens[this.lexer.pos++];
   const tokId = token[0];
-  
+
   // Convert string token to ID if needed
   const id = typeof tokId === 'number' ? tokId : this.symbolIds[tokId] || SYM_ERROR;
-  
+
   return {
     id: id,
     kind: SYMBOL_NAMES[id] || token[0],
@@ -1856,7 +1841,7 @@ _match(expected) {
   if (this.la.id !== expected) {
     this._error([expected], this.la.id);
   }
-  
+
   const value = this.la.value;
   this.la = this._nextToken();
   return value;
@@ -1865,15 +1850,15 @@ _match(expected) {
 _peek(n) {
   const savedPos = this.lexer.pos;
   const savedLa = this.la;
-  
+
   let token = this.la;
   for (let i = 0; i < n; i++) {
     token = this._nextToken();
   }
-  
+
   this.lexer.pos = savedPos;
   this.la = savedLa;
-  
+
   return token.id;
 }
 
@@ -1886,7 +1871,7 @@ _error(expectedIds, gotId) {
   const got = SYMBOL_NAMES[gotId] || gotId;
   const line = this.la.line + 1;
   const col = this.la.column;
-  
+
   throw new Error(
     'Parse error at line ' + line + ', column ' + col + ': expected ' + expected + ', got ' + got
   );
