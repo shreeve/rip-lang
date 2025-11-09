@@ -879,14 +879,22 @@ class Generator
       firstSet = firstSets[i]
       tokens = Array.from(firstSet).map (t) => "'#{t}'"
 
+      # Get action for this rule
+      action = @_getActionCode rule
+
       # Get symbol to parse
       if rule.symbols.length is 1
         symbol = rule.symbols[0]
         # Check if terminal or nonterminal
         if @types[symbol]
-          parseCall = "return this.parse#{symbol}();"
+          # Check if action is just pass-through (return $1)
+          if action is 'return $1;'
+            parseCall = "return this.parse#{symbol}();"
+          else
+            # Action transforms the result
+            parseCall = "{ const $1 = this.parse#{symbol}(); #{action} }"
         else
-          parseCall = "return this._match('#{symbol}');"
+          parseCall = "{ const $1 = this._match('#{symbol}'); #{action} }"
       else
         # Sequence - need block scope
         seqCode = @_emitSequenceInline rule, i
@@ -921,13 +929,19 @@ class Generator
     {rule} = pattern
     action = @_getActionCode rule
 
+    # Special case: Single terminal (like Identifier → IDENTIFIER)
+    # _match() returns the value, so just return it directly
+    if rule.symbols.length is 1 and not @types[rule.symbols[0]]
+      terminal = rule.symbols[0]
+      return "parse#{typeName}() { return this._match('#{terminal}'); }"
+
     # Generate parse calls for each symbol
     parseCalls = []
     for symbol, i in rule.symbols
       if @types[symbol]
         parseCalls.push "const $#{i + 1} = this.parse#{symbol}();"
       else
-        parseCalls.push "this._match('#{symbol}');"
+        parseCalls.push "const $#{i + 1} = this._match('#{symbol}');"
 
     # Compact: single line if ≤ 3 symbols and simple action
     if rule.symbols.length <= 3 and action.length < 50
@@ -1005,20 +1019,60 @@ class Generator
     # Default
     "return items;"
 
-  # Get action code from rule (generic)
-  # Maps $$[n] to generated variables based on context
+  # Get action code from rule (for sequences/alternatives)
+  # Maps $$[$0-n] to $n variables (1-indexed symbols)
   _getActionCode: (rule) ->
-    return "return items;" unless rule
+    unless rule
+      console.log "  ⚠️  No rule provided to _getActionCode"
+      return "return null;"
 
     # Extract action from performAction
-    actionMatch = @performAction.match ///case\s+#{rule.id}:[^:]*return\s+([^;]+);///
-    return "return items;" unless actionMatch
+    # Format: "case 6: case 7: ... case 22: ... return $$[$0];"
+    # Need to find any line containing "case #{rule.id}:" and extract its return
+    lines = @performAction.split '\n'
+    actionLine = lines.find (line) => line.includes "case #{rule.id}:"
+
+    unless actionLine
+      console.log "  ⚠️  No action line for rule #{rule.id}"
+      return "return $1;" if rule.symbols.length is 1
+      return "return null;"
+
+    # Extract return statement from the line
+    returnMatch = actionLine.match /return\s+([^;]+);/
+    unless returnMatch
+      console.log "  ⚠️  No return in action line for rule #{rule.id}"
+      return "return $1;" if rule.symbols.length is 1
+      return "return null;"
+
+    actionCode = returnMatch[1].trim()
+    actionMatch = [null, actionCode]  # Fake match array for compatibility below
+
+    unless actionMatch
+      console.log "  ⚠️  No action found for rule #{rule.id}: #{rule.type} → #{rule.symbols.join(' ')}"
+      # Default: return first symbol for single-symbol rules
+      if rule.symbols.length is 1
+        return "return $1;"
+      return "return null;"
 
     actionCode = actionMatch[1].trim()
 
-    # Return the action code as-is for now
-    # TODO: Map $$[$0-n] to actual variables based on pattern
-    "return #{actionCode};"
+    # Map $$[$0-n] to $n variables
+    # $$[$0] = top of stack = last symbol
+    # $$[$0-1] = second to last, etc.
+    # For rule with N symbols: $$[$0] = symbol N, $$[$0-1] = symbol N-1
+    n = rule.symbols.length
+
+    mapped = actionCode.replace /\$\$\[\$0(-\d+)?\]/g, (match, offset) ->
+      if offset
+        # $$[$0-X] → symbol at position (n - X)
+        x = parseInt offset.slice(1), 10
+        pos = n - x
+        "$#{pos}"
+      else
+        # $$[$0] → last symbol (position n)
+        "$#{n}"
+
+    "return #{mapped};"
 
   # Generate PRD runtime helpers (using ''' - no interpolation needed here)
   _generatePRDRuntime: ->

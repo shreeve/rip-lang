@@ -54,7 +54,8 @@ const parserInstance = {
 
     parseRoot() {
   switch (this.la.kind) {
-      case '': return this._match('');
+      case '':
+        { const $1 = this._match(''); return ["program"]; }
   
       case 'IDENTIFIER':
       case '@':
@@ -105,7 +106,7 @@ const parserInstance = {
       case 'WHILE':
       case 'UNTIL':
       case 'LOOP':
-        return this.parseBody();
+        { const $1 = this.parseBody(); return ["program", ...$1]; }
   
     default:
       this._error('Expected Root, got ' + this.la.kind);
@@ -128,7 +129,8 @@ const parserInstance = {
   switch (this.la.kind) {
       case 'RETURN': return this.parseReturn();
   
-      case 'STATEMENT': return this._match('STATEMENT');
+      case 'STATEMENT':
+        { const $1 = this._match('STATEMENT'); return $1; }
   
       case 'IMPORT': return this.parseImport();
   
@@ -142,13 +144,13 @@ const parserInstance = {
   parseExpression() { return this.parseValue(); },
   
   parseDef() {
-  this._match('DEF');
+  const $1 = this._match('DEF');
     const $2 = this.parseIdentifier();
-    this._match('CALL_START');
+    const $3 = this._match('CALL_START');
     const $4 = this.parseParamList();
-    this._match('CALL_END');
+    const $5 = this._match('CALL_END');
     const $6 = this.parseBlock();
-  return items;
+  return ["def", $2, $4, $6];
   },
   
   parseExpressionLine() {
@@ -164,15 +166,16 @@ const parserInstance = {
   
   parseYield() { return this._match('YIELD'); },
   
-  parseBlock() { this._match('INDENT'); this._match('OUTDENT'); return items; },
+  parseBlock() { const $1 = this._match('INDENT'); const $2 = this._match('OUTDENT'); return ["block"]; },
   
-  parseIdentifier() { this._match('IDENTIFIER'); return items; },
+  parseIdentifier() { return this._match('IDENTIFIER'); },
   
-  parseProperty() { this._match('PROPERTY'); return items; },
+  parseProperty() { return this._match('PROPERTY'); },
   
   parseAlphaNumeric() {
   switch (this.la.kind) {
-      case 'NUMBER': return this._match('NUMBER');
+      case 'NUMBER':
+        { const $1 = this._match('NUMBER'); return $1; }
   
       case 'STRING': case 'STRING_START': return this.parseString();
   
@@ -183,10 +186,11 @@ const parserInstance = {
   
   parseString() {
   switch (this.la.kind) {
-      case 'STRING': return this._match('STRING');
+      case 'STRING':
+        { const $1 = this._match('STRING'); return $1; }
   
       case 'STRING_START':
-        { this._match('STRING_START'); const _1_2 = this.parseInterpolations(); this._match('STRING_END'); return items; }
+        { this._match('STRING_START'); const _1_2 = this.parseInterpolations(); this._match('STRING_END'); return ["str", ...$2]; }
   
     default:
       this._error('Expected String, got ' + this.la.kind);
@@ -199,46 +203,53 @@ const parserInstance = {
   return items;
   },
   
-  parseInterpolationChunk() { this._match('INTERPOLATION_START'); const $2 = this.parseBody(); this._match('INTERPOLATION_END'); return items; },
+  parseInterpolationChunk() { const $1 = this._match('INTERPOLATION_START'); const $2 = this.parseBody(); const $3 = this._match('INTERPOLATION_END'); return $2; },
   
   parseRegex() {
   switch (this.la.kind) {
-      case 'REGEX': return this._match('REGEX');
+      case 'REGEX':
+        { const $1 = this._match('REGEX'); return $1; }
   
       case 'REGEX_START':
-        { this._match('REGEX_START'); const _1_2 = this.parseInvocation(); this._match('REGEX_END'); return items; }
+        { this._match('REGEX_START'); const _1_2 = this.parseInvocation(); this._match('REGEX_END'); return ["regex", $2]; }
   
     default:
       this._error('Expected Regex, got ' + this.la.kind);
   }
   },
   
-  parseRegexWithIndex() { const $1 = this.parseRegex(); this._match(','); const $3 = this.parseExpression(); return items; },
+  parseRegexWithIndex() { const $1 = this.parseRegex(); const $2 = this._match(','); const $3 = this.parseExpression(); return ["regex-index", $1, $3]; },
   
   parseLiteral() {
   switch (this.la.kind) {
       case 'NUMBER': case 'STRING': case 'STRING_START': return this.parseAlphaNumeric();
   
-      case 'JS': return this._match('JS');
+      case 'JS':
+        { const $1 = this._match('JS'); return $1; }
   
       case 'REGEX': case 'REGEX_START': return this.parseRegex();
   
-      case 'UNDEFINED': return this._match('UNDEFINED');
+      case 'UNDEFINED':
+        { const $1 = this._match('UNDEFINED'); return "undefined"; }
   
-      case 'NULL': return this._match('NULL');
+      case 'NULL':
+        { const $1 = this._match('NULL'); return "null"; }
   
-      case 'BOOL': return this._match('BOOL');
+      case 'BOOL':
+        { const $1 = this._match('BOOL'); return $1; }
   
-      case 'INFINITY': return this._match('INFINITY');
+      case 'INFINITY':
+        { const $1 = this._match('INFINITY'); return $1; }
   
-      case 'NAN': return this._match('NAN');
+      case 'NAN':
+        { const $1 = this._match('NAN'); return $1; }
   
     default:
       this._error('Expected Literal, got ' + this.la.kind);
   }
   },
   
-  parseAssign() { const $1 = this.parseAssignable(); this._match('='); const $3 = this.parseExpression(); return items; },
+  parseAssign() { const $1 = this.parseAssignable(); const $2 = this._match('='); const $3 = this.parseExpression(); return ["=", $1, $3]; },
   
   parseAssignObj() { return this.parseObjAssignable(); },
   
@@ -257,20 +268,20 @@ const parserInstance = {
   
   parseObjAssignable() { return this.parseSimpleObjAssignable(); },
   
-  parseObjRestValue() { this._match('...'); const $2 = this.parseSimpleObjAssignable(); return items; },
+  parseObjRestValue() { const $1 = this._match('...'); const $2 = this.parseSimpleObjAssignable(); return ["...", $2]; },
   
   parseObjSpreadExpr() { return this.parseSimpleObjAssignable(); },
   
-  parseReturn() { this._match('RETURN'); const $2 = this.parseExpression(); return items; },
+  parseReturn() { const $1 = this._match('RETURN'); const $2 = this.parseExpression(); return ["return", $2]; },
   
   parseCode() {
   switch (this.la.kind) {
       case 'PARAM_START':
-        { this._match('PARAM_START'); const _0_2 = this.parseParamList(); this._match('PARAM_END'); const _0_4 = this.parseFuncGlyph(); const _0_5 = this.parseBlock(); return items; }
+        { this._match('PARAM_START'); const _0_2 = this.parseParamList(); this._match('PARAM_END'); const _0_4 = this.parseFuncGlyph(); const _0_5 = this.parseBlock(); return [$4, $2, $5]; }
   
       case '->':
       case '=>':
-        { const _1_1 = this.parseFuncGlyph(); const _1_2 = this.parseBlock(); return items; }
+        { const _1_1 = this.parseFuncGlyph(); const _1_2 = this.parseBlock(); return [$1, [], $2]; }
   
     default:
       this._error('Expected Code, got ' + this.la.kind);
@@ -280,11 +291,11 @@ const parserInstance = {
   parseCodeLine() {
   switch (this.la.kind) {
       case 'PARAM_START':
-        { this._match('PARAM_START'); const _0_2 = this.parseParamList(); this._match('PARAM_END'); const _0_4 = this.parseFuncGlyph(); const _0_5 = this.parseLine(); return items; }
+        { this._match('PARAM_START'); const _0_2 = this.parseParamList(); this._match('PARAM_END'); const _0_4 = this.parseFuncGlyph(); const _0_5 = this.parseLine(); return [$4, $2, $5]; }
   
       case '->':
       case '=>':
-        { const _1_1 = this.parseFuncGlyph(); const _1_2 = this.parseLine(); return items; }
+        { const _1_1 = this.parseFuncGlyph(); const _1_2 = this.parseLine(); return [$1, [], $2]; }
   
     default:
       this._error('Expected CodeLine, got ' + this.la.kind);
@@ -293,9 +304,11 @@ const parserInstance = {
   
   parseFuncGlyph() {
   switch (this.la.kind) {
-      case '->': return this._match('->');
+      case '->':
+        { const $1 = this._match('->'); return $1; }
   
-      case '=>': return this._match('=>');
+      case '=>':
+        { const $1 = this._match('=>'); return $1; }
   
     default:
       this._error('Expected FuncGlyph, got ' + this.la.kind);
@@ -304,9 +317,11 @@ const parserInstance = {
   
   parseOptComma() {
   switch (this.la.kind) {
-      case '': return this._match('');
+      case '':
+        { const $1 = this._match(''); return $1; }
   
-      case ',': return this._match(',');
+      case ',':
+        { const $1 = this._match(','); return $1; }
   
     default:
       this._error('Expected OptComma, got ' + this.la.kind);
@@ -332,7 +347,7 @@ const parserInstance = {
   }
   },
   
-  parseSplat() { this._match('...'); const $2 = this.parseExpression(); return items; },
+  parseSplat() { const $1 = this._match('...'); const $2 = this.parseExpression(); return ["...", $2]; },
   
   parseSimpleAssignable() { return this.parseIdentifier(); },
   
@@ -340,15 +355,15 @@ const parserInstance = {
   
   parseValue() { return this.parseAssignable(); },
   
-  parseSuper() { this._match('SUPER'); this._match('.'); const $3 = this.parseProperty(); return items; },
+  parseSuper() { const $1 = this._match('SUPER'); const $2 = this._match('.'); const $3 = this.parseProperty(); return [".", "super", $3]; },
   
   parseMetaProperty() {
   switch (this.la.kind) {
       case 'NEW_TARGET':
-        { this._match('NEW_TARGET'); this._match('.'); const _0_3 = this.parseProperty(); return items; }
+        { this._match('NEW_TARGET'); this._match('.'); const _0_3 = this.parseProperty(); return [".", "new", $3]; }
   
       case 'IMPORT_META':
-        { this._match('IMPORT_META'); this._match('.'); const _1_3 = this.parseProperty(); return items; }
+        { this._match('IMPORT_META'); this._match('.'); const _1_3 = this.parseProperty(); return [".", "import", $3]; }
   
     default:
       this._error('Expected MetaProperty, got ' + this.la.kind);
@@ -356,74 +371,80 @@ const parserInstance = {
   },
   
   parseObject() {
-  this._match('{');
+  const $1 = this._match('{');
     const $2 = this.parseObjAssignable();
-    this._match(':');
+    const $3 = this._match(':');
     const $4 = this.parseExpression();
-    this._match('FOR');
+    const $5 = this._match('FOR');
     const $6 = this.parseForVariables();
-    this._match('FOROF');
+    const $7 = this._match('FOROF');
     const $8 = this.parseExpression();
     const $9 = this.parseOptComma();
-    this._match('}');
-  return items;
+    const $10 = this._match('}');
+  return ["object-comprehension", $2, $4, [["for-of", $6, $8, false]], []];
   },
   
   parseAssignList() { return this._match(''); },
   
   parseClass() { return this._match('CLASS'); },
   
-  parseImport() { this._match('IMPORT'); const $2 = this.parseString(); return items; },
+  parseImport() { const $1 = this._match('IMPORT'); const $2 = this.parseString(); return ["import", "{}", $2]; },
   
   parseImportSpecifierList() { return this.parseImportSpecifier(); },
   
   parseImportSpecifier() { return this.parseIdentifier(); },
   
-  parseImportDefaultSpecifier() { const $1 = this.parseIdentifier(); return items; },
+  parseImportDefaultSpecifier() { const $1 = this.parseIdentifier(); return $1; },
   
-  parseImportNamespaceSpecifier() { this._match('IMPORT_ALL'); this._match('AS'); const $3 = this.parseIdentifier(); return items; },
+  parseImportNamespaceSpecifier() { const $1 = this._match('IMPORT_ALL'); const $2 = this._match('AS'); const $3 = this.parseIdentifier(); return ["*", $3]; },
   
-  parseExport() { this._match('EXPORT'); this._match('{'); this._match('}'); return items; },
+  parseExport() { const $1 = this._match('EXPORT'); const $2 = this._match('{'); const $3 = this._match('}'); return ["export", "{}"]; },
   
   parseExportSpecifierList() { return this.parseExportSpecifier(); },
   
   parseExportSpecifier() { return this.parseIdentifier(); },
   
-  parseInvocation() { const $1 = this.parseValue(); const $2 = this.parseOptFuncExist(); const $3 = this.parseString(); return items; },
+  parseInvocation() { const $1 = this.parseValue(); const $2 = this.parseOptFuncExist(); const $3 = this.parseString(); return ["tagged-template", $1, $3]; },
   
   parseOptFuncExist() {
   switch (this.la.kind) {
-      case '': return this._match('');
+      case '':
+        { const $1 = this._match(''); return null; }
   
-      case 'FUNC_EXIST': return this._match('FUNC_EXIST');
+      case 'FUNC_EXIST':
+        { const $1 = this._match('FUNC_EXIST'); return true; }
   
     default:
       this._error('Expected OptFuncExist, got ' + this.la.kind);
   }
   },
   
-  parseArguments() { this._match('CALL_START'); this._match('CALL_END'); return items; },
+  parseArguments() { const $1 = this._match('CALL_START'); const $2 = this._match('CALL_END'); return []; },
   
   parseThis() {
   switch (this.la.kind) {
-      case 'THIS': return this._match('THIS');
+      case 'THIS':
+        { const $1 = this._match('THIS'); return "this"; }
   
-      case '@': return this._match('@');
+      case '@':
+        { const $1 = this._match('@'); return "this"; }
   
     default:
       this._error('Expected This, got ' + this.la.kind);
   }
   },
   
-  parseThisProperty() { this._match('@'); const $2 = this.parseProperty(); return items; },
+  parseThisProperty() { const $1 = this._match('@'); const $2 = this.parseProperty(); return [".", "this", $2]; },
   
-  parseArray() { this._match('['); this._match(']'); return items; },
+  parseArray() { const $1 = this._match('['); const $2 = this._match(']'); return ["array"]; },
   
   parseRangeDots() {
   switch (this.la.kind) {
-      case '..': return this._match('..');
+      case '..':
+        { const $1 = this._match('..'); return ".."; }
   
-      case '...': return this._match('...');
+      case '...':
+        { const $1 = this._match('...'); return "..."; }
   
     default:
       this._error('Expected RangeDots, got ' + this.la.kind);
@@ -431,15 +452,15 @@ const parserInstance = {
   },
   
   parseRange() {
-  this._match('[');
+  const $1 = this._match('[');
     const $2 = this.parseExpression();
     const $3 = this.parseRangeDots();
     const $4 = this.parseExpression();
-    this._match(']');
-  return items;
+    const $5 = this._match(']');
+  return [$3, $2, $4];
   },
   
-  parseSlice() { const $1 = this.parseExpression(); const $2 = this.parseRangeDots(); const $3 = this.parseExpression(); return items; },
+  parseSlice() { const $1 = this.parseExpression(); const $2 = this.parseRangeDots(); const $3 = this.parseExpression(); return [$2, $1, $3]; },
   
   parseArgList() { return this.parseArg(); },
   
@@ -499,10 +520,10 @@ const parserInstance = {
       case 'IMPORT':
       case 'EXPORT':
       case '...':
-        return this.parseArg();
+        { const $1 = this.parseArg(); return [$1]; }
   
       case ',':
-        { const _1_1 = this.parseElisions(); const _1_2 = this.parseArg(); return items; }
+        { const _1_1 = this.parseElisions(); const _1_2 = this.parseArg(); return [...$1, $2]; }
   
     default:
       this._error('Expected ArgElision, got ' + this.la.kind);
@@ -529,27 +550,31 @@ const parserInstance = {
   return items;
   },
   
-  parseTry() { this._match('TRY'); const $2 = this.parseBlock(); return items; },
+  parseTry() { const $1 = this._match('TRY'); const $2 = this.parseBlock(); return ["try", $2]; },
   
-  parseCatch() { this._match('CATCH'); const $2 = this.parseIdentifier(); const $3 = this.parseBlock(); return items; },
+  parseCatch() { const $1 = this._match('CATCH'); const $2 = this.parseIdentifier(); const $3 = this.parseBlock(); return [$2, $3]; },
   
-  parseThrow() { this._match('THROW'); const $2 = this.parseExpression(); return items; },
+  parseThrow() { const $1 = this._match('THROW'); const $2 = this.parseExpression(); return ["throw", $2]; },
   
-  parseParenthetical() { this._match('('); const $2 = this.parseBody(); this._match(')'); return items; },
+  parseParenthetical() { const $1 = this._match('('); const $2 = this.parseBody(); const $3 = this._match(')'); return $2.length === 1 ? $2[0] : $2; },
   
-  parseWhileSource() { this._match('WHILE'); const $2 = this.parseExpression(); return items; },
+  parseWhileSource() { const $1 = this._match('WHILE'); const $2 = this.parseExpression(); return ["while", $2]; },
   
-  parseWhile() { const $1 = this.parseWhileSource(); const $2 = this.parseBlock(); return items; },
+  parseWhile() {
+  const $1 = this.parseWhileSource();
+    const $2 = this.parseBlock();
+  return $1.length === 2 ? [$1[0], $1[1], $2]   : [$1[0], $1[1], $1[2], $2];
+  },
   
-  parseLoop() { this._match('LOOP'); const $2 = this.parseBlock(); return items; },
+  parseLoop() { const $1 = this._match('LOOP'); const $2 = this.parseBlock(); return ["loop", $2]; },
   
   parseFor() {
-  this._match('FOR');
+  const $1 = this._match('FOR');
     const $2 = this.parseForVariables();
-    this._match('FORIN');
+    const $3 = this._match('FORIN');
     const $4 = this.parseExpression();
     const $5 = this.parseBlock();
-  return items;
+  return ["for-in"  , $2, $4, null, null, $5];
   },
   
   parseForValue() { return this.parseForVar(); },
@@ -572,12 +597,12 @@ const parserInstance = {
   parseForVariables() { return this.parseForValue(); },
   
   parseSwitch() {
-  this._match('SWITCH');
+  const $1 = this._match('SWITCH');
     const $2 = this.parseExpression();
-    this._match('INDENT');
+    const $3 = this._match('INDENT');
     const $4 = this.parseWhens();
-    this._match('OUTDENT');
-  return items;
+    const $5 = this._match('OUTDENT');
+  return ["switch", $2, $4, null];
   },
   
   parseWhens() {
@@ -586,33 +611,33 @@ const parserInstance = {
   return items;
   },
   
-  parseWhen() { this._match('LEADING_WHEN'); const $2 = this.parseSimpleArgs(); const $3 = this.parseBlock(); return items; },
+  parseWhen() { const $1 = this._match('LEADING_WHEN'); const $2 = this.parseSimpleArgs(); const $3 = this.parseBlock(); return ["when", $2, $3]; },
   
-  parseIfBlock() { this._match('IF'); const $2 = this.parseExpression(); const $3 = this.parseBlock(); return items; },
+  parseIfBlock() { const $1 = this._match('IF'); const $2 = this.parseExpression(); const $3 = this.parseBlock(); return ["if", $2, $3]; },
   
-  parseUnlessBlock() { this._match('UNLESS'); const $2 = this.parseExpression(); const $3 = this.parseBlock(); return items; },
+  parseUnlessBlock() { const $1 = this._match('UNLESS'); const $2 = this.parseExpression(); const $3 = this.parseBlock(); return ["unless", $2, $3]; },
   
   parseIf() { return this.parseIfBlock(); },
   
   parseOperationLine() {
   switch (this.la.kind) {
       case 'UNARY':
-        { this._match('UNARY'); const _0_2 = this.parseExpressionLine(); return items; }
+        { this._match('UNARY'); const _0_2 = this.parseExpressionLine(); return [$1, $2]; }
   
       case 'DO':
-        { this._match('DO'); const _1_2 = this.parseExpressionLine(); return items; }
+        { this._match('DO'); const _1_2 = this.parseExpressionLine(); return ["do-iife", $2]; }
   
       case 'DO_IIFE':
-        { this._match('DO_IIFE'); const _2_2 = this.parseCodeLine(); return items; }
+        { this._match('DO_IIFE'); const _2_2 = this.parseCodeLine(); return ["do-iife", $2]; }
   
     default:
       this._error('Expected OperationLine, got ' + this.la.kind);
   }
   },
   
-  parseOperation() { this._match('UNARY'); const $2 = this.parseExpression(); return items; },
+  parseOperation() { const $1 = this._match('UNARY'); const $2 = this.parseExpression(); return [$1, $2]; },
   
-  parseDoIife() { this._match('DO_IIFE'); const $2 = this.parseCode(); return items; }
+  parseDoIife() { const $1 = this._match('DO_IIFE'); const $2 = this.parseCode(); return ["do-iife", $2]; }
 };
 
 function createParser(yyInit = {}) {
