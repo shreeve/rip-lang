@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-1.5.0-blue.svg" alt="Version"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-1.5.1-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
   <a href="#status"><img src="https://img.shields.io/badge/tests-947%2F947-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
@@ -32,7 +32,7 @@ A clean-room **CoffeeScript-inspired compiler** that produces modern JavaScript 
 
 ## Status
 
-**Version 1.5.0** - **PRODUCTION READY** 🚀
+**Version 1.5.1** - **PRODUCTION READY** 🚀
 
 **Quality metrics:**
 - ✅ **947/947 tests passing** (100% coverage)

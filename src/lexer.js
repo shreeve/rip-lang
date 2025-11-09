@@ -716,6 +716,85 @@ export var Lexer = class Lexer {
     return indent.length;
   }
 
+  // Helper: Get closing delimiter column position if it has only whitespace before it
+  getHeredocClosingColumn(end, quoteLength) {
+    const closingPos = end - quoteLength;
+
+    // Find line start
+    let lineStart = closingPos - 1;
+    while (lineStart >= 0 && this.chunk[lineStart] !== '\n') {
+      lineStart--;
+    }
+    lineStart++;
+
+    // Check if only whitespace before closing
+    const beforeClosing = this.chunk.slice(lineStart, closingPos);
+    return /^\s*$/.test(beforeClosing) ? beforeClosing.length : null;
+  }
+
+  // Helper: Extract heredoc content from tokens
+  extractHeredocContent(tokens) {
+    const parts = [];
+    for (let i = 0; i < tokens.length; i++) {
+      if (tokens[i][0] === 'NEOSTRING') {
+        parts.push(tokens[i][1]);
+      }
+    }
+    return parts.join('#{}');
+  }
+
+  // Helper: Find minimum indentation in heredoc content
+  findMinimumIndent(doc) {
+    let indent = null;
+    let match;
+    while (match = HEREDOC_INDENT.exec(doc)) {
+      const attempt = match[1];
+      if (indent === null || (0 < attempt.length && attempt.length < indent.length)) {
+        indent = attempt;
+      }
+    }
+    return indent;
+  }
+
+  // Helper: Choose between closing column and minimum indent
+  selectHeredocIndent(closingColumn, minIndent) {
+    if (closingColumn === null) {
+      // No closing column detected, use minimum
+      return minIndent;
+    }
+
+    if (minIndent === null) {
+      // No content indent (empty or whitespace-only), use closing
+      return ' '.repeat(closingColumn);
+    }
+
+    if (closingColumn <= minIndent.length) {
+      // Closing at or left of content minimum - use closing
+      return ' '.repeat(closingColumn);
+    }
+
+    // Closing right of content - use minimum (old behavior)
+    return minIndent;
+  }
+
+  // Helper: Remove trailing whitespace-only line from tokens
+  removeTrailingWhitespaceLine(tokens) {
+    if (tokens.length === 0) return;
+
+    const lastToken = tokens[tokens.length - 1];
+    if (lastToken[0] !== 'NEOSTRING') return;
+
+    // Check if last line is whitespace-only
+    const lines = lastToken[1].split('\n');
+    const lastLine = lines[lines.length - 1];
+
+    if (/^\s*$/.test(lastLine)) {
+      // Remove the trailing whitespace line
+      lines.pop();
+      lastToken[1] = lines.join('\n');
+    }
+  }
+
   // Matches strings, including multiline strings, as well as heredocs, with or without
   // interpolation.
   stringToken() {
@@ -748,55 +827,21 @@ export var Lexer = class Lexer {
     } = this.matchWithInterpolations(regex, quote));
     heredoc = quote.length === 3;
     if (heredoc) {
-      // NEW: Check if closing delimiter has only whitespace before it
-      // If so, use its column position as the dedenting baseline
-      let useClosingColumn = false;
-      let closingColumn = 0;
+      // Detect closing delimiter position for visual baseline control
+      const closingColumn = this.getHeredocClosingColumn(end, quote.length);
 
-      const closingPos = end - quote.length;
+      // Get document content for analysis
+      doc = this.extractHeredocContent(tokens);
 
-      // Find the start of the line containing the closing delimiter
-      let lineStart = closingPos - 1;
-      while (lineStart >= 0 && this.chunk[lineStart] !== '\n') {
-        lineStart--;
-      }
-      lineStart++;  // Position after \n (or 0 if no \n)
+      // Calculate minimum indentation from content
+      indent = this.findMinimumIndent(doc);
 
-      // Get text between line start and closing delimiter
-      const beforeClosing = this.chunk.slice(lineStart, closingPos);
+      // Choose dedenting baseline intelligently
+      indent = this.selectHeredocIndent(closingColumn, indent);
 
-      // If only whitespace, use closing column as baseline
-      if (/^\s*$/.test(beforeClosing)) {
-        useClosingColumn = true;
-        closingColumn = beforeClosing.length;
-      }
-
-      // Get document content
-      doc = ((function() {
-        var k, len, results;
-        results = [];
-        for (i = k = 0, len = tokens.length; k < len; i = ++k) {
-          token = tokens[i];
-          if (token[0] === 'NEOSTRING') {
-            results.push(token[1]);
-          }
-        }
-        return results;
-      })()).join('#{}');
-
-      // Determine indentation to strip
-      if (useClosingColumn) {
-        // Use closing delimiter column as baseline
-        indent = ' '.repeat(closingColumn);
-      } else {
-        // Fall back to current behavior: find minimum indentation
-        indent = null;
-        while (match = HEREDOC_INDENT.exec(doc)) {
-          attempt = match[1];
-          if (indent === null || (0 < (ref = attempt.length) && ref < indent.length)) {
-            indent = attempt;
-          }
-        }
+      // Clean up trailing whitespace when using minimum indent
+      if (closingColumn !== null && indent !== null && closingColumn > indent.length) {
+        this.removeTrailingWhitespaceLine(tokens);
       }
     }
     delimiter = quote.charAt(0);

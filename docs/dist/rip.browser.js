@@ -678,6 +678,64 @@ ${line}`;
     }
     return indent.length;
   }
+  getHeredocClosingColumn(end, quoteLength) {
+    const closingPos = end - quoteLength;
+    let lineStart = closingPos - 1;
+    while (lineStart >= 0 && this.chunk[lineStart] !== `
+`) {
+      lineStart--;
+    }
+    lineStart++;
+    const beforeClosing = this.chunk.slice(lineStart, closingPos);
+    return /^\s*$/.test(beforeClosing) ? beforeClosing.length : null;
+  }
+  extractHeredocContent(tokens) {
+    const parts = [];
+    for (let i = 0;i < tokens.length; i++) {
+      if (tokens[i][0] === "NEOSTRING") {
+        parts.push(tokens[i][1]);
+      }
+    }
+    return parts.join("#{}");
+  }
+  findMinimumIndent(doc) {
+    let indent = null;
+    let match;
+    while (match = HEREDOC_INDENT.exec(doc)) {
+      const attempt = match[1];
+      if (indent === null || 0 < attempt.length && attempt.length < indent.length) {
+        indent = attempt;
+      }
+    }
+    return indent;
+  }
+  selectHeredocIndent(closingColumn, minIndent) {
+    if (closingColumn === null) {
+      return minIndent;
+    }
+    if (minIndent === null) {
+      return " ".repeat(closingColumn);
+    }
+    if (closingColumn <= minIndent.length) {
+      return " ".repeat(closingColumn);
+    }
+    return minIndent;
+  }
+  removeTrailingWhitespaceLine(tokens) {
+    if (tokens.length === 0)
+      return;
+    const lastToken = tokens[tokens.length - 1];
+    if (lastToken[0] !== "NEOSTRING")
+      return;
+    const lines = lastToken[1].split(`
+`);
+    const lastLine = lines[lines.length - 1];
+    if (/^\s*$/.test(lastLine)) {
+      lines.pop();
+      lastToken[1] = lines.join(`
+`);
+    }
+  }
   stringToken() {
     var attempt, delimiter, doc, end, heredoc, i, indent, match, prev, quote, ref, regex, token, tokens;
     [quote] = STRING_START.exec(this.chunk) || [];
@@ -706,41 +764,12 @@ ${line}`;
     } = this.matchWithInterpolations(regex, quote));
     heredoc = quote.length === 3;
     if (heredoc) {
-      let useClosingColumn = false;
-      let closingColumn = 0;
-      const closingPos = end - quote.length;
-      let lineStart = closingPos - 1;
-      while (lineStart >= 0 && this.chunk[lineStart] !== `
-`) {
-        lineStart--;
-      }
-      lineStart++;
-      const beforeClosing = this.chunk.slice(lineStart, closingPos);
-      if (/^\s*$/.test(beforeClosing)) {
-        useClosingColumn = true;
-        closingColumn = beforeClosing.length;
-      }
-      doc = function() {
-        var k2, len2, results;
-        results = [];
-        for (i = k2 = 0, len2 = tokens.length;k2 < len2; i = ++k2) {
-          token = tokens[i];
-          if (token[0] === "NEOSTRING") {
-            results.push(token[1]);
-          }
-        }
-        return results;
-      }().join("#{}");
-      if (useClosingColumn) {
-        indent = " ".repeat(closingColumn);
-      } else {
-        indent = null;
-        while (match = HEREDOC_INDENT.exec(doc)) {
-          attempt = match[1];
-          if (indent === null || 0 < (ref = attempt.length) && ref < indent.length) {
-            indent = attempt;
-          }
-        }
+      const closingColumn = this.getHeredocClosingColumn(end, quote.length);
+      doc = this.extractHeredocContent(tokens);
+      indent = this.findMinimumIndent(doc);
+      indent = this.selectHeredocIndent(closingColumn, indent);
+      if (closingColumn !== null && indent !== null && closingColumn > indent.length) {
+        this.removeTrailingWhitespaceLine(tokens);
       }
     }
     delimiter = quote.charAt(0);
@@ -7050,8 +7079,8 @@ function compileToJS(source, options = {}) {
   return compiler.compileToJS(source);
 }
 // src/browser.js
-var VERSION = "1.5.0";
-var BUILD_DATE = "2025-11-09@05:26:51GMT";
+var VERSION = "1.5.1";
+var BUILD_DATE = "2025-11-09@06:34:36GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

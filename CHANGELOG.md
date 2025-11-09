@@ -5,6 +5,36 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1] - 2025-11-09
+
+### Fixed
+- **Refined heredoc closing delimiter logic** for edge cases
+  - Only uses closing position when it's at or left of content minimum
+  - Falls back to minimum indent when closing is right of content (old behavior)
+  - Removes trailing whitespace-only line when using minimum indent fallback
+  - Prevents incorrect dedenting when closing delimiter is indented beyond content
+
+### Changed
+- **Refactored heredoc logic into helper methods** for maintainability
+  - Extracted `getHeredocClosingColumn()` - Detects closing delimiter position
+  - Extracted `extractHeredocContent()` - Gets content from tokens
+  - Extracted `findMinimumIndent()` - Calculates minimum indentation
+  - Extracted `selectHeredocIndent()` - Chooses baseline intelligently
+  - Extracted `removeTrailingWhitespaceLine()` - Cleans up edge case
+  - Main heredoc logic now 15 lines (was 70), crystal clear
+  - Zero performance impact, much more maintainable
+
+- **Added inline SVG favicon to HTML files**
+  - repl.html, index.html, example.html now have embedded favicon
+  - No HTTP request needed for favicon
+  - Works in all contexts (local, GitHub Pages, offline)
+
+- **Enhanced dev server** (scripts/serve.js)
+  - Now strips `/rip-lang/` prefix for GitHub Pages URL compatibility
+  - Works with both local and GitHub Pages paths
+
+All 947 tests passing (100%) ✅
+
 ## [1.5.0] - 2025-11-09
 
 ### Added
