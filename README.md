@@ -101,7 +101,7 @@ Rip includes **all of CoffeeScript's beloved features** plus modern enhancements
 | **Traditional ternary** | `x > 0 ? 'pos' : 'neg'` | JavaScript-style (plus CoffeeScript's if/then/else) |
 | **Ruby-style regex** | `str =~ /pattern/`, `_[1]` | Match with capture, inline extraction |
 | **Heregex** | `///pattern # comment///` | Extended regex (CoffeeScript deprecated it) |
-| **Heredoc indent control** | Closing `'''` position = baseline | Visual margin control for code generation |
+| **Smart heredoc margins** | Closing `'''` column = left margin | Visual alignment - position delimiter to set baseline! |
 | **10 optional operators** | `obj?.prop` + `arr?[0]` | Both ES6 and CoffeeScript styles work! |
 | **__DATA__ marker** | `__DATA__\nconfig...` | Ruby-style inline data sections |
 
@@ -290,20 +290,32 @@ pattern = ///
   $
 ///i
 
-# Heredocs - Visual indentation control
-code = '''
-  if (x) {
-    return y;
-  }
-  '''                        # Closing position sets the baseline
-# Output: "if (x) {\n  return y;\n}"  (strips 2 spaces)
+# Heredocs - Smart visual indentation control
+# When closing ''' or """ is preceded only by whitespace,
+# its column position becomes the "left margin" for all content.
+# This makes it easy to visually align content!
 
 code = '''
   if (x) {
     return y;
   }
-'''                          # Closing at column 0 preserves all indent
+  '''                        # Closing at column 2 → strips 2 spaces from all lines
+# Output: "if (x) {\n  return y;\n}"
+
+code = '''
+  if (x) {
+    return y;
+  }
+'''                          # Closing at column 0 → preserves all indentation
 # Output: "  if (x) {\n    return y;\n  }"
+
+# Perfect for code generation - align the closing delimiter where you want!
+template = """
+    function ${name}() {
+      console.log("${message}");
+    }
+    """                      # Closing at column 4 → baseline is column 4
+# Output: "function ${name}() {\n  console.log(\"${message}\");\n}"
 
 # Traditional ternary (plus CoffeeScript's if/then/else)
 result = x > 0 ? 'positive' : 'negative'
