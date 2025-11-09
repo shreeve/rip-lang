@@ -4741,15 +4741,14 @@ ${this.indent()}}`;
     return `(${this.generate(expr, "value")} instanceof ${this.generate(type, "value")})`;
   }
   generateIn(head, rest, context, sexpr) {
-    const [key2, obj] = rest;
+    const [key2, container] = rest;
     const keyCode = this.generate(key2, "value");
-    const objCode = this.generate(obj, "value");
-    const isStringLiteral = (keyCode.startsWith("'") || keyCode.startsWith('"')) && (keyCode.endsWith("'") || keyCode.endsWith('"'));
-    const isVariable = /^[a-zA-Z_$][\w$]*$/.test(objCode);
-    if (isStringLiteral && isVariable) {
-      return `(Array.isArray(${objCode}) || typeof ${objCode} === 'string' ? ${objCode}.includes(${keyCode}) : (${keyCode} in ${objCode}))`;
+    if (Array.isArray(container) && container[0] === "object") {
+      const objCode = this.generate(container, "value");
+      return `(${keyCode} in ${objCode})`;
     }
-    return `(${keyCode} in ${objCode})`;
+    const containerCode = this.generate(container, "value");
+    return `(Array.isArray(${containerCode}) || typeof ${containerCode} === 'string' ? ${containerCode}.includes(${keyCode}) : (${keyCode} in ${containerCode}))`;
   }
   generateOf(head, rest, context, sexpr) {
     const [value, container] = rest;
@@ -7079,8 +7078,8 @@ function compileToJS(source, options = {}) {
   return compiler.compileToJS(source);
 }
 // src/browser.js
-var VERSION = "1.5.1";
-var BUILD_DATE = "2025-11-09@06:34:36GMT";
+var VERSION = "1.5.2";
+var BUILD_DATE = "2025-11-09@08:09:01GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

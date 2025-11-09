@@ -2081,28 +2081,40 @@ export class CodeGenerator {
 
   /**
    * Generate 'in' operator
-   * Pattern: ["in", key, obj] → key in obj
-   * Special case: string literal in variable → use runtime check for string/array
+   * Pattern: ["in", key, container] → membership check
+   * 
+   * JavaScript's 'in' checks INDICES in arrays, not VALUES!
+   * So we need to dispatch based on container type:
+   * - Arrays/strings → .includes() (check values)
+   * - Objects → 'in' operator (check properties)
+   * 
+   * Strategy:
+   * - Object literals: Use JavaScript 'in' directly
+   * - Everything else: Runtime check with .includes() for arrays/strings
+   * 
+   * Issue #60: Previous implementation only handled string literal in variable
    */
   generateIn(head, rest, context, sexpr) {
-    const [key, obj] = rest;
+    const [key, container] = rest;
     const keyCode = this.generate(key, 'value');
-    const objCode = this.generate(obj, 'value');
-
-    // Special case: string literal in variable
-    // Generate runtime check: Array or string → .includes(), otherwise → in
-    // Example: '\n' in action →
-    //   (Array.isArray(action) || typeof action === 'string' ? action.includes('\n') : ('\n' in action))
-    // This is critical for bootstrap (solar.rip uses this pattern)
-    const isStringLiteral = (keyCode.startsWith("'") || keyCode.startsWith('"')) &&
-                           (keyCode.endsWith("'") || keyCode.endsWith('"'));
-    const isVariable = /^[a-zA-Z_$][\w$]*$/.test(objCode);
-
-    if (isStringLiteral && isVariable) {
-      return `(Array.isArray(${objCode}) || typeof ${objCode} === 'string' ? ${objCode}.includes(${keyCode}) : (${keyCode} in ${objCode}))`;
+    
+    // Object literal → Use JavaScript 'in' for property checks
+    // Pattern: ["in", key, ["object", ...pairs]]
+    if (Array.isArray(container) && container[0] === 'object') {
+      const objCode = this.generate(container, 'value');
+      return `(${keyCode} in ${objCode})`;
     }
-
-    return `(${keyCode} in ${objCode})`;
+    
+    // Everything else (arrays, strings, variables) → Runtime check
+    // This handles:
+    // - Array literals: 'x' in ['a', 'b']
+    // - Array variables: val in list
+    // - String variables: 'e' in str
+    // Runtime dispatches to:
+    // - .includes() for arrays/strings (checks values)
+    // - 'in' for objects (checks properties)
+    const containerCode = this.generate(container, 'value');
+    return `(Array.isArray(${containerCode}) || typeof ${containerCode} === 'string' ? ${containerCode}.includes(${keyCode}) : (${keyCode} in ${containerCode}))`;
   }
 
   /**

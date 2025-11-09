@@ -186,3 +186,39 @@ test "newline in string", "str = 'line1\\nline2'\n'\\n' in str", true
 # Code generation test - runtime check for string/array vs object
 code "string literal in variable uses runtime check", "'\\n' in action", "(Array.isArray(action) || typeof action === 'string' ? action.includes('\\n') : ('\\n' in action))"
 code "property in identifier also uses runtime check", "'key' in obj", "(Array.isArray(obj) || typeof obj === 'string' ? obj.includes('key') : ('key' in obj))"
+
+# ============================================================================
+# Array Membership Tests (Issue #60)
+# The 'in' operator should check VALUES in arrays, not INDICES
+# ============================================================================
+
+# Variable in array variable (primary bug case)
+test "variable in array variable", "list = ['apple', 'banana']\nval = 'apple'\nval in list", true
+test "variable not in array variable", "list = ['apple', 'banana']\nval = 'orange'\nval in list", false
+
+# String literal in array literal
+test "string literal in array literal", "'apple' in ['apple', 'banana']", true
+test "string not in array literal", "'orange' in ['apple', 'banana']", false
+
+# Variable in array literal
+test "variable in array literal", "val = 'apple'\nval in ['apple', 'banana']", true
+test "variable not in array literal", "val = 'orange'\nval in ['apple', 'banana']", false
+
+# Number in array (should check VALUE, not index!)
+test "number value in array", "val = 42\nval in [10, 42, 99]", true
+test "number not in array", "val = 5\nval in [10, 42, 99]", false
+
+# Critical edge case: number 1 as VALUE vs index 1
+test "number 1 as value in array", "1 in [5, 1, 9]", true
+test "number 1 not as value", "1 in [5, 9]", false
+
+# Empty array
+test "value in empty array", "'x' in []", false
+
+# Code generation - all non-object cases should use runtime check
+code "variable in variable uses runtime check", "val in list", "(Array.isArray(list) || typeof list === 'string' ? list.includes(val) : (val in list))"
+code "literal in literal uses runtime check", "'x' in ['a', 'b']", "(Array.isArray(['a', 'b']) || typeof ['a', 'b'] === 'string' ? ['a', 'b'].includes('x') : ('x' in ['a', 'b']))"
+code "variable in literal uses runtime check", "val in ['a', 'b']", "(Array.isArray(['a', 'b']) || typeof ['a', 'b'] === 'string' ? ['a', 'b'].includes(val) : (val in ['a', 'b']))"
+
+# Object literal should still use JavaScript 'in'
+code "property in object literal", "'key' in {key: 1}", "('key' in {key: 1})"
