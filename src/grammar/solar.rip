@@ -715,51 +715,118 @@ class Generator
     # Assemble complete parser
     @_assembleDirectParser stateFunctions, runtime
 
+  # Map token name to valid constant name
+  _tokenToConstName: (tokenName) ->
+    return 'TOKEN_END' if tokenName is '$end'
+    return 'TOKEN_ERROR' if tokenName is 'error'
+    
+    # Map punctuation to valid names
+    validName = switch tokenName
+      when ',' then 'COMMA'
+      when '=' then 'EQUALS'
+      when '(' then 'LPAREN'
+      when ')' then 'RPAREN'
+      when '[' then 'LBRACKET'
+      when ']' then 'RBRACKET'
+      when '{' then 'LBRACE'
+      when '}' then 'RBRACE'
+      when '.' then 'DOT'
+      when ':' then 'COLON'
+      when '...' then 'ELLIPSIS'
+      when '..' then 'DOTDOT'
+      when '?' then 'QUESTION'
+      when '-' then 'MINUS'
+      when '+' then 'PLUS'
+      when '*' then 'STAR'
+      when '&' then 'AMP'
+      when '|' then 'PIPE'
+      when '^' then 'CARET'
+      when '&&' then 'AND'
+      when '||' then 'OR'
+      when '??' then 'NULLISH'
+      when '!?' then 'OTHERWISE'
+      when '**' then 'POWER'
+      when '@' then 'AT'
+      when '--' then 'DECREMENT'
+      when '++' then 'INCREMENT'
+      when '?.' then 'OPT_DOT'
+      when '::' then 'PROTO'
+      when '?::' then 'OPT_PROTO'
+      when '->' then 'ARROW'
+      when '=>' then 'FAT_ARROW'
+      when '=~' then 'MATCH'
+      when 'SPACE?' then 'SPACE_QUESTION'
+      else tokenName
+    
+    "TOKEN_#{validName}"
+
   # Generate state functions from parse table (direct translation!)
   _generateStateFunctions: ->
     [SHIFT, REDUCE, ACCEPT] = [1, 2, 3]
     functions = []
-
+    
     for state, stateNum in @parseTable
-      cases = []
       defaultAction = null
-
+      
       # Check for default action (single reduce action for all tokens)
       if @defaultActions[stateNum]
         defaultAction = @defaultActions[stateNum]
-
-      # Generate case for each action in this state
+      
+      # Group actions by their behavior (for compact output)
+      actionGroups = {}  # "shift_42" → [tokens], "reduce_13" → [tokens], etc.
+      
+      # Collect all actions and group them
       for own tokenId, action of state when tokenId isnt 'undefined'
         continue if typeof action is 'number'  # Skip goto entries (nonterminal IDs)
-
+        
         # Convert tokenId to token name
-        # tokenId is a string representation of the numeric ID
         numericId = parseInt tokenId, 10
         tokenName = @tokenNames[numericId]
-
-        # Handle special tokens (not in tokenNames)
+        
+        # Handle special tokens
         unless tokenName
           tokenName = switch numericId
             when 1 then '$end'
             when 2 then 'error'
             else tokenId
-
-        continue unless tokenName  # Skip if still no token name
-
-        if Array.isArray(action) and action[0] is SHIFT
-          # Shift action: match token, push state, go to next state
-          nextState = action[1]
-          cases.push "      case '#{tokenName}': this._match('#{tokenName}'); this.stateStack.push(#{nextState}); return this.state#{nextState}();"
-
-        else if Array.isArray(action) and action[0] is REDUCE
-          # Reduce action: pop, apply action, goto
-          ruleId = action[1]
-          rule = @rules[ruleId - 1]  # Rules are 1-indexed
-          cases.push "      case '#{tokenName}': return this._reduce(#{ruleId});"
-
-        else if Array.isArray(action) and action[0] is ACCEPT
-          # Accept: return result
-          cases.push "      case '#{tokenName}': return this.valueStack[0];"
+        
+        continue unless tokenName
+        
+        # Generate TOKEN_* constant using helper
+        tokenConst = @_tokenToConstName tokenName
+        
+        # Create action key for grouping
+        actionKey = if Array.isArray(action)
+          "#{action[0]}_#{action[1] or ''}"
+        else
+          "unknown"
+        
+        actionGroups[actionKey] ?= {tokens: [], action}
+        actionGroups[actionKey].tokens.push tokenConst
+      
+      # Generate cases from grouped actions
+      cases = []
+      for own actionKey, groupData of actionGroups
+        groupTokens = groupData.tokens
+        groupAction = groupData.action
+        
+        # Generate case labels (group together)
+        for token in groupTokens
+          cases.push "      case #{token}:"
+        
+        # Generate action code (shared by all tokens in group)
+        if Array.isArray(groupAction) and groupAction[0] is SHIFT
+          nextState = groupAction[1]
+          cases.push "        this._match(this.la.kind); this.stateStack.push(#{nextState}); return this.state#{nextState}();"
+        
+        else if Array.isArray(groupAction) and groupAction[0] is REDUCE
+          ruleId = groupAction[1]
+          cases.push "        return this._reduce(#{ruleId});"
+        
+        else if Array.isArray(groupAction) and groupAction[0] is ACCEPT
+          cases.push "        return this.valueStack[0];"
+        
+        cases.push ""  # Blank line between action groups
 
       # Build function
       if cases.length > 0
@@ -1324,23 +1391,24 @@ class Generator
     '''
     valueStack: [],
     stateStack: [],
-
+    
     _match(kind) {
       if (this.la.kind !== kind) {
-        this._error('Expected ' + kind + ', got ' + this.la.kind);
+        this._error('Expected token ' + kind + ', got ' + this.la.kind);
       }
       const value = this.la.value;
       this.valueStack.push(value);
       this._advance();
       return value;
     },
-
+    
     _advance() {
       if (this.pos >= this.tokens.length) {
-        this.la = { kind: '$end', value: null };
+        this.la = { kind: TOKEN_END, value: null };
       } else {
         const token = this.tokens[this.pos++];
-        this.la = { kind: token[0], value: token[1], loc: token[2] };
+        const tokenId = this.symbolIds[token[0]] || TOKEN_ERROR;
+        this.la = { kind: tokenId, value: token[1], loc: token[2] };
       }
     },
 
@@ -1402,30 +1470,59 @@ class Generator
     },
     '''
 
+  # Generate token constants for numeric IDs
+  _generateTokenConstants: ->
+    constants = []
+    
+    # Add special tokens
+    constants.push "const TOKEN_END = 1;"
+    constants.push "const TOKEN_ERROR = 2;"
+    
+    # Track already generated constants to avoid duplicates
+    generated = new Set ['TOKEN_END', 'TOKEN_ERROR']
+    
+    # Add all regular tokens using helper
+    for own id, name of @tokenNames
+      constName = @_tokenToConstName name
+      
+      unless generated.has constName
+        constants.push "const #{constName} = #{id};"
+        generated.add constName
+    
+    constants.join '\n'
+
   # Assemble direct table-to-code parser
   _assembleDirectParser: (stateFunctions, runtime) ->
     # Build goto table for reduce actions
     gotoTable = @_buildGotoTable()
     gotoTableCode = JSON.stringify(gotoTable).replace /"(\d+)":/g, "$1:"
-
+    
+    # Generate token constants
+    tokenConstants = @_generateTokenConstants()
+    
     """
     // Direct Table-to-Code Parser generated by Solar #{VERSION}
     // Each state is a function - no table lookups at runtime!
-
+    // Uses numeric token IDs for fast switch dispatch
+    
+    // Token ID constants (for readable code + fast numeric switches)
+    #{tokenConstants}
+    
     const parserInstance = {
       lexer: null,
       tokens: [],
       pos: 0,
       la: null,
+      symbolIds: #{JSON.stringify @symbolIds},
       ruleData: #{JSON.stringify @ruleData},
       gotoTable: #{gotoTableCode},
       performAction: #{@performAction},
-
+      
       #{@dedent runtime, '  '}
-
+      
       #{@dedent stateFunctions, '  '}
     };
-
+    
     function createParser(yyInit = {}) {
       const p = Object.create(parserInstance);
       Object.defineProperty(p, "yy", {
@@ -1436,9 +1533,9 @@ class Generator
       });
       return p;
     }
-
+    
     const parser = /*#__PURE__*/createParser();
-
+    
     export { parser };
     export const Parser = createParser;
     export const parse = parser.parse.bind(parser);

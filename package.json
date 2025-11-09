@@ -34,6 +34,7 @@
     "serve": "bun scripts/serve.js",
     "test": "bun test/runner.js",
     "test-prd": "bun test/runner-prd.js",
+    "benchmark": "bun test/benchmark.js",
     "version": "./bin/rip -v",
     "pack": "npm pack --dry-run"
   },
