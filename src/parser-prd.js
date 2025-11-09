@@ -334,7 +334,7 @@ const parserInstance = {
       case 382: return [$$[$0-2], $$[$0-3], $$[$0]];
     }
   },
-  
+
     valueStack: [],
   stateStack: [],
   
@@ -414,7 +414,7 @@ const parserInstance = {
   
   return this.state0();
   },
-  
+
     state0() {
   switch (this.la.kind) {
       case TOKEN_END:
@@ -490,10 +490,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -2228,10 +2228,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -2382,10 +2382,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -2536,10 +2536,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -2690,10 +2690,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -2844,10 +2844,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -2998,10 +2998,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -3155,10 +3155,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -3297,10 +3297,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -3379,10 +3379,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -3746,10 +3746,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -3933,10 +3933,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -4033,10 +4033,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -4233,10 +4233,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -4421,10 +4421,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -4512,7 +4512,7 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(204); return this.state204();
   
       case TOKEN_IMPORT_ALL:
-        this._match(this.la.kind); this.stateStack.push(206); return this.state206();
+        this._match(this.la.kind); this.stateStack.push(206); this._match(this.la.kind); this.stateStack.push(360); return this.state360();
   
     default:
       this._error('Unexpected token ' + this.la.kind + ' in state 59');
@@ -4537,7 +4537,7 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(211); return this.state211();
   
       case TOKEN_EXPORT_ALL:
-        this._match(this.la.kind); this.stateStack.push(212); return this.state212();
+        this._match(this.la.kind); this.stateStack.push(212); this._match(this.la.kind); this.stateStack.push(370); return this.state370();
   
     default:
       this._error('Unexpected token ' + this.la.kind + ' in state 60');
@@ -5241,10 +5241,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -5407,10 +5407,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -5639,26 +5639,6 @@ const parserInstance = {
   
     default:
       this._error('Unexpected token ' + this.la.kind + ' in state 76');
-  }
-  },
-  
-  state77() {
-  switch (this.la.kind) {
-      case TOKEN_DOT:
-        this._match(this.la.kind); this.stateStack.push(234); return this.state234();
-  
-    default:
-      this._error('Unexpected token ' + this.la.kind + ' in state 77');
-  }
-  },
-  
-  state78() {
-  switch (this.la.kind) {
-      case TOKEN_DOT:
-        this._match(this.la.kind); this.stateStack.push(235); return this.state235();
-  
-    default:
-      this._error('Unexpected token ' + this.la.kind + ' in state 78');
   }
   },
   
@@ -5986,10 +5966,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -6140,10 +6120,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -6294,10 +6274,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -6448,10 +6428,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -6605,10 +6585,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -6971,10 +6951,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -7222,10 +7202,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -7426,10 +7406,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -7580,10 +7560,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -7734,10 +7714,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -7888,10 +7868,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -8042,10 +8022,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -8196,10 +8176,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -8350,10 +8330,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -8504,10 +8484,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -8658,10 +8638,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -8812,10 +8792,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -8966,10 +8946,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -9120,10 +9100,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -9274,10 +9254,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -9428,10 +9408,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -9582,10 +9562,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -9736,10 +9716,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -9890,10 +9870,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -10119,10 +10099,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -10273,10 +10253,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -10669,10 +10649,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -11021,10 +11001,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -11191,10 +11171,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -11512,10 +11492,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -11749,10 +11729,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -12174,10 +12154,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -12328,10 +12308,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -13048,10 +13028,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -13608,10 +13588,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -14020,10 +14000,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -14315,16 +14295,6 @@ const parserInstance = {
   }
   },
   
-  state203() {
-  switch (this.la.kind) {
-      case TOKEN_FROM:
-        this._match(this.la.kind); this.stateStack.push(353); return this.state353();
-  
-    default:
-      this._error('Unexpected token ' + this.la.kind + ' in state 203');
-  }
-  },
-  
   state204() {
   switch (this.la.kind) {
       case TOKEN_INDENT:
@@ -14334,7 +14304,7 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(93); return this.state93();
   
       case TOKEN_RBRACE:
-        this._match(this.la.kind); this.stateStack.push(354); return this.state354();
+        this._match(this.la.kind); this.stateStack.push(354); this._match(this.la.kind); this.stateStack.push(483); return this.state483();
   
       case TOKEN_DEFAULT:
         this._match(this.la.kind); this.stateStack.push(359); return this.state359();
@@ -14352,16 +14322,6 @@ const parserInstance = {
   
     default:
       this._error('Unexpected token ' + this.la.kind + ' in state 205');
-  }
-  },
-  
-  state206() {
-  switch (this.la.kind) {
-      case TOKEN_AS:
-        this._match(this.la.kind); this.stateStack.push(360); return this.state360();
-  
-    default:
-      this._error('Unexpected token ' + this.la.kind + ' in state 206');
   }
   },
   
@@ -14513,10 +14473,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -14592,16 +14552,6 @@ const parserInstance = {
   
     default:
       this._error('Unexpected token ' + this.la.kind + ' in state 211');
-  }
-  },
-  
-  state212() {
-  switch (this.la.kind) {
-      case TOKEN_FROM:
-        this._match(this.la.kind); this.stateStack.push(370); return this.state370();
-  
-    default:
-      this._error('Unexpected token ' + this.la.kind + ' in state 212');
   }
   },
   
@@ -14690,10 +14640,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -15000,10 +14950,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -15261,10 +15211,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -15531,10 +15481,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -15761,10 +15711,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -15924,10 +15874,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -16818,10 +16768,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -17297,10 +17247,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -19572,10 +19522,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -19753,10 +19703,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -20099,10 +20049,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -20259,10 +20209,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -20754,10 +20704,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -20911,10 +20861,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -21149,10 +21099,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -21303,10 +21253,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -21513,10 +21463,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -21954,10 +21904,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -22108,10 +22058,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -22312,10 +22262,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -22545,10 +22495,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -22699,10 +22649,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -22853,10 +22803,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -23077,10 +23027,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -23250,10 +23200,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -23442,10 +23392,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -23732,10 +23682,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -24027,7 +23977,7 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(481); return this.state481();
   
       case TOKEN_IMPORT_ALL:
-        this._match(this.la.kind); this.stateStack.push(206); return this.state206();
+        this._match(this.la.kind); this.stateStack.push(206); this._match(this.la.kind); this.stateStack.push(360); return this.state360();
   
     default:
       this._error('Unexpected token ' + this.la.kind + ' in state 352');
@@ -24044,16 +23994,6 @@ const parserInstance = {
   
     default:
       this._error('Unexpected token ' + this.la.kind + ' in state 353');
-  }
-  },
-  
-  state354() {
-  switch (this.la.kind) {
-      case TOKEN_FROM:
-        this._match(this.la.kind); this.stateStack.push(483); return this.state483();
-  
-    default:
-      this._error('Unexpected token ' + this.la.kind + ' in state 354');
   }
   },
   
@@ -24334,10 +24274,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -24665,10 +24605,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -24989,10 +24929,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -25246,10 +25186,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -25613,10 +25553,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -25868,10 +25808,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -26250,10 +26190,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -26404,10 +26344,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -26561,10 +26501,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -26773,10 +26713,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -27000,10 +26940,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -27496,10 +27436,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -27663,10 +27603,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -27817,10 +27757,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -27971,10 +27911,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -28125,10 +28065,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -28299,10 +28239,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -28524,10 +28464,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -28682,16 +28622,6 @@ const parserInstance = {
   
     default:
       this._error('Unexpected token ' + this.la.kind + ' in state 426');
-  }
-  },
-  
-  state427() {
-  switch (this.la.kind) {
-      case TOKEN_OUTDENT:
-        this._match(this.la.kind); this.stateStack.push(549); return this.state549();
-  
-    default:
-      this._error('Unexpected token ' + this.la.kind + ' in state 427');
   }
   },
   
@@ -28975,10 +28905,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -29211,10 +29141,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -29451,10 +29381,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -29818,10 +29748,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -30132,10 +30062,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -31152,10 +31082,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -31306,10 +31236,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -32024,16 +31954,6 @@ const parserInstance = {
   }
   },
   
-  state480() {
-  switch (this.la.kind) {
-      case TOKEN_FROM:
-        this._match(this.la.kind); this.stateStack.push(588); return this.state588();
-  
-    default:
-      this._error('Unexpected token ' + this.la.kind + ' in state 480');
-  }
-  },
-  
   state481() {
   switch (this.la.kind) {
       case TOKEN_INDENT:
@@ -32094,7 +32014,7 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(593); return this.state593();
   
       case TOKEN_RBRACE:
-        this._match(this.la.kind); this.stateStack.push(591); return this.state591();
+        this._match(this.la.kind); this.stateStack.push(591); this._match(this.la.kind); this.stateStack.push(669); return this.state669();
   
     default:
       this._error('Unexpected token ' + this.la.kind + ' in state 484');
@@ -32408,10 +32328,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -32562,10 +32482,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -32903,10 +32823,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -33082,10 +33002,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -33242,10 +33162,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -33571,10 +33491,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -33998,10 +33918,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -34392,10 +34312,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -34727,10 +34647,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -34870,7 +34790,7 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(96); return this.state96();
   
       case TOKEN_OUTDENT:
-        this._match(this.la.kind); this.stateStack.push(639); return this.state639();
+        this._match(this.la.kind); this.stateStack.push(639); this._match(this.la.kind); this.stateStack.push(693); return this.state693();
   
     default:
       this._error('Unexpected token ' + this.la.kind + ' in state 539');
@@ -35293,10 +35213,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -35447,10 +35367,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -35923,16 +35843,6 @@ const parserInstance = {
   
     default:
       this._error('Unexpected token ' + this.la.kind + ' in state 552');
-  }
-  },
-  
-  state553() {
-  switch (this.la.kind) {
-      case TOKEN_OUTDENT:
-        this._match(this.la.kind); this.stateStack.push(649); return this.state649();
-  
-    default:
-      this._error('Unexpected token ' + this.la.kind + ' in state 553');
   }
   },
   
@@ -36841,10 +36751,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -36995,10 +36905,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -37199,10 +37109,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -37403,10 +37313,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -37844,10 +37754,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -38036,16 +37946,6 @@ const parserInstance = {
   
     default:
       this._error('Unexpected token ' + this.la.kind + ' in state 590');
-  }
-  },
-  
-  state591() {
-  switch (this.la.kind) {
-      case TOKEN_FROM:
-        this._match(this.la.kind); this.stateStack.push(669); return this.state669();
-  
-    default:
-      this._error('Unexpected token ' + this.la.kind + ' in state 591');
   }
   },
   
@@ -38772,10 +38672,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -38932,10 +38832,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -39299,10 +39199,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -39746,10 +39646,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -39903,10 +39803,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -40007,16 +39907,6 @@ const parserInstance = {
   }
   },
   
-  state639() {
-  switch (this.la.kind) {
-      case TOKEN_INTERPOLATION_END:
-        this._match(this.la.kind); this.stateStack.push(693); return this.state693();
-  
-    default:
-      this._error('Unexpected token ' + this.la.kind + ' in state 639');
-  }
-  },
-  
   state640() {
   switch (this.la.kind) {
       case TOKEN_STATEMENT:
@@ -40089,10 +39979,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -40243,10 +40133,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -40397,10 +40287,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -40551,10 +40441,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -41482,10 +41372,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -41686,10 +41576,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -41995,7 +41885,7 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(593); return this.state593();
   
       case TOKEN_RBRACE:
-        this._match(this.la.kind); this.stateStack.push(714); return this.state714();
+        this._match(this.la.kind); this.stateStack.push(714); this._match(this.la.kind); this.stateStack.push(735); return this.state735();
   
     default:
       this._error('Unexpected token ' + this.la.kind + ' in state 668');
@@ -42659,10 +42549,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -43166,10 +43056,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -43320,10 +43210,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -43807,10 +43697,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -44011,10 +43901,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -44389,16 +44279,6 @@ const parserInstance = {
   }
   },
   
-  state714() {
-  switch (this.la.kind) {
-      case TOKEN_FROM:
-        this._match(this.la.kind); this.stateStack.push(735); return this.state735();
-  
-    default:
-      this._error('Unexpected token ' + this.la.kind + ' in state 714');
-  }
-  },
-  
   state715() {
   switch (this.la.kind) {
       case TOKEN_END:
@@ -44577,10 +44457,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -44860,10 +44740,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -45014,10 +44894,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -45725,10 +45605,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -46211,10 +46091,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
@@ -46649,10 +46529,10 @@ const parserInstance = {
         this._match(this.la.kind); this.stateStack.push(80); return this.state80();
   
       case TOKEN_NEW_TARGET:
-        this._match(this.la.kind); this.stateStack.push(77); return this.state77();
+        this._match(this.la.kind); this.stateStack.push(77); this._match(this.la.kind); this.stateStack.push(234); return this.state234();
   
       case TOKEN_IMPORT_META:
-        this._match(this.la.kind); this.stateStack.push(78); return this.state78();
+        this._match(this.la.kind); this.stateStack.push(78); this._match(this.la.kind); this.stateStack.push(235); return this.state235();
   
       case TOKEN_LBRACE:
         this._match(this.la.kind); this.stateStack.push(88); return this.state88();
