@@ -29,6 +29,11 @@ function handleRequest(req) {
   const url = new URL(req.url);
   let pathname = url.pathname;
 
+  // Strip /rip-lang/ prefix if present (for GitHub Pages compatibility)
+  if (pathname.startsWith('/rip-lang/')) {
+    pathname = pathname.slice('/rip-lang'.length);
+  }
+
   // Default to index.html for directory requests
   if (pathname.endsWith('/')) {
     pathname += 'index.html';
