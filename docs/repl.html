@@ -380,7 +380,7 @@
             <span>Rip Source</span>
             <div class="pane-header-buttons">
               <button id="clear-btn" title="Clear the editor">Clear</button>
-              <button class="active" id="run-btn" title="Execute code and output to browser console">Run</button>
+              <button class="active" id="run-btn" title="Execute code and output to browser console (F5, Cmd+Enter, Ctrl+Enter)">Run</button>
             </div>
           </div>
           <textarea class="editor" id="editor" spellcheck="false"># Rip code - edit me!
@@ -818,7 +818,7 @@ console.log "Domain:", domain</textarea>
     });
 
     // Run button - executes the Rip code and outputs to console
-    document.getElementById('run-btn').addEventListener('click', () => {
+    function runCode() {
       try {
         const source = editor.value;
         const result = compile(source);
@@ -831,6 +831,26 @@ console.log "Domain:", domain</textarea>
         console.log('%c=== Execution Complete ===', 'color: #4ec9b0; font-weight: bold');
       } catch (error) {
         console.error('Execution Error:', error);
+      }
+    }
+
+    document.getElementById('run-btn').addEventListener('click', runCode);
+
+    // Keyboard shortcuts for Run button
+    // F5, Cmd+Enter (Mac), Ctrl+Enter (Windows/Linux)
+    document.addEventListener('keydown', (e) => {
+      // F5 - Run code
+      if (e.key === 'F5') {
+        e.preventDefault();
+        runCode();
+        return;
+      }
+
+      // Cmd+Enter (Mac) or Ctrl+Enter (Windows/Linux) - Run code
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        runCode();
+        return;
       }
     });
 
