@@ -702,18 +702,136 @@ class Generator
   # NEW APPROACH: Direct table-to-code translation!
   # No pattern detection - just convert state machine to functions
   generateRecursiveDescent: ->
-    console.log "\n🚀 Generating Direct Table-to-Code Parser..."
+    console.log "\n🚀 Generating Direct Table-to-Code Parser (Table-Free!)..."
     console.log "  States: #{@parseTable.length}"
     console.log "  Rules: #{@rules.length}"
-
+    
+    # Generate specialized reduce functions (eliminates performAction + gotoTable + ruleData!)
+    reduceFunctions = @_generateReduceFunctions()
+    
     # Generate a function for each state
     stateFunctions = @_generateStateFunctions()
-
-    # Generate runtime helpers (shift, reduce, goto)
+    
+    # Generate runtime helpers (no more generic reduce!)
     runtime = @_generateDirectRuntime()
+    
+    # Assemble complete parser (truly table-free)
+    @_assembleTableFreeParser stateFunctions, reduceFunctions, runtime
 
-    # Assemble complete parser
-    @_assembleDirectParser stateFunctions, runtime
+  # Generate specialized reduce functions (eliminates performAction, gotoTable, ruleData)
+  _generateReduceFunctions: ->
+    functions = []
+    
+    console.log "  Generating specialized reduces..."
+    
+    for rule in @rules when rule.id > 0  # Skip rule 0 (if exists)
+      ruleId = rule.id  # Use rule.id
+      len = rule.symbols.length
+      ntId = @symbolIds[rule.type]
+      
+      # Extract action code from performAction
+      actionCode = @_extractActionCode ruleId, len
+      
+      # Build goto resolution for this nonterminal
+      gotoCode = @_buildGotoResolution rule.type, ntId
+      
+      # Generate specialized reduce function
+      popCode = @_generatePopCode len, rule.symbols
+      
+      functions.push """
+      _reduce#{ruleId}() {
+        // #{rule.type} → #{rule.symbols.join(' ')}
+        #{popCode}
+        const result = #{actionCode};
+        this.valueStack.push(result);
+        // Goto: check state AFTER popping
+        #{gotoCode}
+      }
+      """
+    
+    console.log "  Generated #{functions.length} specialized reduces"
+    functions.join ',\n\n'
+
+  # Generate pop code for reduce (pops BOTH values and states)
+  _generatePopCode: (len, symbols) ->
+    # Check for empty production (symbols is [''] not [])
+    if len is 0 or (len is 1 and symbols[0] is '')
+      return ''
+    
+    # Pop values
+    valuePops = ("const $#{i} = this.valueStack.pop();" for i in [len..1]).join(' ')
+    
+    # Pop states (to get back to state before this production)
+    statePop = if len > 0 then "this.stateStack.splice(-#{len}, #{len});" else ''
+    
+    "#{valuePops} #{statePop}"
+
+  # Extract and inline action code from performAction
+  _extractActionCode: (ruleId, len) ->
+    # Find the action in performAction switch
+    lines = @performAction.split '\n'
+    actionLine = lines.find (line) => line.includes "case #{ruleId}:"
+    
+    unless actionLine
+      return 'null'  # No action found
+    
+    # Extract return statement
+    returnMatch = actionLine.match /return\s+([^;]+);/
+    return 'null' unless returnMatch
+    
+    actionCode = returnMatch[1].trim()
+    
+    # Transform $$[$0-n] to $n variables
+    transformed = actionCode.replace /\$\$\[\$0(-\d+)?\]/g, (match, offset) ->
+      if offset
+        offsetNum = parseInt offset.slice(1), 10
+        pos = len - offsetNum
+        "$#{pos}"
+      else
+        "$#{len}"
+    
+    transformed
+
+  # Build goto resolution (compile-time from goto table) using switch for O(1) dispatch
+  _buildGotoResolution: (ntName, ntId) ->
+    # Find all states that have goto for this nonterminal
+    gotos = []
+    
+    for state, stateNum in @parseTable
+      gotoState = state[ntId]
+      if typeof gotoState is 'number'
+        gotos.push {from: stateNum, to: gotoState}
+    
+    if gotos.length is 0
+      return "// No gotos for #{ntName}"
+    
+    # Group by target state for compact output
+    byTarget = {}
+    for {from, to} in gotos
+      byTarget[to] ?= []
+      byTarget[to].push from
+    
+    # Generate grouped cases (must push state and call it!)
+    cases = []
+    for own targetState, sourceStates of byTarget
+      # Put case labels on one line if reasonable
+      if sourceStates.length <= 8
+        caseLabels = sourceStates.map((s) -> "case #{s}").join(': ')
+        cases.push "#{caseLabels}: this.stateStack.push(#{targetState}); return this.state#{targetState}();"
+      else
+        # Multi-line for many cases
+        for source in sourceStates
+          cases.push "case #{source}:"
+        cases.push "  this.stateStack.push(#{targetState}); return this.state#{targetState}();"
+    
+    """
+    const s = this.stateStack[this.stateStack.length - 1];
+        switch (s) {
+          #{cases.join '\n      '}
+          default:
+            throw new Error('No goto for #{ntName} from state ' + s);
+        }
+    """
 
   # Map token name to valid constant name
   _tokenToConstName: (tokenName) ->
@@ -764,27 +882,27 @@ class Generator
   _detectInlineableStates: ->
     [SHIFT, REDUCE, ACCEPT] = [1, 2, 3]
     inlineable = new Set
-    
+
     for state, stateNum in @parseTable
       # Count non-goto actions
       actionCount = 0
       singleAction = null
-      
+
       for own tokenId, action of state when tokenId isnt 'undefined'
         continue if typeof action is 'number'  # Skip goto entries
         actionCount++
         singleAction = action if actionCount is 1
-      
+
       # Inline if: single shift action to a reasonable next state
       if actionCount is 1 and Array.isArray(singleAction) and singleAction[0] is SHIFT
         # Mark for inlining (we'll inline into callers)
         # Only inline if target state is also simple (avoid massive expansion)
         nextState = singleAction[1]
         nextSize = @_countStateActions @parseTable[nextState]
-        
+
         if nextSize <= 8  # Only inline if target has ≤ 8 actions
           inlineable.add stateNum
-    
+
     console.log "  Inlineable states: #{inlineable.size}/#{@parseTable.length}"
     inlineable
 
@@ -799,11 +917,11 @@ class Generator
   _generateInlinedState: (stateNum, inlineable) ->
     [SHIFT, REDUCE, ACCEPT] = [1, 2, 3]
     state = @parseTable[stateNum]
-    
+
     # Get the single action (we know there's only one for inlineable states)
     for own tokenId, action of state when tokenId isnt 'undefined'
       continue if typeof action is 'number'
-      
+
       # Convert to token name
       numericId = parseInt tokenId, 10
       tokenName = @tokenNames[numericId]
@@ -812,43 +930,43 @@ class Generator
           when 1 then '$end'
           when 2 then 'error'
           else tokenId
-      
+
       tokenConst = @_tokenToConstName tokenName
-      
+
       # Generate inline code based on action type
       if Array.isArray(action) and action[0] is SHIFT
         nextState = action[1]
-        
+
         # Can we chain further?
         if inlineable.has nextState
           furtherInlined = @_generateInlinedState nextState, inlineable
           return "this._match(this.la.kind); this.stateStack.push(#{nextState}); #{furtherInlined}"
         else
           return "this._match(this.la.kind); this.stateStack.push(#{nextState}); return this.state#{nextState}();"
-      
+
       else if Array.isArray(action) and action[0] is REDUCE
         return "return this._reduce(#{action[1]});"
-      
+
       else if Array.isArray(action) and action[0] is ACCEPT
         return "return this.valueStack[0];"
-    
+
     "// Inlining failed for state #{stateNum}"
 
   # Generate state functions from parse table (direct translation!)
   _generateStateFunctions: ->
     [SHIFT, REDUCE, ACCEPT] = [1, 2, 3]
-    
+
     # Detect which states can be inlined
     inlineable = @_detectInlineableStates()
-    
+
     functions = []
 
     for state, stateNum in @parseTable
       # Skip states that will be inlined
       continue if inlineable.has stateNum
-      
+
       defaultAction = null
-      
+
       # Check for default action (single reduce action for all tokens)
       if @defaultActions[stateNum]
         defaultAction = @defaultActions[stateNum]
@@ -898,7 +1016,7 @@ class Generator
         # Generate action code (shared by all tokens in group)
         if Array.isArray(groupAction) and groupAction[0] is SHIFT
           nextState = groupAction[1]
-          
+
           # Check if next state should be inlined (state chaining!)
           if inlineable.has nextState
             # Inline the next state instead of calling it
@@ -910,7 +1028,8 @@ class Generator
 
         else if Array.isArray(groupAction) and groupAction[0] is REDUCE
           ruleId = groupAction[1]
-          cases.push "        return this._reduce(#{ruleId});"
+          # Call specialized reduce function (not generic _reduce)
+          cases.push "        return this._reduce#{ruleId}();"
 
         else if Array.isArray(groupAction) and groupAction[0] is ACCEPT
           cases.push "        return this.valueStack[0];"
@@ -1475,12 +1594,18 @@ class Generator
     },
     '''
 
-  # Generate runtime for direct table-to-code approach
+  # Generate runtime for table-free approach (no generic _reduce!)
   _generateDirectRuntime: ->
-    '''
+    # Build symbolIds mapping inline (eliminates table!)
+    symbolMap = []
+    for own name, id of @symbolIds
+      symbolMap.push "'#{name}': #{id}"
+    symbolMapCode = "{#{symbolMap.join(', ')}}"
+    
+    """
     valueStack: [],
     stateStack: [],
-
+    
     _match(kind) {
       if (this.la.kind !== kind) {
         this._error('Expected token ' + kind + ', got ' + this.la.kind);
@@ -1490,74 +1615,37 @@ class Generator
       this._advance();
       return value;
     },
-
+    
     _advance() {
       if (this.pos >= this.tokens.length) {
         this.la = { kind: TOKEN_END, value: null };
       } else {
         const token = this.tokens[this.pos++];
-        const tokenId = this.symbolIds[token[0]] || TOKEN_ERROR;
+        // Inline symbolIds mapping (no table lookup!)
+        const symbolIds = #{symbolMapCode};
+        const tokenId = symbolIds[token[0]] || TOKEN_ERROR;
         this.la = { kind: tokenId, value: token[1], loc: token[2] };
       }
     },
-
-    _reduce(ruleId) {
-      // Pop values and states from stack (matching production length)
-      const len = this.ruleData[ruleId][1];
-      const $$ = this.valueStack.splice(-len, len);
-
-      // Pop states (one for each symbol in production)
-      if (len > 0) {
-        this.stateStack.splice(-len, len);
-      }
-
-      // Call performAction with standard parameters
-      // performAction signature: (yytext, yyleng, yylineno, yy, yystate, $$, _$)
-      const result = this.performAction.call(
-        { $: null, _$: null },  // Context for action code
-        '',                     // yytext
-        0,                      // yyleng
-        0,                      // yylineno
-        this.yy || {},          // yy
-        ruleId,                 // yystate (rule ID)
-        $$,                     // $$ (values array)
-        {}                      // _$ (location data)
-      );
-
-      this.valueStack.push(result);
-
-      // Goto: find next state based on nonterminal
-      const ntId = this.ruleData[ruleId][0];
-      const currentState = this.stateStack[this.stateStack.length - 1];
-      const gotoState = this.gotoTable[currentState][ntId];
-
-      if (gotoState !== undefined) {
-        this.stateStack.push(gotoState);
-        return this['state' + gotoState]();
-      }
-
-      // No goto found - might be accept state
-      return result;
-    },
-
+    
     _error(msg) {
       throw new Error('Parse error: ' + msg);
     },
-
+    
     parse(input) {
       if (!this.lexer) {
         throw new Error('Lexer not set');
       }
-
+      
       this.tokens = this.lexer.tokens;
       this.pos = 0;
       this.valueStack = [];
       this.stateStack = [0];
       this._advance();
-
+      
       return this.state0();
     },
-    '''
+    """
 
   # Generate token constants for numeric IDs
   _generateTokenConstants: ->
@@ -1580,38 +1668,35 @@ class Generator
 
     constants.join '\n'
 
-  # Assemble direct table-to-code parser
-  _assembleDirectParser: (stateFunctions, runtime) ->
-    # Build goto table for reduce actions
-    gotoTable = @_buildGotoTable()
-    gotoTableCode = JSON.stringify(gotoTable).replace /"(\d+)":/g, "$1:"
-
+  # Assemble table-free parser (NO performAction, gotoTable, ruleData!)
+  _assembleTableFreeParser: (stateFunctions, reduceFunctions, runtime) ->
     # Generate token constants
     tokenConstants = @_generateTokenConstants()
-
+    
     """
-    // Direct Table-to-Code Parser generated by Solar #{VERSION}
-    // Each state is a function - no table lookups at runtime!
-    // Uses numeric token IDs for fast switch dispatch
-
-    // Token ID constants (for readable code + fast numeric switches)
+    // Table-Free Parser generated by Solar #{VERSION}
+    // Zero runtime tables - everything inlined!
+    // Uses numeric token IDs for fast dispatch
+    
+    // Token ID constants
     #{tokenConstants}
-
+    
     const parserInstance = {
       lexer: null,
       tokens: [],
       pos: 0,
       la: null,
-      symbolIds: #{JSON.stringify @symbolIds},
-      ruleData: #{JSON.stringify @ruleData},
-      gotoTable: #{gotoTableCode},
-      performAction: #{@performAction},
-
+      yy: {},
+      
       #{@dedent runtime, '  '}
-
+      
+      // Specialized reduce functions (performAction + gotoTable + ruleData inlined!)
+      #{@dedent reduceFunctions, '  '},
+      
+      // State functions
       #{@dedent stateFunctions, '  '}
     };
-
+    
     function createParser(yyInit = {}) {
       const p = Object.create(parserInstance);
       Object.defineProperty(p, "yy", {
@@ -1622,9 +1707,9 @@ class Generator
       });
       return p;
     }
-
+    
     const parser = /*#__PURE__*/createParser();
-
+    
     export { parser };
     export const Parser = createParser;
     export const parse = parser.parse.bind(parser);
