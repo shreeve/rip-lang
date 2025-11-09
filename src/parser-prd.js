@@ -543,11 +543,19 @@ class Parser {
   }
 
   parseIdentifier() {
-    return this._match(SYM_IDENTIFIER);
+    switch (this.la.id) {
+      case SYM_IDENTIFIER: return this._match(SYM_IDENTIFIER);
+      default:
+        this._error([40], this.la.id);
+    }
   }
 
   parseProperty() {
-    return this._match(SYM_PROPERTY);
+    switch (this.la.id) {
+      case SYM_PROPERTY: return this._match(SYM_PROPERTY);
+      default:
+        this._error([42], this.la.id);
+    }
   }
 
   parseAlphaNumeric() {
@@ -1089,7 +1097,11 @@ class Parser {
   }
 
   parseImportDefaultSpecifier() {
-    return this.parseIdentifier();
+    switch (this.la.id) {
+      case SYM_IDENTIFIER: return this.parseIdentifier();
+      default:
+        this._error([40], this.la.id);
+    }
   }
 
   parseImportNamespaceSpecifier() {
