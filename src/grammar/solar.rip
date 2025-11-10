@@ -1256,23 +1256,23 @@ class Generator
   _compileActionExpression: (action, symbolCount) ->
     # Transform action string by replacing position numbers with temp variables
     # E.g., '["def", 2, 4, 6]' becomes '["def", tok2, tok4, tok6]'
-
+    
     # Handle no action or default action
     if not action or action is 1
       return "return tok1;"
-
+    
     # Handle numeric action (just return that position)
     if typeof action is 'number'
       return "return tok#{action};"
-
+    
     # Handle string literal like '"undefined"'
     if typeof action is 'string' and action.match(/^"[^"]*"$/)
       return "return #{action};"
-
+    
     # Handle string actions (array constructions, expressions, etc.)
     if typeof action is 'string'
       compiled = action
-
+      
       # Replace $n with tokN (protected references)
       compiled = compiled.replace(/\$(\d+)/g, (match, num) ->
         pos = parseInt(num)
@@ -1281,7 +1281,7 @@ class Generator
         else
           match  # Keep as-is if out of range
       )
-
+      
       # Replace bare numbers with tokN (like in '["def", 2, 4, 6]')
       # But preserve string literals and avoid replacing numbers in quotes
       # This is tricky - we need to be careful about context
@@ -1293,11 +1293,120 @@ class Generator
         else
           num  # Keep number if out of range
       )
-
+      
       return "return #{compiled};"
-
+    
     # Fallback
     return "return tok1;"
+
+  # ============================================================================
+  # Phase 5: Lookahead Disambiguation
+  # ============================================================================
+
+  _getSecondTokens: (rule) ->
+    # Get the FIRST set of the second symbol in a rule
+    # Returns null if rule has only 1 symbol or less
+    # Returns array of token IDs
+    
+    return null if rule.symbols.length <= 1
+    
+    secondSymbol = rule.symbols[1]
+    return null unless secondSymbol
+    
+    if @types[secondSymbol]
+      # Nonterminal - get its FIRST set (returns Set of string names)
+      firstNames = Array.from(@types[secondSymbol].firsts)
+      # Convert to numeric IDs
+      ids = []
+      for name in firstNames
+        id = @symbolIds[name]
+        ids.push(id) if id
+      ids
+    else
+      # Terminal - use directly
+      symbolId = @symbolIds[secondSymbol]
+      if symbolId then [symbolId] else []
+
+  _generatePeekCondition: (tokenIds) ->
+    # Generate condition that checks if peeked token matches
+    # E.g., "next === SYM_INDENT" or "(next === SYM_STRING || next === SYM_STRING_START)"
+    
+    return "true" unless tokenIds  # Empty rule - matches anything
+    return "true" if tokenIds.length is 0
+    
+    if tokenIds.length is 1
+      tokenName = @tokenNames[tokenIds[0]]
+      return "true" unless tokenName
+      constName = @_getSymbolConstName(tokenName)
+      "next === #{constName}"
+    else
+      # Multiple possible tokens
+      conditions = []
+      for id in tokenIds
+        tokenName = @tokenNames[id]
+        continue unless tokenName
+        constName = @_getSymbolConstName(tokenName)
+        conditions.push("next === #{constName}")
+      if conditions.length is 0
+        "true"
+      else if conditions.length is 1
+        conditions[0]
+      else
+        "(#{conditions.join(' || ')})"
+
+  _orderRulesForDisambiguation: (rules) ->
+    # Sort rules by specificity of second token
+    # Most specific (fewest tokens) first, most general (many tokens) last
+    
+    sortedRules = rules[..]  # Copy array
+    
+    sortedRules.sort (a, b) =>
+      aTokens = @_getSecondTokens(a)
+      bTokens = @_getSecondTokens(b)
+      
+      # Empty rules (no second token) check FOLLOW set - treat as specific
+      return -1 if not aTokens and bTokens
+      return 1 if aTokens and not bTokens
+      return 0 if not aTokens and not bTokens
+      
+      # Fewer tokens = more specific
+      return aTokens.length - bTokens.length
+    
+    sortedRules
+
+  _generateRuleBody: (rule, options = {}) ->
+    # Generate parsing code for a rule, starting at arbitrary position
+    # Used when first token(s) already matched
+    
+    startPosition = options.startPosition ? 1
+    symbols = rule.symbols[startPosition - 1..]  # Remaining symbols
+    action = rule.action
+    
+    return @_compileAction(rule) if startPosition is 1  # Full rule
+    
+    # Partial rule - need to adjust action positions
+    # Find which positions are referenced in action
+    referencedPositions = @_findReferencedPositions(action, rule.symbols.length)
+    
+    lines = []
+    
+    # Generate parsing for remaining symbols
+    for symbol, i in symbols
+      position = startPosition + i  # Actual position in original rule
+      
+      if position in referencedPositions
+        # This position is used in action - save it
+        lines.push(@_generateCaptureStatement(symbol, position))
+      else
+        # Not used in action - just match
+        lines.push(@_generateMatchStatement(symbol))
+    
+    # Generate return statement
+    returnStatement = @_compileActionExpression(action, rule.symbols.length)
+    lines.push(returnStatement)
+    
+    # Join and indent properly
+    lines.map((line) -> "      #{line}").join('\n')
 
   _expandThroughSkippedNonterminal: (skippedSymbol, parentRule, dispatchMap, expectedTokens) ->
     # Expand through skipped nonterminal to get actual alternatives
