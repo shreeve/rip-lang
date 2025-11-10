@@ -569,7 +569,7 @@ parseValue() {
 
 ### 1. FIRST Sets Need Terminal Extraction
 
-**Issue:** `rule.firsts` contains nonterminal IDs, not terminals  
+**Issue:** `rule.firsts` contains nonterminal IDs, not terminals
 **Example:** `Literal → AlphaNumeric` has `rule.firsts = {43}` (AlphaNumeric's ID)
 
 **Solution:** Use `@types[symbol].firsts` for recursive terminal extraction:
@@ -606,7 +606,7 @@ for name in followSet
 
 **Issue:** `Return` has 3 rules all starting with RETURN:
 - `RETURN Expression`
-- `RETURN INDENT Object OUTDENT`  
+- `RETURN INDENT Object OUTDENT`
 - `RETURN`
 
 **Solution:** Phase 5 will use `_peek()` to check second token:

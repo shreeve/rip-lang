@@ -858,11 +858,12 @@ class Generator
     ]
 
     # Expanded set for parsing programs
-    # Adding incrementally: Group 1 ✅, Group 2 (adding now)
+    # Phase 4: Focus on multi-symbol rules without circular dependencies
     nonterminals = [
       # Core flow
       'Root', 'Body', 'Line',
-      'Expression', 'Value', 'Statement',
+      # Base layer - no Expression/Statement yet (creates circular deps)
+      'Value',  # Dispatches to literals and simple constructs
       # Group 1: Base values ✅
       'Identifier', 'Property', 'ThisProperty',
       'Literal', 'AlphaNumeric', 'String', 'Regex',
@@ -870,10 +871,10 @@ class Generator
       'DoIife', 'This', 'Super', 'MetaProperty',
       # Collections
       'Array', 'Object',
-      # Group 2: Simple terminals & statements
+      # Simple constructs
       'Block', 'Return', 'Yield',
       'RangeDots',  # For ranges
-      # Module system (basic)
+      # Module system (basic - minimal)
       'Import', 'Export'
     ]
 
@@ -1069,15 +1070,26 @@ class Generator
       # Compile action
       action = @_compileAction(rule)
 
+      # Check if action has multiple statements (contains newlines/semicolons)
+      hasMultipleStatements = action.includes('\n') or action.match(/;\s*\w/)
+
       # Format: stack case labels, then action on same/next line
       caseStr = tokenNames.map((n) -> "case #{n}").join(': ')
       totalLength = caseStr.length + action.length
 
-      # If total fits on one line (< 100 chars), put action on same line
-      # Otherwise, put action on next line with proper indentation
-      if totalLength < 100 and tokenNames.length <= 5
+      # If action has multiple statements, wrap in block to avoid variable collisions
+      if hasMultipleStatements
+        cases.push("    #{caseStr}: {")
+        # Indent each line of the action
+        actionLines = action.split('\n')
+        for line in actionLines
+          cases.push("      #{line}") if line.trim()
+        cases.push("    }")
+      else if totalLength < 100 and tokenNames.length <= 5
+        # Single statement, fits on one line
         cases.push("    #{caseStr}: #{action}")
       else
+        # Single statement, put on next line
         cases.push("    #{caseStr}:")
         cases.push("      #{action}")
 
@@ -1135,33 +1147,157 @@ class Generator
       if typeof action is 'number' and action is 1
         return @_generateSymbolRef(firstSymbol, 1)
 
-    # Multi-symbol rules need temp vars and action compilation
-    # For now, just handle simple cases
+    # Multi-symbol rules - Phase 4 implementation
+    if symbols.length > 1
+      return @_compileMultiSymbolAction(rule)
 
-    # No action or action = 1: return first symbol
+    # Fallback for remaining cases
     if not action or action is 1
-      return @_generateSymbolRef(firstSymbol, 1) if symbols.length is 1
-      return "return [];" if symbols.length is 0
       return @_generateSymbolRef(firstSymbol, 1)
 
     # String literal like '"null"'
     if typeof action is 'string' and action.match(/^"[^"]*"$/)
       return "return #{action};"
 
-    # Numeric: return symbol at that position
-    if typeof action is 'number'
-      targetSymbol = symbols[action - 1]
-      return @_generateSymbolRef(targetSymbol, action) if symbols.length is 1
-      # Multi-symbol: need to implement full action compiler
-      return @_generateSymbolRef(firstSymbol, 1)
-
-    # Complex string action - need full compiler (Phase 4)
-    if typeof action is 'string'
-      # For now, just return first symbol
-      return @_generateSymbolRef(firstSymbol, 1)
-
     # Fallback
     return @_generateSymbolRef(firstSymbol, 1)
+
+  _findReferencedPositions: (action, symbolCount) ->
+    # Parse action to find which positions are referenced
+    # Returns array of 1-indexed positions used in the action
+    positions = new Set
+
+    return [] unless action  # No action
+
+    if typeof action is 'number'
+      # Action is just a number like 3
+      positions.add(action) if action >= 1 and action <= symbolCount
+      return Array.from(positions).sort((a, b) -> a - b)
+
+    if typeof action is 'string'
+      # Find all number references (but not protected $n)
+      # We need to find bare numbers AND $n references
+      # Both represent position references
+
+      # Find $n patterns (protected references like $1, $3)
+      dollarMatches = action.match(/\$\d+/g)
+      if dollarMatches
+        for match in dollarMatches
+          pos = parseInt(match.substring(1))  # Remove $ prefix
+          if pos >= 1 and pos <= symbolCount
+            positions.add(pos)
+
+      # Find bare numbers (like in '["def", 2, 4, 6]')
+      # Match word boundaries to avoid matching parts of numbers
+      bareMatches = action.match(/(?<!\$|[a-zA-Z_])\d+(?![a-zA-Z_])/g)
+      if bareMatches
+        for match in bareMatches
+          pos = parseInt(match)
+          if pos >= 1 and pos <= symbolCount
+            positions.add(pos)
+
+    Array.from(positions).sort((a, b) -> a - b)
+
+  _generateCaptureStatement: (symbol, position) ->
+    # Generate code to capture a symbol at a position
+    # Returns: "const tokN = this.parseSymbol();" or "const tokN = this._match(ID);"
+
+    if @types[symbol]
+      # Nonterminal - call parse function
+      "const tok#{position} = this.parse#{symbol}();"
+    else
+      # Terminal - match token
+      symbolId = @symbolIds[symbol]
+      "const tok#{position} = this._match(#{symbolId});"
+
+  _generateMatchStatement: (symbol) ->
+    # Generate code to match a symbol without capturing
+    # Returns: "this.parseSymbol();" or "this._match(ID);"
+
+    if @types[symbol]
+      # Nonterminal - call parse function
+      "this.parse#{symbol}();"
+    else
+      # Terminal - match token
+      symbolId = @symbolIds[symbol]
+      "this._match(#{symbolId});"
+
+  _compileMultiSymbolAction: (rule) ->
+    # Compile multi-symbol rules with proper temp variable generation
+    # E.g., 'DEF Identifier CALL_START ParamList CALL_END Block' with action '["def", 2, 4, 6]'
+    # Generates code that captures positions 2, 4, 6 and matches the others
+
+    symbols = rule.symbols
+    action = rule.action
+
+    # Find which positions are referenced in the action
+    referencedPositions = @_findReferencedPositions(action, symbols.length)
+
+    lines = []
+
+    # Generate parsing for each symbol
+    for symbol, i in symbols
+      position = i + 1  # 1-indexed positions
+
+      if position in referencedPositions
+        # This position is used in action - save it
+        lines.push(@_generateCaptureStatement(symbol, position))
+      else
+        # Not used in action - just match
+        lines.push(@_generateMatchStatement(symbol))
+
+    # Generate return statement with compiled action
+    returnStatement = @_compileActionExpression(action, symbols.length)
+    lines.push(returnStatement)
+
+    # Join with proper indentation and add 'return ' prefix if needed
+    lines.join('\n      ')
+
+  _compileActionExpression: (action, symbolCount) ->
+    # Transform action string by replacing position numbers with temp variables
+    # E.g., '["def", 2, 4, 6]' becomes '["def", tok2, tok4, tok6]'
+
+    # Handle no action or default action
+    if not action or action is 1
+      return "return tok1;"
+
+    # Handle numeric action (just return that position)
+    if typeof action is 'number'
+      return "return tok#{action};"
+
+    # Handle string literal like '"undefined"'
+    if typeof action is 'string' and action.match(/^"[^"]*"$/)
+      return "return #{action};"
+
+    # Handle string actions (array constructions, expressions, etc.)
+    if typeof action is 'string'
+      compiled = action
+
+      # Replace $n with tokN (protected references)
+      compiled = compiled.replace(/\$(\d+)/g, (match, num) ->
+        pos = parseInt(num)
+        if pos >= 1 and pos <= symbolCount
+          "tok#{pos}"
+        else
+          match  # Keep as-is if out of range
+      )
+
+      # Replace bare numbers with tokN (like in '["def", 2, 4, 6]')
+      # But preserve string literals and avoid replacing numbers in quotes
+      # This is tricky - we need to be careful about context
+      # Use a more sophisticated approach: replace \bN\b patterns that are position refs
+      compiled = compiled.replace(/(?<!")(\b\d+\b)(?!")/g, (match, num) ->
+        pos = parseInt(num)
+        if pos >= 1 and pos <= symbolCount
+          "tok#{pos}"
+        else
+          num  # Keep number if out of range
+      )
+
+      return "return #{compiled};"
+
+    # Fallback
+    return "return tok1;"
 
   _expandThroughSkippedNonterminal: (skippedSymbol, parentRule, dispatchMap, expectedTokens) ->
     # Expand through skipped nonterminal to get actual alternatives
