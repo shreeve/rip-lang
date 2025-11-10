@@ -841,11 +841,24 @@ class Generator
     # Generate parse functions by consulting SLR(1) oracle
     functions = []
 
-    # Start with select nonterminals to prove oracle consultation works
-    nonterminals = ['Root', 'Literal', 'Identifier', 'Property']
+    # Expanded set for parsing simple programs
+    nonterminals = [
+      # Core flow
+      'Root', 'Body', 'Line',
+      'Expression', 'Value', 'Statement',
+      # Values
+      'Identifier', 'Property', 'ThisProperty',
+      'Literal', 'AlphaNumeric', 'String', 'Regex',
+      'Assignable', 'SimpleAssignable',
+      'Parenthetical', 'Range', 'Invocation',
+      'DoIife', 'This', 'Super', 'MetaProperty',
+      # Collections
+      'Array', 'Object'
+    ]
 
     for name in nonterminals
-      functions.push @_generateParseFunction(name)
+      func = @_generateParseFunction(name)
+      functions.push(func) if func
 
     # Close parser object
     functions.push "};  // End of parser object"
@@ -859,6 +872,91 @@ class Generator
 
     rules = type.rules
     return '' unless rules.length > 0
+
+    # Detect left recursion: any rule where nonTerminal is first symbol
+    isLeftRecursive = rules.some (rule) => rule.symbols[0] is nonTerminal
+
+    if isLeftRecursive
+      @_generateLeftRecursiveFunction(nonTerminal, rules, type)
+    else
+      @_generateSwitchFunction(nonTerminal, rules)
+
+  _generateLeftRecursiveFunction: (nonTerminal, rules, type) ->
+    # Generate while loop for left-recursive nonterminals
+    # Pattern: Body → Line | Body TERMINATOR Line
+    # Becomes: items = [parseLine()]; while (TERMINATOR) { match; if (FOLLOW) break; items.push(parseLine()) }
+
+    # Find base case (rule without left recursion)
+    baseRule = rules.find (rule) => rule.symbols[0] isnt nonTerminal
+    return @_generateSwitchFunction(nonTerminal, rules) unless baseRule  # Fallback
+
+    # Find recursive rule with separator
+    recursiveRule = rules.find (rule) =>
+      rule.symbols.length >= 3 and rule.symbols[0] is nonTerminal
+
+    if not recursiveRule
+      # No clear recursive pattern, fallback to switch
+      return @_generateSwitchFunction(nonTerminal, rules)
+
+    # Extract pattern: Body TERMINATOR Line → separator is TERMINATOR, element is Line
+    separator = recursiveRule.symbols[1]
+    elementSymbol = recursiveRule.symbols[2] if recursiveRule.symbols.length >= 3
+
+    # Get separator token ID and constant name
+    separatorId = @symbolIds[separator]
+    separatorTokenName = @tokenNames[separatorId]
+    separatorConst = if separatorTokenName
+      @_getSymbolConstName(separatorTokenName)
+    else
+      separatorId  # Fallback to numeric ID
+
+    # Get FOLLOW set for termination (oracle provides this!)
+    followSet = Array.from(type.follows)
+    followChecks = []
+    for name in followSet
+      id = @symbolIds[name]
+      if id and @tokenNames[id]
+        constName = @_getSymbolConstName(@tokenNames[id])
+        followChecks.push("this.la.id === #{constName}")
+
+    # Join with || for the condition
+    followCondition = if followChecks.length > 0
+      followChecks.join(' || ')
+    else
+      'false'  # No FOLLOW set, never break on it
+
+    # Get base element function name
+    baseElement = baseRule.symbols[0]
+    baseFunc = if @types[baseElement] then "parse#{baseElement}" else "this._match(#{@symbolIds[baseElement]})"
+
+    # Get loop element function name
+    elementFunc = if elementSymbol and @types[elementSymbol]
+      "parse#{elementSymbol}"
+    else if elementSymbol
+      "this._match(#{@symbolIds[elementSymbol]})"
+    else
+      baseFunc
+
+    funcName = "parse#{nonTerminal}"
+    """
+      #{funcName}() {
+        // Left-recursive: #{nonTerminal} → #{baseElement} | #{nonTerminal} #{separator} #{elementSymbol or ''}
+        const items = [this.#{baseFunc}()];
+
+        // Iteration with FOLLOW-based termination
+        while (this.la && this.la.id === #{separatorConst}) {
+          this._match(#{separatorConst});
+          // FOLLOW(#{nonTerminal}) = {#{followSet.join(', ')}}
+          if (!this.la || #{followCondition}) break;
+          items.push(this.#{elementFunc}());
+        }
+
+        return items;
+      },
+    """
+
+  _generateSwitchFunction: (nonTerminal, rules) ->
+    # Generate switch-based dispatch for non-left-recursive nonterminals
 
     # Build dispatch map: FIRST token → rule
     dispatchMap = {}
@@ -932,10 +1030,14 @@ class Generator
 
       # Format: stack case labels, then action on same/next line
       caseStr = tokenNames.map((n) -> "case #{n}").join(': ')
-      if caseStr.length + action.length < 100
+      totalLength = caseStr.length + action.length
+
+      # If total fits on one line (< 100 chars), put action on same line
+      # Otherwise, put action on next line with proper indentation
+      if totalLength < 100 and tokenNames.length <= 5
         cases.push("    #{caseStr}: #{action}")
       else
-        cases.push("    #{caseStr}")
+        cases.push("    #{caseStr}:")
         cases.push("      #{action}")
 
     # Generate error case with numeric IDs
@@ -953,33 +1055,55 @@ class Generator
     """
 
   _compileAction: (rule) ->
-    # Compile grammar action into JavaScript return statement
+    # Compile grammar action into JavaScript for PRD mode
+    # Similar to _processGrammarAction but maps to local vars not stack
     action = rule.action
     symbols = rule.symbols
+    firstSymbol = symbols[0]
 
-    # Default action: return first symbol
+    # PRD: Generate code to capture results in local variables
+    # For single-symbol rules, just call directly without temp var
+    if symbols.length is 1
+      # Simple case: one symbol
+      if not action or action is 1
+        # Default: return the symbol
+        return @_generateSymbolRef(firstSymbol, 1)
+
+      # String literal action like '"undefined"'
+      if typeof action is 'string' and action.match(/^"[^"]*"$/)
+        return "return #{action};"
+
+      # Numeric action
+      if typeof action is 'number' and action is 1
+        return @_generateSymbolRef(firstSymbol, 1)
+
+    # Multi-symbol rules need temp vars and action compilation
+    # For now, just handle simple cases
+
+    # No action or action = 1: return first symbol
     if not action or action is 1
-      if symbols.length is 0
-        return "return [];"
-      return @_generateSymbolRef(symbols[0], 1)
+      return @_generateSymbolRef(firstSymbol, 1) if symbols.length is 1
+      return "return [];" if symbols.length is 0
+      return @_generateSymbolRef(firstSymbol, 1)
 
-    # Handle string literal actions like '"null"' or '"undefined"'
-    if typeof action is 'string'
-      # Check if it's a quoted string literal
-      if action.match(/^"[^"]*"$/)
-        return "return #{action};"
-      if action.match(/^'[^']*'$/)
-        return "return #{action};"
+    # String literal like '"null"'
+    if typeof action is 'string' and action.match(/^"[^"]*"$/)
+      return "return #{action};"
 
-      # Complex action string - need to compile
-      compiled = @_compileActionString(action, symbols)
-      return "return #{compiled};"
-
-    # Numeric action - return that position
+    # Numeric: return symbol at that position
     if typeof action is 'number'
-      return @_generateSymbolRef(symbols[action - 1], action)
+      targetSymbol = symbols[action - 1]
+      return @_generateSymbolRef(targetSymbol, action) if symbols.length is 1
+      # Multi-symbol: need to implement full action compiler
+      return @_generateSymbolRef(firstSymbol, 1)
 
-    return "return undefined;"
+    # Complex string action - need full compiler (Phase 4)
+    if typeof action is 'string'
+      # For now, just return first symbol
+      return @_generateSymbolRef(firstSymbol, 1)
+
+    # Fallback
+    return @_generateSymbolRef(firstSymbol, 1)
 
   _generateSymbolRef: (symbol, position) ->
     # Generate code to get value at this position
