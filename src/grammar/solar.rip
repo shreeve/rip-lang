@@ -934,18 +934,14 @@ class Generator
       'ObjAssignable',        # Object literal dispatch
       'SimpleObjAssignable',  # Simple object keys
       'ObjSpreadExpr',        # Object spread expressions
-      'Assign',               # Compound operators (skip for now)
-      # Phase 7: Inline Statement to break Expression ↔ Statement cycle
+      # Assign removed - generating in Phase 8.2
+      # Phase 7-8: Inline Statement to break Expression ↔ Statement cycle
       'Statement',            # Inline into Expression (Return, Import, Export)
       # ExpressionLine removed - can be generated (dispatches to CodeLine)
       'OperationLine',        # Inline into ExpressionLine/Line
-      # Phase 7: Skip complex control flow (accept partial coverage)
-      'For',                  # Complex: comprehensions, multiple variants
-      'While',                # Complex: while/until loops
-      'Until',                # Complex: until loops
-      'Loop',                 # Complex: infinite loops
-      'Class',                # Complex: class definitions
-      'Switch',               # Complex: switch statements
+      'Until',                # Variant of While
+      # Phase 8: These will be generated, remove from skip
+      # 'For', 'While', 'Loop', 'Class', 'Switch' - removed, now generating
       # Note: Operation handled specially, not in this list
     ]
 
@@ -979,7 +975,48 @@ class Generator
       'Arguments',       # Function call arguments
       'ArgList',         # Argument list
       'Arg',             # Single argument
-      # Note: Expression, If, Try, Statement have complex cycles - Phase 8
+      # Phase 8.1: Control flow (can have forward refs to Expression)
+      'If',              # if/then/else
+      'IfBlock',         # if blocks
+      'UnlessBlock',     # unless blocks
+      'While',           # while loops
+      'WhileSource',     # while loop sources
+      'Loop',            # infinite loops
+      'For',             # for loops
+      'ForValue',        # for loop values
+      'ForVariables',    # for loop variables
+      'Try',             # try/catch/finally
+      'Catch',           # catch clause
+      'Switch',          # switch statements
+      'Whens',           # when clauses
+      'When',            # single when
+      'Class',           # class definitions
+      # Phase 8.2: Patterns & Destructuring
+      'Assign',          # Assignment with patterns
+      'AssignObj',       # Object destructuring
+      'AssignList',      # List destructuring
+      'Param',           # Function parameters
+      'ParamList',       # Parameter lists
+      'ParamVar',        # Parameter variables
+      'Splat',           # Spread operator in patterns
+      'Slice',           # Array slicing
+      'ForVar',          # For loop variable patterns
+      # Phase 8.3: Misc functions
+      'OptFuncExist',    # Optional function existence
+      'OptComma',        # Optional trailing commas
+      'OptElisions',     # Optional array elisions
+      'Elision',         # Array holes
+      'Elisions',        # Multiple holes
+      'ObjRestValue',    # Object rest patterns
+      'SimpleArgs',      # Simple argument lists
+      'ArgElision',      # Argument elisions
+      'ArgElisionList',  # Multiple argument elisions
+      'OptElisions',     # Optional elisions
+      'ForFromTo',       # For from/to loops
+      'Interpolations',  # String interpolation
+      'InterpolationChunk', # Interpolation parts
+      # Phase 8.4: THE BIG ONE - Generate Expression (calls everything above)
+      'Expression',      # Core expression dispatcher (Statement inlined)
     ]
 
     for name in nonterminals
@@ -1096,7 +1133,7 @@ class Generator
     # Generate switch-based dispatch for non-left-recursive nonterminals
 
     # Skip list for intermediate dispatchers (must match list in _generateParseFunctions)
-    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr', 'Operation', 'Assign', 'Statement', 'OperationLine', 'For', 'While', 'Until', 'Loop', 'Class', 'Switch']
+    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr', 'Operation', 'Statement', 'OperationLine', 'Until']
 
     # Check for empty rule
     emptyRule = rules.find (rule) => not rule.symbols[0] or rule.symbols[0] is ''
@@ -1205,8 +1242,42 @@ class Generator
 
       # Pick the preferred valid rule
       rule = if validRules.length > 1
-        # Pick last valid rule (often more specific)
-        validRules[validRules.length - 1]
+        # For FALSE ambiguity: prefer rules with matching first symbol
+        tokenName = @tokenNames[parseInt(tokenId)]
+        
+        preferred = null
+        
+        # Priority 1: First symbol exactly matches token (For → FOR, Return → RETURN)
+        for r in validRules
+          firstSym = r.symbols[0]
+          # Check if this is a nonterminal whose name (without suffix) matches the token
+          # E.g., Return matches RETURN, For matches FOR
+          if @types[firstSym]
+            # Simple heuristic: If token name starts with nonterminal name, prefer it
+            typeName = firstSym.toUpperCase()
+            if tokenName is typeName or tokenName.startsWith(typeName + '_')
+              preferred = r
+              break
+        
+        # Priority 2: First symbol has single-token FIRST set matching this token
+        unless preferred
+          for r in validRules
+            firstSym = r.symbols[0]
+            if @types[firstSym]
+              firstSet = Array.from(@types[firstSym].firsts)
+              if firstSet.length is 1 and firstSet[0] is tokenName
+                preferred = r
+                break
+        
+        # Priority 3: Prefer rules with smallest FIRST sets (most specific)
+        unless preferred
+          sortedBySpecificity = validRules.slice().sort (a, b) =>
+            aFirst = @types[a.symbols[0]]?.firsts.size or 999
+            bFirst = @types[b.symbols[0]]?.firsts.size or 999
+            aFirst - bFirst
+          preferred = sortedBySpecificity[0]
+        
+        preferred
       else
         validRules[0]
 
@@ -1662,7 +1733,7 @@ class Generator
     # E.g., Value → Assignable expands to Value → SimpleAssignable | Array | Object
     #       Then SimpleAssignable expands to Identifier | ThisProperty (base cases only)
 
-    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr', 'Operation', 'Assign', 'Statement', 'OperationLine', 'For', 'While', 'Until', 'Loop', 'Class', 'Switch']
+    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr', 'Operation', 'Statement', 'OperationLine', 'Until']
 
     skippedType = @types[skippedSymbol]
     return unless skippedType
@@ -1706,12 +1777,15 @@ class Generator
     # Generate code to get value at this position
     symbolObj = @symbolTable.get(symbol)
 
-    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr', 'Operation', 'Assign', 'Statement', 'OperationLine', 'For', 'While', 'Until', 'Loop', 'Class', 'Switch']
+    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr', 'Operation', 'Statement', 'OperationLine', 'Until']
 
     if symbolObj instanceof Token
       # Terminal: call _match
       symbolId = @symbolIds[symbol]
       return "return this._match(#{symbolId});"
+    else if symbol is 'Operation'
+      # Special: Operation uses precedence climbing
+      return "return this.parseOperation(0);"
     else if symbol in SKIP_GENERATION
       # Skipped - should have been inlined during dispatch generation
       return "/* ERROR: #{symbol} should have been inlined */"
