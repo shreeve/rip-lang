@@ -160,14 +160,18 @@ class Generator
         # Add symbols to grammar
         addSymbol symbol for symbol in symbols
 
-        # Process semantic actions
+        # Store original action for PRD mode
+        originalAction = action
+
+        # Process semantic actions for table mode
         if action
           action = @_processGrammarAction action, symbols
           label = 'case ' + (@rules.length + 1) + ':'
           actionGroups[action]?.push(label) or actionGroups[action] = [label]
 
-        # Create rule
+        # Create rule (store original action for PRD)
         rule = new Rule type, symbols, @rules.length + 1
+        rule.action = originalAction  # Store original for PRD generation
 
         # Set precedence
         @_assignPrecedence rule, precedence
@@ -840,29 +844,39 @@ class Generator
   _generateParseFunctions: ->
     # Generate parse functions by consulting SLR(1) oracle
     functions = []
-
+    
+    # Skip intermediate dispatch layers that cause circular dependencies
+    # These will be inlined into their parent functions
+    SKIP_GENERATION = [
+      'Assignable',           # Dispatches to SimpleAssignable, Array, Object
+      'SimpleAssignable',     # Has accessor rules that create cycles
+      'ObjAssignable',        # Object literal dispatch
+      'SimpleObjAssignable',  # Simple object keys
+      'ObjSpreadExpr'         # Object spread expressions
+    ]
+    
     # Expanded set for parsing simple programs
     nonterminals = [
       # Core flow
       'Root', 'Body', 'Line',
       'Expression', 'Value', 'Statement',
-      # Values
+      # Values (base cases only - no intermediate dispatchers)
       'Identifier', 'Property', 'ThisProperty',
       'Literal', 'AlphaNumeric', 'String', 'Regex',
-      'Assignable', 'SimpleAssignable',
       'Parenthetical', 'Range', 'Invocation',
       'DoIife', 'This', 'Super', 'MetaProperty',
       # Collections
       'Array', 'Object'
     ]
-
+    
     for name in nonterminals
+      continue if name in SKIP_GENERATION
       func = @_generateParseFunction(name)
       functions.push(func) if func
-
+    
     # Close parser object
     functions.push "};  // End of parser object"
-
+    
     functions.join('\n\n')
 
   _generateParseFunction: (nonTerminal) ->
@@ -911,9 +925,13 @@ class Generator
       separatorId  # Fallback to numeric ID
 
     # Get FOLLOW set for termination (oracle provides this!)
+    # CRITICAL: Exclude the separator from FOLLOW checks (we're looping on it!)
     followSet = Array.from(type.follows)
     followChecks = []
     for name in followSet
+      # Skip the separator token - we're already looping on it
+      continue if name is separator
+
       id = @symbolIds[name]
       if id and @tokenNames[id]
         constName = @_getSymbolConstName(@tokenNames[id])
@@ -957,16 +975,29 @@ class Generator
 
   _generateSwitchFunction: (nonTerminal, rules) ->
     # Generate switch-based dispatch for non-left-recursive nonterminals
-
+    
+    # Skip list for intermediate dispatchers
+    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr']
+    
+    # Check for empty rule
+    emptyRule = rules.find (rule) => not rule.symbols[0] or rule.symbols[0] is ''
+    
     # Build dispatch map: FIRST token → rule
+    # Expand through skipped nonterminals
     dispatchMap = {}
     expectedTokens = new Set()
 
     for rule in rules
       firstSymbol = rule.symbols[0]
 
-      # Skip empty rules (will handle separately)
+      # Skip empty rules (will add as default later)
       continue if not firstSymbol or firstSymbol is ''
+      
+      # If first symbol is a skipped nonterminal, expand through it
+      if firstSymbol in SKIP_GENERATION and @types[firstSymbol]
+        # Recursively get alternatives from skipped nonterminal
+        @_expandThroughSkippedNonterminal(firstSymbol, rule, dispatchMap, expectedTokens)
+        continue
 
       # Get terminal FIRST tokens for this rule
       # If first symbol is nonterminal → use its terminal FIRST set
@@ -1040,9 +1071,15 @@ class Generator
         cases.push("    #{caseStr}:")
         cases.push("      #{action}")
 
-    # Generate error case with numeric IDs
-    expectedArray = Array.from(expectedTokens).sort((a,b) -> a - b).join(', ')
-    cases.push("    default: this._error([#{expectedArray}], this.la.id);")
+    # Generate default case
+    if emptyRule
+      # Empty rule exists - default returns its action
+      action = @_compileAction(emptyRule)
+      cases.push("    default: #{action}")
+    else
+      # No empty rule - error
+      expectedArray = Array.from(expectedTokens).sort((a,b) -> a - b).join(', ')
+      cases.push("    default: this._error([#{expectedArray}], this.la.id);")
 
     # Generate function
     funcName = "parse#{nonTerminal}"
@@ -1056,13 +1093,18 @@ class Generator
 
   _compileAction: (rule) ->
     # Compile grammar action into JavaScript for PRD mode
-    # Similar to _processGrammarAction but maps to local vars not stack
     action = rule.action
     symbols = rule.symbols
     firstSymbol = symbols[0]
 
-    # PRD: Generate code to capture results in local variables
-    # For single-symbol rules, just call directly without temp var
+    # Handle empty rules (no symbols)
+    if symbols.length is 0 or not firstSymbol or firstSymbol is ''
+      if typeof action is 'string' and action.match(/^\[/)
+        # Action is an array expression like '["program"]'
+        return "return #{action};"
+      return "return [];"
+
+    # For single-symbol rules, generate direct call
     if symbols.length is 1
       # Simple case: one symbol
       if not action or action is 1
@@ -1105,15 +1147,62 @@ class Generator
     # Fallback
     return @_generateSymbolRef(firstSymbol, 1)
 
+  _expandThroughSkippedNonterminal: (skippedSymbol, parentRule, dispatchMap, expectedTokens) ->
+    # Expand through skipped nonterminal to get actual alternatives
+    # E.g., Value → Assignable expands to Value → SimpleAssignable | Array | Object
+    #       Then SimpleAssignable expands to Identifier | ThisProperty (base cases only)
+    
+    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr']
+    
+    skippedType = @types[skippedSymbol]
+    return unless skippedType
+    
+    for childRule in skippedType.rules
+      childFirst = childRule.symbols[0]
+      continue unless childFirst  # Skip empty
+      
+      # For SimpleAssignable, only include base cases (single symbols)
+      # Skip accessor rules like "Value . Property" (multi-symbol)
+      if skippedSymbol is 'SimpleAssignable' and childRule.symbols.length > 1
+        continue  # Skip accessors for now
+      
+      # If child is also skipped, recurse
+      if childFirst in SKIP_GENERATION and @types[childFirst]
+        @_expandThroughSkippedNonterminal(childFirst, childRule, dispatchMap, expectedTokens)
+        continue
+      
+      # Get terminal FIRST for this child alternative
+      firstTokens = if @types[childFirst]
+        firstNames = Array.from(@types[childFirst].firsts)
+        ids = []
+        for name in firstNames
+          id = @symbolIds[name]
+          ids.push(id) if id
+        ids
+      else
+        symbolId = @symbolIds[childFirst]
+        if symbolId then [symbolId] else []
+      
+      # Map to the child rule (use child's action, not parent's)
+      for tokenId in firstTokens
+        continue unless @tokenNames[tokenId]
+        expectedTokens.add(tokenId)
+        dispatchMap[tokenId] = dispatchMap[tokenId] or []
+        dispatchMap[tokenId].push(childRule)
+
   _generateSymbolRef: (symbol, position) ->
     # Generate code to get value at this position
-    # Check if terminal or nonterminal
     symbolObj = @symbolTable.get(symbol)
-
+    
+    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr']
+    
     if symbolObj instanceof Token
       # Terminal: call _match
       symbolId = @symbolIds[symbol]
       return "return this._match(#{symbolId});"
+    else if symbol in SKIP_GENERATION
+      # Skipped - should have been inlined during dispatch generation
+      return "/* ERROR: #{symbol} should have been inlined */"
     else
       # Nonterminal: call parse function
       funcName = "parse#{symbol}"
