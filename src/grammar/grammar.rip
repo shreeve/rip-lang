@@ -275,7 +275,7 @@ grammar =
 
   # PrimaryValue: base values that can be accessed (no Assignable to break cycle)
   # MUST be defined before SimpleAssignable uses it
-  # Note: Code/Class have explicit rules in SimpleAssignable, so not included here
+  # Including Code/Class here allows common prefix detection in SimpleAssignable
   PrimaryValue: [
     o 'Identifier'
     o 'ThisProperty'
@@ -284,6 +284,8 @@ grammar =
     o 'Range'
     o 'Array'
     o 'Object'
+    o 'Class'
+    o 'Code'
     o 'Invocation'
     o 'DoIife'
     o 'This'
@@ -318,17 +320,6 @@ grammar =
     # ES6 optional indexing (?.[)
     o 'PrimaryValue ES6_OPTIONAL_INDEX INDEX_START Expression INDEX_END'               , '["optindex", 1, 4]'
     o 'PrimaryValue ES6_OPTIONAL_INDEX INDEX_START INDENT Expression OUTDENT INDEX_END', '["optindex", 1, 5]'
-    # Code (arrow function) with accessor
-    o 'Code . Property'                                                         , '[".", 1, 3]'
-    o 'Code ?. Property'                                                        , '["?.", 1, 3]'
-    o 'Code :: Property'                                                        , '["::", 1, 3]'
-    o 'Code ?:: Property'                                                       , '["?::", 1, 3]'
-    o 'Code ::'                                                                 , '["::", 1, "prototype"]'
-    o 'Code ?::'                                                                , '["?::", 1, "prototype"]'
-    o 'Code INDEX_START Expression INDEX_END'                                   , '["[]", 1, 3]'
-    o 'Code INDEX_START INDENT Expression OUTDENT INDEX_END'                    , '["[]", 1, 4]'
-    o 'Code INDEX_SOAK INDEX_START Expression INDEX_END'                        , '["?[]", 1, 4]'
-    o 'Code INDEX_SOAK INDEX_START INDENT Expression OUTDENT INDEX_END'         , '["?[]", 1, 5]'
   ]
 
   # Assignable: can be identifier, array pattern, or object pattern

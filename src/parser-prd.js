@@ -21,45 +21,35 @@ const SYM_LINE = 5;
 const SYM_TERMINATOR = 6;
 const SYM_EXPRESSION = 7;
 const SYM_EXPRESSIONLINE = 8;
-const SYM_STATEMENT = 9;
-const SYM_RETURN = 10;
-const SYM_IMPORT = 12;
-const SYM_EXPORT = 13;
+const SYM_STATEMENT = 11;
 const SYM_VALUE = 14;
 const SYM_CODE = 15;
 const SYM_OPERATION = 16;
 const SYM_ASSIGN = 17;
-const SYM_IF = 18;
-const SYM_TRY = 19;
-const SYM_WHILE = 20;
-const SYM_FOR = 21;
-const SYM_SWITCH = 22;
-const SYM_CLASS = 23;
-const SYM_THROW = 24;
-const SYM_YIELD = 25;
-const SYM_DEF = 26;
-const SYM_IDENTIFIER = 28;
+const SYM_DEF = 27;
 const SYM_CALL_START = 29;
 const SYM_PARAMLIST = 30;
 const SYM_CALL_END = 31;
 const SYM_BLOCK = 32;
 const SYM_CODELINE = 33;
 const SYM_OPERATIONLINE = 34;
+const SYM_YIELD = 35;
 const SYM_INDENT = 36;
 const SYM_OBJECT = 37;
 const SYM_OUTDENT = 38;
 const SYM_FROM = 39;
-const SYM_PROPERTY = 41;
+const SYM_IDENTIFIER = 40;
+const SYM_PROPERTY = 42;
 const SYM_ALPHANUMERIC = 43;
 const SYM_NUMBER = 44;
-const SYM_STRING = 45;
+const SYM_STRING = 46;
 const SYM_STRING_START = 47;
 const SYM_INTERPOLATIONS = 48;
 const SYM_STRING_END = 49;
 const SYM_INTERPOLATIONCHUNK = 50;
 const SYM_INTERPOLATION_START = 51;
 const SYM_INTERPOLATION_END = 52;
-const SYM_REGEX = 53;
+const SYM_REGEX = 54;
 const SYM_REGEX_START = 55;
 const SYM_INVOCATION = 56;
 const SYM_REGEX_END = 57;
@@ -86,8 +76,7 @@ const SYM_AT = 77;
 const SYM_ELLIPSIS = 78;
 const SYM_OBJSPREADEXPR = 79;
 const SYM_PARENTHETICAL = 80;
-const SYM_SUPER = 81;
-const SYM_THIS = 82;
+const SYM_SUPER = 83;
 const SYM_OPTFUNCEXIST = 84;
 const SYM_ARGUMENTS = 85;
 const SYM_DYNAMIC_IMPORT = 86;
@@ -98,6 +87,7 @@ const SYM_OPT_PROTO = 90;
 const SYM_INDEX_START = 91;
 const SYM_INDEX_END = 92;
 const SYM_INDEX_SOAK = 93;
+const SYM_RETURN = 94;
 const SYM_PARAM_START = 95;
 const SYM_PARAM_END = 96;
 const SYM_FUNCGLYPH = 97;
@@ -108,88 +98,99 @@ const SYM_PARAM = 101;
 const SYM_PARAMVAR = 102;
 const SYM_ARRAY = 103;
 const SYM_SPLAT = 104;
-const SYM_SIMPLEASSIGNABLE = 105;
-const SYM_SLICE = 106;
-const SYM_ES6_OPTIONAL_INDEX = 107;
-const SYM_RANGE = 108;
-const SYM_DOIIFE = 109;
-const SYM_METAPROPERTY = 110;
-const SYM_NEW_TARGET = 111;
-const SYM_IMPORT_META = 112;
-const SYM_LBRACE = 113;
-const SYM_FORVARIABLES = 115;
-const SYM_FOROF = 116;
-const SYM_RBRACE = 117;
-const SYM_WHEN = 118;
-const SYM_OWN = 119;
-const SYM_ASSIGNLIST = 120;
-const SYM_EXTENDS = 122;
-const SYM_IMPORTDEFAULTSPECIFIER = 124;
-const SYM_IMPORTNAMESPACESPECIFIER = 125;
-const SYM_IMPORTSPECIFIERLIST = 126;
-const SYM_IMPORTSPECIFIER = 127;
-const SYM_AS = 128;
-const SYM_DEFAULT = 129;
-const SYM_IMPORT_ALL = 130;
-const SYM_EXPORTSPECIFIERLIST = 132;
-const SYM_EXPORT_ALL = 133;
-const SYM_EXPORTSPECIFIER = 134;
-const SYM_ES6_OPTIONAL_CALL = 135;
-const SYM_FUNC_EXIST = 136;
-const SYM_ARGLIST = 137;
-const SYM_ELISIONS = 139;
-const SYM_ARGELISIONLIST = 140;
-const SYM_OPTELISIONS = 141;
-const SYM_RANGEDOTS = 142;
-const SYM_DOTDOT = 143;
-const SYM_ARG = 144;
-const SYM_ARGELISION = 145;
-const SYM_ELISION = 146;
-const SYM_SIMPLEARGS = 147;
-const SYM_CATCH = 149;
-const SYM_FINALLY = 150;
-const SYM_LPAREN = 153;
-const SYM_RPAREN = 154;
-const SYM_WHILESOURCE = 155;
-const SYM_UNTIL = 157;
-const SYM_LOOP = 158;
-const SYM_FORIN = 160;
-const SYM_BY = 161;
-const SYM_FORFROM = 162;
-const SYM_AWAIT = 163;
-const SYM_FORVALUE = 164;
-const SYM_FORVAR = 165;
-const SYM_WHENS = 167;
-const SYM_ELSE = 168;
-const SYM_LEADING_WHEN = 170;
-const SYM_IFBLOCK = 171;
-const SYM_UNLESSBLOCK = 173;
-const SYM_UNLESS = 174;
-const SYM_POST_IF = 175;
-const SYM_POST_UNLESS = 176;
-const SYM_UNARY = 177;
-const SYM_DO = 178;
-const SYM_DO_IIFE = 179;
-const SYM_UNARY_MATH = 180;
-const SYM_MINUS = 181;
-const SYM_PLUS = 182;
-const SYM_DECREMENT = 183;
-const SYM_INCREMENT = 184;
-const SYM_QUESTION = 185;
-const SYM_MATH = 186;
-const SYM_POWER = 187;
-const SYM_SHIFT = 188;
-const SYM_COMPARE = 189;
-const SYM_AMPERSAND = 190;
-const SYM_CARET = 191;
-const SYM_PIPE = 192;
-const SYM_AND = 193;
-const SYM_OR = 194;
-const SYM_NULLISH = 195;
-const SYM_OTHERWISE = 196;
-const SYM_RELATION = 197;
-const SYM_SPACE_QUESTION = 198;
-const SYM_COMPOUND_ASSIGN = 199;
+const SYM_PRIMARYVALUE = 105;
+const SYM_RANGE = 106;
+const SYM_DOIIFE = 107;
+const SYM_METAPROPERTY = 108;
+const SYM_SIMPLEASSIGNABLE = 109;
+const SYM_SLICE = 110;
+const SYM_ES6_OPTIONAL_INDEX = 111;
+const SYM_NEW_TARGET = 112;
+const SYM_IMPORT_META = 113;
+const SYM_LBRACE = 114;
+const SYM_FOR = 115;
+const SYM_FORVARIABLES = 116;
+const SYM_FOROF = 117;
+const SYM_RBRACE = 118;
+const SYM_WHEN = 119;
+const SYM_OWN = 120;
+const SYM_ASSIGNLIST = 121;
+const SYM_CLASS = 122;
+const SYM_EXTENDS = 123;
+const SYM_IMPORT = 124;
+const SYM_IMPORTDEFAULTSPECIFIER = 125;
+const SYM_IMPORTNAMESPACESPECIFIER = 126;
+const SYM_IMPORTSPECIFIERLIST = 127;
+const SYM_IMPORTSPECIFIER = 128;
+const SYM_AS = 129;
+const SYM_DEFAULT = 130;
+const SYM_IMPORT_ALL = 131;
+const SYM_EXPORT = 132;
+const SYM_EXPORTSPECIFIERLIST = 133;
+const SYM_EXPORT_ALL = 134;
+const SYM_EXPORTSPECIFIER = 135;
+const SYM_ES6_OPTIONAL_CALL = 136;
+const SYM_FUNC_EXIST = 137;
+const SYM_ARGLIST = 138;
+const SYM_THIS = 139;
+const SYM_ELISIONS = 140;
+const SYM_ARGELISIONLIST = 141;
+const SYM_OPTELISIONS = 142;
+const SYM_RANGEDOTS = 143;
+const SYM_DOTDOT = 144;
+const SYM_ARG = 145;
+const SYM_ARGELISION = 146;
+const SYM_ELISION = 147;
+const SYM_SIMPLEARGS = 148;
+const SYM_TRY = 149;
+const SYM_FINALLY = 151;
+const SYM_CATCH = 152;
+const SYM_THROW = 153;
+const SYM_LPAREN = 154;
+const SYM_RPAREN = 155;
+const SYM_WHILESOURCE = 156;
+const SYM_WHILE = 157;
+const SYM_UNTIL = 158;
+const SYM_LOOP = 160;
+const SYM_FORIN = 161;
+const SYM_BY = 162;
+const SYM_FORFROM = 163;
+const SYM_AWAIT = 164;
+const SYM_FORVALUE = 165;
+const SYM_FORVAR = 166;
+const SYM_SWITCH = 167;
+const SYM_WHENS = 168;
+const SYM_ELSE = 169;
+const SYM_LEADING_WHEN = 171;
+const SYM_IFBLOCK = 172;
+const SYM_IF = 173;
+const SYM_UNLESSBLOCK = 174;
+const SYM_UNLESS = 175;
+const SYM_POST_IF = 176;
+const SYM_POST_UNLESS = 177;
+const SYM_UNARY = 178;
+const SYM_DO = 179;
+const SYM_DO_IIFE = 180;
+const SYM_UNARY_MATH = 181;
+const SYM_MINUS = 182;
+const SYM_PLUS = 183;
+const SYM_DECREMENT = 184;
+const SYM_INCREMENT = 185;
+const SYM_QUESTION = 186;
+const SYM_MATH = 187;
+const SYM_POWER = 188;
+const SYM_SHIFT = 189;
+const SYM_COMPARE = 190;
+const SYM_AMPERSAND = 191;
+const SYM_CARET = 192;
+const SYM_PIPE = 193;
+const SYM_AND = 194;
+const SYM_OR = 195;
+const SYM_NULLISH = 196;
+const SYM_OTHERWISE = 197;
+const SYM_RELATION = 198;
+const SYM_SPACE_QUESTION = 199;
+const SYM_COMPOUND_ASSIGN = 200;
 
 const SYMBOL_NAMES = {
   1: '$end',
@@ -296,101 +297,102 @@ const SYMBOL_NAMES = {
   102: 'ParamVar',
   103: 'Array',
   104: 'Splat',
-  105: 'SimpleAssignable',
-  106: 'Slice',
-  107: 'ES6_OPTIONAL_INDEX',
-  108: 'Range',
-  109: 'DoIife',
-  110: 'MetaProperty',
-  111: 'NEW_TARGET',
-  112: 'IMPORT_META',
-  113: '{',
-  114: 'FOR',
-  115: 'ForVariables',
-  116: 'FOROF',
-  117: '}',
-  118: 'WHEN',
-  119: 'OWN',
-  120: 'AssignList',
-  121: 'CLASS',
-  122: 'EXTENDS',
-  123: 'IMPORT',
-  124: 'ImportDefaultSpecifier',
-  125: 'ImportNamespaceSpecifier',
-  126: 'ImportSpecifierList',
-  127: 'ImportSpecifier',
-  128: 'AS',
-  129: 'DEFAULT',
-  130: 'IMPORT_ALL',
-  131: 'EXPORT',
-  132: 'ExportSpecifierList',
-  133: 'EXPORT_ALL',
-  134: 'ExportSpecifier',
-  135: 'ES6_OPTIONAL_CALL',
-  136: 'FUNC_EXIST',
-  137: 'ArgList',
-  138: 'THIS',
-  139: 'Elisions',
-  140: 'ArgElisionList',
-  141: 'OptElisions',
-  142: 'RangeDots',
-  143: '..',
-  144: 'Arg',
-  145: 'ArgElision',
-  146: 'Elision',
-  147: 'SimpleArgs',
-  148: 'TRY',
-  149: 'Catch',
-  150: 'FINALLY',
-  151: 'CATCH',
-  152: 'THROW',
-  153: '(',
-  154: ')',
-  155: 'WhileSource',
-  156: 'WHILE',
-  157: 'UNTIL',
-  158: 'Loop',
-  159: 'LOOP',
-  160: 'FORIN',
-  161: 'BY',
-  162: 'FORFROM',
-  163: 'AWAIT',
-  164: 'ForValue',
-  165: 'ForVar',
-  166: 'SWITCH',
-  167: 'Whens',
-  168: 'ELSE',
-  169: 'When',
-  170: 'LEADING_WHEN',
-  171: 'IfBlock',
-  172: 'IF',
-  173: 'UnlessBlock',
-  174: 'UNLESS',
-  175: 'POST_IF',
-  176: 'POST_UNLESS',
-  177: 'UNARY',
-  178: 'DO',
-  179: 'DO_IIFE',
-  180: 'UNARY_MATH',
-  181: '-',
-  182: '+',
-  183: '--',
-  184: '++',
-  185: '?',
-  186: 'MATH',
-  187: '**',
-  188: 'SHIFT',
-  189: 'COMPARE',
-  190: '&',
-  191: '^',
-  192: '|',
-  193: '&&',
-  194: '||',
-  195: '??',
-  196: '!?',
-  197: 'RELATION',
-  198: 'SPACE?',
-  199: 'COMPOUND_ASSIGN'
+  105: 'PrimaryValue',
+  106: 'Range',
+  107: 'DoIife',
+  108: 'MetaProperty',
+  109: 'SimpleAssignable',
+  110: 'Slice',
+  111: 'ES6_OPTIONAL_INDEX',
+  112: 'NEW_TARGET',
+  113: 'IMPORT_META',
+  114: '{',
+  115: 'FOR',
+  116: 'ForVariables',
+  117: 'FOROF',
+  118: '}',
+  119: 'WHEN',
+  120: 'OWN',
+  121: 'AssignList',
+  122: 'CLASS',
+  123: 'EXTENDS',
+  124: 'IMPORT',
+  125: 'ImportDefaultSpecifier',
+  126: 'ImportNamespaceSpecifier',
+  127: 'ImportSpecifierList',
+  128: 'ImportSpecifier',
+  129: 'AS',
+  130: 'DEFAULT',
+  131: 'IMPORT_ALL',
+  132: 'EXPORT',
+  133: 'ExportSpecifierList',
+  134: 'EXPORT_ALL',
+  135: 'ExportSpecifier',
+  136: 'ES6_OPTIONAL_CALL',
+  137: 'FUNC_EXIST',
+  138: 'ArgList',
+  139: 'THIS',
+  140: 'Elisions',
+  141: 'ArgElisionList',
+  142: 'OptElisions',
+  143: 'RangeDots',
+  144: '..',
+  145: 'Arg',
+  146: 'ArgElision',
+  147: 'Elision',
+  148: 'SimpleArgs',
+  149: 'TRY',
+  150: 'Catch',
+  151: 'FINALLY',
+  152: 'CATCH',
+  153: 'THROW',
+  154: '(',
+  155: ')',
+  156: 'WhileSource',
+  157: 'WHILE',
+  158: 'UNTIL',
+  159: 'Loop',
+  160: 'LOOP',
+  161: 'FORIN',
+  162: 'BY',
+  163: 'FORFROM',
+  164: 'AWAIT',
+  165: 'ForValue',
+  166: 'ForVar',
+  167: 'SWITCH',
+  168: 'Whens',
+  169: 'ELSE',
+  170: 'When',
+  171: 'LEADING_WHEN',
+  172: 'IfBlock',
+  173: 'IF',
+  174: 'UnlessBlock',
+  175: 'UNLESS',
+  176: 'POST_IF',
+  177: 'POST_UNLESS',
+  178: 'UNARY',
+  179: 'DO',
+  180: 'DO_IIFE',
+  181: 'UNARY_MATH',
+  182: '-',
+  183: '+',
+  184: '--',
+  185: '++',
+  186: '?',
+  187: 'MATH',
+  188: '**',
+  189: 'SHIFT',
+  190: 'COMPARE',
+  191: '&',
+  192: '^',
+  193: '|',
+  194: '&&',
+  195: '||',
+  196: '??',
+  197: '!?',
+  198: 'RELATION',
+  199: 'SPACE?',
+  200: 'COMPOUND_ASSIGN'
 };
 
 
@@ -413,9 +415,9 @@ class Parser {
 
   parseRoot() {
     switch (this.la.id) {
-      case SYM_IDENTIFIER: case SYM_AT: case SYM_PARAM_START: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: return this.parseBody();
+      case SYM_IDENTIFIER: case SYM_AT: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_LBRACKET: case SYM_LBRACE: case SYM_CLASS: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_IF: case SYM_UNLESS: case SYM_STATEMENT: case SYM_TRY: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: case SYM_FOR: case SYM_SWITCH: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_RETURN: case SYM_IMPORT: case SYM_EXPORT: return this.parseBody();
       default:
-        this._error([40, 77, 95, 75, 113, 44, 46, 47, 61, 54, 55, 62, 63, 64, 65, 66, 153, 83, 86, 179, 138, 111, 112, 98, 99, 177, 178, 180, 181, 182, 163, 183, 184, 148, 114, 166, 121, 152, 35, 27, 172, 174, 94, 11, 123, 131, 156, 157, 159], this.la.id);
+        this._error([40, 77, 44, 46, 47, 61, 54, 55, 62, 63, 64, 65, 66, 154, 75, 114, 122, 95, 98, 99, 83, 86, 180, 139, 112, 113, 178, 179, 181, 182, 183, 164, 184, 185, 173, 175, 11, 149, 157, 158, 160, 115, 167, 153, 35, 27, 94, 124, 132], this.la.id);
     }
   }
 
@@ -436,9 +438,9 @@ class Parser {
 
   parseLine() {
     switch (this.la.id) {
-      case SYM_IDENTIFIER: case SYM_AT: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_STRING: case SYM_STRING_START: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: return this.parseExpression();
+      case SYM_IDENTIFIER: case SYM_AT: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_LBRACKET: case SYM_LBRACE: case SYM_CLASS: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_IF: case SYM_UNLESS: case SYM_STATEMENT: case SYM_TRY: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: case SYM_FOR: case SYM_SWITCH: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_RETURN: case SYM_IMPORT: case SYM_EXPORT: return this.parseExpression();
       default:
-        this._error([40, 77, 75, 113, 44, 61, 54, 55, 62, 63, 64, 65, 66, 153, 83, 86, 179, 138, 111, 112, 95, 98, 99, 46, 47, 177, 178, 180, 181, 182, 163, 183, 184, 148, 114, 166, 121, 152, 35, 27, 172, 174, 94, 11, 123, 131, 156, 157, 159], this.la.id);
+        this._error([40, 77, 44, 46, 47, 61, 54, 55, 62, 63, 64, 65, 66, 154, 75, 114, 122, 95, 98, 99, 83, 86, 180, 139, 112, 113, 178, 179, 181, 182, 183, 164, 184, 185, 173, 175, 11, 149, 157, 158, 160, 115, 167, 153, 35, 27, 94, 124, 132], this.la.id);
     }
   }
 
@@ -449,16 +451,16 @@ class Parser {
       case SYM_IMPORT: return this.parseImport();
       case SYM_EXPORT: return this.parseExport();
       default:
-        this._error([94, 11, 123, 131], this.la.id);
+        this._error([94, 11, 124, 132], this.la.id);
     }
   }
 
   parseExpression() {
     switch (this.la.id) {
-      case SYM_IDENTIFIER: case SYM_AT: case SYM_PARAM_START: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_ARROW: case SYM_FAT_ARROW: return this.parseValue();
-      case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_IF: case SYM_UNLESS: case SYM_STATEMENT: case SYM_TRY: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_RETURN: case SYM_IMPORT: case SYM_EXPORT: return this.parseOperation();
+      case SYM_IDENTIFIER: case SYM_AT: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_LBRACKET: case SYM_LBRACE: case SYM_CLASS: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: return this.parseValue();
+      case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: return this.parseOperation();
       default:
-        this._error([40, 77, 95, 75, 113, 44, 46, 47, 61, 54, 55, 62, 63, 64, 65, 66, 153, 83, 86, 179, 138, 111, 112, 98, 99, 177, 178, 180, 181, 182, 163, 183, 184, 172, 174, 11, 148, 156, 157, 159, 114, 166, 121, 152, 35, 27, 94, 123, 131], this.la.id);
+        this._error([40, 77, 44, 46, 47, 61, 54, 55, 62, 63, 64, 65, 66, 154, 75, 114, 122, 95, 98, 99, 83, 86, 180, 139, 112, 113, 178, 179, 181, 182, 183, 164, 184, 185, 149, 115, 167, 153, 35, 27, 173, 175, 94, 11, 124, 132, 157, 158, 160], this.la.id);
     }
   }
 
@@ -480,8 +482,7 @@ class Parser {
         const prod1_3 = this.parseBlock();
         return ["def", _prefix2, [], prod1_3];
       }
-      default:
-        this._error([27], this.la.id);
+      default: this._error([27], this.la.id);
     }
   }
 
@@ -490,7 +491,7 @@ class Parser {
       case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: return this.parseCodeLine();
       case SYM_UNARY: case SYM_DO: case SYM_DO_IIFE: return this.parseOperationLine();
       default:
-        this._error([95, 98, 99, 177, 178, 179], this.la.id);
+        this._error([95, 98, 99, 178, 179, 180], this.la.id);
     }
   }
 
@@ -500,9 +501,9 @@ class Parser {
 
     // Disambiguate based on next token
     switch (this.la.id) {
-      case SYM_END: case SYM_TERMINATOR: case SYM_OUTDENT: case SYM_RBRACKET: case SYM_INDEX_END: case SYM_CALL_END: case SYM_PARAM_END: case SYM_COMMA: case SYM_: case SYM_RBRACE: case SYM_WHEN: case SYM_DOTDOT: case SYM_ELLIPSIS: case SYM_BY: case SYM_POST_IF: case SYM_POST_UNLESS: case SYM_QUESTION: case SYM_MATH: case SYM_POWER: case SYM_SHIFT: case SYM_COMPARE: case SYM_AMPERSAND: case SYM_CARET: case SYM_PIPE: case SYM_AND: case SYM_OR: case SYM_NULLISH: case SYM_OTHERWISE: case SYM_RELATION: case SYM_SPACE_QUESTION: case SYM_COLON: case SYM_INTERPOLATION_END: case SYM_RPAREN: case SYM_FOROF: case SYM_FORIN: case SYM_FORFROM:
+      case SYM_END: case SYM_TERMINATOR: case SYM_OUTDENT: case SYM_RBRACKET: case SYM_INDEX_END: case SYM_CALL_END: case SYM_PARAM_END: case SYM_COMMA: case SYM_RBRACE: case SYM_WHEN: case SYM_DOTDOT: case SYM_ELLIPSIS: case SYM_BY: case SYM_POST_IF: case SYM_POST_UNLESS: case SYM_QUESTION: case SYM_MATH: case SYM_POWER: case SYM_SHIFT: case SYM_COMPARE: case SYM_AMPERSAND: case SYM_CARET: case SYM_PIPE: case SYM_AND: case SYM_OR: case SYM_NULLISH: case SYM_OTHERWISE: case SYM_RELATION: case SYM_SPACE_QUESTION: case SYM_COLON: case SYM_INTERPOLATION_END: case SYM_RPAREN: case SYM_DOT: case SYM_OPT_DOT: case SYM_PROTO: case SYM_OPT_PROTO: case SYM_INDEX_START: case SYM_INDEX_SOAK: case SYM_ES6_OPTIONAL_INDEX: case SYM_FOROF: case SYM_FORIN: case SYM_FORFROM: case SYM_EQUALS: case SYM_EXTENDS: case SYM_COMPOUND_ASSIGN: case SYM_FUNC_EXIST: case SYM_CALL_START: case SYM_ES6_OPTIONAL_CALL:
         return ["yield"];
-      case SYM_IDENTIFIER: case SYM_AT: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_STRING: case SYM_STRING_START: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: {
+      case SYM_IDENTIFIER: case SYM_AT: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_LBRACKET: case SYM_LBRACE: case SYM_CLASS: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_IF: case SYM_UNLESS: case SYM_STATEMENT: case SYM_TRY: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: case SYM_FOR: case SYM_SWITCH: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_RETURN: case SYM_IMPORT: case SYM_EXPORT: {
         const prod1_2 = this.parseExpression();
         return ["yield", prod1_2];
       }
@@ -517,8 +518,7 @@ class Parser {
         const prod3_3 = this.parseExpression();
         return ["yield-from", prod3_3];
       }
-      default:
-        this._error([35], this.la.id);
+      default: this._error([35], this.la.id);
     }
   }
 
@@ -532,13 +532,12 @@ class Parser {
         const prod0_2 = this._match(SYM_OUTDENT);
         return ["block"];
       }
-      case SYM_IDENTIFIER: case SYM_AT: case SYM_PARAM_START: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: {
+      case SYM_IDENTIFIER: case SYM_AT: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_LBRACKET: case SYM_LBRACE: case SYM_CLASS: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_IF: case SYM_UNLESS: case SYM_STATEMENT: case SYM_TRY: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: case SYM_FOR: case SYM_SWITCH: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_RETURN: case SYM_IMPORT: case SYM_EXPORT: {
         const prod1_2 = this.parseBody();
         const prod1_3 = this._match(SYM_OUTDENT);
         return ["block", ...prod1_2];
       }
-      default:
-        this._error([36], this.la.id);
+      default: this._error([36], this.la.id);
     }
   }
 
@@ -644,8 +643,7 @@ class Parser {
       }
       case SYM_INDEX_END:
         return ["regex-index", _prefix1, null];
-      default:
-        this._error([54, 55], this.la.id);
+      default: this._error([54, 55], this.la.id);
     }
   }
 
@@ -671,7 +669,7 @@ class Parser {
 
     // Disambiguate based on next token
     switch (this.la.id) {
-      case SYM_IDENTIFIER: case SYM_AT: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_STRING: case SYM_STRING_START: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: {
+      case SYM_IDENTIFIER: case SYM_AT: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_LBRACKET: case SYM_LBRACE: case SYM_CLASS: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_IF: case SYM_UNLESS: case SYM_STATEMENT: case SYM_TRY: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: case SYM_FOR: case SYM_SWITCH: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_RETURN: case SYM_IMPORT: case SYM_EXPORT: {
         const prod0_3 = this.parseExpression();
         return ["=", _prefix1, prod0_3];
       }
@@ -686,8 +684,7 @@ class Parser {
         const prod2_5 = this._match(SYM_OUTDENT);
         return ["=", _prefix1, prod2_4];
       }
-      default:
-        this._error([40, 77, 61, 62, 63, 64, 65, 66, 153, 75, 83, 86, 179, 138, 111, 112, 95, 98, 99, 113, 44, 46, 47, 54, 55], this.la.id);
+      default: this._error([40, 77, 44, 46, 47, 61, 54, 55, 62, 63, 64, 65, 66, 154, 75, 114, 122, 95, 98, 99, 83, 86, 180, 139, 112, 113], this.la.id);
     }
   }
 
@@ -725,7 +722,6 @@ class Parser {
       }
       case SYM_LBRACKET: {
         const r1_1 = this._match(SYM_LBRACKET);
-        // Warning: potential cycle with Expression
         const r1_2 = this.parseExpression();
         const r1_3 = this._match(SYM_RBRACKET);
         return ["computed", r1_2];
@@ -753,8 +749,7 @@ class Parser {
         const prod1_2 = this.parseObjSpreadExpr();
         return ["...", prod1_2];
       }
-      default:
-        this._error([78], this.la.id);
+      default: this._error([78], this.la.id);
     }
   }
 
@@ -765,7 +760,7 @@ class Parser {
       this._match(SYM_INDEX_SOAK);
 
       // Check FOLLOW set for trailing separator
-      if (this.la.id === SYM_ || this.la.id === SYM_FUNC_EXIST || this.la.id === SYM_CALL_START || this.la.id === SYM_DOT || this.la.id === SYM_OPT_DOT || this.la.id === SYM_PROTO || this.la.id === SYM_OPT_PROTO || this.la.id === SYM_INDEX_START || this.la.id === SYM_INDEX_SOAK || this.la.id === SYM_COMMA || this.la.id === SYM_RBRACE || this.la.id === SYM_TERMINATOR || this.la.id === SYM_INDENT || this.la.id === SYM_OUTDENT) break;
+      if (this.la.id === SYM_FUNC_EXIST || this.la.id === SYM_CALL_START || this.la.id === SYM_DOT || this.la.id === SYM_OPT_DOT || this.la.id === SYM_PROTO || this.la.id === SYM_OPT_PROTO || this.la.id === SYM_INDEX_START || this.la.id === SYM_INDEX_SOAK || this.la.id === SYM_COMMA || this.la.id === SYM_RBRACE || this.la.id === SYM_TERMINATOR || this.la.id === SYM_INDENT || this.la.id === SYM_OUTDENT) break;
 
       items.push(this.parseSimpleObjAssignable());
     }
@@ -779,7 +774,7 @@ class Parser {
 
     // Disambiguate based on next token
     switch (this.la.id) {
-      case SYM_IDENTIFIER: case SYM_AT: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_STRING: case SYM_STRING_START: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: {
+      case SYM_IDENTIFIER: case SYM_AT: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_LBRACKET: case SYM_LBRACE: case SYM_CLASS: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_IF: case SYM_UNLESS: case SYM_STATEMENT: case SYM_TRY: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: case SYM_FOR: case SYM_SWITCH: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_RETURN: case SYM_IMPORT: case SYM_EXPORT: {
         const prod0_2 = this.parseExpression();
         return ["return", prod0_2];
       }
@@ -789,10 +784,9 @@ class Parser {
         const prod1_4 = this._match(SYM_OUTDENT);
         return ["return", prod1_3];
       }
-      case SYM_END: case SYM_TERMINATOR: case SYM_POST_IF: case SYM_POST_UNLESS: case SYM_OUTDENT: case SYM_INTERPOLATION_END: case SYM_RPAREN: case SYM_: case SYM_COMMA: case SYM_CALL_END: case SYM_RBRACKET:
+      case SYM_END: case SYM_TERMINATOR: case SYM_POST_IF: case SYM_POST_UNLESS: case SYM_OUTDENT: case SYM_INTERPOLATION_END: case SYM_RPAREN: case SYM_COMMA: case SYM_CALL_END: case SYM_RBRACKET:
         return ["return"];
-      default:
-        this._error([94], this.la.id);
+      default: this._error([94], this.la.id);
     }
   }
 
@@ -864,7 +858,7 @@ class Parser {
       this._match(SYM_OPTCOMMA);
 
       // Check FOLLOW set for trailing separator
-      if (this.la.id === SYM_CALL_END || this.la.id === SYM_PARAM_END || this.la.id === SYM_COMMA || this.la.id === SYM_ || this.la.id === SYM_TERMINATOR || this.la.id === SYM_INDENT || this.la.id === SYM_OUTDENT) break;
+      if (this.la.id === SYM_CALL_END || this.la.id === SYM_PARAM_END || this.la.id === SYM_COMMA || this.la.id === SYM_TERMINATOR || this.la.id === SYM_INDENT || this.la.id === SYM_OUTDENT) break;
 
       items.push(this.parseParam());
     }
@@ -884,7 +878,7 @@ class Parser {
         return ["rest", r1_2];
       }
       default:
-        this._error([40, 77, 75, 113, 78], this.la.id);
+        this._error([40, 77, 75, 114, 78], this.la.id);
     }
   }
 
@@ -895,7 +889,7 @@ class Parser {
       case SYM_LBRACKET: return this.parseArray();
       case SYM_LBRACE: return this.parseObject();
       default:
-        this._error([40, 77, 75, 113], this.la.id);
+        this._error([40, 77, 75, 114], this.la.id);
     }
   }
 
@@ -905,41 +899,85 @@ class Parser {
     return ["...", $2];
   }
 
-  parseSimpleAssignable() {
+  parsePrimaryValue() {
     switch (this.la.id) {
-      case SYM_IDENTIFIER: {
-        const r0_1 = this.parseIdentifier();
-        return r0_1;
-      }
-      case SYM_AT: {
-        const r1_1 = this.parseThisProperty();
-        return r1_1;
-      }
-      case SYM_PARAM_START: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_ARROW: case SYM_FAT_ARROW: {
-        // Warning: potential cycle with Value
-        const r2_1 = this.parseValue();
-        const r2_2 = this._match(SYM_DOT);
-        const r2_3 = this.parseProperty();
-        return [".", r2_1, r2_3];
-      }
+      case SYM_IDENTIFIER: return this.parseIdentifier();
+      case SYM_AT: return this.parseThisProperty();
+      case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: return this.parseLiteral();
+      case SYM_LPAREN: return this.parseParenthetical();
+      case SYM_LBRACKET: return this.parseRange();
+      case SYM_LBRACE: return this.parseObject();
+      case SYM_CLASS: return this.parseClass();
+      case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: return this.parseCode();
+      case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: return this.parseInvocation();
       default:
-        this._error([40, 77, 95, 75, 113, 44, 46, 47, 61, 54, 55, 62, 63, 64, 65, 66, 153, 83, 86, 179, 138, 111, 112, 98, 99], this.la.id);
+        this._error([40, 77, 44, 46, 47, 61, 54, 55, 62, 63, 64, 65, 66, 154, 75, 114, 122, 95, 98, 99, 83, 86, 180, 139, 112, 113], this.la.id);
+    }
+  }
+
+  parseSimpleAssignable() {
+    // Parse common prefix: PrimaryValue
+    const _prefix1 = this.parsePrimaryValue();
+
+    // Disambiguate based on next token
+    switch (this.la.id) {
+      case SYM_EQUALS: case SYM_END: case SYM_TERMINATOR: case SYM_INDENT: case SYM_EXTENDS: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_COMPOUND_ASSIGN: case SYM_OUTDENT: case SYM_RBRACKET: case SYM_INDEX_END: case SYM_CALL_END: case SYM_PARAM_END: case SYM_COMMA: case SYM_FOR: case SYM_RBRACE: case SYM_WHEN: case SYM_DOTDOT: case SYM_ELLIPSIS: case SYM_WHILE: case SYM_UNTIL: case SYM_BY: case SYM_POST_IF: case SYM_POST_UNLESS: case SYM_QUESTION: case SYM_PLUS: case SYM_MINUS: case SYM_MATH: case SYM_POWER: case SYM_SHIFT: case SYM_COMPARE: case SYM_AMPERSAND: case SYM_CARET: case SYM_PIPE: case SYM_AND: case SYM_OR: case SYM_NULLISH: case SYM_OTHERWISE: case SYM_RELATION: case SYM_SPACE_QUESTION: case SYM_COLON: case SYM_INTERPOLATION_END: case SYM_RPAREN: case SYM_FUNC_EXIST: case SYM_STRING: case SYM_STRING_START: case SYM_CALL_START: case SYM_ES6_OPTIONAL_CALL: case SYM_FOROF: case SYM_FORIN: case SYM_FORFROM:
+        return _prefix1;
+      case SYM_DOT: {
+        const prod1_2 = this._match(SYM_DOT);
+        const prod1_3 = this.parseProperty();
+        return [".", _prefix1, prod1_3];
+      }
+      case SYM_OPT_DOT: {
+        const prod2_2 = this._match(SYM_OPT_DOT);
+        const prod2_3 = this.parseProperty();
+        return ["?.", _prefix1, prod2_3];
+      }
+      case SYM_PROTO: {
+        const prod5_2 = this._match(SYM_PROTO);
+        return ["::", _prefix1, "prototype"];
+      }
+      case SYM_OPT_PROTO: {
+        const prod6_2 = this._match(SYM_OPT_PROTO);
+        return ["?::", _prefix1, "prototype"];
+      }
+      case SYM_INDEX_START: {
+        const prod7_2 = this._match(SYM_INDEX_START);
+        const prod7_3 = this.parseExpression();
+        const prod7_4 = this._match(SYM_INDEX_END);
+        return ["[]", _prefix1, prod7_3];
+      }
+      case SYM_INDEX_SOAK: {
+        const prod12_2 = this._match(SYM_INDEX_SOAK);
+        const prod12_3 = this._match(SYM_INDEX_START);
+        const prod12_4 = this.parseExpression();
+        const prod12_5 = this._match(SYM_INDEX_END);
+        return ["?[]", _prefix1, prod12_4];
+      }
+      case SYM_ES6_OPTIONAL_INDEX: {
+        const prod16_2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+        const prod16_3 = this._match(SYM_INDEX_START);
+        const prod16_4 = this.parseExpression();
+        const prod16_5 = this._match(SYM_INDEX_END);
+        return ["optindex", _prefix1, prod16_4];
+      }
+      default: this._error([40, 77, 44, 46, 47, 61, 54, 55, 62, 63, 64, 65, 66, 154, 75, 114, 122, 95, 98, 99, 83, 86, 180, 139, 112, 113], this.la.id);
     }
   }
 
   parseAssignable() {
     switch (this.la.id) {
-      case SYM_IDENTIFIER: case SYM_AT: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_STRING: case SYM_STRING_START: return this.parseSimpleAssignable();
+      case SYM_IDENTIFIER: case SYM_AT: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_LBRACKET: case SYM_LBRACE: case SYM_CLASS: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: return this.parseSimpleAssignable();
       default:
-        this._error([40, 77, 75, 113, 44, 61, 54, 55, 62, 63, 64, 65, 66, 153, 83, 86, 179, 138, 111, 112, 95, 98, 99, 46, 47], this.la.id);
+        this._error([40, 77, 44, 46, 47, 61, 54, 55, 62, 63, 64, 65, 66, 154, 75, 114, 122, 95, 98, 99, 83, 86, 180, 139, 112, 113], this.la.id);
     }
   }
 
   parseValue() {
     switch (this.la.id) {
-      case SYM_IDENTIFIER: case SYM_AT: case SYM_JS: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_LBRACKET: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_LBRACE: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_REGEX: case SYM_REGEX_START: return this.parseAssignable();
+      case SYM_IDENTIFIER: case SYM_AT: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_LBRACKET: case SYM_LBRACE: case SYM_CLASS: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: return this.parseAssignable();
       default:
-        this._error([40, 77, 61, 62, 63, 64, 65, 66, 153, 75, 83, 86, 179, 138, 111, 112, 95, 98, 99, 113, 44, 46, 47, 54, 55], this.la.id);
+        this._error([40, 77, 44, 46, 47, 61, 54, 55, 62, 63, 64, 65, 66, 154, 75, 114, 122, 95, 98, 99, 83, 86, 180, 139, 112, 113], this.la.id);
     }
   }
 
@@ -960,8 +998,7 @@ class Parser {
         const prod1_4 = this._match(SYM_INDEX_END);
         return ["[]", "super", prod1_3];
       }
-      default:
-        this._error([83], this.la.id);
+      default: this._error([83], this.la.id);
     }
   }
 
@@ -980,7 +1017,7 @@ class Parser {
         return [".", "import", r1_3];
       }
       default:
-        this._error([111, 112], this.la.id);
+        this._error([112, 113], this.la.id);
     }
   }
 
@@ -990,14 +1027,13 @@ class Parser {
 
     // Disambiguate based on next token
     switch (this.la.id) {
-      case SYM_: case SYM_IDENTIFIER: case SYM_PROPERTY: case SYM_AT: case SYM_LBRACKET: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_ELLIPSIS: case SYM_COMMA: case SYM_TERMINATOR: case SYM_INDENT: {
+      case SYM_IDENTIFIER: case SYM_PROPERTY: case SYM_AT: case SYM_LBRACKET: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_ELLIPSIS: case SYM_COMMA: case SYM_TERMINATOR: case SYM_INDENT: {
         const prod4_2 = this.parseAssignList();
         const prod4_3 = this.parseOptComma();
         const prod4_4 = this._match(SYM_RBRACE);
         return ["object", ...prod4_2];
       }
-      default:
-        this._error([113], this.la.id);
+      default: this._error([114], this.la.id);
     }
   }
 
@@ -1008,7 +1044,7 @@ class Parser {
       this._match(SYM_OPTCOMMA);
 
       // Check FOLLOW set for trailing separator
-      if (this.la.id === SYM_ || this.la.id === SYM_COMMA || this.la.id === SYM_RBRACE || this.la.id === SYM_TERMINATOR || this.la.id === SYM_INDENT || this.la.id === SYM_OUTDENT) break;
+      if (this.la.id === SYM_COMMA || this.la.id === SYM_RBRACE || this.la.id === SYM_TERMINATOR || this.la.id === SYM_INDENT || this.la.id === SYM_OUTDENT) break;
 
       items.push(this.parseAssignObj());
     }
@@ -1022,7 +1058,7 @@ class Parser {
 
     // Disambiguate based on next token
     switch (this.la.id) {
-      case SYM_END: case SYM_TERMINATOR: case SYM_OUTDENT: case SYM_RBRACKET: case SYM_INDEX_END: case SYM_CALL_END: case SYM_PARAM_END: case SYM_COMMA: case SYM_: case SYM_FOR: case SYM_RBRACE: case SYM_WHEN: case SYM_DOTDOT: case SYM_ELLIPSIS: case SYM_WHILE: case SYM_UNTIL: case SYM_BY: case SYM_POST_IF: case SYM_POST_UNLESS: case SYM_QUESTION: case SYM_PLUS: case SYM_MINUS: case SYM_MATH: case SYM_POWER: case SYM_SHIFT: case SYM_COMPARE: case SYM_AMPERSAND: case SYM_CARET: case SYM_PIPE: case SYM_AND: case SYM_OR: case SYM_NULLISH: case SYM_OTHERWISE: case SYM_RELATION: case SYM_SPACE_QUESTION: case SYM_COLON: case SYM_INTERPOLATION_END: case SYM_RPAREN: case SYM_FOROF: case SYM_FORIN: case SYM_FORFROM:
+      case SYM_END: case SYM_TERMINATOR: case SYM_OUTDENT: case SYM_RBRACKET: case SYM_INDEX_END: case SYM_CALL_END: case SYM_PARAM_END: case SYM_COMMA: case SYM_FOR: case SYM_RBRACE: case SYM_WHEN: case SYM_DOTDOT: case SYM_ELLIPSIS: case SYM_WHILE: case SYM_UNTIL: case SYM_BY: case SYM_POST_IF: case SYM_POST_UNLESS: case SYM_QUESTION: case SYM_PLUS: case SYM_MINUS: case SYM_MATH: case SYM_POWER: case SYM_SHIFT: case SYM_COMPARE: case SYM_AMPERSAND: case SYM_CARET: case SYM_PIPE: case SYM_AND: case SYM_OR: case SYM_NULLISH: case SYM_OTHERWISE: case SYM_RELATION: case SYM_SPACE_QUESTION: case SYM_COLON: case SYM_INTERPOLATION_END: case SYM_RPAREN: case SYM_DOT: case SYM_OPT_DOT: case SYM_PROTO: case SYM_OPT_PROTO: case SYM_INDEX_START: case SYM_INDEX_SOAK: case SYM_ES6_OPTIONAL_INDEX: case SYM_FOROF: case SYM_FORIN: case SYM_FORFROM: case SYM_EQUALS: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_COMPOUND_ASSIGN: case SYM_FUNC_EXIST: case SYM_CALL_START: case SYM_ES6_OPTIONAL_CALL:
         return ["class", null, null];
       case SYM_INDENT: {
         const prod1_2 = this.parseBlock();
@@ -1033,12 +1069,11 @@ class Parser {
         const prod2_3 = this.parseExpression();
         return ["class", null, prod2_3];
       }
-      case SYM_IDENTIFIER: case SYM_AT: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_STRING: case SYM_STRING_START: {
+      case SYM_IDENTIFIER: case SYM_AT: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_LBRACKET: case SYM_LBRACE: case SYM_CLASS: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: {
         const prod4_2 = this.parseSimpleAssignable();
         return ["class", prod4_2, null];
       }
-      default:
-        this._error([121], this.la.id);
+      default: this._error([122], this.la.id);
     }
   }
 
@@ -1071,8 +1106,7 @@ class Parser {
         const prod3_5 = this.parseString();
         return ["import", "{}", prod3_5];
       }
-      default:
-        this._error([123], this.la.id);
+      default: this._error([124], this.la.id);
     }
   }
 
@@ -1083,7 +1117,7 @@ class Parser {
       this._match(SYM_OPTCOMMA);
 
       // Check FOLLOW set for trailing separator
-      if (this.la.id === SYM_ || this.la.id === SYM_COMMA || this.la.id === SYM_RBRACE || this.la.id === SYM_TERMINATOR || this.la.id === SYM_OUTDENT || this.la.id === SYM_INDENT) break;
+      if (this.la.id === SYM_COMMA || this.la.id === SYM_RBRACE || this.la.id === SYM_TERMINATOR || this.la.id === SYM_OUTDENT || this.la.id === SYM_INDENT) break;
 
       items.push(this._match(SYM_INDENT));
     }
@@ -1102,7 +1136,7 @@ class Parser {
         return r2_1;
       }
       default:
-        this._error([40, 129], this.la.id);
+        this._error([40, 130], this.la.id);
     }
   }
 
@@ -1157,8 +1191,7 @@ class Parser {
         const prod9_4 = this.parseString();
         return ["export-all", prod9_4];
       }
-      default:
-        this._error([131], this.la.id);
+      default: this._error([132], this.la.id);
     }
   }
 
@@ -1169,7 +1202,7 @@ class Parser {
       this._match(SYM_OPTCOMMA);
 
       // Check FOLLOW set for trailing separator
-      if (this.la.id === SYM_ || this.la.id === SYM_COMMA || this.la.id === SYM_RBRACE || this.la.id === SYM_TERMINATOR || this.la.id === SYM_OUTDENT || this.la.id === SYM_INDENT) break;
+      if (this.la.id === SYM_COMMA || this.la.id === SYM_RBRACE || this.la.id === SYM_TERMINATOR || this.la.id === SYM_OUTDENT || this.la.id === SYM_INDENT) break;
 
       items.push(this._match(SYM_INDENT));
     }
@@ -1188,13 +1221,13 @@ class Parser {
         return r3_1;
       }
       default:
-        this._error([40, 129], this.la.id);
+        this._error([40, 130], this.la.id);
     }
   }
 
   parseInvocation() {
     switch (this.la.id) {
-      case SYM_IDENTIFIER: case SYM_AT: case SYM_PARAM_START: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_ARROW: case SYM_FAT_ARROW: {
+      case SYM_IDENTIFIER: case SYM_AT: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_LBRACKET: case SYM_LBRACE: case SYM_CLASS: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: {
         // Warning: potential cycle with Value
         const r0_1 = this.parseValue();
         const r0_2 = this.parseOptFuncExist();
@@ -1202,7 +1235,7 @@ class Parser {
         return ["tagged-template", r0_1, r0_3];
       }
       default:
-        this._error([40, 77, 95, 75, 113, 44, 46, 47, 61, 54, 55, 62, 63, 64, 65, 66, 153, 83, 86, 179, 138, 111, 112, 98, 99], this.la.id);
+        this._error([40, 77, 44, 46, 47, 61, 54, 55, 62, 63, 64, 65, 66, 154, 75, 114, 122, 95, 98, 99, 83, 86, 180, 139, 112, 113], this.la.id);
     }
   }
 
@@ -1210,7 +1243,7 @@ class Parser {
     switch (this.la.id) {
       case SYM_FUNC_EXIST: return this._match(SYM_FUNC_EXIST);
       default:
-        this._error([136], this.la.id);
+        this._error([137], this.la.id);
     }
   }
 
@@ -1224,14 +1257,13 @@ class Parser {
         const prod0_2 = this._match(SYM_CALL_END);
         return [];
       }
-      case SYM_IDENTIFIER: case SYM_AT: case SYM_PARAM_START: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: case SYM_ELLIPSIS: case SYM_INDENT: {
+      case SYM_IDENTIFIER: case SYM_AT: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_LBRACKET: case SYM_LBRACE: case SYM_CLASS: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_IF: case SYM_UNLESS: case SYM_STATEMENT: case SYM_TRY: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: case SYM_FOR: case SYM_SWITCH: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_RETURN: case SYM_IMPORT: case SYM_EXPORT: case SYM_ELLIPSIS: case SYM_INDENT: {
         const prod1_2 = this.parseArgList();
         const prod1_3 = this.parseOptComma();
         const prod1_4 = this._match(SYM_CALL_END);
         return prod1_2;
       }
-      default:
-        this._error([29], this.la.id);
+      default: this._error([29], this.la.id);
     }
   }
 
@@ -1240,7 +1272,7 @@ class Parser {
       case SYM_THIS: return this._match(SYM_THIS);
       case SYM_AT: return this._match(SYM_AT);
       default:
-        this._error([138, 77], this.la.id);
+        this._error([139, 77], this.la.id);
     }
   }
 
@@ -1265,14 +1297,13 @@ class Parser {
         const prod1_3 = this._match(SYM_RBRACKET);
         return ["array", ...prod1_2];
       }
-      case SYM_IDENTIFIER: case SYM_AT: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_STRING: case SYM_STRING_START: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_IF: case SYM_UNLESS: case SYM_STATEMENT: case SYM_TRY: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_RETURN: case SYM_IMPORT: case SYM_EXPORT: case SYM_ELLIPSIS: case SYM_INDENT: {
+      case SYM_IDENTIFIER: case SYM_AT: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_LBRACKET: case SYM_LBRACE: case SYM_CLASS: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: case SYM_ELLIPSIS: case SYM_INDENT: {
         const prod2_2 = this.parseArgElisionList();
         const prod2_3 = this.parseOptElisions();
         const prod2_4 = this._match(SYM_RBRACKET);
         return ["array", ...prod2_2, ...prod2_3];
       }
-      default:
-        this._error([75], this.la.id);
+      default: this._error([75], this.la.id);
     }
   }
 
@@ -1281,7 +1312,7 @@ class Parser {
       case SYM_DOTDOT: return this._match(SYM_DOTDOT);
       case SYM_ELLIPSIS: return this._match(SYM_ELLIPSIS);
       default:
-        this._error([143, 78], this.la.id);
+        this._error([144, 78], this.la.id);
     }
   }
 
@@ -1296,7 +1327,7 @@ class Parser {
 
   parseSlice() {
     switch (this.la.id) {
-      case SYM_IDENTIFIER: case SYM_AT: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_STRING: case SYM_STRING_START: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: {
+      case SYM_IDENTIFIER: case SYM_AT: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_LBRACKET: case SYM_LBRACE: case SYM_CLASS: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_IF: case SYM_UNLESS: case SYM_STATEMENT: case SYM_TRY: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: case SYM_FOR: case SYM_SWITCH: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_RETURN: case SYM_IMPORT: case SYM_EXPORT: {
         // Warning: potential cycle with Expression
         const r0_1 = this.parseExpression();
         const r0_2 = this.parseRangeDots();
@@ -1311,7 +1342,7 @@ class Parser {
         return [r2_1, null, r2_2];
       }
       default:
-        this._error([40, 77, 75, 113, 44, 61, 54, 55, 62, 63, 64, 65, 66, 153, 83, 86, 179, 138, 111, 112, 95, 98, 99, 46, 47, 177, 178, 180, 181, 182, 163, 183, 184, 148, 114, 166, 121, 152, 35, 27, 172, 174, 94, 11, 123, 131, 156, 157, 159, 143, 78], this.la.id);
+        this._error([40, 77, 44, 46, 47, 61, 54, 55, 62, 63, 64, 65, 66, 154, 75, 114, 122, 95, 98, 99, 83, 86, 180, 139, 112, 113, 178, 179, 181, 182, 183, 164, 184, 185, 173, 175, 11, 149, 157, 158, 160, 115, 167, 153, 35, 27, 94, 124, 132, 144, 78], this.la.id);
     }
   }
 
@@ -1322,7 +1353,7 @@ class Parser {
       this._match(SYM_OPTCOMMA);
 
       // Check FOLLOW set for trailing separator
-      if (this.la.id === SYM_ || this.la.id === SYM_COMMA || this.la.id === SYM_CALL_END || this.la.id === SYM_TERMINATOR || this.la.id === SYM_OUTDENT || this.la.id === SYM_INDENT) break;
+      if (this.la.id === SYM_COMMA || this.la.id === SYM_CALL_END || this.la.id === SYM_TERMINATOR || this.la.id === SYM_OUTDENT || this.la.id === SYM_INDENT) break;
 
       items.push(this._match(SYM_INDENT));
     }
@@ -1332,10 +1363,10 @@ class Parser {
 
   parseArg() {
     switch (this.la.id) {
-      case SYM_IDENTIFIER: case SYM_AT: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_STRING: case SYM_STRING_START: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: return this.parseExpression();
+      case SYM_IDENTIFIER: case SYM_AT: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_LBRACKET: case SYM_LBRACE: case SYM_CLASS: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_IF: case SYM_UNLESS: case SYM_STATEMENT: case SYM_TRY: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: case SYM_FOR: case SYM_SWITCH: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_RETURN: case SYM_IMPORT: case SYM_EXPORT: return this.parseExpression();
       case SYM_ELLIPSIS: return this.parseSplat();
       default:
-        this._error([40, 77, 75, 113, 44, 61, 54, 55, 62, 63, 64, 65, 66, 153, 83, 86, 179, 138, 111, 112, 95, 98, 99, 46, 47, 177, 178, 180, 181, 182, 163, 183, 184, 148, 114, 166, 121, 152, 35, 27, 172, 174, 94, 11, 123, 131, 156, 157, 159, 78], this.la.id);
+        this._error([40, 77, 44, 46, 47, 61, 54, 55, 62, 63, 64, 65, 66, 154, 75, 114, 122, 95, 98, 99, 83, 86, 180, 139, 112, 113, 178, 179, 181, 182, 183, 164, 184, 185, 173, 175, 11, 149, 157, 158, 160, 115, 167, 153, 35, 27, 94, 124, 132, 78], this.la.id);
     }
   }
 
@@ -1346,7 +1377,7 @@ class Parser {
       this._match(SYM_OPTELISIONS);
 
       // Check FOLLOW set for trailing separator
-      if (this.la.id === SYM_ || this.la.id === SYM_COMMA || this.la.id === SYM_RBRACKET || this.la.id === SYM_TERMINATOR || this.la.id === SYM_OUTDENT || this.la.id === SYM_INDENT) break;
+      if (this.la.id === SYM_COMMA || this.la.id === SYM_RBRACKET || this.la.id === SYM_TERMINATOR || this.la.id === SYM_OUTDENT || this.la.id === SYM_INDENT) break;
 
       items.push(this._match(SYM_INDENT));
     }
@@ -1356,7 +1387,7 @@ class Parser {
 
   parseArgElision() {
     switch (this.la.id) {
-      case SYM_IDENTIFIER: case SYM_AT: case SYM_JS: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_LBRACKET: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_LBRACE: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_IF: case SYM_UNLESS: case SYM_STATEMENT: case SYM_TRY: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_RETURN: case SYM_IMPORT: case SYM_EXPORT: case SYM_ELLIPSIS: {
+      case SYM_IDENTIFIER: case SYM_AT: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_LBRACKET: case SYM_LBRACE: case SYM_CLASS: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: case SYM_ELLIPSIS: {
         const r0_1 = this.parseArg();
         return [r0_1];
       }
@@ -1366,13 +1397,13 @@ class Parser {
         return [...r1_1, r1_2];
       }
       default:
-        this._error([40, 77, 61, 62, 63, 64, 65, 66, 153, 75, 83, 86, 179, 138, 111, 112, 95, 98, 99, 113, 44, 46, 47, 54, 55, 177, 178, 180, 181, 182, 163, 183, 184, 172, 174, 11, 148, 156, 157, 159, 114, 166, 121, 152, 35, 27, 94, 123, 131, 78, 59], this.la.id);
+        this._error([40, 77, 44, 46, 47, 61, 54, 55, 62, 63, 64, 65, 66, 154, 75, 114, 122, 95, 98, 99, 83, 86, 180, 139, 112, 113, 178, 179, 181, 182, 183, 164, 184, 185, 149, 115, 167, 153, 35, 27, 173, 175, 94, 11, 124, 132, 157, 158, 160, 78, 59], this.la.id);
     }
   }
 
   parseOptElisions() {
     switch (this.la.id) {
-      case SYM_: case SYM_COMMA: {
+      case SYM_COMMA: {
         const r0_1 = this.parseOptComma();
         return [];
       }
@@ -1424,7 +1455,7 @@ class Parser {
 
     // Disambiguate based on next token
     switch (this.la.id) {
-      case SYM_END: case SYM_TERMINATOR: case SYM_OUTDENT: case SYM_RBRACKET: case SYM_INDEX_END: case SYM_CALL_END: case SYM_PARAM_END: case SYM_COMMA: case SYM_: case SYM_FOR: case SYM_RBRACE: case SYM_WHEN: case SYM_INDENT: case SYM_DOTDOT: case SYM_ELLIPSIS: case SYM_WHILE: case SYM_UNTIL: case SYM_BY: case SYM_POST_IF: case SYM_POST_UNLESS: case SYM_QUESTION: case SYM_PLUS: case SYM_MINUS: case SYM_MATH: case SYM_POWER: case SYM_SHIFT: case SYM_COMPARE: case SYM_AMPERSAND: case SYM_CARET: case SYM_PIPE: case SYM_AND: case SYM_OR: case SYM_NULLISH: case SYM_OTHERWISE: case SYM_RELATION: case SYM_SPACE_QUESTION: case SYM_COLON: case SYM_INTERPOLATION_END: case SYM_RPAREN: case SYM_FOROF: case SYM_FORIN: case SYM_FORFROM:
+      case SYM_END: case SYM_TERMINATOR: case SYM_OUTDENT: case SYM_RBRACKET: case SYM_INDEX_END: case SYM_CALL_END: case SYM_PARAM_END: case SYM_COMMA: case SYM_FOR: case SYM_RBRACE: case SYM_WHEN: case SYM_INDENT: case SYM_DOTDOT: case SYM_ELLIPSIS: case SYM_WHILE: case SYM_UNTIL: case SYM_BY: case SYM_POST_IF: case SYM_POST_UNLESS: case SYM_QUESTION: case SYM_PLUS: case SYM_MINUS: case SYM_MATH: case SYM_POWER: case SYM_SHIFT: case SYM_COMPARE: case SYM_AMPERSAND: case SYM_CARET: case SYM_PIPE: case SYM_AND: case SYM_OR: case SYM_NULLISH: case SYM_OTHERWISE: case SYM_RELATION: case SYM_SPACE_QUESTION: case SYM_COLON: case SYM_INTERPOLATION_END: case SYM_RPAREN: case SYM_DOT: case SYM_OPT_DOT: case SYM_PROTO: case SYM_OPT_PROTO: case SYM_INDEX_START: case SYM_INDEX_SOAK: case SYM_ES6_OPTIONAL_INDEX: case SYM_FOROF: case SYM_FORIN: case SYM_FORFROM: case SYM_EQUALS: case SYM_EXTENDS: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_COMPOUND_ASSIGN: case SYM_FUNC_EXIST: case SYM_STRING: case SYM_STRING_START: case SYM_CALL_START: case SYM_ES6_OPTIONAL_CALL:
         return ["try", _prefix2];
       case SYM_CATCH: {
         const prod1_3 = this.parseCatch();
@@ -1435,8 +1466,7 @@ class Parser {
         const prod2_4 = this.parseBlock();
         return ["try", _prefix2, prod2_4];
       }
-      default:
-        this._error([148], this.la.id);
+      default: this._error([149], this.la.id);
     }
   }
 
@@ -1460,8 +1490,7 @@ class Parser {
         const prod2_2 = this.parseBlock();
         return [null, prod2_2];
       }
-      default:
-        this._error([151], this.la.id);
+      default: this._error([152], this.la.id);
     }
   }
 
@@ -1471,7 +1500,7 @@ class Parser {
 
     // Disambiguate based on next token
     switch (this.la.id) {
-      case SYM_IDENTIFIER: case SYM_AT: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_STRING: case SYM_STRING_START: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: {
+      case SYM_IDENTIFIER: case SYM_AT: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_LBRACKET: case SYM_LBRACE: case SYM_CLASS: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_IF: case SYM_UNLESS: case SYM_STATEMENT: case SYM_TRY: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: case SYM_FOR: case SYM_SWITCH: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_RETURN: case SYM_IMPORT: case SYM_EXPORT: {
         const prod0_2 = this.parseExpression();
         return ["throw", prod0_2];
       }
@@ -1481,8 +1510,7 @@ class Parser {
         const prod1_4 = this._match(SYM_OUTDENT);
         return ["throw", prod1_3];
       }
-      default:
-        this._error([152], this.la.id);
+      default: this._error([153], this.la.id);
     }
   }
 
@@ -1492,7 +1520,7 @@ class Parser {
 
     // Disambiguate based on next token
     switch (this.la.id) {
-      case SYM_IDENTIFIER: case SYM_AT: case SYM_PARAM_START: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: {
+      case SYM_IDENTIFIER: case SYM_AT: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_LBRACKET: case SYM_LBRACE: case SYM_CLASS: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_IF: case SYM_UNLESS: case SYM_STATEMENT: case SYM_TRY: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: case SYM_FOR: case SYM_SWITCH: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_RETURN: case SYM_IMPORT: case SYM_EXPORT: {
         const prod0_2 = this.parseBody();
         const prod0_3 = this._match(SYM_RPAREN);
         return $prod0_2.length === _prefix1 ? $prod0_2[0] : $prod0_2;
@@ -1504,8 +1532,7 @@ class Parser {
         const prod1_5 = this._match(SYM_RPAREN);
         return $prod1_3.length === _prefix1 ? $prod1_3[0] : $prod1_3;
       }
-      default:
-        this._error([153], this.la.id);
+      default: this._error([154], this.la.id);
     }
   }
 
@@ -1524,7 +1551,7 @@ class Parser {
         return ["until", r2_2];
       }
       default:
-        this._error([156, 157], this.la.id);
+        this._error([157, 158], this.la.id);
     }
   }
 
@@ -1544,7 +1571,7 @@ class Parser {
         const r1_2 = this.parseWhileSource();
         return $r1_2.length === r1_2 ? [$r1_2[0], $r1_2[r1_1], [$r1_1]] : [$r1_2[0], $r1_2[r1_1], $r1_2[r1_2], [$r1_1]];
       }
-      case SYM_IDENTIFIER: case SYM_AT: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_STRING: case SYM_STRING_START: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_LOOP: {
+      case SYM_IDENTIFIER: case SYM_AT: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_LBRACKET: case SYM_LBRACE: case SYM_CLASS: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_IF: case SYM_UNLESS: case SYM_TRY: case SYM_LOOP: case SYM_FOR: case SYM_SWITCH: case SYM_THROW: case SYM_YIELD: case SYM_DEF: {
         // Warning: potential cycle with Expression
         const r2_1 = this.parseExpression();
         // Warning: potential cycle with WhileSource
@@ -1552,7 +1579,7 @@ class Parser {
         return $r2_2.length === r2_2 ? [$r2_2[0], $r2_2[r2_1], [$r2_1]] : [$r2_2[0], $r2_2[r2_1], $r2_2[r2_2], [$r2_1]];
       }
       default:
-        this._error([156, 157, 94, 11, 123, 131, 40, 77, 75, 113, 44, 61, 54, 55, 62, 63, 64, 65, 66, 153, 83, 86, 179, 138, 111, 112, 95, 98, 99, 46, 47, 177, 178, 180, 181, 182, 163, 183, 184, 148, 114, 166, 121, 152, 35, 27, 172, 174, 159], this.la.id);
+        this._error([157, 158, 94, 11, 124, 132, 40, 77, 44, 46, 47, 61, 54, 55, 62, 63, 64, 65, 66, 154, 75, 114, 122, 95, 98, 99, 83, 86, 180, 139, 112, 113, 178, 179, 181, 182, 183, 164, 184, 185, 173, 175, 149, 160, 115, 167, 153, 35, 27], this.la.id);
     }
   }
 
@@ -1566,12 +1593,11 @@ class Parser {
         const prod0_2 = this.parseBlock();
         return ["loop", prod0_2];
       }
-      case SYM_IDENTIFIER: case SYM_AT: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_STRING: case SYM_STRING_START: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: {
+      case SYM_IDENTIFIER: case SYM_AT: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_LBRACKET: case SYM_LBRACE: case SYM_CLASS: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_IF: case SYM_UNLESS: case SYM_STATEMENT: case SYM_TRY: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: case SYM_FOR: case SYM_SWITCH: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_RETURN: case SYM_IMPORT: case SYM_EXPORT: {
         const prod1_2 = this.parseExpression();
         return ["loop", [prod1_2]];
       }
-      default:
-        this._error([159], this.la.id);
+      default: this._error([160], this.la.id);
     }
   }
 
@@ -1587,7 +1613,7 @@ class Parser {
         const r0_5 = this.parseBlock();
         return ["for-in"  , r0_2, r0_4, null, null, r0_5];
       }
-      case SYM_IDENTIFIER: case SYM_AT: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_STRING: case SYM_STRING_START: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: {
+      case SYM_IDENTIFIER: case SYM_AT: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_LBRACKET: case SYM_LBRACE: case SYM_CLASS: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_IF: case SYM_UNLESS: case SYM_STATEMENT: case SYM_TRY: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: case SYM_SWITCH: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_RETURN: case SYM_IMPORT: case SYM_EXPORT: {
         // Warning: potential cycle with Expression
         const r15_1 = this.parseExpression();
         const r15_2 = this._match(SYM_FOR);
@@ -1598,7 +1624,7 @@ class Parser {
         return ["comprehension", r15_1, [["for-in"  , r15_3, r15_5, null]], []];
       }
       default:
-        this._error([114, 40, 77, 75, 113, 44, 61, 54, 55, 62, 63, 64, 65, 66, 153, 83, 86, 179, 138, 111, 112, 95, 98, 99, 46, 47, 177, 178, 180, 181, 182, 163, 183, 184, 148, 166, 121, 152, 35, 27, 172, 174, 94, 11, 123, 131, 156, 157, 159], this.la.id);
+        this._error([115, 40, 77, 44, 46, 47, 61, 54, 55, 62, 63, 64, 65, 66, 154, 75, 114, 122, 95, 98, 99, 83, 86, 180, 139, 112, 113, 178, 179, 181, 182, 183, 164, 184, 185, 173, 175, 11, 149, 157, 158, 160, 167, 153, 35, 27, 94, 124, 132], this.la.id);
     }
   }
 
@@ -1615,8 +1641,7 @@ class Parser {
         const prod1_3 = this.parseExpression();
         return ["default", _prefix1, prod1_3];
       }
-      default:
-        this._error([40, 77, 75, 113], this.la.id);
+      default: this._error([40, 77, 75, 114], this.la.id);
     }
   }
 
@@ -1627,7 +1652,7 @@ class Parser {
       case SYM_LBRACKET: return this.parseArray();
       case SYM_LBRACE: return this.parseObject();
       default:
-        this._error([40, 77, 75, 113], this.la.id);
+        this._error([40, 77, 75, 114], this.la.id);
     }
   }
 
@@ -1644,8 +1669,7 @@ class Parser {
         const prod1_3 = this.parseForValue();
         return [_prefix1, prod1_3];
       }
-      default:
-        this._error([40, 77, 75, 113], this.la.id);
+      default: this._error([40, 77, 75, 114], this.la.id);
     }
   }
 
@@ -1655,7 +1679,7 @@ class Parser {
 
     // Disambiguate based on next token
     switch (this.la.id) {
-      case SYM_IDENTIFIER: case SYM_AT: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_STRING: case SYM_STRING_START: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: {
+      case SYM_IDENTIFIER: case SYM_AT: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_LBRACKET: case SYM_LBRACE: case SYM_CLASS: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_IF: case SYM_UNLESS: case SYM_STATEMENT: case SYM_TRY: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: case SYM_FOR: case SYM_SWITCH: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_RETURN: case SYM_IMPORT: case SYM_EXPORT: {
         const prod0_2 = this.parseExpression();
         const prod0_3 = this._match(SYM_INDENT);
         const prod0_4 = this.parseWhens();
@@ -1668,8 +1692,7 @@ class Parser {
         const prod2_4 = this._match(SYM_OUTDENT);
         return ["switch", null, prod2_3, null];
       }
-      default:
-        this._error([166], this.la.id);
+      default: this._error([167], this.la.id);
     }
   }
 
@@ -1697,8 +1720,7 @@ class Parser {
         const prod1_4 = this._match(SYM_TERMINATOR);
         return ["when", _prefix2, _prefix3];
       }
-      default:
-        this._error([170], this.la.id);
+      default: this._error([171], this.la.id);
     }
   }
 
@@ -1709,7 +1731,7 @@ class Parser {
       this._match(SYM_ELSE);
 
       // Check FOLLOW set for trailing separator
-      if (this.la.id === SYM_ELSE || this.la.id === SYM_END || this.la.id === SYM_TERMINATOR || this.la.id === SYM_OUTDENT || this.la.id === SYM_RBRACKET || this.la.id === SYM_INDEX_END || this.la.id === SYM_CALL_END || this.la.id === SYM_PARAM_END || this.la.id === SYM_COMMA || this.la.id === SYM_ || this.la.id === SYM_FOR || this.la.id === SYM_RBRACE || this.la.id === SYM_WHEN || this.la.id === SYM_INDENT || this.la.id === SYM_DOTDOT || this.la.id === SYM_ELLIPSIS || this.la.id === SYM_WHILE || this.la.id === SYM_UNTIL || this.la.id === SYM_BY || this.la.id === SYM_POST_IF || this.la.id === SYM_POST_UNLESS || this.la.id === SYM_QUESTION || this.la.id === SYM_PLUS || this.la.id === SYM_MINUS || this.la.id === SYM_MATH || this.la.id === SYM_POWER || this.la.id === SYM_SHIFT || this.la.id === SYM_COMPARE || this.la.id === SYM_AMPERSAND || this.la.id === SYM_CARET || this.la.id === SYM_PIPE || this.la.id === SYM_AND || this.la.id === SYM_OR || this.la.id === SYM_NULLISH || this.la.id === SYM_OTHERWISE || this.la.id === SYM_RELATION || this.la.id === SYM_SPACE_QUESTION || this.la.id === SYM_COLON || this.la.id === SYM_INTERPOLATION_END || this.la.id === SYM_RPAREN || this.la.id === SYM_FOROF || this.la.id === SYM_FORIN || this.la.id === SYM_FORFROM) break;
+      if (this.la.id === SYM_ELSE || this.la.id === SYM_END || this.la.id === SYM_TERMINATOR || this.la.id === SYM_OUTDENT || this.la.id === SYM_RBRACKET || this.la.id === SYM_INDEX_END || this.la.id === SYM_CALL_END || this.la.id === SYM_PARAM_END || this.la.id === SYM_COMMA || this.la.id === SYM_FOR || this.la.id === SYM_RBRACE || this.la.id === SYM_WHEN || this.la.id === SYM_INDENT || this.la.id === SYM_DOTDOT || this.la.id === SYM_ELLIPSIS || this.la.id === SYM_WHILE || this.la.id === SYM_UNTIL || this.la.id === SYM_BY || this.la.id === SYM_POST_IF || this.la.id === SYM_POST_UNLESS || this.la.id === SYM_QUESTION || this.la.id === SYM_PLUS || this.la.id === SYM_MINUS || this.la.id === SYM_MATH || this.la.id === SYM_POWER || this.la.id === SYM_SHIFT || this.la.id === SYM_COMPARE || this.la.id === SYM_AMPERSAND || this.la.id === SYM_CARET || this.la.id === SYM_PIPE || this.la.id === SYM_AND || this.la.id === SYM_OR || this.la.id === SYM_NULLISH || this.la.id === SYM_OTHERWISE || this.la.id === SYM_RELATION || this.la.id === SYM_SPACE_QUESTION || this.la.id === SYM_COLON || this.la.id === SYM_INTERPOLATION_END || this.la.id === SYM_RPAREN || this.la.id === SYM_DOT || this.la.id === SYM_OPT_DOT || this.la.id === SYM_PROTO || this.la.id === SYM_OPT_PROTO || this.la.id === SYM_INDEX_START || this.la.id === SYM_INDEX_SOAK || this.la.id === SYM_ES6_OPTIONAL_INDEX || this.la.id === SYM_FOROF || this.la.id === SYM_FORIN || this.la.id === SYM_FORFROM || this.la.id === SYM_EQUALS || this.la.id === SYM_EXTENDS || this.la.id === SYM_DECREMENT || this.la.id === SYM_INCREMENT || this.la.id === SYM_COMPOUND_ASSIGN || this.la.id === SYM_FUNC_EXIST || this.la.id === SYM_STRING || this.la.id === SYM_STRING_START || this.la.id === SYM_CALL_START || this.la.id === SYM_ES6_OPTIONAL_CALL) break;
 
       items.push(this._match(SYM_IF));
     }
@@ -1725,15 +1747,14 @@ class Parser {
 
     // Disambiguate based on next token
     switch (this.la.id) {
-      case SYM_END: case SYM_TERMINATOR: case SYM_OUTDENT: case SYM_RBRACKET: case SYM_INDEX_END: case SYM_CALL_END: case SYM_PARAM_END: case SYM_COMMA: case SYM_: case SYM_FOR: case SYM_RBRACE: case SYM_WHEN: case SYM_INDENT: case SYM_DOTDOT: case SYM_ELLIPSIS: case SYM_WHILE: case SYM_UNTIL: case SYM_BY: case SYM_POST_IF: case SYM_POST_UNLESS: case SYM_QUESTION: case SYM_PLUS: case SYM_MINUS: case SYM_MATH: case SYM_POWER: case SYM_SHIFT: case SYM_COMPARE: case SYM_AMPERSAND: case SYM_CARET: case SYM_PIPE: case SYM_AND: case SYM_OR: case SYM_NULLISH: case SYM_OTHERWISE: case SYM_RELATION: case SYM_SPACE_QUESTION: case SYM_COLON: case SYM_INTERPOLATION_END: case SYM_RPAREN: case SYM_FOROF: case SYM_FORIN: case SYM_FORFROM:
+      case SYM_END: case SYM_TERMINATOR: case SYM_OUTDENT: case SYM_RBRACKET: case SYM_INDEX_END: case SYM_CALL_END: case SYM_PARAM_END: case SYM_COMMA: case SYM_FOR: case SYM_RBRACE: case SYM_WHEN: case SYM_INDENT: case SYM_DOTDOT: case SYM_ELLIPSIS: case SYM_WHILE: case SYM_UNTIL: case SYM_BY: case SYM_POST_IF: case SYM_POST_UNLESS: case SYM_QUESTION: case SYM_PLUS: case SYM_MINUS: case SYM_MATH: case SYM_POWER: case SYM_SHIFT: case SYM_COMPARE: case SYM_AMPERSAND: case SYM_CARET: case SYM_PIPE: case SYM_AND: case SYM_OR: case SYM_NULLISH: case SYM_OTHERWISE: case SYM_RELATION: case SYM_SPACE_QUESTION: case SYM_COLON: case SYM_INTERPOLATION_END: case SYM_RPAREN: case SYM_DOT: case SYM_OPT_DOT: case SYM_PROTO: case SYM_OPT_PROTO: case SYM_INDEX_START: case SYM_INDEX_SOAK: case SYM_ES6_OPTIONAL_INDEX: case SYM_FOROF: case SYM_FORIN: case SYM_FORFROM: case SYM_EQUALS: case SYM_EXTENDS: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_COMPOUND_ASSIGN: case SYM_FUNC_EXIST: case SYM_STRING: case SYM_STRING_START: case SYM_CALL_START: case SYM_ES6_OPTIONAL_CALL:
         return ["unless", _prefix2, _prefix3];
       case SYM_ELSE: {
         const prod1_4 = this._match(SYM_ELSE);
         const prod1_5 = this.parseBlock();
         return ["if", ["!", _prefix2], _prefix3, prod1_5];
       }
-      default:
-        this._error([174], this.la.id);
+      default: this._error([175], this.la.id);
     }
   }
 
@@ -1757,7 +1778,7 @@ class Parser {
         const r3_3 = this.parseExpression();
         return ["if", r3_3, [r3_1]];
       }
-      case SYM_IDENTIFIER: case SYM_AT: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_STRING: case SYM_STRING_START: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: {
+      case SYM_IDENTIFIER: case SYM_AT: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_LBRACKET: case SYM_LBRACE: case SYM_CLASS: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_UNARY: case SYM_DO: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_AWAIT: case SYM_DECREMENT: case SYM_INCREMENT: case SYM_TRY: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: case SYM_FOR: case SYM_SWITCH: case SYM_THROW: case SYM_YIELD: case SYM_DEF: {
         // Warning: potential cycle with Expression
         const r4_1 = this.parseExpression();
         const r4_2 = this._match(SYM_POST_IF);
@@ -1766,7 +1787,7 @@ class Parser {
         return ["if", r4_3, [r4_1]];
       }
       default:
-        this._error([172, 174, 94, 11, 123, 131, 40, 77, 75, 113, 44, 61, 54, 55, 62, 63, 64, 65, 66, 153, 83, 86, 179, 138, 111, 112, 95, 98, 99, 46, 47, 177, 178, 180, 181, 182, 163, 183, 184, 148, 114, 166, 121, 152, 35, 27, 156, 157, 159], this.la.id);
+        this._error([173, 175, 94, 11, 124, 132, 40, 77, 44, 46, 47, 61, 54, 55, 62, 63, 64, 65, 66, 154, 75, 114, 122, 95, 98, 99, 83, 86, 180, 139, 112, 113, 178, 179, 181, 182, 183, 164, 184, 185, 149, 157, 158, 160, 115, 167, 153, 35, 27], this.la.id);
     }
   }
 
@@ -1791,7 +1812,7 @@ class Parser {
         return ["do-iife", r2_2];
       }
       default:
-        this._error([177, 178, 179], this.la.id);
+        this._error([178, 179, 180], this.la.id);
     }
   }
 
@@ -1843,19 +1864,19 @@ class Parser {
         const r8_2 = this.parseSimpleAssignable();
         return ["++", r8_2, false];
       }
-      case SYM_IDENTIFIER: case SYM_AT: case SYM_LBRACKET: case SYM_LBRACE: case SYM_NUMBER: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_STRING: case SYM_STRING_START: {
+      case SYM_IDENTIFIER: case SYM_AT: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_JS: case SYM_REGEX: case SYM_REGEX_START: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LPAREN: case SYM_LBRACKET: case SYM_LBRACE: case SYM_CLASS: case SYM_PARAM_START: case SYM_ARROW: case SYM_FAT_ARROW: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_DO_IIFE: case SYM_THIS: case SYM_NEW_TARGET: case SYM_IMPORT_META: {
         const r9_1 = this.parseSimpleAssignable();
         const r9_2 = this._match(SYM_DECREMENT);
         return ["--", r9_1, true];
       }
-      case SYM_TRY: case SYM_FOR: case SYM_SWITCH: case SYM_CLASS: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_IF: case SYM_UNLESS: case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: {
+      case SYM_IF: case SYM_UNLESS: case SYM_STATEMENT: case SYM_TRY: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: case SYM_FOR: case SYM_SWITCH: case SYM_THROW: case SYM_YIELD: case SYM_DEF: case SYM_RETURN: case SYM_IMPORT: case SYM_EXPORT: {
         // Warning: potential cycle with Expression
         const r11_1 = this.parseExpression();
         const r11_2 = this._match(SYM_QUESTION);
         return ["?", r11_1];
       }
       default:
-        this._error([177, 178, 180, 181, 182, 163, 183, 184, 40, 77, 75, 113, 44, 61, 54, 55, 62, 63, 64, 65, 66, 153, 83, 86, 179, 138, 111, 112, 95, 98, 99, 46, 47, 148, 114, 166, 121, 152, 35, 27, 172, 174, 94, 11, 123, 131, 156, 157, 159], this.la.id);
+        this._error([178, 179, 181, 182, 183, 164, 184, 185, 40, 77, 44, 46, 47, 61, 54, 55, 62, 63, 64, 65, 66, 154, 75, 114, 122, 95, 98, 99, 83, 86, 180, 139, 112, 113, 173, 175, 11, 149, 157, 158, 160, 115, 167, 153, 35, 27, 94, 124, 132], this.la.id);
     }
   }
 

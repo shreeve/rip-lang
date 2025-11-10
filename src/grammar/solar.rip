@@ -773,20 +773,37 @@ class Generator
   _generateSymbolConstants: ->
     constants = []
     names = []
-    seen = {}
+    constMap = {}
 
     # Sort by ID for readability
     sorted = Object.entries(@symbolIds).sort (a, b) -> a[1] - b[1]
 
+    # First pass: collect all symbols and prefer terminals for constants
     for [name, id] from sorted when name isnt '$accept'
       constName = @_toConstantName name
 
-      # Skip duplicates (terminals and nonterminals can share names)
-      unless seen[constName]
-        constants.push "const #{constName} = #{id};"
-        seen[constName] = true
+      # Skip if constName is invalid (empty or doesn't start with SYM_)
+      unless constName and constName.startsWith('SYM_') and constName.length > 4
+        console.warn "Warning: Invalid constant name '#{constName}' for symbol '#{name}' (id=#{id}), skipping"
+        # Still add to SYMBOL_NAMES for lookup
+        names.push "  #{id}: '#{name}'"
+        continue
 
+      # Prefer terminal (UPPERCASE) over nonterminal (Mixed case) for constant
+      isTerminal = name.toUpperCase() is name
+      if not constMap[constName]
+        constMap[constName] = { id, name, isTerminal }
+      else if isTerminal and not constMap[constName].isTerminal
+        # Replace nonterminal with terminal
+        constMap[constName] = { id, name, isTerminal }
+
+      # ALWAYS add to SYMBOL_NAMES (needed for token lookup)
       names.push "  #{id}: '#{name}'"
+
+    # Generate constants from the map, sorted by ID
+    sortedConstants = Object.entries(constMap).sort (a, b) -> a[1].id - b[1].id
+    for [constName, info] in sortedConstants
+      constants.push "const #{constName} = #{info.id};"
 
     """
     // ============================================================================
@@ -946,7 +963,7 @@ class Generator
 
     # Get FOLLOW set for loop termination
     followArray = @_getFollowSetArray name
-    followChecks = followArray.map (t) => @_toConstantName t
+    followChecks = followArray.map((t) => @_toConstantName t).filter((c) -> c and c.startsWith('SYM_') and c.length > 4)
     followCondition = if followChecks.length > 0
       followChecks.map((c) -> "this.la.id === #{c}").join(' || ')
     else
@@ -1291,8 +1308,8 @@ class Generator
     for entry in analysis when entry.assignedTokens.length > 0
       {prodIdx, rule, suffix, assignedTokens} = entry
 
-      # Generate case labels
-      constNames = assignedTokens.map (t) => @_toConstantName t
+      # Generate case labels (filter invalid constants)
+      constNames = assignedTokens.map((t) => @_toConstantName t).filter((c) -> c and c.startsWith('SYM_') and c.length > 4)
       caseLabels = constNames.map((c) -> "case #{c}").join(': ')
 
       # Generate body with UNIQUE variable names
@@ -1425,7 +1442,7 @@ class Generator
       rule = rules[parseInt prodIdx]
       target = rule.symbols[0]
 
-      constNames = tokens.map (t) => @_toConstantName t
+      constNames = tokens.map((t) => @_toConstantName t).filter((c) -> c and c.startsWith('SYM_') and c.length > 4)
       caseLabels = constNames.map((c) -> "case #{c}").join(': ')
 
       caseLines.push "      #{caseLabels}: return #{@_getParseCall target};"
@@ -1494,7 +1511,7 @@ class Generator
     for prodIdx, tokens of prodToTokens
       rule = rules[parseInt prodIdx]
 
-      constNames = tokens.map (t) => @_toConstantName t
+      constNames = tokens.map((t) => @_toConstantName t).filter((c) -> c and c.startsWith('SYM_') and c.length > 4)
       caseLabels = constNames.map((c) -> "case #{c}").join(': ')
 
       # Generate body that parses ENTIRE rule (pass parent name for cycle detection!)
