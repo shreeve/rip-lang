@@ -1119,7 +1119,7 @@ class Generator
         hasExpandableAlternatives = skippedType.rules.some (childRule) =>
           childFirst = childRule.symbols[0]
           childFirst and childFirst isnt '' and childFirst not in SKIP_GENERATION
-        
+
         if hasExpandableAlternatives
           # Recursively get alternatives from skipped nonterminal
           @_expandThroughSkippedNonterminal(firstSymbol, rule, dispatchMap, expectedTokens)
@@ -1183,35 +1183,35 @@ class Generator
     # Pass 2: Handle remaining tokens (not handled by lookahead)
     # Group by RULE (not token) to avoid duplicate case labels
     ruleTokenMap = {}
-    
+
     for own tokenId, rulesForToken of dispatchMap
       continue unless @tokenNames[tokenId]
-      
+
       # Filter out rules with skipped first symbols that can't be expanded
       validRules = rulesForToken.filter (r) =>
         firstSym = r.symbols[0]
         return true unless firstSym
         return true unless @types[firstSym]  # Terminal - always valid
         return true unless firstSym in SKIP_GENERATION  # Not skipped - valid
-        
+
         # First symbol is skipped - check if expandable
         skippedType = @types[firstSym]
         hasExpandable = skippedType.rules.some (childRule) =>
           childFirst = childRule.symbols[0]
           childFirst and childFirst isnt '' and childFirst not in SKIP_GENERATION
         hasExpandable
-      
+
       continue if validRules.length is 0  # No valid rules for this token
-      
+
       # Pick the preferred valid rule
       rule = if validRules.length > 1
         # Pick last valid rule (often more specific)
         validRules[validRules.length - 1]
       else
         validRules[0]
-      
+
       continue if processedRules.has(rule.id)  # Skip if already handled by lookahead
-      
+
       # Group tokens by rule
       ruleTokenMap[rule.id] ?= {rule: rule, tokens: []}
       ruleTokenMap[rule.id].tokens.push(parseInt(tokenId))
