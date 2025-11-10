@@ -863,23 +863,31 @@ class Generator
     # Build dispatch map: FIRST token → rule
     dispatchMap = {}
     expectedTokens = new Set()
-    
+
     for rule in rules
       firstSymbol = rule.symbols[0]
-      
-      # Skip empty rules
+
+      # Skip empty rules (will handle separately)
       continue if not firstSymbol or firstSymbol is ''
-      
+
       # Get terminal FIRST tokens for this rule
       # If first symbol is nonterminal → use its terminal FIRST set
       # If first symbol is terminal → use its ID directly
-      firstTokens = if @types[firstSymbol]
-        # Nonterminal → get its terminal FIRST set (computed recursively by SLR(1))
-        Array.from(@types[firstSymbol].firsts)
+      typeObj = @types[firstSymbol]
+      firstTokens = if typeObj
+        # Nonterminal → get its terminal FIRST set (Set of string names!)
+        firstNames = Array.from(typeObj.firsts)
+        # Convert string names to numeric IDs
+        ids = []
+        for name in firstNames
+          id = @symbolIds[name]
+          ids.push(id) if id
+        ids
       else
         # Terminal → use its ID directly
-        [@symbolIds[firstSymbol]]
-      
+        symbolId = @symbolIds[firstSymbol]
+        if symbolId then [symbolId] else []
+
       # Map each terminal FIRST token to this rule
       for tokenId in firstTokens
         continue unless @tokenNames[tokenId]  # Only terminals with names
@@ -946,9 +954,6 @@ class Generator
 
   _compileAction: (rule) ->
     # Compile grammar action into JavaScript return statement
-    # Actions reference token positions (1-indexed)
-    # In PRD, these are local variables or function calls
-
     action = rule.action
     symbols = rule.symbols
 
@@ -956,18 +961,17 @@ class Generator
     if not action or action is 1
       if symbols.length is 0
         return "return [];"
-      else if symbols.length is 1
-        return @_generateSymbolRef(symbols[0], 1)
-      else
-        return @_generateSymbolRef(symbols[0], 1)
+      return @_generateSymbolRef(symbols[0], 1)
 
-    # Handle literal actions
+    # Handle string literal actions like '"null"' or '"undefined"'
     if typeof action is 'string'
-      # Simple string return like '"null"' or '"undefined"'
-      if action.match(/^"[^"]*"$/) or action.match(/^'[^']*'$/)
+      # Check if it's a quoted string literal
+      if action.match(/^"[^"]*"$/)
+        return "return #{action};"
+      if action.match(/^'[^']*'$/)
         return "return #{action};"
 
-      # Action contains position references - need to compile
+      # Complex action string - need to compile
       compiled = @_compileActionString(action, symbols)
       return "return #{compiled};"
 
