@@ -259,3 +259,25 @@ For "D", I think the top-level is parse()
 
 
 Add point 15, 16, 17 as you have them.
+
+==[ Actions ]==
+
+Default action (no action specified): Just returns token 1 (first symbol)
+
+o 'IDENTIFIER' → returns the IDENTIFIER token itself (String object with all properties)
+o 'Expression' → returns the Expression result
+
+
+Actions reference token positions: 1, 2, 3 etc.
+
+o 'Value . Property', '[".", 1, 3]' → builds array with tokens at positions 1 and 3
+Position 2 (the . operator) is not referenced, so it's discarded
+
+
+Protected references with $: $1, $2, $3 for literal positions
+
+o 'Value INDEX_START RegexWithIndex INDEX_END', '[$3[0], $1, ...$3.slice(1)]'
+The $ protects against auto-substitution
+
+
+Tokens are passed through AS-IS: When an action references a token position, the entire token (with all its String object properties like .quote, .await, .heregex) is passed through.
