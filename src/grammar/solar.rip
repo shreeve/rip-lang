@@ -1033,34 +1033,65 @@ class Generator
         dispatchMap[tokenId] = dispatchMap[tokenId] or []
         dispatchMap[tokenId].push(rule)
 
-    # Generate switch statement - group by rule to avoid duplicates
-    ruleToTokens = {}
-    processed = {}
+    # Phase 5: Detect TRUE ambiguity and generate lookahead
+    # TRUE AMBIGUITY = multiple rules share the exact same first token
+    cases = []
+    processedRules = new Set()
+
+    # Pass 1: Detect TRUE ambiguity
+    # TRUE AMBIGUITY = ALL rules for this nonterminal start with the SAME token
+    # E.g., Return has 3 alternatives, ALL start with RETURN → TRUE ambiguity
+    # FALSE AMBIGUITY = Rules map to different tokens → oracle can distinguish
+
+    # Count how many tokens each rule maps to
+    totalRulesForNonterminal = rules.filter((r) -> r.symbols[0] and r.symbols[0] isnt '').length
 
     for own tokenId, rulesForToken of dispatchMap
-      # When multiple rules match a token, prefer the last (often more specific)
-      # E.g., for Line: Expression is general, Statement is specific
-      rule = rulesForToken[rulesForToken.length - 1]
-      ruleKey = rule.id
+      continue unless @tokenNames[tokenId]
 
-      if not processed[ruleKey]
-        ruleToTokens[ruleKey] = {rule: rule, tokens: []}
-        processed[ruleKey] = true
+      # CRITICAL CHECK: Only generate lookahead for TRUE ambiguity
+      # TRUE = all alternatives for this nonterminal start with same token
+      if rulesForToken.length > 1 and rulesForToken.length is totalRulesForNonterminal
+        # ALL rules map to this ONE token → TRUE AMBIGUITY → Generate lookahead
+        lookaheadCase = @_generateLookaheadDisambiguation(parseInt(tokenId), rulesForToken, nonTerminal)
+        cases.push(lookaheadCase)
 
-      ruleToTokens[ruleKey].tokens.push(parseInt(tokenId))
+        # Mark all these rules as processed
+        for rule in rulesForToken
+          processedRules.add(rule.id)
 
-    # Generate cases
-    cases = []
+    # Pass 2: Handle remaining tokens (not handled by lookahead)
+    # Group by RULE (not token) to avoid duplicate case labels
+    ruleTokenMap = {}
 
-    for own ruleKey, data of ruleToTokens
+    for own tokenId, rulesForToken of dispatchMap
+      continue unless @tokenNames[tokenId]
+
+      # If multiple rules but not all (FALSE ambiguity), pick the preferred one
+      rule = if rulesForToken.length > 1
+        # Pick last rule (often more specific - oracle's preference)
+        rulesForToken[rulesForToken.length - 1]
+      else
+        rulesForToken[0]
+
+      continue if processedRules.has(rule.id)  # Skip if already handled by lookahead
+
+      # Group tokens by rule
+      ruleTokenMap[rule.id] ?= {rule: rule, tokens: []}
+      ruleTokenMap[rule.id].tokens.push(parseInt(tokenId))
+
+    # Generate cases for single-rule dispatch
+    for own ruleId, data of ruleTokenMap
       {rule, tokens} = data
+
+      # Mark as processed
+      processedRules.add(rule.id)
 
       # Convert token IDs to SYM_* constants
       tokenNames = []
       for tokenId in tokens
         tokenName = @tokenNames[tokenId]
-        continue unless tokenName  # Skip if no name (epsilon or undefined)
-        # Use operator name mapping if available
+        continue unless tokenName
         constName = @_getSymbolConstName(tokenName)
         tokenNames.push(constName)
 
@@ -1070,26 +1101,23 @@ class Generator
       # Compile action
       action = @_compileAction(rule)
 
-      # Check if action has multiple statements (contains newlines/semicolons)
+      # Check if action has multiple statements
       hasMultipleStatements = action.includes('\n') or action.match(/;\s*\w/)
 
-      # Format: stack case labels, then action on same/next line
+      # Format case
       caseStr = tokenNames.map((n) -> "case #{n}").join(': ')
       totalLength = caseStr.length + action.length
 
-      # If action has multiple statements, wrap in block to avoid variable collisions
+      # Generate case with proper formatting
       if hasMultipleStatements
         cases.push("    #{caseStr}: {")
-        # Indent each line of the action
         actionLines = action.split('\n')
         for line in actionLines
           cases.push("      #{line}") if line.trim()
         cases.push("    }")
       else if totalLength < 100 and tokenNames.length <= 5
-        # Single statement, fits on one line
         cases.push("    #{caseStr}: #{action}")
       else
-        # Single statement, put on next line
         cases.push("    #{caseStr}:")
         cases.push("      #{action}")
 
@@ -1256,23 +1284,23 @@ class Generator
   _compileActionExpression: (action, symbolCount) ->
     # Transform action string by replacing position numbers with temp variables
     # E.g., '["def", 2, 4, 6]' becomes '["def", tok2, tok4, tok6]'
-    
+
     # Handle no action or default action
     if not action or action is 1
       return "return tok1;"
-    
+
     # Handle numeric action (just return that position)
     if typeof action is 'number'
       return "return tok#{action};"
-    
+
     # Handle string literal like '"undefined"'
     if typeof action is 'string' and action.match(/^"[^"]*"$/)
       return "return #{action};"
-    
+
     # Handle string actions (array constructions, expressions, etc.)
     if typeof action is 'string'
       compiled = action
-      
+
       # Replace $n with tokN (protected references)
       compiled = compiled.replace(/\$(\d+)/g, (match, num) ->
         pos = parseInt(num)
@@ -1281,7 +1309,7 @@ class Generator
         else
           match  # Keep as-is if out of range
       )
-      
+
       # Replace bare numbers with tokN (like in '["def", 2, 4, 6]')
       # But preserve string literals and avoid replacing numbers in quotes
       # This is tricky - we need to be careful about context
@@ -1293,9 +1321,9 @@ class Generator
         else
           num  # Keep number if out of range
       )
-      
+
       return "return #{compiled};"
-    
+
     # Fallback
     return "return tok1;"
 
@@ -1307,12 +1335,12 @@ class Generator
     # Get the FIRST set of the second symbol in a rule
     # Returns null if rule has only 1 symbol or less
     # Returns array of token IDs
-    
+
     return null if rule.symbols.length <= 1
-    
+
     secondSymbol = rule.symbols[1]
     return null unless secondSymbol
-    
+
     if @types[secondSymbol]
       # Nonterminal - get its FIRST set (returns Set of string names)
       firstNames = Array.from(@types[secondSymbol].firsts)
@@ -1327,13 +1355,45 @@ class Generator
       symbolId = @symbolIds[secondSymbol]
       if symbolId then [symbolId] else []
 
-  _generatePeekCondition: (tokenIds) ->
+  _generatePeekCondition: (tokenIds, nonTerminal, allRules) ->
     # Generate condition that checks if peeked token matches
     # E.g., "next === SYM_INDENT" or "(next === SYM_STRING || next === SYM_STRING_START)"
-    
-    return "true" unless tokenIds  # Empty rule - matches anything
+
+    # Empty rule (no second token) - check FOLLOW set
+    unless tokenIds
+      return "true" unless nonTerminal and @types[nonTerminal]
+
+      followSet = Array.from(@types[nonTerminal].follows)
+
+      # Exclude tokens that are explicit second tokens in other rules
+      explicitSecondTokens = new Set()
+      if allRules
+        for rule in allRules
+          secondTokens = @_getSecondTokens(rule)
+          if secondTokens
+            for tok in secondTokens
+              explicitSecondTokens.add(tok)
+
+      # Filter FOLLOW to exclude explicit second tokens
+      followIds = []
+      for name in followSet
+        id = @symbolIds[name]
+        if id and @tokenNames[id] and not explicitSecondTokens.has(id)
+          followIds.push(id)
+
+      if followIds.length is 0
+        return "true"
+
+      conditions = []
+      for id in followIds
+        tokenName = @tokenNames[id]
+        constName = @_getSymbolConstName(tokenName)
+        conditions.push("next === #{constName}")
+      return "(#{conditions.join(' || ')})"
+
     return "true" if tokenIds.length is 0
-    
+
+    # Has second token(s) - check for them
     if tokenIds.length is 1
       tokenName = @tokenNames[tokenIds[0]]
       return "true" unless tokenName
@@ -1356,57 +1416,110 @@ class Generator
 
   _orderRulesForDisambiguation: (rules) ->
     # Sort rules by specificity of second token
-    # Most specific (fewest tokens) first, most general (many tokens) last
-    
+    # Most specific (fewest tokens) first, empty rules (most general) last
+
     sortedRules = rules[..]  # Copy array
-    
+
     sortedRules.sort (a, b) =>
       aTokens = @_getSecondTokens(a)
       bTokens = @_getSecondTokens(b)
-      
-      # Empty rules (no second token) check FOLLOW set - treat as specific
-      return -1 if not aTokens and bTokens
-      return 1 if aTokens and not bTokens
-      return 0 if not aTokens and not bTokens
-      
-      # Fewer tokens = more specific
+
+      # Empty rules (no second token) are MOST GENERAL - go LAST
+      return 1 if not aTokens and bTokens      # a is empty, b is not → a after b
+      return -1 if aTokens and not bTokens     # b is empty, a is not → b after a
+      return 0 if not aTokens and not bTokens  # both empty → same
+
+      # Fewer tokens = more specific → comes first
       return aTokens.length - bTokens.length
-    
+
     sortedRules
 
   _generateRuleBody: (rule, options = {}) ->
     # Generate parsing code for a rule, starting at arbitrary position
     # Used when first token(s) already matched
-    
+
     startPosition = options.startPosition ? 1
+    indent = options.indent ? '        '
     symbols = rule.symbols[startPosition - 1..]  # Remaining symbols
     action = rule.action
-    
+
     return @_compileAction(rule) if startPosition is 1  # Full rule
-    
+
     # Partial rule - need to adjust action positions
     # Find which positions are referenced in action
     referencedPositions = @_findReferencedPositions(action, rule.symbols.length)
-    
+
     lines = []
-    
+
     # Generate parsing for remaining symbols
     for symbol, i in symbols
       position = startPosition + i  # Actual position in original rule
-      
+
       if position in referencedPositions
         # This position is used in action - save it
         lines.push(@_generateCaptureStatement(symbol, position))
       else
         # Not used in action - just match
         lines.push(@_generateMatchStatement(symbol))
-    
+
     # Generate return statement
     returnStatement = @_compileActionExpression(action, rule.symbols.length)
     lines.push(returnStatement)
-    
-    # Join and indent properly
-    lines.map((line) -> "      #{line}").join('\n')
+
+    # Join with proper indentation
+    lines.map((line) -> "#{indent}#{line}").join('\n')
+
+  _generateLookaheadDisambiguation: (firstTokenId, rules, nonTerminal) ->
+    # Generate if/else chain with lookahead for ambiguous FIRST sets
+    # CRITICAL: Add 'case' keyword!
+
+    firstTokenName = @tokenNames[firstTokenId]
+    firstConstName = @_getSymbolConstName(firstTokenName)
+
+    # Order rules by specificity (most specific first, empty last)
+    orderedRules = @_orderRulesForDisambiguation(rules)
+
+    # Check if any rule's action references position 1
+    needsTok1 = orderedRules.some (rule) =>
+      referencedPositions = @_findReferencedPositions(rule.action, rule.symbols.length)
+      1 in referencedPositions
+
+    lines = []
+
+    # CRITICAL: Include 'case' keyword!
+    lines.push "    case #{firstConstName}: {"
+
+    # Match first token and capture it if any rule needs it
+    if needsTok1
+      lines.push "      const tok1 = this._match(#{firstTokenId});"
+    else
+      lines.push "      this._match(#{firstTokenId});"
+
+    # Peek at next token to disambiguate
+    lines.push "      const next = this._peek();"
+    lines.push ""
+
+    # Generate if/else chain
+    for rule, i in orderedRules
+      secondTokens = @_getSecondTokens(rule)
+      condition = @_generatePeekCondition(secondTokens, nonTerminal, rules)
+
+      if i is 0
+        lines.push "      if (#{condition}) {"
+      else if i is orderedRules.length - 1
+        lines.push "      } else {"
+      else
+        lines.push "      } else if (#{condition}) {"
+
+      # Generate body for this rule (starting at position 2)
+      body = @_generateRuleBody(rule, startPosition: 2, indent: '        ')
+      lines.push body
+
+    # Close all branches and the case
+    lines.push "      }"
+    lines.push "    }"
+
+    lines.join('\n')
 
   _expandThroughSkippedNonterminal: (skippedSymbol, parentRule, dispatchMap, expectedTokens) ->
     # Expand through skipped nonterminal to get actual alternatives
@@ -1444,12 +1557,14 @@ class Generator
         symbolId = @symbolIds[childFirst]
         if symbolId then [symbolId] else []
 
-      # Map to the child rule (use child's action, not parent's)
+      # Map to the PARENT rule (the Line alternative, not the child)
+      # This prevents false ambiguity when expanding through skipped nonterminals
       for tokenId in firstTokens
         continue unless @tokenNames[tokenId]
         expectedTokens.add(tokenId)
         dispatchMap[tokenId] = dispatchMap[tokenId] or []
-        dispatchMap[tokenId].push(childRule)
+        # Only add parent rule if not already there
+        dispatchMap[tokenId].push(parentRule) unless parentRule in dispatchMap[tokenId]
 
   _generateSymbolRef: (symbol, position) ->
     # Generate code to get value at this position
