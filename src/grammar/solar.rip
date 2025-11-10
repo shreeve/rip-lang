@@ -725,11 +725,11 @@ class Generator
   _generatePrecedenceTables: ->
     # Generate precedence and associativity tables for binary operators
     # Based on JavaScript/CoffeeScript operator precedence
-    
+
     output = []
     output.push "// Operator precedence table (higher = binds tighter)"
     output.push "const OPERATOR_PRECEDENCE = {"
-    
+
     # Define precedence levels (from lowest to highest)
     precedenceLevels = [
       {level: 1, ops: ['||']},
@@ -745,7 +745,7 @@ class Generator
       {level: 11, ops: ['MATH']},     # * / % //
       {level: 12, ops: ['**']},       # Power (highest)
     ]
-    
+
     entries = []
     for {level, ops} in precedenceLevels
       for op in ops
@@ -753,45 +753,45 @@ class Generator
         continue unless symbolId
         constName = @_getSymbolConstName(@tokenNames[symbolId] or op)
         entries.push "  [#{constName}]: #{level}"
-    
+
     output.push entries.join(',\n')
     output.push "};"
     output.push ""
-    
+
     # Associativity table (only non-left operators)
     output.push "// Operator associativity (default is 'left')"
     output.push "const OPERATOR_ASSOCIATIVITY = {"
     output.push "  [SYM_POWER]: 'right',  // 2**3**4 = 2**(3**4)"
     output.push "};"
     output.push ""
-    
+
     output.join('\n')
 
   _generateOperationFunction: ->
     # Generate precedence climbing function for binary operators
     # Handles all precedence levels in one recursive function
-    
+
     """
       parseOperation(minPrec = 0) {
         let left = this.parseValue();
-        
+
         while (this.la && this.la.id !== SYM_EOF) {
           const prec = OPERATOR_PRECEDENCE[this.la.id];
           if (prec === undefined || prec < minPrec) break;
-          
+
           const op = this.la.id;
           const assoc = OPERATOR_ASSOCIATIVITY[op] || 'left';
           this._match(op);
-          
+
           // Right-associative: same prec; Left-associative: higher prec
           const nextPrec = prec + (assoc === 'right' ? 0 : 1);
           const right = this.parseOperation(nextPrec);
-          
+
           // Build AST node with operator name
           const opName = TOKEN_NAMES[op] || op;
           left = [opName, left, right];
         }
-        
+
         return left;
       },
     """
@@ -963,7 +963,7 @@ class Generator
 
     for name in nonterminals
       continue if name in SKIP_GENERATION
-      
+
       # Phase 6: Special handling for Operation
       if name is 'Operation'
         func = @_generateOperationFunction()
