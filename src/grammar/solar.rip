@@ -770,28 +770,28 @@ class Generator
   _generateOperationFunction: ->
     # Generate precedence climbing function for binary operators
     # Handles all precedence levels in one recursive function
-    
+
     """
       parseOperation(minPrec = 0) {
         let left = this.parseValue();
-        
+
         while (this.la && this.la.id !== SYM_EOF) {
           const prec = OPERATOR_PRECEDENCE[this.la.id];
           if (prec === undefined || prec < minPrec) break;
-          
+
           const op = this.la.id;
           const assoc = OPERATOR_ASSOCIATIVITY[op] || 'left';
           this._match(op);
-          
+
           // Right-associative: same prec; Left-associative: higher prec
           const nextPrec = prec + (assoc === 'right' ? 0 : 1);
           const right = this.parseOperation(nextPrec);
-          
+
           // Build AST node with operator name
           const opName = TOKEN_NAMES[op] || op;
           left = [opName, left, right];
         }
-        
+
         return left;
       },
     """
@@ -799,7 +799,7 @@ class Generator
   _generateForFunction: ->
     # Custom generator for For loops (too complex for oracle lookahead)
     # Handles multiple variants with runtime checking for optional WHEN/BY clauses
-    
+
     forId = @symbolIds['FOR']
     ownId = @symbolIds['OWN']
     awaitId = @symbolIds['AWAIT']
@@ -808,33 +808,33 @@ class Generator
     forfromId = @symbolIds['FORFROM']
     whenId = @symbolIds['WHEN']
     byId = @symbolIds['BY']
-    
+
     """
       parseFor() {
         this._match(#{forId});  // FOR
         const second = this._peek();
-        
+
         // FOR OWN variants (for-of with own flag)
         if (second === #{ownId}) {
           this._match(#{ownId});  // OWN
           const vars = this.parseForVariables();
           this._match(#{forofId});  // FOROF
           const source = this.parseExpression();
-          
+
           // Optional BY clause
           let step = null;
           if (this.la.id === #{byId}) {
             this._match(#{byId});
             step = this.parseExpression();
           }
-          
+
           // Optional WHEN clause
           let guard = null;
           if (this.la.id === #{whenId}) {
             this._match(#{whenId});
             guard = this.parseExpression();
           }
-          
+
           const body = this.parseBlock();
           return ["for-of", vars, source, true, guard, body];
         }
@@ -844,14 +844,14 @@ class Generator
           const vars = this.parseForVariables();
           this._match(#{forfromId});  // FORFROM
           const source = this.parseExpression();
-          
+
           // Optional WHEN clause
           let guard = null;
           if (this.la.id === #{whenId}) {
             this._match(#{whenId});
             guard = this.parseExpression();
           }
-          
+
           const body = this.parseBlock();
           return ["for-from", vars, source, guard, body];
         }
@@ -859,38 +859,38 @@ class Generator
         else {
           const vars = this.parseForVariables();
           const loopType = this.la.id;
-          
+
           if (loopType === #{forinId}) {
             this._match(#{forinId});  // FORIN
             const source = this.parseExpression();
-            
+
             // Optional BY clause
             let step = null;
             if (this.la.id === #{byId}) {
               this._match(#{byId});
               step = this.parseExpression();
             }
-            
+
             // Optional WHEN clause
             let guard = null;
             if (this.la.id === #{whenId}) {
               this._match(#{whenId});
               guard = this.parseExpression();
             }
-            
+
             const body = this.parseBlock();
             return ["for-in", vars, source, step, guard, body];
           } else if (loopType === #{forofId}) {
             this._match(#{forofId});  // FOROF
             const source = this.parseExpression();
-            
+
             // Optional WHEN clause
             let guard = null;
             if (this.la.id === #{whenId}) {
               this._match(#{whenId});
               guard = this.parseExpression();
             }
-            
+
             const body = this.parseBlock();
             return ["for-of", vars, source, false, guard, body];
           } else {
@@ -1044,6 +1044,7 @@ class Generator
       # ExpressionLine removed - can be generated (dispatches to CodeLine)
       'OperationLine',        # Inline into ExpressionLine/Line
       'Until',                # Variant of While
+      'Invocation',           # Phase 8: Inline into Value to break Value ↔ Invocation cycle
       # Phase 8: These will be generated, remove from skip
       # 'For', 'While', 'Loop', 'Class', 'Switch' - removed, now generating
       # Note: Operation handled specially, not in this list
@@ -1059,7 +1060,8 @@ class Generator
       # Group 1: Base values ✅
       'Identifier', 'Property', 'ThisProperty',
       'Literal', 'AlphaNumeric', 'String', 'Regex',
-      'Parenthetical', 'Range', 'Invocation',
+      'Parenthetical', 'Range',
+      # Invocation removed - inline into Value to break cycle
       'DoIife', 'This', 'Super', 'MetaProperty',
       # Collections
       'Array', 'Object',
@@ -1258,7 +1260,7 @@ class Generator
     # Generate switch-based dispatch for non-left-recursive nonterminals
 
     # Skip list for intermediate dispatchers (must match list in _generateParseFunctions)
-    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr', 'Operation', 'Statement', 'OperationLine', 'Until']
+    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr', 'Operation', 'Statement', 'OperationLine', 'Until', 'Invocation']
 
     # Check for empty rule
     emptyRule = rules.find (rule) => not rule.symbols[0] or rule.symbols[0] is ''
@@ -1858,7 +1860,7 @@ class Generator
     # E.g., Value → Assignable expands to Value → SimpleAssignable | Array | Object
     #       Then SimpleAssignable expands to Identifier | ThisProperty (base cases only)
 
-    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr', 'Operation', 'Statement', 'OperationLine', 'Until']
+    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr', 'Operation', 'Statement', 'OperationLine', 'Until', 'Invocation']
 
     skippedType = @types[skippedSymbol]
     return unless skippedType
@@ -1871,6 +1873,11 @@ class Generator
       # Skip accessor rules like "Value . Property" (multi-symbol)
       if skippedSymbol is 'SimpleAssignable' and childRule.symbols.length > 1
         continue  # Skip accessors for now
+      
+      # For Invocation, skip rules that start with Value (would create cycle)
+      # Include only SUPER Arguments and DYNAMIC_IMPORT Arguments
+      if skippedSymbol is 'Invocation' and childFirst is 'Value'
+        continue  # Skip Value-based invocations (would cycle)
 
       # If child is also skipped, recurse
       if childFirst in SKIP_GENERATION and @types[childFirst]
@@ -1902,7 +1909,7 @@ class Generator
     # Generate code to get value at this position
     symbolObj = @symbolTable.get(symbol)
 
-    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr', 'Operation', 'Statement', 'OperationLine', 'Until']
+    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr', 'Operation', 'Statement', 'OperationLine', 'Until', 'Invocation']
 
     if symbolObj instanceof Token
       # Terminal: call _match

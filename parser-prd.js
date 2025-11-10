@@ -138,13 +138,11 @@ const parser = {
       return this.parseLiteral();
     case SYM_LPAREN: return this.parseParenthetical();
     case SYM_LBRACKET: return this.parseRange();
-    case SYM_IDENTIFIER: case SYM_DYNAMIC_IMPORT: case SYM_PARAM_START: case SYM_THIN_ARROW: case SYM_FAT_ARROW:
-      return this.parseInvocation();
     case SYM_DO_IIFE: return this.parseDoIife();
     case SYM_AT: case SYM_THIS: return this.parseThis();
     case SYM_SUPER: return this.parseSuper();
     case SYM_NEW_TARGET: case SYM_IMPORT_META: return this.parseMetaProperty();
-    default: this._error([40, 44, 46, 47, 54, 55, 61, 62, 63, 64, 65, 66, 75, 77, 83, 86, 95, 98, 99, 111, 112, 113, 138, 153, 179], this.la.id);
+    default: this._error([40, 44, 46, 47, 54, 55, 61, 62, 63, 64, 65, 66, 75, 77, 83, 111, 112, 113, 138, 153, 179], this.la.id);
     }
   },
 
@@ -254,18 +252,6 @@ const parser = {
             return [tok3, tok2, tok4];
     }
     default: this._error([75], this.la.id);
-    }
-  },
-
-  parseInvocation() {
-    switch (this.la.id) {
-    case SYM_IDENTIFIER: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_REGEX: case SYM_REGEX_START: case SYM_JS: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LBRACKET: case SYM_AT: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_PARAM_START: case SYM_THIN_ARROW: case SYM_FAT_ARROW: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_LBRACE: case SYM_THIS: case SYM_LPAREN: case SYM_DO_IIFE: {
-      const tok1 = this.parseValue();
-            this.parseOptFuncExist();
-            const tok3 = this.parseString();
-            return ["tagged-template", tok1, tok3];
-    }
-    default: this._error([40, 44, 46, 47, 54, 55, 61, 62, 63, 64, 65, 66, 75, 77, 83, 86, 95, 98, 99, 111, 112, 113, 138, 153, 179], this.la.id);
     }
   },
 
@@ -633,24 +619,24 @@ const parser = {
 
   parseOperation(minPrec = 0) {
     let left = this.parseValue();
-    
+
     while (this.la && this.la.id !== SYM_EOF) {
       const prec = OPERATOR_PRECEDENCE[this.la.id];
       if (prec === undefined || prec < minPrec) break;
-      
+
       const op = this.la.id;
       const assoc = OPERATOR_ASSOCIATIVITY[op] || 'left';
       this._match(op);
-      
+
       // Right-associative: same prec; Left-associative: higher prec
       const nextPrec = prec + (assoc === 'right' ? 0 : 1);
       const right = this.parseOperation(nextPrec);
-      
+
       // Build AST node with operator name
       const opName = TOKEN_NAMES[op] || op;
       left = [opName, left, right];
     }
-    
+
     return left;
   },
 
@@ -878,28 +864,28 @@ const parser = {
   parseFor() {
     this._match(114);  // FOR
     const second = this._peek();
-    
+
     // FOR OWN variants (for-of with own flag)
     if (second === 119) {
       this._match(119);  // OWN
       const vars = this.parseForVariables();
       this._match(116);  // FOROF
       const source = this.parseExpression();
-      
+
       // Optional BY clause
       let step = null;
       if (this.la.id === 161) {
         this._match(161);
         step = this.parseExpression();
       }
-      
+
       // Optional WHEN clause
       let guard = null;
       if (this.la.id === 118) {
         this._match(118);
         guard = this.parseExpression();
       }
-      
+
       const body = this.parseBlock();
       return ["for-of", vars, source, true, guard, body];
     }
@@ -909,14 +895,14 @@ const parser = {
       const vars = this.parseForVariables();
       this._match(162);  // FORFROM
       const source = this.parseExpression();
-      
+
       // Optional WHEN clause
       let guard = null;
       if (this.la.id === 118) {
         this._match(118);
         guard = this.parseExpression();
       }
-      
+
       const body = this.parseBlock();
       return ["for-from", vars, source, guard, body];
     }
@@ -924,38 +910,38 @@ const parser = {
     else {
       const vars = this.parseForVariables();
       const loopType = this.la.id;
-      
+
       if (loopType === 160) {
         this._match(160);  // FORIN
         const source = this.parseExpression();
-        
+
         // Optional BY clause
         let step = null;
         if (this.la.id === 161) {
           this._match(161);
           step = this.parseExpression();
         }
-        
+
         // Optional WHEN clause
         let guard = null;
         if (this.la.id === 118) {
           this._match(118);
           guard = this.parseExpression();
         }
-        
+
         const body = this.parseBlock();
         return ["for-in", vars, source, step, guard, body];
       } else if (loopType === 116) {
         this._match(116);  // FOROF
         const source = this.parseExpression();
-        
+
         // Optional WHEN clause
         let guard = null;
         if (this.la.id === 118) {
           this._match(118);
           guard = this.parseExpression();
         }
-        
+
         const body = this.parseBlock();
         return ["for-of", vars, source, false, guard, body];
       } else {
