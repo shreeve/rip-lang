@@ -10,6 +10,30 @@ const SYMBOL_IDS = {"$accept": 0, "$end": 1, "error": 2, "Root": 3, "Body": 4, "
 const TOKEN_NAMES = {2: "error", 6: "TERMINATOR", 11: "STATEMENT", 27: "DEF", 29: "CALL_START", 31: "CALL_END", 35: "YIELD", 36: "INDENT", 38: "OUTDENT", 39: "FROM", 40: "IDENTIFIER", 42: "PROPERTY", 44: "NUMBER", 46: "STRING", 47: "STRING_START", 49: "STRING_END", 51: "INTERPOLATION_START", 52: "INTERPOLATION_END", 54: "REGEX", 55: "REGEX_START", 57: "REGEX_END", 59: ",", 61: "JS", 62: "UNDEFINED", 63: "NULL", 64: "BOOL", 65: "INFINITY", 66: "NAN", 68: "=", 72: ":", 75: "[", 76: "]", 77: "@", 78: "...", 83: "SUPER", 86: "DYNAMIC_IMPORT", 87: ".", 88: "?.", 89: "::", 90: "?::", 91: "INDEX_START", 92: "INDEX_END", 93: "INDEX_SOAK", 94: "RETURN", 95: "PARAM_START", 96: "PARAM_END", 98: "->", 99: "=>", 107: "ES6_OPTIONAL_INDEX", 111: "NEW_TARGET", 112: "IMPORT_META", 113: "{", 114: "FOR", 116: "FOROF", 117: "}", 118: "WHEN", 119: "OWN", 121: "CLASS", 122: "EXTENDS", 123: "IMPORT", 128: "AS", 129: "DEFAULT", 130: "IMPORT_ALL", 131: "EXPORT", 133: "EXPORT_ALL", 135: "ES6_OPTIONAL_CALL", 136: "FUNC_EXIST", 138: "THIS", 143: "..", 148: "TRY", 150: "FINALLY", 151: "CATCH", 152: "THROW", 153: "(", 154: ")", 156: "WHILE", 157: "UNTIL", 159: "LOOP", 160: "FORIN", 161: "BY", 162: "FORFROM", 163: "AWAIT", 166: "SWITCH", 168: "ELSE", 170: "LEADING_WHEN", 172: "IF", 174: "UNLESS", 175: "POST_IF", 176: "POST_UNLESS", 177: "UNARY", 178: "DO", 179: "DO_IIFE", 180: "UNARY_MATH", 181: "-", 182: "+", 183: "--", 184: "++", 185: "?", 186: "MATH", 187: "**", 188: "SHIFT", 189: "COMPARE", 190: "&", 191: "^", 192: "|", 193: "&&", 194: "||", 195: "??", 196: "!?", 197: "RELATION", 198: "SPACE?", 199: "COMPOUND_ASSIGN"};
 
 
+// Operator precedence table (higher = binds tighter)
+const OPERATOR_PRECEDENCE = {
+  [SYM_OR]: 1,
+  [SYM_AND]: 2,
+  [SYM_NULLISH]: 3,
+  [SYM_OTHERWISE]: 3,
+  [SYM_BITOR]: 4,
+  [SYM_BITXOR]: 5,
+  [SYM_BITAND]: 6,
+  [SYM_COMPARE]: 7,
+  [SYM_RELATION]: 8,
+  [SYM_SHIFT]: 9,
+  [SYM_PLUS]: 10,
+  [SYM_MINUS]: 10,
+  [SYM_MATH]: 11,
+  [SYM_POWER]: 12
+};
+
+// Operator associativity (default is 'left')
+const OPERATOR_ASSOCIATIVITY = {
+  [SYM_POWER]: 'right',  // 2**3**4 = 2**(3**4)
+};
+
+
 const parser = {
   lexer: null,
   la: null,          // Current lookahead token {id, value}
@@ -611,6 +635,29 @@ const parser = {
     }
     default: this._error([131], this.la.id);
     }
+  },
+
+  parseOperation(minPrec = 0) {
+    let left = this.parseValue();
+    
+    while (this.la && this.la.id !== SYM_EOF) {
+      const prec = OPERATOR_PRECEDENCE[this.la.id];
+      if (prec === undefined || prec < minPrec) break;
+      
+      const op = this.la.id;
+      const assoc = OPERATOR_ASSOCIATIVITY[op] || 'left';
+      this._match(op);
+      
+      // Right-associative: same prec; Left-associative: higher prec
+      const nextPrec = prec + (assoc === 'right' ? 0 : 1);
+      const right = this.parseOperation(nextPrec);
+      
+      // Build AST node with operator name
+      const opName = TOKEN_NAMES[op] || op;
+      left = [opName, left, right];
+    }
+    
+    return left;
   },
 
 };  // End of parser object

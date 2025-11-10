@@ -698,6 +698,7 @@ class Generator
   _generatePRD: ->
     # Generate the parser using predictive recursive descent
     symbolConstants = @_generateSymbolConstants()
+    precedenceTables = @_generatePrecedenceTables()
     parserShell = @_generateParserShell()
     parseFunctions = @_generateParseFunctions()
 
@@ -706,6 +707,8 @@ class Generator
 
     #{symbolConstants}
 
+    #{precedenceTables}
+
     #{parserShell}
 
     #{parseFunctions}
@@ -713,6 +716,84 @@ class Generator
     export { parser }
     export const parse = parser.parse.bind(parser)
     export default parser
+    """
+
+  # ============================================================================
+  # Phase 6: Operator Precedence Climbing
+  # ============================================================================
+
+  _generatePrecedenceTables: ->
+    # Generate precedence and associativity tables for binary operators
+    # Based on JavaScript/CoffeeScript operator precedence
+    
+    output = []
+    output.push "// Operator precedence table (higher = binds tighter)"
+    output.push "const OPERATOR_PRECEDENCE = {"
+    
+    # Define precedence levels (from lowest to highest)
+    precedenceLevels = [
+      {level: 1, ops: ['||']},
+      {level: 2, ops: ['&&']},
+      {level: 3, ops: ['??', '!?']},  # Nullish coalescing, otherwise
+      {level: 4, ops: ['|']},         # Bitwise OR
+      {level: 5, ops: ['^']},         # Bitwise XOR
+      {level: 6, ops: ['&']},         # Bitwise AND
+      {level: 7, ops: ['COMPARE']},   # == != === !==
+      {level: 8, ops: ['RELATION']},  # < > <= >= in of instanceof
+      {level: 9, ops: ['SHIFT']},     # << >> >>>
+      {level: 10, ops: ['+', '-']},   # Addition, subtraction
+      {level: 11, ops: ['MATH']},     # * / % //
+      {level: 12, ops: ['**']},       # Power (highest)
+    ]
+    
+    entries = []
+    for {level, ops} in precedenceLevels
+      for op in ops
+        symbolId = @symbolIds[op]
+        continue unless symbolId
+        constName = @_getSymbolConstName(@tokenNames[symbolId] or op)
+        entries.push "  [#{constName}]: #{level}"
+    
+    output.push entries.join(',\n')
+    output.push "};"
+    output.push ""
+    
+    # Associativity table (only non-left operators)
+    output.push "// Operator associativity (default is 'left')"
+    output.push "const OPERATOR_ASSOCIATIVITY = {"
+    output.push "  [SYM_POWER]: 'right',  // 2**3**4 = 2**(3**4)"
+    output.push "};"
+    output.push ""
+    
+    output.join('\n')
+
+  _generateOperationFunction: ->
+    # Generate precedence climbing function for binary operators
+    # Handles all precedence levels in one recursive function
+    
+    """
+      parseOperation(minPrec = 0) {
+        let left = this.parseValue();
+        
+        while (this.la && this.la.id !== SYM_EOF) {
+          const prec = OPERATOR_PRECEDENCE[this.la.id];
+          if (prec === undefined || prec < minPrec) break;
+          
+          const op = this.la.id;
+          const assoc = OPERATOR_ASSOCIATIVITY[op] || 'left';
+          this._match(op);
+          
+          // Right-associative: same prec; Left-associative: higher prec
+          const nextPrec = prec + (assoc === 'right' ? 0 : 1);
+          const right = this.parseOperation(nextPrec);
+          
+          // Build AST node with operator name
+          const opName = TOKEN_NAMES[op] || op;
+          left = [opName, left, right];
+        }
+        
+        return left;
+      },
     """
 
   _generateSymbolConstants: ->
@@ -853,8 +934,8 @@ class Generator
       'ObjAssignable',        # Object literal dispatch
       'SimpleObjAssignable',  # Simple object keys
       'ObjSpreadExpr',        # Object spread expressions
-      'Operation',            # Needs precedence climbing (Phase 6)
-      'Assign'                # Compound operators (Phase 6)
+      'Assign'                # Compound operators (skip for now)
+      # Note: Operation handled specially below, not skipped
     ]
 
     # Expanded set for parsing programs
@@ -875,13 +956,21 @@ class Generator
       'Block', 'Return', 'Yield',
       'RangeDots',  # For ranges
       # Module system (basic - minimal)
-      'Import', 'Export'
+      'Import', 'Export',
+      # Phase 6: Add Operation with special handling
+      'Operation'  # ← Special: uses precedence climbing
     ]
 
     for name in nonterminals
       continue if name in SKIP_GENERATION
-      func = @_generateParseFunction(name)
-      functions.push(func) if func
+      
+      # Phase 6: Special handling for Operation
+      if name is 'Operation'
+        func = @_generateOperationFunction()
+        functions.push(func) if func
+      else
+        func = @_generateParseFunction(name)
+        functions.push(func) if func
 
     # Close parser object
     functions.push "};  // End of parser object"
@@ -986,7 +1075,7 @@ class Generator
     # Generate switch-based dispatch for non-left-recursive nonterminals
 
     # Skip list for intermediate dispatchers
-    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr']
+    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr', 'Operation', 'Assign']
 
     # Check for empty rule
     emptyRule = rules.find (rule) => not rule.symbols[0] or rule.symbols[0] is ''
