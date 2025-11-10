@@ -123,11 +123,10 @@ const parser = {
 
   parseLine() {
     switch (this.la.id) {
-    case SYM_DEF: case SYM_YIELD: case SYM_IDENTIFIER: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_REGEX: case SYM_REGEX_START: case SYM_JS: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LBRACKET: case SYM_AT: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_LBRACE: case SYM_FOR: case SYM_CLASS: case SYM_THIS: case SYM_TRY: case SYM_THROW: case SYM_LPAREN: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: case SYM_AWAIT: case SYM_SWITCH: case SYM_IF: case SYM_UNLESS: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_DEC: case SYM_INC:
+    case SYM_STATEMENT: case SYM_DEF: case SYM_YIELD: case SYM_IDENTIFIER: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_REGEX: case SYM_REGEX_START: case SYM_JS: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LBRACKET: case SYM_AT: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_RETURN: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_LBRACE: case SYM_FOR: case SYM_CLASS: case SYM_IMPORT: case SYM_EXPORT: case SYM_THIS: case SYM_TRY: case SYM_THROW: case SYM_LPAREN: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: case SYM_AWAIT: case SYM_SWITCH: case SYM_IF: case SYM_UNLESS: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_DEC: case SYM_INC:
       return this.parseExpression();
     case SYM_PARAM_START: case SYM_THIN_ARROW: case SYM_FAT_ARROW: case SYM_UNARY: case SYM_DO: case SYM_DO_IIFE:
       return this.parseExpressionLine();
-    case SYM_STATEMENT: case SYM_RETURN: case SYM_IMPORT: case SYM_EXPORT: return this.parseStatement();
     default: this._error([11, 27, 35, 40, 44, 46, 47, 54, 55, 61, 62, 63, 64, 65, 66, 75, 77, 83, 86, 94, 95, 98, 99, 111, 112, 113, 114, 121, 123, 131, 138, 148, 152, 153, 156, 157, 159, 163, 166, 172, 174, 177, 178, 179, 180, 181, 182, 183, 184], this.la.id);
     }
   },
@@ -639,25 +638,144 @@ const parser = {
 
   parseOperation(minPrec = 0) {
     let left = this.parseValue();
-    
+
     while (this.la && this.la.id !== SYM_EOF) {
       const prec = OPERATOR_PRECEDENCE[this.la.id];
       if (prec === undefined || prec < minPrec) break;
-      
+
       const op = this.la.id;
       const assoc = OPERATOR_ASSOCIATIVITY[op] || 'left';
       this._match(op);
-      
+
       // Right-associative: same prec; Left-associative: higher prec
       const nextPrec = prec + (assoc === 'right' ? 0 : 1);
       const right = this.parseOperation(nextPrec);
-      
+
       // Build AST node with operator name
       const opName = TOKEN_NAMES[op] || op;
       left = [opName, left, right];
     }
-    
+
     return left;
+  },
+
+  parseCode() {
+    switch (this.la.id) {
+    case SYM_PARAM_START: {
+      this._match(95);
+            const tok2 = this.parseParamList();
+            this._match(96);
+            const tok4 = this.parseFuncGlyph();
+            const tok5 = this.parseBlock();
+            return [tok4, tok2, tok5];
+    }
+    case SYM_THIN_ARROW: case SYM_FAT_ARROW: {
+      const tok1 = this.parseFuncGlyph();
+            const tok2 = this.parseBlock();
+            return [tok1, [], tok2];
+    }
+    default: this._error([95, 98, 99], this.la.id);
+    }
+  },
+
+  parseCodeLine() {
+    switch (this.la.id) {
+    case SYM_PARAM_START: {
+      this._match(95);
+            const tok2 = this.parseParamList();
+            this._match(96);
+            const tok4 = this.parseFuncGlyph();
+            const tok5 = this.parseLine();
+            return [tok4, tok2, tok5];
+    }
+    case SYM_THIN_ARROW: case SYM_FAT_ARROW: {
+      const tok1 = this.parseFuncGlyph();
+            const tok2 = this.parseLine();
+            return [tok1, [], tok2];
+    }
+    default: this._error([95, 98, 99], this.la.id);
+    }
+  },
+
+  parseExpressionLine() {
+    switch (this.la.id) {
+    case SYM_PARAM_START: case SYM_THIN_ARROW: case SYM_FAT_ARROW: return this.parseCodeLine();
+    default: this._error([95, 98, 99], this.la.id);
+    }
+  },
+
+  parseFuncGlyph() {
+    switch (this.la.id) {
+    case SYM_THIN_ARROW: return this._match(98);
+    case SYM_FAT_ARROW: return this._match(99);
+    default: this._error([98, 99], this.la.id);
+    }
+  },
+
+  parseThrow() {
+    switch (this.la.id) {
+    case SYM_THROW: {
+      this._match(152);
+      const next = this._peek();
+
+      if (next === SYM_INDENT) {
+        this._match(36);
+        const tok3 = this.parseObject();
+        this._match(38);
+        return ["throw", tok3];
+      } else {
+        const tok2 = this.parseExpression();
+        return ["throw", tok2];
+      }
+    }
+    default: this._error([152], this.la.id);
+    }
+  },
+
+  parseArguments() {
+    switch (this.la.id) {
+    case SYM_CALL_START: {
+      this._match(29);
+      const next = this._peek();
+
+      if (next === SYM_CALL_END) {
+        this._match(31);
+        return [];
+      } else {
+        const tok2 = this.parseArgList();
+        this.parseOptComma();
+        this._match(31);
+        return tok2;
+      }
+    }
+    default: this._error([29], this.la.id);
+    }
+  },
+
+  parseArgList() {
+    // Left-recursive: ArgList → Arg | ArgList , Arg
+    const items = [this.parseArg()];
+
+    // Iteration with FOLLOW-based termination
+    while (this.la && this.la.id === SYM_COMMA) {
+      this._match(SYM_COMMA);
+      // FOLLOW(ArgList) = {, ,, CALL_END, TERMINATOR, OUTDENT, INDENT}
+      if (this.la.id === SYM_EOF || this.la.id === SYM_CALL_END || this.la.id === SYM_TERMINATOR || this.la.id === SYM_OUTDENT || this.la.id === SYM_INDENT) break;
+      items.push(this.parseArg());
+    }
+
+    return items;
+  },
+
+  parseArg() {
+    switch (this.la.id) {
+    case SYM_STATEMENT: case SYM_DEF: case SYM_YIELD: case SYM_IDENTIFIER: case SYM_NUMBER: case SYM_STRING: case SYM_STRING_START: case SYM_REGEX: case SYM_REGEX_START: case SYM_JS: case SYM_UNDEFINED: case SYM_NULL: case SYM_BOOL: case SYM_INFINITY: case SYM_NAN: case SYM_LBRACKET: case SYM_AT: case SYM_SUPER: case SYM_DYNAMIC_IMPORT: case SYM_RETURN: case SYM_NEW_TARGET: case SYM_IMPORT_META: case SYM_LBRACE: case SYM_FOR: case SYM_CLASS: case SYM_IMPORT: case SYM_EXPORT: case SYM_THIS: case SYM_TRY: case SYM_THROW: case SYM_LPAREN: case SYM_WHILE: case SYM_UNTIL: case SYM_LOOP: case SYM_AWAIT: case SYM_SWITCH: case SYM_IF: case SYM_UNLESS: case SYM_UNARY_MATH: case SYM_MINUS: case SYM_PLUS: case SYM_DEC: case SYM_INC:
+      return this.parseExpression();
+    case SYM_PARAM_START: case SYM_THIN_ARROW: case SYM_FAT_ARROW: case SYM_UNARY: case SYM_DO: case SYM_DO_IIFE:
+      return this.parseExpressionLine();
+    case SYM_ELLIPSIS: return "...";
+    default: this._error([11, 27, 35, 40, 44, 46, 47, 54, 55, 61, 62, 63, 64, 65, 66, 75, 77, 78, 83, 86, 94, 95, 98, 99, 111, 112, 113, 114, 121, 123, 131, 138, 148, 152, 153, 156, 157, 159, 163, 166, 172, 174, 177, 178, 179, 180, 181, 182, 183, 184], this.la.id);
+    }
   },
 
 };  // End of parser object

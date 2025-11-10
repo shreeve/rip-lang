@@ -934,17 +934,28 @@ class Generator
       'ObjAssignable',        # Object literal dispatch
       'SimpleObjAssignable',  # Simple object keys
       'ObjSpreadExpr',        # Object spread expressions
-      'Assign'                # Compound operators (skip for now)
-      # Note: Operation handled specially below, not skipped
+      'Assign',               # Compound operators (skip for now)
+      # Phase 7: Inline Statement to break Expression ↔ Statement cycle
+      'Statement',            # Inline into Expression (Return, Import, Export)
+      # ExpressionLine removed - can be generated (dispatches to CodeLine)
+      'OperationLine',        # Inline into ExpressionLine/Line
+      # Phase 7: Skip complex control flow (accept partial coverage)
+      'For',                  # Complex: comprehensions, multiple variants
+      'While',                # Complex: while/until loops
+      'Until',                # Complex: until loops
+      'Loop',                 # Complex: infinite loops
+      'Class',                # Complex: class definitions
+      'Switch',               # Complex: switch statements
+      # Note: Operation handled specially, not in this list
     ]
 
     # Expanded set for parsing programs
-    # Phase 4: Focus on multi-symbol rules without circular dependencies
+    # Phase 7: Pragmatic approach - generate what we can, document limitations
     nonterminals = [
       # Core flow
       'Root', 'Body', 'Line',
-      # Base layer - no Expression/Statement yet (creates circular deps)
-      'Value',  # Dispatches to literals and simple constructs
+      # Base layer
+      'Value',       # Dispatches to literals and simple constructs
       # Group 1: Base values ✅
       'Identifier', 'Property', 'ThisProperty',
       'Literal', 'AlphaNumeric', 'String', 'Regex',
@@ -955,10 +966,20 @@ class Generator
       # Simple constructs
       'Block', 'Return', 'Yield',
       'RangeDots',  # For ranges
-      # Module system (basic - minimal)
+      # Module system
       'Import', 'Export',
-      # Phase 6: Add Operation with special handling
-      'Operation'  # ← Special: uses precedence climbing
+      # Phase 6: Operation with precedence climbing
+      'Operation',  # ← Special: uses precedence climbing
+      # Phase 7: Additional functions (no Expression yet)
+      'Code',            # Arrow functions (block body)
+      'CodeLine',        # Arrow functions (single line)
+      'ExpressionLine',  # Dispatches to CodeLine (OperationLine skipped)
+      'FuncGlyph',       # -> or =>
+      'Throw',           # throw statements
+      'Arguments',       # Function call arguments
+      'ArgList',         # Argument list
+      'Arg',             # Single argument
+      # Note: Expression, If, Try, Statement have complex cycles - Phase 8
     ]
 
     for name in nonterminals
@@ -1074,8 +1095,8 @@ class Generator
   _generateSwitchFunction: (nonTerminal, rules) ->
     # Generate switch-based dispatch for non-left-recursive nonterminals
 
-    # Skip list for intermediate dispatchers
-    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr', 'Operation', 'Assign']
+    # Skip list for intermediate dispatchers (must match list in _generateParseFunctions)
+    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr', 'Operation', 'Assign', 'Statement', 'OperationLine', 'For', 'While', 'Until', 'Loop', 'Class', 'Switch']
 
     # Check for empty rule
     emptyRule = rules.find (rule) => not rule.symbols[0] or rule.symbols[0] is ''
@@ -1091,11 +1112,21 @@ class Generator
       # Skip empty rules (will add as default later)
       continue if not firstSymbol or firstSymbol is ''
 
-      # If first symbol is a skipped nonterminal, expand through it
+      # If first symbol is a skipped nonterminal, try to expand through it
       if firstSymbol in SKIP_GENERATION and @types[firstSymbol]
-        # Recursively get alternatives from skipped nonterminal
-        @_expandThroughSkippedNonterminal(firstSymbol, rule, dispatchMap, expectedTokens)
-        continue
+        # Check if this skipped symbol has alternatives we can expand to
+        skippedType = @types[firstSymbol]
+        hasExpandableAlternatives = skippedType.rules.some (childRule) =>
+          childFirst = childRule.symbols[0]
+          childFirst and childFirst isnt '' and childFirst not in SKIP_GENERATION
+        
+        if hasExpandableAlternatives
+          # Recursively get alternatives from skipped nonterminal
+          @_expandThroughSkippedNonterminal(firstSymbol, rule, dispatchMap, expectedTokens)
+          continue
+        else
+          # Can't expand - all alternatives also skipped. Skip this rule entirely.
+          continue
 
       # Get terminal FIRST tokens for this rule
       # If first symbol is nonterminal → use its terminal FIRST set
@@ -1152,19 +1183,35 @@ class Generator
     # Pass 2: Handle remaining tokens (not handled by lookahead)
     # Group by RULE (not token) to avoid duplicate case labels
     ruleTokenMap = {}
-
+    
     for own tokenId, rulesForToken of dispatchMap
       continue unless @tokenNames[tokenId]
-
-      # If multiple rules but not all (FALSE ambiguity), pick the preferred one
-      rule = if rulesForToken.length > 1
-        # Pick last rule (often more specific - oracle's preference)
-        rulesForToken[rulesForToken.length - 1]
+      
+      # Filter out rules with skipped first symbols that can't be expanded
+      validRules = rulesForToken.filter (r) =>
+        firstSym = r.symbols[0]
+        return true unless firstSym
+        return true unless @types[firstSym]  # Terminal - always valid
+        return true unless firstSym in SKIP_GENERATION  # Not skipped - valid
+        
+        # First symbol is skipped - check if expandable
+        skippedType = @types[firstSym]
+        hasExpandable = skippedType.rules.some (childRule) =>
+          childFirst = childRule.symbols[0]
+          childFirst and childFirst isnt '' and childFirst not in SKIP_GENERATION
+        hasExpandable
+      
+      continue if validRules.length is 0  # No valid rules for this token
+      
+      # Pick the preferred valid rule
+      rule = if validRules.length > 1
+        # Pick last valid rule (often more specific)
+        validRules[validRules.length - 1]
       else
-        rulesForToken[0]
-
+        validRules[0]
+      
       continue if processedRules.has(rule.id)  # Skip if already handled by lookahead
-
+      
       # Group tokens by rule
       ruleTokenMap[rule.id] ?= {rule: rule, tokens: []}
       ruleTokenMap[rule.id].tokens.push(parseInt(tokenId))
@@ -1615,7 +1662,7 @@ class Generator
     # E.g., Value → Assignable expands to Value → SimpleAssignable | Array | Object
     #       Then SimpleAssignable expands to Identifier | ThisProperty (base cases only)
 
-    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr', 'Operation', 'Assign']
+    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr', 'Operation', 'Assign', 'Statement', 'OperationLine', 'For', 'While', 'Until', 'Loop', 'Class', 'Switch']
 
     skippedType = @types[skippedSymbol]
     return unless skippedType
@@ -1659,7 +1706,7 @@ class Generator
     # Generate code to get value at this position
     symbolObj = @symbolTable.get(symbol)
 
-    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr', 'Operation', 'Assign']
+    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr', 'Operation', 'Assign', 'Statement', 'OperationLine', 'For', 'While', 'Until', 'Loop', 'Class', 'Switch']
 
     if symbolObj instanceof Token
       # Terminal: call _match
