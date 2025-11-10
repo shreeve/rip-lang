@@ -63,6 +63,39 @@ Does it seem high quality and clean?
 
 ==
 
+Rip's heredocs (''' non-interpolating, """ interpolating) support visual margin control: when the closing delimiter is preceded only by whitespace, its column position becomes the "left margin" for all content lines. Text indented to the right of this baseline retains its relative indentation, while text at or left of the baseline is stripped to match it. This makes code generation elegant—just position the closing ''' or """ where you want the baseline, and the output aligns perfectly without manual indentation management.
+
+• Two heredoc types: ''' (literal) and """ (interpolating)
+• Visual margin control: Closing delimiter's column = left margin baseline
+• Smart stripping: Only when closing delimiter has only whitespace before it
+• Relative indentation preserved: Text right of baseline keeps its indent offset
+• Perfect for codegen: Position closing delimiter → instant clean alignment
+• Example: Closing at column 2 strips 2 spaces from all lines, closing at column 0 preserves all indentation
+
+--
+
+Actions in the grammar are simple.
+
+1) empty value means use token 1 (1-indexed)
+2) "" or null means use those as-is
+3) a number 1 or 3 means use token 1 or 3
+4) a string with numbers will be converted to the token position
+5) if a bare number should be protected, then token numbers use a $n and bare numbers are untouched
+
+--
+
+Grammar actions in Rip use a simple, intuitive indexing system: empty/undefined defaults to token 1 (first matched symbol), literal "" or null pass through as-is, bare numbers (1, 3, etc.) reference token positions (1-indexed), and strings containing numbers automatically convert to token position references. For strings needing literal numbers, use $n syntax for token references (e.g., $1, $3) while bare numbers remain untouched—this prevents ambiguity between "return token 2" versus "return the number 2".
+
+• Default (empty/undefined): Returns token 1 (first matched symbol)
+• Literal values: "" or null pass through unchanged
+• Bare numbers: 1, 3, etc. reference token positions (1-indexed)
+• String actions: Numbers in strings auto-convert to token positions
+• Protected literals: Use $n syntax ($1, $3) for tokens; bare numbers stay literal
+• Example: '["array", ...2]' → token 2 spreads into array; '["if", $1, $3]' → tokens 1 and 3, not numbers
+
+
+==
+
 Lexer+Rewriter
     1943    8247   75721 lexer.js
     1138    5765   49855 rewriter.js
