@@ -838,87 +838,181 @@ class Generator
     '''
 
   _generateParseFunctions: ->
-    # Generate parse functions - start with minimum set to prove pattern
+    # Generate parse functions by consulting SLR(1) oracle
     functions = []
 
-    # Minimum set: Root, Body, Line, Expression, Identifier
-    functions.push @_generateParseRoot()
-    functions.push @_generateParseBody()
-    functions.push @_generateParseLine()
-    functions.push @_generateParseExpression()
-    functions.push @_generateParseIdentifier()
+    # Start with select nonterminals to prove oracle consultation works
+    nonterminals = ['Root', 'Literal', 'Identifier', 'Property']
+
+    for name in nonterminals
+      functions.push @_generateParseFunction(name)
 
     # Close parser object
     functions.push "};  // End of parser object"
 
     functions.join('\n\n')
 
-  _generateParseRoot: ->
-    # Root → '' | Body
-    # Actions: '["program"]' | '["program", ...1]'
-    '''
-      parseRoot() {
-        // Empty program
-        if (this.la === null || this.la.id === SYM_EOF) {
-          return ["program"];
+  _generateParseFunction: (nonTerminal) ->
+    # Consult SLR(1) oracle to generate parse function
+    type = @types[nonTerminal]
+    return '' unless type
+
+    rules = type.rules
+    return '' unless rules.length > 0
+
+    # Build dispatch map: FIRST token → rule
+    dispatchMap = {}
+    expectedTokens = new Set()
+    
+    for rule in rules
+      firstSymbol = rule.symbols[0]
+      
+      # Skip empty rules
+      continue if not firstSymbol or firstSymbol is ''
+      
+      # Get terminal FIRST tokens for this rule
+      # If first symbol is nonterminal → use its terminal FIRST set
+      # If first symbol is terminal → use its ID directly
+      firstTokens = if @types[firstSymbol]
+        # Nonterminal → get its terminal FIRST set (computed recursively by SLR(1))
+        Array.from(@types[firstSymbol].firsts)
+      else
+        # Terminal → use its ID directly
+        [@symbolIds[firstSymbol]]
+      
+      # Map each terminal FIRST token to this rule
+      for tokenId in firstTokens
+        continue unless @tokenNames[tokenId]  # Only terminals with names
+        expectedTokens.add(tokenId)
+        dispatchMap[tokenId] = dispatchMap[tokenId] or []
+        dispatchMap[tokenId].push(rule)
+
+    # Generate switch statement - group by rule to avoid duplicates
+    ruleToTokens = {}
+    processed = {}
+
+    for own tokenId, rulesForToken of dispatchMap
+      rule = rulesForToken[0]  # Assume no conflicts for now
+      ruleKey = rule.id
+
+      if not processed[ruleKey]
+        ruleToTokens[ruleKey] = {rule: rule, tokens: []}
+        processed[ruleKey] = true
+
+      ruleToTokens[ruleKey].tokens.push(parseInt(tokenId))
+
+    # Generate cases
+    cases = []
+
+    for own ruleKey, data of ruleToTokens
+      {rule, tokens} = data
+
+      # Convert token IDs to SYM_* constants
+      tokenNames = []
+      for tokenId in tokens
+        tokenName = @tokenNames[tokenId]
+        continue unless tokenName  # Skip if no name (epsilon or undefined)
+        # Use operator name mapping if available
+        constName = @_getSymbolConstName(tokenName)
+        tokenNames.push(constName)
+
+      # Skip this rule if no valid tokens
+      continue if tokenNames.length is 0
+
+      # Compile action
+      action = @_compileAction(rule)
+
+      # Format: stack case labels, then action on same/next line
+      caseStr = tokenNames.map((n) -> "case #{n}").join(': ')
+      if caseStr.length + action.length < 100
+        cases.push("    #{caseStr}: #{action}")
+      else
+        cases.push("    #{caseStr}")
+        cases.push("      #{action}")
+
+    # Generate error case with numeric IDs
+    expectedArray = Array.from(expectedTokens).sort((a,b) -> a - b).join(', ')
+    cases.push("    default: this._error([#{expectedArray}], this.la.id);")
+
+    # Generate function
+    funcName = "parse#{nonTerminal}"
+    """
+      #{funcName}() {
+        switch (this.la.id) {
+    #{cases.join('\n')}
         }
-        // Program with body
-        const tok1 = this.parseBody();
-        return ["program", ...tok1];
       },
-    '''
+    """
 
-  _generateParseBody: ->
-    # Body → Line | Body TERMINATOR Line
-    # This is left-recursive, so generate while loop
-    '''
-      parseBody() {
-        const items = [this.parseLine()];
+  _compileAction: (rule) ->
+    # Compile grammar action into JavaScript return statement
+    # Actions reference token positions (1-indexed)
+    # In PRD, these are local variables or function calls
 
-        // Left recursion → iteration with FOLLOW check
-        while (this.la && this.la.id === SYM_TERMINATOR) {
-          this._match(SYM_TERMINATOR);
-          // FOLLOW(Body) includes OUTDENT, EOF
-          if (!this.la || this.la.id === SYM_OUTDENT || this.la.id === SYM_EOF) break;
-          items.push(this.parseLine());
-        }
+    action = rule.action
+    symbols = rule.symbols
 
-        return items;
-      },
-    '''
+    # Default action: return first symbol
+    if not action or action is 1
+      if symbols.length is 0
+        return "return [];"
+      else if symbols.length is 1
+        return @_generateSymbolRef(symbols[0], 1)
+      else
+        return @_generateSymbolRef(symbols[0], 1)
 
-  _generateParseLine: ->
-    # Line → Expression | ExpressionLine | Statement
-    # For now, just handle Expression
-    '''
-      parseLine() {
-        // Simplified: just parse Expression
-        return this.parseExpression();
-      },
-    '''
+    # Handle literal actions
+    if typeof action is 'string'
+      # Simple string return like '"null"' or '"undefined"'
+      if action.match(/^"[^"]*"$/) or action.match(/^'[^']*'$/)
+        return "return #{action};"
 
-  _generateParseExpression: ->
-    # Expression → Value | Code | Operation | Assign | If | Try | While | For | Switch | Class | Throw | Yield | Def
-    # For now, just handle Identifier (via Value)
-    '''
-      parseExpression() {
-        // Simplified: just handle identifiers for now
-        if (this.la.id === SYM_IDENTIFIER) {
-          return this.parseIdentifier();
-        }
-        this._error([SYM_IDENTIFIER], this.la.id);
-      },
-    '''
+      # Action contains position references - need to compile
+      compiled = @_compileActionString(action, symbols)
+      return "return #{compiled};"
 
-  _generateParseIdentifier: ->
-    # Identifier → IDENTIFIER
-    # Action: default (return token 1)
-    '''
-      parseIdentifier() {
-        const tok = this._match(SYM_IDENTIFIER);
-        return tok;  // Return complete token with metadata
-      }
-    '''
+    # Numeric action - return that position
+    if typeof action is 'number'
+      return @_generateSymbolRef(symbols[action - 1], action)
+
+    return "return undefined;"
+
+  _generateSymbolRef: (symbol, position) ->
+    # Generate code to get value at this position
+    # Check if terminal or nonterminal
+    symbolObj = @symbolTable.get(symbol)
+
+    if symbolObj instanceof Token
+      # Terminal: call _match
+      symbolId = @symbolIds[symbol]
+      return "return this._match(#{symbolId});"
+    else
+      # Nonterminal: call parse function
+      funcName = "parse#{symbol}"
+      return "return this.#{funcName}();"
+
+  _getSymbolConstName: (tokenName) ->
+    # Convert token name to SYM_* constant name
+    operatorNames =
+      ',': 'COMMA', '=': 'ASSIGN', ':': 'COLON', '[': 'LBRACKET', ']': 'RBRACKET'
+      '@': 'AT', '...': 'ELLIPSIS', '.': 'DOT', '?.': 'OPT_DOT', '::': 'PROTO'
+      '?::': 'OPT_PROTO', '->': 'THIN_ARROW', '=>': 'FAT_ARROW', '{': 'LBRACE'
+      '}': 'RBRACE', '..': 'RANGE_INCL', '(': 'LPAREN', ')': 'RPAREN', '-': 'MINUS'
+      '+': 'PLUS', '--': 'DEC', '++': 'INC', '?': 'QUESTION', '**': 'POWER'
+      '&': 'BITAND', '^': 'BITXOR', '|': 'BITOR', '&&': 'AND', '||': 'OR'
+      '??': 'NULLISH', '!?': 'OTHERWISE', 'SPACE?': 'TERNARY_Q'
+
+    if operatorNames[tokenName]
+      "SYM_#{operatorNames[tokenName]}"
+    else
+      "SYM_#{tokenName.toUpperCase().replace(/[^A-Z0-9_]/g, '_')}"
+
+  _compileActionString: (actionStr, symbols) ->
+    # Compile action string like '["=", 1, 3]' into JavaScript
+    # Position numbers need to be replaced with symbol references
+
+    # For now, simple passthrough - will enhance in next iteration
+    actionStr
 
   _generateModuleCore: ->
     tableCode = @_generateTableCode @parseTable
