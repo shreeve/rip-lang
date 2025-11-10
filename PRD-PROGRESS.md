@@ -565,6 +565,81 @@ parseValue() {
 
 ---
 
+## Lessons Learned
+
+### 1. FIRST Sets Need Terminal Extraction
+
+**Issue:** `rule.firsts` contains nonterminal IDs, not terminals  
+**Example:** `Literal → AlphaNumeric` has `rule.firsts = {43}` (AlphaNumeric's ID)
+
+**Solution:** Use `@types[symbol].firsts` for recursive terminal extraction:
+```coffeescript
+firstTokens = if @types[firstSymbol]
+  Array.from(@types[firstSymbol].firsts)  # Gets {NUMBER, STRING} not {AlphaNumeric}
+else
+  [@symbolIds[firstSymbol]]  # Already a terminal
+```
+
+### 2. Circular Dependencies from Accessor Rules
+
+**Issue:** `Value → Assignable → SimpleAssignable → Value . Property` creates infinite loop
+
+**Solution:** Skip intermediate dispatchers, inline to base cases:
+```coffeescript
+SKIP_GENERATION = ['Assignable', 'SimpleAssignable', ...]
+# parseValue() directly calls parseIdentifier(), parseArray(), etc.
+```
+
+### 3. FOLLOW Must Exclude Separator Token
+
+**Issue:** `Body → Body TERMINATOR Line` - checking `this.la.id === SYM_TERMINATOR` in FOLLOW caused early loop exit
+
+**Solution:** Filter separator from FOLLOW checks:
+```coffeescript
+for name in followSet
+  continue if name is separator  # Skip the loop token!
+```
+
+**Result:** Loop continues on consecutive TERMINATORs, only breaks on true FOLLOW tokens.
+
+### 4. Same FIRST Ambiguity Needs Lookahead
+
+**Issue:** `Return` has 3 rules all starting with RETURN:
+- `RETURN Expression`
+- `RETURN INDENT Object OUTDENT`  
+- `RETURN`
+
+**Solution:** Phase 5 will use `_peek()` to check second token:
+```javascript
+const next = this._peek();
+if (next === SYM_INDENT) { /* case 2 */ }
+else if (next === SYM_EOF || ...) { /* case 3 */ }
+else { /* case 1 - Expression */ }
+```
+
+### 5. Original Actions Must Be Preserved
+
+**Issue:** `rule.action` gets overwritten by `_processGrammarAction()` for table mode
+
+**Solution:** Store original before processing:
+```coffeescript
+originalAction = action  # Save before table processing
+rule.action = originalAction  # Store for PRD access
+```
+
+### 6. Multiple Rules Per Token - Take Last
+
+**Issue:** `Line → Expression | Statement` where RETURN appears in both FIRST sets
+
+**Solution:** When multiple rules match a token, prefer the last (more specific):
+```coffeescript
+rule = rulesForToken[rulesForToken.length - 1]  # Last = most specific
+```
+
+**Result:** RETURN correctly dispatches to Statement, not Expression.
+
+---
+
 ## Conclusion
 
 **Phases 1-3: ✅ COMPLETE**
