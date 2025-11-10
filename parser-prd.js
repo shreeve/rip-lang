@@ -633,24 +633,24 @@ const parser = {
 
   parseOperation(minPrec = 0) {
     let left = this.parseValue();
-
+    
     while (this.la && this.la.id !== SYM_EOF) {
       const prec = OPERATOR_PRECEDENCE[this.la.id];
       if (prec === undefined || prec < minPrec) break;
-
+      
       const op = this.la.id;
       const assoc = OPERATOR_ASSOCIATIVITY[op] || 'left';
       this._match(op);
-
+      
       // Right-associative: same prec; Left-associative: higher prec
       const nextPrec = prec + (assoc === 'right' ? 0 : 1);
       const right = this.parseOperation(nextPrec);
-
+      
       // Build AST node with operator name
       const opName = TOKEN_NAMES[op] || op;
       left = [opName, left, right];
     }
-
+    
     return left;
   },
 
@@ -876,238 +876,91 @@ const parser = {
   },
 
   parseFor() {
-    switch (this.la.id) {
-    case SYM_FOR: {
-      const tok1 = this._match(114);
-      const next = this._peek();
-
-      if (next === SYM_OWN) {
-        this._match(119);
-        const tok3 = this.parseForVariables();
-        this._match(116);
-        const tok5 = this.parseExpression();
-        const tok6 = this.parseBlock();
-        return ["for-of"  , tok3, tok5, true, null, tok6];
-      } else if (next === SYM_OWN) {
-        this._match(119);
-        const tok3 = this.parseForVariables();
-        this._match(116);
-        const tok5 = this.parseExpression();
-        this._match(118);
-        const tok7 = this.parseExpression();
-        const tok8 = this.parseBlock();
-        return ["for-of"  , tok3, tok5, true, tok7, tok8];
-      } else if (next === SYM_AWAIT) {
-        this._match(163);
-        const tok3 = this.parseForVariables();
-        this._match(162);
-        const tok5 = this.parseExpression();
-        const tok6 = this.parseBlock();
-        return ["for-from", tok3, tok5, true, null, tok6];
-      } else if (next === SYM_AWAIT) {
-        this._match(163);
-        const tok3 = this.parseForVariables();
-        this._match(162);
-        const tok5 = this.parseExpression();
-        this._match(118);
-        const tok7 = this.parseExpression();
-        const tok8 = this.parseBlock();
-        return ["for-from", tok3, tok5, true, tok7, tok8];
-      } else if (next === SYM_LBRACKET) {
-        const tok2 = this.parseRange();
-        const tok3 = this.parseBlock();
-        return ["for-in"  , [], tok2, null, null, tok3];
-      } else if (next === SYM_LBRACKET) {
-        const tok2 = this.parseRange();
+    this._match(114);  // FOR
+    const second = this._peek();
+    
+    // FOR OWN variants (for-of with own flag)
+    if (second === 119) {
+      this._match(119);  // OWN
+      const vars = this.parseForVariables();
+      this._match(116);  // FOROF
+      const source = this.parseExpression();
+      
+      // Optional BY clause
+      let step = null;
+      if (this.la.id === 161) {
         this._match(161);
-        const tok4 = this.parseExpression();
-        const tok5 = this.parseBlock();
-        return ["for-in"  , [], tok2, tok4, null, tok5];
-      } else if (next === SYM_FOR) {
-        this._match(114);
-        const tok3 = this.parseForVariables();
-        this._match(160);
-        const tok5 = this.parseExpression();
-        return ["comprehension", tok1, [["for-in"  , tok3, tok5, null]], []];
-      } else if (next === SYM_FOR) {
-        this._match(114);
-        const tok3 = this.parseForVariables();
-        this._match(160);
-        const tok5 = this.parseExpression();
-        this._match(118);
-        const tok7 = this.parseExpression();
-        return ["comprehension", tok1, [["for-in"  , tok3, tok5, null]], [tok7]];
-      } else if (next === SYM_FOR) {
-        this._match(114);
-        const tok3 = this.parseForVariables();
-        this._match(160);
-        const tok5 = this.parseExpression();
-        this._match(161);
-        const tok7 = this.parseExpression();
-        return ["comprehension", tok1, [["for-in"  , tok3, tok5, tok7]], []];
-      } else if (next === SYM_FOR) {
-        this._match(114);
-        const tok3 = this.parseForVariables();
-        this._match(160);
-        const tok5 = this.parseExpression();
-        this._match(118);
-        const tok7 = this.parseExpression();
-        this._match(161);
-        const tok9 = this.parseExpression();
-        return ["comprehension", tok1, [["for-in"  , tok3, tok5, tok9]], [tok7]];
-      } else if (next === SYM_FOR) {
-        this._match(114);
-        const tok3 = this.parseForVariables();
-        this._match(160);
-        const tok5 = this.parseExpression();
-        this._match(161);
-        const tok7 = this.parseExpression();
-        this._match(118);
-        const tok9 = this.parseExpression();
-        return ["comprehension", tok1, [["for-in"  , tok3, tok5, tok7]], [tok9]];
-      } else if (next === SYM_FOR) {
-        this._match(114);
-        const tok3 = this.parseForVariables();
-        this._match(116);
-        const tok5 = this.parseExpression();
-        return ["comprehension", tok1, [["for-of"  , tok3, tok5, false]], []];
-      } else if (next === SYM_FOR) {
-        this._match(114);
-        const tok3 = this.parseForVariables();
-        this._match(116);
-        const tok5 = this.parseExpression();
-        this._match(118);
-        const tok7 = this.parseExpression();
-        return ["comprehension", tok1, [["for-of"  , tok3, tok5, false]], [tok7]];
-      } else if (next === SYM_FOR) {
-        this._match(114);
-        this._match(119);
-        const tok4 = this.parseForVariables();
-        this._match(116);
-        const tok6 = this.parseExpression();
-        return ["comprehension", tok1, [["for-of"  , tok4, tok6, true]], []];
-      } else if (next === SYM_FOR) {
-        this._match(114);
-        this._match(119);
-        const tok4 = this.parseForVariables();
-        this._match(116);
-        const tok6 = this.parseExpression();
-        this._match(118);
-        const tok8 = this.parseExpression();
-        return ["comprehension", tok1, [["for-of"  , tok4, tok6, true]], [tok8]];
-      } else if (next === SYM_FOR) {
-        this._match(114);
-        const tok3 = this.parseForVariables();
-        this._match(162);
-        const tok5 = this.parseExpression();
-        return ["comprehension", tok1, [["for-from", tok3, tok5, false, null]], []];
-      } else if (next === SYM_FOR) {
-        this._match(114);
-        const tok3 = this.parseForVariables();
-        this._match(162);
-        const tok5 = this.parseExpression();
-        this._match(118);
-        const tok7 = this.parseExpression();
-        return ["comprehension", tok1, [["for-from", tok3, tok5, false, null]], [tok7]];
-      } else if (next === SYM_FOR) {
-        this._match(114);
-        this._match(163);
-        const tok4 = this.parseForVariables();
-        this._match(162);
-        const tok6 = this.parseExpression();
-        return ["comprehension", tok1, [["for-from", tok4, tok6, true, null]], []];
-      } else if (next === SYM_FOR) {
-        this._match(114);
-        this._match(163);
-        const tok4 = this.parseForVariables();
-        this._match(162);
-        const tok6 = this.parseExpression();
-        this._match(118);
-        const tok8 = this.parseExpression();
-        return ["comprehension", tok1, [["for-from", tok4, tok6, true, null]], [tok8]];
-      } else if (next === SYM_FOR) {
-        this._match(114);
-        const tok3 = this.parseRange();
-        return ["comprehension", tok1, [["for-in", [], tok3, null]], []];
-      } else if (next === SYM_FOR) {
-        this._match(114);
-        const tok3 = this.parseRange();
-        this._match(161);
-        const tok5 = this.parseExpression();
-        return ["comprehension", tok1, [["for-in", [], tok3, tok5]], []];
-      } else if ((next === SYM_IDENTIFIER || next === SYM_AT || next === SYM_LBRACKET || next === SYM_LBRACE)) {
-        const tok2 = this.parseForVariables();
-        this._match(160);
-        const tok4 = this.parseExpression();
-        const tok5 = this.parseBlock();
-        return ["for-in"  , tok2, tok4, null, null, tok5];
-      } else if ((next === SYM_IDENTIFIER || next === SYM_AT || next === SYM_LBRACKET || next === SYM_LBRACE)) {
-        const tok2 = this.parseForVariables();
-        this._match(160);
-        const tok4 = this.parseExpression();
-        this._match(118);
-        const tok6 = this.parseExpression();
-        const tok7 = this.parseBlock();
-        return ["for-in"  , tok2, tok4, null, tok6, tok7];
-      } else if ((next === SYM_IDENTIFIER || next === SYM_AT || next === SYM_LBRACKET || next === SYM_LBRACE)) {
-        const tok2 = this.parseForVariables();
-        this._match(160);
-        const tok4 = this.parseExpression();
-        this._match(161);
-        const tok6 = this.parseExpression();
-        const tok7 = this.parseBlock();
-        return ["for-in"  , tok2, tok4, tok6, null, tok7];
-      } else if ((next === SYM_IDENTIFIER || next === SYM_AT || next === SYM_LBRACKET || next === SYM_LBRACE)) {
-        const tok2 = this.parseForVariables();
-        this._match(160);
-        const tok4 = this.parseExpression();
-        this._match(118);
-        const tok6 = this.parseExpression();
-        this._match(161);
-        const tok8 = this.parseExpression();
-        const tok9 = this.parseBlock();
-        return ["for-in"  , tok2, tok4, tok8, tok6, tok9];
-      } else if ((next === SYM_IDENTIFIER || next === SYM_AT || next === SYM_LBRACKET || next === SYM_LBRACE)) {
-        const tok2 = this.parseForVariables();
-        this._match(160);
-        const tok4 = this.parseExpression();
-        this._match(161);
-        const tok6 = this.parseExpression();
-        this._match(118);
-        const tok8 = this.parseExpression();
-        const tok9 = this.parseBlock();
-        return ["for-in"  , tok2, tok4, tok6, tok8, tok9];
-      } else if ((next === SYM_IDENTIFIER || next === SYM_AT || next === SYM_LBRACKET || next === SYM_LBRACE)) {
-        const tok2 = this.parseForVariables();
-        this._match(116);
-        const tok4 = this.parseExpression();
-        const tok5 = this.parseBlock();
-        return ["for-of"  , tok2, tok4, false, null, tok5];
-      } else if ((next === SYM_IDENTIFIER || next === SYM_AT || next === SYM_LBRACKET || next === SYM_LBRACE)) {
-        const tok2 = this.parseForVariables();
-        this._match(116);
-        const tok4 = this.parseExpression();
-        this._match(118);
-        const tok6 = this.parseExpression();
-        const tok7 = this.parseBlock();
-        return ["for-of"  , tok2, tok4, false, tok6, tok7];
-      } else if ((next === SYM_IDENTIFIER || next === SYM_AT || next === SYM_LBRACKET || next === SYM_LBRACE)) {
-        const tok2 = this.parseForVariables();
-        this._match(162);
-        const tok4 = this.parseExpression();
-        const tok5 = this.parseBlock();
-        return ["for-from", tok2, tok4, false, null, tok5];
-      } else {
-        const tok2 = this.parseForVariables();
-        this._match(162);
-        const tok4 = this.parseExpression();
-        this._match(118);
-        const tok6 = this.parseExpression();
-        const tok7 = this.parseBlock();
-        return ["for-from", tok2, tok4, false, tok6, tok7];
+        step = this.parseExpression();
       }
+      
+      // Optional WHEN clause
+      let guard = null;
+      if (this.la.id === 118) {
+        this._match(118);
+        guard = this.parseExpression();
+      }
+      
+      const body = this.parseBlock();
+      return ["for-of", vars, source, true, guard, body];
     }
-    default: this._error([11, 27, 35, 40, 44, 46, 47, 54, 55, 61, 62, 63, 64, 65, 66, 75, 77, 83, 86, 94, 95, 98, 99, 111, 112, 113, 114, 121, 123, 131, 138, 148, 152, 153, 156, 157, 159, 163, 166, 172, 174, 177, 178, 179, 180, 181, 182, 183, 184], this.la.id);
+    // FOR AWAIT variants (async iteration)
+    else if (second === 163) {
+      this._match(163);  // AWAIT
+      const vars = this.parseForVariables();
+      this._match(162);  // FORFROM
+      const source = this.parseExpression();
+      
+      // Optional WHEN clause
+      let guard = null;
+      if (this.la.id === 118) {
+        this._match(118);
+        guard = this.parseExpression();
+      }
+      
+      const body = this.parseBlock();
+      return ["for-from", vars, source, guard, body];
+    }
+    // FOR IN/OF variants (regular iteration)
+    else {
+      const vars = this.parseForVariables();
+      const loopType = this.la.id;
+      
+      if (loopType === 160) {
+        this._match(160);  // FORIN
+        const source = this.parseExpression();
+        
+        // Optional BY clause
+        let step = null;
+        if (this.la.id === 161) {
+          this._match(161);
+          step = this.parseExpression();
+        }
+        
+        // Optional WHEN clause
+        let guard = null;
+        if (this.la.id === 118) {
+          this._match(118);
+          guard = this.parseExpression();
+        }
+        
+        const body = this.parseBlock();
+        return ["for-in", vars, source, step, guard, body];
+      } else if (loopType === 116) {
+        this._match(116);  // FOROF
+        const source = this.parseExpression();
+        
+        // Optional WHEN clause
+        let guard = null;
+        if (this.la.id === 118) {
+          this._match(118);
+          guard = this.parseExpression();
+        }
+        
+        const body = this.parseBlock();
+        return ["for-of", vars, source, false, guard, body];
+      } else {
+        this._error([160, 116], loopType);
+      }
     }
   },
 
@@ -1751,6 +1604,124 @@ const parser = {
     case SYM_YIELD: return this.parseYield();
     case SYM_DEF: return this.parseDef();
     default: this._error([11, 27, 35, 40, 44, 46, 47, 54, 55, 61, 62, 63, 64, 65, 66, 75, 77, 83, 86, 94, 95, 98, 99, 111, 112, 113, 114, 121, 123, 131, 138, 148, 152, 153, 156, 157, 159, 163, 166, 172, 174, 177, 178, 179, 180, 181, 182, 183, 184], this.la.id);
+    }
+  },
+
+  parseImportDefaultSpecifier() {
+    switch (this.la.id) {
+    case SYM_IDENTIFIER: return this.parseIdentifier();
+    default: this._error([40], this.la.id);
+    }
+  },
+
+  parseImportNamespaceSpecifier() {
+    switch (this.la.id) {
+    case SYM_IMPORT_ALL: {
+      this._match(130);
+            this._match(128);
+            const tok3 = this.parseIdentifier();
+            return ["*", tok3];
+    }
+    default: this._error([130], this.la.id);
+    }
+  },
+
+  parseImportSpecifierList() {
+    // Left-recursive: ImportSpecifierList → ImportSpecifier | ImportSpecifierList , ImportSpecifier
+    const items = [this.parseImportSpecifier()];
+
+    // Iteration with FOLLOW-based termination
+    while (this.la && this.la.id === SYM_COMMA) {
+      this._match(SYM_COMMA);
+      // FOLLOW(ImportSpecifierList) = {, ,, }, TERMINATOR, OUTDENT, INDENT}
+      if (this.la.id === SYM_EOF || this.la.id === SYM_RBRACE || this.la.id === SYM_TERMINATOR || this.la.id === SYM_OUTDENT || this.la.id === SYM_INDENT) break;
+      items.push(this.parseImportSpecifier());
+    }
+
+    return items;
+  },
+
+  parseImportSpecifier() {
+    switch (this.la.id) {
+    case SYM_IDENTIFIER: return this.parseIdentifier();
+    case SYM_DEFAULT: return this._match(129);
+    default: this._error([40, 129], this.la.id);
+    }
+  },
+
+  parseExportSpecifierList() {
+    // Left-recursive: ExportSpecifierList → ExportSpecifier | ExportSpecifierList , ExportSpecifier
+    const items = [this.parseExportSpecifier()];
+
+    // Iteration with FOLLOW-based termination
+    while (this.la && this.la.id === SYM_COMMA) {
+      this._match(SYM_COMMA);
+      // FOLLOW(ExportSpecifierList) = {, ,, }, TERMINATOR, OUTDENT, INDENT}
+      if (this.la.id === SYM_EOF || this.la.id === SYM_RBRACE || this.la.id === SYM_TERMINATOR || this.la.id === SYM_OUTDENT || this.la.id === SYM_INDENT) break;
+      items.push(this.parseExportSpecifier());
+    }
+
+    return items;
+  },
+
+  parseExportSpecifier() {
+    switch (this.la.id) {
+    case SYM_IDENTIFIER: return this.parseIdentifier();
+    case SYM_DEFAULT: return this._match(129);
+    default: this._error([40, 129], this.la.id);
+    }
+  },
+
+  parseDef() {
+    switch (this.la.id) {
+    case SYM_DEF: {
+      this._match(27);
+      const next = this._peek();
+
+      if (next === SYM_IDENTIFIER) {
+        const tok2 = this.parseIdentifier();
+        this._match(29);
+        const tok4 = this.parseParamList();
+        this._match(31);
+        const tok6 = this.parseBlock();
+        return ["def", tok2, tok4, tok6];
+      } else {
+        const tok2 = this.parseIdentifier();
+        const tok3 = this.parseBlock();
+        return ["def", tok2, [], tok3];
+      }
+    }
+    default: this._error([27], this.la.id);
+    }
+  },
+
+  parseRegexWithIndex() {
+    switch (this.la.id) {
+    case SYM_REGEX: {
+      const tok1 = this._match(54);
+      const next = this._peek();
+
+      if (next === SYM_COMMA) {
+        this._match(59);
+        const tok3 = this.parseExpression();
+        return ["regex-index", tok1, tok3];
+      } else {
+        return ["regex-index", tok1, null];
+      }
+    }
+    case SYM_REGEX_START: {
+      const tok1 = this._match(55);
+      const next = this._peek();
+
+      if (next === SYM_COMMA) {
+        this._match(59);
+        const tok3 = this.parseExpression();
+        return ["regex-index", tok1, tok3];
+      } else {
+        return ["regex-index", tok1, null];
+      }
+    }
+    default: this._error([54, 55], this.la.id);
     }
   },
 

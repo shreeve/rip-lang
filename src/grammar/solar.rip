@@ -770,29 +770,133 @@ class Generator
   _generateOperationFunction: ->
     # Generate precedence climbing function for binary operators
     # Handles all precedence levels in one recursive function
-
+    
     """
       parseOperation(minPrec = 0) {
         let left = this.parseValue();
-
+        
         while (this.la && this.la.id !== SYM_EOF) {
           const prec = OPERATOR_PRECEDENCE[this.la.id];
           if (prec === undefined || prec < minPrec) break;
-
+          
           const op = this.la.id;
           const assoc = OPERATOR_ASSOCIATIVITY[op] || 'left';
           this._match(op);
-
+          
           // Right-associative: same prec; Left-associative: higher prec
           const nextPrec = prec + (assoc === 'right' ? 0 : 1);
           const right = this.parseOperation(nextPrec);
-
+          
           // Build AST node with operator name
           const opName = TOKEN_NAMES[op] || op;
           left = [opName, left, right];
         }
-
+        
         return left;
+      },
+    """
+
+  _generateForFunction: ->
+    # Custom generator for For loops (too complex for oracle lookahead)
+    # Handles multiple variants with runtime checking for optional WHEN/BY clauses
+    
+    forId = @symbolIds['FOR']
+    ownId = @symbolIds['OWN']
+    awaitId = @symbolIds['AWAIT']
+    forinId = @symbolIds['FORIN']
+    forofId = @symbolIds['FOROF']
+    forfromId = @symbolIds['FORFROM']
+    whenId = @symbolIds['WHEN']
+    byId = @symbolIds['BY']
+    
+    """
+      parseFor() {
+        this._match(#{forId});  // FOR
+        const second = this._peek();
+        
+        // FOR OWN variants (for-of with own flag)
+        if (second === #{ownId}) {
+          this._match(#{ownId});  // OWN
+          const vars = this.parseForVariables();
+          this._match(#{forofId});  // FOROF
+          const source = this.parseExpression();
+          
+          // Optional BY clause
+          let step = null;
+          if (this.la.id === #{byId}) {
+            this._match(#{byId});
+            step = this.parseExpression();
+          }
+          
+          // Optional WHEN clause
+          let guard = null;
+          if (this.la.id === #{whenId}) {
+            this._match(#{whenId});
+            guard = this.parseExpression();
+          }
+          
+          const body = this.parseBlock();
+          return ["for-of", vars, source, true, guard, body];
+        }
+        // FOR AWAIT variants (async iteration)
+        else if (second === #{awaitId}) {
+          this._match(#{awaitId});  // AWAIT
+          const vars = this.parseForVariables();
+          this._match(#{forfromId});  // FORFROM
+          const source = this.parseExpression();
+          
+          // Optional WHEN clause
+          let guard = null;
+          if (this.la.id === #{whenId}) {
+            this._match(#{whenId});
+            guard = this.parseExpression();
+          }
+          
+          const body = this.parseBlock();
+          return ["for-from", vars, source, guard, body];
+        }
+        // FOR IN/OF variants (regular iteration)
+        else {
+          const vars = this.parseForVariables();
+          const loopType = this.la.id;
+          
+          if (loopType === #{forinId}) {
+            this._match(#{forinId});  // FORIN
+            const source = this.parseExpression();
+            
+            // Optional BY clause
+            let step = null;
+            if (this.la.id === #{byId}) {
+              this._match(#{byId});
+              step = this.parseExpression();
+            }
+            
+            // Optional WHEN clause
+            let guard = null;
+            if (this.la.id === #{whenId}) {
+              this._match(#{whenId});
+              guard = this.parseExpression();
+            }
+            
+            const body = this.parseBlock();
+            return ["for-in", vars, source, step, guard, body];
+          } else if (loopType === #{forofId}) {
+            this._match(#{forofId});  // FOROF
+            const source = this.parseExpression();
+            
+            // Optional WHEN clause
+            let guard = null;
+            if (this.la.id === #{whenId}) {
+              this._match(#{whenId});
+              guard = this.parseExpression();
+            }
+            
+            const body = this.parseBlock();
+            return ["for-of", vars, source, false, guard, body];
+          } else {
+            this._error([#{forinId}, #{forofId}], loopType);
+          }
+        }
       },
     """
 
@@ -1017,14 +1121,31 @@ class Generator
       'InterpolationChunk', # Interpolation parts
       # Phase 8.4: THE BIG ONE - Generate Expression (calls everything above)
       'Expression',      # Core expression dispatcher (Statement inlined)
+      # Phase 8.5: Import/Export variants
+      'ImportDefaultSpecifier',
+      'ImportNamespaceSpecifier',
+      'ImportSpecifierList',
+      'ImportSpecifier',
+      'ExportSpecifierList',
+      'ExportSpecifier',
+      # Phase 8.6: Remaining functions
+      'Def',             # Function definitions
+      'RegexWithIndex',  # Regex with index access
+      # Add any remaining that aren't in SKIP_GENERATION
+      # ObjAssignable, SimpleObjAssignable, ObjSpreadExpr, Assignable, SimpleAssignable still skipped (inline into parent)
     ]
 
     for name in nonterminals
       continue if name in SKIP_GENERATION
 
-      # Phase 6: Special handling for Operation
+      # Special handling for complex rules
       if name is 'Operation'
+        # Phase 6: Operator precedence climbing
         func = @_generateOperationFunction()
+        functions.push(func) if func
+      else if name is 'For'
+        # Phase 8: Custom For generator with runtime checking
+        func = @_generateForFunction()
         functions.push(func) if func
       else
         func = @_generateParseFunction(name)
@@ -1042,6 +1163,10 @@ class Generator
 
     rules = type.rules
     return '' unless rules.length > 0
+
+    # Phase 8: Custom generators for complex rules
+    if nonTerminal is 'For'
+      return @_generateForFunction()
 
     # Detect left recursion: any rule where nonTerminal is first symbol
     isLeftRecursive = rules.some (rule) => rule.symbols[0] is nonTerminal
@@ -1244,9 +1369,9 @@ class Generator
       rule = if validRules.length > 1
         # For FALSE ambiguity: prefer rules with matching first symbol
         tokenName = @tokenNames[parseInt(tokenId)]
-        
+
         preferred = null
-        
+
         # Priority 1: First symbol exactly matches token (For → FOR, Return → RETURN)
         for r in validRules
           firstSym = r.symbols[0]
@@ -1258,7 +1383,7 @@ class Generator
             if tokenName is typeName or tokenName.startsWith(typeName + '_')
               preferred = r
               break
-        
+
         # Priority 2: First symbol has single-token FIRST set matching this token
         unless preferred
           for r in validRules
@@ -1268,7 +1393,7 @@ class Generator
               if firstSet.length is 1 and firstSet[0] is tokenName
                 preferred = r
                 break
-        
+
         # Priority 3: Prefer rules with smallest FIRST sets (most specific)
         unless preferred
           sortedBySpecificity = validRules.slice().sort (a, b) =>
@@ -1276,7 +1401,7 @@ class Generator
             bFirst = @types[b.symbols[0]]?.firsts.size or 999
             aFirst - bFirst
           preferred = sortedBySpecificity[0]
-        
+
         preferred
       else
         validRules[0]
