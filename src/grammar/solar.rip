@@ -852,21 +852,29 @@ class Generator
       'SimpleAssignable',     # Has accessor rules that create cycles
       'ObjAssignable',        # Object literal dispatch
       'SimpleObjAssignable',  # Simple object keys
-      'ObjSpreadExpr'         # Object spread expressions
+      'ObjSpreadExpr',        # Object spread expressions
+      'Operation',            # Needs precedence climbing (Phase 6)
+      'Assign'                # Compound operators (Phase 6)
     ]
 
-    # Expanded set for parsing simple programs
+    # Expanded set for parsing programs
+    # Adding incrementally: Group 1 ✅, Group 2 (adding now)
     nonterminals = [
       # Core flow
       'Root', 'Body', 'Line',
       'Expression', 'Value', 'Statement',
-      # Values (base cases only - no intermediate dispatchers)
+      # Group 1: Base values ✅
       'Identifier', 'Property', 'ThisProperty',
       'Literal', 'AlphaNumeric', 'String', 'Regex',
       'Parenthetical', 'Range', 'Invocation',
       'DoIife', 'This', 'Super', 'MetaProperty',
       # Collections
-      'Array', 'Object'
+      'Array', 'Object',
+      # Group 2: Simple terminals & statements
+      'Block', 'Return', 'Yield',
+      'RangeDots',  # For ranges
+      # Module system (basic)
+      'Import', 'Export'
     ]
 
     for name in nonterminals
@@ -1029,7 +1037,9 @@ class Generator
     processed = {}
 
     for own tokenId, rulesForToken of dispatchMap
-      rule = rulesForToken[0]  # Assume no conflicts for now
+      # When multiple rules match a token, prefer the last (often more specific)
+      # E.g., for Line: Expression is general, Statement is specific
+      rule = rulesForToken[rulesForToken.length - 1]
       ruleKey = rule.id
 
       if not processed[ruleKey]
@@ -1158,7 +1168,7 @@ class Generator
     # E.g., Value → Assignable expands to Value → SimpleAssignable | Array | Object
     #       Then SimpleAssignable expands to Identifier | ThisProperty (base cases only)
 
-    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr']
+    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr', 'Operation', 'Assign']
 
     skippedType = @types[skippedSymbol]
     return unless skippedType
@@ -1200,7 +1210,7 @@ class Generator
     # Generate code to get value at this position
     symbolObj = @symbolTable.get(symbol)
 
-    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr']
+    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr', 'Operation', 'Assign']
 
     if symbolObj instanceof Token
       # Terminal: call _match

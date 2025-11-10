@@ -92,7 +92,7 @@ Grammar actions in Rip use a simple, intuitive indexing system: empty/undefined 
 • String actions: Numbers in strings auto-convert to token positions
 • Protected literals: Use $n syntax ($1, $3) for tokens; allows bare numbers to stay literal
 
-Examples:
+Rule examples with their action strings:
 
 ['Token1 Token2 Token3'] => action is Token1
 ['Token1 Token2 Token3', 'null'] => action is 'null' (pass literal value)
