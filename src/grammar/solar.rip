@@ -851,7 +851,7 @@ class Generator
     for own name, type of @types
       # Skip special symbols
       continue if name in ['$accept', '$end', 'error']
-      
+
       # Generate a parse function for this nonterminal
       func = @_generateParseFunction(name)
       functions.push(func) if func
@@ -871,7 +871,7 @@ class Generator
 
     # Analyze the nonterminal at generation time using SLR(1) information
     analysis = @_analyzeNonterminal(nonTerminal, rules)
-    
+
     # Generate optimized parse function based on analysis
     @_generateOptimizedFunction(nonTerminal, analysis, type)
 
@@ -1382,26 +1382,26 @@ class Generator
   # ============================================================================
   # Phase 2: Generation-Time Optimization
   # ============================================================================
-  
+
   _analyzeNonterminal: (name, rules) ->
     # At generation time, analyze each nonterminal using SLR(1) information
     # to identify fast paths (unambiguous) and slow paths (conflicts)
-    
+
     fastPaths = {}  # token -> unambiguous rule
     slowPaths = {}  # token -> [conflicting rules]
     leftRecursive = false
-    
+
     # Check for left recursion
     leftRecursive = rules.some (rule) => rule.symbols[0] is name
-    
+
     # Build map of FIRST tokens to rules
     for rule in rules
       # Skip empty rules for now
       continue unless rule.symbols[0]
-      
+
       # Get FIRST set for this rule
       firstTokens = @_getFirstTokensForRule(rule)
-      
+
       for tokenId in firstTokens
         if fastPaths[tokenId]
           # Conflict detected - move to slow path
@@ -1415,33 +1415,33 @@ class Generator
         else
           # No conflict yet - fast path
           fastPaths[tokenId] = rule
-    
+
     # Check for empty rule
     emptyRule = rules.find (rule) => not rule.symbols[0] or rule.symbols[0] is ''
-    
+
     # For conflicts, consult SLR(1) parse table to see how they're resolved
     for tokenId, conflictingRules of slowPaths
       # Get disambiguation info from SLR(1) tables
       disambiguationInfo = @_getDisambiguationInfo(name, tokenId, conflictingRules)
       slowPaths[tokenId] = disambiguationInfo
-    
+
     return {
       fastPaths
       slowPaths
       emptyRule
       leftRecursive
     }
-  
+
   _getFirstTokensForRule: (rule) ->
     # Get the FIRST tokens that can start this rule
     firstSymbol = rule.symbols[0]
     return [] unless firstSymbol
-    
+
     # If it's a terminal, return its ID
     if not @types[firstSymbol]
       symbolId = @symbolIds[firstSymbol]
       return if symbolId then [symbolId] else []
-    
+
     # If it's a nonterminal, return its FIRST set
     type = @types[firstSymbol]
     firstNames = Array.from(type.firsts)
@@ -1450,11 +1450,11 @@ class Generator
       id = @symbolIds[name]
       ids.push(id) if id
     return ids
-  
+
   _getDisambiguationInfo: (nonterminal, tokenId, conflictingRules) ->
     # Use SLR(1) parse table to determine how to disambiguate
     # This is where we consult the oracle at generation time
-    
+
     # Find states where this conflict occurs
     conflictStates = []
     for state, i in @states
@@ -1463,7 +1463,7 @@ class Generator
           # Check if this state has conflicts
           if state.hasConflicts
             conflictStates.push({state: i, item})
-    
+
     # For now, return the rules with lookahead info
     # In a full implementation, we'd analyze the parse table actions here
     return {
@@ -1471,40 +1471,40 @@ class Generator
       needsLookahead: true
       conflictStates
     }
-  
+
   _generateOptimizedFunction: (nonTerminal, analysis, type) ->
     # Generate optimized parse function based on generation-time analysis
-    
+
     if analysis.leftRecursive
       # Use existing left-recursive handling
       return @_generateLeftRecursiveOptimized(nonTerminal, analysis, type)
-    
+
     # Generate switch-based function with fast/slow path optimization
     funcName = "parse#{nonTerminal}"
     cases = []
-    
+
     # Generate fast path cases (direct dispatch)
     for tokenId, rule of analysis.fastPaths
       tokenName = @tokenNames[tokenId]
       continue unless tokenName
       constName = @_getSymbolConstName(tokenName)
-      
+
       # Generate inline action for this rule
       action = @_compileAction(rule)
       cases.push("    case #{constName}: #{action}")
-    
+
     # Generate slow path cases (need disambiguation)
     for tokenId, disambigInfo of analysis.slowPaths
       tokenName = @tokenNames[tokenId]
       continue unless tokenName
       constName = @_getSymbolConstName(tokenName)
-      
+
       # Generate disambiguation code
       disambigCode = @_generateDisambiguationCode(tokenId, disambigInfo, nonTerminal)
       cases.push("    case #{constName}: {")
       cases.push(disambigCode)
       cases.push("    }")
-    
+
     # Generate default case
     if analysis.emptyRule
       action = @_compileAction(analysis.emptyRule)
@@ -1516,10 +1516,10 @@ class Generator
         expectedTokens.add(parseInt(tokenId))
       for tokenId of analysis.slowPaths
         expectedTokens.add(parseInt(tokenId))
-      
+
       expectedArray = Array.from(expectedTokens).sort((a,b) -> a - b).join(', ')
       cases.push("    default: this._error([#{expectedArray}], this.la.id);")
-    
+
     """
       #{funcName}() {
         switch (this.la.id) {
@@ -1527,24 +1527,24 @@ class Generator
         }
       },
     """
-  
+
   _generateDisambiguationCode: (tokenId, disambigInfo, nonterminal) ->
     # Generate code to disambiguate between conflicting rules
     # This uses lookahead or other context determined by SLR(1) analysis
-    
+
     if not disambigInfo.needsLookahead
       # Simple case - can be resolved without lookahead
       rule = disambigInfo.rules[0]
       action = @_compileAction(rule)
       return "      #{action}"
-    
+
     # Need lookahead to disambiguate
     lines = []
     lines.push("      // Disambiguate using lookahead (SLR(1) conflict resolution)")
     lines.push("      this._match(#{tokenId});")
     lines.push("      const next = this.la.id;")
     lines.push("")
-    
+
     # For each rule, determine what lookahead distinguishes it
     # This is a simplified version - full implementation would use FOLLOW sets
     for rule, i in disambigInfo.rules
@@ -1554,19 +1554,19 @@ class Generator
         lines.push("      } else {")
       else
         lines.push("      } else if (#{@_getLookaheadCondition(rule, nonterminal)}) {")
-      
+
       # Generate inline action for this rule
       # Skip the first symbol since we already matched it
       actionCode = @_compilePartialAction(rule, 1)
       lines.push("        #{actionCode}")
-    
+
     lines.push("      }")
     lines.join('\n')
-  
+
   _getLookaheadCondition: (rule, nonterminal) ->
     # Determine lookahead condition for this rule
     # In full implementation, this would use FOLLOW sets from SLR(1)
-    
+
     if rule.symbols.length > 1
       # Check what can follow the first symbol
       secondSymbol = rule.symbols[1]
@@ -1576,27 +1576,27 @@ class Generator
         if tokenId and @tokenNames[tokenId]
           constName = @_getSymbolConstName(@tokenNames[tokenId])
           return "next === #{constName}"
-    
+
     # Default - check FOLLOW set
     # This is simplified - real implementation would be more sophisticated
     return "true"
-  
+
   _compilePartialAction: (rule, startPos) ->
     # Compile action starting from a given position in the rule
     # Used when we've already matched some symbols
-    
+
     remainingSymbols = rule.symbols[startPos..]
-    
+
     # For now, compile the rest and adjust the action
     # This is simplified - full implementation would handle position references correctly
     action = rule.action
-    
+
     if remainingSymbols.length is 0
       # We've matched everything
       if typeof action is 'string' and action.match(/^\[/)
         return "return #{action};"
       return "return [];"
-    
+
     # Generate code to match remaining symbols
     # This is a simplified version
     lines = []
@@ -1607,30 +1607,30 @@ class Generator
       else
         tokenId = @symbolIds[symbol]
         lines.push("const tok#{pos} = this._match(#{tokenId});")
-    
+
     # Compile the action
     if typeof action is 'string'
       lines.push("return #{action};")
     else
       lines.push("return tok1;")
-    
+
     lines.join(' ')
-  
+
   _generateLeftRecursiveOptimized: (nonTerminal, analysis, type) ->
     # Generate optimized left-recursive function
     # This reuses the existing approach but could be enhanced with SLR(1) info
-    
+
     rules = type.rules
-    
+
     # Find base case and recursive rule
     baseRule = rules.find (rule) => rule.symbols[0] isnt nonTerminal
-    recursiveRule = rules.find (rule) => 
+    recursiveRule = rules.find (rule) =>
       rule.symbols.length >= 3 and rule.symbols[0] is nonTerminal
-    
+
     if not baseRule or not recursiveRule
       # Can't optimize - fall back to switch
       return @_generateOptimizedFunction(nonTerminal, analysis, type)
-    
+
     # Use existing left-recursive generation
     @_generateLeftRecursiveFunction(nonTerminal, rules, type)
 
