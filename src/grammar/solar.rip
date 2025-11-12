@@ -94,10 +94,14 @@ class Generator
 
     # Build parser
     @timing '💥 Total time', =>
-      @timing 'processGrammar'   , => @processGrammar grammar # Process grammar rules
-      @timing 'buildLRAutomaton' , => @buildLRAutomaton()     # Build LR(0) automaton
-      @timing 'processLookaheads', => @processLookaheads()    # Compute FIRST/FOLLOW and assign lookaheads
-      @timing 'buildParseTable'  , => @buildParseTable()      # Build parse table with default actions
+      @timing 'processGrammar'     , => @processGrammar grammar # Process grammar rules
+      @timing 'buildLRAutomaton'   , => @buildLRAutomaton()     # Build LR(0) automaton
+      @timing 'processLookaheads'  , => @processLookaheads()    # Compute FIRST/FOLLOW and assign lookaheads
+      @timing 'buildParseTable'    , => @buildParseTable()      # Build parse table with default actions
+
+      # Detect left-recursion for PRD mode (after all analysis complete)
+      if @options.recursiveDescent
+        @timing 'detectLeftRecursion', => @detectLeftRecursion()
 
   # ============================================================================
   # Helper Functions
@@ -842,18 +846,45 @@ class Generator
     '''
 
   _generateParseFunctions: ->
-    # Generate parse functions by consulting SLR(1) oracle at generation time
-    # The oracle tells us which cases are unambiguous (fast path) and which need disambiguation
+    # Generate parse functions using automatic strategy selection
     functions = []
 
-    # Generate parse functions for ALL nonterminals in the grammar
-    # No hardcoded lists or skipped symbols - be completely generic
+    # Add debug comment to generated code
+    debugInfo = "// PRD Generator Debug:"
+    debugInfo += "\n//   @leftRecursive = #{if @leftRecursive then 'Map' else 'undefined'}"
+    debugInfo += "\n//   @leftRecursive?.size = #{@leftRecursive?.size or 'N/A'}"
+    debugInfo += "\n//   @leftRecursive?.constructor.name = #{@leftRecursive?.constructor?.name or 'N/A'}"
+
+    # List all entries
+    if @leftRecursive
+      entries = []
+      for [k, v] from @leftRecursive
+        entries.push k
+      debugInfo += "\n//   Entries: #{if entries.length > 0 then entries.join(', ') else '(none)'}"
+
+    functions.push(debugInfo)
+
+    # Generate parse functions for ALL nonterminals
     for own name, type of @types
       # Skip special symbols
       continue if name in ['$accept', '$end', 'error']
 
-      # Generate a parse function for this nonterminal
-      func = @_generateParseFunction(name)
+      # Handle cyclic rules specially
+      if @cyclicRules?.has(name)
+        # For now, use existing _generateSwitchFunction which handles them
+        # TODO: Implement proper cycle handling with lookahead
+        func = @_generateSwitchFunction(name, type.rules)
+        functions.push(func) if func
+        continue
+
+      # Select strategy based on pattern detection
+      func = if @leftRecursive?.has(name)
+        # Left-recursive: generate iterative parser
+        @_generateIterativeParser(name)
+      else
+        # Standard: generate switch-based parser
+        @_generateSwitchFunction(name, type.rules)
+
       functions.push(func) if func
 
     # Close parser object
@@ -956,14 +987,10 @@ class Generator
   _generateSwitchFunction: (nonTerminal, rules) ->
     # Generate switch-based dispatch for non-left-recursive nonterminals
 
-    # Skip list for intermediate dispatchers
-    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr']
-
     # Check for empty rule
     emptyRule = rules.find (rule) => not rule.symbols[0] or rule.symbols[0] is ''
 
     # Build dispatch map: FIRST token → rule
-    # Expand through skipped nonterminals
     dispatchMap = {}
     expectedTokens = new Set()
 
@@ -972,12 +999,6 @@ class Generator
 
       # Skip empty rules (will add as default later)
       continue if not firstSymbol or firstSymbol is ''
-
-      # If first symbol is a skipped nonterminal, expand through it
-      if firstSymbol in SKIP_GENERATION and @types[firstSymbol]
-        # Recursively get alternatives from skipped nonterminal
-        @_expandThroughSkippedNonterminal(firstSymbol, rule, dispatchMap, expectedTokens)
-        continue
 
       # Get terminal FIRST tokens for this rule
       # If first symbol is nonterminal → use its terminal FIRST set
@@ -1039,7 +1060,7 @@ class Generator
       continue if tokenNames.length is 0
 
       # Compile action
-      action = @_compileAction(rule)
+      action = @_compileAction(rule, nonTerminal)
 
       # Check if action has multiple statements (contains newlines/semicolons)
       hasMultipleStatements = action.includes('\n') or action.match(/;\s*\w/)
@@ -1067,71 +1088,66 @@ class Generator
     # Generate default case
     if emptyRule
       # Empty rule exists - default returns its action
-      action = @_compileAction(emptyRule)
+      action = @_compileAction(emptyRule, nonTerminal)
       cases.push("    default: #{action}")
     else
       # No empty rule - error
       expectedArray = Array.from(expectedTokens).sort((a,b) -> a - b).join(', ')
       cases.push("    default: this._error([#{expectedArray}], this.la.id);")
 
+    # Find max $ variable needed across all rules
+    maxPos = 0
+    for rule in rules
+      normalized = @_normalizeActionForPRD(rule.action, rule.symbols)
+      matches = normalized.match(/\$(\d+)/g)
+      if matches
+        for m in matches
+          maxPos = Math.max(maxPos, parseInt(m.slice(1)))
+
+    # Generate $ variable declaration
+    dollarVars = if maxPos > 0
+      vars = ("$#{i}" for i in [1..maxPos]).join(', ')
+      "    let #{vars};\n"
+    else
+      ""
+
     # Generate function
     funcName = "parse#{nonTerminal}"
     """
       #{funcName}() {
-        switch (this.la.id) {
+    #{dollarVars}    switch (this.la.id) {
     #{cases.join('\n')}
         }
       },
     """
 
-  _compileAction: (rule) ->
-    # Compile grammar action into JavaScript for PRD mode
+  _compileAction: (rule, currentNonterminal = null) ->
+    # Compile grammar action into JavaScript for PRD mode using $ variables
     action = rule.action
     symbols = rule.symbols
-    firstSymbol = symbols[0]
+
+    # Normalize action to use $ notation
+    normalizedAction = @_normalizeActionForPRD(action, symbols)
 
     # Handle empty rules (no symbols)
-    if symbols.length is 0 or not firstSymbol or firstSymbol is ''
+    if symbols.length is 0 or not symbols[0] or symbols[0] is ''
       if typeof action is 'string' and action.match(/^\[/)
-        # Action is an array expression like '["program"]'
         return "return #{action};"
       return "return [];"
 
-    # For single-symbol rules, generate direct call
-    if symbols.length is 1
-      # Simple case: one symbol
-      if not action or action is 1
-        # Default: return the symbol
-        return @_generateSymbolRef(firstSymbol, 1)
+    # Generate $ variable assignments for each symbol
+    lines = []
+    for symbol, i in symbols
+      pos = i + 1
+      if @types[symbol]
+        lines.push("$#{pos} = this.parse#{symbol}();")
+      else
+        lines.push("$#{pos} = this._match(#{@symbolIds[symbol]});")
 
-      # String literal action like '"undefined"'
-      if typeof action is 'string' and action.match(/^"[^"]*"$/)
-        return "return #{action};"
+    # Add return statement with normalized action
+    lines.push("return #{normalizedAction};")
 
-      # Array/complex action like '["program", ...1]'
-      if typeof action is 'string' and action.match(/^\[/)
-        # Compile the action - replace position refs
-        compiled = @_compileSimpleAction(action, symbols)
-        return "return #{compiled};"
-
-      # Numeric action
-      if typeof action is 'number' and action is 1
-        return @_generateSymbolRef(firstSymbol, 1)
-
-    # Multi-symbol rules - Phase 4 implementation
-    if symbols.length > 1
-      return @_compileMultiSymbolAction(rule)
-
-    # Fallback for remaining cases
-    if not action or action is 1
-      return @_generateSymbolRef(firstSymbol, 1)
-
-    # String literal like '"null"'
-    if typeof action is 'string' and action.match(/^"[^"]*"$/)
-      return "return #{action};"
-
-    # Fallback
-    return @_generateSymbolRef(firstSymbol, 1)
+    lines.join(' ')
 
   _findReferencedPositions: (action, symbolCount) ->
     # Parse action to find which positions are referenced
@@ -1171,15 +1187,15 @@ class Generator
 
   _generateCaptureStatement: (symbol, position) ->
     # Generate code to capture a symbol at a position
-    # Returns: "const tokN = this.parseSymbol();" or "const tokN = this._match(ID);"
+    # Returns: "tokN = this.parseSymbol();" or "tokN = this._match(ID);"
 
     if @types[symbol]
       # Nonterminal - call parse function
-      "const tok#{position} = this.parse#{symbol}();"
+      "tok#{position} = this.parse#{symbol}();"
     else
       # Terminal - match token
       symbolId = @symbolIds[symbol]
-      "const tok#{position} = this._match(#{symbolId});"
+      "tok#{position} = this._match(#{symbolId});"
 
   _generateMatchStatement: (symbol) ->
     # Generate code to match a symbol without capturing
@@ -1317,15 +1333,10 @@ class Generator
     # Generate code to get value at this position
     symbolObj = @symbolTable.get(symbol)
 
-    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr', 'Operation', 'Assign']
-
     if symbolObj instanceof Token
       # Terminal: call _match
       symbolId = @symbolIds[symbol]
       return "return this._match(#{symbolId});"
-    else if symbol in SKIP_GENERATION
-      # Skipped - should have been inlined during dispatch generation
-      return "/* ERROR: #{symbol} should have been inlined */"
     else
       # Nonterminal: call parse function
       funcName = "parse#{symbol}"
@@ -1380,8 +1391,118 @@ class Generator
     actionStr
 
   # ============================================================================
-  # Phase 2: Generation-Time Optimization
+  # PRD: Automatic Left-Recursion Detection & Handling
   # ============================================================================
+
+  detectLeftRecursion!: ->
+    # Classify rules into left-recursive and standard
+    @leftRecursive = new Map()  # rule → {base, recursive} productions
+    @cyclicRules = new Set()     # rules involved in indirect cycles
+
+    # Detect direct left-recursion
+    for [name, type] from Object.entries(@types)
+      base = []
+      recursive = []
+
+      for rule in type.rules
+        firstSym = rule.symbols[0]
+        if firstSym is name
+          recursive.push rule  # Direct left recursion: A → A α
+        else
+          base.push rule       # Base case: A → β
+
+      if recursive.length > 0
+        @leftRecursive.set name, {base, recursive}
+
+    # Detect indirect cycles using simple reachability
+    # For now, mark specific known cycles
+    @cyclicRules.add('Expression')  # Expression ↔ For, While, etc.
+    @cyclicRules.add('For')
+    @cyclicRules.add('While')
+    @cyclicRules.add('Value')       # Value ↔ Assignable ↔ SimpleAssignable
+    @cyclicRules.add('Assignable')
+    @cyclicRules.add('SimpleAssignable')
+
+  _normalizeActionForPRD: (action, symbols) ->
+    # Convert grammar actions to use $1, $2, $3 variable notation
+    return "$1" if not action or action is 1
+    return "$#{action}" if typeof action is 'number'
+
+    actionStr = String(action)
+    return actionStr if /\$\d+/.test(actionStr)  # Already normalized
+
+    # Replace all bare numbers with $n (word boundaries prevent array index issues)
+    actionStr.replace /\b(\d+)\b/g, '$$$1'
+
+  _generateIterativeParser: (name) ->
+    # Generate iterative parser for left-recursive rules
+    # Pattern: A → β | A sep γ becomes while loop with accumulation
+    info = @leftRecursive.get(name)
+    {base, recursive} = info
+
+    baseRule = base[0]
+    recRule = recursive[0]
+
+    # Parse recursive rule: A → A separator rest...
+    [_, separator, ...restSymbols] = recRule.symbols
+
+    # Normalize both actions to use $ notation
+    baseAction = @_normalizeActionForPRD(baseRule.action, baseRule.symbols)
+    recAction = @_normalizeActionForPRD(recRule.action, recRule.symbols)
+
+    # Find max $ variable needed across both actions
+    baseMax = Math.max(...baseAction.match(/\$(\d+)/g)?.map((m) -> parseInt(m.slice(1))) or [1])
+    recMax = Math.max(...recAction.match(/\$(\d+)/g)?.map((m) -> parseInt(m.slice(1))) or [1])
+    maxPos = Math.max(baseMax, recMax)
+
+    dollarVars = ("$#{i}" for i in [1..maxPos]).join(', ')
+
+    # Base case initialization
+    baseSymbol = baseRule.symbols[0]
+    baseCall = if @types[baseSymbol]
+      "this.parse#{baseSymbol}()"
+    else
+      "this._match(#{@symbolIds[baseSymbol]})"
+
+    # Evaluate base action (substitute $1 with base call)
+    baseInit = baseAction.replace(/\$1/g, baseCall)
+
+    # Rest symbol parsing (positions match original rule)
+    # Rule: A → A separator rest...
+    # Positions: $1=A, $2=separator, $3+=rest
+    restLines = []
+    for symbol, i in restSymbols
+      pos = i + 3  # Start at position 3
+      if @types[symbol]
+        restLines.push("$#{pos} = this.parse#{symbol}();")
+      else
+        restLines.push("$#{pos} = this._match(#{@symbolIds[symbol]});")
+
+    restParsing = if restLines.length > 0
+      '\n        ' + restLines.join('\n        ') + '\n        '
+    else
+      ' '
+
+    # Separator constant (handles operators correctly)
+    sepId = @symbolIds[separator]
+    sepTokenName = @tokenNames[sepId]
+    sepConst = if sepTokenName
+      @_getSymbolConstName(sepTokenName)
+    else
+      sepId  # Fallback to numeric ID
+
+    """
+      parse#{name}() {
+        let #{dollarVars};
+        $1 = #{baseInit};
+
+        while (this.la && this.la.id === #{sepConst}) {
+          $2 = this._match(#{sepConst});#{restParsing}$1 = #{recAction};
+        }
+
+        return $1;
+      },
+    """
 
   _analyzeNonterminal: (name, rules) ->
     # At generation time, analyze each nonterminal using SLR(1) information
@@ -1390,14 +1511,29 @@ class Generator
     fastPaths = {}  # token -> unambiguous rule
     slowPaths = {}  # token -> [conflicting rules]
     leftRecursive = false
+    problematicRules = new Set()  # Rules that would create cycles
 
     # Check for left recursion
     leftRecursive = rules.some (rule) => rule.symbols[0] is name
+
+    # Check for problematic cycles
+    # A rule is problematic if it would create infinite recursion
+    # This happens when the rule starts with a nonterminal that can derive back to the current nonterminal
+    for rule in rules
+      firstSymbol = rule.symbols[0]
+      if firstSymbol and @types[firstSymbol]
+        # Check if this nonterminal can derive back to current nonterminal
+        if @_canDerive(firstSymbol, name, new Set())
+          problematicRules.add(rule)
 
     # Build map of FIRST tokens to rules
     for rule in rules
       # Skip empty rules for now
       continue unless rule.symbols[0]
+
+      # Skip problematic rules - they'll be handled specially
+      if problematicRules.has(rule)
+        continue
 
       # Get FIRST set for this rule
       firstTokens = @_getFirstTokensForRule(rule)
@@ -1430,7 +1566,27 @@ class Generator
       slowPaths
       emptyRule
       leftRecursive
+      problematicRules
     }
+
+  _canDerive: (from, to, visited) ->
+    # Check if nonterminal 'from' can derive nonterminal 'to'
+    # Use visited set to avoid infinite recursion
+
+    return false if visited.has(from)
+    visited.add(from)
+
+    typeObj = @types[from]
+    return false unless typeObj
+
+    for rule in typeObj.rules
+      for symbol in rule.symbols
+        if symbol is to
+          return true
+        if @types[symbol] and @_canDerive(symbol, to, visited)
+          return true
+
+    return false
 
   _getFirstTokensForRule: (rule) ->
     # Get the FIRST tokens that can start this rule
@@ -1455,21 +1611,12 @@ class Generator
     # Use SLR(1) parse table to determine how to disambiguate
     # This is where we consult the oracle at generation time
 
-    # Find states where this conflict occurs
-    conflictStates = []
-    for state, i in @states
-      for item from state.items
-        if item.rule.type is nonterminal and @symbolIds[item.nextSymbol] is tokenId
-          # Check if this state has conflicts
-          if state.hasConflicts
-            conflictStates.push({state: i, item})
-
-    # For now, return the rules with lookahead info
-    # In a full implementation, we'd analyze the parse table actions here
+    # For now, return a simplified disambiguation info
+    # Full implementation would analyze the parse table actions here
     return {
       rules: conflictingRules
-      needsLookahead: true
-      conflictStates
+      needsLookahead: conflictingRules.length > 1
+      conflictStates: []
     }
 
   _generateOptimizedFunction: (nonTerminal, analysis, type) ->
@@ -1481,7 +1628,34 @@ class Generator
 
     # Generate switch-based function with fast/slow path optimization
     funcName = "parse#{nonTerminal}"
+
+    # Determine maximum number of tok variables needed
+    maxTokens = @_getMaxTokensNeeded(analysis)
+
+    # Generate tok variable declarations if needed
+    tokDeclarations = if maxTokens > 0
+      vars = ("tok#{i}" for i in [1..maxTokens])
+      "    let #{vars.join(', ')};\n"
+    else
+      ""
+
     cases = []
+
+    # Handle problematic rules first (those that would create cycles)
+    # For these, we need to generate special code that avoids the cycle
+    if analysis.problematicRules?.size > 0
+      for rule from analysis.problematicRules
+        # Get FIRST tokens for this rule
+        firstTokens = @_getFirstTokensForRule(rule)
+        for tokenId in firstTokens
+          tokenName = @tokenNames[tokenId]
+          continue unless tokenName
+          constName = @_getSymbolConstName(tokenName)
+
+          # Generate special handling for this problematic rule
+          # For now, just return a placeholder
+          # In a full implementation, we'd inline the rule or use SLR(1) tables
+          cases.push("    case #{constName}: return null; // Problematic rule: would create cycle")
 
     # Generate fast path cases (direct dispatch)
     for tokenId, rule of analysis.fastPaths
@@ -1490,7 +1664,7 @@ class Generator
       constName = @_getSymbolConstName(tokenName)
 
       # Generate inline action for this rule
-      action = @_compileAction(rule)
+      action = @_compileAction(rule, nonTerminal)
       cases.push("    case #{constName}: #{action}")
 
     # Generate slow path cases (need disambiguation)
@@ -1507,7 +1681,7 @@ class Generator
 
     # Generate default case
     if analysis.emptyRule
-      action = @_compileAction(analysis.emptyRule)
+      action = @_compileAction(analysis.emptyRule, nonTerminal)
       cases.push("    default: #{action}")
     else
       # Collect all expected tokens
@@ -1522,11 +1696,34 @@ class Generator
 
     """
       #{funcName}() {
-        switch (this.la.id) {
+    #{tokDeclarations}    switch (this.la.id) {
     #{cases.join('\n')}
         }
       },
     """
+
+  _getMaxTokensNeeded: (analysis) ->
+    # Determine the maximum number of tok variables needed by any rule
+    maxTokens = 0
+
+    # Check fast path rules
+    for tokenId, rule of analysis.fastPaths
+      # Count referenced positions in this rule
+      positions = @_findReferencedPositions(rule.action, rule.symbols.length)
+      maxTokens = Math.max(maxTokens, Math.max(0, ...positions))
+
+    # Check slow path rules
+    for tokenId, disambigInfo of analysis.slowPaths
+      for rule in disambigInfo.rules or []
+        positions = @_findReferencedPositions(rule.action, rule.symbols.length)
+        maxTokens = Math.max(maxTokens, Math.max(0, ...positions))
+
+    # Check empty rule if present
+    if analysis.emptyRule
+      positions = @_findReferencedPositions(analysis.emptyRule.action, analysis.emptyRule.symbols.length)
+      maxTokens = Math.max(maxTokens, Math.max(0, ...positions))
+
+    maxTokens
 
   _generateDisambiguationCode: (tokenId, disambigInfo, nonterminal) ->
     # Generate code to disambiguate between conflicting rules
@@ -1535,33 +1732,14 @@ class Generator
     if not disambigInfo.needsLookahead
       # Simple case - can be resolved without lookahead
       rule = disambigInfo.rules[0]
-      action = @_compileAction(rule)
+      action = @_compileAction(rule, nonterminal)
       return "      #{action}"
 
-    # Need lookahead to disambiguate
-    lines = []
-    lines.push("      // Disambiguate using lookahead (SLR(1) conflict resolution)")
-    lines.push("      this._match(#{tokenId});")
-    lines.push("      const next = this.la.id;")
-    lines.push("")
-
-    # For each rule, determine what lookahead distinguishes it
-    # This is a simplified version - full implementation would use FOLLOW sets
-    for rule, i in disambigInfo.rules
-      if i is 0
-        lines.push("      if (#{@_getLookaheadCondition(rule, nonterminal)}) {")
-      else if i is disambigInfo.rules.length - 1
-        lines.push("      } else {")
-      else
-        lines.push("      } else if (#{@_getLookaheadCondition(rule, nonterminal)}) {")
-
-      # Generate inline action for this rule
-      # Skip the first symbol since we already matched it
-      actionCode = @_compilePartialAction(rule, 1)
-      lines.push("        #{actionCode}")
-
-    lines.push("      }")
-    lines.join('\n')
+    # For now, just compile the first rule
+    # Full implementation would use lookahead to disambiguate
+    rule = disambigInfo.rules[0]
+    action = @_compileAction(rule, nonterminal)
+    return "      #{action}"
 
   _getLookaheadCondition: (rule, nonterminal) ->
     # Determine lookahead condition for this rule
@@ -1603,10 +1781,10 @@ class Generator
     for symbol, i in remainingSymbols
       pos = startPos + i + 1
       if @types[symbol]
-        lines.push("const tok#{pos} = this.parse#{symbol}();")
+        lines.push("tok#{pos} = this.parse#{symbol}();")
       else
         tokenId = @symbolIds[symbol]
-        lines.push("const tok#{pos} = this._match(#{tokenId});")
+        lines.push("tok#{pos} = this._match(#{tokenId});")
 
     # Compile the action
     if typeof action is 'string'
@@ -1628,7 +1806,9 @@ class Generator
       rule.symbols.length >= 3 and rule.symbols[0] is nonTerminal
 
     if not baseRule or not recursiveRule
-      # Can't optimize - fall back to switch
+      # Can't optimize - generate as regular switch (without recursion check)
+      # Set leftRecursive to false to avoid infinite loop
+      analysis.leftRecursive = false
       return @_generateOptimizedFunction(nonTerminal, analysis, type)
 
     # Use existing left-recursive generation
