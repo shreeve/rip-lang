@@ -1103,14 +1103,14 @@ class Generator
     for rule in rules
       # Max from symbols (we parse all of them)
       maxPos = Math.max(maxPos, rule.symbols.length)
-      
+
       # Max from action references
       normalized = @_normalizeActionForPRD(rule.action, rule.symbols)
       matches = normalized.match(/\$(\d+)/g)
       if matches
         for m in matches
           maxPos = Math.max(maxPos, parseInt(m.slice(1)))
-    
+
     # Generate $ variable declaration
     dollarVars = if maxPos > 0
       vars = ("$#{i}" for i in [1..maxPos]).join(', ')
@@ -1636,10 +1636,10 @@ class Generator
     # Rule: Value OptFuncExist Arguments (postfix function call)
     # First symbol is parent (already in $1)
     # Need to find the trigger token (skip nullable nonterminals)
-    
+
     # Skip first symbol (the recursion point, already in $1)
     remainingSymbols = rule.symbols.slice(1)
-    
+
     # Find first non-nullable symbol to use as trigger
     triggerToken = null
     for symbol in remainingSymbols
@@ -1660,15 +1660,15 @@ class Generator
         # It's a terminal - use it
         triggerToken = symbol
         break
-    
+
     return '' unless triggerToken
-    
+
     tokenId = @symbolIds[triggerToken]
     tokenName = @tokenNames[tokenId]
     return '' unless tokenName
-    
+
     constName = @_getSymbolConstName(tokenName)
-    
+
     # Generate parsing for remaining symbols
     lines = []
     for symbol, i in remainingSymbols
@@ -1677,14 +1677,14 @@ class Generator
         lines.push("$#{pos} = this.parse#{symbol}();")
       else
         lines.push("$#{pos} = this._match(#{@symbolIds[symbol]});")
-    
+
     # Generate action (with $1 as accumulated result)
     action = @_normalizeActionForPRD(rule.action, rule.symbols)
     lines.push("$1 = #{action};")
     lines.push("continue;")
-    
+
     parsing = lines.map((line) -> "            #{line}").join('\n')
-    
+
     """
           case #{constName}:
     #{parsing}

@@ -35,13 +35,13 @@ detectLeftRecursion!: ->
 parseBody() {
   let $1, $2, $3;
   $1 = [this.parseLine()];
-  
+
   while (this.la && this.la.id === SYM_TERMINATOR) {
     $2 = this._match(SYM_TERMINATOR);
     $3 = this.parseLine();
     $1 = [...$1, $3];  // Grammar action verbatim!
   }
-  
+
   return $1;
 }
 ```
@@ -58,7 +58,7 @@ detectIndirectLeftRecursion!: ->
     for parentRule in parentType.rules
       childName = parentRule.symbols[0]
       childType = @types[childName]
-      
+
       for childRule in childType.rules
         if childRule.symbols[0] is parentName
           # Found cycle: parent → child → parent
@@ -75,7 +75,7 @@ detectIndirectLeftRecursion!: ->
 ```javascript
 parseExpression() {
   let $1, $2, $3, $4, $5;
-  
+
   // Base cases (including inlined prefix FOR/WHILE/IF)
   switch (this.la.id) {
     case SYM_FOR:  // Inlined from For prefix rules
@@ -90,7 +90,7 @@ parseExpression() {
       $1 = this.parseValue();
       break;
   }
-  
+
   // Postfix operators (inlined from For/While/If postfix rules)
   while (this.la) {
     switch (this.la.id) {
@@ -105,7 +105,7 @@ parseExpression() {
         return $1;
     }
   }
-  
+
   return $1;
 }
 ```
@@ -119,10 +119,10 @@ parseExpression() {
 _normalizeActionForPRD: (action, symbols) ->
   return "$1" if not action or action is 1
   return "$#{action}" if typeof action is 'number'
-  
+
   actionStr = String(action)
   return actionStr if /\$\d+/.test(actionStr)
-  
+
   actionStr.replace /\b(\d+)\b/g, '$$$1'
 ```
 
@@ -197,7 +197,7 @@ Without separate `parseFor()` function, there's no Function A → Function B →
 ### Detection Runs In Order
 
 1. `processGrammar` - Build grammar structures
-2. `buildLRAutomaton` - Build LR(0) states  
+2. `buildLRAutomaton` - Build LR(0) states
 3. `processLookaheads` - Compute FIRST/FOLLOW
 4. `buildParseTable` - Build SLR(1) table
 5. `detectLeftRecursion` - Find direct patterns (0.3ms)
@@ -205,8 +205,8 @@ Without separate `parseFor()` function, there's no Function A → Function B →
 
 ### Host Selection Strategy
 
-**Hosts** (won't be inlined): Expression, Value, Statement  
-**Inlined**: Operation, For, While, If, Invocation  
+**Hosts** (won't be inlined): Expression, Value, Statement
+**Inlined**: Operation, For, While, If, Invocation
 **Passthroughs**: Assignable, SimpleAssignable (expanded inline)
 
 This prevents mutual inlining (Expression inlines For, not vice versa).
@@ -225,7 +225,7 @@ Postfix rules like `Value OptFuncExist Arguments` have nullable nonterminals.
 ### Fully Working
 
 ✅ **Direct left-recursion** - 14 rules with perfect iteration
-✅ **Cycle detection** - finds all A→B, B→A patterns  
+✅ **Cycle detection** - finds all A→B, B→A patterns
 ✅ **Inlining generation** - prefix/postfix separation works
 ✅ **No infinite recursion** - cycles eliminated
 ✅ **Simple expressions** - `x = 1`, property access working
@@ -259,7 +259,7 @@ Postfix rules like `Value OptFuncExist Arguments` have nullable nonterminals.
 
 **Lines Added to solar.rip:**
 - Detection: ~80 lines
-- Normalization: 6 lines  
+- Normalization: 6 lines
 - Generation: ~200 lines
 - Helpers: ~100 lines
 - **Total: ~386 lines**
@@ -351,4 +351,3 @@ Postfix rules like `Value OptFuncExist Arguments` have nullable nonterminals.
 _Last updated: Session ending November 12, 2025_
 _Branch: `predictive-recursive-descent-generic`_
 _Commits: e0ba674 through 88f4a99_
-
