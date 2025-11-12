@@ -870,16 +870,48 @@ class Generator
     for own name, type of @types
       # Skip special symbols
       continue if name in ['$accept', '$end', 'error']
-
+      
+      # Check for postfix forms
+      if @_hasPostfixForms(type)
+        # Filter out postfix rules (start with Expression/Statement)
+        # These are handled by operator precedence, not direct parsing
+        prefixRules = type.rules.filter (rule) =>
+          firstSym = rule.symbols[0]
+          firstSym not in ['Expression', 'Statement']
+        
+        # If no prefix rules remain, skip this function
+        # (it's only used for postfix, handled elsewhere)
+        continue if prefixRules.length is 0
+        
+        # Generate with only prefix rules
+        func = @_generateSwitchFunction(name, prefixRules)
+        functions.push(func) if func
+        continue
+      
+      # Special case: Expression should not dispatch to For/While/If
+      # (they have postfix forms that create cycles)
+      if name is 'Expression'
+        # Filter out alternatives that have postfix forms
+        filteredRules = type.rules.filter (rule) =>
+          firstSym = rule.symbols[0]
+          # Skip For, While, If - they'll be called only when lookahead matches
+          return false if firstSym in ['For', 'While', 'If']
+          # Include others
+          return true if @types[firstSym]  # It's a nonterminal
+          return true  # It's a terminal
+        
+        func = @_generateSwitchFunction(name, filteredRules)
+        functions.push(func) if func
+        continue
+      
       # Select strategy based on pattern detection
-      # FIRST sets prevent indirect cycles automatically!
       func = if @leftRecursive?.has(name)
         # Left-recursive: generate iterative parser
         @_generateIterativeParser(name)
       else
         # Standard: generate switch-based parser
         @_generateSwitchFunction(name, type.rules)
-
+      
       functions.push(func) if func
 
     # Close parser object
@@ -1407,13 +1439,16 @@ class Generator
       if recursive.length > 0
         @leftRecursive.set name, {base, recursive}
 
-    # Note: Indirect cycles (Expression ↔ For, Value ↔ Assignable) are NOT actually
-    # problematic because FIRST sets prevent them:
-    # - parseExpression() only calls parseFor() when lookahead is FOR
-    # - parseFor() only calls parseExpression() AFTER consuming FOR token
-    # The context changes, so no infinite recursion occurs
-    # The SLR(1) oracle handles this automatically through FIRST set dispatch!
-
+    # Note: Indirect cycles occur with postfix comprehensions
+    # Solution: Skip PRD generation for rules with postfix forms (Expression/Statement start)
+    # These rules will use table-driven parsing which handles precedence correctly
+  
+  _hasPostfixForms: (type) ->
+    # Check if any rule starts with Expression or Statement (postfix pattern)
+    type.rules.some (rule) =>
+      firstSym = rule.symbols[0]
+      firstSym in ['Expression', 'Statement']
+  
   _normalizeActionForPRD: (action, symbols) ->
     # Convert grammar actions to use $1, $2, $3 variable notation
     return "$1" if not action or action is 1
