@@ -1703,7 +1703,7 @@ class Generator
     # For rules in inlined functions: assign to $1 and break (for postfix loop)
     # For rules in standard functions: just compile normally
     firstSym = rule.symbols[0]
-    
+
     if @types[firstSym]
       # Nonterminal - get its FIRST set
       firstTokens = @_getFirstTokensForRule(rule)
@@ -1712,11 +1712,11 @@ class Generator
         tokenName = @tokenNames[tokenId]
         if tokenName
           tokenNames.push(@_getSymbolConstName(tokenName))
-      
+
       return '' if tokenNames.length is 0
-      
+
       caseStr = tokenNames.map((n) -> "case #{n}").join(': ')
-      
+
       # Generate parsing
       lines = []
       for symbol, i in rule.symbols
@@ -1728,15 +1728,15 @@ class Generator
           tokenName = @tokenNames[tokenId]
           constName = if tokenName then @_getSymbolConstName(tokenName) else tokenId
           lines.push("$#{pos} = this._match(#{constName});")
-      
+
       # Normalize action
       action = @_normalizeActionForPRD(rule.action, rule.symbols)
       # Skip no-op assignments like "$1 = $1;"
       lines.push("$1 = #{action};") unless action is '$1'
       lines.push("break;")
-      
+
       parsing = lines.map((line) -> "    #{line}").join('\n')
-      
+
       """
     #{caseStr}:
   #{parsing}
@@ -1746,9 +1746,9 @@ class Generator
       tokenId = @symbolIds[firstSym]
       tokenName = @tokenNames[tokenId]
       return '' unless tokenName
-      
+
       constName = @_getSymbolConstName(tokenName)
-      
+
       # Parse the rule
       lines = []
       for symbol, i in rule.symbols
@@ -1760,14 +1760,14 @@ class Generator
           tokenName = @tokenNames[tokenId]
           constName = if tokenName then @_getSymbolConstName(tokenName) else tokenId
           lines.push("$#{pos} = this._match(#{constName});")
-      
+
       action = @_normalizeActionForPRD(rule.action, rule.symbols)
       # Skip no-op assignments like "$1 = $1;"
       lines.push("$1 = #{action};") unless action is '$1'
       lines.push("break;")
-      
+
       parsing = lines.map((line) -> "    #{line}").join('\n')
-      
+
       """
     case #{constName}:
   #{parsing}
