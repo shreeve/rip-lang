@@ -283,3 +283,16 @@ The $ protects against auto-substitution
 
 
 Tokens are passed through AS-IS: When an action references a token position, the entire token (with all its String object properties like .quote, .await, .heregex) is passed through.
+
+==
+
+_normalizeActionForPRD: (action, symbols) ->
+  return "$1" if not action or action is 1
+  return "$#{action}" if typeof action is 'number'
+
+  actionStr = String(action)
+  return actionStr if /\$\d+/.test(actionStr)  # Already normalized
+
+  # Replace all bare numbers with $n
+  # Use word boundaries to avoid partial replacements
+  actionStr.replace /\b(\d+)\b/g, '$$$1'
