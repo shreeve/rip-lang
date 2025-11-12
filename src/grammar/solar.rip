@@ -855,7 +855,7 @@ class Generator
       for [k, v] from @leftRecursive
         entries.push k
     entriesList = if entries.length > 0 then entries.join(', ') else '(none)'
-    
+
     debugInfo = """
     // PRD Generator Debug:
     //   @leftRecursive = #{if @leftRecursive then 'Map' else 'undefined'}
@@ -863,7 +863,7 @@ class Generator
     //   @leftRecursive?.constructor.name = #{@leftRecursive?.constructor?.name or 'N/A'}
     //   Entries: #{entriesList}
     """
-    
+
     functions.push(debugInfo)
 
     # Generate parse functions for ALL nonterminals
