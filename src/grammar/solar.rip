@@ -1064,21 +1064,19 @@ class Generator
       # Compile action
       action = @_compileAction(rule, nonTerminal)
 
-      # Check if action has multiple statements (contains newlines/semicolons)
-      hasMultipleStatements = action.includes('\n') or action.match(/;\s*\w/)
-
       # Format: stack case labels, then action on same/next line
       caseStr = tokenNames.map((n) -> "case #{n}").join(': ')
       totalLength = caseStr.length + action.length
 
-      # If action has multiple statements, wrap in block to avoid variable collisions
+      # Check if action has multiple statements (contains newlines/semicolons)
+      hasMultipleStatements = action.includes('\n') or action.match(/;\s*\w/)
+
       if hasMultipleStatements
-        cases.push("    #{caseStr}: {")
-        # Indent each line of the action
+        # Multiple statements - put on separate lines (no braces needed with $ variables)
+        cases.push("    #{caseStr}:")
         actionLines = action.split('\n')
         for line in actionLines
           cases.push("      #{line}") if line.trim()
-        cases.push("    }")
       else if totalLength < 100 and tokenNames.length <= 5
         # Single statement, fits on one line
         cases.push("    #{caseStr}: #{action}")
