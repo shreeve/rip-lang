@@ -1149,7 +1149,10 @@ class Generator
       if @types[symbol]
         lines.push("$#{pos} = this.parse#{symbol}();")
       else
-        lines.push("$#{pos} = this._match(#{@symbolIds[symbol]});")
+        tokenId = @symbolIds[symbol]
+        tokenName = @tokenNames[tokenId]
+        constName = if tokenName then @_getSymbolConstName(tokenName) else tokenId
+        lines.push("$#{pos} = this._match(#{constName});")
 
     # Add return statement with normalized action
     lines.push("return #{normalizedAction};")
@@ -1617,12 +1620,14 @@ class Generator
       if @types[symbol]
         lines.push("$#{pos} = this.parse#{symbol}();")
       else
-        lines.push("$#{pos} = this._match(#{@symbolIds[symbol]});")
+        tokenId = @symbolIds[symbol]
+        tokenName = @tokenNames[tokenId]
+        constName = if tokenName then @_getSymbolConstName(tokenName) else tokenId
+        lines.push("$#{pos} = this._match(#{constName});")
 
     # Generate action
     action = @_normalizeActionForPRD(rule.action, rule.symbols)
-    lines.push("$1 = #{action};")
-    lines.push("break;")
+    lines.push("return #{action};")
 
     parsing = lines.map((line) -> "        #{line}").join('\n')
 
@@ -1676,7 +1681,10 @@ class Generator
       if @types[symbol]
         lines.push("$#{pos} = this.parse#{symbol}();")
       else
-        lines.push("$#{pos} = this._match(#{@symbolIds[symbol]});")
+        tokenId = @symbolIds[symbol]
+        tokenName = @tokenNames[tokenId]
+        constName = if tokenName then @_getSymbolConstName(tokenName) else tokenId
+        lines.push("$#{pos} = this._match(#{constName});")
 
     # Generate action (with $1 as accumulated result)
     action = @_normalizeActionForPRD(rule.action, rule.symbols)
@@ -1692,10 +1700,10 @@ class Generator
 
   _generateStandardCase: (rule) ->
     # Generate case for standard rule (no inlining needed)
-    # Compile the rule, but use $1 = ... and break (not return)
-    # This allows postfix loops to continue processing
+    # For rules in inlined functions: assign to $1 and break (for postfix loop)
+    # For rules in standard functions: just compile normally
     firstSym = rule.symbols[0]
-
+    
     if @types[firstSym]
       # Nonterminal - get its FIRST set
       firstTokens = @_getFirstTokensForRule(rule)
@@ -1704,27 +1712,31 @@ class Generator
         tokenName = @tokenNames[tokenId]
         if tokenName
           tokenNames.push(@_getSymbolConstName(tokenName))
-
+      
       return '' if tokenNames.length is 0
-
+      
       caseStr = tokenNames.map((n) -> "case #{n}").join(': ')
-
-      # Generate parsing - assign to $1, don't return yet
+      
+      # Generate parsing
       lines = []
       for symbol, i in rule.symbols
         pos = i + 1
         if @types[symbol]
           lines.push("$#{pos} = this.parse#{symbol}();")
         else
-          lines.push("$#{pos} = this._match(#{@symbolIds[symbol]});")
-
+          tokenId = @symbolIds[symbol]
+          tokenName = @tokenNames[tokenId]
+          constName = if tokenName then @_getSymbolConstName(tokenName) else tokenId
+          lines.push("$#{pos} = this._match(#{constName});")
+      
       # Normalize action
       action = @_normalizeActionForPRD(rule.action, rule.symbols)
-      lines.push("$1 = #{action};")
+      # Skip no-op assignments like "$1 = $1;"
+      lines.push("$1 = #{action};") unless action is '$1'
       lines.push("break;")
-
+      
       parsing = lines.map((line) -> "    #{line}").join('\n')
-
+      
       """
     #{caseStr}:
   #{parsing}
@@ -1734,9 +1746,9 @@ class Generator
       tokenId = @symbolIds[firstSym]
       tokenName = @tokenNames[tokenId]
       return '' unless tokenName
-
+      
       constName = @_getSymbolConstName(tokenName)
-
+      
       # Parse the rule
       lines = []
       for symbol, i in rule.symbols
@@ -1744,14 +1756,18 @@ class Generator
         if @types[symbol]
           lines.push("$#{pos} = this.parse#{symbol}();")
         else
-          lines.push("$#{pos} = this._match(#{@symbolIds[symbol]});")
-
+          tokenId = @symbolIds[symbol]
+          tokenName = @tokenNames[tokenId]
+          constName = if tokenName then @_getSymbolConstName(tokenName) else tokenId
+          lines.push("$#{pos} = this._match(#{constName});")
+      
       action = @_normalizeActionForPRD(rule.action, rule.symbols)
-      lines.push("$1 = #{action};")
+      # Skip no-op assignments like "$1 = $1;"
+      lines.push("$1 = #{action};") unless action is '$1'
       lines.push("break;")
-
+      
       parsing = lines.map((line) -> "    #{line}").join('\n')
-
+      
       """
     case #{constName}:
   #{parsing}
@@ -1799,7 +1815,10 @@ class Generator
       if @types[symbol]
         restLines.push("$#{pos} = this.parse#{symbol}();")
       else
-        restLines.push("$#{pos} = this._match(#{@symbolIds[symbol]});")
+        tokenId = @symbolIds[symbol]
+        tokenName = @tokenNames[tokenId]
+        constName = if tokenName then @_getSymbolConstName(tokenName) else tokenId
+        restLines.push("$#{pos} = this._match(#{constName});")
 
     restParsing = if restLines.length > 0
       '\n        ' + restLines.join('\n        ') + '\n        '
