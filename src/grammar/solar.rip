@@ -870,23 +870,16 @@ class Generator
     for own name, type of @types
       # Skip special symbols
       continue if name in ['$accept', '$end', 'error']
-
-      # Handle cyclic rules specially
-      if @cyclicRules?.has(name)
-        # For now, use existing _generateSwitchFunction which handles them
-        # TODO: Implement proper cycle handling with lookahead
-        func = @_generateSwitchFunction(name, type.rules)
-        functions.push(func) if func
-        continue
-
+      
       # Select strategy based on pattern detection
+      # FIRST sets prevent indirect cycles automatically!
       func = if @leftRecursive?.has(name)
         # Left-recursive: generate iterative parser
         @_generateIterativeParser(name)
       else
         # Standard: generate switch-based parser
         @_generateSwitchFunction(name, type.rules)
-
+      
       functions.push(func) if func
 
     # Close parser object
@@ -1414,14 +1407,12 @@ class Generator
       if recursive.length > 0
         @leftRecursive.set name, {base, recursive}
 
-    # Detect indirect cycles using simple reachability
-    # For now, mark specific known cycles
-    @cyclicRules.add('Expression')  # Expression ↔ For, While, etc.
-    @cyclicRules.add('For')
-    @cyclicRules.add('While')
-    @cyclicRules.add('Value')       # Value ↔ Assignable ↔ SimpleAssignable
-    @cyclicRules.add('Assignable')
-    @cyclicRules.add('SimpleAssignable')
+    # Note: Indirect cycles (Expression ↔ For, Value ↔ Assignable) are NOT actually
+    # problematic because FIRST sets prevent them:
+    # - parseExpression() only calls parseFor() when lookahead is FOR
+    # - parseFor() only calls parseExpression() AFTER consuming FOR token
+    # The context changes, so no infinite recursion occurs
+    # The SLR(1) oracle handles this automatically through FIRST set dispatch!
 
   _normalizeActionForPRD: (action, symbols) ->
     # Convert grammar actions to use $1, $2, $3 variable notation
