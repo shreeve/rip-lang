@@ -102,6 +102,7 @@ class Generator
       # Detect left-recursion for PRD mode (after all analysis complete)
       if @options.recursiveDescent
         @timing 'detectLeftRecursion', => @detectLeftRecursion()
+        @timing 'detectIndirectRecursion', => @detectIndirectLeftRecursion()
 
   # ============================================================================
   # Helper Functions
@@ -870,48 +871,24 @@ class Generator
     for own name, type of @types
       # Skip special symbols
       continue if name in ['$accept', '$end', 'error']
-
-      # Check for postfix forms
-      if @_hasPostfixForms(type)
-        # Filter out postfix rules (start with Expression/Statement)
-        # These are handled by operator precedence, not direct parsing
-        prefixRules = type.rules.filter (rule) =>
-          firstSym = rule.symbols[0]
-          firstSym not in ['Expression', 'Statement']
-
-        # If no prefix rules remain, skip this function
-        # (it's only used for postfix, handled elsewhere)
-        continue if prefixRules.length is 0
-
-        # Generate with only prefix rules
-        func = @_generateSwitchFunction(name, prefixRules)
-        functions.push(func) if func
+      
+      # Skip rules marked for inlining (will be inlined into parent)
+      if @shouldInline?.has(name)
+        console.log "⏭️  Skipping #{name} (will be inlined into parent)"
         continue
-
-      # Special case: Expression should not dispatch to For/While/If
-      # (they have postfix forms that create cycles)
-      if name is 'Expression'
-        # Filter out alternatives that have postfix forms
-        filteredRules = type.rules.filter (rule) =>
-          firstSym = rule.symbols[0]
-          # Skip For, While, If - they'll be called only when lookahead matches
-          return false if firstSym in ['For', 'While', 'If']
-          # Include others
-          return true if @types[firstSym]  # It's a nonterminal
-          return true  # It's a terminal
-
-        func = @_generateSwitchFunction(name, filteredRules)
-        functions.push(func) if func
-        continue
-
+      
       # Select strategy based on pattern detection
-      func = if @leftRecursive?.has(name)
-        # Left-recursive: generate iterative parser
+      func = if @indirectLeftRec?.has(name)
+        # Has indirect left-recursion - inline children with postfix forms
+        console.log "📝 Generating #{name} with inlining"
+        @_generateWithInlining(name, type)
+      else if @leftRecursive?.has(name)
+        # Direct left-recursion - iterative
         @_generateIterativeParser(name)
       else
-        # Standard: generate switch-based parser
+        # Standard - switch dispatch
         @_generateSwitchFunction(name, type.rules)
-
+      
       functions.push(func) if func
 
     # Close parser object
@@ -1439,27 +1416,292 @@ class Generator
       if recursive.length > 0
         @leftRecursive.set name, {base, recursive}
 
-    # Note: Indirect cycles occur with postfix comprehensions
-    # Solution: Skip PRD generation for rules with postfix forms (Expression/Statement start)
-    # These rules will use table-driven parsing which handles precedence correctly
+    # Note: Indirect cycles are handled via inlining
+    # Pattern: A → B, B → A α means B should be inlined into A
+  
+  detectIndirectLeftRecursion!: ->
+    # Find patterns: A → B, B → A α (indirect left-recursion)
+    # Solution: Inline specific child into more general parent
+    # Strategy: Inline Operation/For/While/If INTO Expression (not vice versa)
+    @indirectLeftRec = new Map()  # parent → {children with postfix forms}
+    @shouldInline = new Set()      # rules to inline (don't generate)
+    
+    # Define which rules should HOST inlining (more general rules)
+    # These won't be inlined into others
+    # Value is the ultimate host for the Value/Assignable/SimpleAssignable cycle
+    hosts = new Set(['Expression', 'Value', 'Statement'])
+    
+    # Also detect multi-hop cycles: Value → Assignable → SimpleAssignable → Value
+    # Solution: Inline both Assignable and SimpleAssignable into Value
+    # These are passthrough rules that participate in cycles
+    @shouldInline.add('Assignable')
+    @shouldInline.add('SimpleAssignable')
+    
+    for [parentName, parentType] from Object.entries(@types)
+      # Skip if parent is already direct left-recursive
+      # (those are handled by iterative generation, not inlining)
+      continue if @leftRecursive.has(parentName)
+      
+      # Only process if parent is a host
+      continue unless hosts.has(parentName)
+      
+      for parentRule in parentType.rules
+        childName = parentRule.symbols[0]
+        continue unless @types[childName]  # Must be nonterminal
+        continue if childName is parentName  # Skip direct recursion
+        continue if hosts.has(childName)  # Don't inline other hosts
+        
+        # Check if this child/parent pair already processed
+        if @indirectLeftRec.has(parentName) and @indirectLeftRec.get(parentName).children.has(childName)
+          continue  # Already processed this pair
+        
+        # Check if child has rules that start with parent (creates cycle)
+        childType = @types[childName]
+        prefixRules = []
+        postfixRules = []
+        
+        for childRule in childType.rules
+          if childRule.symbols[0] is parentName
+            postfixRules.push(childRule)  # Child → Parent α (POSTFIX)
+          else
+            prefixRules.push(childRule)     # Child → Terminal α (PREFIX)
+        
+        # If child has postfix forms, mark for inlining
+        if postfixRules.length > 0
+          @shouldInline.add(childName)
+          
+          unless @indirectLeftRec.has(parentName)
+            @indirectLeftRec.set(parentName, {children: new Map()})
+          
+          @indirectLeftRec.get(parentName).children.set(childName, {
+            prefixRules: prefixRules
+            postfixRules: postfixRules
+          })
+          
+          console.log "🔄 Inlining #{childName} into #{parentName}"
+          console.log "   Prefix: #{prefixRules.length} rules"
+          console.log "   Postfix: #{postfixRules.length} rules"
 
-  _hasPostfixForms: (type) ->
-    # Check if any rule starts with Expression or Statement (postfix pattern)
-    type.rules.some (rule) =>
-      firstSym = rule.symbols[0]
-      firstSym in ['Expression', 'Statement']
-
+  _generateWithInlining: (name, type) ->
+    # Generate function with inlined children (handles indirect left-recursion)
+    info = @indirectLeftRec.get(name)
+    
+    # Collect all cases for base switch and postfix loop
+    baseCases = []
+    postfixCases = []
+    
+    for rule in type.rules
+      childName = rule.symbols[0]
+      
+      if info.children.has(childName)
+        # This child should be inlined - add its alternatives
+        childInfo = info.children.get(childName)
+        
+        # Add child's PREFIX rules to base switch
+        for prefixRule in childInfo.prefixRules
+          baseCases.push(@_generateInlinedPrefixCase(prefixRule))
+        
+        # Add child's POSTFIX rules to postfix loop
+        for postfixRule in childInfo.postfixRules
+          postfixCases.push(@_generateInlinedPostfixCase(postfixRule))
+      else if @shouldInline?.has(childName)
+        # Child is marked for inlining but isn't in our inlining map
+        # This means it's a passthrough rule - expand through it
+        childType = @types[childName]
+        for childRule in childType.rules
+          grandchildName = childRule.symbols[0]
+          
+          # Check if grandchild rule starts with parent (postfix form!)
+          if grandchildName is name
+            # This is a postfix form - add to postfix loop
+            postfixCases.push(@_generateInlinedPostfixCase(childRule))
+          else if @shouldInline?.has(grandchildName)
+            # Grandchild is also passthrough - expand one more level
+            grandchildType = @types[grandchildName]
+            for grandchildRule in grandchildType.rules
+              if grandchildRule.symbols[0] is name
+                # Postfix at third level
+                postfixCases.push(@_generateInlinedPostfixCase(grandchildRule))
+              else
+                # Regular rule
+                baseCases.push(@_generateStandardCase(grandchildRule))
+          else
+            # Regular grandchild - add its case
+            baseCases.push(@_generateStandardCase(childRule))
+      else
+        # Regular rule - add to base switch normally
+        baseCases.push(@_generateStandardCase(rule))
+    
+    # Find max $ variable needed
+    maxVar = 1
+    for caseCode in baseCases.concat(postfixCases)
+      matches = caseCode.match(/\$(\d+)/g)
+      if matches
+        for m in matches
+          maxVar = Math.max(maxVar, parseInt(m.slice(1)))
+    
+    dollarVars = ("$#{i}" for i in [1..maxVar]).join(', ')
+    
+    # Generate postfix loop if needed
+    postfixLoop = if postfixCases.length > 0
+      """
+            
+            while (this.la) {
+              switch (this.la.id) {
+          #{postfixCases.join('\n')}
+                default:
+                  return $1;
+              }
+            }
+      """
+    else
+      ""
+    
+    # Collect expected tokens for error message
+    expectedTokens = new Set()
+    for caseCode in baseCases
+      # Extract case constants from generated code
+      matches = caseCode.match(/case\s+(SYM_\w+)/g)
+      if matches
+        for m in matches
+          expectedTokens.add(m.replace('case ', ''))
+    
+    expectedList = Array.from(expectedTokens).join(', ')
+    
+    # Build function
+    """
+      parse#{name}() {
+        let #{dollarVars};
+        
+        switch (this.la.id) {
+    #{baseCases.join('\n')}
+          default: this._error([#{expectedList}], this.la.id);
+        }#{postfixLoop}
+        
+        return $1;
+      },
+    """
+  
   _normalizeActionForPRD: (action, symbols) ->
     # Convert grammar actions to use $1, $2, $3 variable notation
     return "$1" if not action or action is 1
     return "$#{action}" if typeof action is 'number'
-
+    
     actionStr = String(action)
     return actionStr if /\$\d+/.test(actionStr)  # Already normalized
-
+    
     # Replace all bare numbers with $n (word boundaries prevent array index issues)
     actionStr.replace /\b(\d+)\b/g, '$$$1'
 
+  _generateInlinedPrefixCase: (rule) ->
+    # Generate case for prefix rule (goes in switch section)
+    # Rule: FOR ForVariables FORIN Expression Block
+    # Generate: case SYM_FOR: $1 = match; $2 = parse; ...; $1 = action; break;
+    
+    firstToken = rule.symbols[0]
+    tokenId = @symbolIds[firstToken]
+    tokenName = @tokenNames[tokenId]
+    return '' unless tokenName
+    
+    constName = @_getSymbolConstName(tokenName)
+    
+    # Generate parsing code for each symbol
+    lines = []
+    for symbol, i in rule.symbols
+      pos = i + 1
+      if @types[symbol]
+        lines.push("$#{pos} = this.parse#{symbol}();")
+      else
+        lines.push("$#{pos} = this._match(#{@symbolIds[symbol]});")
+    
+    # Generate action
+    action = @_normalizeActionForPRD(rule.action, rule.symbols)
+    lines.push("$1 = #{action};")
+    lines.push("break;")
+    
+    parsing = lines.map((line) -> "        #{line}").join('\n')
+    
+    """
+        case #{constName}:
+    #{parsing}
+    """
+  
+  _generateInlinedPostfixCase: (rule) ->
+    # Generate case for postfix rule (goes in while loop)
+    # Rule: Expression FOR ForVariables FORIN Expression
+    # First symbol is parent (already in $1)
+    # Generate: case SYM_FOR: $2 = match; $3 = parse; ...; $1 = action; continue;
+    
+    # Skip first symbol (the recursion point, already in $1)
+    remainingSymbols = rule.symbols.slice(1)
+    
+    secondToken = remainingSymbols[0]
+    tokenId = @symbolIds[secondToken]
+    tokenName = @tokenNames[tokenId]
+    return '' unless tokenName
+    
+    constName = @_getSymbolConstName(tokenName)
+    
+    # Generate parsing for remaining symbols
+    lines = []
+    for symbol, i in remainingSymbols
+      pos = i + 2  # Start at $2 (since $1 is accumulated result)
+      if @types[symbol]
+        lines.push("$#{pos} = this.parse#{symbol}();")
+      else
+        lines.push("$#{pos} = this._match(#{@symbolIds[symbol]});")
+    
+    # Generate action (with $1 as accumulated result)
+    action = @_normalizeActionForPRD(rule.action, rule.symbols)
+    lines.push("$1 = #{action};")
+    lines.push("continue;")
+    
+    parsing = lines.map((line) -> "            #{line}").join('\n')
+    
+    """
+          case #{constName}:
+    #{parsing}
+    """
+  
+  _generateStandardCase: (rule) ->
+    # Generate case for standard rule (no inlining needed)
+    # Just compile the rule normally
+    firstSym = rule.symbols[0]
+    
+    if @types[firstSym]
+      # Nonterminal - get its FIRST set
+      firstTokens = @_getFirstTokensForRule(rule)
+      tokenNames = []
+      for tokenId in firstTokens
+        tokenName = @tokenNames[tokenId]
+        if tokenName
+          tokenNames.push(@_getSymbolConstName(tokenName))
+      
+      return '' if tokenNames.length is 0
+      
+      caseStr = tokenNames.map((n) -> "case #{n}").join(': ')
+      action = @_compileAction(rule)
+      
+      """
+        #{caseStr}:
+          #{action}
+          break;
+      """
+    else
+      # Terminal - simple case
+      tokenId = @symbolIds[firstSym]
+      tokenName = @tokenNames[tokenId]
+      return '' unless tokenName
+      
+      constName = @_getSymbolConstName(tokenName)
+      action = @_compileAction(rule)
+      
+      """
+        case #{constName}:
+          #{action}
+          break;
+      """
+  
   _generateIterativeParser: (name) ->
     # Generate iterative parser for left-recursive rules
     # Pattern: A → β | A sep γ becomes while loop with accumulation
