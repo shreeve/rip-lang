@@ -850,18 +850,20 @@ class Generator
     functions = []
 
     # Add debug comment to generated code
-    debugInfo = "// PRD Generator Debug:"
-    debugInfo += "\n//   @leftRecursive = #{if @leftRecursive then 'Map' else 'undefined'}"
-    debugInfo += "\n//   @leftRecursive?.size = #{@leftRecursive?.size or 'N/A'}"
-    debugInfo += "\n//   @leftRecursive?.constructor.name = #{@leftRecursive?.constructor?.name or 'N/A'}"
-
-    # List all entries
+    entries = []
     if @leftRecursive
-      entries = []
       for [k, v] from @leftRecursive
         entries.push k
-      debugInfo += "\n//   Entries: #{if entries.length > 0 then entries.join(', ') else '(none)'}"
-
+    entriesList = if entries.length > 0 then entries.join(', ') else '(none)'
+    
+    debugInfo = """
+    // PRD Generator Debug:
+    //   @leftRecursive = #{if @leftRecursive then 'Map' else 'undefined'}
+    //   @leftRecursive?.size = #{@leftRecursive?.size or 'N/A'}
+    //   @leftRecursive?.constructor.name = #{@leftRecursive?.constructor?.name or 'N/A'}
+    //   Entries: #{entriesList}
+    """
+    
     functions.push(debugInfo)
 
     # Generate parse functions for ALL nonterminals
