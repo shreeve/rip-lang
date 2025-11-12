@@ -870,7 +870,7 @@ class Generator
     for own name, type of @types
       # Skip special symbols
       continue if name in ['$accept', '$end', 'error']
-      
+
       # Select strategy based on pattern detection
       # FIRST sets prevent indirect cycles automatically!
       func = if @leftRecursive?.has(name)
@@ -879,7 +879,7 @@ class Generator
       else
         # Standard: generate switch-based parser
         @_generateSwitchFunction(name, type.rules)
-      
+
       functions.push(func) if func
 
     # Close parser object
