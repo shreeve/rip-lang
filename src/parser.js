@@ -272,9 +272,11 @@ const parser = {
 
     while (this.la && (this.la.id === SYM_TERMINATOR || this.la.id === SYM_TERMINATOR)) {
         if (this.la.id === SYM_TERMINATOR) {
+    const _posSave = this._saveState();
     $2 = this._match(SYM_TERMINATOR);
-    // Check if another element follows
+    // Check if another element follows (restore state if not)
     if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_LBRACKET, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_IF, SYM_UNLESS, SYM_STATEMENT, SYM_TRY, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_RETURN, SYM_IMPORT, SYM_EXPORT].includes(this.la.id)) {
+      this._restoreState(_posSave);
       break;
     }
     $3 = this.parseLine();
@@ -282,9 +284,11 @@ const parser = {
     continue;
   }
             if (this.la.id === SYM_TERMINATOR) {
+    const _posSave = this._saveState();
     $2 = this._match(SYM_TERMINATOR);
-    // Check if another element follows
+    // Check if another element follows (restore state if not)
     if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_LBRACKET, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_IF, SYM_UNLESS, SYM_STATEMENT, SYM_TRY, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_RETURN, SYM_IMPORT, SYM_EXPORT].includes(this.la.id)) {
+      this._restoreState(_posSave);
       break;
     }
     $3 = this._match(undefined);
@@ -689,24 +693,29 @@ const parser = {
   }
     case SYM_UNARY:
         $1 = this._match(SYM_UNARY);
-        $2 = this.parseExpression();
-        return [$1, $2];
+        $2 = this.parseExpression(20);
+        $1 = [$1, $2];
+        break;
     case SYM_DO:
         $1 = this._match(SYM_DO);
-        $2 = this.parseExpression();
-        return ["do-iife", $2];
+        $2 = this.parseExpression(20);
+        $1 = ["do-iife", $2];
+        break;
     case SYM_UNARY_MATH:
         $1 = this._match(SYM_UNARY_MATH);
-        $2 = this.parseExpression();
-        return [$1, $2];
+        $2 = this.parseExpression(17);
+        $1 = [$1, $2];
+        break;
     case SYM_MINUS:
         $1 = this._match(SYM_MINUS);
-        $2 = this.parseExpression();
-        return ["-", $2];
+        $2 = this.parseExpression(17);
+        $1 = ["-", $2];
+        break;
     case SYM_PLUS:
         $1 = this._match(SYM_PLUS);
-        $2 = this.parseExpression();
-        return ["+", $2];
+        $2 = this.parseExpression(17);
+        $1 = ["+", $2];
+        break;
     case SYM_AWAIT:
       $1 = this._match(SYM_AWAIT);
       
@@ -722,12 +731,14 @@ const parser = {
       }
     case SYM_DEC:
         $1 = this._match(SYM_DEC);
-        $2 = this.parseSimpleAssignable();
-        return ["--", $2, false];
+        $2 = this.parseSimpleAssignable(22);
+        $1 = ["--", $2, false];
+        break;
     case SYM_INC:
         $1 = this._match(SYM_INC);
-        $2 = this.parseSimpleAssignable();
-        return ["++", $2, false];
+        $2 = this.parseSimpleAssignable(22);
+        $1 = ["++", $2, false];
+        break;
   case SYM_IF: {
     const _saved = this._saveState();
 
@@ -755,11 +766,6 @@ const parser = {
   }
   case SYM_UNLESS:
       $1 = this.parseUnlessBlock();
-      break;
-  case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
-      $1 = this.parseStatement();
-      $2 = this.parseWhileSource();
-      $1 = $2.length === 2 ? [$2[0], $2[1], [$1]] : [$2[0], $2[1], $2[2], [$1]];
       break;
   case SYM_TRY:
       $1 = this.parseTry();
@@ -975,7 +981,10 @@ const parser = {
   case SYM_DEF:
       $1 = this.parseDef();
       break;
-      default: this._error([SYM_AT, SYM_BOOL, SYM_DO_IIFE, SYM_DYNAMIC_IMPORT, SYM_FAT_ARROW, SYM_IDENTIFIER, SYM_IMPORT_META, SYM_INFINITY, SYM_JS, SYM_LBRACE, SYM_LBRACKET, SYM_LPAREN, SYM_NAN, SYM_NEW_TARGET, SYM_NULL, SYM_NUMBER, SYM_PARAM_START, SYM_REGEX, SYM_REGEX_START, SYM_STRING, SYM_STRING_START, SYM_SUPER, SYM_THIN_ARROW, SYM_THIS, SYM_UNDEFINED, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_TRY, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF], this.la.id);
+case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
+      $1 = this.parseStatement();
+      break;
+      default: this._error([SYM_AT, SYM_BOOL, SYM_DO_IIFE, SYM_DYNAMIC_IMPORT, SYM_FAT_ARROW, SYM_IDENTIFIER, SYM_IMPORT_META, SYM_INFINITY, SYM_JS, SYM_LBRACE, SYM_LBRACKET, SYM_LPAREN, SYM_NAN, SYM_NEW_TARGET, SYM_NULL, SYM_NUMBER, SYM_PARAM_START, SYM_REGEX, SYM_REGEX_START, SYM_STRING, SYM_STRING_START, SYM_SUPER, SYM_THIN_ARROW, SYM_THIS, SYM_UNDEFINED, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_IF, SYM_UNLESS, SYM_TRY, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT], this.la.id);
     }
     while (this.la) {
       // Check precedence before continuing
@@ -1156,19 +1165,101 @@ const parser = {
             // All variants failed
             return $1;
       case SYM_POST_IF:
-            $2 = this._match(SYM_POST_IF);
-            $3 = this.parseExpression(1);
-            $1 = ["if", $3, [$1]];
-            continue;
+            const _savedPOST_IF = this._saveState();
+
+            // Variant 1
+            try {
+          $2 = this._match(SYM_POST_IF);
+                      $3 = this.parseExpression(1);
+                      $1 = ["if", $3, [$1]];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedPOST_IF);
+            }
+
+            // Variant 2
+            try {
+          $2 = this._match(SYM_POST_IF);
+                      $3 = this.parseExpression(1);
+                      $1 = ["if", $3, [$1]];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedPOST_IF);
+            }
+
+            // All variants failed
+            return $1;
       case SYM_POST_UNLESS:
-            $2 = this._match(SYM_POST_UNLESS);
-            $3 = this.parseExpression();
-            $1 = ["unless", $3, [$1]];
-            continue;
+            const _savedPOST_UNLESS = this._saveState();
+
+            // Variant 1
+            try {
+          $2 = this._match(SYM_POST_UNLESS);
+                      $3 = this.parseExpression();
+                      $1 = ["unless", $3, [$1]];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedPOST_UNLESS);
+            }
+
+            // Variant 2
+            try {
+          $2 = this._match(SYM_POST_UNLESS);
+                      $3 = this.parseExpression();
+                      $1 = ["unless", $3, [$1]];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedPOST_UNLESS);
+            }
+
+            // All variants failed
+            return $1;
+      case SYM_UNTIL:
+            const _savedUNTIL = this._saveState();
+
+            // Variant 1
+            try {
+          $2 = this.parseWhileSource();
+                      $1 = $2.length === 2 ? [$2[0], $2[1], [$1]] : [$2[0], $2[1], $2[2], [$1]];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedUNTIL);
+            }
+
+            // Variant 2
+            try {
+          $2 = this.parseWhileSource();
+                      $1 = $2.length === 2 ? [$2[0], $2[1], [$1]] : [$2[0], $2[1], $2[2], [$1]];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedUNTIL);
+            }
+
+            // All variants failed
+            return $1;
       case SYM_WHILE:
-            $2 = this.parseWhileSource();
-            $1 = $2.length === 2 ? [$2[0], $2[1], [$1]] : [$2[0], $2[1], $2[2], [$1]];
-            continue;
+            const _savedWHILE = this._saveState();
+
+            // Variant 1
+            try {
+          $2 = this.parseWhileSource();
+                      $1 = $2.length === 2 ? [$2[0], $2[1], [$1]] : [$2[0], $2[1], $2[2], [$1]];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedWHILE);
+            }
+
+            // Variant 2
+            try {
+          $2 = this.parseWhileSource();
+                      $1 = $2.length === 2 ? [$2[0], $2[1], [$1]] : [$2[0], $2[1], $2[2], [$1]];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedWHILE);
+            }
+
+            // All variants failed
+            return $1;
       case SYM_FOR:
             const _savedFOR = this._saveState();
 
@@ -1950,18 +2041,24 @@ const parser = {
             $2 = this.parseExpression();
             $3 = this._match(SYM_RBRACKET);
             return ["computed", $2];
-    case SYM_AT:
-      $1 = this._match(SYM_AT);
-      
-      if (this.la.id === SYM_LBRACKET) {
-        $2 = this._match(SYM_LBRACKET);
-        $3 = this.parseExpression();
-        $4 = this._match(SYM_RBRACKET);
-        return ["[]", "this", $3];
-      }
-      else {
+    case SYM_AT: {
+      const _saved = this._saveState();
+
+      // Try: SimpleObjAssignable
+      try {
+        $1 = this.parseSimpleObjAssignable();
         return $1;
+      } catch (e) {
+        this._restoreState(_saved);
       }
+
+      // Fallback: @ [ Expression
+      $1 = this._match(SYM_AT);
+      $2 = this._match(SYM_LBRACKET);
+      $3 = this.parseExpression();
+      $4 = this._match(SYM_RBRACKET);
+      return ["[]", "this", $3];
+    }
     default: this._error([40, 42, 44, 46, 47, 75, 77], this.la.id);
     }
   },
@@ -1991,9 +2088,11 @@ const parser = {
 
     while (this.la && (this.la.id === SYM_DOT || this.la.id === SYM_OPT_DOT || this.la.id === SYM_PROTO || this.la.id === SYM_OPT_PROTO || this.la.id === SYM_PROTO || this.la.id === SYM_OPT_PROTO || this.la.id === SYM_INDEX_START || this.la.id === SYM_INDEX_START || this.la.id === SYM_INDEX_SOAK || this.la.id === SYM_INDEX_SOAK)) {
         if (this.la.id === SYM_DOT) {
+    const _posSave = this._saveState();
     $2 = this._match(SYM_DOT);
-    // Check if another element follows
+    // Check if another element follows (restore state if not)
     if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT].includes(this.la.id)) {
+      this._restoreState(_posSave);
       break;
     }
     $3 = this.parseProperty();
@@ -2001,9 +2100,11 @@ const parser = {
     continue;
   }
             if (this.la.id === SYM_OPT_DOT) {
+    const _posSave = this._saveState();
     $2 = this._match(SYM_OPT_DOT);
-    // Check if another element follows
+    // Check if another element follows (restore state if not)
     if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT].includes(this.la.id)) {
+      this._restoreState(_posSave);
       break;
     }
     $3 = this.parseProperty();
@@ -2011,9 +2112,11 @@ const parser = {
     continue;
   }
             if (this.la.id === SYM_PROTO) {
+    const _posSave = this._saveState();
     $2 = this._match(SYM_PROTO);
-    // Check if another element follows
+    // Check if another element follows (restore state if not)
     if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT].includes(this.la.id)) {
+      this._restoreState(_posSave);
       break;
     }
     $3 = this.parseProperty();
@@ -2021,9 +2124,11 @@ const parser = {
     continue;
   }
             if (this.la.id === SYM_OPT_PROTO) {
+    const _posSave = this._saveState();
     $2 = this._match(SYM_OPT_PROTO);
-    // Check if another element follows
+    // Check if another element follows (restore state if not)
     if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT].includes(this.la.id)) {
+      this._restoreState(_posSave);
       break;
     }
     $3 = this.parseProperty();
@@ -2031,9 +2136,11 @@ const parser = {
     continue;
   }
             if (this.la.id === SYM_PROTO) {
+    const _posSave = this._saveState();
     $2 = this._match(SYM_PROTO);
-    // Check if another element follows
+    // Check if another element follows (restore state if not)
     if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT].includes(this.la.id)) {
+      this._restoreState(_posSave);
       break;
     }
     $3 = this._match(undefined);
@@ -2041,9 +2148,11 @@ const parser = {
     continue;
   }
             if (this.la.id === SYM_OPT_PROTO) {
+    const _posSave = this._saveState();
     $2 = this._match(SYM_OPT_PROTO);
-    // Check if another element follows
+    // Check if another element follows (restore state if not)
     if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT].includes(this.la.id)) {
+      this._restoreState(_posSave);
       break;
     }
     $3 = this._match(undefined);
@@ -2051,9 +2160,11 @@ const parser = {
     continue;
   }
             if (this.la.id === SYM_INDEX_START) {
+    const _posSave = this._saveState();
     $2 = this._match(SYM_INDEX_START);
-    // Check if another element follows
+    // Check if another element follows (restore state if not)
     if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT].includes(this.la.id)) {
+      this._restoreState(_posSave);
       break;
     }
     $3 = this.parseExpression();
@@ -2061,9 +2172,11 @@ const parser = {
     continue;
   }
             if (this.la.id === SYM_INDEX_START) {
+    const _posSave = this._saveState();
     $2 = this._match(SYM_INDEX_START);
-    // Check if another element follows
+    // Check if another element follows (restore state if not)
     if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT].includes(this.la.id)) {
+      this._restoreState(_posSave);
       break;
     }
     $3 = this._match(SYM_INDENT);
@@ -2071,9 +2184,11 @@ const parser = {
     continue;
   }
             if (this.la.id === SYM_INDEX_SOAK) {
+    const _posSave = this._saveState();
     $2 = this._match(SYM_INDEX_SOAK);
-    // Check if another element follows
+    // Check if another element follows (restore state if not)
     if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT].includes(this.la.id)) {
+      this._restoreState(_posSave);
       break;
     }
     $3 = this._match(SYM_INDEX_START);
@@ -2081,9 +2196,11 @@ const parser = {
     continue;
   }
             if (this.la.id === SYM_INDEX_SOAK) {
+    const _posSave = this._saveState();
     $2 = this._match(SYM_INDEX_SOAK);
-    // Check if another element follows
+    // Check if another element follows (restore state if not)
     if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT].includes(this.la.id)) {
+      this._restoreState(_posSave);
       break;
     }
     $3 = this._match(SYM_INDEX_START);
@@ -2198,9 +2315,11 @@ $1 = this.parseParam();
 
     while (this.la && (this.la.id === SYM_COMMA || this.la.id === SYM_TERMINATOR || this.la.id === SYM_INDENT)) {
         if (this.la.id === SYM_COMMA) {
+    const _posSave = this._saveState();
     $2 = this._match(SYM_COMMA);
-    // Check if another element follows
+    // Check if another element follows (restore state if not)
     if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_ELLIPSIS].includes(this.la.id)) {
+      this._restoreState(_posSave);
       break;
     }
     $3 = this.parseParam();
@@ -2208,9 +2327,11 @@ $1 = this.parseParam();
     continue;
   }
             if (this.la.id === SYM_TERMINATOR) {
+    const _posSave = this._saveState();
     $2 = this._match(SYM_TERMINATOR);
-    // Check if another element follows
+    // Check if another element follows (restore state if not)
     if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_ELLIPSIS].includes(this.la.id)) {
+      this._restoreState(_posSave);
       break;
     }
     $3 = this.parseParam();
@@ -2389,34 +2510,14 @@ $1 = this.parseParam();
   case SYM_LPAREN:
       $1 = this.parseParenthetical();
       break;
-  case SYM_SUPER: {
-    const _saved = this._saveState();
-
-    // Try alternative 1
-    try {
-      $1 = this._match(SYM_SUPER);
-      $2 = this.parseArguments();
-      return ["super", ...$2];
-      break;
-    } catch (e) {
-      this._restoreState(_saved);
-    }
-
-    // Try alternative 2
-    try {
+  case SYM_SUPER:
       $1 = this.parseSuper();
       break;
-    } catch (e) {
-      this._restoreState(_saved);
-    }
-
-    // Fallback error
-    this._error([SYM_SUPER], this.la.id);
-  }
     case SYM_DYNAMIC_IMPORT:
         $1 = this._match(SYM_DYNAMIC_IMPORT);
-        $2 = this.parseArguments();
-        return ["import", ...$2];
+        $2 = this.parseArguments(1);
+        $1 = ["import", ...$2];
+        break;
   case SYM_DO_IIFE:
       $1 = this.parseDoIife();
       break;
@@ -2648,6 +2749,16 @@ $1 = this.parseParam();
 
             // All variants failed
             return $1;
+      case SYM_NUMBER:
+            $2 = this.parseOptFuncExist();
+            $3 = this.parseString();
+            $1 = ["tagged-template", $1, $3];
+            continue;
+      case SYM_STRING_START:
+            $2 = this.parseOptFuncExist();
+            $3 = this.parseString();
+            $1 = ["tagged-template", $1, $3];
+            continue;
       case SYM_STRING:
             $2 = this.parseOptFuncExist();
             $3 = this.parseString();
@@ -2840,9 +2951,11 @@ $1 = this.parseAssignObj();
 
     while (this.la && (this.la.id === SYM_COMMA || this.la.id === SYM_TERMINATOR || this.la.id === SYM_INDENT)) {
         if (this.la.id === SYM_COMMA) {
+    const _posSave = this._saveState();
     $2 = this._match(SYM_COMMA);
-    // Check if another element follows
+    // Check if another element follows (restore state if not)
     if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT, SYM_LBRACKET, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_ELLIPSIS].includes(this.la.id)) {
+      this._restoreState(_posSave);
       break;
     }
     $3 = this.parseAssignObj();
@@ -2850,9 +2963,11 @@ $1 = this.parseAssignObj();
     continue;
   }
             if (this.la.id === SYM_TERMINATOR) {
+    const _posSave = this._saveState();
     $2 = this._match(SYM_TERMINATOR);
-    // Check if another element follows
+    // Check if another element follows (restore state if not)
     if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT, SYM_LBRACKET, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_ELLIPSIS].includes(this.la.id)) {
+      this._restoreState(_posSave);
       break;
     }
     $3 = this.parseAssignObj();
@@ -3049,9 +3164,11 @@ $1 = this.parseAssignObj();
 
     while (this.la && (this.la.id === SYM_COMMA || this.la.id === SYM_TERMINATOR || this.la.id === SYM_INDENT)) {
         if (this.la.id === SYM_COMMA) {
+    const _posSave = this._saveState();
     $2 = this._match(SYM_COMMA);
-    // Check if another element follows
+    // Check if another element follows (restore state if not)
     if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_DEFAULT].includes(this.la.id)) {
+      this._restoreState(_posSave);
       break;
     }
     $3 = this.parseImportSpecifier();
@@ -3059,9 +3176,11 @@ $1 = this.parseAssignObj();
     continue;
   }
             if (this.la.id === SYM_TERMINATOR) {
+    const _posSave = this._saveState();
     $2 = this._match(SYM_TERMINATOR);
-    // Check if another element follows
+    // Check if another element follows (restore state if not)
     if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_DEFAULT].includes(this.la.id)) {
+      this._restoreState(_posSave);
       break;
     }
     $3 = this.parseImportSpecifier();
@@ -3273,9 +3392,11 @@ $1 = this.parseAssignObj();
 
     while (this.la && (this.la.id === SYM_COMMA || this.la.id === SYM_TERMINATOR || this.la.id === SYM_INDENT)) {
         if (this.la.id === SYM_COMMA) {
+    const _posSave = this._saveState();
     $2 = this._match(SYM_COMMA);
-    // Check if another element follows
+    // Check if another element follows (restore state if not)
     if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_DEFAULT].includes(this.la.id)) {
+      this._restoreState(_posSave);
       break;
     }
     $3 = this.parseExportSpecifier();
@@ -3283,9 +3404,11 @@ $1 = this.parseAssignObj();
     continue;
   }
             if (this.la.id === SYM_TERMINATOR) {
+    const _posSave = this._saveState();
     $2 = this._match(SYM_TERMINATOR);
-    // Check if another element follows
+    // Check if another element follows (restore state if not)
     if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_DEFAULT].includes(this.la.id)) {
+      this._restoreState(_posSave);
       break;
     }
     $3 = this.parseExportSpecifier();
@@ -4120,9 +4243,11 @@ $1 = this.parseAssignObj();
 
     while (this.la && (this.la.id === SYM_COMMA || this.la.id === SYM_TERMINATOR || this.la.id === SYM_INDENT)) {
         if (this.la.id === SYM_COMMA) {
+    const _posSave = this._saveState();
     $2 = this._match(SYM_COMMA);
-    // Check if another element follows
+    // Check if another element follows (restore state if not)
     if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_LBRACKET, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_IF, SYM_UNLESS, SYM_STATEMENT, SYM_TRY, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_RETURN, SYM_IMPORT, SYM_EXPORT, SYM_ELLIPSIS].includes(this.la.id)) {
+      this._restoreState(_posSave);
       break;
     }
     $3 = this.parseArg();
@@ -4130,9 +4255,11 @@ $1 = this.parseAssignObj();
     continue;
   }
             if (this.la.id === SYM_TERMINATOR) {
+    const _posSave = this._saveState();
     $2 = this._match(SYM_TERMINATOR);
-    // Check if another element follows
+    // Check if another element follows (restore state if not)
     if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_LBRACKET, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_IF, SYM_UNLESS, SYM_STATEMENT, SYM_TRY, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_RETURN, SYM_IMPORT, SYM_EXPORT, SYM_ELLIPSIS].includes(this.la.id)) {
+      this._restoreState(_posSave);
       break;
     }
     $3 = this.parseArg();
@@ -4445,9 +4572,11 @@ $1 = this.parseAssignObj();
 
     while (this.la && (this.la.id === SYM_COMMA || this.la.id === SYM_TERMINATOR || this.la.id === SYM_INDENT)) {
         if (this.la.id === SYM_COMMA) {
+    const _posSave = this._saveState();
     $2 = this._match(SYM_COMMA);
-    // Check if another element follows
+    // Check if another element follows (restore state if not)
     if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_PARAM_START, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_ELLIPSIS, SYM_COMMA].includes(this.la.id)) {
+      this._restoreState(_posSave);
       break;
     }
     $3 = this.parseArgElision();
@@ -4455,9 +4584,11 @@ $1 = this.parseAssignObj();
     continue;
   }
             if (this.la.id === SYM_TERMINATOR) {
+    const _posSave = this._saveState();
     $2 = this._match(SYM_TERMINATOR);
-    // Check if another element follows
+    // Check if another element follows (restore state if not)
     if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_PARAM_START, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_ELLIPSIS, SYM_COMMA].includes(this.la.id)) {
+      this._restoreState(_posSave);
       break;
     }
     $3 = this.parseArgElision();
@@ -4644,16 +4775,22 @@ $1 = this.parseAssignObj();
   parseOptElisions() {
     let $1, $2;
     switch (this.la.id) {
-    case SYM_COMMA:
-      $1 = this._match(SYM_COMMA);
-      
-      if ([SYM_COMMA].includes(this.la.id)) {
-        $2 = this.parseElisions();
-        return [...$2];
-      }
-      else {
+    case SYM_COMMA: {
+      const _saved = this._saveState();
+
+      // Try: OptComma
+      try {
+        $1 = this.parseOptComma();
         return [];
+      } catch (e) {
+        this._restoreState(_saved);
       }
+
+      // Fallback: , Elisions
+      $1 = this._match(SYM_COMMA);
+      $2 = this.parseElisions();
+      return [...$2];
+    }
     default: $1 = this.parseOptComma();
       return [];
     }
@@ -4678,9 +4815,11 @@ $1 = this.parseAssignObj();
         $1 = null;
 
     while (this.la && this.la.id === SYM_TERMINATOR) {
+      const _posSave = this._saveState();
                 $2 = this._match(SYM_TERMINATOR);
 // Only continue if another element can follow (check FIRST set)
       if (!this.la || this.la.id === SYM_EOF || ![SYM_COMMA].includes(this.la.id)) {
+        this._restoreState(_posSave);
         break;
       } $1 = $1;
     }
@@ -4694,9 +4833,11 @@ $1 = this.parseAssignObj();
         $1 = $1;
 
     while (this.la && this.la.id === SYM_COMMA) {
+      const _posSave = this._saveState();
                 $2 = this._match(SYM_COMMA);
 // Only continue if another element can follow (check FIRST set)
       if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
+        this._restoreState(_posSave);
         break;
       }
         $3 = this.parseExpression();
@@ -5067,9 +5208,11 @@ $1 = this.parseAssignObj();
         $1 = ["if", $2, $3];
 
     while (this.la && this.la.id === SYM_ELSE) {
+      const _posSave = this._saveState();
                 $2 = this._match(SYM_ELSE);
 // Only continue if another element can follow (check FIRST set)
       if (!this.la || this.la.id === SYM_EOF || ![SYM_IF].includes(this.la.id)) {
+        this._restoreState(_posSave);
         break;
       }
         $3 = this._match(SYM_IF);

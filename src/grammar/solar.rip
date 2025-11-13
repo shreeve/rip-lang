@@ -1846,6 +1846,7 @@ class Generator
     # Collect all cases for base switch and postfix loop
     baseCases = []
     postfixCases = []
+    movedToPostfix = new Set()  # Track which nonterminals were moved to postfix (for gateway generation)
 
     for rule in type.rules
       childName = rule.symbols[0]
@@ -1865,6 +1866,37 @@ class Generator
             # This is actually a postfix rule! (e.g., SimpleAssignable COMPOUND_ASSIGN Expression)
             postfixCases.push(@_generateInlinedPostfixCase(prefixRule, name))
             continue
+
+          # GENERIC FIX: Detect fake-prefix patterns (nonterminal that can already be in $1)
+          # Key insight: If firstSym's FIRST is a SMALL STRICT SUBSET of parent's FIRST,
+          # it's likely a secondary alternative that can already be parsed
+          # Example: Statement FIRST (4 tokens) ⊂ Expression FIRST (40+ tokens) → postfix
+          # Counter: WhileSource FIRST (2 tokens) vs Expression FIRST (40+ tokens) → but still prefix
+          #          because child While OWNS WhileSource (only appears in While rules)
+          #
+          # Better heuristic: child-specific nonterminals have names related to child
+          # WhileSource contains "While", IfBlock contains "If" → primary constructs, keep prefix
+          # Statement is generic (not tied to child name) → secondary alternative, make postfix
+          if @types[firstSym] and @types[name] and prefixRule.symbols.length >= 2
+            # Check if firstSym name contains childName (child-specific nonterminal)
+            firstSymLower = firstSym.toLowerCase()
+            childNameLower = childName.toLowerCase()
+            isChildSpecific = firstSymLower.includes(childNameLower)
+
+            unless isChildSpecific
+              # Not child-specific - check FIRST subset
+              firstSymType = @types[firstSym]
+              parentType = @types[name]
+              firstSymFirst = Array.from(firstSymType.firsts)
+              parentFirst = Array.from(parentType.firsts)
+              isSubset = firstSymFirst.every((token) -> parentFirst.includes(token))
+
+              if isSubset and firstSymFirst.length > 0
+                # Treat as postfix - firstSym is generic and can already be in $1
+                console.log "🔄 Treating #{childName} rule '#{prefixRule.symbols.slice(0, 3).join(' ')}...' as postfix (#{firstSym} is generic, FIRST ⊆ #{name})"
+                postfixCases.push(@_generateInlinedPostfixCase(prefixRule, name))
+                movedToPostfix.add(firstSym)  # Track for gateway generation
+                continue
 
           # Group by first symbol for disambiguation
           firstKey = if @types[firstSym]
@@ -2048,6 +2080,34 @@ class Generator
         # Regular rule - add to base switch normally
         generatedCase = @_generateStandardCase(rule)
         baseCases.push(generatedCase) if generatedCase
+
+    # GENERIC FIX: Add gateway cases for nonterminals that need postfix handling
+    # If we moved some rules to postfix (like "Statement POST_IF"), we need base cases
+    # that parse the nonterminal and break to postfix loop
+    # Use the movedToPostfix Set to know which nonterminals need gateways
+    if movedToPostfix.size > 0
+      # Add gateway cases for each nonterminal that was moved to postfix
+      for nonterminal from movedToPostfix
+        nonterminalType = @types[nonterminal]
+        continue unless nonterminalType
+
+        # Get FIRST tokens
+        firstTokens = Array.from(nonterminalType.firsts)
+        tokenNames = []
+        for tokenName in firstTokens
+          id = @symbolIds[tokenName]
+          if id and @tokenNames[id]
+            tokenNames.push(@_getSymbolConstName(@tokenNames[id]))
+
+        if tokenNames.length > 0
+          caseStr = tokenNames.map((n) -> "case #{n}").join(': ')
+          gatewayCase = """
+      #{caseStr}:
+            $1 = this.parse#{nonterminal}();
+            break;
+          """
+          baseCases.push(gatewayCase)
+          console.log "🔌 Added gateway case for #{nonterminal} (enables postfix handling)"
 
     # Deduplicate baseCases - remove EXACT duplicates only
     # Two cases are duplicates if they have identical code (same tokens AND same parsing)
@@ -2435,6 +2495,66 @@ class Generator
 
     postfixCases = groupedPostfixCases
 
+    # GENERIC FIX: Duplicate cases for nonterminals with multiple FIRST terminals
+    # Example: WhileSource has {WHILE, UNTIL} - case only generated for WHILE
+    # Solution: Extract trigger, check if it's from multi-FIRST nonterminal, duplicate case
+    expandedPostfixCases = []
+    for caseCode in postfixCases
+      # Extract trigger from case label
+      match = caseCode.match(/case\s+(SYM_\w+):/)
+      if match
+        triggerConst = match[1]
+        # Find which terminal this is
+        triggerToken = null
+        for own tokenName, info of @operators when info
+          id = @symbolIds[tokenName]
+          if id and @tokenNames[id]
+            testConst = @_getSymbolConstName(@tokenNames[id])
+            if testConst is triggerConst
+              triggerToken = tokenName
+              break
+
+        # Check all terminals if not found in operators
+        unless triggerToken
+          for own name, id of @symbolIds
+            continue if @types[name]
+            if @tokenNames[id]
+              testConst = @_getSymbolConstName(@tokenNames[id])
+              if testConst is triggerConst
+                triggerToken = name
+                break
+
+        # Check which nonterminal this trigger came from (find nonterminal with this in FIRST)
+        if triggerToken
+          for own nonterminalName, nonterminalType of @types when nonterminalType
+            continue if nonterminalType.rules.length is 0
+            firstNames = Array.from(nonterminalType.firsts)
+            # CRITICAL: Only clone for SMALL multi-FIRST nonterminals (2-4 terminals)
+            # Example: String {STRING, STRING_START}, WhileSource {WHILE, UNTIL}
+            # Don't clone for Expression/Value (40+ terminals) - performance disaster!
+            if firstNames.includes(triggerToken) and firstNames.length >= 2 and firstNames.length <= 4
+              # This nonterminal has 2-4 FIRST terminals - clone for coverage
+              for terminal in firstNames when terminal isnt triggerToken
+                # Clone the case with new trigger
+                termId = @symbolIds[terminal]
+                if termId and @tokenNames[termId]
+                  newTriggerConst = @_getSymbolConstName(@tokenNames[termId])
+                  # Replace case label AND saved variable name to avoid collisions
+                  # Pattern: "case SYM_X:" → "case SYM_Y:" and "_savedX" → "_savedY"
+                  triggerName = triggerConst.replace('SYM_', '')
+                  newTriggerName = newTriggerConst.replace('SYM_', '')
+                  clonedCase = caseCode
+                    .replace("case #{triggerConst}:", "case #{newTriggerConst}:")
+                    .replace(new RegExp("_saved#{triggerName}", 'g'), "_saved#{newTriggerName}")
+                  expandedPostfixCases.push(clonedCase)
+                  console.log "📋 Cloned #{nonterminalName} case: #{triggerConst} → #{newTriggerConst}"
+              break  # Found the nonterminal, stop searching
+
+      # Always add original case
+      expandedPostfixCases.push(caseCode)
+
+    postfixCases = expandedPostfixCases
+
     # Deduplicate postfixCases - remove exact duplicates only
     seenPostfixCases = new Set()
     uniquePostfixCases = []
@@ -2660,12 +2780,29 @@ class Generator
 
     constName = @_getSymbolConstName(tokenName)
 
+    # Check if first token is a prefix unary operator with precedence
+    # GENERIC: Detect by checking if rule has precedence and matches pattern "Op Expression"
+    # CRITICAL: Use RULE precedence (from prec: option), not TOKEN precedence!
+    # Example: "- Expression" has rule.precedence = 18 (UNARY_MATH), but token "-" has prec 16 (binary)
+    isUnaryOp = rule.precedence > 0 and rule.symbols.length is 2 and
+                @types[rule.symbols[1]] and not @types[firstToken]
+    unaryPrecedence = if isUnaryOp then rule.precedence else null
+
     # Generate parsing code for each symbol
     lines = []
     for symbol, i in rule.symbols
       pos = i + 1
       if @types[symbol]
-        lines.push("$#{pos} = this.parse#{symbol}();")
+        # GENERIC FIX: For unary operators calling Expression, pass precedence to prevent
+        # consuming lower-precedence binary operators
+        # Example: "- Expression" should parse only the operand, not "operand + operand"
+        # Why: Unary minus has prec 18, binary + has prec 16, so pass 17 to stop at binary
+        if isUnaryOp and symbol is rule.symbols[1]
+          # Pass (precedence - 1) for right-associative prefix operators
+          # This allows same-precedence operators to be parsed (e.g., --x) while blocking lower
+          lines.push("$#{pos} = this.parse#{symbol}(#{unaryPrecedence - 1});")
+        else
+          lines.push("$#{pos} = this.parse#{symbol}();")
       else
         tokenId = @symbolIds[symbol]
         tokenName = @tokenNames[tokenId]
@@ -2674,7 +2811,21 @@ class Generator
 
     # Generate action
     action = @_normalizeActionForPRD(rule.action, rule.symbols)
-    lines.push("return #{action};")
+
+    # GENERIC FIX: Check if parent has postfix loop (for operator precedence climbing)
+    # If parent has postfix cases, prefix operators should assign to $1 and break (not return)
+    # to allow postfix operators to be processed. Example: "-5 + 10" parses "-5" first,
+    # then postfix loop handles "+ 10"
+    # Detect parent with postfix by checking if it's in indirectLeftRec map
+    hasPostfixLoop = parentName and @indirectLeftRec?.has(parentName)
+
+    if hasPostfixLoop
+      # Use break to continue to postfix loop
+      lines.push("$1 = #{action};")
+      lines.push("break;")
+    else
+      # No postfix loop - return directly
+      lines.push("return #{action};")
 
     parsing = lines.map((line) -> "        #{line}").join('\n')
 
@@ -2688,16 +2839,30 @@ class Generator
     # Rule: Value OptFuncExist Arguments (postfix function call)
     # First symbol is parent (already in $1)
     # OR: First symbol is inlined passthrough (Assignable in "Assignable = Expression")
+    # OR: First symbol is nonterminal subset (Statement in "Statement POST_IF Expression")
     # Need to find the trigger token (skip nullable nonterminals)
 
     # Determine if we should skip first symbol
     # Skip if: (1) it's a nonterminal that matches the parent we're generating for
     #          (2) it's marked for inlining (fake-postfix like Assignable)
+    #          (3) it's a nonterminal whose FIRST is subset of parent's FIRST (Statement ⊆ Expression)
     firstSymbol = rule.symbols[0]
-    isParentRecursion = firstSymbol and @types[firstSymbol] and parentName and
-                        (firstSymbol is parentName or @shouldInline?.has(firstSymbol))
+    shouldSkipFirst = false
 
-    remainingSymbols = if isParentRecursion then rule.symbols.slice(1) else rule.symbols
+    if firstSymbol and @types[firstSymbol] and parentName
+      if firstSymbol is parentName or @shouldInline?.has(firstSymbol)
+        shouldSkipFirst = true
+      else if @types[parentName]
+        # Check if FIRST subset (generic detection for Statement-like patterns)
+        firstSymType = @types[firstSymbol]
+        parentType = @types[parentName]
+        firstSymFirst = Array.from(firstSymType.firsts)
+        parentFirst = Array.from(parentType.firsts)
+        isSubset = firstSymFirst.every((token) -> parentFirst.includes(token))
+        shouldSkipFirst = true if isSubset and firstSymFirst.length > 0
+
+    isParentRecursion = shouldSkipFirst
+    remainingSymbols = if shouldSkipFirst then rule.symbols.slice(1) else rule.symbols
 
     # Find the first TERMINAL token as trigger (skip ALL nonterminals, including nullable)
     triggerToken = null
@@ -3124,6 +3289,51 @@ class Generator
     if hasSignificantLengthDiff and sortedRules.length >= 3
       return @_generateTryBacktrackCase(triggerToken, sortedRules, nonTerminal)
 
+    # GENERIC FIX: Check if rules have MIXED starting symbols (some terminal, some nonterminal)
+    # Example: ObjAssignable with @ token has "@ [ Expr" (terminal) and "SimpleObjAssignable" (nonterminal)
+    # These can't be nested - need try/catch disambiguation!
+    hasTerminalStart = rules.some((r) => not @types[r.symbols[0]])
+    hasNonterminalStart = rules.some((r) => @types[r.symbols[0]])
+
+    if hasTerminalStart and hasNonterminalStart
+      # Mixed starts - use try/catch
+      console.log "🔧 Mixed terminal/nonterminal start for #{triggerToken} in #{nonTerminal}"
+      lines = ["    case #{triggerToken}: {"]
+      lines.push("      const _saved = this._saveState();")
+      lines.push("")
+
+      # Try nonterminals first (more specific - multi-token patterns)
+      for rule in rules when @types[rule.symbols[0]]
+        nonterminal = rule.symbols[0]
+        action = @_normalizeActionForPRD(rule.action, rule.symbols)
+        lines.push("      // Try: #{nonterminal}")
+        lines.push("      try {")
+        lines.push("        $1 = this.parse#{nonterminal}();")
+        lines.push("        return #{action};")
+        lines.push("      } catch (e) {")
+        lines.push("        this._restoreState(_saved);")
+        lines.push("      }")
+        lines.push("")
+
+      # Fallback: terminal-start rules (compile full rule)
+      for rule in rules when not @types[rule.symbols[0]]
+        lines.push("      // Fallback: #{rule.symbols.slice(0, 3).join(' ')}")
+        # Generate full parsing for this rule
+        for symbol, i in rule.symbols
+          pos = i + 1
+          if @types[symbol]
+            lines.push("      $#{pos} = this.parse#{symbol}();")
+          else
+            symId = @symbolIds[symbol]
+            symName = @tokenNames[symId]
+            symConst = if symName then @_getSymbolConstName(symName) else symId
+            lines.push("      $#{pos} = this._match(#{symConst});")
+        action = @_normalizeActionForPRD(rule.action, rule.symbols)
+        lines.push("      return #{action};")
+
+      lines.push("    }")
+      return lines.join('\n')
+
     # Otherwise, use standard nested branching
     lines = ["    case #{triggerToken}:"]
 
@@ -3521,9 +3731,11 @@ class Generator
 
             separatorCases.push """
               if (this.la.id === #{triggerConst}) {
+                const _posSave = this._saveState();
                 $2 = this._match(#{triggerConst});
-                // Check if another element follows
+                // Check if another element follows (restore state if not)
                 if (!this.la || this.la.id === SYM_EOF || ![#{baseFirstSet}].includes(this.la.id)) {
+                  this._restoreState(_posSave);
                   break;
                 }
                 $3 = #{elementParse};
@@ -3565,7 +3777,10 @@ class Generator
         },
       """
     else
-      # Real separator token - match it before parsing rest
+      # Real separator token - match it with state save/restore
+      # CRITICAL FIX: If element doesn't follow separator, restore state to avoid orphaned tokens
+      # Example: IfBlock consumes ELSE but breaks when IF doesn't follow, leaving
+      # parent rule unable to see the ELSE for "If → IfBlock ELSE Block" pattern
       # Pattern: Body → Line | Body TERMINATOR Line
       """
         parse#{name}() {
@@ -3573,8 +3788,10 @@ class Generator
           #{emptyCheck}#{baseInit}
 
           while (this.la && #{loopCheck}) {
+            const _posSave = this._saveState();
             #{separatorMatch}// Only continue if another element can follow (check FIRST set)
             if (!this.la || this.la.id === SYM_EOF || ![#{baseFirstSet}].includes(this.la.id)) {
+              this._restoreState(_posSave);
               break;
             }#{elementParsing}$1 = #{adjustedAction};
           }
