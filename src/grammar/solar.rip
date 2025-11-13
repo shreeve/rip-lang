@@ -1889,7 +1889,7 @@ class Generator
               baseCases.push(@_generateStandardCase(singleRule))
             else
               # Terminal first
-              baseCases.push(@_generateInlinedPrefixCase(singleRule))
+              baseCases.push(@_generateInlinedPrefixCase(singleRule, name))
           else
             # Multiple rules with same FIRST token - need lookahead
             # Use the lookahead case generator
@@ -1943,7 +1943,7 @@ class Generator
                 lines.push("    // All variants failed")
                 lines.push("    this._error([#{tokenNames.join(', ')}], this.la.id);")
                 lines.push("  }")
-
+                
                 baseCases.push(lines.join('\n'))
             else
               # Terminal first - use lookahead disambiguation
@@ -2070,7 +2070,8 @@ class Generator
 
     for caseCode in baseCases
       # Extract trigger token(s)
-      match = caseCode.match(/case\s+((?:SYM_\w+(?::\s*)?)+):/)
+      # GENERIC FIX: Handle both simple cases (ends with :) and try/catch blocks (ends with {)
+      match = caseCode.match(/case\s+((?:SYM_\w+(?::\s*)?)+)(?::|:\s*\{)/)
       if match
         triggers = new Set(match[1].match(/SYM_\w+/g))
 
@@ -2647,7 +2648,7 @@ class Generator
     # Replace all bare numbers with $n (word boundaries prevent array index issues)
     actionStr.replace /\b(\d+)\b/g, '$$$1'
 
-  _generateInlinedPrefixCase: (rule) ->
+  _generateInlinedPrefixCase: (rule, parentName = null) ->
     # Generate case for prefix rule (goes in switch section)
     # Rule: FOR ForVariables FORIN Expression Block
     # Generate: case SYM_FOR: $1 = match; $2 = parse; ...; return action;
