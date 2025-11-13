@@ -364,6 +364,62 @@ parser.parseAssignable = parser.parseValue;
 
 ---
 
+### Fix 8: Postfix FOR Comprehension Grouping (+23 tests)
+
+**Problem:** 15 FOR comprehension variants all triggered on SYM_FOR but weren't grouped, creating duplicate `case SYM_FOR:` in postfix loop (JavaScript only executes first).
+
+**Solution:** Group postfix rules by trigger token before generating:
+
+```rip
+# Group postfix rules
+postfixRulesByTrigger = new Map()
+for postfixRule in childInfo.postfixRules
+  trigger = @_findPostfixTrigger(postfixRule, name)
+  postfixRulesByTrigger.get(trigger).push(postfixRule)
+
+# Generate with disambiguation
+if rulesGroup.length > 1
+  postfixCase = @_generatePostfixLookaheadCase(trigger, rulesGroup, name)
+```
+
+**Code:** Lines 1888-1910, plus _findPostfixTrigger (2256-2279), _generatePostfixLookaheadCase (2281-2336)
+
+**Impact:** Comprehension guards (when), BY steps, and all variants now work. +23 tests (807 → 830).
+
+---
+
+### Fix 9: Comprehensive Postfix Merging (+22 tests)
+
+**Problem:** Multiple code sections add postfix cases (childInfo, passthrough, fake-postfix), creating duplicates for ASSIGN (3×), INDEX_START (5×), etc. Previous fix only grouped childInfo, others were dropped.
+
+**Solution:** After collecting ALL postfix cases, group by trigger and merge duplicates with try/catch:
+
+```rip
+postfixByTrigger = new Map()
+for caseCode in postfixCases
+  trigger = extract from case label
+  postfixByTrigger.get(trigger).push(caseCode)
+
+# Merge duplicates
+if cases.length > 1
+  # Generate try/catch for each variant
+```
+
+**Code:** Lines 2145-2203
+
+**Result:**
+```javascript
+case SYM_ASSIGN:
+  const _savedASSIGN = this._saveState();
+  try { /* variant 1: plain */ } catch { restore; }
+  try { /* variant 2: with INDENT */ } catch { restore; }
+  try { /* variant 3: with TERMINATOR */ } catch { restore; }
+```
+
+**Impact:** All ASSIGN, COMPOUND_ASSIGN, INDEX, PROTO variants now properly disambiguated. +22 tests (830 → 852).
+
+---
+
 ## 📊 Test Progress
 
 | Milestone | Tests | % | Change |
@@ -550,67 +606,115 @@ bun run test  # Should show 630/962 passing
 
 ## 💡 For Next AI
 
-**Status:** 735/962 tests (76.4%) - Excellent progress! 🚀
+**Status:** 852/962 tests (88.6%) - Nearly at 90%! 🚀
 
-**Three major fixes completed this session:**
-- ✅ Operator precedence/associativity (textbook algorithm)
-- ✅ Statement-in-expression (IF/UNLESS/WHILE now work as expressions)
-- ✅ FOR loop disambiguation (15 variants with lookahead)
-
-**All implemented generically** - no grammar changes, clean algorithms!
+**Remaining:** 110 tests (11.4%) to reach 100%
 
 ---
 
-### Priority #1: Classes (~20 tests, quick win!)
+### What Was Accomplished This Session
 
-**Status:** All 20 class tests failing
+✅ **Nine major fixes** - All generic algorithms  
+✅ **100% generic** - Zero hardcoded symbol names  
+✅ **33x faster** - Validated with benchmarks (864K vs 26K parses/sec)  
+✅ **+267 tests** - From 585 (60.8%) to 852 (88.6%)  
 
-**Likely cause:** Same as IF/UNLESS issue - Class might need special handling in Expression
+**Key insight:** Codegen is production-ready (962/962). All failures are **parser generator** issues (wrong s-expressions), not codegen bugs!
 
-**Test it:**
+---
+
+### Remaining 110 Tests - Quick Diagnostic
+
+**Test these patterns to understand what's failing:**
+
 ```bash
-echo 'class Dog
-  bark: -> "woof"
-' | ./bin/rip -s
+cd /Users/shreeve/Data/Code/rip-lang
+
+# Array rest in middle (fails ~5 tests)
+echo '[a, ...rest, b] = [1,2,3,4]' | ./bin/rip -s
+
+# Computed property (fails ~3 tests)  
+echo '{[x]: 1}' | ./bin/rip -s
+
+# Object comprehension (fails ~2 tests)
+echo '{k: v for k, v of obj when v > 0}' | ./bin/rip -s
+
+# Multiline array (fails ~5-10 tests)
+echo '[
+  1,
+  2
+]' | ./bin/rip -s
+
+# FOR AWAIT (fails ~2 tests)
+echo 'for await x from stream then x' | ./bin/rip -s
 ```
 
-**If similar to IF fix:** Could be 5-10 minute fix, +20 tests!
+**Check results** - which patterns fail? Those are your targets!
 
 ---
 
-### Priority #2: Import/Export (~21 tests)
+### Likely High-Impact Issues
 
-**Status:** All module tests failing with "got IMPORT" or "got EXPORT"
+**1. Array Destructuring Edge Cases (~10-15 tests)**
+- Rest in middle: `[a, ...rest, b]`
+- Elisions: `[a, , c]`
+- May be grammar issue (does grammar have these patterns?)
 
-**Likely cause:** Import/Export are in Statement but may need special recognition
+**2. Multiline Syntax (~5-10 tests)**
+- Arrays/objects with INDENT after `[` or `{`
+- Grammar has rules but may not generate correctly
+- Check: Does parseArray handle INDENT after LBRACKET?
 
-**Similar pattern to what we just fixed!**
+**3. Object Comprehensions (~2-5 tests)**
+- Pattern: `{k: v for k, v of obj when...}`
+- Likely similar to array comprehensions but grammar might differ
 
-**Estimated:** +21 tests
+**4. Runtime Errors (~40-50 tests)**
+- Code parses but produces wrong result
+- Compare PRD output to expected
+- May need codegen fixes OR parser producing wrong structure
 
 ---
 
-### Priority #3: Remaining Parse Errors (~15-40 tests)
+### Strategy for Next 110 Tests
 
-**Categories:**
-- Array/object literals in expression context (10-15 tests)
-- Arrow function edge cases (4-8 tests)
-- FOR AWAIT patterns (4 tests)
-- Comprehension patterns (18 tests)
+**Phase 1: Quick Tests (30 min)**
+- Test the 5 patterns above
+- Identify which are parser vs codegen issues
+- Pick highest-impact pattern
 
-**Method:** Tackle each parse error pattern systematically
+**Phase 2: Fix Top Pattern (1-3 hours)**
+- Likely array destructuring or multiline
+- Could unlock 10-20 tests
+
+**Phase 3: Systematic Cleanup (4-8 hours)**
+- Fix remaining patterns one by one
+- Most will be 2-5 test improvements
+- Different pace than 56-test architectural wins
+
+**Total:** 6-12 hours to 100% from 88.6%
 
 ---
 
-### Priority #4: Long Tail (~130 tests)
+### Critical Context
 
-- Runtime errors (wrong output, not parse failures)
-- Regex index syntax
-- Destructuring edge cases
-- Codegen issues
-- Miscellaneous patterns
+**Performance validated:**
+- PRD: 864K parses/sec (1.16 μs/parse)
+- Table: 26K parses/sec (38.3 μs/parse)  
+- **33x faster** - promise delivered!
 
-**Approach:** After fixing Classes/Import/Export, run systematic analysis again
+**Tradeoff accepted:**
+- 13x larger code (4,569 vs 350 lines)
+- Worth it for parser-heavy applications
+- Production keeps table-driven, PRD is research/specialty
+
+**Generic confirmed:**
+- Zero hardcoded symbol names
+- Automatic passthrough detection
+- Multi-hop cycle detection
+- Optimal host selection
+
+**All fixes reusable for ANY SLR(1) grammar!**
 
 ---
 
@@ -726,18 +830,22 @@ bun run test
 ## 🏆 Session Summary
 
 **Achievements:**
-- ✅ +166 tests (28.4% improvement) - 585 → 751 tests
-- ✅ **SEVEN** production-quality fixes:
+- ✅ +267 tests (45.6% improvement) - 585 → 852 tests
+- ✅ **NINE** production-quality fixes (plus 3 from previous session):
   1. COMPOUND_ASSIGN operators (+23 tests)
   2. OptFuncExist returns null (+20 tests)
   3. Nonterminal-first lookahead (+2 tests)
   4. Operator precedence/associativity (+17 tests)
   5. Nonterminal-first prefix rules (+32 tests)
   6. FOR loop lookahead grouping (+56 tests)
-  7. Inlined-but-referenced nonterminals (+16 tests)
-- ✅ **78.1% test coverage** - Major milestone! (Past 3/4!)
-- ✅ All fixes are **generic** - no grammar modifications
-- ✅ Clean algorithms (precedence climbing, lookahead grouping, reference detection)
+  7. Inlined-but-referenced aliases (+16 tests)
+  8. Different-target disambiguation (+56 tests)
+  9. Postfix FOR grouping (+23 tests)
+  10. Comprehensive postfix merging (+22 tests)
+- ✅ **88.6% test coverage** - Nearly at 90%!
+- ✅ **100% generic** - ZERO hardcoded symbol names!
+- ✅ **33x faster** - Performance validated (864K vs 26K parses/sec)
+- ✅ Clean algorithms throughout
 - ✅ Architecture proven at scale
 
 **Major Accomplishments:**
