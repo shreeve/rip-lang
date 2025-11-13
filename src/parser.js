@@ -718,7 +718,7 @@ const parser = {
         break;
     case SYM_AWAIT:
       $1 = this._match(SYM_AWAIT);
-      
+
       if (this.la.id === SYM_INDENT) {
         $2 = this._match(SYM_INDENT);
         $3 = this.parseObject();
@@ -780,9 +780,9 @@ const parser = {
       break;
     case SYM_FOR: {
       $1 = this._match(SYM_FOR);
-      
+
       const _saved = this._saveState();
-      
+
       // Try: FOR ForVariables FORIN Expression WHEN Expression BY Expression Block
       try {
         $2 = this.parseForVariables();
@@ -797,7 +797,7 @@ const parser = {
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: FOR ForVariables FORIN Expression BY Expression WHEN Expression Block
       try {
         $2 = this.parseForVariables();
@@ -812,7 +812,7 @@ const parser = {
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: FOR OWN ForVariables FOROF Expression WHEN Expression Block
       try {
         $2 = this._match(SYM_OWN);
@@ -826,7 +826,7 @@ const parser = {
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: FOR AWAIT ForVariables FORFROM Expression WHEN Expression Block
       try {
         $2 = this._match(SYM_AWAIT);
@@ -840,7 +840,7 @@ const parser = {
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: FOR ForVariables FORIN Expression WHEN Expression Block
       try {
         $2 = this.parseForVariables();
@@ -853,7 +853,7 @@ const parser = {
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: FOR ForVariables FORIN Expression BY Expression Block
       try {
         $2 = this.parseForVariables();
@@ -866,7 +866,7 @@ const parser = {
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: FOR ForVariables FOROF Expression WHEN Expression Block
       try {
         $2 = this.parseForVariables();
@@ -879,7 +879,7 @@ const parser = {
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: FOR ForVariables FORFROM Expression WHEN Expression Block
       try {
         $2 = this.parseForVariables();
@@ -892,7 +892,7 @@ const parser = {
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: FOR OWN ForVariables FOROF Expression Block
       try {
         $2 = this._match(SYM_OWN);
@@ -904,7 +904,7 @@ const parser = {
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: FOR AWAIT ForVariables FORFROM Expression Block
       try {
         $2 = this._match(SYM_AWAIT);
@@ -916,7 +916,7 @@ const parser = {
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: FOR ForVariables FORIN Expression Block
       try {
         $2 = this.parseForVariables();
@@ -927,7 +927,7 @@ const parser = {
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: FOR ForVariables FOROF Expression Block
       try {
         $2 = this.parseForVariables();
@@ -938,7 +938,7 @@ const parser = {
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: FOR ForVariables FORFROM Expression Block
       try {
         $2 = this.parseForVariables();
@@ -949,7 +949,7 @@ const parser = {
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: FOR Range BY Expression Block
       try {
         $2 = this.parseRange();
@@ -960,7 +960,7 @@ const parser = {
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Fallback: FOR Range Block
       $2 = this.parseRange();
       $3 = this.parseBlock();
@@ -1448,7 +1448,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
               $1 = ["comprehension", $1, [["for-in", [], $3, null]], []];
               continue;
             } catch (e) {}
-            
+
             // All variants failed, restore and return
             this._restoreState(_savedFOR);
             return $1;
@@ -1465,7 +1465,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
     switch (this.la.id) {
     case SYM_DEF:
       $1 = this._match(SYM_DEF);
-      
+
       if ([SYM_IDENTIFIER].includes(this.la.id)) {
         $2 = this.parseIdentifier();
         if (this.la.id === SYM_CALL_START) {
@@ -1514,7 +1514,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
     switch (this.la.id) {
     case SYM_YIELD:
       $1 = this._match(SYM_YIELD);
-      
+
       if (this.la.id === SYM_INDENT) {
         $2 = this._match(SYM_INDENT);
         $3 = this.parseObject();
@@ -1542,7 +1542,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
     switch (this.la.id) {
     case SYM_INDENT:
       $1 = this._match(SYM_INDENT);
-      
+
       if ([SYM_IDENTIFIER, SYM_AT, SYM_PARAM_START, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
         $2 = this.parseBody();
         $3 = this._match(SYM_OUTDENT);
@@ -1631,7 +1631,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
             return $1;
     case SYM_INTERPOLATION_START:
       $1 = this._match(SYM_INTERPOLATION_START);
-      
+
       if (this.la.id === SYM_INDENT) {
         $2 = this._match(SYM_INDENT);
         $3 = this.parseBody();
@@ -1672,7 +1672,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
     switch (this.la.id) {
     case SYM_REGEX:
       $1 = this.parseRegex();
-      
+
       if (this.la.id === SYM_COMMA) {
         $2 = this._match(SYM_COMMA);
         $3 = this.parseExpression();
@@ -1683,7 +1683,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       }
     case SYM_REGEX_START:
       $1 = this.parseRegex();
-      
+
       if (this.la.id === SYM_COMMA) {
         $2 = this._match(SYM_COMMA);
         $3 = this.parseExpression();
@@ -1741,7 +1741,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
     switch (this.la.id) {
     case SYM_IDENTIFIER: {
       const _saved = this._saveState();
-      
+
       // Try: ObjAssignable : INDENT Expression OUTDENT
       try {
         $1 = this.parseObjAssignable();
@@ -1753,7 +1753,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: SimpleObjAssignable = INDENT Expression OUTDENT
       try {
         $1 = this.parseSimpleObjAssignable();
@@ -1765,7 +1765,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: ObjAssignable : Expression
       try {
         $1 = this.parseObjAssignable();
@@ -1775,7 +1775,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: SimpleObjAssignable = Expression
       try {
         $1 = this.parseSimpleObjAssignable();
@@ -1785,14 +1785,14 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Fallback: ObjAssignable
       $1 = this.parseObjAssignable();
       return [$1, $1, null];
     }
     case SYM_PROPERTY: {
       const _saved = this._saveState();
-      
+
       // Try: ObjAssignable : INDENT Expression OUTDENT
       try {
         $1 = this.parseObjAssignable();
@@ -1804,7 +1804,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: SimpleObjAssignable = INDENT Expression OUTDENT
       try {
         $1 = this.parseSimpleObjAssignable();
@@ -1816,7 +1816,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: ObjAssignable : Expression
       try {
         $1 = this.parseObjAssignable();
@@ -1826,7 +1826,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: SimpleObjAssignable = Expression
       try {
         $1 = this.parseSimpleObjAssignable();
@@ -1836,14 +1836,14 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Fallback: ObjAssignable
       $1 = this.parseObjAssignable();
       return [$1, $1, null];
     }
     case SYM_NUMBER: {
       const _saved = this._saveState();
-      
+
       // Try: ObjAssignable : INDENT Expression OUTDENT
       try {
         $1 = this.parseObjAssignable();
@@ -1855,7 +1855,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: ObjAssignable : Expression
       try {
         $1 = this.parseObjAssignable();
@@ -1865,14 +1865,14 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Fallback: ObjAssignable
       $1 = this.parseObjAssignable();
       return [$1, $1, null];
     }
     case SYM_STRING: {
       const _saved = this._saveState();
-      
+
       // Try: ObjAssignable : INDENT Expression OUTDENT
       try {
         $1 = this.parseObjAssignable();
@@ -1884,7 +1884,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: ObjAssignable : Expression
       try {
         $1 = this.parseObjAssignable();
@@ -1894,14 +1894,14 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Fallback: ObjAssignable
       $1 = this.parseObjAssignable();
       return [$1, $1, null];
     }
     case SYM_STRING_START: {
       const _saved = this._saveState();
-      
+
       // Try: ObjAssignable : INDENT Expression OUTDENT
       try {
         $1 = this.parseObjAssignable();
@@ -1913,7 +1913,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: ObjAssignable : Expression
       try {
         $1 = this.parseObjAssignable();
@@ -1923,14 +1923,14 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Fallback: ObjAssignable
       $1 = this.parseObjAssignable();
       return [$1, $1, null];
     }
     case SYM_LBRACKET: {
       const _saved = this._saveState();
-      
+
       // Try: ObjAssignable : INDENT Expression OUTDENT
       try {
         $1 = this.parseObjAssignable();
@@ -1942,7 +1942,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: ObjAssignable : Expression
       try {
         $1 = this.parseObjAssignable();
@@ -1952,14 +1952,14 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Fallback: ObjAssignable
       $1 = this.parseObjAssignable();
       return [$1, $1, null];
     }
     case SYM_AT: {
       const _saved = this._saveState();
-      
+
       // Try: ObjAssignable : INDENT Expression OUTDENT
       try {
         $1 = this.parseObjAssignable();
@@ -1971,7 +1971,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: SimpleObjAssignable = INDENT Expression OUTDENT
       try {
         $1 = this.parseSimpleObjAssignable();
@@ -1983,7 +1983,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: ObjAssignable : Expression
       try {
         $1 = this.parseObjAssignable();
@@ -1993,7 +1993,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: SimpleObjAssignable = Expression
       try {
         $1 = this.parseSimpleObjAssignable();
@@ -2003,7 +2003,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Fallback: ObjAssignable
       $1 = this.parseObjAssignable();
       return [$1, $1, null];
@@ -2081,7 +2081,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
     switch (this.la.id) {
     case SYM_ELLIPSIS:
       $1 = this._match(SYM_ELLIPSIS);
-      
+
       if ([SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT].includes(this.la.id)) {
         $2 = this.parseSimpleObjAssignable();
         return ["...", $2];
@@ -2232,7 +2232,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
     switch (this.la.id) {
     case SYM_RETURN:
       $1 = this._match(SYM_RETURN);
-      
+
       if (this.la.id === SYM_INDENT) {
         $2 = this._match(SYM_INDENT);
         $3 = this.parseObject();
@@ -2372,7 +2372,7 @@ $1 = this.parseParam();
     switch (this.la.id) {
     case SYM_IDENTIFIER:
       $1 = this.parseParamVar();
-      
+
       if (this.la.id === SYM_ASSIGN) {
         $2 = this._match(SYM_ASSIGN);
         $3 = this.parseExpression();
@@ -2383,7 +2383,7 @@ $1 = this.parseParam();
       }
     case SYM_LBRACKET:
       $1 = this.parseParamVar();
-      
+
       if (this.la.id === SYM_ASSIGN) {
         $2 = this._match(SYM_ASSIGN);
         $3 = this.parseExpression();
@@ -2394,7 +2394,7 @@ $1 = this.parseParam();
       }
     case SYM_AT:
       $1 = this.parseParamVar();
-      
+
       if (this.la.id === SYM_ASSIGN) {
         $2 = this._match(SYM_ASSIGN);
         $3 = this.parseExpression();
@@ -2405,7 +2405,7 @@ $1 = this.parseParam();
       }
     case SYM_ELLIPSIS:
       $1 = this._match(SYM_ELLIPSIS);
-      
+
       if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE].includes(this.la.id)) {
         $2 = this.parseParamVar();
         return ["rest", $2];
@@ -2415,7 +2415,7 @@ $1 = this.parseParam();
       }
     case SYM_LBRACE:
       $1 = this.parseParamVar();
-      
+
       if (this.la.id === SYM_ASSIGN) {
         $2 = this._match(SYM_ASSIGN);
         $3 = this.parseExpression();
@@ -2796,7 +2796,7 @@ $1 = this.parseParam();
               $1 = $2 ? ["?call", $1, ...$3] : [$1, ...$3];
               continue;
             } catch (e) {}
-            
+
             // All variants failed, restore and return
             this._restoreState(_savedFUNC_EXIST);
             return $1;
@@ -2823,7 +2823,7 @@ $1 = this.parseParam();
     switch (this.la.id) {
     case SYM_SUPER:
       $1 = this._match(SYM_SUPER);
-      
+
       if (this.la.id === SYM_INDEX_START) {
         $2 = this._match(SYM_INDEX_START);
         if (this.la.id === SYM_INDENT) {
@@ -2870,9 +2870,9 @@ $1 = this.parseParam();
     switch (this.la.id) {
     case SYM_LBRACE: {
       $1 = this._match(SYM_LBRACE);
-      
+
       const _saved = this._saveState();
-      
+
       // Try: { ObjAssignable : Expression FOR OWN ForVariables FOROF Expression WHEN Expression OptComma }
       try {
         $2 = this.parseObjAssignable();
@@ -2891,7 +2891,7 @@ $1 = this.parseParam();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: { ObjAssignable : Expression FOR ForVariables FOROF Expression WHEN Expression OptComma }
       try {
         $2 = this.parseObjAssignable();
@@ -2909,7 +2909,7 @@ $1 = this.parseParam();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: { ObjAssignable : Expression FOR OWN ForVariables FOROF Expression OptComma }
       try {
         $2 = this.parseObjAssignable();
@@ -2926,7 +2926,7 @@ $1 = this.parseParam();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: { ObjAssignable : Expression FOR ForVariables FOROF Expression OptComma }
       try {
         $2 = this.parseObjAssignable();
@@ -2942,7 +2942,7 @@ $1 = this.parseParam();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Fallback: { AssignList OptComma }
       $2 = this.parseAssignList();
       $3 = this.parseOptComma();
@@ -3008,9 +3008,9 @@ $1 = this.parseAssignObj();
     switch (this.la.id) {
     case SYM_CLASS: {
       $1 = this._match(SYM_CLASS);
-      
+
       const _saved = this._saveState();
-      
+
       // Try: CLASS SimpleAssignable EXTENDS Expression Block
       try {
         $2 = this.parseSimpleAssignable();
@@ -3021,7 +3021,7 @@ $1 = this.parseAssignObj();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: CLASS EXTENDS Expression Block
       try {
         $2 = this._match(SYM_EXTENDS);
@@ -3031,7 +3031,7 @@ $1 = this.parseAssignObj();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: CLASS SimpleAssignable EXTENDS Expression
       try {
         $2 = this.parseSimpleAssignable();
@@ -3041,7 +3041,7 @@ $1 = this.parseAssignObj();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: CLASS EXTENDS Expression
       try {
         $2 = this._match(SYM_EXTENDS);
@@ -3050,7 +3050,7 @@ $1 = this.parseAssignObj();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: CLASS SimpleAssignable Block
       try {
         $2 = this.parseSimpleAssignable();
@@ -3059,7 +3059,7 @@ $1 = this.parseAssignObj();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: CLASS Block
       try {
         $2 = this.parseBlock();
@@ -3067,7 +3067,7 @@ $1 = this.parseAssignObj();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: CLASS SimpleAssignable
       try {
         $2 = this.parseSimpleAssignable();
@@ -3075,7 +3075,7 @@ $1 = this.parseAssignObj();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Fallback: CLASS
       return ["class", null, null];
     }
@@ -3088,9 +3088,9 @@ $1 = this.parseAssignObj();
     switch (this.la.id) {
     case SYM_IMPORT: {
       $1 = this._match(SYM_IMPORT);
-      
+
       const _saved = this._saveState();
-      
+
       // Try: IMPORT ImportDefaultSpecifier , { ImportSpecifierList OptComma } FROM String
       try {
         $2 = this.parseImportDefaultSpecifier();
@@ -3105,7 +3105,7 @@ $1 = this.parseAssignObj();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: IMPORT { ImportSpecifierList OptComma } FROM String
       try {
         $2 = this._match(SYM_LBRACE);
@@ -3118,7 +3118,7 @@ $1 = this.parseAssignObj();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: IMPORT ImportDefaultSpecifier , ImportNamespaceSpecifier FROM String
       try {
         $2 = this.parseImportDefaultSpecifier();
@@ -3130,7 +3130,7 @@ $1 = this.parseAssignObj();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: IMPORT { } FROM String
       try {
         $2 = this._match(SYM_LBRACE);
@@ -3141,7 +3141,7 @@ $1 = this.parseAssignObj();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: IMPORT ImportDefaultSpecifier FROM String
       try {
         $2 = this.parseImportDefaultSpecifier();
@@ -3151,7 +3151,7 @@ $1 = this.parseAssignObj();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: IMPORT ImportNamespaceSpecifier FROM String
       try {
         $2 = this.parseImportNamespaceSpecifier();
@@ -3161,7 +3161,7 @@ $1 = this.parseAssignObj();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Fallback: IMPORT String
       $2 = this.parseString();
       return ["import", "{}", $2];
@@ -3221,7 +3221,7 @@ $1 = this.parseAssignObj();
     switch (this.la.id) {
     case SYM_IDENTIFIER:
       $1 = this.parseIdentifier();
-      
+
       if (this.la.id === SYM_AS) {
         $2 = this._match(SYM_AS);
         $3 = this.parseIdentifier();
@@ -3232,7 +3232,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_DEFAULT:
       $1 = this._match(SYM_DEFAULT);
-      
+
       if (this.la.id === SYM_AS) {
         $2 = this._match(SYM_AS);
         $3 = this.parseIdentifier();
@@ -3272,9 +3272,9 @@ $1 = this.parseAssignObj();
     switch (this.la.id) {
     case SYM_EXPORT: {
       $1 = this._match(SYM_EXPORT);
-      
+
       const _saved = this._saveState();
-      
+
       // Try: EXPORT { ExportSpecifierList OptComma } FROM String
       try {
         $2 = this._match(SYM_LBRACE);
@@ -3287,7 +3287,7 @@ $1 = this.parseAssignObj();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: EXPORT Identifier = INDENT Expression OUTDENT
       try {
         $2 = this.parseIdentifier();
@@ -3299,7 +3299,7 @@ $1 = this.parseAssignObj();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: EXPORT { ExportSpecifierList OptComma }
       try {
         $2 = this._match(SYM_LBRACE);
@@ -3310,7 +3310,7 @@ $1 = this.parseAssignObj();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: EXPORT Identifier = TERMINATOR Expression
       try {
         $2 = this.parseIdentifier();
@@ -3321,7 +3321,7 @@ $1 = this.parseAssignObj();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: EXPORT DEFAULT INDENT Object OUTDENT
       try {
         $2 = this._match(SYM_DEFAULT);
@@ -3332,7 +3332,7 @@ $1 = this.parseAssignObj();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: EXPORT { } FROM String
       try {
         $2 = this._match(SYM_LBRACE);
@@ -3343,7 +3343,7 @@ $1 = this.parseAssignObj();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: EXPORT Identifier = Expression
       try {
         $2 = this.parseIdentifier();
@@ -3353,7 +3353,7 @@ $1 = this.parseAssignObj();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: EXPORT EXPORT_ALL FROM String
       try {
         $2 = this._match(SYM_EXPORT_ALL);
@@ -3363,7 +3363,7 @@ $1 = this.parseAssignObj();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: EXPORT { }
       try {
         $2 = this._match(SYM_LBRACE);
@@ -3372,7 +3372,7 @@ $1 = this.parseAssignObj();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: EXPORT DEFAULT Expression
       try {
         $2 = this._match(SYM_DEFAULT);
@@ -3381,7 +3381,7 @@ $1 = this.parseAssignObj();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Try: EXPORT Class
       try {
         $2 = this.parseClass();
@@ -3389,7 +3389,7 @@ $1 = this.parseAssignObj();
       } catch (e) {
         this._restoreState(_saved);
       }
-      
+
       // Fallback: EXPORT Def
       $2 = this.parseDef();
       return ["export", $2];
@@ -3449,7 +3449,7 @@ $1 = this.parseAssignObj();
     switch (this.la.id) {
     case SYM_IDENTIFIER:
       $1 = this.parseIdentifier();
-      
+
       if (this.la.id === SYM_AS) {
         $2 = this._match(SYM_AS);
         if ([SYM_IDENTIFIER].includes(this.la.id)) {
@@ -3466,7 +3466,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_DEFAULT:
       $1 = this._match(SYM_DEFAULT);
-      
+
       if (this.la.id === SYM_AS) {
         $2 = this._match(SYM_AS);
         $3 = this.parseIdentifier();
@@ -3494,7 +3494,7 @@ $1 = this.parseAssignObj();
     switch (this.la.id) {
     case SYM_CALL_START:
       $1 = this._match(SYM_CALL_START);
-      
+
       if ([SYM_IDENTIFIER, SYM_AT, SYM_PARAM_START, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_ELLIPSIS, SYM_INDENT].includes(this.la.id)) {
         $2 = this.parseArgList();
         $3 = this.parseOptComma();
@@ -3538,7 +3538,7 @@ $1 = this.parseAssignObj();
     switch (this.la.id) {
     case SYM_LBRACKET:
       $1 = this._match(SYM_LBRACKET);
-      
+
       if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_IF, SYM_UNLESS, SYM_STATEMENT, SYM_TRY, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_RETURN, SYM_IMPORT, SYM_EXPORT, SYM_ELLIPSIS, SYM_COMMA, SYM_INDENT].includes(this.la.id)) {
         $2 = this.parseArgElisionList();
         $3 = this.parseOptElisions();
@@ -3590,7 +3590,7 @@ $1 = this.parseAssignObj();
     switch (this.la.id) {
     case SYM_STATEMENT:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3603,7 +3603,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_DEF:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3616,7 +3616,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_YIELD:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3629,7 +3629,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_IDENTIFIER:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3642,7 +3642,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_NUMBER:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3655,7 +3655,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_STRING:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3668,7 +3668,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_STRING_START:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3681,7 +3681,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_REGEX:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3694,7 +3694,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_REGEX_START:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3707,7 +3707,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_JS:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3720,7 +3720,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_UNDEFINED:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3733,7 +3733,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_NULL:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3746,7 +3746,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_BOOL:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3759,7 +3759,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_INFINITY:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3772,7 +3772,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_NAN:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3785,7 +3785,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_LBRACKET:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3798,7 +3798,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_AT:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3811,7 +3811,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_ELLIPSIS:
       $1 = this.parseRangeDots();
-      
+
       if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
         $2 = this.parseExpression();
         return [$1, null, $2];
@@ -3821,7 +3821,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_SUPER:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3834,7 +3834,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_DYNAMIC_IMPORT:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3847,7 +3847,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_RETURN:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3860,7 +3860,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_PARAM_START:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3873,7 +3873,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_THIN_ARROW:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3886,7 +3886,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_FAT_ARROW:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3899,7 +3899,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_NEW_TARGET:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3912,7 +3912,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_IMPORT_META:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3925,7 +3925,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_LBRACE:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3938,7 +3938,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_FOR:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3951,7 +3951,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_CLASS:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3964,7 +3964,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_IMPORT:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3977,7 +3977,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_EXPORT:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -3990,7 +3990,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_THIS:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -4003,7 +4003,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_RANGE_INCL:
       $1 = this.parseRangeDots();
-      
+
       if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
         $2 = this.parseExpression();
         return [$1, null, $2];
@@ -4013,7 +4013,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_TRY:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -4026,7 +4026,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_THROW:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -4039,7 +4039,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_LPAREN:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -4052,7 +4052,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_WHILE:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -4065,7 +4065,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_UNTIL:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -4078,7 +4078,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_LOOP:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -4091,7 +4091,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_AWAIT:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -4104,7 +4104,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_SWITCH:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -4117,7 +4117,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_IF:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -4130,7 +4130,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_UNLESS:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -4143,7 +4143,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_UNARY:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -4156,7 +4156,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_DO:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -4169,7 +4169,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_DO_IIFE:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -4182,7 +4182,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_UNARY_MATH:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -4195,7 +4195,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_MINUS:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -4208,7 +4208,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_PLUS:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -4221,7 +4221,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_DEC:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -4234,7 +4234,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_INC:
       $1 = this.parseExpression();
-      
+
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
         if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
@@ -4865,7 +4865,7 @@ $1 = this.parseAssignObj();
     switch (this.la.id) {
     case SYM_TRY:
       $1 = this._match(SYM_TRY);
-      
+
       if ([SYM_INDENT].includes(this.la.id)) {
         $2 = this.parseBlock();
         if ([SYM_CATCH].includes(this.la.id)) {
@@ -4897,7 +4897,7 @@ $1 = this.parseAssignObj();
     switch (this.la.id) {
     case SYM_CATCH:
       $1 = this._match(SYM_CATCH);
-      
+
       if ([SYM_IDENTIFIER].includes(this.la.id)) {
         $2 = this.parseIdentifier();
         $3 = this.parseBlock();
@@ -4921,7 +4921,7 @@ $1 = this.parseAssignObj();
     switch (this.la.id) {
     case SYM_THROW:
       $1 = this._match(SYM_THROW);
-      
+
       if (this.la.id === SYM_INDENT) {
         $2 = this._match(SYM_INDENT);
         $3 = this.parseObject();
@@ -4941,7 +4941,7 @@ $1 = this.parseAssignObj();
     switch (this.la.id) {
     case SYM_LPAREN:
       $1 = this._match(SYM_LPAREN);
-      
+
       if (this.la.id === SYM_INDENT) {
         $2 = this._match(SYM_INDENT);
         $3 = this.parseBody();
@@ -4963,7 +4963,7 @@ $1 = this.parseAssignObj();
     switch (this.la.id) {
     case SYM_WHILE:
       $1 = this._match(SYM_WHILE);
-      
+
       if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
         $2 = this.parseExpression();
         if (this.la.id === SYM_WHEN) {
@@ -4977,7 +4977,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_UNTIL:
       $1 = this._match(SYM_UNTIL);
-      
+
       if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
         $2 = this.parseExpression();
         if (this.la.id === SYM_WHEN) {
@@ -4998,7 +4998,7 @@ $1 = this.parseAssignObj();
     switch (this.la.id) {
     case SYM_LOOP:
       $1 = this._match(SYM_LOOP);
-      
+
       if ([SYM_INDENT].includes(this.la.id)) {
         $2 = this.parseBlock();
         return ["loop", $2];
@@ -5016,7 +5016,7 @@ $1 = this.parseAssignObj();
     switch (this.la.id) {
     case SYM_IDENTIFIER:
       $1 = this.parseForVar();
-      
+
       if (this.la.id === SYM_ASSIGN) {
         $2 = this._match(SYM_ASSIGN);
         $3 = this.parseExpression();
@@ -5027,7 +5027,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_LBRACKET:
       $1 = this.parseForVar();
-      
+
       if (this.la.id === SYM_ASSIGN) {
         $2 = this._match(SYM_ASSIGN);
         $3 = this.parseExpression();
@@ -5038,7 +5038,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_AT:
       $1 = this.parseForVar();
-      
+
       if (this.la.id === SYM_ASSIGN) {
         $2 = this._match(SYM_ASSIGN);
         $3 = this.parseExpression();
@@ -5049,7 +5049,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_LBRACE:
       $1 = this.parseForVar();
-      
+
       if (this.la.id === SYM_ASSIGN) {
         $2 = this._match(SYM_ASSIGN);
         $3 = this.parseExpression();
@@ -5086,7 +5086,7 @@ $1 = this.parseAssignObj();
     switch (this.la.id) {
     case SYM_IDENTIFIER:
       $1 = this.parseForValue();
-      
+
       if (this.la.id === SYM_COMMA) {
         $2 = this._match(SYM_COMMA);
         $3 = this.parseForValue();
@@ -5097,7 +5097,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_LBRACKET:
       $1 = this.parseForValue();
-      
+
       if (this.la.id === SYM_COMMA) {
         $2 = this._match(SYM_COMMA);
         $3 = this.parseForValue();
@@ -5108,7 +5108,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_AT:
       $1 = this.parseForValue();
-      
+
       if (this.la.id === SYM_COMMA) {
         $2 = this._match(SYM_COMMA);
         $3 = this.parseForValue();
@@ -5119,7 +5119,7 @@ $1 = this.parseAssignObj();
       }
     case SYM_LBRACE:
       $1 = this.parseForValue();
-      
+
       if (this.la.id === SYM_COMMA) {
         $2 = this._match(SYM_COMMA);
         $3 = this.parseForValue();
@@ -5137,7 +5137,7 @@ $1 = this.parseAssignObj();
     switch (this.la.id) {
     case SYM_SWITCH:
       $1 = this._match(SYM_SWITCH);
-      
+
       if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
         $2 = this.parseExpression();
         if (this.la.id === SYM_INDENT) {
@@ -5195,7 +5195,7 @@ $1 = this.parseAssignObj();
     switch (this.la.id) {
     case SYM_LEADING_WHEN:
       $1 = this._match(SYM_LEADING_WHEN);
-      
+
       if ([SYM_IDENTIFIER, SYM_AT, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_LBRACKET, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_IF, SYM_UNLESS, SYM_STATEMENT, SYM_TRY, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_RETURN, SYM_IMPORT, SYM_EXPORT].includes(this.la.id)) {
         $2 = this.parseSimpleArgs();
         if ([SYM_INDENT].includes(this.la.id)) {
@@ -5242,7 +5242,7 @@ $1 = this.parseAssignObj();
     switch (this.la.id) {
     case SYM_UNLESS:
       $1 = this._match(SYM_UNLESS);
-      
+
       if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
         $2 = this.parseExpression();
         if ([SYM_INDENT].includes(this.la.id)) {

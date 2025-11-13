@@ -3133,18 +3133,18 @@ class Generator
     # STRATEGY: Try longest (most specific) rules first, fall back to shortest (most general)
 
     lines = ["    case #{triggerToken}: {"]  # Wrap in block scope for const _saved
-    
+
     # GENERIC FIX: Check if rules start with terminal or nonterminal
     # Don't assume all rules start with the trigger token!
     firstRule = sortedRules[0]
     firstSymbol = firstRule.symbols[0]
     startsWithTerminal = not @types[firstSymbol]
-    
+
     if startsWithTerminal
       # Rules start with trigger terminal - match it first
       lines.push("      $1 = this._match(#{triggerToken});")
       lines.push("      ")
-    
+
     # The fallback rule is the shortest (most general)
     fallbackRule = sortedRules[sortedRules.length - 1]
     specificRules = sortedRules[0...-1]
@@ -3361,25 +3361,25 @@ class Generator
       firstNonterminals = new Set()
       for rule in rules when @types[rule.symbols[0]]
         firstNonterminals.add(rule.symbols[0])
-      
+
       if firstNonterminals.size > 1
         # Multiple different nonterminals - need try/catch!
         console.log "🔧 Multiple nonterminal starts for #{triggerToken} in #{nonTerminal}: #{Array.from(firstNonterminals).join(', ')}"
         lines = ["    case #{triggerToken}: {"]
         lines.push("      const _saved = this._saveState();")
         lines.push("")
-        
+
         # Try each nonterminal parser
         for nonterminal from firstNonterminals
           lines.push("      // Try: parse#{nonterminal}")
           lines.push("      try {")
           lines.push("        $1 = this.parse#{nonterminal}();")
-          
+
           # After parsing the nonterminal, check if any rules need additional symbols
           # Group rules by this nonterminal and see what follows
           rulesForThis = rules.filter((r) => r.symbols[0] is nonterminal)
           groups = @_groupRulesByNextToken(rulesForThis, 1)
-          
+
           if groups.size > 0
             nestedCode = @_generateNestedBranches(groups, rulesForThis, 1, "        ")
             for line in nestedCode.split('\n')
@@ -3388,16 +3388,16 @@ class Generator
             # No more symbols - just return
             action = @_normalizeActionForPRD(rulesForThis[0].action, rulesForThis[0].symbols)
             lines.push("        return #{action};")
-          
+
           lines.push("      } catch (e) {")
           lines.push("        this._restoreState(_saved);")
           lines.push("      }")
           lines.push("")
-        
+
         lines.push("      // All attempts failed")
         lines.push("      this._error([#{triggerToken}], this.la.id);")
         lines.push("    }")
-        
+
         return lines.join('\n')
 
     if @types[firstSymbol]
