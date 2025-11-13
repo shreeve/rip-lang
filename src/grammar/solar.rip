@@ -1921,7 +1921,7 @@ class Generator
           unless postfixRulesByTrigger.has(trigger)
             postfixRulesByTrigger.set(trigger, [])
           postfixRulesByTrigger.get(trigger).push(postfixRule)
-          
+
           # GENERIC FIX: For each skipped nullable with non-empty alternatives,
           # generate additional trigger cases
           # Example: Value OptFuncExist Arguments - OptFuncExist has FUNC_EXIST alternative
@@ -1930,11 +1930,11 @@ class Generator
             for nullableSymbol in skippedNullables
               nullableType = @types[nullableSymbol]
               continue unless nullableType
-              
+
               # Find non-empty rules of this nullable
               for nullableRule in nullableType.rules
                 continue if not nullableRule.symbols[0] or nullableRule.symbols[0] is ''
-                
+
                 # Get the terminal from this non-empty rule
                 firstSym = nullableRule.symbols[0]
                 if not @types[firstSym]  # It's a terminal
@@ -2511,7 +2511,7 @@ class Generator
                         (firstSymbol is parentName or @shouldInline?.has(firstSymbol))
 
     remainingSymbols = if isParentRecursion then rule.symbols.slice(1) else rule.symbols
-    
+
     # Track nullable nonterminals we skip over
     skippedNullables = []
 
