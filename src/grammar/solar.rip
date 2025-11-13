@@ -1888,16 +1888,16 @@ class Generator
         # Add child's POSTFIX rules to postfix loop with grouping
         # Group by trigger token for disambiguation (same as prefix grouping)
         postfixRulesByTrigger = new Map()
-        
+
         for postfixRule in childInfo.postfixRules
           # Find trigger token for this postfix rule
           trigger = @_findPostfixTrigger(postfixRule, name)
           continue unless trigger
-          
+
           unless postfixRulesByTrigger.has(trigger)
             postfixRulesByTrigger.set(trigger, [])
           postfixRulesByTrigger.get(trigger).push(postfixRule)
-        
+
         # Generate cases with disambiguation
         for [trigger, rulesGroup] from postfixRulesByTrigger
           if rulesGroup.length is 1
@@ -2145,17 +2145,17 @@ class Generator
     # Group postfix cases by trigger token (like we did for prefix cases)
     # Multiple postfix rules with same trigger need disambiguation
     postfixByTrigger = new Map()
-    
+
     for caseCode in postfixCases
       # Extract trigger token from case statement
       match = caseCode.match(/case\s+(SYM_\w+):/)
       continue unless match
-      
+
       trigger = match[1]
       unless postfixByTrigger.has(trigger)
         postfixByTrigger.set(trigger, [])
       postfixByTrigger.get(trigger).push(caseCode)
-    
+
     # Generate grouped/disambiguated postfix cases
     groupedPostfixCases = []
     for [trigger, cases] from postfixByTrigger
@@ -2168,7 +2168,7 @@ class Generator
         # but keep first as fallback
         console.log "⚠️  Multiple postfix cases for #{trigger}: #{cases.length} (using first)"
         groupedPostfixCases.push(cases[0])
-    
+
     postfixCases = groupedPostfixCases
 
     # Deduplicate postfixCases - remove exact duplicates only
@@ -2283,13 +2283,13 @@ class Generator
   _findPostfixTrigger: (rule, parentName) ->
     # Find the trigger token for a postfix rule (used for grouping)
     # Same logic as in _generateInlinedPostfixCase
-    
+
     firstSymbol = rule.symbols[0]
     isParentRecursion = firstSymbol and @types[firstSymbol] and parentName and
                         (firstSymbol is parentName or @shouldInline?.has(firstSymbol))
-    
+
     remainingSymbols = if isParentRecursion then rule.symbols.slice(1) else rule.symbols
-    
+
     # Find first terminal as trigger
     for symbol in remainingSymbols
       if @types[symbol]
@@ -2302,43 +2302,43 @@ class Generator
       else
         # Terminal - this is the trigger
         return symbol
-    
+
     return null
 
   _generatePostfixLookaheadCase: (trigger, rules, parentName) ->
     # Generate postfix case with lookahead disambiguation for multiple rules
     # Similar to _generateLookaheadCase but for postfix (in while loop)
-    
+
     tokenId = @symbolIds[trigger]
     tokenName = @tokenNames[tokenId]
     return '' unless tokenName
-    
+
     constName = @_getSymbolConstName(tokenName)
-    
+
     # For postfix with multiple rules, use nested if/else on second token
     lines = ["      case #{constName}:"]
     lines.push("            const _saved#{trigger} = this._saveState();")
     lines.push("")
-    
+
     # Try each rule in order (longest first for best match)
     sortedRules = rules.sort((a, b) -> b.symbols.length - a.symbols.length)
-    
+
     for rule, idx in sortedRules
       if idx > 0
         lines.push("            this._restoreState(_saved#{trigger});")
         lines.push("")
-      
+
       lines.push("            // Try: #{rule.symbols.slice(0, 5).join(' ')}...")
       lines.push("            try {")
-      
+
       # Generate the parsing for this specific rule variant
       firstSymbol = rule.symbols[0]
       isParentRecursion = firstSymbol and @types[firstSymbol] and parentName and
                           (firstSymbol is parentName or @shouldInline?.has(firstSymbol))
-      
+
       remainingSymbols = if isParentRecursion then rule.symbols.slice(1) else rule.symbols
       startPos = if isParentRecursion then 2 else 1
-      
+
       for symbol, i in remainingSymbols
         pos = i + startPos
         if @types[symbol]
@@ -2348,18 +2348,18 @@ class Generator
           symTokenName = @tokenNames[symTokenId]
           symConstName = if symTokenName then @_getSymbolConstName(symTokenName) else symTokenId
           lines.push("              $#{pos} = this._match(#{symConstName});")
-      
+
       # Generate action
       action = @_normalizeActionForPRD(rule.action, rule.symbols)
       lines.push("              $1 = #{action};")
       lines.push("              continue;")
       lines.push("            } catch (e) {}")
-    
+
     lines.push("            ")
     lines.push("            // All variants failed, restore and return")
     lines.push("            this._restoreState(_saved#{trigger});")
     lines.push("            return $1;")
-    
+
     lines.join('\n')
 
   _normalizeActionForPRD: (action, symbols) ->
