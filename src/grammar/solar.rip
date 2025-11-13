@@ -3164,7 +3164,8 @@ class Generator
             trigger: realSeparator,
             element: remainingSymbols[0],
             action: recRule.action,
-            restSymbols: remainingSymbols
+            restSymbols: remainingSymbols,
+            originalRule: recRule  # Store full rule for position mapping
           })
       else if not separator
         # No separator: A → A (shouldn't happen)
@@ -3176,7 +3177,8 @@ class Generator
           trigger: separator,
           element: restSymbols[0] or restSymbols,
           action: recRule.action,
-          restSymbols: restSymbols
+          restSymbols: restSymbols,
+          originalRule: recRule  # Store full rule for position mapping
         })
 
     # Debug: Show detected patterns
@@ -3294,18 +3296,22 @@ class Generator
       tokenName = @tokenNames[tokenId]
       if tokenName then [@_getSymbolConstName(tokenName)] else []
 
-    # CRITICAL FIX: Exclude separator token from FIRST set check
-    # Why: After matching separator ',', if we see another ',', that should NOT
-    # be treated as the start of a new element (it's a trailing separator or
-    # part of element's internal structure that element parser will handle)
-    # Example: [1,2,,] - after matching first trailing ',', seeing another ','
-    # should NOT trigger parsing another ArgElision
-    if not separatorIsNonterminal and separator
+    # REFINED FIX: Only exclude separator if it's NOT naturally in base element's FIRST
+    # Why: Some elements naturally start with separator (ArgElision → Elisions Arg starts with ,)
+    # Others don't (simple elements). We only want to break on trailing separators.
+    #
+    # Strategy: Check if base element type's FIRST set contains the separator BEFORE
+    # we computed baseFirstTokens (which came from the type). If separator is there
+    # naturally, keep it. If not, it's added through some other path and should be excluded.
+    #
+    # Simple heuristic: If base element is a nonterminal, trust its FIRST set as-is.
+    # Only filter for terminal base elements (which can't naturally start with separators).
+    if not separatorIsNonterminal and separator and not @types[baseSymbol]
+      # Base is terminal - separator definitely not in its natural FIRST
       sepId = @symbolIds[separator]
       sepTokenName = @tokenNames[sepId]
       if sepTokenName
         sepConst = @_getSymbolConstName(sepTokenName)
-        # Remove separator from base FIRST set
         baseFirstTokens = baseFirstTokens.filter((token) -> token isnt sepConst)
 
     baseFirstSet = baseFirstTokens.join(', ')
@@ -3389,7 +3395,27 @@ class Generator
               elemConst = if elemName then @_getSymbolConstName(elemName) else elemId
               "this._match(#{elemConst})"
 
-            action = @_normalizeActionForPRD(pattern.action, [name, trigger, elementSym])
+            # CRITICAL FIX: Remap action positions to match generated code
+            # Original rule: A → A OptSep Sep Element with action like '[...1, 4]'
+            # Generated code uses: $1=accumulated, $2=separator, $3=element
+            # Need to remap positions correctly
+
+            # Get original rule's symbol count
+            originalSymbols = pattern.originalRule?.symbols or []
+            originalSymbolCount = originalSymbols.length
+
+            # The element is at the LAST position in original rule
+            elementPosition = originalSymbolCount
+
+            # Normalize action with original symbols
+            normalizedAction = @_normalizeActionForPRD(pattern.action, originalSymbols)
+
+            # Remap: element position → $3 (since we only have $1, $2, $3 in generated code)
+            if elementPosition > 3
+              # Replace references to element position with $3
+              normalizedAction = normalizedAction.replace(new RegExp("\\$#{elementPosition}\\b", 'g'), '$3')
+
+            action = normalizedAction
 
             separatorCases.push """
               if (this.la.id === #{triggerConst}) {
