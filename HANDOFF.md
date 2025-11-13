@@ -246,11 +246,11 @@ Based on error patterns:
 ```javascript
 parseExpression(minPrec = 0) {
   // Base switch...
-  
+
   while (this.la) {
     const opPrec = OPERATOR_PRECEDENCE[this.la.id];
     if (opPrec === undefined || opPrec <= minPrec) break;
-    
+
     switch (this.la.id) {
       case SYM_PLUS:
         $2 = this._match(SYM_PLUS);

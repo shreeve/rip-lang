@@ -2313,12 +2313,12 @@ class Generator
 
     # Otherwise, use standard nested branching
     lines = ["    case #{triggerToken}:"]
-    
+
     # Check if rules start with a nonterminal (not a terminal)
     # If so, call parse function instead of matching token
     firstRule = rules[0]
     firstSymbol = firstRule.symbols[0]
-    
+
     if @types[firstSymbol]
       # Rules start with nonterminal - call its parse function
       lines.push("      $1 = this.parse#{firstSymbol}();")
@@ -2333,7 +2333,7 @@ class Generator
       groups = @_groupRulesByNextToken(rules, 1)  # Skip trigger (position 0)
       nestedCode = @_generateNestedBranches(groups, rules, 1, "      ")
       lines.push(nestedCode)
-    
+
     lines.join('\n')
 
   _generateStandardCase: (rule) ->
@@ -2421,18 +2421,18 @@ class Generator
     emptyRule = base.find((r) -> not r.symbols[0] or r.symbols[0] is '')
     # Prefer non-empty base rules for iteration start
     baseRule = base.find((r) -> r.symbols[0] and r.symbols[0] isnt '') or base[0]
-    
+
     # NEW: Detect ALL recursive patterns and their separators
     separatorPatterns = []
     for recRule in recursive
       [_, separator, ...restSymbols] = recRule.symbols
-      
+
       # If separator is nullable, the REAL separator is in restSymbols
       if @types[separator]?.nullable and restSymbols.length > 0
         # Skip the nullable separator, use next token as trigger
         realSeparator = restSymbols[0]
         remainingSymbols = restSymbols.slice(1)
-        
+
         # Check if this is the INDENT nested pattern
         if realSeparator is 'INDENT' and remainingSymbols.length >= 2 and remainingSymbols[0] is name
           # Pattern: A → A OptComma INDENT A OptComma OUTDENT
@@ -2464,11 +2464,11 @@ class Generator
           action: recRule.action,
           restSymbols: restSymbols
         })
-    
+
     # Debug: Show detected patterns
     if separatorPatterns.length > 1
       console.log "🔢 Multiple separators for #{name}: #{separatorPatterns.map((p) -> p.trigger).join(', ')}"
-    
+
     # For backward compatibility, use first simple pattern as primary
     primaryPattern = separatorPatterns.find((p) -> p.type is 'simple') or separatorPatterns[0]
     recRule = recursive[0]
@@ -2592,7 +2592,7 @@ class Generator
       indentPattern = separatorPatterns.find((p) -> p.trigger is 'INDENT')
       if indentPattern
         extendedFirstSet += ', SYM_INDENT'
-    
+
     emptyCheck = if emptyRule
       emptyAction = @_normalizeActionForPRD(emptyRule.action, emptyRule.symbols)
       """
@@ -2604,7 +2604,7 @@ class Generator
       """
     else
       ""
-    
+
     # Generate loop body based on whether we have a real separator
     if hasMultipleSeparators
       # Multiple recursive patterns - generate unified loop with branching
@@ -2618,9 +2618,9 @@ class Generator
           if triggerName
             triggerConst = @_getSymbolConstName(triggerName)
             triggerConditions.push("this.la.id === #{triggerConst}")
-      
+
       loopCondition = triggerConditions.join(' || ')
-      
+
       # Generate cases for each separator
       separatorCases = []
       for pattern in separatorPatterns
@@ -2630,7 +2630,7 @@ class Generator
           triggerName = @tokenNames[triggerId]
           continue unless triggerName
           triggerConst = @_getSymbolConstName(triggerName)
-          
+
           if pattern.type is 'nested'
             # Nested recursion: INDENT AssignList OUTDENT
             separatorCases.push """
@@ -2654,9 +2654,9 @@ class Generator
               elemName = @tokenNames[elemId]
               elemConst = if elemName then @_getSymbolConstName(elemName) else elemId
               "this._match(#{elemConst})"
-            
+
             action = @_normalizeActionForPRD(pattern.action, [name, trigger, elementSym])
-            
+
             separatorCases.push """
               if (this.la.id === #{triggerConst}) {
                 $2 = this._match(#{triggerConst});
@@ -2669,9 +2669,9 @@ class Generator
                 continue;
               }
             """
-      
+
       separatorHandling = separatorCases.join('\n          ')
-      
+
       """
         parse#{name}() {
           let #{dollarVars};
@@ -2679,7 +2679,7 @@ class Generator
 
           while (this.la && (#{loopCondition})) {
             #{separatorHandling}
-            
+
             break;  // No matching separator
           }
 
