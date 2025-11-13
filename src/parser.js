@@ -301,8 +301,28 @@ const parser = {
   parseLine() {
     let $1;
     switch (this.la.id) {
-    case SYM_STATEMENT: $1 = this.parseExpression();
-      return $1;
+    case SYM_STATEMENT: {
+      const _saved = this._saveState();
+
+      // Try: parseExpression
+      try {
+        $1 = this.parseExpression();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Try: parseStatement
+      try {
+        $1 = this.parseStatement();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Fallback error
+      this._error([SYM_STATEMENT], this.la.id);
+    }
     case SYM_DEF:
       $1 = this.parseExpression();
             return $1;
@@ -357,14 +377,94 @@ const parser = {
     case SYM_DYNAMIC_IMPORT:
       $1 = this.parseExpression();
             return $1;
-    case SYM_RETURN: $1 = this.parseExpression();
-      return $1;
-    case SYM_PARAM_START: $1 = this.parseExpression();
-      return $1;
-    case SYM_THIN_ARROW: $1 = this.parseExpression();
-      return $1;
-    case SYM_FAT_ARROW: $1 = this.parseExpression();
-      return $1;
+    case SYM_RETURN: {
+      const _saved = this._saveState();
+
+      // Try: parseExpression
+      try {
+        $1 = this.parseExpression();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Try: parseStatement
+      try {
+        $1 = this.parseStatement();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Fallback error
+      this._error([SYM_RETURN], this.la.id);
+    }
+    case SYM_PARAM_START: {
+      const _saved = this._saveState();
+
+      // Try: parseExpression
+      try {
+        $1 = this.parseExpression();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Try: parseExpressionLine
+      try {
+        $1 = this.parseExpressionLine();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Fallback error
+      this._error([SYM_PARAM_START], this.la.id);
+    }
+    case SYM_THIN_ARROW: {
+      const _saved = this._saveState();
+
+      // Try: parseExpression
+      try {
+        $1 = this.parseExpression();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Try: parseExpressionLine
+      try {
+        $1 = this.parseExpressionLine();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Fallback error
+      this._error([SYM_THIN_ARROW], this.la.id);
+    }
+    case SYM_FAT_ARROW: {
+      const _saved = this._saveState();
+
+      // Try: parseExpression
+      try {
+        $1 = this.parseExpression();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Try: parseExpressionLine
+      try {
+        $1 = this.parseExpressionLine();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Fallback error
+      this._error([SYM_FAT_ARROW], this.la.id);
+    }
     case SYM_NEW_TARGET:
       $1 = this.parseExpression();
             return $1;
@@ -380,10 +480,50 @@ const parser = {
     case SYM_CLASS:
       $1 = this.parseExpression();
             return $1;
-    case SYM_IMPORT: $1 = this.parseExpression();
-      return $1;
-    case SYM_EXPORT: $1 = this.parseExpression();
-      return $1;
+    case SYM_IMPORT: {
+      const _saved = this._saveState();
+
+      // Try: parseExpression
+      try {
+        $1 = this.parseExpression();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Try: parseStatement
+      try {
+        $1 = this.parseStatement();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Fallback error
+      this._error([SYM_IMPORT], this.la.id);
+    }
+    case SYM_EXPORT: {
+      const _saved = this._saveState();
+
+      // Try: parseExpression
+      try {
+        $1 = this.parseExpression();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Try: parseStatement
+      try {
+        $1 = this.parseStatement();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Fallback error
+      this._error([SYM_EXPORT], this.la.id);
+    }
     case SYM_THIS:
       $1 = this.parseExpression();
             return $1;
@@ -417,12 +557,72 @@ const parser = {
     case SYM_UNLESS:
       $1 = this.parseExpression();
             return $1;
-    case SYM_UNARY: $1 = this.parseExpression();
-      return $1;
-    case SYM_DO: $1 = this.parseExpression();
-      return $1;
-    case SYM_DO_IIFE: $1 = this.parseExpression();
-      return $1;
+    case SYM_UNARY: {
+      const _saved = this._saveState();
+
+      // Try: parseExpression
+      try {
+        $1 = this.parseExpression();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Try: parseExpressionLine
+      try {
+        $1 = this.parseExpressionLine();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Fallback error
+      this._error([SYM_UNARY], this.la.id);
+    }
+    case SYM_DO: {
+      const _saved = this._saveState();
+
+      // Try: parseExpression
+      try {
+        $1 = this.parseExpression();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Try: parseExpressionLine
+      try {
+        $1 = this.parseExpressionLine();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Fallback error
+      this._error([SYM_DO], this.la.id);
+    }
+    case SYM_DO_IIFE: {
+      const _saved = this._saveState();
+
+      // Try: parseExpression
+      try {
+        $1 = this.parseExpression();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Try: parseExpressionLine
+      try {
+        $1 = this.parseExpressionLine();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Fallback error
+      this._error([SYM_DO_IIFE], this.la.id);
+    }
     case SYM_UNARY_MATH:
       $1 = this.parseExpression();
             return $1;
@@ -3769,12 +3969,72 @@ $1 = this.parseAssignObj();
     case SYM_RETURN:
       $1 = this.parseExpression();
             return $1;
-    case SYM_PARAM_START: $1 = this.parseExpression();
-      return $1;
-    case SYM_THIN_ARROW: $1 = this.parseExpression();
-      return $1;
-    case SYM_FAT_ARROW: $1 = this.parseExpression();
-      return $1;
+    case SYM_PARAM_START: {
+      const _saved = this._saveState();
+
+      // Try: parseExpression
+      try {
+        $1 = this.parseExpression();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Try: parseExpressionLine
+      try {
+        $1 = this.parseExpressionLine();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Fallback error
+      this._error([SYM_PARAM_START], this.la.id);
+    }
+    case SYM_THIN_ARROW: {
+      const _saved = this._saveState();
+
+      // Try: parseExpression
+      try {
+        $1 = this.parseExpression();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Try: parseExpressionLine
+      try {
+        $1 = this.parseExpressionLine();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Fallback error
+      this._error([SYM_THIN_ARROW], this.la.id);
+    }
+    case SYM_FAT_ARROW: {
+      const _saved = this._saveState();
+
+      // Try: parseExpression
+      try {
+        $1 = this.parseExpression();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Try: parseExpressionLine
+      try {
+        $1 = this.parseExpressionLine();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Fallback error
+      this._error([SYM_FAT_ARROW], this.la.id);
+    }
     case SYM_NEW_TARGET:
       $1 = this.parseExpression();
             return $1;
@@ -3829,12 +4089,72 @@ $1 = this.parseAssignObj();
     case SYM_UNLESS:
       $1 = this.parseExpression();
             return $1;
-    case SYM_UNARY: $1 = this.parseExpression();
-      return $1;
-    case SYM_DO: $1 = this.parseExpression();
-      return $1;
-    case SYM_DO_IIFE: $1 = this.parseExpression();
-      return $1;
+    case SYM_UNARY: {
+      const _saved = this._saveState();
+
+      // Try: parseExpression
+      try {
+        $1 = this.parseExpression();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Try: parseExpressionLine
+      try {
+        $1 = this.parseExpressionLine();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Fallback error
+      this._error([SYM_UNARY], this.la.id);
+    }
+    case SYM_DO: {
+      const _saved = this._saveState();
+
+      // Try: parseExpression
+      try {
+        $1 = this.parseExpression();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Try: parseExpressionLine
+      try {
+        $1 = this.parseExpressionLine();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Fallback error
+      this._error([SYM_DO], this.la.id);
+    }
+    case SYM_DO_IIFE: {
+      const _saved = this._saveState();
+
+      // Try: parseExpression
+      try {
+        $1 = this.parseExpression();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Try: parseExpressionLine
+      try {
+        $1 = this.parseExpressionLine();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Fallback error
+      this._error([SYM_DO_IIFE], this.la.id);
+    }
     case SYM_UNARY_MATH:
       $1 = this.parseExpression();
             return $1;

@@ -1092,6 +1092,7 @@ class Generator
 
   _generateSwitchFunction: (nonTerminal, rules) ->
     # Generate switch-based dispatch for non-left-recursive nonterminals
+    
 
     # Check for empty rule OR rule starting with nullable nonterminal
     emptyRule = rules.find (rule) =>
@@ -1577,26 +1578,45 @@ class Generator
         console.log "🔍 Detected passthrough: #{name}"
 
   _isPassthrough: (name, type) ->
-    # Check if this nonterminal forwards to another nonterminal as first alternative
+    # Check if this nonterminal is a simple passthrough (forwards to exactly ONE nonterminal)
+    # vs an aggregator (provides meaningful grouping of alternatives)
+    #
+    # TRUE PASSTHROUGH:
+    #   Assignable → SimpleAssignable (plus other alternatives, but primarily one)
+    #   ForValue → ForVar (single dominant alternative)
+    #
+    # NOT PASSTHROUGH (Aggregator):
+    #   Line → Expression | ExpressionLine | Statement (fundamentally different alternatives)
+    #   Statement → Return | Import | Export (distinct constructs)
+    #
+    # Key distinction: Passthroughs participate in cycles, aggregators organize the grammar
+    
     return false unless type.rules.length > 0
-
+    
+    # Must have at least one single-nonterminal forward rule
     firstRule = type.rules[0]
     return false unless firstRule.symbols.length is 1
-
+    
     firstSymbol = firstRule.symbols[0]
     return false unless @types[firstSymbol]
-
-    # Count passthrough rules
-    passthroughCount = 0
+    
+    # Count rules
+    totalRules = type.rules.length
+    singleNonterminalRules = 0
+    
     for rule in type.rules
       if rule.symbols.length is 1 and @types[rule.symbols[0]]
-        passthroughCount++
-
-    # True passthrough: has passthrough rules but not exclusively
-    return true if passthroughCount >= 1 and type.rules.length > 1
-    return true if passthroughCount is 1 and type.rules.length is 1
-
-    return false
+        singleNonterminalRules++
+    
+    # Passthrough if: ONLY has single-nonterminal rules
+    # (Multiple options are fine if they're all forwards: Assignable → SimpleAssignable | Array | Object)
+    return false if singleNonterminalRules isnt totalRules
+    
+    # Additionally: passthrough should be relatively simple (not an aggregator like Line)
+    # If it has 3+ alternatives, it's likely an aggregator providing structure
+    return false if totalRules >= 3
+    
+    return true
 
   detectAllCycles: ->
     # Find all cycles of any length using DFS
@@ -2602,13 +2622,41 @@ class Generator
     # Strategy: For simple cases use nested branches, for complex use try/backtrack
     # Uses SLR(1) oracle (FIRST/FOLLOW sets) to determine valid paths
 
-    # If all rules are just single-nonterminal passthroughs, use first one
+    # If all rules are just single-nonterminal passthroughs, check if they're to the SAME nonterminal
     allSingleNonterminal = rules.every((r) => r.symbols.length is 1 and @types[r.symbols[0]])
     if allSingleNonterminal
-      # All rules are like "Line → Expression", just use first
-      rule = rules[0]
-      action = @_compileAction(rule, nonTerminal)
-      return "    case #{triggerToken}: #{action}"
+      # Check if all forward to the SAME nonterminal
+      firstNonterminal = rules[0].symbols[0]
+      allSameTarget = rules.every((r) => r.symbols[0] is firstNonterminal)
+      
+      if allSameTarget
+        # All forward to same nonterminal - just use first
+        rule = rules[0]
+        action = @_compileAction(rule, nonTerminal)
+        return "    case #{triggerToken}: #{action}"
+      else
+        # Forward to DIFFERENT nonterminals - need try/catch disambiguation!
+        # Example: Line → Expression vs Line → Statement for IMPORT token
+        lines = ["    case #{triggerToken}: {"]
+        lines.push("      const _saved = this._saveState();")
+        lines.push("")
+        
+        for rule, i in rules
+          nonterminal = rule.symbols[0]
+          lines.push("      // Try: parse#{nonterminal}")
+          lines.push("      try {")
+          lines.push("        $1 = this.parse#{nonterminal}();")
+          lines.push("        return $1;")
+          lines.push("      } catch (e) {")
+          lines.push("        this._restoreState(_saved);")
+          lines.push("      }")
+          lines.push("")
+        
+        lines.push("      // Fallback error")
+        lines.push("      this._error([#{triggerToken}], this.la.id);")
+        lines.push("    }")
+        
+        return lines.join('\n')
 
     # Check if all rules are bare (single symbol only)
     allBare = rules.every((r) -> r.symbols.length is 1)
