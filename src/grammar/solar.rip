@@ -785,12 +785,31 @@ class Generator
       lexer: null,
       la: null,          // Current lookahead token {id, value}
       peekToken: null,   // Buffered token for _peek()
+      tokenStream: [],   // All tokens (for backtracking)
+      tokenPos: 0,       // Current position in token stream
 
       parse(input) {
         this.lexer.setInput(input);
         this.peekToken = null;
+        this.tokenStream = [];
+        this.tokenPos = 0;
         this.la = this._advance();
         return this.parseRoot();
+      },
+
+      _saveState() {
+        // Save current position for backtracking (position of current lookahead)
+        // tokenPos points to NEXT token to read, so current la is at tokenPos - 1
+        return this.tokenPos - 1;
+      },
+
+      _restoreState(pos) {
+        // Restore to saved position
+        // pos is the index of the token we want as current lookahead
+        // Set this.la to that token, and tokenPos to next position
+        this.la = this.tokenStream[pos] || {id: 1, value: null};
+        this.tokenPos = pos + 1;  // Next _advance() will return tokenStream[pos+1]
+        this.peekToken = null;
       },
 
       _match(expected) {
@@ -817,24 +836,32 @@ class Generator
       },
 
       _advance() {
+        // Check if we're replaying from tokenStream (after backtrack)
+        if (this.tokenPos < this.tokenStream.length) {
+          return this.tokenStream[this.tokenPos++];
+        }
+
         // Return buffered token if available, else get from lexer
         if (this.peekToken) {
           const tok = this.peekToken;
           this.peekToken = null;
+          this.tokenStream.push(tok);
+          this.tokenPos = this.tokenStream.length;
           return tok;
         }
 
         // Get next token from lexer (returns string tag like "IDENTIFIER")
         let id = this.lexer.lex();
-        if (id === 1 || id === null) return {id: 1, value: null};  // EOF
+        const tok = (id === 1 || id === null)
+          ? {id: 1, value: null}  // EOF
+          : {
+              id: (typeof id !== 'number') ? (SYMBOL_IDS[id] || id) : id,
+              value: this.lexer.yytext  // CRITICAL: Can be String object with metadata!
+            };
 
-        // Convert string tag to numeric ID
-        if (typeof id !== 'number') {
-          id = SYMBOL_IDS[id] || id;
-        }
-
-        // CRITICAL: lexer.yytext can be String object with metadata!
-        return {id, value: this.lexer.yytext};
+        this.tokenStream.push(tok);
+        this.tokenPos = this.tokenStream.length;
+        return tok;
       },
 
       _error(expected, got) {
@@ -991,8 +1018,11 @@ class Generator
   _generateSwitchFunction: (nonTerminal, rules) ->
     # Generate switch-based dispatch for non-left-recursive nonterminals
 
-    # Check for empty rule
-    emptyRule = rules.find (rule) => not rule.symbols[0] or rule.symbols[0] is ''
+    # Check for empty rule OR rule starting with nullable nonterminal
+    emptyRule = rules.find (rule) =>
+      not rule.symbols[0] or
+      rule.symbols[0] is '' or
+      (@types[rule.symbols[0]]?.nullable and rule.symbols.length is 1)
 
     # Build dispatch map: FIRST token → rule
     dispatchMap = {}
@@ -1003,6 +1033,43 @@ class Generator
 
       # Skip empty rules (will add as default later)
       continue if not firstSymbol or firstSymbol is ''
+
+      # Skip rules that start with a nullable nonterminal (treated as empty)
+      if @types[firstSymbol]?.nullable and rule.symbols.length is 1
+        continue
+
+      # If first symbol is marked for inlining, expand its alternatives
+      if @shouldInline?.has(firstSymbol) and @types[firstSymbol]
+        # Expand through the inlined nonterminal
+        for childRule in @types[firstSymbol].rules
+          # Create expanded rule: replace first symbol with child's symbols
+          expandedSymbols = [...childRule.symbols, ...rule.symbols.slice(1)]
+          # Keep original action (of parent rule, not child)
+          expandedRule = {symbols: expandedSymbols, action: rule.action, id: rule.id}
+
+          # Get FIRST tokens of expanded rule
+          expandedFirst = expandedSymbols[0]
+          expandedTypeObj = @types[expandedFirst]
+          expandedTokens = if expandedTypeObj
+            firstNames = Array.from(expandedTypeObj.firsts)
+            ids = []
+            for name in firstNames
+              id = @symbolIds[name]
+              ids.push(id) if id
+            ids
+          else
+            symbolId = @symbolIds[expandedFirst]
+            if symbolId then [symbolId] else []
+
+          # Map expanded rule
+          for tokenId in expandedTokens
+            continue unless @tokenNames[tokenId]
+            expectedTokens.add(tokenId)
+            dispatchMap[tokenId] = dispatchMap[tokenId] or []
+            dispatchMap[tokenId].push(expandedRule)
+
+        # Skip original rule since we expanded it
+        continue
 
       # Get terminal FIRST tokens for this rule
       # If first symbol is nonterminal → use its terminal FIRST set
@@ -1029,63 +1096,48 @@ class Generator
         dispatchMap[tokenId] = dispatchMap[tokenId] or []
         dispatchMap[tokenId].push(rule)
 
-    # Generate switch statement - group by rule to avoid duplicates
-    ruleToTokens = {}
-    processed = {}
+    # Group rules by token for case generation
+    # Key insight: If multiple rules share same FIRST tokens, they need disambiguation!
+    rulesByToken = new Map()
 
     for own tokenId, rulesForToken of dispatchMap
-      # When multiple rules match a token, prefer the last (often more specific)
-      # E.g., for Line: Expression is general, Statement is specific
-      rule = rulesForToken[rulesForToken.length - 1]
-      ruleKey = rule.id
+      tokenKey = parseInt(tokenId)
 
-      if not processed[ruleKey]
-        ruleToTokens[ruleKey] = {rule: rule, tokens: []}
-        processed[ruleKey] = true
+      unless rulesByToken.has(tokenKey)
+        rulesByToken.set(tokenKey, [])
 
-      ruleToTokens[ruleKey].tokens.push(parseInt(tokenId))
+      # Keep ALL rules, not just the last one!
+      for rule in rulesForToken
+        rulesByToken.get(tokenKey).push(rule)
 
     # Generate cases
     cases = []
 
-    for own ruleKey, data of ruleToTokens
-      {rule, tokens} = data
+    for [tokenId, rules] from rulesByToken
+      tokenName = @tokenNames[tokenId]
+      continue unless tokenName
+      constName = @_getSymbolConstName(tokenName)
 
-      # Convert token IDs to SYM_* constants
-      tokenNames = []
-      for tokenId in tokens
-        tokenName = @tokenNames[tokenId]
-        continue unless tokenName  # Skip if no name (epsilon or undefined)
-        # Use operator name mapping if available
-        constName = @_getSymbolConstName(tokenName)
-        tokenNames.push(constName)
+      if rules.length is 1
+        # Single rule - generate simple case
+        rule = rules[0]
+        action = @_compileAction(rule, nonTerminal)
 
-      # Skip this rule if no valid tokens
-      continue if tokenNames.length is 0
-
-      # Compile action
-      action = @_compileAction(rule, nonTerminal)
-
-      # Format: stack case labels, then action on same/next line
-      caseStr = tokenNames.map((n) -> "case #{n}").join(': ')
-      totalLength = caseStr.length + action.length
-
-      # Check if action has multiple statements (contains newlines/semicolons)
-      hasMultipleStatements = action.includes('\n') or action.match(/;\s*\w/)
-
-      if hasMultipleStatements
-        # Multiple statements - put on separate lines (no braces needed with $ variables)
-        cases.push("    #{caseStr}:")
-        actionLines = action.split('\n')
-        for line in actionLines
-          cases.push("      #{line}") if line.trim()
-      else if totalLength < 100 and tokenNames.length <= 5
-        # Single statement, fits on one line
-        cases.push("    #{caseStr}: #{action}")
+        # Format: stack case label, then action
+        if action.includes('\n')
+          cases.push("    case #{constName}:")
+          actionLines = action.split('\n')
+          for line in actionLines
+            cases.push("      #{line}") if line.trim()
+        else if action.length < 80
+          cases.push("    case #{constName}: #{action}")
+        else
+          cases.push("    case #{constName}:")
+          cases.push("      #{action}")
       else
-        # Single statement, put on next line
-        cases.push("    #{caseStr}:")
-        cases.push("      #{action}")
+        # Multiple rules with same FIRST token - need lookahead disambiguation
+        caseCode = @_generateLookaheadCase(constName, rules, nonTerminal)
+        cases.push(caseCode)
 
     # Generate default case
     if emptyRule
@@ -1157,7 +1209,8 @@ class Generator
     # Add return statement with normalized action
     lines.push("return #{normalizedAction};")
 
-    lines.join(' ')
+    # Join with newlines for readability
+    lines.join('\n      ')
 
   _findReferencedPositions: (action, symbolCount) ->
     # Parse action to find which positions are referenced
@@ -1490,6 +1543,12 @@ class Generator
           console.log "   Prefix: #{prefixRules.length} rules"
           console.log "   Postfix: #{postfixRules.length} rules"
 
+  _getOperatorPrecedence: (opSymbol) ->
+    # Get numeric precedence for an operator symbol
+    # Higher number = higher precedence (binds tighter)
+    opInfo = @operators[opSymbol]
+    return opInfo?.precedence or 0
+
   _generateWithInlining: (name, type) ->
     # Generate function with inlined children (handles indirect left-recursion)
     info = @indirectLeftRec.get(name)
@@ -1511,7 +1570,7 @@ class Generator
 
         # Add child's POSTFIX rules to postfix loop
         for postfixRule in childInfo.postfixRules
-          postfixCases.push(@_generateInlinedPostfixCase(postfixRule))
+          postfixCases.push(@_generateInlinedPostfixCase(postfixRule, name))
       else if @shouldInline?.has(childName)
         # Child is marked for inlining but isn't in our inlining map
         # This means it's a passthrough rule - expand through it
@@ -1522,14 +1581,14 @@ class Generator
           # Check if grandchild rule starts with parent (postfix form!)
           if grandchildName is name
             # This is a postfix form - add to postfix loop
-            postfixCases.push(@_generateInlinedPostfixCase(childRule))
+            postfixCases.push(@_generateInlinedPostfixCase(childRule, name))
           else if @shouldInline?.has(grandchildName)
             # Grandchild is also passthrough - expand one more level
             grandchildType = @types[grandchildName]
             for grandchildRule in grandchildType.rules
               if grandchildRule.symbols[0] is name
                 # Postfix at third level
-                postfixCases.push(@_generateInlinedPostfixCase(grandchildRule))
+                postfixCases.push(@_generateInlinedPostfixCase(grandchildRule, name))
               else
                 # Regular rule
                 baseCases.push(@_generateStandardCase(grandchildRule))
@@ -1537,8 +1596,249 @@ class Generator
             # Regular grandchild - add its case
             baseCases.push(@_generateStandardCase(childRule))
       else
+        # Regular rule - but check if child is "fake postfix"
+        childName = rule.symbols[0]
+        childType = @types[childName]
+
+        if childType and not @shouldInline.has(childName) and not @leftRecursive.has(childName)
+          # Check if ALL of child's rules start with an inlined nonterminal
+          # If so, child is effectively postfix (like Assign → Assignable = Expr)
+          allStartWithInlined = childType.rules.every((r) =>
+            r.symbols[0] and @shouldInline?.has(r.symbols[0])
+          )
+
+          if allStartWithInlined
+            # Treat as postfix! Inline all child's rules as postfix cases
+            console.log "⚡ Detected fake-postfix: #{childName} (all rules start with inlined nonterminals)"
+            @shouldInline.add(childName)
+
+            for childRule in childType.rules
+              postfixCases.push(@_generateInlinedPostfixCase(childRule, name))
+
+            continue  # Don't add to baseCases
+
         # Regular rule - add to base switch normally
-        baseCases.push(@_generateStandardCase(rule))
+        generatedCase = @_generateStandardCase(rule)
+        if generatedCase
+          console.log "📝 Adding base case for #{name} → #{rule.symbols.join(' ')}"
+          baseCases.push(generatedCase)
+        else
+          console.log "⚠️  Failed to generate case for #{name} → #{rule.symbols.join(' ')}"
+
+    # Deduplicate baseCases - remove EXACT duplicates only
+    # Two cases are duplicates if they have identical code (same tokens AND same parsing)
+    # Cases with same trigger tokens but different parsing are NOT duplicates!
+    seenCases = new Set()
+    uniqueBaseCases = []
+    startCount = baseCases.length
+    for caseCode in baseCases
+      # Normalize whitespace for comparison
+      normalized = caseCode.replace(/\s+/g, ' ').trim()
+      unless seenCases.has(normalized)
+        uniqueBaseCases.push(caseCode)
+        seenCases.add(normalized)
+
+    if startCount > uniqueBaseCases.length
+      console.log "🔄 Deduplication: #{startCount} → #{uniqueBaseCases.length} cases (removed #{startCount - uniqueBaseCases.length} exact duplicates)"
+
+    baseCases = uniqueBaseCases
+
+    # Detect overlapping triggers and merge with disambiguation
+    # Instead of grouping by exact trigger match, check for ANY overlap
+    baseCasesByTrigger = []  # Array of {triggers: Set, cases: []}
+
+    for caseCode in baseCases
+      # Extract trigger token(s)
+      match = caseCode.match(/case\s+((?:SYM_\w+(?::\s*)?)+):/)
+      if match
+        triggers = new Set(match[1].match(/SYM_\w+/g))
+        triggerList = Array.from(triggers).slice(0, 3).join(',')  # First 3 for debug
+
+        # Find existing group with overlapping triggers
+        overlappingGroup = null
+        for group in baseCasesByTrigger
+          # Check if any triggers overlap
+          hasOverlap = Array.from(triggers).some((t) -> group.triggers.has(t))
+          if hasOverlap
+            existingList = Array.from(group.triggers).slice(0, 3).join(',')
+            console.log "  🔗 Merging [#{triggerList}...] into existing group [#{existingList}...]"
+            overlappingGroup = group
+            break
+
+        if overlappingGroup
+          # Merge into existing group
+          triggers.forEach((t) -> overlappingGroup.triggers.add(t))
+          overlappingGroup.cases.push(caseCode)
+        else
+          # Create new group
+          console.log "  ✨ New group [#{triggerList}...]"
+          baseCasesByTrigger.push({triggers, cases: [caseCode]})
+
+    # Merge base cases with duplicate triggers using lookahead disambiguation
+    mergedBaseCases = []
+    for group in baseCasesByTrigger
+      {triggers, cases} = group
+
+      if cases.length is 1
+        # Single case - use as-is
+        mergedBaseCases.push(cases[0])
+      else
+        # Multiple cases with overlapping triggers - need disambiguation
+        # Extract the parsing function being called
+        handlers = cases.map((c) ->
+          match = c.match(/this\.parse(\w+)\(\)/)
+          if match then match[1] else null
+        ).filter((h) -> h)
+
+        # Deduplicate handlers
+        uniqueHandlers = Array.from(new Set(handlers))
+
+        if uniqueHandlers.length is 0
+          # Can't extract handlers - use first as fallback
+          console.log "⚠️  Overlapping triggers (no handlers): keeping first"
+          mergedBaseCases.push(cases[0])
+        else if uniqueHandlers.length is 1
+          # All call same function - pick simplest case (fewest operations)
+          # Prefer: "$1 = parseX(); break;" over "$1 = parseX(); $2 = match...; $1 = [...]; break;"
+
+          # Debug: show operation counts for each case
+          for caseCode, idx in cases
+            ops = (caseCode.match(/this\.(parse|_match)/g) || []).length
+            snippet = caseCode.substring(0, 150).replace(/\n/g, ' ').replace(/\s+/g, ' ')
+            console.log "    Case #{idx}: #{ops} ops - #{snippet}..."
+
+          simplestCase = cases.reduce((best, c) ->
+            # Count operations (parse calls + match calls + assignments)
+            bestOps = (best.match(/this\.(parse|_match)/g) || []).length
+            cOps = (c.match(/this\.(parse|_match)/g) || []).length
+            if cOps < bestOps then c else best
+          )
+          console.log "⚠️  Overlapping triggers for #{uniqueHandlers[0]}: #{cases.length} cases, selected one with #{simplestCase.match(/this\.(parse|_match)/g)?.length or 0} ops)"
+          mergedBaseCases.push(simplestCase)
+        else
+          # Generate try/catch for disambiguation
+          triggerList = Array.from(triggers).sort().join(' vs ')
+          console.log "✨ Overlapping triggers: #{uniqueHandlers.join(' vs ')}"
+          tokens = Array.from(triggers).sort()
+          caseLabel = tokens.map((t) -> "case #{t}").join(': ')
+
+          lines = ["  #{caseLabel}: {"]
+          lines.push("    const _saved = this._saveState();")
+          lines.push("")
+
+          for handler in uniqueHandlers
+            lines.push("    // Try: parse#{handler}")
+            lines.push("    try {")
+            lines.push("      $1 = this.parse#{handler}();")
+            lines.push("      break;")
+            lines.push("    } catch (e) {")
+            lines.push("      this._restoreState(_saved);")
+            lines.push("    }")
+            lines.push("")
+
+          lines.push("    // Fallback error")
+          lines.push("    this._error([#{tokens.join(', ')}], this.la.id);")
+          lines.push("  }")
+
+          mergedBaseCases.push(lines.join('\n'))
+
+    baseCases = mergedBaseCases
+
+    # FINAL PASS: Detect overlaps across ALL base cases (catches Value vs Code overlaps)
+    # This runs after all cases from different sources are merged into baseCases
+    console.log "🔍 Final overlap check on #{baseCases.length} cases..."
+
+    finalGroups = []  # Array of {triggers: Set, cases: []}
+
+    for caseCode in baseCases
+      # Extract ALL trigger tokens from case label (handles "case A: case B: case C:")
+      # Match all "case SYM_XXX" patterns
+      allMatches = caseCode.match(/case\s+SYM_\w+/g)
+      continue unless allMatches
+
+      triggers = new Set(allMatches.map((m) -> m.replace('case ', '')))
+      console.log "  📌 Found triggers: #{Array.from(triggers).slice(0, 5).join(', ')}#{if triggers.size > 5 then '...' else ''}"
+
+      # Find group with ANY overlapping trigger
+      found = null
+      for group in finalGroups
+        hasOverlap = Array.from(triggers).some((t) -> group.triggers.has(t))
+        if hasOverlap
+          found = group
+          break
+
+      if found
+        # Merge into existing group
+        triggers.forEach((t) -> found.triggers.add(t))
+        found.cases.push(caseCode)
+      else
+        # New group
+        finalGroups.push({triggers, cases: [caseCode]})
+
+    # Generate try/catch for overlapping groups
+    finalBaseCases = []
+    for group in finalGroups
+      {triggers, cases} = group
+
+      if cases.length is 1
+        finalBaseCases.push(cases[0])
+      else
+        # Extract handlers
+        handlers = cases.map((c) ->
+          match = c.match(/this\.parse(\w+)\(\)/)
+          match?[1]
+        ).filter((h) -> h)
+        uniqueHandlers = Array.from(new Set(handlers))
+
+        if uniqueHandlers.length <= 1
+          # All same handler or can't extract - pick simplest
+          simplest = cases.reduce((best, c) ->
+            bestOps = (best.match(/this\.(parse|_match)/g) || []).length
+            cOps = (c.match(/this\.(parse|_match)/g) || []).length
+            if cOps < bestOps then c else best
+          )
+          console.log "  ⚠️  Final: #{uniqueHandlers[0] or 'unknown'} - #{cases.length} cases, using simplest"
+          finalBaseCases.push(simplest)
+        else
+          # Different handlers - generate try/catch
+          console.log "  ✨ Final: #{uniqueHandlers.join(' vs ')}"
+          tokens = Array.from(triggers).sort()
+          caseLabel = tokens.map((t) -> "case #{t}").join(': ')
+
+          lines = ["  #{caseLabel}: {"]
+          lines.push("    const _saved = this._saveState();")
+          lines.push("")
+
+          for handler in uniqueHandlers
+            lines.push("    // Try: parse#{handler}")
+            lines.push("    try {")
+            lines.push("      $1 = this.parse#{handler}();")
+            lines.push("      break;")
+            lines.push("    } catch (e) {")
+            lines.push("      this._restoreState(_saved);")
+            lines.push("    }")
+            lines.push("")
+
+          lines.push("    // Fallback error")
+          lines.push("    this._error([#{tokens.join(', ')}], this.la.id);")
+          lines.push("  }")
+
+          finalBaseCases.push(lines.join('\n'))
+
+    baseCases = finalBaseCases
+
+    # Deduplicate postfixCases - same approach as baseCases
+    # Each trigger token in postfix loop is a DIFFERENT operation (DOT, CALL_START, etc)
+    # Don't merge them! Only remove exact duplicates.
+    seenPostfixCases = new Set()
+    uniquePostfixCases = []
+    for caseCode in postfixCases
+      normalized = caseCode.replace(/\s+/g, ' ').trim()
+      unless seenPostfixCases.has(normalized)
+        uniquePostfixCases.push(caseCode)
+        seenPostfixCases.add(normalized)
+
+    postfixCases = uniquePostfixCases
 
     # Find max $ variable needed
     maxVar = 1
@@ -1604,7 +1904,7 @@ class Generator
   _generateInlinedPrefixCase: (rule) ->
     # Generate case for prefix rule (goes in switch section)
     # Rule: FOR ForVariables FORIN Expression Block
-    # Generate: case SYM_FOR: $1 = match; $2 = parse; ...; $1 = action; break;
+    # Generate: case SYM_FOR: $1 = match; $2 = parse; ...; return action;
 
     firstToken = rule.symbols[0]
     tokenId = @symbolIds[firstToken]
@@ -1636,33 +1936,42 @@ class Generator
     #{parsing}
     """
 
-  _generateInlinedPostfixCase: (rule) ->
+  _generateInlinedPostfixCase: (rule, parentName = null) ->
     # Generate case for postfix rule (goes in while loop)
     # Rule: Value OptFuncExist Arguments (postfix function call)
     # First symbol is parent (already in $1)
+    # OR: First symbol is inlined passthrough (Assignable in "Assignable = Expression")
     # Need to find the trigger token (skip nullable nonterminals)
 
-    # Skip first symbol (the recursion point, already in $1)
-    remainingSymbols = rule.symbols.slice(1)
+    # Determine if we should skip first symbol
+    # Skip if: (1) it's a nonterminal that matches the parent we're generating for
+    #          (2) it's marked for inlining (fake-postfix like Assignable)
+    firstSymbol = rule.symbols[0]
+    isParentRecursion = firstSymbol and @types[firstSymbol] and parentName and
+                        (firstSymbol is parentName or @shouldInline?.has(firstSymbol))
 
-    # Find first non-nullable symbol to use as trigger
+    remainingSymbols = if isParentRecursion then rule.symbols.slice(1) else rule.symbols
+
+    # Find the first TERMINAL token as trigger (skip ALL nonterminals, including nullable)
     triggerToken = null
     for symbol in remainingSymbols
       if @types[symbol]
-        # It's a nonterminal - check if nullable
-        type = @types[symbol]
-        if not type.nullable
-          # Not nullable - use its FIRST set
-          # For now, get the first token from its FIRST set
-          firstNames = Array.from(type.firsts)
-          for name in firstNames
+        # It's a nonterminal - skip it but check its FIRST set for terminals
+        # Skip if nullable (OptFuncExist, etc - these are optional!)
+        continue if @types[symbol].nullable
+
+        # Non-nullable nonterminal - get first terminal from its FIRST set
+        firstNames = Array.from(@types[symbol].firsts)
+        for name in firstNames
+          # Check if this is a terminal (not a nonterminal)
+          unless @types[name]
             id = @symbolIds[name]
             if id and @tokenNames[id]
               triggerToken = name
               break
-          break if triggerToken
+        break if triggerToken
       else
-        # It's a terminal - use it
+        # It's a terminal - this is our trigger!
         triggerToken = symbol
         break
 
@@ -1676,15 +1985,16 @@ class Generator
 
     # Generate parsing for remaining symbols
     lines = []
+    startPos = if isParentRecursion then 2 else 1  # $2 if we skipped first symbol, else $1
     for symbol, i in remainingSymbols
-      pos = i + 2  # Start at $2 (since $1 is accumulated result)
+      pos = i + startPos
       if @types[symbol]
         lines.push("$#{pos} = this.parse#{symbol}();")
       else
         tokenId = @symbolIds[symbol]
         tokenName = @tokenNames[tokenId]
-        constName = if tokenName then @_getSymbolConstName(tokenName) else tokenId
-        lines.push("$#{pos} = this._match(#{constName});")
+        tokenConstName = if tokenName then @_getSymbolConstName(tokenName) else tokenId
+        lines.push("$#{pos} = this._match(#{tokenConstName});")
 
     # Generate action (with $1 as accumulated result)
     action = @_normalizeActionForPRD(rule.action, rule.symbols)
@@ -1698,10 +2008,293 @@ class Generator
     #{parsing}
     """
 
+  _mergePostfixCases: (trigger, cases) ->
+    # Merge multiple postfix cases with the same trigger into one case with if/else
+    # Input: ["case SYM_ASSIGN:\n  ...", "case SYM_ASSIGN:\n  ..."]
+    # Output: Single case with if/else branching
+
+    # Extract the parsing code from each case (skip "case XXX:" line)
+    parsings = []
+    for caseCode in cases
+      # Extract everything after "case XXX:"
+      lines = caseCode.split('\n')
+      codeLines = lines.slice(1) # Skip case label
+      # Remove "continue;" from end (we'll add it once at the end)
+      codeLines = codeLines.filter((line) -> not line.includes('continue;'))
+      parsings.push(codeLines.join('\n'))
+
+    # For Assign-style rules, we need to check lookahead to distinguish variants
+    # Pattern: Assignable = Expression / Assignable = TERMINATOR Expression / etc.
+    # Strategy: Parse common prefix (match =), then branch on next token
+
+    if parsings.length is 3 and trigger is 'SYM_ASSIGN'
+      # Special case for Assign (3 variants)
+      # All start with: $2 = this._match(SYM_ASSIGN);
+      # Then differ by INDENT/TERMINATOR/neither
+
+      """
+          case #{trigger}:
+            $2 = this._match(#{trigger});
+
+            if (this.la.id === SYM_INDENT) {
+              $3 = this._match(SYM_INDENT);
+              $4 = this.parseExpression();
+              $5 = this._match(SYM_OUTDENT);
+              $1 = ["=", $1, $4];
+            } else if (this.la.id === SYM_TERMINATOR) {
+              $3 = this._match(SYM_TERMINATOR);
+              $4 = this.parseExpression();
+              $1 = ["=", $1, $4];
+            } else {
+              $3 = this.parseExpression();
+              $1 = ["=", $1, $3];
+            }
+            continue;
+      """
+    else
+      # General case: generate if/else chain
+      # For now, just use the first case (this is a limitation)
+      # TODO: implement proper lookahead-based branching
+      cases[0]
+
+  _findCommonPrefixLength: (rules) ->
+    # Find how many symbols all rules share at the start (after position 0/trigger)
+    return 0 if rules.length < 2
+
+    minLength = Math.min(...rules.map((r) -> r.symbols.length))
+    commonLength = 0
+
+    for pos in [1...minLength]  # Start at 1 (position 0 is trigger, already matched)
+      firstSymbol = rules[0].symbols[pos]
+      allMatch = rules.every((r) -> r.symbols[pos] is firstSymbol)
+      if allMatch
+        commonLength = pos
+      else
+        break
+
+    commonLength
+
+  _groupRulesByNextToken: (rules, skipCount = 1) ->
+    # Group rules by their next distinguishing token (after skipCount symbols)
+    # Returns Map: distinguisher → [rules with that distinguisher]
+    groups = new Map()
+
+    for rule in rules
+      remaining = rule.symbols.slice(skipCount)
+
+      if remaining.length is 0
+        # Bare rule (no more symbols)
+        groups.set('__bare__', []) unless groups.has('__bare__')
+        groups.get('__bare__').push(rule)
+      else
+        # Find first distinguishing symbol
+        distinguisher = remaining[0]
+
+        # Use symbol directly as key
+        groups.set(distinguisher, []) unless groups.has(distinguisher)
+        groups.get(distinguisher).push(rule)
+
+    groups
+
+  _generateNestedBranches: (groups, rules, skipCount, indent) ->
+    # Recursively generate nested if/else branches for grouped rules
+    # Returns array of code lines
+    lines = []
+    groupArray = Array.from(groups.entries())
+
+    # Sort groups: bare rules last, others by specificity
+    groupArray.sort ([keyA, rulesA], [keyB, rulesB]) ->
+      return 1 if keyA is '__bare__'  # Bare always last
+      return -1 if keyB is '__bare__'  # Bare always last
+      rulesB[0].symbols.length - rulesA[0].symbols.length  # Longer rules first
+
+    for [distinguisher, groupRules], i in groupArray
+      if distinguisher is '__bare__'
+        # Bare rule - no more symbols
+        rule = groupRules[0]
+        action = @_normalizeActionForPRD(rule.action, rule.symbols)
+        if i > 0
+          lines.push("#{indent}else {")
+          lines.push("#{indent}  return #{action};")
+          lines.push("#{indent}}")
+        else
+          lines.push("#{indent}return #{action};")
+      else
+        # Has distinguisher - check for it
+        tokenId = @symbolIds[distinguisher]
+        tokenName = @tokenNames[tokenId]
+
+        # Generate lookahead check
+        lookaheadCheck = if @types[distinguisher]
+          # Nonterminal - check its FIRST set
+          type = @types[distinguisher]
+          firstNames = Array.from(type.firsts)
+          firstTerminals = []
+          for name in firstNames
+            unless @types[name]  # Only terminals
+              id = @symbolIds[name]
+              if id and @tokenNames[id]
+                firstTerminals.push(@_getSymbolConstName(@tokenNames[id]))
+          if firstTerminals.length > 0
+            "[#{firstTerminals.join(', ')}].includes(this.la.id)"
+          else
+            "true"
+        else if tokenName
+          # Terminal - check directly
+          constName = @_getSymbolConstName(tokenName)
+          "this.la.id === #{constName}"
+        else
+          "true"
+
+        condition = if i is 0 then "if" else "else if"
+        lines.push("#{indent}#{condition} (#{lookaheadCheck}) {")
+
+        # Parse/match the distinguisher symbol
+        pos = skipCount + 1
+        if @types[distinguisher]
+          lines.push("#{indent}  $#{pos} = this.parse#{distinguisher}();")
+        else
+          tokenId = @symbolIds[distinguisher]
+          tokenName = @tokenNames[tokenId]
+          constName = if tokenName then @_getSymbolConstName(tokenName) else tokenId
+          lines.push("#{indent}  $#{pos} = this._match(#{constName});")
+
+        if groupRules.length is 1
+          # Single rule in this group - generate its body (remaining symbols after distinguisher)
+          rule = groupRules[0]
+          @_generateRuleBranch(lines, rule, skipCount + 1, indent + "  ")
+        else
+          # Multiple rules - recurse!
+          subGroups = @_groupRulesByNextToken(groupRules, skipCount + 1)
+          subLines = @_generateNestedBranches(subGroups, groupRules, skipCount + 1, indent + "  ")
+          lines.push(subLines)
+
+        lines.push("#{indent}}")
+
+    lines.join('\n')
+
+  _generateRuleBranch: (lines, rule, skipCount, indent) ->
+    # Generate parsing code for a single rule branch
+    action = @_normalizeActionForPRD(rule.action, rule.symbols)
+    remaining = rule.symbols.slice(skipCount)
+
+    # Generate parsing for remaining symbols
+    for sym, idx in remaining
+      pos = skipCount + idx + 1
+      if @types[sym]
+        lines.push("#{indent}$#{pos} = this.parse#{sym}();")
+      else
+        symTokenId = @symbolIds[sym]
+        symTokenName = @tokenNames[symTokenId]
+        symConstName = if symTokenName then @_getSymbolConstName(symTokenName) else symTokenId
+        lines.push("#{indent}$#{pos} = this._match(#{symConstName});")
+
+    lines.push("#{indent}return #{action};")
+
+  _generateTryBacktrackCase: (triggerToken, sortedRules, nonTerminal) ->
+    # Generate try/catch with backtracking for complex ambiguous cases
+    # Try specific patterns first (longest rules), fall back to general (shortest)
+    lines = ["    case #{triggerToken}: {"]  # Wrap in block scope
+    lines.push("      $1 = this._match(#{triggerToken});")
+    lines.push("      ")
+
+    # The fallback rule is the shortest (most general)
+    fallbackRule = sortedRules[sortedRules.length - 1]
+    specificRules = sortedRules[0...-1]
+
+    # Group specific rules by common prefixes for ordered trials
+    lines.push("      const _saved = this._saveState();")
+    lines.push("      ")
+
+    # Try each specific rule in order
+    for rule, i in specificRules
+      lines.push("      // Try: #{rule.symbols.join(' ')}")
+      lines.push("      try {")
+
+      # Generate parsing for this rule
+      for sym, idx in rule.symbols.slice(1)
+        pos = idx + 2
+        if @types[sym]
+          lines.push("        $#{pos} = this.parse#{sym}();")
+        else
+          symTokenId = @symbolIds[sym]
+          symTokenName = @tokenNames[symTokenId]
+          symConstName = if symTokenName then @_getSymbolConstName(symTokenName) else symTokenId
+          lines.push("        $#{pos} = this._match(#{symConstName});")
+
+      action = @_normalizeActionForPRD(rule.action, rule.symbols)
+      lines.push("        return #{action};")
+      lines.push("      } catch (e) {")
+      lines.push("        this._restoreState(_saved);")
+      lines.push("      }")
+      lines.push("      ")
+
+    # Fallback rule (always succeeds or throws)
+    lines.push("      // Fallback: #{fallbackRule.symbols.join(' ')}")
+    fallbackSymbols = fallbackRule.symbols.slice(1)
+    fallbackAction = @_normalizeActionForPRD(fallbackRule.action, fallbackRule.symbols)
+
+    for sym, idx in fallbackSymbols
+      pos = idx + 2
+      if @types[sym]
+        lines.push("      $#{pos} = this.parse#{sym}();")
+      else
+        symTokenId = @symbolIds[sym]
+        symTokenName = @tokenNames[symTokenId]
+        symConstName = if symTokenName then @_getSymbolConstName(symTokenName) else symTokenId
+        lines.push("      $#{pos} = this._match(#{symConstName});")
+
+    lines.push("      return #{fallbackAction};")
+    lines.push("    }")  # Close block scope
+    lines.join('\n')
+
+  _generateLookaheadCase: (triggerToken, rules, nonTerminal) ->
+    # Generate case with lookahead disambiguation
+    # Strategy: For simple cases use nested branches, for complex use try/backtrack
+    # Uses SLR(1) oracle (FIRST/FOLLOW sets) to determine valid paths
+
+    # If all rules are just single-nonterminal passthroughs, use first one
+    allSingleNonterminal = rules.every((r) => r.symbols.length is 1 and @types[r.symbols[0]])
+    if allSingleNonterminal
+      # All rules are like "Line → Expression", just use first
+      rule = rules[0]
+      action = @_compileAction(rule, nonTerminal)
+      return "    case #{triggerToken}: #{action}"
+
+    # Check if all rules are bare (single symbol only)
+    allBare = rules.every((r) -> r.symbols.length is 1)
+    if allBare
+      # All rules are bare - just match and return
+      rule = rules[0]
+      action = @_normalizeActionForPRD(rule.action, rule.symbols)
+      return "    case #{triggerToken}:\n      $1 = this._match(#{triggerToken});\n      return #{action};"
+
+    # Sort rules by length (most specific first for try/catch ordering)
+    sortedRules = rules.sort((a, b) -> b.symbols.length - a.symbols.length)
+
+    # Detect complex ambiguity: rules share common long prefix
+    longestRule = sortedRules[0]
+    shortestRule = sortedRules[sortedRules.length - 1]
+    hasSignificantLengthDiff = (longestRule.symbols.length - shortestRule.symbols.length) >= 4
+
+    # If we have very different lengths, use try/catch with backtracking
+    if hasSignificantLengthDiff and sortedRules.length >= 3
+      return @_generateTryBacktrackCase(triggerToken, sortedRules, nonTerminal)
+
+    # Otherwise, use standard nested branching
+    lines = ["    case #{triggerToken}:"]
+    lines.push("      $1 = this._match(#{triggerToken});")
+    lines.push("      ")
+
+    groups = @_groupRulesByNextToken(rules, 1)  # Skip trigger (position 0)
+    nestedCode = @_generateNestedBranches(groups, rules, 1, "      ")
+
+    lines.push(nestedCode)
+    lines.join('\n')
+
   _generateStandardCase: (rule) ->
     # Generate case for standard rule (no inlining needed)
     # For rules in inlined functions: assign to $1 and break (for postfix loop)
-    # For rules in standard functions: just compile normally
     firstSym = rule.symbols[0]
 
     if @types[firstSym]
@@ -1735,7 +2328,7 @@ class Generator
       lines.push("$1 = #{action};") unless action is '$1'
       lines.push("break;")
 
-      parsing = lines.map((line) -> "    #{line}").join('\n')
+      parsing = lines.map((line) -> "      #{line}").join('\n')
 
       """
     #{caseStr}:
@@ -1766,7 +2359,7 @@ class Generator
       lines.push("$1 = #{action};") unless action is '$1'
       lines.push("break;")
 
-      parsing = lines.map((line) -> "    #{line}").join('\n')
+      parsing = lines.map((line) -> "      #{line}").join('\n')
 
       """
     case #{constName}:
@@ -1779,7 +2372,10 @@ class Generator
     info = @leftRecursive.get(name)
     {base, recursive} = info
 
-    baseRule = base[0]
+    # Check if there's an empty base rule (ε)
+    emptyRule = base.find((r) -> not r.symbols[0] or r.symbols[0] is '')
+    # Prefer non-empty base rules for iteration start
+    baseRule = base.find((r) -> r.symbols[0] and r.symbols[0] isnt '') or base[0]
     recRule = recursive[0]
 
     # Parse recursive rule: A → A separator rest...
@@ -1796,55 +2392,149 @@ class Generator
 
     dollarVars = ("$#{i}" for i in [1..maxPos]).join(', ')
 
-    # Base case initialization
-    baseSymbol = baseRule.symbols[0]
-    baseCall = if @types[baseSymbol]
-      "this.parse#{baseSymbol}()"
-    else
-      "this._match(#{@symbolIds[baseSymbol]})"
-
-    # Evaluate base action (substitute $1 with base call)
-    baseInit = baseAction.replace(/\$1/g, baseCall)
-
-    # Rest symbol parsing (positions match original rule)
-    # Rule: A → A separator rest...
-    # Positions: $1=A, $2=separator, $3+=rest
-    restLines = []
-    for symbol, i in restSymbols
-      pos = i + 3  # Start at position 3
+    # Base case initialization - parse ALL symbols of base rule
+    baseInitLines = []
+    for symbol, i in baseRule.symbols when symbol and symbol isnt ''
+      pos = i + 1
       if @types[symbol]
-        restLines.push("$#{pos} = this.parse#{symbol}();")
+        baseInitLines.push("$#{pos} = this.parse#{symbol}();")
       else
         tokenId = @symbolIds[symbol]
         tokenName = @tokenNames[tokenId]
         constName = if tokenName then @_getSymbolConstName(tokenName) else tokenId
-        restLines.push("$#{pos} = this._match(#{constName});")
+        baseInitLines.push("$#{pos} = this._match(#{constName});")
 
-    restParsing = if restLines.length > 0
-      '\n        ' + restLines.join('\n        ') + '\n        '
+    # Add action evaluation
+    baseInitLines.push("$1 = #{baseAction};")
+    baseInit = baseInitLines.join('\n        ')
+
+    # Check if separator is a terminal or nonterminal
+    # If nonterminal: A → B | A B (no separator, just accumulation)
+    # If terminal: A → B | A sep B (has separator)
+    separatorIsNonterminal = @types[separator]?
+
+    if separatorIsNonterminal
+      # No actual separator - the "separator" position is the element to accumulate
+      # Pattern: Interpolations → InterpolationChunk | Interpolations InterpolationChunk
+      # Rule: A → A B (where B is nonterminal)
+      # Positions: $1=accumulated, $2=new B element
+      elementSymbol = separator
+      restSymbols = []  # No rest (the element IS the separator position)
+
+      # Check FIRST set of the element
+      elementType = @types[elementSymbol]
+      elementFirstTokens = Array.from(elementType.firsts)
+        .map((name) => @symbolIds[name])
+        .filter((id) => id and @tokenNames[id])
+        .map((id) => @_getSymbolConstName(@tokenNames[id]))
+      loopCheck = "[#{elementFirstTokens.join(', ')}].includes(this.la.id)"
+
+      # Generate element parsing
+      elementParsing = "        $2 = this.parse#{elementSymbol}();\n        "
+
+      # Adjust action to use $2 for element (not $3)
+      # Original action has positions: $1=A, $2=B
+      # We need: $1=accumulated, $2=new element
+      adjustedAction = recAction
     else
-      ' '
+      # Real separator token
+      # Pattern: Body → Line | Body TERMINATOR Line
+      # Rule: A → A sep B
+      # Positions: $1=accumulated, $2=separator, $3+=rest
 
-    # Separator constant (handles operators correctly)
-    sepId = @symbolIds[separator]
-    sepTokenName = @tokenNames[sepId]
-    sepConst = if sepTokenName
-      @_getSymbolConstName(sepTokenName)
+      sepId = @symbolIds[separator]
+      sepTokenName = @tokenNames[sepId]
+      sepConst = if sepTokenName
+        @_getSymbolConstName(sepTokenName)
+      else
+        sepId  # Fallback to numeric ID
+      loopCheck = "this.la.id === #{sepConst}"
+
+      # Rest symbol parsing (positions match original rule)
+      restLines = []
+      for symbol, i in restSymbols
+        pos = i + 3  # Start at position 3 ($1=accumulated, $2=separator, $3+=rest)
+        if @types[symbol]
+          restLines.push("$#{pos} = this.parse#{symbol}();")
+        else
+          tokenId = @symbolIds[symbol]
+          tokenName = @tokenNames[tokenId]
+          constName = if tokenName then @_getSymbolConstName(tokenName) else tokenId
+          restLines.push("$#{pos} = this._match(#{constName});")
+
+      elementParsing = if restLines.length > 0
+        '\n        ' + restLines.join('\n        ') + '\n        '
+      else
+        ' '
+
+      # Separator matching
+      separatorMatch = "          $2 = this._match(#{sepConst});\n"
+
+      adjustedAction = recAction
+
+    # Get FIRST set of the base element to check if another one follows
+    baseSymbol = baseRule.symbols[0]
+    baseFirstTokens = if @types[baseSymbol]
+      type = @types[baseSymbol]
+      Array.from(type.firsts)
+        .map((name) => @symbolIds[name])
+        .filter((id) => id and @tokenNames[id])
+        .map((id) => @_getSymbolConstName(@tokenNames[id]))
     else
-      sepId  # Fallback to numeric ID
+      tokenId = @symbolIds[baseSymbol]
+      tokenName = @tokenNames[tokenId]
+      if tokenName then [@_getSymbolConstName(tokenName)] else []
 
-    """
-      parse#{name}() {
-        let #{dollarVars};
-        $1 = #{baseInit};
+    baseFirstSet = baseFirstTokens.join(', ')
 
-        while (this.la && this.la.id === #{sepConst}) {
-          $2 = this._match(#{sepConst});#{restParsing}$1 = #{recAction};
-        }
+    # If there's an empty base rule, generate check before parsing
+    emptyCheck = if emptyRule
+      emptyAction = @_normalizeActionForPRD(emptyRule.action, emptyRule.symbols)
+      """
+      // Check if list is empty (ε rule exists)
+          if (!this.la || ![#{baseFirstSet}].includes(this.la.id)) {
+            return #{emptyAction};
+          }
 
-        return $1;
-      },
-    """
+      """
+    else
+      ""
+
+    # Generate loop body based on whether we have a real separator
+    if separatorIsNonterminal
+      # No actual separator - the "separator" position is the element to accumulate
+      # Pattern: Interpolations → InterpolationChunk | Interpolations InterpolationChunk
+      # Generate: while (lookahead in FIRST(element)) { $2 = parseElement(); accumulate }
+      """
+        parse#{name}() {
+          let #{dollarVars};
+          #{emptyCheck}#{baseInit}
+
+          while (this.la && #{loopCheck}) {
+            #{elementParsing}$1 = #{adjustedAction};
+          }
+
+          return $1;
+        },
+      """
+    else
+      # Real separator token - match it before parsing rest
+      # Pattern: Body → Line | Body TERMINATOR Line
+      """
+        parse#{name}() {
+          let #{dollarVars};
+          #{emptyCheck}#{baseInit}
+
+          while (this.la && #{loopCheck}) {
+            #{separatorMatch}// Only continue if another element can follow (check FIRST set)
+            if (!this.la || this.la.id === SYM_EOF || ![#{baseFirstSet}].includes(this.la.id)) {
+              break;
+            }#{elementParsing}$1 = #{adjustedAction};
+          }
+
+          return $1;
+        },
+      """
 
   _analyzeNonterminal: (name, rules) ->
     # At generation time, analyze each nonterminal using SLR(1) information
