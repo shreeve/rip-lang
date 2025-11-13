@@ -266,14 +266,29 @@ const parser = {
     $1 = this.parseLine();
         $1 = [$1];
 
-    while (this.la && this.la.id === SYM_TERMINATOR) {
-                $2 = this._match(SYM_TERMINATOR);
-// Only continue if another element can follow (check FIRST set)
-      if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_LBRACKET, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_IF, SYM_UNLESS, SYM_STATEMENT, SYM_TRY, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_RETURN, SYM_IMPORT, SYM_EXPORT].includes(this.la.id)) {
-        break;
-      }
-        $3 = this.parseLine();
-        $1 = [...$1, $3];
+    while (this.la && (this.la.id === SYM_TERMINATOR || this.la.id === SYM_TERMINATOR)) {
+        if (this.la.id === SYM_TERMINATOR) {
+    $2 = this._match(SYM_TERMINATOR);
+    // Check if another element follows
+    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_LBRACKET, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_IF, SYM_UNLESS, SYM_STATEMENT, SYM_TRY, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_RETURN, SYM_IMPORT, SYM_EXPORT].includes(this.la.id)) {
+      break;
+    }
+    $3 = this.parseLine();
+    $1 = [...$1, $3];
+    continue;
+  }
+            if (this.la.id === SYM_TERMINATOR) {
+    $2 = this._match(SYM_TERMINATOR);
+    // Check if another element follows
+    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_LBRACKET, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_IF, SYM_UNLESS, SYM_STATEMENT, SYM_TRY, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_RETURN, SYM_IMPORT, SYM_EXPORT].includes(this.la.id)) {
+      break;
+    }
+    $3 = this._match(undefined);
+    $1 = $1;
+    continue;
+  }
+      
+      break;  // No matching separator
     }
 
     return $1;
@@ -1479,9 +1494,109 @@ const parser = {
     $1 = this.parseSimpleObjAssignable();
         $1 = $1;
 
-    while (this.la && [SYM_FUNC_EXIST].includes(this.la.id)) {
-              $2 = this.parseOptFuncExist();
-        $1 = [$1, ...$3];
+    while (this.la && (this.la.id === SYM_DOT || this.la.id === SYM_OPT_DOT || this.la.id === SYM_PROTO || this.la.id === SYM_OPT_PROTO || this.la.id === SYM_PROTO || this.la.id === SYM_OPT_PROTO || this.la.id === SYM_INDEX_START || this.la.id === SYM_INDEX_START || this.la.id === SYM_INDEX_SOAK || this.la.id === SYM_INDEX_SOAK)) {
+        if (this.la.id === SYM_DOT) {
+    $2 = this._match(SYM_DOT);
+    // Check if another element follows
+    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT].includes(this.la.id)) {
+      break;
+    }
+    $3 = this.parseProperty();
+    $1 = [".", $1, $3];
+    continue;
+  }
+            if (this.la.id === SYM_OPT_DOT) {
+    $2 = this._match(SYM_OPT_DOT);
+    // Check if another element follows
+    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT].includes(this.la.id)) {
+      break;
+    }
+    $3 = this.parseProperty();
+    $1 = ["?.", $1, $3];
+    continue;
+  }
+            if (this.la.id === SYM_PROTO) {
+    $2 = this._match(SYM_PROTO);
+    // Check if another element follows
+    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT].includes(this.la.id)) {
+      break;
+    }
+    $3 = this.parseProperty();
+    $1 = ["::", $1, $3];
+    continue;
+  }
+            if (this.la.id === SYM_OPT_PROTO) {
+    $2 = this._match(SYM_OPT_PROTO);
+    // Check if another element follows
+    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT].includes(this.la.id)) {
+      break;
+    }
+    $3 = this.parseProperty();
+    $1 = ["?::", $1, $3];
+    continue;
+  }
+            if (this.la.id === SYM_PROTO) {
+    $2 = this._match(SYM_PROTO);
+    // Check if another element follows
+    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT].includes(this.la.id)) {
+      break;
+    }
+    $3 = this._match(undefined);
+    $1 = ["::", $1, "prototype"];
+    continue;
+  }
+            if (this.la.id === SYM_OPT_PROTO) {
+    $2 = this._match(SYM_OPT_PROTO);
+    // Check if another element follows
+    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT].includes(this.la.id)) {
+      break;
+    }
+    $3 = this._match(undefined);
+    $1 = ["?::", $1, "prototype"];
+    continue;
+  }
+            if (this.la.id === SYM_INDEX_START) {
+    $2 = this._match(SYM_INDEX_START);
+    // Check if another element follows
+    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT].includes(this.la.id)) {
+      break;
+    }
+    $3 = this.parseExpression();
+    $1 = ["[]", $1, $3];
+    continue;
+  }
+            if (this.la.id === SYM_INDEX_START) {
+    $2 = this._match(SYM_INDEX_START);
+    // Check if another element follows
+    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT].includes(this.la.id)) {
+      break;
+    }
+    $3 = this._match(SYM_INDENT);
+    $1 = ["[]", $1, $4];
+    continue;
+  }
+            if (this.la.id === SYM_INDEX_SOAK) {
+    $2 = this._match(SYM_INDEX_SOAK);
+    // Check if another element follows
+    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT].includes(this.la.id)) {
+      break;
+    }
+    $3 = this._match(SYM_INDEX_START);
+    $1 = ["?[]", $1, $4];
+    continue;
+  }
+            if (this.la.id === SYM_INDEX_SOAK) {
+    $2 = this._match(SYM_INDEX_SOAK);
+    // Check if another element follows
+    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT].includes(this.la.id)) {
+      break;
+    }
+    $3 = this._match(SYM_INDEX_START);
+    $1 = ["?[]", $1, $5];
+    continue;
+  }
+      
+      break;  // No matching separator
     }
 
     return $1;
@@ -1580,20 +1695,44 @@ const parser = {
   parseParamList() {
     let $1, $2, $3;
     // Check if list is empty (ε rule exists)
-    if (!this.la || ![SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_ELLIPSIS].includes(this.la.id)) {
+    if (!this.la || ![SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_ELLIPSIS, SYM_INDENT].includes(this.la.id)) {
       return [];
     }
 $1 = this.parseParam();
         $1 = [$1];
 
-    while (this.la && this.la.id === SYM_COMMA) {
-                $2 = this._match(SYM_COMMA);
-// Only continue if another element can follow (check FIRST set)
-      if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_ELLIPSIS].includes(this.la.id)) {
-        break;
-      }
-        $3 = this.parseParam();
-        $1 = [...$1, $3];
+    while (this.la && (this.la.id === SYM_COMMA || this.la.id === SYM_TERMINATOR || this.la.id === SYM_INDENT)) {
+        if (this.la.id === SYM_COMMA) {
+    $2 = this._match(SYM_COMMA);
+    // Check if another element follows
+    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_ELLIPSIS].includes(this.la.id)) {
+      break;
+    }
+    $3 = this.parseParam();
+    $1 = [...$1, $3];
+    continue;
+  }
+            if (this.la.id === SYM_TERMINATOR) {
+    $2 = this._match(SYM_TERMINATOR);
+    // Check if another element follows
+    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_ELLIPSIS].includes(this.la.id)) {
+      break;
+    }
+    $3 = this.parseParam();
+    $1 = [...$1, $4];
+    continue;
+  }
+            if (this.la.id === SYM_INDENT) {
+    $2 = this._match(SYM_INDENT);  // Match INDENT
+    $3 = this.parseParamList();  // Recursive!
+    if (this.la && this.la.id === SYM_OUTDENT) {
+      this._match(SYM_OUTDENT);
+    }
+    $1 = [...$1, ...$3];  // Flatten nested list
+    continue;
+  }
+      
+      break;  // No matching separator
     }
 
     return $1;
@@ -2062,20 +2201,44 @@ $1 = this.parseParam();
   parseAssignList() {
     let $1, $2, $3;
     // Check if list is empty (ε rule exists)
-    if (!this.la || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT, SYM_LBRACKET, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_ELLIPSIS].includes(this.la.id)) {
+    if (!this.la || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT, SYM_LBRACKET, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_ELLIPSIS, SYM_INDENT].includes(this.la.id)) {
       return [];
     }
 $1 = this.parseAssignObj();
         $1 = [$1];
 
-    while (this.la && this.la.id === SYM_COMMA) {
-                $2 = this._match(SYM_COMMA);
-// Only continue if another element can follow (check FIRST set)
-      if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT, SYM_LBRACKET, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_ELLIPSIS].includes(this.la.id)) {
-        break;
-      }
-        $3 = this.parseAssignObj();
-        $1 = [...$1, $3];
+    while (this.la && (this.la.id === SYM_COMMA || this.la.id === SYM_TERMINATOR || this.la.id === SYM_INDENT)) {
+        if (this.la.id === SYM_COMMA) {
+    $2 = this._match(SYM_COMMA);
+    // Check if another element follows
+    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT, SYM_LBRACKET, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_ELLIPSIS].includes(this.la.id)) {
+      break;
+    }
+    $3 = this.parseAssignObj();
+    $1 = [...$1, $3];
+    continue;
+  }
+            if (this.la.id === SYM_TERMINATOR) {
+    $2 = this._match(SYM_TERMINATOR);
+    // Check if another element follows
+    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT, SYM_LBRACKET, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_ELLIPSIS].includes(this.la.id)) {
+      break;
+    }
+    $3 = this.parseAssignObj();
+    $1 = [...$1, $4];
+    continue;
+  }
+            if (this.la.id === SYM_INDENT) {
+    $2 = this._match(SYM_INDENT);  // Match INDENT
+    $3 = this.parseAssignList();  // Recursive!
+    if (this.la && this.la.id === SYM_OUTDENT) {
+      this._match(SYM_OUTDENT);
+    }
+    $1 = [...$1, ...$3];  // Flatten nested list
+    continue;
+  }
+      
+      break;  // No matching separator
     }
 
     return $1;
@@ -2253,14 +2416,38 @@ $1 = this.parseAssignObj();
     $1 = this.parseImportSpecifier();
         $1 = [$1];
 
-    while (this.la && this.la.id === SYM_COMMA) {
-                $2 = this._match(SYM_COMMA);
-// Only continue if another element can follow (check FIRST set)
-      if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_DEFAULT].includes(this.la.id)) {
-        break;
-      }
-        $3 = this.parseImportSpecifier();
-        $1 = [...$1, $3];
+    while (this.la && (this.la.id === SYM_COMMA || this.la.id === SYM_TERMINATOR || this.la.id === SYM_INDENT)) {
+        if (this.la.id === SYM_COMMA) {
+    $2 = this._match(SYM_COMMA);
+    // Check if another element follows
+    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_DEFAULT].includes(this.la.id)) {
+      break;
+    }
+    $3 = this.parseImportSpecifier();
+    $1 = [...$1, $3];
+    continue;
+  }
+            if (this.la.id === SYM_TERMINATOR) {
+    $2 = this._match(SYM_TERMINATOR);
+    // Check if another element follows
+    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_DEFAULT].includes(this.la.id)) {
+      break;
+    }
+    $3 = this.parseImportSpecifier();
+    $1 = [...$1, $4];
+    continue;
+  }
+            if (this.la.id === SYM_INDENT) {
+    $2 = this._match(SYM_INDENT);  // Match INDENT
+    $3 = this.parseImportSpecifierList();  // Recursive!
+    if (this.la && this.la.id === SYM_OUTDENT) {
+      this._match(SYM_OUTDENT);
+    }
+    $1 = [...$1, ...$3];  // Flatten nested list
+    continue;
+  }
+      
+      break;  // No matching separator
     }
 
     return $1;
@@ -2453,14 +2640,38 @@ $1 = this.parseAssignObj();
     $1 = this.parseExportSpecifier();
         $1 = [$1];
 
-    while (this.la && this.la.id === SYM_COMMA) {
-                $2 = this._match(SYM_COMMA);
-// Only continue if another element can follow (check FIRST set)
-      if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_DEFAULT].includes(this.la.id)) {
-        break;
-      }
-        $3 = this.parseExportSpecifier();
-        $1 = [...$1, $3];
+    while (this.la && (this.la.id === SYM_COMMA || this.la.id === SYM_TERMINATOR || this.la.id === SYM_INDENT)) {
+        if (this.la.id === SYM_COMMA) {
+    $2 = this._match(SYM_COMMA);
+    // Check if another element follows
+    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_DEFAULT].includes(this.la.id)) {
+      break;
+    }
+    $3 = this.parseExportSpecifier();
+    $1 = [...$1, $3];
+    continue;
+  }
+            if (this.la.id === SYM_TERMINATOR) {
+    $2 = this._match(SYM_TERMINATOR);
+    // Check if another element follows
+    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_DEFAULT].includes(this.la.id)) {
+      break;
+    }
+    $3 = this.parseExportSpecifier();
+    $1 = [...$1, $4];
+    continue;
+  }
+            if (this.la.id === SYM_INDENT) {
+    $2 = this._match(SYM_INDENT);  // Match INDENT
+    $3 = this.parseExportSpecifierList();  // Recursive!
+    if (this.la && this.la.id === SYM_OUTDENT) {
+      this._match(SYM_OUTDENT);
+    }
+    $1 = [...$1, ...$3];  // Flatten nested list
+    continue;
+  }
+      
+      break;  // No matching separator
     }
 
     return $1;
@@ -3276,14 +3487,38 @@ $1 = this.parseAssignObj();
     $1 = this.parseArg();
         $1 = [$1];
 
-    while (this.la && this.la.id === SYM_COMMA) {
-                $2 = this._match(SYM_COMMA);
-// Only continue if another element can follow (check FIRST set)
-      if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_LBRACKET, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_IF, SYM_UNLESS, SYM_STATEMENT, SYM_TRY, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_RETURN, SYM_IMPORT, SYM_EXPORT, SYM_ELLIPSIS].includes(this.la.id)) {
-        break;
-      }
-        $3 = this.parseArg();
-        $1 = [...$1, $3];
+    while (this.la && (this.la.id === SYM_COMMA || this.la.id === SYM_TERMINATOR || this.la.id === SYM_INDENT)) {
+        if (this.la.id === SYM_COMMA) {
+    $2 = this._match(SYM_COMMA);
+    // Check if another element follows
+    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_LBRACKET, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_IF, SYM_UNLESS, SYM_STATEMENT, SYM_TRY, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_RETURN, SYM_IMPORT, SYM_EXPORT, SYM_ELLIPSIS].includes(this.la.id)) {
+      break;
+    }
+    $3 = this.parseArg();
+    $1 = [...$1, $3];
+    continue;
+  }
+            if (this.la.id === SYM_TERMINATOR) {
+    $2 = this._match(SYM_TERMINATOR);
+    // Check if another element follows
+    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_LBRACKET, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_IF, SYM_UNLESS, SYM_STATEMENT, SYM_TRY, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_RETURN, SYM_IMPORT, SYM_EXPORT, SYM_ELLIPSIS].includes(this.la.id)) {
+      break;
+    }
+    $3 = this.parseArg();
+    $1 = [...$1, $4];
+    continue;
+  }
+            if (this.la.id === SYM_INDENT) {
+    $2 = this._match(SYM_INDENT);  // Match INDENT
+    $3 = this.parseArgList();  // Recursive!
+    if (this.la && this.la.id === SYM_OUTDENT) {
+      this._match(SYM_OUTDENT);
+    }
+    $1 = [...$1, ...$3];  // Flatten nested list
+    continue;
+  }
+      
+      break;  // No matching separator
     }
 
     return $1;
@@ -3445,14 +3680,38 @@ $1 = this.parseAssignObj();
     $1 = this.parseArgElision();
         $1 = $1;
 
-    while (this.la && this.la.id === SYM_COMMA) {
-                $2 = this._match(SYM_COMMA);
-// Only continue if another element can follow (check FIRST set)
-      if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_PARAM_START, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_ELLIPSIS, SYM_COMMA].includes(this.la.id)) {
-        break;
-      }
-        $3 = this.parseArgElision();
-        $1 = [...$1, ...$3];
+    while (this.la && (this.la.id === SYM_COMMA || this.la.id === SYM_TERMINATOR || this.la.id === SYM_INDENT)) {
+        if (this.la.id === SYM_COMMA) {
+    $2 = this._match(SYM_COMMA);
+    // Check if another element follows
+    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_PARAM_START, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_ELLIPSIS, SYM_COMMA].includes(this.la.id)) {
+      break;
+    }
+    $3 = this.parseArgElision();
+    $1 = [...$1, ...$3];
+    continue;
+  }
+            if (this.la.id === SYM_TERMINATOR) {
+    $2 = this._match(SYM_TERMINATOR);
+    // Check if another element follows
+    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_PARAM_START, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_ELLIPSIS, SYM_COMMA].includes(this.la.id)) {
+      break;
+    }
+    $3 = this.parseArgElision();
+    $1 = [...$1, ...$4];
+    continue;
+  }
+            if (this.la.id === SYM_INDENT) {
+    $2 = this._match(SYM_INDENT);  // Match INDENT
+    $3 = this.parseArgElisionList();  // Recursive!
+    if (this.la && this.la.id === SYM_OUTDENT) {
+      this._match(SYM_OUTDENT);
+    }
+    $1 = [...$1, ...$3];  // Flatten nested list
+    continue;
+  }
+      
+      break;  // No matching separator
     }
 
     return $1;
