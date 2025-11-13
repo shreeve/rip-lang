@@ -1701,13 +1701,13 @@ class Generator
       # Example:
       #   Expression → Value | Code | Operation | If | While | For  (diverse - aggregator)
       #   For → FOR ... | FOR ... | FOR ... (uniform - construct with variants)
-      
+
       # Count unique FIRST symbols across all rules
       firstSymbols = new Set()
       for rule in nodeType.rules
         firstSym = rule.symbols[0]
         firstSymbols.add(firstSym) if firstSym
-      
+
       # DOMINANT FACTOR: Diversity of first symbols
       # High diversity = aggregator (good host), Low diversity = construct (bad host)
       diversityRatio = if nodeType.rules.length > 0
@@ -1715,19 +1715,19 @@ class Generator
       else
         0
       score += diversityRatio * 10000  # Overwhelming weight
-      
+
       # Secondary: More rules helps if diversity is equal
       score += nodeType.rules.length * 10
-      
+
       # Penalize passthroughs (transparent, not structural)
       if @passthroughs.has(nodeName)
         score -= 200
-      
+
       # Earlier in grammar = more fundamental
       typeId = nodeType.id or 999
       score += Math.max(0, 100 - typeId)
-      
-      # Shorter name = conventionally more general  
+
+      # Shorter name = conventionally more general
       score += (25 - nodeName.length) if nodeName.length < 25
 
       scores.set(nodeName, score)
