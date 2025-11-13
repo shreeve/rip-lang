@@ -1740,12 +1740,11 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
     let $1, $2, $3, $4, $5;
     switch (this.la.id) {
     case SYM_IDENTIFIER: {
-      $1 = this._match(SYM_IDENTIFIER);
-      
       const _saved = this._saveState();
       
       // Try: ObjAssignable : INDENT Expression OUTDENT
       try {
+        $1 = this.parseObjAssignable();
         $2 = this._match(SYM_COLON);
         $3 = this._match(SYM_INDENT);
         $4 = this.parseExpression();
@@ -1757,6 +1756,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       
       // Try: SimpleObjAssignable = INDENT Expression OUTDENT
       try {
+        $1 = this.parseSimpleObjAssignable();
         $2 = this._match(SYM_ASSIGN);
         $3 = this._match(SYM_INDENT);
         $4 = this.parseExpression();
@@ -1768,6 +1768,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       
       // Try: ObjAssignable : Expression
       try {
+        $1 = this.parseObjAssignable();
         $2 = this._match(SYM_COLON);
         $3 = this.parseExpression();
         return [$1, $3, ":"];
@@ -1777,6 +1778,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       
       // Try: SimpleObjAssignable = Expression
       try {
+        $1 = this.parseSimpleObjAssignable();
         $2 = this._match(SYM_ASSIGN);
         $3 = this.parseExpression();
         return [$1, $3, "="];
@@ -1785,15 +1787,15 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       }
       
       // Fallback: ObjAssignable
+      $1 = this.parseObjAssignable();
       return [$1, $1, null];
     }
     case SYM_PROPERTY: {
-      $1 = this._match(SYM_PROPERTY);
-      
       const _saved = this._saveState();
       
       // Try: ObjAssignable : INDENT Expression OUTDENT
       try {
+        $1 = this.parseObjAssignable();
         $2 = this._match(SYM_COLON);
         $3 = this._match(SYM_INDENT);
         $4 = this.parseExpression();
@@ -1805,6 +1807,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       
       // Try: SimpleObjAssignable = INDENT Expression OUTDENT
       try {
+        $1 = this.parseSimpleObjAssignable();
         $2 = this._match(SYM_ASSIGN);
         $3 = this._match(SYM_INDENT);
         $4 = this.parseExpression();
@@ -1816,6 +1819,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       
       // Try: ObjAssignable : Expression
       try {
+        $1 = this.parseObjAssignable();
         $2 = this._match(SYM_COLON);
         $3 = this.parseExpression();
         return [$1, $3, ":"];
@@ -1825,6 +1829,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       
       // Try: SimpleObjAssignable = Expression
       try {
+        $1 = this.parseSimpleObjAssignable();
         $2 = this._match(SYM_ASSIGN);
         $3 = this.parseExpression();
         return [$1, $3, "="];
@@ -1833,15 +1838,15 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       }
       
       // Fallback: ObjAssignable
+      $1 = this.parseObjAssignable();
       return [$1, $1, null];
     }
     case SYM_NUMBER: {
-      $1 = this._match(SYM_NUMBER);
-      
       const _saved = this._saveState();
       
       // Try: ObjAssignable : INDENT Expression OUTDENT
       try {
+        $1 = this.parseObjAssignable();
         $2 = this._match(SYM_COLON);
         $3 = this._match(SYM_INDENT);
         $4 = this.parseExpression();
@@ -1853,6 +1858,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       
       // Try: ObjAssignable : Expression
       try {
+        $1 = this.parseObjAssignable();
         $2 = this._match(SYM_COLON);
         $3 = this.parseExpression();
         return [$1, $3, ":"];
@@ -1861,15 +1867,15 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       }
       
       // Fallback: ObjAssignable
+      $1 = this.parseObjAssignable();
       return [$1, $1, null];
     }
     case SYM_STRING: {
-      $1 = this._match(SYM_STRING);
-      
       const _saved = this._saveState();
       
       // Try: ObjAssignable : INDENT Expression OUTDENT
       try {
+        $1 = this.parseObjAssignable();
         $2 = this._match(SYM_COLON);
         $3 = this._match(SYM_INDENT);
         $4 = this.parseExpression();
@@ -1881,6 +1887,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       
       // Try: ObjAssignable : Expression
       try {
+        $1 = this.parseObjAssignable();
         $2 = this._match(SYM_COLON);
         $3 = this.parseExpression();
         return [$1, $3, ":"];
@@ -1889,15 +1896,15 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       }
       
       // Fallback: ObjAssignable
+      $1 = this.parseObjAssignable();
       return [$1, $1, null];
     }
     case SYM_STRING_START: {
-      $1 = this._match(SYM_STRING_START);
-      
       const _saved = this._saveState();
       
       // Try: ObjAssignable : INDENT Expression OUTDENT
       try {
+        $1 = this.parseObjAssignable();
         $2 = this._match(SYM_COLON);
         $3 = this._match(SYM_INDENT);
         $4 = this.parseExpression();
@@ -1909,6 +1916,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       
       // Try: ObjAssignable : Expression
       try {
+        $1 = this.parseObjAssignable();
         $2 = this._match(SYM_COLON);
         $3 = this.parseExpression();
         return [$1, $3, ":"];
@@ -1917,15 +1925,15 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       }
       
       // Fallback: ObjAssignable
+      $1 = this.parseObjAssignable();
       return [$1, $1, null];
     }
     case SYM_LBRACKET: {
-      $1 = this._match(SYM_LBRACKET);
-      
       const _saved = this._saveState();
       
       // Try: ObjAssignable : INDENT Expression OUTDENT
       try {
+        $1 = this.parseObjAssignable();
         $2 = this._match(SYM_COLON);
         $3 = this._match(SYM_INDENT);
         $4 = this.parseExpression();
@@ -1937,6 +1945,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       
       // Try: ObjAssignable : Expression
       try {
+        $1 = this.parseObjAssignable();
         $2 = this._match(SYM_COLON);
         $3 = this.parseExpression();
         return [$1, $3, ":"];
@@ -1945,15 +1954,15 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       }
       
       // Fallback: ObjAssignable
+      $1 = this.parseObjAssignable();
       return [$1, $1, null];
     }
     case SYM_AT: {
-      $1 = this._match(SYM_AT);
-      
       const _saved = this._saveState();
       
       // Try: ObjAssignable : INDENT Expression OUTDENT
       try {
+        $1 = this.parseObjAssignable();
         $2 = this._match(SYM_COLON);
         $3 = this._match(SYM_INDENT);
         $4 = this.parseExpression();
@@ -1965,6 +1974,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       
       // Try: SimpleObjAssignable = INDENT Expression OUTDENT
       try {
+        $1 = this.parseSimpleObjAssignable();
         $2 = this._match(SYM_ASSIGN);
         $3 = this._match(SYM_INDENT);
         $4 = this.parseExpression();
@@ -1976,6 +1986,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       
       // Try: ObjAssignable : Expression
       try {
+        $1 = this.parseObjAssignable();
         $2 = this._match(SYM_COLON);
         $3 = this.parseExpression();
         return [$1, $3, ":"];
@@ -1985,6 +1996,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       
       // Try: SimpleObjAssignable = Expression
       try {
+        $1 = this.parseSimpleObjAssignable();
         $2 = this._match(SYM_ASSIGN);
         $3 = this.parseExpression();
         return [$1, $3, "="];
@@ -1993,6 +2005,7 @@ case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
       }
       
       // Fallback: ObjAssignable
+      $1 = this.parseObjAssignable();
       return [$1, $1, null];
     }
     case SYM_ELLIPSIS:
