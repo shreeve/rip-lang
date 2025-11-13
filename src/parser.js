@@ -981,19 +981,6 @@ const parser = {
             $3 = this.parseExpression(4);
             $1 = [$2, $1, $3];
             continue;
-      case SYM_COMPOUND_ASSIGN:
-            $2 = this._match(SYM_COMPOUND_ASSIGN);
-            $3 = this._match(SYM_INDENT);
-            $4 = this.parseExpression(4);
-            $5 = this._match(SYM_OUTDENT);
-            $1 = [$2, $1, $4];
-            continue;
-      case SYM_COMPOUND_ASSIGN:
-            $2 = this._match(SYM_COMPOUND_ASSIGN);
-            $3 = this._match(SYM_TERMINATOR);
-            $4 = this.parseExpression(4);
-            $1 = [$2, $1, $4];
-            continue;
       case SYM_QUESTION:
             $2 = this._match(SYM_QUESTION);
             $1 = ["?", $1];
@@ -1080,19 +1067,6 @@ const parser = {
             $3 = this.parseExpression(4);
             $1 = ["=", $1, $3];
             continue;
-      case SYM_ASSIGN:
-            $2 = this._match(SYM_ASSIGN);
-            $3 = this._match(SYM_TERMINATOR);
-            $4 = this.parseExpression(4);
-            $1 = ["=", $1, $4];
-            continue;
-      case SYM_ASSIGN:
-            $2 = this._match(SYM_ASSIGN);
-            $3 = this._match(SYM_INDENT);
-            $4 = this.parseExpression(4);
-            $5 = this._match(SYM_OUTDENT);
-            $1 = ["=", $1, $4];
-            continue;
       case SYM_POST_IF:
             $2 = this._match(SYM_POST_IF);
             $3 = this.parseExpression(1);
@@ -1108,132 +1082,197 @@ const parser = {
             $1 = $2.length === 2 ? [$2[0], $2[1], [$1]] : [$2[0], $2[1], $2[2], [$1]];
             continue;
       case SYM_FOR:
-            $2 = this._match(SYM_FOR);
-            $3 = this.parseForVariables();
-            $4 = this._match(SYM_FORIN);
-            $5 = this.parseExpression(2);
-            $1 = ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
-            continue;
-      case SYM_FOR:
-            $2 = this._match(SYM_FOR);
-            $3 = this.parseForVariables();
-            $4 = this._match(SYM_FORIN);
-            $5 = this.parseExpression(2);
-            $6 = this._match(SYM_WHEN);
-            $7 = this.parseExpression(2);
-            $1 = ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
-            continue;
-      case SYM_FOR:
-            $2 = this._match(SYM_FOR);
-            $3 = this.parseForVariables();
-            $4 = this._match(SYM_FORIN);
-            $5 = this.parseExpression(2);
-            $6 = this._match(SYM_BY);
-            $7 = this.parseExpression(2);
-            $1 = ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
-            continue;
-      case SYM_FOR:
-            $2 = this._match(SYM_FOR);
-            $3 = this.parseForVariables();
-            $4 = this._match(SYM_FORIN);
-            $5 = this.parseExpression(2);
-            $6 = this._match(SYM_WHEN);
-            $7 = this.parseExpression(2);
-            $8 = this._match(SYM_BY);
-            $9 = this.parseExpression(2);
-            $1 = ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
-            continue;
-      case SYM_FOR:
-            $2 = this._match(SYM_FOR);
-            $3 = this.parseForVariables();
-            $4 = this._match(SYM_FORIN);
-            $5 = this.parseExpression(2);
-            $6 = this._match(SYM_BY);
-            $7 = this.parseExpression(2);
-            $8 = this._match(SYM_WHEN);
-            $9 = this.parseExpression(2);
-            $1 = ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
-            continue;
-      case SYM_FOR:
-            $2 = this._match(SYM_FOR);
-            $3 = this.parseForVariables();
-            $4 = this._match(SYM_FOROF);
-            $5 = this.parseExpression(2);
-            $1 = ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
-            continue;
-      case SYM_FOR:
-            $2 = this._match(SYM_FOR);
-            $3 = this.parseForVariables();
-            $4 = this._match(SYM_FOROF);
-            $5 = this.parseExpression(2);
-            $6 = this._match(SYM_WHEN);
-            $7 = this.parseExpression(2);
-            $1 = ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
-            continue;
-      case SYM_FOR:
-            $2 = this._match(SYM_FOR);
-            $3 = this._match(SYM_OWN);
-            $4 = this.parseForVariables();
-            $5 = this._match(SYM_FOROF);
-            $6 = this.parseExpression(2);
-            $1 = ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
-            continue;
-      case SYM_FOR:
-            $2 = this._match(SYM_FOR);
-            $3 = this._match(SYM_OWN);
-            $4 = this.parseForVariables();
-            $5 = this._match(SYM_FOROF);
-            $6 = this.parseExpression(2);
-            $7 = this._match(SYM_WHEN);
-            $8 = this.parseExpression(2);
-            $1 = ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
-            continue;
-      case SYM_FOR:
-            $2 = this._match(SYM_FOR);
-            $3 = this.parseForVariables();
-            $4 = this._match(SYM_FORFROM);
-            $5 = this.parseExpression(2);
-            $1 = ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
-            continue;
-      case SYM_FOR:
-            $2 = this._match(SYM_FOR);
-            $3 = this.parseForVariables();
-            $4 = this._match(SYM_FORFROM);
-            $5 = this.parseExpression(2);
-            $6 = this._match(SYM_WHEN);
-            $7 = this.parseExpression(2);
-            $1 = ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
-            continue;
-      case SYM_FOR:
-            $2 = this._match(SYM_FOR);
-            $3 = this._match(SYM_AWAIT);
-            $4 = this.parseForVariables();
-            $5 = this._match(SYM_FORFROM);
-            $6 = this.parseExpression(2);
-            $1 = ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
-            continue;
-      case SYM_FOR:
-            $2 = this._match(SYM_FOR);
-            $3 = this._match(SYM_AWAIT);
-            $4 = this.parseForVariables();
-            $5 = this._match(SYM_FORFROM);
-            $6 = this.parseExpression(2);
-            $7 = this._match(SYM_WHEN);
-            $8 = this.parseExpression(2);
-            $1 = ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
-            continue;
-      case SYM_FOR:
-            $2 = this._match(SYM_FOR);
-            $3 = this.parseRange();
-            $1 = ["comprehension", $1, [["for-in", [], $3, null]], []];
-            continue;
-      case SYM_FOR:
-            $2 = this._match(SYM_FOR);
-            $3 = this.parseRange();
-            $4 = this._match(SYM_BY);
-            $5 = this.parseExpression(2);
-            $1 = ["comprehension", $1, [["for-in", [], $3, $5]], []];
-            continue;
+            const _savedFOR = this._saveState();
+
+            // Try: Expression FOR ForVariables FORIN Expression...
+            try {
+              $2 = this._match(SYM_FOR);
+              $3 = this.parseForVariables();
+              $4 = this._match(SYM_FORIN);
+              $5 = this.parseExpression();
+              $6 = this._match(SYM_WHEN);
+              $7 = this.parseExpression();
+              $8 = this._match(SYM_BY);
+              $9 = this.parseExpression();
+              $1 = ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
+              continue;
+            } catch (e) {}
+            this._restoreState(_savedFOR);
+
+            // Try: Expression FOR ForVariables FORIN Expression...
+            try {
+              $2 = this._match(SYM_FOR);
+              $3 = this.parseForVariables();
+              $4 = this._match(SYM_FORIN);
+              $5 = this.parseExpression();
+              $6 = this._match(SYM_BY);
+              $7 = this.parseExpression();
+              $8 = this._match(SYM_WHEN);
+              $9 = this.parseExpression();
+              $1 = ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
+              continue;
+            } catch (e) {}
+            this._restoreState(_savedFOR);
+
+            // Try: Expression FOR OWN ForVariables FOROF...
+            try {
+              $2 = this._match(SYM_FOR);
+              $3 = this._match(SYM_OWN);
+              $4 = this.parseForVariables();
+              $5 = this._match(SYM_FOROF);
+              $6 = this.parseExpression();
+              $7 = this._match(SYM_WHEN);
+              $8 = this.parseExpression();
+              $1 = ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
+              continue;
+            } catch (e) {}
+            this._restoreState(_savedFOR);
+
+            // Try: Expression FOR AWAIT ForVariables FORFROM...
+            try {
+              $2 = this._match(SYM_FOR);
+              $3 = this._match(SYM_AWAIT);
+              $4 = this.parseForVariables();
+              $5 = this._match(SYM_FORFROM);
+              $6 = this.parseExpression();
+              $7 = this._match(SYM_WHEN);
+              $8 = this.parseExpression();
+              $1 = ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
+              continue;
+            } catch (e) {}
+            this._restoreState(_savedFOR);
+
+            // Try: Expression FOR ForVariables FORIN Expression...
+            try {
+              $2 = this._match(SYM_FOR);
+              $3 = this.parseForVariables();
+              $4 = this._match(SYM_FORIN);
+              $5 = this.parseExpression();
+              $6 = this._match(SYM_WHEN);
+              $7 = this.parseExpression();
+              $1 = ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
+              continue;
+            } catch (e) {}
+            this._restoreState(_savedFOR);
+
+            // Try: Expression FOR ForVariables FORIN Expression...
+            try {
+              $2 = this._match(SYM_FOR);
+              $3 = this.parseForVariables();
+              $4 = this._match(SYM_FORIN);
+              $5 = this.parseExpression();
+              $6 = this._match(SYM_BY);
+              $7 = this.parseExpression();
+              $1 = ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
+              continue;
+            } catch (e) {}
+            this._restoreState(_savedFOR);
+
+            // Try: Expression FOR ForVariables FOROF Expression...
+            try {
+              $2 = this._match(SYM_FOR);
+              $3 = this.parseForVariables();
+              $4 = this._match(SYM_FOROF);
+              $5 = this.parseExpression();
+              $6 = this._match(SYM_WHEN);
+              $7 = this.parseExpression();
+              $1 = ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
+              continue;
+            } catch (e) {}
+            this._restoreState(_savedFOR);
+
+            // Try: Expression FOR ForVariables FORFROM Expression...
+            try {
+              $2 = this._match(SYM_FOR);
+              $3 = this.parseForVariables();
+              $4 = this._match(SYM_FORFROM);
+              $5 = this.parseExpression();
+              $6 = this._match(SYM_WHEN);
+              $7 = this.parseExpression();
+              $1 = ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
+              continue;
+            } catch (e) {}
+            this._restoreState(_savedFOR);
+
+            // Try: Expression FOR OWN ForVariables FOROF...
+            try {
+              $2 = this._match(SYM_FOR);
+              $3 = this._match(SYM_OWN);
+              $4 = this.parseForVariables();
+              $5 = this._match(SYM_FOROF);
+              $6 = this.parseExpression();
+              $1 = ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
+              continue;
+            } catch (e) {}
+            this._restoreState(_savedFOR);
+
+            // Try: Expression FOR AWAIT ForVariables FORFROM...
+            try {
+              $2 = this._match(SYM_FOR);
+              $3 = this._match(SYM_AWAIT);
+              $4 = this.parseForVariables();
+              $5 = this._match(SYM_FORFROM);
+              $6 = this.parseExpression();
+              $1 = ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
+              continue;
+            } catch (e) {}
+            this._restoreState(_savedFOR);
+
+            // Try: Expression FOR ForVariables FORIN Expression...
+            try {
+              $2 = this._match(SYM_FOR);
+              $3 = this.parseForVariables();
+              $4 = this._match(SYM_FORIN);
+              $5 = this.parseExpression();
+              $1 = ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
+              continue;
+            } catch (e) {}
+            this._restoreState(_savedFOR);
+
+            // Try: Expression FOR ForVariables FOROF Expression...
+            try {
+              $2 = this._match(SYM_FOR);
+              $3 = this.parseForVariables();
+              $4 = this._match(SYM_FOROF);
+              $5 = this.parseExpression();
+              $1 = ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
+              continue;
+            } catch (e) {}
+            this._restoreState(_savedFOR);
+
+            // Try: Expression FOR ForVariables FORFROM Expression...
+            try {
+              $2 = this._match(SYM_FOR);
+              $3 = this.parseForVariables();
+              $4 = this._match(SYM_FORFROM);
+              $5 = this.parseExpression();
+              $1 = ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
+              continue;
+            } catch (e) {}
+            this._restoreState(_savedFOR);
+
+            // Try: Expression FOR Range BY Expression...
+            try {
+              $2 = this._match(SYM_FOR);
+              $3 = this.parseRange();
+              $4 = this._match(SYM_BY);
+              $5 = this.parseExpression();
+              $1 = ["comprehension", $1, [["for-in", [], $3, $5]], []];
+              continue;
+            } catch (e) {}
+            this._restoreState(_savedFOR);
+
+            // Try: Expression FOR Range...
+            try {
+              $2 = this._match(SYM_FOR);
+              $3 = this.parseRange();
+              $1 = ["comprehension", $1, [["for-in", [], $3, null]], []];
+              continue;
+            } catch (e) {}
+            
+            // All variants failed, restore and return
+            this._restoreState(_savedFOR);
+            return $1;
         default:
           return $1;
       }
@@ -2198,7 +2237,7 @@ $1 = this.parseParam();
   },
 
   parseValue(minPrec = 0) {
-    let $1, $2, $3, $4, $5, $6, $7;
+    let $1, $2, $3, $4, $5;
 
     switch (this.la.id) {
   case SYM_IDENTIFIER:
@@ -2329,79 +2368,18 @@ $1 = this.parseParam();
             $3 = this.parseProperty();
             $1 = ["?::", $1, $3];
             continue;
-      case SYM_PROTO:
-            $2 = this._match(SYM_PROTO);
-            $1 = ["::", $1, "prototype"];
-            continue;
-      case SYM_OPT_PROTO:
-            $2 = this._match(SYM_OPT_PROTO);
-            $1 = ["?::", $1, "prototype"];
-            continue;
       case SYM_INDEX_START:
             $2 = this._match(SYM_INDEX_START);
             $3 = this.parseExpression();
             $4 = this._match(SYM_INDEX_END);
             $1 = ["[]", $1, $3];
             continue;
-      case SYM_INDEX_START:
-            $2 = this._match(SYM_INDEX_START);
-            $3 = this._match(SYM_INDENT);
-            $4 = this.parseExpression();
-            $5 = this._match(SYM_OUTDENT);
-            $6 = this._match(SYM_INDEX_END);
-            $1 = ["[]", $1, $4];
-            continue;
-      case SYM_INDEX_START:
-            $2 = this._match(SYM_INDEX_START);
-            $3 = this.parseSlice();
-            $4 = this._match(SYM_INDEX_END);
-            $1 = ["[]", $1, $3];
-            continue;
-      case SYM_INDEX_START:
-            $2 = this._match(SYM_INDEX_START);
-            $3 = this._match(SYM_INDENT);
-            $4 = this.parseSlice();
-            $5 = this._match(SYM_OUTDENT);
-            $6 = this._match(SYM_INDEX_END);
-            $1 = ["[]", $1, $4];
-            continue;
-      case SYM_INDEX_START:
-            $2 = this._match(SYM_INDEX_START);
-            $3 = this.parseRegexWithIndex();
-            $4 = this._match(SYM_INDEX_END);
-            $1 = [$3[0], $1, ...$3.slice(1)];
-            continue;
       case SYM_INDEX_SOAK:
             $2 = this._match(SYM_INDEX_SOAK);
             $3 = this._match(SYM_INDEX_START);
             $4 = this.parseExpression();
             $5 = this._match(SYM_INDEX_END);
             $1 = ["?[]", $1, $4];
-            continue;
-      case SYM_INDEX_SOAK:
-            $2 = this._match(SYM_INDEX_SOAK);
-            $3 = this._match(SYM_INDEX_START);
-            $4 = this._match(SYM_INDENT);
-            $5 = this.parseExpression();
-            $6 = this._match(SYM_OUTDENT);
-            $7 = this._match(SYM_INDEX_END);
-            $1 = ["?[]", $1, $5];
-            continue;
-      case SYM_INDEX_SOAK:
-            $2 = this._match(SYM_INDEX_SOAK);
-            $3 = this._match(SYM_INDEX_START);
-            $4 = this.parseSlice();
-            $5 = this._match(SYM_INDEX_END);
-            $1 = ["?[]", $1, $4];
-            continue;
-      case SYM_INDEX_SOAK:
-            $2 = this._match(SYM_INDEX_SOAK);
-            $3 = this._match(SYM_INDEX_START);
-            $4 = this._match(SYM_INDENT);
-            $5 = this.parseSlice();
-            $6 = this._match(SYM_OUTDENT);
-            $7 = this._match(SYM_INDEX_END);
-            $1 = ["?[]", $1, $5];
             continue;
       case SYM_ES6_OPTIONAL_INDEX:
             $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
@@ -2409,15 +2387,6 @@ $1 = this.parseParam();
             $4 = this.parseExpression();
             $5 = this._match(SYM_INDEX_END);
             $1 = ["optindex", $1, $4];
-            continue;
-      case SYM_ES6_OPTIONAL_INDEX:
-            $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
-            $3 = this._match(SYM_INDEX_START);
-            $4 = this._match(SYM_INDENT);
-            $5 = this.parseExpression();
-            $6 = this._match(SYM_OUTDENT);
-            $7 = this._match(SYM_INDEX_END);
-            $1 = ["optindex", $1, $5];
             continue;
       case SYM_STRING:
             $2 = this.parseOptFuncExist();
