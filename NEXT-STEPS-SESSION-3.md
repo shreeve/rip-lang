@@ -75,7 +75,7 @@ All 3 generate identical case labels, only WhileSource survives.
 
 **Problem:** Objects/arrays with TERMINATOR-separated items fail when starting a line:
 - `{a: 1\n  b: 2}` fails
-- `[,,1,2,,]` fails  
+- `[,,1,2,,]` fails
 - `{@property: value}` loses block
 
 **Works when:** Preceded by assignment `x = {a: 1\n  b: 2}`
@@ -206,4 +206,3 @@ rip rip-lang/src/grammar/solar.rip -r -o rip-lang/src/parser.js rip-lang/src/gra
 **You're inheriting 93.8% coverage with fully generic code. The remaining 60 tests are individual patterns, not architectural issues. You've got this!** 🚀
 
 **Start with the 6 one-test files for quick momentum, then tackle Statement disambiguation for maximum leverage.**
-
