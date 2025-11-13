@@ -4547,6 +4547,24 @@ $1 = this.parseAssignObj();
 
 };  // End of parser object
 
+
+
+// Aliases for inlined nonterminals that are still referenced
+
+parser.parseSimpleAssignable = parser.parseValue;
+
+parser.parseAssignable = parser.parseValue;
+
+parser.parseInvocation = parser.parseValue;
+
+parser.parseWhile = parser.parseExpression;
+
+parser.parseFor = parser.parseExpression;
+
+parser.parseIf = parser.parseExpression;
+
+parser.parseOperation = parser.parseExpression;
+
 export { parser }
 export const parse = parser.parse.bind(parser)
 export default parser

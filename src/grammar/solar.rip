@@ -920,17 +920,57 @@ class Generator
 
     functions.push(debugInfo)
 
+    # Check which inlined nonterminals are referenced by non-inlined rules
+    # and find which parent they were inlined into
+    inlinedButReferenced = new Map()  # inlinedName → parentName
+
+    if @shouldInline?.size > 0
+      for own name, type of @types
+        continue if name in ['$accept', '$end', 'error']
+        continue if @shouldInline?.has(name)  # Skip inlined rules themselves
+
+        # Check if this non-inlined rule references any inlined nonterminals
+        for rule in type.rules
+          for symbol in rule.symbols
+            if @shouldInline?.has(symbol)
+              # Find which parent this was inlined into
+              parentName = null
+              for [parent, info] from @indirectLeftRec or []
+                if info.children?.has(symbol)
+                  parentName = parent
+                  break
+
+              # Special cases for manually inlined rules
+              # Assignable/SimpleAssignable were manually added to @shouldInline
+              # They participate in Value cycles
+              unless parentName
+                if symbol in ['Assignable', 'SimpleAssignable']
+                  parentName = 'Value'
+
+              if parentName
+                inlinedButReferenced.set(symbol, parentName)
+                console.log "🔗 #{symbol} referenced by #{name}, inlined into #{parentName}"
+
     # Generate parse functions for ALL nonterminals
     for own name, type of @types
       # Skip special symbols
       continue if name in ['$accept', '$end', 'error']
 
-      # Skip rules marked for inlining (will be inlined into parent)
-      if @shouldInline?.has(name)
+      # Skip rules marked for inlining UNLESS they're referenced by non-inlined rules
+      if @shouldInline?.has(name) and not inlinedButReferenced.has(name)
         console.log "⏭️  Skipping #{name} (will be inlined into parent)"
         continue
 
-      # Select strategy based on pattern detection
+      # If inlined but referenced, generate an ALIAS
+      if @shouldInline?.has(name) and inlinedButReferenced.has(name)
+        parentName = inlinedButReferenced.get(name)
+        console.log "📦 Aliasing parse#{name} → parse#{parentName}"
+        # Store for later - we'll generate aliases after closing the parser object
+        @aliases ?= []
+        @aliases.push({name: name, parent: parentName})
+        continue  # Don't generate full function
+
+      # Regular generation for non-inlined rules
       func = if @indirectLeftRec?.has(name)
         # Has indirect left-recursion - inline children with postfix forms
         console.log "📝 Generating #{name} with inlining"
@@ -946,6 +986,13 @@ class Generator
 
     # Close parser object
     functions.push "};  // End of parser object"
+
+    # Generate aliases for inlined-but-referenced nonterminals
+    if @aliases?.length > 0
+      functions.push ""
+      functions.push "// Aliases for inlined nonterminals that are still referenced"
+      for alias in @aliases
+        functions.push "parser.parse#{alias.name} = parser.parse#{alias.parent};"
 
     functions.join('\n\n')
 
@@ -1615,16 +1662,16 @@ class Generator
 
         # Group PREFIX rules by their FIRST token for lookahead disambiguation
         prefixRulesByFirst = new Map()
-        
+
         for prefixRule in childInfo.prefixRules
           firstSym = prefixRule.symbols[0]
-          
+
           # Check if this should be treated as postfix
           if @shouldInline?.has(firstSym) and @types[firstSym]
             # This is actually a postfix rule! (e.g., SimpleAssignable COMPOUND_ASSIGN Expression)
             postfixCases.push(@_generateInlinedPostfixCase(prefixRule, name))
             continue
-          
+
           # Group by first symbol for disambiguation
           firstKey = if @types[firstSym]
             # Nonterminal - use its name as key
@@ -1632,11 +1679,11 @@ class Generator
           else
             # Terminal - use its token ID as key
             @symbolIds[firstSym]?.toString() or firstSym
-          
+
           unless prefixRulesByFirst.has(firstKey)
             prefixRulesByFirst.set(firstKey, [])
           prefixRulesByFirst.get(firstKey).push(prefixRule)
-        
+
         # Generate cases for each group
         for [firstKey, rulesGroup] from prefixRulesByFirst
           if rulesGroup.length is 1
