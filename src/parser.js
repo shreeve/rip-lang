@@ -2370,15 +2370,17 @@ $1 = this.parseParam();
   case SYM_SUPER: {
     const _saved = this._saveState();
 
-    // Try: parseArguments
+    // Try alternative 1
     try {
-      $1 = this.parseArguments();
+      $1 = this._match(SYM_SUPER);
+      $2 = this.parseArguments();
+      return ["super", ...$2];
       break;
     } catch (e) {
       this._restoreState(_saved);
     }
 
-    // Try: parseSuper
+    // Try alternative 2
     try {
       $1 = this.parseSuper();
       break;
@@ -4162,9 +4164,21 @@ $1 = this.parseAssignObj();
     case SYM_AT:
       $1 = this.parseExpression();
             return $1;
-    case SYM_ELLIPSIS:
+    case SYM_ELLIPSIS: {
+      const _saved = this._saveState();
+
+      // Try: parseSplat
+      try {
+        $1 = this.parseSplat();
+        return $1;
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+
+      // Fallback: bare terminal
       $1 = this._match(SYM_ELLIPSIS);
-      return $1;
+      return "...";
+    }
     case SYM_SUPER:
       $1 = this.parseExpression();
             return $1;
@@ -4388,7 +4402,7 @@ $1 = this.parseAssignObj();
         if (this.la.id === SYM_COMMA) {
     $2 = this._match(SYM_COMMA);
     // Check if another element follows
-    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_PARAM_START, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_ELLIPSIS, SYM_COMMA].includes(this.la.id)) {
+    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_PARAM_START, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_ELLIPSIS].includes(this.la.id)) {
       break;
     }
     $3 = this.parseArgElision();
@@ -4398,7 +4412,7 @@ $1 = this.parseAssignObj();
             if (this.la.id === SYM_TERMINATOR) {
     $2 = this._match(SYM_TERMINATOR);
     // Check if another element follows
-    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_PARAM_START, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_ELLIPSIS, SYM_COMMA].includes(this.la.id)) {
+    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_PARAM_START, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_ELLIPSIS].includes(this.la.id)) {
       break;
     }
     $3 = this.parseArgElision();
@@ -4587,8 +4601,14 @@ $1 = this.parseAssignObj();
     switch (this.la.id) {
     case SYM_COMMA:
       $1 = this._match(SYM_COMMA);
-            $2 = this.parseElisions();
-            return [...$2];
+      
+      if ([SYM_COMMA].includes(this.la.id)) {
+        $2 = this.parseElisions();
+        return [...$2];
+      }
+      else {
+        return [];
+      }
     default: $1 = this.parseOptComma();
       return [];
     }

@@ -1110,9 +1110,14 @@ class Generator
       # Skip empty rules (will add as default later)
       continue if not firstSymbol or firstSymbol is ''
 
-      # Skip rules that start with a nullable nonterminal (treated as empty)
-      if @types[firstSymbol]?.nullable and rule.symbols.length is 1
-        continue
+      # GENERIC FIX: Don't skip nullable-first rules entirely!
+      # Even if first symbol is nullable, it may have non-nullable alternatives
+      # that conflict with other rules. We need to include it in dispatch for
+      # conflict detection. The rule will ALSO be considered for default case
+      # when lookahead doesn't match any non-nullable alternatives.
+      # Example: OptElisions → OptComma where OptComma can be '' or ','
+      #          conflicts with OptElisions → , Elisions
+      # Old code skipped this, preventing conflict detection!
 
       # If first symbol is marked for inlining, expand its alternatives
       if @shouldInline?.has(firstSymbol) and @types[firstSymbol]
@@ -1690,21 +1695,39 @@ class Generator
 
       score = 0
 
-      # MOST IMPORTANT: Conventional host names (Expression, Value, etc.)
-      # These are typically the top-level aggregators in grammars
-      if nodeName in ['Expression', 'Statement', 'Value', 'Literal', 'Term', 'Factor']
-        score += 1000  # Overwhelming priority
-
-      # More rules = more general = better host
+      # GENERIC HEURISTICS: Distinguish aggregators from constructs
+      # Key: Aggregators have DIVERSE first symbols, constructs have UNIFORM first symbols
+      #
+      # Example:
+      #   Expression → Value | Code | Operation | If | While | For  (diverse - aggregator)
+      #   For → FOR ... | FOR ... | FOR ... (uniform - construct with variants)
+      
+      # Count unique FIRST symbols across all rules
+      firstSymbols = new Set()
+      for rule in nodeType.rules
+        firstSym = rule.symbols[0]
+        firstSymbols.add(firstSym) if firstSym
+      
+      # DOMINANT FACTOR: Diversity of first symbols
+      # High diversity = aggregator (good host), Low diversity = construct (bad host)
+      diversityRatio = if nodeType.rules.length > 0
+        firstSymbols.size / nodeType.rules.length
+      else
+        0
+      score += diversityRatio * 10000  # Overwhelming weight
+      
+      # Secondary: More rules helps if diversity is equal
       score += nodeType.rules.length * 10
-
-      # Being a passthrough is OK for Expression/Value (they aggregate)
-      # Penalize OTHER passthroughs
+      
+      # Penalize passthroughs (transparent, not structural)
       if @passthroughs.has(nodeName)
-        unless nodeName in ['Expression', 'Value', 'Statement']
-          score -= 50  # Penalty for non-aggregator passthroughs
-
-      # Prefer shorter names (convention: general names are shorter)
+        score -= 200
+      
+      # Earlier in grammar = more fundamental
+      typeId = nodeType.id or 999
+      score += Math.max(0, 100 - typeId)
+      
+      # Shorter name = conventionally more general  
       score += (25 - nodeName.length) if nodeName.length < 25
 
       scores.set(nodeName, score)
@@ -2033,31 +2056,85 @@ class Generator
           )
           mergedBaseCases.push(simplestCase)
         else
-          # Generate try/catch for disambiguation
-          # WHY: Multiple handlers (e.g., Value vs Code) need ordered alternatives
-          console.log "✨ Overlapping: #{uniqueHandlers.join(' vs ')}"
-          tokens = Array.from(triggers).sort()
-          caseLabel = tokens.map((t) -> "case #{t}").join(': ')
+          # GENERIC FIX: Check if cases are simple parse calls or complex inline code
+          allSimple = cases.every((c) ->
+            parseCount = (c.match(/this\.parse\w+\(\)/g) || []).length
+            matchCount = (c.match(/this\._match\(/g) || []).length
+            parseCount is 1 and matchCount is 0
+          )
 
-          lines = ["  #{caseLabel}: {"]
-          lines.push("    const _saved = this._saveState();")
-          lines.push("")
+          if allSimple
+            # Generate try/catch for disambiguation with simple parse calls
+            # WHY: Multiple handlers (e.g., Value vs Code) need ordered alternatives
+            console.log "✨ Overlapping: #{uniqueHandlers.join(' vs ')}"
+            tokens = Array.from(triggers).sort()
+            caseLabel = tokens.map((t) -> "case #{t}").join(': ')
 
-          for handler in uniqueHandlers
-            lines.push("    // Try: parse#{handler}")
-            lines.push("    try {")
-            lines.push("      $1 = this.parse#{handler}();")
-            lines.push("      break;")
-            lines.push("    } catch (e) {")
-            lines.push("      this._restoreState(_saved);")
-            lines.push("    }")
+            lines = ["  #{caseLabel}: {"]
+            lines.push("    const _saved = this._saveState();")
             lines.push("")
 
-          lines.push("    // Fallback error")
-          lines.push("    this._error([#{tokens.join(', ')}], this.la.id);")
-          lines.push("  }")
+            for handler in uniqueHandlers
+              lines.push("    // Try: parse#{handler}")
+              lines.push("    try {")
+              lines.push("      $1 = this.parse#{handler}();")
+              lines.push("      break;")
+              lines.push("    } catch (e) {")
+              lines.push("      this._restoreState(_saved);")
+              lines.push("    }")
+              lines.push("")
 
-          mergedBaseCases.push(lines.join('\n'))
+            lines.push("    // Fallback error")
+            lines.push("    this._error([#{tokens.join(', ')}], this.la.id);")
+            lines.push("  }")
+
+            mergedBaseCases.push(lines.join('\n'))
+          else
+            # Complex cases - use full inline code in try/catch blocks
+            tokens = Array.from(triggers).sort()
+            caseLabel = tokens.map((t) -> "case #{t}").join(': ')
+
+            lines = ["  #{caseLabel}: {"]
+            lines.push("    const _saved = this._saveState();")
+            lines.push("")
+
+            for caseCode, idx in cases
+              # Extract parsing code (after "case XXX:")
+              caseLines = caseCode.split('\n')
+              codeStart = 1
+              while codeStart < caseLines.length and caseLines[codeStart].trim() is ''
+                codeStart++
+
+              codeLines = caseLines.slice(codeStart)
+              codeLines = codeLines.map((line) ->
+                if line.startsWith('        ')
+                  line.slice(8)
+                else if line.startsWith('      ')
+                  line.slice(6)
+                else
+                  line
+              )
+
+              # Remove trailing break/return
+              lastLine = codeLines[codeLines.length - 1]?.trim()
+              if lastLine is 'break;'
+                codeLines = codeLines.slice(0, -1)
+
+              lines.push("    // Try alternative #{idx + 1}")
+              lines.push("    try {")
+              for codeLine in codeLines
+                lines.push("      #{codeLine}")
+              lines.push("      break;")
+              lines.push("    } catch (e) {")
+              lines.push("      this._restoreState(_saved);")
+              lines.push("    }")
+              lines.push("")
+
+            lines.push("    // Fallback error")
+            lines.push("    this._error([#{tokens.join(', ')}], this.la.id);")
+            lines.push("  }")
+
+            mergedBaseCases.push(lines.join('\n'))
 
     baseCases = mergedBaseCases
 
@@ -2098,7 +2175,13 @@ class Generator
       if cases.length is 1
         finalBaseCases.push(cases[0])
       else
-        # Extract handlers
+        # GENERIC FIX: For overlapping cases, use full inline code instead of just function calls
+        # WHY: Inlined prefix rules like "SUPER Arguments" generate code like:
+        #      $1 = this._match(SYM_SUPER); $2 = this.parseArguments(); return ...
+        # Extracting just "Arguments" and calling parseArguments() is WRONG (expects CALL_START, not SUPER)
+        # FIX: Use the full generated case code in try/catch blocks
+
+        # Extract handlers (parse function names)
         handlers = cases.map((c) ->
           match = c.match(/this\.parse(\w+)\(\)/)
           match?[1]
@@ -2114,31 +2197,88 @@ class Generator
           )
           finalBaseCases.push(simplest)
         else
-          # Different handlers - generate try/catch with ordered alternatives
-          # WHY: Value vs Code overlap requires trying both parsers
-          console.log "✨ Final overlap: #{uniqueHandlers.join(' vs ')}"
-          tokens = Array.from(triggers).sort()
-          caseLabel = tokens.map((t) -> "case #{t}").join(': ')
+          # Different handlers - check if cases are simple parse calls or complex inline code
+          allSimple = cases.every((c) ->
+            # Simple if: single parse call with no matches/other operations
+            parseCount = (c.match(/this\.parse\w+\(\)/g) || []).length
+            matchCount = (c.match(/this\._match\(/g) || []).length
+            parseCount is 1 and matchCount is 0
+          )
 
-          lines = ["  #{caseLabel}: {"]
-          lines.push("    const _saved = this._saveState();")
-          lines.push("")
+          if allSimple
+            # All cases are simple parse calls - use extracted handlers
+            console.log "✨ Final overlap: #{uniqueHandlers.join(' vs ')}"
+            tokens = Array.from(triggers).sort()
+            caseLabel = tokens.map((t) -> "case #{t}").join(': ')
 
-          for handler in uniqueHandlers
-            lines.push("    // Try: parse#{handler}")
-            lines.push("    try {")
-            lines.push("      $1 = this.parse#{handler}();")
-            lines.push("      break;")
-            lines.push("    } catch (e) {")
-            lines.push("      this._restoreState(_saved);")
-            lines.push("    }")
+            lines = ["  #{caseLabel}: {"]
+            lines.push("    const _saved = this._saveState();")
             lines.push("")
 
-          lines.push("    // Fallback error")
-          lines.push("    this._error([#{tokens.join(', ')}], this.la.id);")
-          lines.push("  }")
+            for handler in uniqueHandlers
+              lines.push("    // Try: parse#{handler}")
+              lines.push("    try {")
+              lines.push("      $1 = this.parse#{handler}();")
+              lines.push("      break;")
+              lines.push("    } catch (e) {")
+              lines.push("      this._restoreState(_saved);")
+              lines.push("    }")
+              lines.push("")
 
-          finalBaseCases.push(lines.join('\n'))
+            lines.push("    // Fallback error")
+            lines.push("    this._error([#{tokens.join(', ')}], this.la.id);")
+            lines.push("  }")
+
+            finalBaseCases.push(lines.join('\n'))
+          else
+            # Complex cases with inline code - use full case code in try/catch
+            tokens = Array.from(triggers).sort()
+            caseLabel = tokens.map((t) -> "case #{t}").join(': ')
+
+            lines = ["  #{caseLabel}: {"]
+            lines.push("    const _saved = this._saveState();")
+            lines.push("")
+
+            for caseCode, idx in cases
+              # Extract the actual parsing code (after "case XXX:")
+              caseLines = caseCode.split('\n')
+              # Find where the actual code starts (after case label)
+              codeStart = 1
+              while codeStart < caseLines.length and caseLines[codeStart].trim() is ''
+                codeStart++
+
+              # Extract code lines (skip case label and empty lines)
+              codeLines = caseLines.slice(codeStart)
+              # Remove indentation (typically 8 spaces)
+              codeLines = codeLines.map((line) ->
+                if line.startsWith('        ')
+                  line.slice(8)  # Remove 8 spaces
+                else if line.startsWith('      ')
+                  line.slice(6)  # Remove 6 spaces
+                else
+                  line
+              )
+
+              # Remove trailing "break;" or "return" since we use try/catch
+              lastLine = codeLines[codeLines.length - 1]?.trim()
+              if lastLine is 'break;'
+                codeLines = codeLines.slice(0, -1)
+
+              lines.push("    // Try alternative #{idx + 1}")
+              lines.push("    try {")
+              for codeLine in codeLines
+                lines.push("      #{codeLine}")
+              lines.push("      break;")  # Success - exit switch
+              lines.push("    } catch (e) {")
+              lines.push("      this._restoreState(_saved);")
+              lines.push("    }")
+              lines.push("")
+
+            lines.push("    // Fallback error")
+            lines.push("    this._error([#{tokens.join(', ')}], this.la.id);")
+            lines.push("  }")
+
+            finalBaseCases.push(lines.join('\n'))
 
     baseCases = finalBaseCases
 
@@ -2820,13 +2960,55 @@ class Generator
 
         return lines.join('\n')
 
-    # Check if all rules are bare (single symbol only)
+    # GENERIC FIX: Check if all rules are bare (single symbol only)
+    # BUT distinguish between bare terminals vs bare nonterminals!
     allBare = rules.every((r) -> r.symbols.length is 1)
     if allBare
-      # All rules are bare - just match and return
-      rule = rules[0]
-      action = @_normalizeActionForPRD(rule.action, rule.symbols)
-      return "    case #{triggerToken}:\n      $1 = this._match(#{triggerToken});\n      return #{action};"
+      # Check if any are nonterminals (need different handling)
+      hasNonterminals = rules.some((r) => @types[r.symbols[0]])
+      hasTerminals = rules.some((r) => not @types[r.symbols[0]])
+
+      if hasNonterminals and hasTerminals
+        # Mix of nonterminals and terminals - need try/catch
+        # Example: Arg → Splat vs Arg → ...
+        lines = ["    case #{triggerToken}: {"]
+        lines.push("      const _saved = this._saveState();")
+        lines.push("")
+
+        # Try nonterminals first (more specific)
+        for rule in rules when @types[rule.symbols[0]]
+          nonterminal = rule.symbols[0]
+          action = @_normalizeActionForPRD(rule.action, rule.symbols)
+          lines.push("      // Try: parse#{nonterminal}")
+          lines.push("      try {")
+          lines.push("        $1 = this.parse#{nonterminal}();")
+          lines.push("        return #{action};")
+          lines.push("      } catch (e) {")
+          lines.push("        this._restoreState(_saved);")
+          lines.push("      }")
+          lines.push("")
+
+        # Fallback to terminals
+        for rule in rules when not @types[rule.symbols[0]]
+          action = @_normalizeActionForPRD(rule.action, rule.symbols)
+          lines.push("      // Fallback: bare terminal")
+          lines.push("      $1 = this._match(#{triggerToken});")
+          lines.push("      return #{action};")
+
+        lines.push("    }")
+        return lines.join('\n')
+      else if hasNonterminals
+        # All nonterminals - handled above in allSingleNonterminal check
+        # Just call the parser (they all go to same target or were disambiguated above)
+        rule = rules[0]
+        nonterminal = rule.symbols[0]
+        action = @_normalizeActionForPRD(rule.action, rule.symbols)
+        return "    case #{triggerToken}:\n      $1 = this.parse#{nonterminal}();\n      return #{action};"
+      else
+        # All terminals - just match and return
+        rule = rules[0]
+        action = @_normalizeActionForPRD(rule.action, rule.symbols)
+        return "    case #{triggerToken}:\n      $1 = this._match(#{triggerToken});\n      return #{action};"
 
     # Sort rules by length (most specific first for try/catch ordering)
     sortedRules = rules.sort((a, b) -> b.symbols.length - a.symbols.length)
@@ -2962,15 +3144,18 @@ class Generator
         realSeparator = restSymbols[0]
         remainingSymbols = restSymbols.slice(1)
 
-        # Check if this is the INDENT nested pattern
-        if realSeparator is 'INDENT' and remainingSymbols.length >= 2 and remainingSymbols[0] is name
-          # Pattern: A → A OptComma INDENT A OptComma OUTDENT
+        # GENERIC: Check if this is a nested recursive pattern
+        # Pattern: A → A OptSeparator TriggerToken A ... ClosingToken
+        # Example: ArgList → ArgList OptComma INDENT ArgList OptComma OUTDENT
+        # Key: after trigger token, we recursively call the same nonterminal (name)
+        if remainingSymbols.length >= 2 and remainingSymbols[0] is name
+          # This is nested recursion - the realSeparator triggers recursive parsing
           separatorPatterns.push({
             type: 'nested',
             trigger: realSeparator,
             recursive: true,
             action: recRule.action,
-            hasOptComma: true
+            hasOptComma: @types[separator]?.nullable  # Generic check for optional separator
           })
         else if remainingSymbols.length > 0
           # Pattern: A → A OptComma TERMINATOR B
@@ -3109,18 +3294,38 @@ class Generator
       tokenName = @tokenNames[tokenId]
       if tokenName then [@_getSymbolConstName(tokenName)] else []
 
+    # CRITICAL FIX: Exclude separator token from FIRST set check
+    # Why: After matching separator ',', if we see another ',', that should NOT
+    # be treated as the start of a new element (it's a trailing separator or
+    # part of element's internal structure that element parser will handle)
+    # Example: [1,2,,] - after matching first trailing ',', seeing another ','
+    # should NOT trigger parsing another ArgElision
+    if not separatorIsNonterminal and separator
+      sepId = @symbolIds[separator]
+      sepTokenName = @tokenNames[sepId]
+      if sepTokenName
+        sepConst = @_getSymbolConstName(sepTokenName)
+        # Remove separator from base FIRST set
+        baseFirstTokens = baseFirstTokens.filter((token) -> token isnt sepConst)
+
     baseFirstSet = baseFirstTokens.join(', ')
 
-    # NEW: Check if we have multiple separator patterns (comma, terminator, INDENT)
+    # GENERIC: Check if we have multiple separator patterns
     hasMultipleSeparators = separatorPatterns.length > 1
 
     # If there's an empty base rule, generate check before parsing
-    # ENHANCEMENT: Include INDENT in FIRST set if it's a valid separator
+    # GENERIC ENHANCEMENT: Include nested recursive triggers in FIRST set if they exist
+    # Nested patterns (like INDENT for nested lists) are valid ways to start/continue the list
     extendedFirstSet = baseFirstSet
     if hasMultipleSeparators
-      indentPattern = separatorPatterns.find((p) -> p.trigger is 'INDENT')
-      if indentPattern
-        extendedFirstSet += ', SYM_INDENT'
+      # Find any nested recursive patterns and add their triggers to FIRST set
+      for pattern in separatorPatterns when pattern.type is 'nested'
+        triggerName = pattern.trigger
+        triggerId = @symbolIds[triggerName]
+        triggerTokenName = @tokenNames[triggerId]
+        if triggerTokenName
+          triggerConst = @_getSymbolConstName(triggerTokenName)
+          extendedFirstSet += ", #{triggerConst}"
 
     emptyCheck = if emptyRule
       emptyAction = @_normalizeActionForPRD(emptyRule.action, emptyRule.symbols)
