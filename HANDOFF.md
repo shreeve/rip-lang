@@ -614,10 +614,10 @@ bun run test  # Should show 630/962 passing
 
 ### What Was Accomplished This Session
 
-✅ **Nine major fixes** - All generic algorithms  
-✅ **100% generic** - Zero hardcoded symbol names  
-✅ **33x faster** - Validated with benchmarks (864K vs 26K parses/sec)  
-✅ **+267 tests** - From 585 (60.8%) to 852 (88.6%)  
+✅ **Nine major fixes** - All generic algorithms
+✅ **100% generic** - Zero hardcoded symbol names
+✅ **33x faster** - Validated with benchmarks (864K vs 26K parses/sec)
+✅ **+267 tests** - From 585 (60.8%) to 852 (88.6%)
 
 **Key insight:** Codegen is production-ready (962/962). All failures are **parser generator** issues (wrong s-expressions), not codegen bugs!
 
@@ -633,7 +633,7 @@ cd /Users/shreeve/Data/Code/rip-lang
 # Array rest in middle (fails ~5 tests)
 echo '[a, ...rest, b] = [1,2,3,4]' | ./bin/rip -s
 
-# Computed property (fails ~3 tests)  
+# Computed property (fails ~3 tests)
 echo '{[x]: 1}' | ./bin/rip -s
 
 # Object comprehension (fails ~2 tests)
@@ -700,7 +700,7 @@ echo 'for await x from stream then x' | ./bin/rip -s
 
 **Performance validated:**
 - PRD: 864K parses/sec (1.16 μs/parse)
-- Table: 26K parses/sec (38.3 μs/parse)  
+- Table: 26K parses/sec (38.3 μs/parse)
 - **33x faster** - promise delivered!
 
 **Tradeoff accepted:**
