@@ -585,7 +585,33 @@ const parser = {
     }
       while (this.la) {
         switch (this.la.id) {
-          case SYM_QUESTION:
+          case SYM_DEC:
+            $2 = this._match(SYM_DEC);
+            $1 = ["--", $1, true];
+            continue;
+      case SYM_INC:
+            $2 = this._match(SYM_INC);
+            $1 = ["++", $1, true];
+            continue;
+      case SYM_COMPOUND_ASSIGN:
+            $2 = this._match(SYM_COMPOUND_ASSIGN);
+            $3 = this.parseExpression();
+            $1 = [$2, $1, $3];
+            continue;
+      case SYM_COMPOUND_ASSIGN:
+            $2 = this._match(SYM_COMPOUND_ASSIGN);
+            $3 = this._match(SYM_INDENT);
+            $4 = this.parseExpression();
+            $5 = this._match(SYM_OUTDENT);
+            $1 = [$2, $1, $4];
+            continue;
+      case SYM_COMPOUND_ASSIGN:
+            $2 = this._match(SYM_COMPOUND_ASSIGN);
+            $3 = this._match(SYM_TERMINATOR);
+            $4 = this.parseExpression();
+            $1 = [$2, $1, $4];
+            continue;
+      case SYM_QUESTION:
             $2 = this._match(SYM_QUESTION);
             $1 = ["?", $1];
             continue;
@@ -1044,7 +1070,7 @@ const parser = {
     let $1, $2, $3;
     switch (this.la.id) {
     case SYM_REGEX:
-      $1 = this._match(SYM_REGEX);
+      $1 = this.parseRegex();
       
       if (this.la.id === SYM_COMMA) {
         $2 = this._match(SYM_COMMA);
@@ -1055,7 +1081,7 @@ const parser = {
         return ["regex-index", $1, null];
       }
     case SYM_REGEX_START:
-      $1 = this._match(SYM_REGEX_START);
+      $1 = this.parseRegex();
       
       if (this.la.id === SYM_COMMA) {
         $2 = this._match(SYM_COMMA);
@@ -1577,7 +1603,7 @@ $1 = this.parseParam();
     let $1, $2, $3;
     switch (this.la.id) {
     case SYM_IDENTIFIER:
-      $1 = this._match(SYM_IDENTIFIER);
+      $1 = this.parseParamVar();
       
       if (this.la.id === SYM_ASSIGN) {
         $2 = this._match(SYM_ASSIGN);
@@ -1588,7 +1614,7 @@ $1 = this.parseParam();
         return $1;
       }
     case SYM_LBRACKET:
-      $1 = this._match(SYM_LBRACKET);
+      $1 = this.parseParamVar();
       
       if (this.la.id === SYM_ASSIGN) {
         $2 = this._match(SYM_ASSIGN);
@@ -1599,7 +1625,7 @@ $1 = this.parseParam();
         return $1;
       }
     case SYM_AT:
-      $1 = this._match(SYM_AT);
+      $1 = this.parseParamVar();
       
       if (this.la.id === SYM_ASSIGN) {
         $2 = this._match(SYM_ASSIGN);
@@ -1620,7 +1646,7 @@ $1 = this.parseParam();
         return ["expansion"];
       }
     case SYM_LBRACE:
-      $1 = this._match(SYM_LBRACE);
+      $1 = this.parseParamVar();
       
       if (this.la.id === SYM_ASSIGN) {
         $2 = this._match(SYM_ASSIGN);
@@ -2244,7 +2270,7 @@ $1 = this.parseAssignObj();
     let $1, $2, $3;
     switch (this.la.id) {
     case SYM_IDENTIFIER:
-      $1 = this._match(SYM_IDENTIFIER);
+      $1 = this.parseIdentifier();
       
       if (this.la.id === SYM_AS) {
         $2 = this._match(SYM_AS);
@@ -2444,7 +2470,7 @@ $1 = this.parseAssignObj();
     let $1, $2, $3;
     switch (this.la.id) {
     case SYM_IDENTIFIER:
-      $1 = this._match(SYM_IDENTIFIER);
+      $1 = this.parseIdentifier();
       
       if (this.la.id === SYM_AS) {
         $2 = this._match(SYM_AS);
@@ -2481,7 +2507,7 @@ $1 = this.parseAssignObj();
     case SYM_FUNC_EXIST:
       $1 = this._match(SYM_FUNC_EXIST);
             return true;
-    default: return [];
+    default: return null;
     }
   },
 
@@ -2585,7 +2611,7 @@ $1 = this.parseAssignObj();
     let $1, $2, $3;
     switch (this.la.id) {
     case SYM_STATEMENT:
-      $1 = this._match(SYM_STATEMENT);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2598,7 +2624,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_DEF:
-      $1 = this._match(SYM_DEF);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2611,7 +2637,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_YIELD:
-      $1 = this._match(SYM_YIELD);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2624,7 +2650,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_IDENTIFIER:
-      $1 = this._match(SYM_IDENTIFIER);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2637,7 +2663,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_NUMBER:
-      $1 = this._match(SYM_NUMBER);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2650,7 +2676,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_STRING:
-      $1 = this._match(SYM_STRING);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2663,7 +2689,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_STRING_START:
-      $1 = this._match(SYM_STRING_START);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2676,7 +2702,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_REGEX:
-      $1 = this._match(SYM_REGEX);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2689,7 +2715,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_REGEX_START:
-      $1 = this._match(SYM_REGEX_START);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2702,7 +2728,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_JS:
-      $1 = this._match(SYM_JS);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2715,7 +2741,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_UNDEFINED:
-      $1 = this._match(SYM_UNDEFINED);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2728,7 +2754,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_NULL:
-      $1 = this._match(SYM_NULL);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2741,7 +2767,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_BOOL:
-      $1 = this._match(SYM_BOOL);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2754,7 +2780,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_INFINITY:
-      $1 = this._match(SYM_INFINITY);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2767,7 +2793,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_NAN:
-      $1 = this._match(SYM_NAN);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2780,7 +2806,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_LBRACKET:
-      $1 = this._match(SYM_LBRACKET);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2793,7 +2819,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_AT:
-      $1 = this._match(SYM_AT);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2806,7 +2832,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_ELLIPSIS:
-      $1 = this._match(SYM_ELLIPSIS);
+      $1 = this.parseRangeDots();
       
       if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
         $2 = this.parseExpression();
@@ -2816,7 +2842,7 @@ $1 = this.parseAssignObj();
         return [$1, null, null];
       }
     case SYM_SUPER:
-      $1 = this._match(SYM_SUPER);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2829,7 +2855,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_DYNAMIC_IMPORT:
-      $1 = this._match(SYM_DYNAMIC_IMPORT);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2842,7 +2868,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_RETURN:
-      $1 = this._match(SYM_RETURN);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2855,7 +2881,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_PARAM_START:
-      $1 = this._match(SYM_PARAM_START);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2868,7 +2894,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_THIN_ARROW:
-      $1 = this._match(SYM_THIN_ARROW);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2881,7 +2907,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_FAT_ARROW:
-      $1 = this._match(SYM_FAT_ARROW);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2894,7 +2920,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_NEW_TARGET:
-      $1 = this._match(SYM_NEW_TARGET);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2907,7 +2933,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_IMPORT_META:
-      $1 = this._match(SYM_IMPORT_META);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2920,7 +2946,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_LBRACE:
-      $1 = this._match(SYM_LBRACE);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2933,7 +2959,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_FOR:
-      $1 = this._match(SYM_FOR);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2946,7 +2972,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_CLASS:
-      $1 = this._match(SYM_CLASS);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2959,7 +2985,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_IMPORT:
-      $1 = this._match(SYM_IMPORT);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2972,7 +2998,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_EXPORT:
-      $1 = this._match(SYM_EXPORT);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2985,7 +3011,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_THIS:
-      $1 = this._match(SYM_THIS);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -2998,7 +3024,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_RANGE_INCL:
-      $1 = this._match(SYM_RANGE_INCL);
+      $1 = this.parseRangeDots();
       
       if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
         $2 = this.parseExpression();
@@ -3008,7 +3034,7 @@ $1 = this.parseAssignObj();
         return [$1, null, null];
       }
     case SYM_TRY:
-      $1 = this._match(SYM_TRY);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -3021,7 +3047,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_THROW:
-      $1 = this._match(SYM_THROW);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -3034,7 +3060,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_LPAREN:
-      $1 = this._match(SYM_LPAREN);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -3047,7 +3073,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_WHILE:
-      $1 = this._match(SYM_WHILE);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -3060,7 +3086,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_UNTIL:
-      $1 = this._match(SYM_UNTIL);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -3073,7 +3099,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_LOOP:
-      $1 = this._match(SYM_LOOP);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -3086,7 +3112,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_AWAIT:
-      $1 = this._match(SYM_AWAIT);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -3099,7 +3125,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_SWITCH:
-      $1 = this._match(SYM_SWITCH);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -3112,7 +3138,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_IF:
-      $1 = this._match(SYM_IF);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -3125,7 +3151,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_UNLESS:
-      $1 = this._match(SYM_UNLESS);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -3138,7 +3164,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_UNARY:
-      $1 = this._match(SYM_UNARY);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -3151,7 +3177,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_DO:
-      $1 = this._match(SYM_DO);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -3164,7 +3190,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_DO_IIFE:
-      $1 = this._match(SYM_DO_IIFE);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -3177,7 +3203,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_UNARY_MATH:
-      $1 = this._match(SYM_UNARY_MATH);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -3190,7 +3216,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_MINUS:
-      $1 = this._match(SYM_MINUS);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -3203,7 +3229,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_PLUS:
-      $1 = this._match(SYM_PLUS);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -3216,7 +3242,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_DEC:
-      $1 = this._match(SYM_DEC);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -3229,7 +3255,7 @@ $1 = this.parseAssignObj();
         }
       }
     case SYM_INC:
-      $1 = this._match(SYM_INC);
+      $1 = this.parseExpression();
       
       if ([SYM_RANGE_INCL, SYM_ELLIPSIS].includes(this.la.id)) {
         $2 = this.parseRangeDots();
@@ -3807,7 +3833,7 @@ $1 = this.parseAssignObj();
     let $1, $2, $3;
     switch (this.la.id) {
     case SYM_IDENTIFIER:
-      $1 = this._match(SYM_IDENTIFIER);
+      $1 = this.parseForVar();
       
       if (this.la.id === SYM_ASSIGN) {
         $2 = this._match(SYM_ASSIGN);
@@ -3818,7 +3844,7 @@ $1 = this.parseAssignObj();
         return $1;
       }
     case SYM_LBRACKET:
-      $1 = this._match(SYM_LBRACKET);
+      $1 = this.parseForVar();
       
       if (this.la.id === SYM_ASSIGN) {
         $2 = this._match(SYM_ASSIGN);
@@ -3829,7 +3855,7 @@ $1 = this.parseAssignObj();
         return $1;
       }
     case SYM_AT:
-      $1 = this._match(SYM_AT);
+      $1 = this.parseForVar();
       
       if (this.la.id === SYM_ASSIGN) {
         $2 = this._match(SYM_ASSIGN);
@@ -3840,7 +3866,7 @@ $1 = this.parseAssignObj();
         return $1;
       }
     case SYM_LBRACE:
-      $1 = this._match(SYM_LBRACE);
+      $1 = this.parseForVar();
       
       if (this.la.id === SYM_ASSIGN) {
         $2 = this._match(SYM_ASSIGN);
@@ -3877,7 +3903,7 @@ $1 = this.parseAssignObj();
     let $1, $2, $3;
     switch (this.la.id) {
     case SYM_IDENTIFIER:
-      $1 = this._match(SYM_IDENTIFIER);
+      $1 = this.parseForValue();
       
       if (this.la.id === SYM_COMMA) {
         $2 = this._match(SYM_COMMA);
@@ -3888,7 +3914,7 @@ $1 = this.parseAssignObj();
         return [$1];
       }
     case SYM_LBRACKET:
-      $1 = this._match(SYM_LBRACKET);
+      $1 = this.parseForValue();
       
       if (this.la.id === SYM_COMMA) {
         $2 = this._match(SYM_COMMA);
@@ -3899,7 +3925,7 @@ $1 = this.parseAssignObj();
         return [$1];
       }
     case SYM_AT:
-      $1 = this._match(SYM_AT);
+      $1 = this.parseForValue();
       
       if (this.la.id === SYM_COMMA) {
         $2 = this._match(SYM_COMMA);
@@ -3910,7 +3936,7 @@ $1 = this.parseAssignObj();
         return [$1];
       }
     case SYM_LBRACE:
-      $1 = this._match(SYM_LBRACE);
+      $1 = this.parseForValue();
       
       if (this.la.id === SYM_COMMA) {
         $2 = this._match(SYM_COMMA);

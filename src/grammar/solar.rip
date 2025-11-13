@@ -1204,8 +1204,17 @@ class Generator
 
     # Handle empty rules (no symbols)
     if symbols.length is 0 or not symbols[0] or symbols[0] is ''
-      if typeof action is 'string' and action.match(/^\[/)
-        return "return #{action};"
+      if typeof action is 'string'
+        # String action - handle different patterns
+        if action.match(/^\[/)
+          # Array construction: '["array"]' → return ["array"];
+          return "return #{action};"
+        else if action.match(/^"/)
+          # Quoted string: '"null"' → return "null";
+          return "return #{action};"
+        else
+          # Bare keyword: 'null', 'true', 'false' → return null;
+          return "return #{action};"
       return "return [];"
 
     # Generate $ variable assignments for each symbol
@@ -1573,7 +1582,7 @@ class Generator
     #
     # WHY: Breaks infinite recursion cycles by not generating separate functions for
     # children, instead inlining their alternatives directly into the parent.
-    
+
     info = @indirectLeftRec.get(name)
 
     # Collect all cases for base switch and postfix loop
@@ -1589,7 +1598,14 @@ class Generator
 
         # Add child's PREFIX rules to base switch
         for prefixRule in childInfo.prefixRules
-          baseCases.push(@_generateInlinedPrefixCase(prefixRule))
+          # Check if prefix rule starts with an inlined nonterminal (like SimpleAssignable)
+          # If so, treat as postfix (since inlined nonterminal expands to parent)
+          firstSym = prefixRule.symbols[0]
+          if @shouldInline?.has(firstSym) and @types[firstSym]
+            # This is actually a postfix rule! (e.g., SimpleAssignable COMPOUND_ASSIGN Expression)
+            postfixCases.push(@_generateInlinedPostfixCase(prefixRule, name))
+          else
+            baseCases.push(@_generateInlinedPrefixCase(prefixRule))
 
         # Add child's POSTFIX rules to postfix loop
         for postfixRule in childInfo.postfixRules
@@ -1662,13 +1678,13 @@ class Generator
     # WHY: Cases from different sources (Value, Code) may have overlapping FIRST sets
     # This groups them for proper disambiguation using try/catch
     baseCasesByTrigger = []  # Array of {triggers: Set, cases: []}
-    
+
     for caseCode in baseCases
       # Extract trigger token(s)
       match = caseCode.match(/case\s+((?:SYM_\w+(?::\s*)?)+):/)
       if match
         triggers = new Set(match[1].match(/SYM_\w+/g))
-        
+
         # Find existing group with overlapping triggers
         overlappingGroup = null
         for group in baseCasesByTrigger
@@ -1677,7 +1693,7 @@ class Generator
           if hasOverlap
             overlappingGroup = group
             break
-        
+
         if overlappingGroup
           # Merge into existing group
           triggers.forEach((t) -> overlappingGroup.triggers.add(t))
@@ -1711,7 +1727,7 @@ class Generator
         else if uniqueHandlers.length is 1
           # All call same function - pick simplest case (fewest operations)
           # WHY: Prefer "$1 = parseX(); break;" over "$1 = parseX(); $2 = match...; break;"
-          simplestCase = cases.reduce((best, c) -> 
+          simplestCase = cases.reduce((best, c) ->
             # Count operations (parse calls + match calls)
             bestOps = (best.match(/this\.(parse|_match)/g) || []).length
             cOps = (c.match(/this\.(parse|_match)/g) || []).length
@@ -1752,14 +1768,14 @@ class Generator
     # compared in earlier passes. This catches cross-source overlaps like when Value
     # and Code both handle PARAM_START/THIN_ARROW/FAT_ARROW tokens.
     finalGroups = []  # Array of {triggers: Set, cases: []}
-    
+
     for caseCode in baseCases
       # Extract ALL trigger tokens from case label (handles "case A: case B: case C:")
       allMatches = caseCode.match(/case\s+SYM_\w+/g)
       continue unless allMatches
-      
+
       triggers = new Set(allMatches.map((m) -> m.replace('case ', '')))
-      
+
       # Find group with ANY overlapping trigger
       found = null
       for group in finalGroups
@@ -1767,7 +1783,7 @@ class Generator
         if hasOverlap
           found = group
           break
-      
+
       if found
         # Merge into existing group
         triggers.forEach((t) -> found.triggers.add(t))
@@ -1793,7 +1809,7 @@ class Generator
 
         if uniqueHandlers.length <= 1
           # All same handler or can't extract - pick simplest
-          simplest = cases.reduce((best, c) -> 
+          simplest = cases.reduce((best, c) ->
             bestOps = (best.match(/this\.(parse|_match)/g) || []).length
             cOps = (c.match(/this\.(parse|_match)/g) || []).length
             if cOps < bestOps then c else best
@@ -2105,7 +2121,7 @@ class Generator
     # distinguisher. This prevents duplicate lookahead checks (all branches checking same FIRST set).
     #
     # STRATEGY: Group by next symbol, generate if/else, recurse for multi-rule groups.
-    
+
     lines = []
     groupArray = Array.from(groups.entries())
 
@@ -2207,7 +2223,7 @@ class Generator
     # specific patterns and backtrack on failure - no multi-token lookahead needed!
     #
     # STRATEGY: Try longest (most specific) rules first, fall back to shortest (most general)
-    
+
     lines = ["    case #{triggerToken}: {"]  # Wrap in block scope for const _saved
     lines.push("      $1 = this._match(#{triggerToken});")
     lines.push("      ")
@@ -2297,13 +2313,27 @@ class Generator
 
     # Otherwise, use standard nested branching
     lines = ["    case #{triggerToken}:"]
-    lines.push("      $1 = this._match(#{triggerToken});")
-    lines.push("      ")
-
-    groups = @_groupRulesByNextToken(rules, 1)  # Skip trigger (position 0)
-    nestedCode = @_generateNestedBranches(groups, rules, 1, "      ")
-
-    lines.push(nestedCode)
+    
+    # Check if rules start with a nonterminal (not a terminal)
+    # If so, call parse function instead of matching token
+    firstRule = rules[0]
+    firstSymbol = firstRule.symbols[0]
+    
+    if @types[firstSymbol]
+      # Rules start with nonterminal - call its parse function
+      lines.push("      $1 = this.parse#{firstSymbol}();")
+      lines.push("      ")
+      groups = @_groupRulesByNextToken(rules, 1)  # Skip nonterminal (position 0)
+      nestedCode = @_generateNestedBranches(groups, rules, 1, "      ")
+      lines.push(nestedCode)
+    else
+      # Rules start with terminal - match it
+      lines.push("      $1 = this._match(#{triggerToken});")
+      lines.push("      ")
+      groups = @_groupRulesByNextToken(rules, 1)  # Skip trigger (position 0)
+      nestedCode = @_generateNestedBranches(groups, rules, 1, "      ")
+      lines.push(nestedCode)
+    
     lines.join('\n')
 
   _generateStandardCase: (rule) ->
