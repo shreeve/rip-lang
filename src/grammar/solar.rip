@@ -1177,6 +1177,46 @@ class Generator
         dispatchMap[tokenId] = dispatchMap[tokenId] or []
         dispatchMap[tokenId].push(rule)
 
+    # GENERIC FIX: For non-inlined nonterminals that call inlined nonterminals,
+    # add the inlined rules that start with matching terminals
+    # Example: Super calls parseSuper which should handle SUPER Arguments from inlined Invocation
+    # But ONLY for direct references (Value → Super), not transitive (Expression → Value → Super)
+    if @shouldInline?.size > 0 and not @shouldInline.has(nonTerminal)
+      currentType = @types[nonTerminal]
+      if currentType and currentType.firsts.size > 0
+        currentFirstTokens = Array.from(currentType.firsts)
+        
+        # Check all inlined nonterminals for rules matching our FIRST set
+        for inlinedName from @shouldInline
+          inlinedType = @types[inlinedName]
+          continue unless inlinedType
+          
+          # Only add if this nonterminal is directly referenced by a non-inlined parent
+          # that also references the current nonterminal (they're siblings)
+          isRelevant = false
+          for own parentName, parentType of @types
+            continue if @shouldInline.has(parentName)
+            parentRefsInlined = parentType.rules.some((r) => r.symbols.includes(inlinedName))
+            parentRefsCurrent = parentType.rules.some((r) => r.symbols.includes(nonTerminal))
+            if parentRefsInlined and parentRefsCurrent
+              isRelevant = true
+              break
+          
+          continue unless isRelevant
+          
+          for inlinedRule in inlinedType.rules
+            firstSym = inlinedRule.symbols[0]
+            continue unless firstSym and not @types[firstSym]
+            
+            # Check if this terminal is in our FIRST set
+            if currentFirstTokens.includes(firstSym)
+              tokenId = @symbolIds[firstSym]
+              if tokenId and @tokenNames[tokenId]
+                expectedTokens.add(tokenId)
+                dispatchMap[tokenId] = dispatchMap[tokenId] or []
+                dispatchMap[tokenId].push(inlinedRule)
+                console.log "📌 Adding inlined #{inlinedName} rule to parse#{nonTerminal}: #{inlinedRule.symbols.join(' ')}"
+
     # Group rules by token for case generation
     # Key insight: If multiple rules share same FIRST tokens, they need disambiguation!
     rulesByToken = new Map()
