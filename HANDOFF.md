@@ -1,16 +1,16 @@
 # PRD Parser Generator - Current Status
 
-## Achievement: 751/962 Tests Passing (78.1%)
+## Achievement: 807/962 Tests Passing (83.9%)
 
 **Session Progress:**
 - Started: 585 tests (60.8%)
-- Current: 751 tests (78.1%)
-- Improvement: +166 tests (+28.4%)
+- Current: 807 tests (83.9%)
+- Improvement: +222 tests (+38.0%)
 
 **Historical Total:**
 - Origin: 261 tests (27.1%)
-- Now: 751 tests (78.1%)
-- **Total improvement: +490 tests (+188%)!**
+- Now: 807 tests (83.9%)
+- **Total improvement: +546 tests (+209%)!**
 
 ---
 
@@ -376,24 +376,39 @@ parser.parseAssignable = parser.parseValue;
 | After operator precedence | 647 | 67.3% | +17 |
 | After nonterminal-first prefix | 679 | 70.6% | +32 |
 | After FOR lookahead grouping | 735 | 76.4% | +56 |
-| **After inlined-but-referenced** | **751** | **78.1%** | **+16** |
+| After inlined-but-referenced | 751 | 78.1% | +16 |
+| **After different-target disambiguation** | **807** | **83.9%** | **+56** |
 
 ---
 
-## ❌ Remaining Issues (211 tests, 21.9%)
+## ❌ Remaining Issues (155 tests, 16.1%)
 
 ### ✅ Major Blockers - ALL FIXED!
 
 1. **Operator Associativity** ✅ - COMPLETE (+17 tests)
 2. **Statement-in-Expression** ✅ - COMPLETE (+32 tests)
 3. **FOR Loop Disambiguation** ✅ - COMPLETE (+56 tests)
-4. **Inlined-But-Referenced** ✅ - COMPLETE (+15 tests - classes now work!)
+4. **Inlined-But-Referenced** ✅ - COMPLETE (+16 tests - classes!)
+5. **100% Generic Pattern Detection** ✅ - Infrastructure (zero hardcoded symbols!)
+6. **Different-Target Disambiguation** ✅ - COMPLETE (+56 tests - imports/exports!)
 
-**Combined Impact:** +120 tests (630 → 750, +19.0%)
+**Combined Impact:** +177 tests (630 → 807, +28.1%)**
 
 ---
 
-### Current Remaining Failures (212 tests)
+### Current Remaining Failures (155 tests)
+
+**Breakdown from test analysis:**
+- **Comprehensions:** 15 failures (guards, by steps, object comprehensions)
+- **Array destructuring:** ~10 failures (rest in middle, elisions, computed properties)
+- **Parse errors:** ~30-40 failures (various expression context issues)
+- **Codegen/runtime errors:** ~40-50 failures (wrong output, not parse failures)
+- **Edge cases:** ~50-60 failures (various rare patterns)
+
+**Next High-Impact Targets:**
+1. Comprehensions (15 tests) - Likely codegen issues with guards/steps
+2. Array destructuring (10 tests) - Parser/grammar issues
+3. Systematic parse error analysis - Find common patterns
 
 **Breakdown:**
 - Parse errors: ~56 tests (26%)
