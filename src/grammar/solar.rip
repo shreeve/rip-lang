@@ -2317,7 +2317,7 @@ class Generator
             # Remove trailing "continue;"
             parsing = parsing.replace(/\s*continue;\s*$/, '')
             parsings.push(parsing) if parsing
-        
+
         # GENERIC FIX: Sort by specificity - more specific patterns first
         # Heuristic: Count parse calls to specific nonterminals vs generic ones
         # RegexWithIndex, Slice = specific; Expression = generic
@@ -2326,11 +2326,11 @@ class Generator
           # Count operations as specificity metric
           aOps = (a.match(/this\.(parse|_match)/g) || []).length
           bOps = (b.match(/this\.(parse|_match)/g) || []).length
-          
+
           # Prefer parsings that DON'T call parseExpression (too general)
           aHasExpr = a.includes('parseExpression')
           bHasExpr = b.includes('parseExpression')
-          
+
           if aHasExpr and not bHasExpr
             return 1  # b first (doesn't use Expression)
           else if bHasExpr and not aHasExpr
