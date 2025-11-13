@@ -9,6 +9,10 @@ const SYMBOL_IDS = {"$accept": 0, "$end": 1, "error": 2, "Root": 3, "Body": 4, "
 // Token names for error messages
 const TOKEN_NAMES = {2: "error", 6: "TERMINATOR", 11: "STATEMENT", 27: "DEF", 29: "CALL_START", 31: "CALL_END", 35: "YIELD", 36: "INDENT", 38: "OUTDENT", 39: "FROM", 40: "IDENTIFIER", 42: "PROPERTY", 44: "NUMBER", 46: "STRING", 47: "STRING_START", 49: "STRING_END", 51: "INTERPOLATION_START", 52: "INTERPOLATION_END", 54: "REGEX", 55: "REGEX_START", 57: "REGEX_END", 59: ",", 61: "JS", 62: "UNDEFINED", 63: "NULL", 64: "BOOL", 65: "INFINITY", 66: "NAN", 68: "=", 72: ":", 75: "[", 76: "]", 77: "@", 78: "...", 83: "SUPER", 86: "DYNAMIC_IMPORT", 87: ".", 88: "?.", 89: "::", 90: "?::", 91: "INDEX_START", 92: "INDEX_END", 93: "INDEX_SOAK", 94: "RETURN", 95: "PARAM_START", 96: "PARAM_END", 98: "->", 99: "=>", 107: "ES6_OPTIONAL_INDEX", 111: "NEW_TARGET", 112: "IMPORT_META", 113: "{", 114: "FOR", 116: "FOROF", 117: "}", 118: "WHEN", 119: "OWN", 121: "CLASS", 122: "EXTENDS", 123: "IMPORT", 128: "AS", 129: "DEFAULT", 130: "IMPORT_ALL", 131: "EXPORT", 133: "EXPORT_ALL", 135: "ES6_OPTIONAL_CALL", 136: "FUNC_EXIST", 138: "THIS", 143: "..", 148: "TRY", 150: "FINALLY", 151: "CATCH", 152: "THROW", 153: "(", 154: ")", 156: "WHILE", 157: "UNTIL", 159: "LOOP", 160: "FORIN", 161: "BY", 162: "FORFROM", 163: "AWAIT", 166: "SWITCH", 168: "ELSE", 170: "LEADING_WHEN", 172: "IF", 174: "UNLESS", 175: "POST_IF", 176: "POST_UNLESS", 177: "UNARY", 178: "DO", 179: "DO_IIFE", 180: "UNARY_MATH", 181: "-", 182: "+", 183: "--", 184: "++", 185: "?", 186: "MATH", 187: "**", 188: "SHIFT", 189: "COMPARE", 190: "&", 191: "^", 192: "|", 193: "&&", 194: "||", 195: "??", 196: "!?", 197: "RELATION", 198: "SPACE?", 199: "COMPOUND_ASSIGN"};
 
+// Operator precedence and associativity
+// Used for precedence climbing to achieve correct associativity
+const OPERATOR_PRECEDENCE = {175: {prec: 1, assoc: 'left'}, 172: {prec: 2, assoc: 'right'}, 168: {prec: 2, assoc: 'right'}, 114: {prec: 2, assoc: 'right'}, 156: {prec: 2, assoc: 'right'}, 157: {prec: 2, assoc: 'right'}, 159: {prec: 2, assoc: 'right'}, 83: {prec: 2, assoc: 'right'}, 121: {prec: 2, assoc: 'right'}, 123: {prec: 2, assoc: 'right'}, 131: {prec: 2, assoc: 'right'}, 86: {prec: 2, assoc: 'right'}, 160: {prec: 3, assoc: 'right'}, 116: {prec: 3, assoc: 'right'}, 162: {prec: 3, assoc: 'right'}, 161: {prec: 3, assoc: 'right'}, 118: {prec: 3, assoc: 'right'}, 68: {prec: 4, assoc: 'right'}, 72: {prec: 4, assoc: 'right'}, 199: {prec: 4, assoc: 'right'}, 94: {prec: 4, assoc: 'right'}, 152: {prec: 4, assoc: 'right'}, 122: {prec: 4, assoc: 'right'}, 35: {prec: 5, assoc: 'right'}, 36: {prec: 6, assoc: 'nonassoc'}, 38: {prec: 6, assoc: 'nonassoc'}, 198: {prec: 7, assoc: 'right'}, 194: {prec: 8, assoc: 'left'}, 193: {prec: 9, assoc: 'left'}, 192: {prec: 10, assoc: 'left'}, 191: {prec: 11, assoc: 'left'}, 190: {prec: 12, assoc: 'left'}, 189: {prec: 13, assoc: 'left'}, 197: {prec: 14, assoc: 'left'}, 188: {prec: 15, assoc: 'left'}, 182: {prec: 16, assoc: 'left'}, 181: {prec: 16, assoc: 'left'}, 186: {prec: 17, assoc: 'left'}, 180: {prec: 18, assoc: 'right'}, 187: {prec: 19, assoc: 'right'}, 163: {prec: 20, assoc: 'right'}, 177: {prec: 21, assoc: 'right'}, 178: {prec: 21, assoc: 'right'}, 185: {prec: 22, assoc: 'left'}, 184: {prec: 23, assoc: 'nonassoc'}, 183: {prec: 23, assoc: 'nonassoc'}, 29: {prec: 24, assoc: 'left'}, 31: {prec: 24, assoc: 'left'}, 87: {prec: 25, assoc: 'left'}, 88: {prec: 25, assoc: 'left'}, 89: {prec: 25, assoc: 'left'}, 90: {prec: 25, assoc: 'left'}, 179: {prec: 26, assoc: 'right'}};
+
 
 const parser = {
   lexer: null,
@@ -287,7 +291,7 @@ const parser = {
     $1 = $1;
     continue;
   }
-      
+
       break;  // No matching separator
     }
 
@@ -457,7 +461,7 @@ const parser = {
     }
   },
 
-  parseExpression() {
+  parseExpression(minPrec = 0) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
 
     switch (this.la.id) {
@@ -504,15 +508,18 @@ const parser = {
         $2 = this.parseExpression();
         return ["+", $2];
     case SYM_AWAIT:
-        $1 = this._match(SYM_AWAIT);
-        $2 = this.parseExpression();
-        return ["await", $2];
-    case SYM_OUTDENT:
-        $1 = this._match(SYM_AWAIT);
+      $1 = this._match(SYM_AWAIT);
+      
+      if (this.la.id === SYM_INDENT) {
         $2 = this._match(SYM_INDENT);
         $3 = this.parseObject();
         $4 = this._match(SYM_OUTDENT);
         return ["await", $3];
+      }
+      else if ([SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_STRING, SYM_STRING_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP].includes(this.la.id)) {
+        $2 = this.parseExpression();
+        return ["await", $2];
+      }
     case SYM_DEC:
         $1 = this._match(SYM_DEC);
         $2 = this.parseSimpleAssignable();
@@ -521,18 +528,93 @@ const parser = {
         $1 = this._match(SYM_INC);
         $2 = this.parseSimpleAssignable();
         return ["++", $2, false];
+  case SYM_IF:
+      $1 = this.parseIfBlock();
+      break;
+  case SYM_UNLESS:
+      $1 = this.parseUnlessBlock();
+      break;
+  case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
+      $1 = this.parseStatement();
+      $2 = this.parseWhileSource();
+      $1 = $2.length === 2 ? [$2[0], $2[1], [$1]] : [$2[0], $2[1], $2[2], [$1]];
+      break;
   case SYM_TRY:
       $1 = this.parseTry();
       break;
-    case SYM_FORIN:
-        $1 = this._match(SYM_FOR);
+  case SYM_WHILE: case SYM_UNTIL:
+      $1 = this.parseWhileSource();
+      $2 = this.parseBlock();
+      $1 = $1.length === 2 ? [$1[0], $1[1], $2]   : [$1[0], $1[1], $1[2], $2];
+      break;
+  case SYM_LOOP:
+      $1 = this.parseLoop();
+      break;
+    case SYM_FOR: {
+      $1 = this._match(SYM_FOR);
+      
+      const _saved = this._saveState();
+      
+      // Try: FOR ForVariables FORIN Expression WHEN Expression BY Expression Block
+      try {
         $2 = this.parseForVariables();
         $3 = this._match(SYM_FORIN);
         $4 = this.parseExpression();
-        $5 = this.parseBlock();
-        return ["for-in"  , $2, $4, null, null, $5];
-    case SYM_WHEN:
-        $1 = this._match(SYM_FOR);
+        $5 = this._match(SYM_WHEN);
+        $6 = this.parseExpression();
+        $7 = this._match(SYM_BY);
+        $8 = this.parseExpression();
+        $9 = this.parseBlock();
+        return ["for-in"  , $2, $4, $8, $6, $9];
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+      
+      // Try: FOR ForVariables FORIN Expression BY Expression WHEN Expression Block
+      try {
+        $2 = this.parseForVariables();
+        $3 = this._match(SYM_FORIN);
+        $4 = this.parseExpression();
+        $5 = this._match(SYM_BY);
+        $6 = this.parseExpression();
+        $7 = this._match(SYM_WHEN);
+        $8 = this.parseExpression();
+        $9 = this.parseBlock();
+        return ["for-in"  , $2, $4, $6, $8, $9];
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+      
+      // Try: FOR OWN ForVariables FOROF Expression WHEN Expression Block
+      try {
+        $2 = this._match(SYM_OWN);
+        $3 = this.parseForVariables();
+        $4 = this._match(SYM_FOROF);
+        $5 = this.parseExpression();
+        $6 = this._match(SYM_WHEN);
+        $7 = this.parseExpression();
+        $8 = this.parseBlock();
+        return ["for-of"  , $3, $5, true, $7, $8];
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+      
+      // Try: FOR AWAIT ForVariables FORFROM Expression WHEN Expression Block
+      try {
+        $2 = this._match(SYM_AWAIT);
+        $3 = this.parseForVariables();
+        $4 = this._match(SYM_FORFROM);
+        $5 = this.parseExpression();
+        $6 = this._match(SYM_WHEN);
+        $7 = this.parseExpression();
+        $8 = this.parseBlock();
+        return ["for-from", $3, $5, true, $7, $8];
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+      
+      // Try: FOR ForVariables FORIN Expression WHEN Expression Block
+      try {
         $2 = this.parseForVariables();
         $3 = this._match(SYM_FORIN);
         $4 = this.parseExpression();
@@ -540,47 +622,122 @@ const parser = {
         $6 = this.parseExpression();
         $7 = this.parseBlock();
         return ["for-in"  , $2, $4, null, $6, $7];
-  case SYM_BY: {
-    const _saved = this._saveState();
-
-    // Try: parseForVariables
-    try {
-      $1 = this.parseForVariables();
-      break;
-    } catch (e) {
-      this._restoreState(_saved);
-    }
-
-    // Try: parseRange
-    try {
-      $1 = this.parseRange();
-      break;
-    } catch (e) {
-      this._restoreState(_saved);
-    }
-
-    // Fallback error
-    this._error([SYM_BY], this.la.id);
-  }
-    case SYM_FOROF:
-        $1 = this._match(SYM_FOR);
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+      
+      // Try: FOR ForVariables FORIN Expression BY Expression Block
+      try {
+        $2 = this.parseForVariables();
+        $3 = this._match(SYM_FORIN);
+        $4 = this.parseExpression();
+        $5 = this._match(SYM_BY);
+        $6 = this.parseExpression();
+        $7 = this.parseBlock();
+        return ["for-in"  , $2, $4, $6, null, $7];
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+      
+      // Try: FOR ForVariables FOROF Expression WHEN Expression Block
+      try {
+        $2 = this.parseForVariables();
+        $3 = this._match(SYM_FOROF);
+        $4 = this.parseExpression();
+        $5 = this._match(SYM_WHEN);
+        $6 = this.parseExpression();
+        $7 = this.parseBlock();
+        return ["for-of"  , $2, $4, false, $6, $7];
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+      
+      // Try: FOR ForVariables FORFROM Expression WHEN Expression Block
+      try {
+        $2 = this.parseForVariables();
+        $3 = this._match(SYM_FORFROM);
+        $4 = this.parseExpression();
+        $5 = this._match(SYM_WHEN);
+        $6 = this.parseExpression();
+        $7 = this.parseBlock();
+        return ["for-from", $2, $4, false, $6, $7];
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+      
+      // Try: FOR OWN ForVariables FOROF Expression Block
+      try {
+        $2 = this._match(SYM_OWN);
+        $3 = this.parseForVariables();
+        $4 = this._match(SYM_FOROF);
+        $5 = this.parseExpression();
+        $6 = this.parseBlock();
+        return ["for-of"  , $3, $5, true, null, $6];
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+      
+      // Try: FOR AWAIT ForVariables FORFROM Expression Block
+      try {
+        $2 = this._match(SYM_AWAIT);
+        $3 = this.parseForVariables();
+        $4 = this._match(SYM_FORFROM);
+        $5 = this.parseExpression();
+        $6 = this.parseBlock();
+        return ["for-from", $3, $5, true, null, $6];
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+      
+      // Try: FOR ForVariables FORIN Expression Block
+      try {
+        $2 = this.parseForVariables();
+        $3 = this._match(SYM_FORIN);
+        $4 = this.parseExpression();
+        $5 = this.parseBlock();
+        return ["for-in"  , $2, $4, null, null, $5];
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+      
+      // Try: FOR ForVariables FOROF Expression Block
+      try {
         $2 = this.parseForVariables();
         $3 = this._match(SYM_FOROF);
         $4 = this.parseExpression();
         $5 = this.parseBlock();
         return ["for-of"  , $2, $4, false, null, $5];
-    case SYM_FORFROM:
-        $1 = this._match(SYM_FOR);
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+      
+      // Try: FOR ForVariables FORFROM Expression Block
+      try {
         $2 = this.parseForVariables();
         $3 = this._match(SYM_FORFROM);
         $4 = this.parseExpression();
         $5 = this.parseBlock();
         return ["for-from", $2, $4, false, null, $5];
-    case SYM_FOR:
-        $1 = this._match(SYM_FOR);
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+      
+      // Try: FOR Range BY Expression Block
+      try {
         $2 = this.parseRange();
-        $3 = this.parseBlock();
-        return ["for-in"  , [], $2, null, null, $3];
+        $3 = this._match(SYM_BY);
+        $4 = this.parseExpression();
+        $5 = this.parseBlock();
+        return ["for-in"  , [], $2, $4, null, $5];
+      } catch (e) {
+        this._restoreState(_saved);
+      }
+      
+      // Fallback: FOR Range Block
+      $2 = this.parseRange();
+      $3 = this.parseBlock();
+      return ["for-in"  , [], $2, null, null, $3];
+    }
   case SYM_SWITCH:
       $1 = this.parseSwitch();
       break;
@@ -596,11 +753,22 @@ const parser = {
   case SYM_DEF:
       $1 = this.parseDef();
       break;
-      default: this._error([SYM_AT, SYM_BOOL, SYM_DO_IIFE, SYM_DYNAMIC_IMPORT, SYM_FAT_ARROW, SYM_IDENTIFIER, SYM_IMPORT_META, SYM_INFINITY, SYM_JS, SYM_LBRACE, SYM_LBRACKET, SYM_LPAREN, SYM_NAN, SYM_NEW_TARGET, SYM_NULL, SYM_NUMBER, SYM_PARAM_START, SYM_REGEX, SYM_REGEX_START, SYM_STRING, SYM_STRING_START, SYM_SUPER, SYM_THIN_ARROW, SYM_THIS, SYM_UNDEFINED, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_OUTDENT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FORIN, SYM_WHEN, SYM_BY, SYM_FOROF, SYM_FORFROM, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF], this.la.id);
+      default: this._error([SYM_AT, SYM_BOOL, SYM_DO_IIFE, SYM_DYNAMIC_IMPORT, SYM_FAT_ARROW, SYM_IDENTIFIER, SYM_IMPORT_META, SYM_INFINITY, SYM_JS, SYM_LBRACE, SYM_LBRACKET, SYM_LPAREN, SYM_NAN, SYM_NEW_TARGET, SYM_NULL, SYM_NUMBER, SYM_PARAM_START, SYM_REGEX, SYM_REGEX_START, SYM_STRING, SYM_STRING_START, SYM_SUPER, SYM_THIN_ARROW, SYM_THIS, SYM_UNDEFINED, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_TRY, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF], this.la.id);
     }
-      while (this.la) {
-        switch (this.la.id) {
-          case SYM_DEC:
+    while (this.la) {
+      // Check precedence before continuing
+      const opInfo = OPERATOR_PRECEDENCE[this.la.id];
+      if (opInfo !== undefined) {
+        // Stop if operator precedence is less than or equal to minPrec
+        // For left-assoc: stop at same precedence (forces left grouping)
+        // For right-assoc: continue at same precedence (forces right grouping)
+        if (opInfo.assoc === 'left' && opInfo.prec <= minPrec) return $1;
+        if (opInfo.assoc === 'right' && opInfo.prec < minPrec) return $1;
+        if (opInfo.assoc === 'nonassoc' && opInfo.prec <= minPrec) return $1;
+      }
+
+      switch (this.la.id) {
+        case SYM_DEC:
             $2 = this._match(SYM_DEC);
             $1 = ["--", $1, true];
             continue;
@@ -610,20 +778,20 @@ const parser = {
             continue;
       case SYM_COMPOUND_ASSIGN:
             $2 = this._match(SYM_COMPOUND_ASSIGN);
-            $3 = this.parseExpression();
+            $3 = this.parseExpression(4);
             $1 = [$2, $1, $3];
             continue;
       case SYM_COMPOUND_ASSIGN:
             $2 = this._match(SYM_COMPOUND_ASSIGN);
             $3 = this._match(SYM_INDENT);
-            $4 = this.parseExpression();
+            $4 = this.parseExpression(4);
             $5 = this._match(SYM_OUTDENT);
             $1 = [$2, $1, $4];
             continue;
       case SYM_COMPOUND_ASSIGN:
             $2 = this._match(SYM_COMPOUND_ASSIGN);
             $3 = this._match(SYM_TERMINATOR);
-            $4 = this.parseExpression();
+            $4 = this.parseExpression(4);
             $1 = [$2, $1, $4];
             continue;
       case SYM_QUESTION:
@@ -632,57 +800,57 @@ const parser = {
             continue;
       case SYM_PLUS:
             $2 = this._match(SYM_PLUS);
-            $3 = this.parseExpression();
+            $3 = this.parseExpression(16);
             $1 = ["+", $1, $3];
             continue;
       case SYM_MINUS:
             $2 = this._match(SYM_MINUS);
-            $3 = this.parseExpression();
+            $3 = this.parseExpression(16);
             $1 = ["-", $1, $3];
             continue;
       case SYM_MATH:
             $2 = this._match(SYM_MATH);
-            $3 = this.parseExpression();
+            $3 = this.parseExpression(17);
             $1 = [$2, $1, $3];
             continue;
       case SYM_POWER:
             $2 = this._match(SYM_POWER);
-            $3 = this.parseExpression();
+            $3 = this.parseExpression(19);
             $1 = ["**", $1, $3];
             continue;
       case SYM_SHIFT:
             $2 = this._match(SYM_SHIFT);
-            $3 = this.parseExpression();
+            $3 = this.parseExpression(15);
             $1 = [$2, $1, $3];
             continue;
       case SYM_COMPARE:
             $2 = this._match(SYM_COMPARE);
-            $3 = this.parseExpression();
+            $3 = this.parseExpression(13);
             $1 = [$2, $1, $3];
             continue;
       case SYM_BITAND:
             $2 = this._match(SYM_BITAND);
-            $3 = this.parseExpression();
+            $3 = this.parseExpression(12);
             $1 = ["&", $1, $3];
             continue;
       case SYM_BITXOR:
             $2 = this._match(SYM_BITXOR);
-            $3 = this.parseExpression();
+            $3 = this.parseExpression(11);
             $1 = ["^", $1, $3];
             continue;
       case SYM_BITOR:
             $2 = this._match(SYM_BITOR);
-            $3 = this.parseExpression();
+            $3 = this.parseExpression(10);
             $1 = ["|", $1, $3];
             continue;
       case SYM_AND:
             $2 = this._match(SYM_AND);
-            $3 = this.parseExpression();
+            $3 = this.parseExpression(9);
             $1 = ["&&", $1, $3];
             continue;
       case SYM_OR:
             $2 = this._match(SYM_OR);
-            $3 = this.parseExpression();
+            $3 = this.parseExpression(8);
             $1 = ["||", $1, $3];
             continue;
       case SYM_NULLISH:
@@ -697,37 +865,37 @@ const parser = {
             continue;
       case SYM_RELATION:
             $2 = this._match(SYM_RELATION);
-            $3 = this.parseExpression();
+            $3 = this.parseExpression(14);
             $1 = [$2, $1, $3];
             continue;
       case SYM_TERNARY_Q:
             $2 = this._match(SYM_TERNARY_Q);
-            $3 = this.parseExpression();
+            $3 = this.parseExpression(7);
             $4 = this._match(SYM_COLON);
-            $5 = this.parseExpression();
+            $5 = this.parseExpression(7);
             $1 = ["?:", $1, $3, $5];
             continue;
       case SYM_ASSIGN:
             $2 = this._match(SYM_ASSIGN);
-            $3 = this.parseExpression();
+            $3 = this.parseExpression(4);
             $1 = ["=", $1, $3];
             continue;
       case SYM_ASSIGN:
             $2 = this._match(SYM_ASSIGN);
             $3 = this._match(SYM_TERMINATOR);
-            $4 = this.parseExpression();
+            $4 = this.parseExpression(4);
             $1 = ["=", $1, $4];
             continue;
       case SYM_ASSIGN:
             $2 = this._match(SYM_ASSIGN);
             $3 = this._match(SYM_INDENT);
-            $4 = this.parseExpression();
+            $4 = this.parseExpression(4);
             $5 = this._match(SYM_OUTDENT);
             $1 = ["=", $1, $4];
             continue;
       case SYM_POST_IF:
             $2 = this._match(SYM_POST_IF);
-            $3 = this.parseExpression();
+            $3 = this.parseExpression(1);
             $1 = ["if", $3, [$1]];
             continue;
       case SYM_POST_UNLESS:
@@ -743,63 +911,63 @@ const parser = {
             $2 = this._match(SYM_FOR);
             $3 = this.parseForVariables();
             $4 = this._match(SYM_FORIN);
-            $5 = this.parseExpression();
+            $5 = this.parseExpression(2);
             $1 = ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
             continue;
       case SYM_FOR:
             $2 = this._match(SYM_FOR);
             $3 = this.parseForVariables();
             $4 = this._match(SYM_FORIN);
-            $5 = this.parseExpression();
+            $5 = this.parseExpression(2);
             $6 = this._match(SYM_WHEN);
-            $7 = this.parseExpression();
+            $7 = this.parseExpression(2);
             $1 = ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
             continue;
       case SYM_FOR:
             $2 = this._match(SYM_FOR);
             $3 = this.parseForVariables();
             $4 = this._match(SYM_FORIN);
-            $5 = this.parseExpression();
+            $5 = this.parseExpression(2);
             $6 = this._match(SYM_BY);
-            $7 = this.parseExpression();
+            $7 = this.parseExpression(2);
             $1 = ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
             continue;
       case SYM_FOR:
             $2 = this._match(SYM_FOR);
             $3 = this.parseForVariables();
             $4 = this._match(SYM_FORIN);
-            $5 = this.parseExpression();
+            $5 = this.parseExpression(2);
             $6 = this._match(SYM_WHEN);
-            $7 = this.parseExpression();
+            $7 = this.parseExpression(2);
             $8 = this._match(SYM_BY);
-            $9 = this.parseExpression();
+            $9 = this.parseExpression(2);
             $1 = ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
             continue;
       case SYM_FOR:
             $2 = this._match(SYM_FOR);
             $3 = this.parseForVariables();
             $4 = this._match(SYM_FORIN);
-            $5 = this.parseExpression();
+            $5 = this.parseExpression(2);
             $6 = this._match(SYM_BY);
-            $7 = this.parseExpression();
+            $7 = this.parseExpression(2);
             $8 = this._match(SYM_WHEN);
-            $9 = this.parseExpression();
+            $9 = this.parseExpression(2);
             $1 = ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
             continue;
       case SYM_FOR:
             $2 = this._match(SYM_FOR);
             $3 = this.parseForVariables();
             $4 = this._match(SYM_FOROF);
-            $5 = this.parseExpression();
+            $5 = this.parseExpression(2);
             $1 = ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
             continue;
       case SYM_FOR:
             $2 = this._match(SYM_FOR);
             $3 = this.parseForVariables();
             $4 = this._match(SYM_FOROF);
-            $5 = this.parseExpression();
+            $5 = this.parseExpression(2);
             $6 = this._match(SYM_WHEN);
-            $7 = this.parseExpression();
+            $7 = this.parseExpression(2);
             $1 = ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
             continue;
       case SYM_FOR:
@@ -807,7 +975,7 @@ const parser = {
             $3 = this._match(SYM_OWN);
             $4 = this.parseForVariables();
             $5 = this._match(SYM_FOROF);
-            $6 = this.parseExpression();
+            $6 = this.parseExpression(2);
             $1 = ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
             continue;
       case SYM_FOR:
@@ -815,25 +983,25 @@ const parser = {
             $3 = this._match(SYM_OWN);
             $4 = this.parseForVariables();
             $5 = this._match(SYM_FOROF);
-            $6 = this.parseExpression();
+            $6 = this.parseExpression(2);
             $7 = this._match(SYM_WHEN);
-            $8 = this.parseExpression();
+            $8 = this.parseExpression(2);
             $1 = ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
             continue;
       case SYM_FOR:
             $2 = this._match(SYM_FOR);
             $3 = this.parseForVariables();
             $4 = this._match(SYM_FORFROM);
-            $5 = this.parseExpression();
+            $5 = this.parseExpression(2);
             $1 = ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
             continue;
       case SYM_FOR:
             $2 = this._match(SYM_FOR);
             $3 = this.parseForVariables();
             $4 = this._match(SYM_FORFROM);
-            $5 = this.parseExpression();
+            $5 = this.parseExpression(2);
             $6 = this._match(SYM_WHEN);
-            $7 = this.parseExpression();
+            $7 = this.parseExpression(2);
             $1 = ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
             continue;
       case SYM_FOR:
@@ -841,7 +1009,7 @@ const parser = {
             $3 = this._match(SYM_AWAIT);
             $4 = this.parseForVariables();
             $5 = this._match(SYM_FORFROM);
-            $6 = this.parseExpression();
+            $6 = this.parseExpression(2);
             $1 = ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
             continue;
       case SYM_FOR:
@@ -849,9 +1017,9 @@ const parser = {
             $3 = this._match(SYM_AWAIT);
             $4 = this.parseForVariables();
             $5 = this._match(SYM_FORFROM);
-            $6 = this.parseExpression();
+            $6 = this.parseExpression(2);
             $7 = this._match(SYM_WHEN);
-            $8 = this.parseExpression();
+            $8 = this.parseExpression(2);
             $1 = ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
             continue;
       case SYM_FOR:
@@ -863,13 +1031,13 @@ const parser = {
             $2 = this._match(SYM_FOR);
             $3 = this.parseRange();
             $4 = this._match(SYM_BY);
-            $5 = this.parseExpression();
+            $5 = this.parseExpression(2);
             $1 = ["comprehension", $1, [["for-in", [], $3, $5]], []];
             continue;
-          default:
-            return $1;
-        }
+        default:
+          return $1;
       }
+    }
 
     return $1;
   },
@@ -1595,7 +1763,7 @@ const parser = {
     $1 = ["?[]", $1, $5];
     continue;
   }
-      
+
       break;  // No matching separator
     }
 
@@ -1731,7 +1899,7 @@ $1 = this.parseParam();
     $1 = [...$1, ...$3];  // Flatten nested list
     continue;
   }
-      
+
       break;  // No matching separator
     }
 
@@ -1829,7 +1997,7 @@ $1 = this.parseParam();
     }
   },
 
-  parseValue() {
+  parseValue(minPrec = 0) {
     let $1, $2, $3, $4, $5, $6, $7;
 
     switch (this.la.id) {
@@ -1928,9 +2096,20 @@ $1 = this.parseParam();
       break;
       default: this._error([SYM_IDENTIFIER, SYM_AT, SYM_THIS, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_NEW_TARGET, SYM_IMPORT_META], this.la.id);
     }
-      while (this.la) {
-        switch (this.la.id) {
-          case SYM_DOT:
+    while (this.la) {
+      // Check precedence before continuing
+      const opInfo = OPERATOR_PRECEDENCE[this.la.id];
+      if (opInfo !== undefined) {
+        // Stop if operator precedence is less than or equal to minPrec
+        // For left-assoc: stop at same precedence (forces left grouping)
+        // For right-assoc: continue at same precedence (forces right grouping)
+        if (opInfo.assoc === 'left' && opInfo.prec <= minPrec) return $1;
+        if (opInfo.assoc === 'right' && opInfo.prec < minPrec) return $1;
+        if (opInfo.assoc === 'nonassoc' && opInfo.prec <= minPrec) return $1;
+      }
+
+      switch (this.la.id) {
+        case SYM_DOT:
             $2 = this._match(SYM_DOT);
             $3 = this.parseProperty();
             $1 = [".", $1, $3];
@@ -2055,10 +2234,10 @@ $1 = this.parseParam();
             $3 = this.parseArguments();
             $1 = ["optcall", $1, ...$3];
             continue;
-          default:
-            return $1;
-        }
+        default:
+          return $1;
       }
+    }
 
     return $1;
   },
@@ -2237,7 +2416,7 @@ $1 = this.parseAssignObj();
     $1 = [...$1, ...$3];  // Flatten nested list
     continue;
   }
-      
+
       break;  // No matching separator
     }
 
@@ -2446,7 +2625,7 @@ $1 = this.parseAssignObj();
     $1 = [...$1, ...$3];  // Flatten nested list
     continue;
   }
-      
+
       break;  // No matching separator
     }
 
@@ -2670,7 +2849,7 @@ $1 = this.parseAssignObj();
     $1 = [...$1, ...$3];  // Flatten nested list
     continue;
   }
-      
+
       break;  // No matching separator
     }
 
@@ -3517,7 +3696,7 @@ $1 = this.parseAssignObj();
     $1 = [...$1, ...$3];  // Flatten nested list
     continue;
   }
-      
+
       break;  // No matching separator
     }
 
@@ -3710,7 +3889,7 @@ $1 = this.parseAssignObj();
     $1 = [...$1, ...$3];  // Flatten nested list
     continue;
   }
-      
+
       break;  // No matching separator
     }
 

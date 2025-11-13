@@ -785,6 +785,23 @@ class Generator
     output.push "const TOKEN_NAMES = {#{entries.join(', ')}};"
     output.push ""
 
+    # Operator precedence map (for precedence climbing in Expression parsing)
+    if @operators and Object.keys(@operators).length > 0
+      output.push "// Operator precedence and associativity"
+      output.push "// Used for precedence climbing to achieve correct associativity"
+      precedenceEntries = []
+
+      for own tokenName, info of @operators
+        # Get the symbol ID for this operator
+        id = @symbolIds[tokenName]
+        continue unless id
+
+        # Use numeric ID as key (not constant name!)
+        precedenceEntries.push("#{id}: {prec: #{info.precedence}, assoc: '#{info.assoc}'}")
+
+      output.push "const OPERATOR_PRECEDENCE = {#{precedenceEntries.join(', ')}};"
+      output.push ""
+
     output.join('\n')
 
   _generateParserShell: ->
@@ -1596,16 +1613,59 @@ class Generator
         # This child should be inlined - add its alternatives
         childInfo = info.children.get(childName)
 
-        # Add child's PREFIX rules to base switch
+        # Group PREFIX rules by their FIRST token for lookahead disambiguation
+        prefixRulesByFirst = new Map()
+        
         for prefixRule in childInfo.prefixRules
-          # Check if prefix rule starts with an inlined nonterminal (like SimpleAssignable)
-          # If so, treat as postfix (since inlined nonterminal expands to parent)
           firstSym = prefixRule.symbols[0]
+          
+          # Check if this should be treated as postfix
           if @shouldInline?.has(firstSym) and @types[firstSym]
             # This is actually a postfix rule! (e.g., SimpleAssignable COMPOUND_ASSIGN Expression)
             postfixCases.push(@_generateInlinedPostfixCase(prefixRule, name))
+            continue
+          
+          # Group by first symbol for disambiguation
+          firstKey = if @types[firstSym]
+            # Nonterminal - use its name as key
+            firstSym
           else
-            baseCases.push(@_generateInlinedPrefixCase(prefixRule))
+            # Terminal - use its token ID as key
+            @symbolIds[firstSym]?.toString() or firstSym
+          
+          unless prefixRulesByFirst.has(firstKey)
+            prefixRulesByFirst.set(firstKey, [])
+          prefixRulesByFirst.get(firstKey).push(prefixRule)
+        
+        # Generate cases for each group
+        for [firstKey, rulesGroup] from prefixRulesByFirst
+          if rulesGroup.length is 1
+            # Single rule - generate normally
+            singleRule = rulesGroup[0]
+            firstSym = singleRule.symbols[0]
+            if @types[firstSym]
+              # Nonterminal first
+              baseCases.push(@_generateStandardCase(singleRule))
+            else
+              # Terminal first
+              baseCases.push(@_generateInlinedPrefixCase(singleRule))
+          else
+            # Multiple rules with same FIRST token - need lookahead
+            # Use the lookahead case generator
+            firstSym = rulesGroup[0].symbols[0]
+            if @types[firstSym]
+              # Nonterminal first - not supported in _generateLookaheadCase
+              # Fall back to generating separate cases
+              for groupRule in rulesGroup
+                baseCases.push(@_generateStandardCase(groupRule))
+            else
+              # Terminal first - use lookahead disambiguation
+              tokenId = @symbolIds[firstSym]
+              tokenName = @tokenNames[tokenId]
+              if tokenName
+                constName = @_getSymbolConstName(tokenName)
+                lookaheadCase = @_generateLookaheadCase(constName, rulesGroup, name)
+                baseCases.push(lookaheadCase)
 
         # Add child's POSTFIX rules to postfix loop
         for postfixRule in childInfo.postfixRules
@@ -1867,9 +1927,54 @@ class Generator
 
     dollarVars = ("$#{i}" for i in [1..maxVar]).join(', ')
 
+    # Detect if this function needs precedence parameter
+    # Check if any postfix cases have operators with precedence
+    needsPrecedence = false
+    if postfixCases.length > 0
+      for caseCode in postfixCases
+        # Extract the trigger token
+        match = caseCode.match(/case\s+(SYM_\w+)/)
+        if match and @operators
+          # Check if this is an operator with precedence
+          tokenConst = match[1]
+          for own tokenName, info of @operators
+            id = @symbolIds[tokenName]
+            continue unless id
+            # Check if this token matches
+            constName = @_getSymbolConstName(@tokenNames[id])
+            if constName is tokenConst
+              needsPrecedence = true
+              break
+        break if needsPrecedence
+
     # Generate postfix loop if needed
     postfixLoop = if postfixCases.length > 0
-      """
+      if needsPrecedence
+        # Add precedence checking before the switch
+        """
+
+            while (this.la) {
+              // Check precedence before continuing
+              const opInfo = OPERATOR_PRECEDENCE[this.la.id];
+              if (opInfo !== undefined) {
+                // Stop if operator precedence is less than or equal to minPrec
+                // For left-assoc: stop at same precedence (forces left grouping)
+                // For right-assoc: continue at same precedence (forces right grouping)
+                if (opInfo.assoc === 'left' && opInfo.prec <= minPrec) return $1;
+                if (opInfo.assoc === 'right' && opInfo.prec < minPrec) return $1;
+                if (opInfo.assoc === 'nonassoc' && opInfo.prec <= minPrec) return $1;
+              }
+
+              switch (this.la.id) {
+          #{postfixCases.join('\n')}
+                default:
+                  return $1;
+              }
+            }
+        """
+      else
+        # No precedence checking needed
+        """
 
             while (this.la) {
               switch (this.la.id) {
@@ -1878,7 +1983,7 @@ class Generator
                   return $1;
               }
             }
-      """
+        """
     else
       ""
 
@@ -1893,9 +1998,12 @@ class Generator
 
     expectedList = Array.from(expectedTokens).join(', ')
 
+    # Build function with or without precedence parameter
+    funcParams = if needsPrecedence then "minPrec = 0" else ""
+
     # Build function
     """
-      parse#{name}() {
+      parse#{name}(#{funcParams}) {
         let #{dollarVars};
 
         switch (this.la.id) {
@@ -2000,13 +2108,26 @@ class Generator
 
     constName = @_getSymbolConstName(tokenName)
 
+    # Check if trigger token has operator precedence
+    triggerHasPrecedence = false
+    triggerPrecedence = null
+    if @operators and @operators[triggerToken]
+      triggerHasPrecedence = true
+      triggerPrecedence = @operators[triggerToken].precedence
+
     # Generate parsing for remaining symbols
     lines = []
     startPos = if isParentRecursion then 2 else 1  # $2 if we skipped first symbol, else $1
     for symbol, i in remainingSymbols
       pos = i + startPos
       if @types[symbol]
-        lines.push("$#{pos} = this.parse#{symbol}();")
+        # Check if this is a recursive call to parent with precedence
+        if parentName and symbol is parentName and triggerHasPrecedence
+          # Pass the operator precedence to recursive call
+          lines.push("$#{pos} = this.parse#{symbol}(#{triggerPrecedence});")
+        else
+          # Normal parse call without precedence
+          lines.push("$#{pos} = this.parse#{symbol}();")
       else
         tokenId = @symbolIds[symbol]
         tokenName = @tokenNames[tokenId]
