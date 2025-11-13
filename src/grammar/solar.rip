@@ -1943,7 +1943,7 @@ class Generator
                 lines.push("    // All variants failed")
                 lines.push("    this._error([#{tokenNames.join(', ')}], this.la.id);")
                 lines.push("  }")
-                
+
                 baseCases.push(lines.join('\n'))
             else
               # Terminal first - use lookahead disambiguation
