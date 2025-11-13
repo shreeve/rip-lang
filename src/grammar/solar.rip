@@ -696,9 +696,18 @@ class Generator
   # Predictive Recursive Descent Generator
   # ============================================================================
   #
-  # Core Insight: SLR(1) tables are an oracle at generation time, not runtime.
-  # We consult the tables during code generation to determine what lookahead
-  # checks and dispatch logic to compile into direct code.
+  # CORE INSIGHT: SLR(1) tables are an oracle at generation time, not runtime.
+  # We consult the tables (FIRST/FOLLOW sets, nullable analysis, conflict resolution)
+  # during code generation to determine what lookahead checks and dispatch logic to
+  # compile into direct recursive descent code.
+  #
+  # KEY TECHNIQUES:
+  # 1. Direct left-recursion → Iterative loops (A → A sep B becomes while loop)
+  # 2. Indirect cycles → Inlining (A → B, B → A becomes inline B into A)
+  # 3. Multi-token ambiguity → Try/catch with backtracking (~50 line overhead)
+  # 4. Overlapping alternatives → Recursive grouping prevents duplicate checks
+  #
+  # RESULT: Generic PRD generation for ANY SLR(1) grammar, no embedded tables.
 
   _generatePRD: ->
     # Generate the parser using predictive recursive descent
@@ -923,18 +932,23 @@ class Generator
 
     functions.join('\n\n')
 
+  # ============================================================================
+  # DEAD CODE SECTION - Experimental PRD Approach (UNUSED)
+  # ============================================================================
+  # TODO: Remove this section in deep refactor (lines 935-2856, ~1900 lines)
+  # These functions were part of an experimental oracle-based approach that was
+  # superseded by the inlining/backtracking strategy. Kept for reference but
+  # never called in actual generation.
+
   _generateParseFunction: (nonTerminal) ->
-    # Consult SLR(1) oracle to generate parse function
+    # UNUSED - Experimental oracle-based generation
     type = @types[nonTerminal]
     return '' unless type
 
     rules = type.rules
     return '' unless rules.length > 0
 
-    # Analyze the nonterminal at generation time using SLR(1) information
     analysis = @_analyzeNonterminal(nonTerminal, rules)
-
-    # Generate optimized parse function based on analysis
     @_generateOptimizedFunction(nonTerminal, analysis, type)
 
   _generateLeftRecursiveFunction: (nonTerminal, rules, type) ->
@@ -1539,9 +1553,7 @@ class Generator
             postfixRules: postfixRules
           })
 
-          console.log "🔄 Inlining #{childName} into #{parentName}"
-          console.log "   Prefix: #{prefixRules.length} rules"
-          console.log "   Postfix: #{postfixRules.length} rules"
+          console.log "🔄 Inlining #{childName} into #{parentName} (#{prefixRules.length} prefix, #{postfixRules.length} postfix)"
 
   _getOperatorPrecedence: (opSymbol) ->
     # Get numeric precedence for an operator symbol
@@ -1551,6 +1563,17 @@ class Generator
 
   _generateWithInlining: (name, type) ->
     # Generate function with inlined children (handles indirect left-recursion)
+    #
+    # STRATEGY:
+    # 1. Inline child rules to eliminate cycles (e.g., Expression → Operation, Operation → Expression)
+    # 2. Prefix forms (FOR ...) go in base switch
+    # 3. Postfix forms (... FOR) go in while loop
+    # 4. Detect overlapping FIRST sets and generate disambiguation (try/catch)
+    # 5. Final pass catches cross-source overlaps (Value vs Code)
+    #
+    # WHY: Breaks infinite recursion cycles by not generating separate functions for
+    # children, instead inlining their alternatives directly into the parent.
+    
     info = @indirectLeftRec.get(name)
 
     # Collect all cases for base switch and postfix loop
@@ -1619,18 +1642,13 @@ class Generator
 
         # Regular rule - add to base switch normally
         generatedCase = @_generateStandardCase(rule)
-        if generatedCase
-          console.log "📝 Adding base case for #{name} → #{rule.symbols.join(' ')}"
-          baseCases.push(generatedCase)
-        else
-          console.log "⚠️  Failed to generate case for #{name} → #{rule.symbols.join(' ')}"
+        baseCases.push(generatedCase) if generatedCase
 
     # Deduplicate baseCases - remove EXACT duplicates only
     # Two cases are duplicates if they have identical code (same tokens AND same parsing)
     # Cases with same trigger tokens but different parsing are NOT duplicates!
     seenCases = new Set()
     uniqueBaseCases = []
-    startCount = baseCases.length
     for caseCode in baseCases
       # Normalize whitespace for comparison
       normalized = caseCode.replace(/\s+/g, ' ').trim()
@@ -1638,40 +1656,34 @@ class Generator
         uniqueBaseCases.push(caseCode)
         seenCases.add(normalized)
 
-    if startCount > uniqueBaseCases.length
-      console.log "🔄 Deduplication: #{startCount} → #{uniqueBaseCases.length} cases (removed #{startCount - uniqueBaseCases.length} exact duplicates)"
-
     baseCases = uniqueBaseCases
 
     # Detect overlapping triggers and merge with disambiguation
-    # Instead of grouping by exact trigger match, check for ANY overlap
+    # WHY: Cases from different sources (Value, Code) may have overlapping FIRST sets
+    # This groups them for proper disambiguation using try/catch
     baseCasesByTrigger = []  # Array of {triggers: Set, cases: []}
-
+    
     for caseCode in baseCases
       # Extract trigger token(s)
       match = caseCode.match(/case\s+((?:SYM_\w+(?::\s*)?)+):/)
       if match
         triggers = new Set(match[1].match(/SYM_\w+/g))
-        triggerList = Array.from(triggers).slice(0, 3).join(',')  # First 3 for debug
-
+        
         # Find existing group with overlapping triggers
         overlappingGroup = null
         for group in baseCasesByTrigger
           # Check if any triggers overlap
           hasOverlap = Array.from(triggers).some((t) -> group.triggers.has(t))
           if hasOverlap
-            existingList = Array.from(group.triggers).slice(0, 3).join(',')
-            console.log "  🔗 Merging [#{triggerList}...] into existing group [#{existingList}...]"
             overlappingGroup = group
             break
-
+        
         if overlappingGroup
           # Merge into existing group
           triggers.forEach((t) -> overlappingGroup.triggers.add(t))
           overlappingGroup.cases.push(caseCode)
         else
           # Create new group
-          console.log "  ✨ New group [#{triggerList}...]"
           baseCasesByTrigger.push({triggers, cases: [caseCode]})
 
     # Merge base cases with duplicate triggers using lookahead disambiguation
@@ -1695,30 +1707,21 @@ class Generator
 
         if uniqueHandlers.length is 0
           # Can't extract handlers - use first as fallback
-          console.log "⚠️  Overlapping triggers (no handlers): keeping first"
           mergedBaseCases.push(cases[0])
         else if uniqueHandlers.length is 1
           # All call same function - pick simplest case (fewest operations)
-          # Prefer: "$1 = parseX(); break;" over "$1 = parseX(); $2 = match...; $1 = [...]; break;"
-
-          # Debug: show operation counts for each case
-          for caseCode, idx in cases
-            ops = (caseCode.match(/this\.(parse|_match)/g) || []).length
-            snippet = caseCode.substring(0, 150).replace(/\n/g, ' ').replace(/\s+/g, ' ')
-            console.log "    Case #{idx}: #{ops} ops - #{snippet}..."
-
-          simplestCase = cases.reduce((best, c) ->
-            # Count operations (parse calls + match calls + assignments)
+          # WHY: Prefer "$1 = parseX(); break;" over "$1 = parseX(); $2 = match...; break;"
+          simplestCase = cases.reduce((best, c) -> 
+            # Count operations (parse calls + match calls)
             bestOps = (best.match(/this\.(parse|_match)/g) || []).length
             cOps = (c.match(/this\.(parse|_match)/g) || []).length
             if cOps < bestOps then c else best
           )
-          console.log "⚠️  Overlapping triggers for #{uniqueHandlers[0]}: #{cases.length} cases, selected one with #{simplestCase.match(/this\.(parse|_match)/g)?.length or 0} ops)"
           mergedBaseCases.push(simplestCase)
         else
           # Generate try/catch for disambiguation
-          triggerList = Array.from(triggers).sort().join(' vs ')
-          console.log "✨ Overlapping triggers: #{uniqueHandlers.join(' vs ')}"
+          # WHY: Multiple handlers (e.g., Value vs Code) need ordered alternatives
+          console.log "✨ Overlapping: #{uniqueHandlers.join(' vs ')}"
           tokens = Array.from(triggers).sort()
           caseLabel = tokens.map((t) -> "case #{t}").join(': ')
 
@@ -1744,21 +1747,19 @@ class Generator
 
     baseCases = mergedBaseCases
 
-    # FINAL PASS: Detect overlaps across ALL base cases (catches Value vs Code overlaps)
-    # This runs after all cases from different sources are merged into baseCases
-    console.log "🔍 Final overlap check on #{baseCases.length} cases..."
-
+    # FINAL PASS: Detect overlaps across ALL base cases
+    # WHY: Cases from different sources (Expression→Value, Expression→Code) aren't
+    # compared in earlier passes. This catches cross-source overlaps like when Value
+    # and Code both handle PARAM_START/THIN_ARROW/FAT_ARROW tokens.
     finalGroups = []  # Array of {triggers: Set, cases: []}
-
+    
     for caseCode in baseCases
       # Extract ALL trigger tokens from case label (handles "case A: case B: case C:")
-      # Match all "case SYM_XXX" patterns
       allMatches = caseCode.match(/case\s+SYM_\w+/g)
       continue unless allMatches
-
+      
       triggers = new Set(allMatches.map((m) -> m.replace('case ', '')))
-      console.log "  📌 Found triggers: #{Array.from(triggers).slice(0, 5).join(', ')}#{if triggers.size > 5 then '...' else ''}"
-
+      
       # Find group with ANY overlapping trigger
       found = null
       for group in finalGroups
@@ -1766,7 +1767,7 @@ class Generator
         if hasOverlap
           found = group
           break
-
+      
       if found
         # Merge into existing group
         triggers.forEach((t) -> found.triggers.add(t))
@@ -1792,16 +1793,16 @@ class Generator
 
         if uniqueHandlers.length <= 1
           # All same handler or can't extract - pick simplest
-          simplest = cases.reduce((best, c) ->
+          simplest = cases.reduce((best, c) -> 
             bestOps = (best.match(/this\.(parse|_match)/g) || []).length
             cOps = (c.match(/this\.(parse|_match)/g) || []).length
             if cOps < bestOps then c else best
           )
-          console.log "  ⚠️  Final: #{uniqueHandlers[0] or 'unknown'} - #{cases.length} cases, using simplest"
           finalBaseCases.push(simplest)
         else
-          # Different handlers - generate try/catch
-          console.log "  ✨ Final: #{uniqueHandlers.join(' vs ')}"
+          # Different handlers - generate try/catch with ordered alternatives
+          # WHY: Value vs Code overlap requires trying both parsers
+          console.log "✨ Final overlap: #{uniqueHandlers.join(' vs ')}"
           tokens = Array.from(triggers).sort()
           caseLabel = tokens.map((t) -> "case #{t}").join(': ')
 
@@ -2098,7 +2099,13 @@ class Generator
 
   _generateNestedBranches: (groups, rules, skipCount, indent) ->
     # Recursively generate nested if/else branches for grouped rules
-    # Returns array of code lines
+    #
+    # WHY: Rules may differ at varying depths (some at position 1, others at position 3).
+    # Recursive grouping generates proper nesting: parse common symbols, then branch on
+    # distinguisher. This prevents duplicate lookahead checks (all branches checking same FIRST set).
+    #
+    # STRATEGY: Group by next symbol, generate if/else, recurse for multi-rule groups.
+    
     lines = []
     groupArray = Array.from(groups.entries())
 
@@ -2193,8 +2200,15 @@ class Generator
 
   _generateTryBacktrackCase: (triggerToken, sortedRules, nonTerminal) ->
     # Generate try/catch with backtracking for complex ambiguous cases
-    # Try specific patterns first (longest rules), fall back to general (shortest)
-    lines = ["    case #{triggerToken}: {"]  # Wrap in block scope
+    #
+    # WHY: Some rules share long common prefixes but differ deep inside (e.g., Object
+    # comprehensions vs regular objects). Simple lookahead can't distinguish them without
+    # parsing several tokens ahead. Try/catch with state save/restore lets us attempt
+    # specific patterns and backtrack on failure - no multi-token lookahead needed!
+    #
+    # STRATEGY: Try longest (most specific) rules first, fall back to shortest (most general)
+    
+    lines = ["    case #{triggerToken}: {"]  # Wrap in block scope for const _saved
     lines.push("      $1 = this._match(#{triggerToken});")
     lines.push("      ")
 
