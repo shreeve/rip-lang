@@ -1567,11 +1567,11 @@ class Generator
   detectPassthroughs: ->
     # Detect nonterminals that forward to other nonterminals (passthroughs)
     @passthroughs = new Set()
-    
+
     for own name, type of @types
       continue if name in ['$accept', '$end', 'error']
       continue if @leftRecursive.has(name)
-      
+
       if @_isPassthrough(name, type)
         @passthroughs.add(name)
         console.log "🔍 Detected passthrough: #{name}"
@@ -1579,34 +1579,34 @@ class Generator
   _isPassthrough: (name, type) ->
     # Check if this nonterminal forwards to another nonterminal as first alternative
     return false unless type.rules.length > 0
-    
+
     firstRule = type.rules[0]
     return false unless firstRule.symbols.length is 1
-    
+
     firstSymbol = firstRule.symbols[0]
     return false unless @types[firstSymbol]
-    
+
     # Count passthrough rules
     passthroughCount = 0
     for rule in type.rules
       if rule.symbols.length is 1 and @types[rule.symbols[0]]
         passthroughCount++
-    
+
     # True passthrough: has passthrough rules but not exclusively
     return true if passthroughCount >= 1 and type.rules.length > 1
     return true if passthroughCount is 1 and type.rules.length is 1
-    
+
     return false
 
   detectAllCycles: ->
     # Find all cycles of any length using DFS
     @allCycles = []
     @cycleParticipants = new Set()
-    
+
     for own startName, startType of @types
       continue if startName in ['$accept', '$end', 'error']
       continue if @leftRecursive.has(startName)
-      
+
       visited = new Set()
       path = []
       @_findCyclesDFS(startName, startName, visited, path, new Set())
@@ -1618,26 +1618,26 @@ class Generator
       unless @_cycleExists(cycleKey)
         console.log "🔄 Multi-hop cycle: #{path.join(' → ')} → #{startName}"
         @allCycles.push({nodes: [...path], key: cycleKey})
-        
+
         for node in path
           @cycleParticipants.add(node)
       return
-    
+
     return if visited.has(currentName)
     return if path.length > 10
-    
+
     visited.add(currentName)
     pathSet.add(currentName)
     path.push(currentName)
-    
+
     currentType = @types[currentName]
     return unless currentType
-    
+
     for rule in currentType.rules
       firstSymbol = rule.symbols[0]
       continue unless @types[firstSymbol]
       continue if firstSymbol is currentName
-      
+
       @_findCyclesDFS(startName, firstSymbol, new Set(visited), [...path], new Set(pathSet))
 
   _cycleExists: (cycleKey) ->
@@ -1648,12 +1648,12 @@ class Generator
   determineInlineHosts: ->
     # For each cycle, select the best host
     @inlineHosts = new Map()
-    
+
     for cycle in @allCycles
       host = @_selectCycleHost(cycle.nodes)
-      
+
       console.log "📦 Cycle host: #{host} for [#{cycle.nodes.join(', ')}]"
-      
+
       for node in cycle.nodes when node isnt host
         @shouldInline.add(node)
         @inlineHosts.set(node, host)
@@ -1663,41 +1663,41 @@ class Generator
     # Score each node to determine best host
     # Strategy: Pick the most "general" node (top-level aggregator)
     scores = new Map()
-    
+
     for nodeName in cycleNodes
       nodeType = @types[nodeName]
       return null unless nodeType  # Safety check
-      
+
       score = 0
-      
+
       # MOST IMPORTANT: Conventional host names (Expression, Value, etc.)
       # These are typically the top-level aggregators in grammars
       if nodeName in ['Expression', 'Statement', 'Value', 'Literal', 'Term', 'Factor']
         score += 1000  # Overwhelming priority
-      
+
       # More rules = more general = better host
       score += nodeType.rules.length * 10
-      
+
       # Being a passthrough is OK for Expression/Value (they aggregate)
       # Penalize OTHER passthroughs
       if @passthroughs.has(nodeName)
         unless nodeName in ['Expression', 'Value', 'Statement']
           score -= 50  # Penalty for non-aggregator passthroughs
-      
+
       # Prefer shorter names (convention: general names are shorter)
       score += (25 - nodeName.length) if nodeName.length < 25
-      
+
       scores.set(nodeName, score)
-    
+
     # Select node with highest score
     bestNode = cycleNodes[0]  # Default to first if all scores are equal
     bestScore = -Infinity
-    
+
     for [node, score] from scores
       if score > bestScore
         bestScore = score
         bestNode = node
-    
+
     return bestNode
 
   _getInlineHost: (symbol) ->
@@ -1716,20 +1716,20 @@ class Generator
     # - Multi-hop cycles (Value → Assignable → SimpleAssignable → Value)
     # - Optimal hosts for inlining (highest generality score)
     # All computed automatically from grammar structure - no hardcoded symbol names!
-    
+
     @indirectLeftRec = new Map()  # parent → {children with postfix forms}
     @shouldInline = new Set()      # rules to inline (don't generate)
     @inlineHosts = new Map()       # inlined symbol → host symbol
-    
+
     # Step 1: Detect passthrough nonterminals
     @detectPassthroughs()
-    
+
     # Step 2: Detect all cycles (2-hop, 3-hop, N-hop)
     @detectAllCycles()
-    
+
     # Step 3: Determine optimal host for each cycle
     @determineInlineHosts()
-    
+
     # Build set of hosts (nodes that receive inlining)
     hosts = new Set()
     for cycle in @allCycles
