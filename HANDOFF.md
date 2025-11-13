@@ -1,16 +1,16 @@
 # PRD Parser Generator - Current Status
 
-## Achievement: 807/962 Tests Passing (83.9%)
+## Achievement: 852/962 Tests Passing (88.6%)
 
 **Session Progress:**
 - Started: 585 tests (60.8%)
-- Current: 807 tests (83.9%)
-- Improvement: +222 tests (+38.0%)
+- Current: 852 tests (88.6%)
+- Improvement: +267 tests (+45.6%)
 
 **Historical Total:**
 - Origin: 261 tests (27.1%)
-- Now: 807 tests (83.9%)
-- **Total improvement: +546 tests (+209%)!**
+- Now: 852 tests (88.6%)
+- **Total improvement: +591 tests (+227%)!**
 
 ---
 
@@ -377,11 +377,13 @@ parser.parseAssignable = parser.parseValue;
 | After nonterminal-first prefix | 679 | 70.6% | +32 |
 | After FOR lookahead grouping | 735 | 76.4% | +56 |
 | After inlined-but-referenced | 751 | 78.1% | +16 |
-| **After different-target disambiguation** | **807** | **83.9%** | **+56** |
+| After different-target disambiguation | 807 | 83.9% | +56 |
+| After postfix FOR grouping | 830 | 86.3% | +23 |
+| **After comprehensive postfix merging** | **852** | **88.6%** | **+22** |
 
 ---
 
-## ❌ Remaining Issues (155 tests, 16.1%)
+## ❌ Remaining Issues (110 tests, 11.4%)
 
 ### ✅ Major Blockers - ALL FIXED!
 

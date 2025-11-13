@@ -2166,7 +2166,7 @@ class Generator
         # Multiple cases - extract and merge them
         # These come from passthrough/grandchild sections that aren't pre-grouped
         console.log "⚡ Merging #{cases.length} duplicate postfix cases for #{trigger}"
-        
+
         # Extract the parsing code from each case (everything after "case XXX:")
         parsings = []
         for caseCode in cases
@@ -2177,13 +2177,13 @@ class Generator
             # Remove trailing "continue;"
             parsing = parsing.replace(/\s*continue;\s*$/, '')
             parsings.push(parsing) if parsing
-        
+
         # Generate merged case with try/catch for each variant
         # Use unique save variable name based on trigger to avoid conflicts
         saveVar = "_saved#{trigger.replace('SYM_', '')}"
         lines = ["      case #{trigger}:"]
         lines.push("            const #{saveVar} = this._saveState();")
-        
+
         for parsing, idx in parsings
           lines.push("")
           lines.push("            // Variant #{idx + 1}")
@@ -2195,13 +2195,13 @@ class Generator
           lines.push("            } catch (e) {")
           lines.push("              this._restoreState(#{saveVar});")
           lines.push("            }")
-        
+
         lines.push("")
         lines.push("            // All variants failed")
         lines.push("            return $1;")
-        
+
         groupedPostfixCases.push(lines.join('\n'))
-    
+
     postfixCases = groupedPostfixCases
 
     # Deduplicate postfixCases - remove exact duplicates only
