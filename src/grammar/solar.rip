@@ -2163,12 +2163,45 @@ class Generator
         # Single case - use as-is
         groupedPostfixCases.push(cases[0])
       else
-        # Multiple cases - they're duplicates that need merging
-        # This shouldn't happen with our new _generatePostfixLookaheadCase
-        # but keep first as fallback
-        console.log "⚠️  Multiple postfix cases for #{trigger}: #{cases.length} (using first)"
-        groupedPostfixCases.push(cases[0])
-
+        # Multiple cases - extract and merge them
+        # These come from passthrough/grandchild sections that aren't pre-grouped
+        console.log "⚡ Merging #{cases.length} duplicate postfix cases for #{trigger}"
+        
+        # Extract the parsing code from each case (everything after "case XXX:")
+        parsings = []
+        for caseCode in cases
+          # Extract the actual code after case label
+          match = caseCode.match(/case\s+SYM_\w+:\s*([\s\S]*)/)
+          if match
+            parsing = match[1].trim()
+            # Remove trailing "continue;"
+            parsing = parsing.replace(/\s*continue;\s*$/, '')
+            parsings.push(parsing) if parsing
+        
+        # Generate merged case with try/catch for each variant
+        # Use unique save variable name based on trigger to avoid conflicts
+        saveVar = "_saved#{trigger.replace('SYM_', '')}"
+        lines = ["      case #{trigger}:"]
+        lines.push("            const #{saveVar} = this._saveState();")
+        
+        for parsing, idx in parsings
+          lines.push("")
+          lines.push("            // Variant #{idx + 1}")
+          lines.push("            try {")
+          # Indent the parsing code
+          for line in parsing.split('\n')
+            lines.push("          #{line}")
+          lines.push("              continue;")
+          lines.push("            } catch (e) {")
+          lines.push("              this._restoreState(#{saveVar});")
+          lines.push("            }")
+        
+        lines.push("")
+        lines.push("            // All variants failed")
+        lines.push("            return $1;")
+        
+        groupedPostfixCases.push(lines.join('\n'))
+    
     postfixCases = groupedPostfixCases
 
     # Deduplicate postfixCases - remove exact duplicates only

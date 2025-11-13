@@ -977,10 +977,43 @@ const parser = {
             $1 = ["++", $1, true];
             continue;
       case SYM_COMPOUND_ASSIGN:
-            $2 = this._match(SYM_COMPOUND_ASSIGN);
-            $3 = this.parseExpression(4);
-            $1 = [$2, $1, $3];
-            continue;
+            const _savedCOMPOUND_ASSIGN = this._saveState();
+
+            // Variant 1
+            try {
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+                      $3 = this.parseExpression(4);
+                      $1 = [$2, $1, $3];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedCOMPOUND_ASSIGN);
+            }
+
+            // Variant 2
+            try {
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+                      $3 = this._match(SYM_INDENT);
+                      $4 = this.parseExpression(4);
+                      $5 = this._match(SYM_OUTDENT);
+                      $1 = [$2, $1, $4];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedCOMPOUND_ASSIGN);
+            }
+
+            // Variant 3
+            try {
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+                      $3 = this._match(SYM_TERMINATOR);
+                      $4 = this.parseExpression(4);
+                      $1 = [$2, $1, $4];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedCOMPOUND_ASSIGN);
+            }
+
+            // All variants failed
+            return $1;
       case SYM_QUESTION:
             $2 = this._match(SYM_QUESTION);
             $1 = ["?", $1];
@@ -1063,10 +1096,43 @@ const parser = {
             $1 = ["?:", $1, $3, $5];
             continue;
       case SYM_ASSIGN:
-            $2 = this._match(SYM_ASSIGN);
-            $3 = this.parseExpression(4);
-            $1 = ["=", $1, $3];
-            continue;
+            const _savedASSIGN = this._saveState();
+
+            // Variant 1
+            try {
+          $2 = this._match(SYM_ASSIGN);
+                      $3 = this.parseExpression(4);
+                      $1 = ["=", $1, $3];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedASSIGN);
+            }
+
+            // Variant 2
+            try {
+          $2 = this._match(SYM_ASSIGN);
+                      $3 = this._match(SYM_TERMINATOR);
+                      $4 = this.parseExpression(4);
+                      $1 = ["=", $1, $4];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedASSIGN);
+            }
+
+            // Variant 3
+            try {
+          $2 = this._match(SYM_ASSIGN);
+                      $3 = this._match(SYM_INDENT);
+                      $4 = this.parseExpression(4);
+                      $5 = this._match(SYM_OUTDENT);
+                      $1 = ["=", $1, $4];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedASSIGN);
+            }
+
+            // All variants failed
+            return $1;
       case SYM_POST_IF:
             $2 = this._match(SYM_POST_IF);
             $3 = this.parseExpression(1);
@@ -2237,7 +2303,7 @@ $1 = this.parseParam();
   },
 
   parseValue(minPrec = 0) {
-    let $1, $2, $3, $4, $5;
+    let $1, $2, $3, $4, $5, $6, $7;
 
     switch (this.la.id) {
   case SYM_IDENTIFIER:
@@ -2359,35 +2425,205 @@ $1 = this.parseParam();
             $1 = ["?.", $1, $3];
             continue;
       case SYM_PROTO:
-            $2 = this._match(SYM_PROTO);
-            $3 = this.parseProperty();
-            $1 = ["::", $1, $3];
-            continue;
+            const _savedPROTO = this._saveState();
+
+            // Variant 1
+            try {
+          $2 = this._match(SYM_PROTO);
+                      $3 = this.parseProperty();
+                      $1 = ["::", $1, $3];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedPROTO);
+            }
+
+            // Variant 2
+            try {
+          $2 = this._match(SYM_PROTO);
+                      $1 = ["::", $1, "prototype"];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedPROTO);
+            }
+
+            // All variants failed
+            return $1;
       case SYM_OPT_PROTO:
-            $2 = this._match(SYM_OPT_PROTO);
-            $3 = this.parseProperty();
-            $1 = ["?::", $1, $3];
-            continue;
+            const _savedOPT_PROTO = this._saveState();
+
+            // Variant 1
+            try {
+          $2 = this._match(SYM_OPT_PROTO);
+                      $3 = this.parseProperty();
+                      $1 = ["?::", $1, $3];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedOPT_PROTO);
+            }
+
+            // Variant 2
+            try {
+          $2 = this._match(SYM_OPT_PROTO);
+                      $1 = ["?::", $1, "prototype"];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedOPT_PROTO);
+            }
+
+            // All variants failed
+            return $1;
       case SYM_INDEX_START:
-            $2 = this._match(SYM_INDEX_START);
-            $3 = this.parseExpression();
-            $4 = this._match(SYM_INDEX_END);
-            $1 = ["[]", $1, $3];
-            continue;
+            const _savedINDEX_START = this._saveState();
+
+            // Variant 1
+            try {
+          $2 = this._match(SYM_INDEX_START);
+                      $3 = this.parseExpression();
+                      $4 = this._match(SYM_INDEX_END);
+                      $1 = ["[]", $1, $3];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedINDEX_START);
+            }
+
+            // Variant 2
+            try {
+          $2 = this._match(SYM_INDEX_START);
+                      $3 = this._match(SYM_INDENT);
+                      $4 = this.parseExpression();
+                      $5 = this._match(SYM_OUTDENT);
+                      $6 = this._match(SYM_INDEX_END);
+                      $1 = ["[]", $1, $4];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedINDEX_START);
+            }
+
+            // Variant 3
+            try {
+          $2 = this._match(SYM_INDEX_START);
+                      $3 = this.parseSlice();
+                      $4 = this._match(SYM_INDEX_END);
+                      $1 = ["[]", $1, $3];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedINDEX_START);
+            }
+
+            // Variant 4
+            try {
+          $2 = this._match(SYM_INDEX_START);
+                      $3 = this._match(SYM_INDENT);
+                      $4 = this.parseSlice();
+                      $5 = this._match(SYM_OUTDENT);
+                      $6 = this._match(SYM_INDEX_END);
+                      $1 = ["[]", $1, $4];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedINDEX_START);
+            }
+
+            // Variant 5
+            try {
+          $2 = this._match(SYM_INDEX_START);
+                      $3 = this.parseRegexWithIndex();
+                      $4 = this._match(SYM_INDEX_END);
+                      $1 = [$3[0], $1, ...$3.slice(1)];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedINDEX_START);
+            }
+
+            // All variants failed
+            return $1;
       case SYM_INDEX_SOAK:
-            $2 = this._match(SYM_INDEX_SOAK);
-            $3 = this._match(SYM_INDEX_START);
-            $4 = this.parseExpression();
-            $5 = this._match(SYM_INDEX_END);
-            $1 = ["?[]", $1, $4];
-            continue;
+            const _savedINDEX_SOAK = this._saveState();
+
+            // Variant 1
+            try {
+          $2 = this._match(SYM_INDEX_SOAK);
+                      $3 = this._match(SYM_INDEX_START);
+                      $4 = this.parseExpression();
+                      $5 = this._match(SYM_INDEX_END);
+                      $1 = ["?[]", $1, $4];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedINDEX_SOAK);
+            }
+
+            // Variant 2
+            try {
+          $2 = this._match(SYM_INDEX_SOAK);
+                      $3 = this._match(SYM_INDEX_START);
+                      $4 = this._match(SYM_INDENT);
+                      $5 = this.parseExpression();
+                      $6 = this._match(SYM_OUTDENT);
+                      $7 = this._match(SYM_INDEX_END);
+                      $1 = ["?[]", $1, $5];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedINDEX_SOAK);
+            }
+
+            // Variant 3
+            try {
+          $2 = this._match(SYM_INDEX_SOAK);
+                      $3 = this._match(SYM_INDEX_START);
+                      $4 = this.parseSlice();
+                      $5 = this._match(SYM_INDEX_END);
+                      $1 = ["?[]", $1, $4];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedINDEX_SOAK);
+            }
+
+            // Variant 4
+            try {
+          $2 = this._match(SYM_INDEX_SOAK);
+                      $3 = this._match(SYM_INDEX_START);
+                      $4 = this._match(SYM_INDENT);
+                      $5 = this.parseSlice();
+                      $6 = this._match(SYM_OUTDENT);
+                      $7 = this._match(SYM_INDEX_END);
+                      $1 = ["?[]", $1, $5];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedINDEX_SOAK);
+            }
+
+            // All variants failed
+            return $1;
       case SYM_ES6_OPTIONAL_INDEX:
-            $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
-            $3 = this._match(SYM_INDEX_START);
-            $4 = this.parseExpression();
-            $5 = this._match(SYM_INDEX_END);
-            $1 = ["optindex", $1, $4];
-            continue;
+            const _savedES6_OPTIONAL_INDEX = this._saveState();
+
+            // Variant 1
+            try {
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+                      $3 = this._match(SYM_INDEX_START);
+                      $4 = this.parseExpression();
+                      $5 = this._match(SYM_INDEX_END);
+                      $1 = ["optindex", $1, $4];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedES6_OPTIONAL_INDEX);
+            }
+
+            // Variant 2
+            try {
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+                      $3 = this._match(SYM_INDEX_START);
+                      $4 = this._match(SYM_INDENT);
+                      $5 = this.parseExpression();
+                      $6 = this._match(SYM_OUTDENT);
+                      $7 = this._match(SYM_INDEX_END);
+                      $1 = ["optindex", $1, $5];
+              continue;
+            } catch (e) {
+              this._restoreState(_savedES6_OPTIONAL_INDEX);
+            }
+
+            // All variants failed
+            return $1;
       case SYM_STRING:
             $2 = this.parseOptFuncExist();
             $3 = this.parseString();
