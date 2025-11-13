@@ -179,11 +179,11 @@ The recursive call eats everything to the right, making all operators right-asso
 ```javascript
 parseExpression(minPrec = 0) {
   // Base switch to start expression...
-  
+
   while (this.la) {
     const opPrec = OPERATOR_PRECEDENCE[this.la.id];
     if (opPrec === undefined || opPrec <= minPrec) break;  // Stop!
-    
+
     switch (this.la.id) {
       case SYM_PLUS:  // Precedence 10
         $2 = this._match(SYM_PLUS);
@@ -201,8 +201,8 @@ parseExpression(minPrec = 0) {
 - Modify `_generateWithInlining()` to add minPrec parameter
 - Update all `parseExpression()` calls in postfix cases
 
-**Estimated Impact:** +100-150 tests (65.5% → 76-81%)  
-**Time:** 4-6 hours  
+**Estimated Impact:** +100-150 tests (65.5% → 76-81%)
+**Time:** 4-6 hours
 **Difficulty:** Medium
 
 ---
@@ -250,7 +250,7 @@ parseExpression(minPrec = 0) {
 
 ## 🚀 Path to 100%
 
-**Current:** 630/962 (65.5%)  
+**Current:** 630/962 (65.5%)
 **Remaining:** 332 tests
 
 ### Phase 1: Operator Associativity ⚡
@@ -352,11 +352,11 @@ echo '1 + 2 + 3' | ./bin/rip -s
    ```javascript
    parseExpression(minPrec = 0) {
      // ... base switch ...
-     
+
      while (this.la) {
        const opPrec = OPERATOR_PRECEDENCE[this.la.id];
        if (opPrec === undefined || opPrec <= minPrec) break;  // STOP!
-       
+
        switch (this.la.id) {
          case SYM_PLUS:
            $2 = this._match(SYM_PLUS);
