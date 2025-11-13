@@ -21,7 +21,7 @@ echo 'obj = {
 
 ### Token Difference
 
-**Inline:** `{ PROPERTY : NUMBER }`  
+**Inline:** `{ PROPERTY : NUMBER }`
 **Multiline:** `{ INDENT PROPERTY : NUMBER OUTDENT }`
 
 ### The Grammar ALREADY Handles This!
@@ -54,10 +54,10 @@ parseAssignList() {
   if (!this.la || ![SYM_IDENTIFIER, SYM_PROPERTY, ..., SYM_INDENT].includes(this.la.id)) {
     return [];
   }
-  
+
   $1 = this.parseAssignObj();
   $1 = [$1];
-  
+
   while (this.la && (this.la.id === SYM_COMMA || this.la.id === SYM_TERMINATOR || this.la.id === SYM_INDENT)) {
     if (this.la.id === SYM_INDENT) {
       $2 = this._match(SYM_INDENT);
@@ -70,14 +70,14 @@ parseAssignList() {
     }
     // ... other separators ...
   }
-  
+
   return $1;
 }
 ```
 
-**The code looks CORRECT!** 
+**The code looks CORRECT!**
 - FIRST set includes SYM_INDENT ✅
-- While loop checks for INDENT ✅  
+- While loop checks for INDENT ✅
 - Handles INDENT recursively ✅
 
 ### The Mystery
@@ -111,7 +111,7 @@ Unless the issue is with the **assignment itself**, not the object parsing?
 - Generate unified while loop checking comma, terminator, AND indent
 - **Result:** Code generation looks correct but still fails
 
-### Fix 2: Extended FIRST Set ✅  
+### Fix 2: Extended FIRST Set ✅
 - Include SYM_INDENT in FIRST set when INDENT is a valid separator
 - **Result:** Generated code includes INDENT in check, but still fails
 
@@ -159,7 +159,6 @@ The generated code LOOKS correct, so the bug is subtle. Good luck!
 
 ---
 
-**Current status:** 630/962 tests (65.5%), +45 this session  
-**This issue:** ~4 tests, low priority  
+**Current status:** 630/962 tests (65.5%), +45 this session
+**This issue:** ~4 tests, low priority
 **Next priority:** Operator associativity (~150 tests)
-
