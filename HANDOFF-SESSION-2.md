@@ -117,7 +117,7 @@ bun run test
 
 # Test specific pattern
 echo 'code' | ./bin/rip -s  # s-expression
-echo 'code' | ./bin/rip -c  # JavaScript  
+echo 'code' | ./bin/rip -c  # JavaScript
 echo 'code' | ./bin/rip -t  # tokens
 
 # Compare with production
@@ -180,4 +180,3 @@ Once Statement is fixed:
 **Excellent work! You're 60 tests from a complete, generic, production-ready PRD generator!** 🎉
 
 **The hardest problems are solved. What remains is systematic cleanup and edge case handling.**
-

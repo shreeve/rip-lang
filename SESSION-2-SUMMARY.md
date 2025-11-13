@@ -29,7 +29,7 @@ All fixes are **100% generic** - zero hardcoded symbol names!
 - **Impact:** +2 tests (super calls work)
 
 ### 4. Bare Nonterminal/Terminal Disambiguation (lines 3051-3093)
-- Properly disambiguates single-symbol conflicts  
+- Properly disambiguates single-symbol conflicts
 - Handles Arg → Splat vs Arg → ... patterns
 - **Impact:** +29 tests (array spread/rest, compatibility.rip 100%!)
 
@@ -95,7 +95,7 @@ All fixes are **100% generic** - zero hardcoded symbol names!
 
 ### Parse Errors (~8 tests):
 1. **FOR AWAIT with complex blocks** (2 tests) - Backtracking falls through to wrong alternative
-2. **Multiline objects standalone** (3-4 tests) - Still fails when starting line  
+2. **Multiline objects standalone** (3-4 tests) - Still fails when starting line
 3. **INDENT/OUTDENT in conditionals** (3 tests) - "expected OUTDENT, got POST_IF"
 
 ### Runtime Errors (~52 tests):
@@ -113,7 +113,7 @@ All fixes are **100% generic** - zero hardcoded symbol names!
 ### Issue #1: Statement Postfix Disambiguation
 **Problem:** Rules starting with Statement (from If and While) aren't properly disambiguated.
 - If: Statement POST_IF Expression
-- If: Statement POST_UNLESS Expression  
+- If: Statement POST_UNLESS Expression
 - While: Statement WhileSource
 
 **Current behavior:** All 3 generate separate cases, but end up merged into single case handling only WhileSource.
@@ -226,4 +226,3 @@ All fixes are **100% generic** - zero hardcoded symbol names!
 ---
 
 **You're at 93.8% with fully generic code! Just 60 tests from 100%!** 🚀
-

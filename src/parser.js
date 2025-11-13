@@ -728,9 +728,31 @@ const parser = {
         $1 = this._match(SYM_INC);
         $2 = this.parseSimpleAssignable();
         return ["++", $2, false];
-  case SYM_IF:
+  case SYM_IF: {
+    const _saved = this._saveState();
+
+    // Try alternative 1: IfBlock ELSE Block...
+    try {
+      $1 = this.parseIfBlock();
+      $2 = this._match(SYM_ELSE);
+      $3 = this.parseBlock();
+      $1 = $1.length === 3 ? ["if", $1[1], $1[2], $3] : [...$1, $3];
+      break;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+
+    // Try alternative 2: IfBlock...
+    try {
       $1 = this.parseIfBlock();
       break;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+
+    // All variants failed
+    this._error([SYM_IF], this.la.id);
+  }
   case SYM_UNLESS:
       $1 = this.parseUnlessBlock();
       break;

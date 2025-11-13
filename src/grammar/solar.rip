@@ -1895,10 +1895,56 @@ class Generator
             # Use the lookahead case generator
             firstSym = rulesGroup[0].symbols[0]
             if @types[firstSym]
-              # Nonterminal first - not supported in _generateLookaheadCase
-              # Fall back to generating separate cases
-              for groupRule in rulesGroup
-                baseCases.push(@_generateStandardCase(groupRule))
+              # GENERIC FIX: Multiple nonterminal-first rules need disambiguation!
+              # Can't use standard cases - they'll have identical case labels (from FIRST set)
+              # Solution: Generate try/catch with proper disambiguation
+
+              # Get FIRST tokens for case label
+              firstTokens = @_getFirstTokensForRule(rulesGroup[0])
+              tokenNames = []
+              for tokenId in firstTokens
+                tokenName = @tokenNames[tokenId]
+                tokenNames.push(@_getSymbolConstName(tokenName)) if tokenName
+
+              if tokenNames.length > 0
+                caseLabel = tokenNames.map((n) -> "case #{n}").join(': ')
+
+                lines = ["  #{caseLabel}: {"]
+                lines.push("    const _saved = this._saveState();")
+                lines.push("")
+
+                # Try each rule in order (most specific first = longest)
+                sortedRules = rulesGroup.sort((a, b) -> b.symbols.length - a.symbols.length)
+
+                for rule, idx in sortedRules
+                  lines.push("    // Try alternative #{idx + 1}: #{rule.symbols.slice(0, 3).join(' ')}...")
+                  lines.push("    try {")
+
+                  # Generate parsing for this rule
+                  for symbol, i in rule.symbols
+                    pos = i + 1
+                    if @types[symbol]
+                      lines.push("      $#{pos} = this.parse#{symbol}();")
+                    else
+                      symId = @symbolIds[symbol]
+                      symName = @tokenNames[symId]
+                      symConst = if symName then @_getSymbolConstName(symName) else symId
+                      lines.push("      $#{pos} = this._match(#{symConst});")
+
+                  # Generate action
+                  action = @_normalizeActionForPRD(rule.action, rule.symbols)
+                  lines.push("      $1 = #{action};") unless action is '$1'
+                  lines.push("      break;")
+                  lines.push("    } catch (e) {")
+                  lines.push("      this._restoreState(_saved);")
+                  lines.push("    }")
+                  lines.push("")
+
+                lines.push("    // All variants failed")
+                lines.push("    this._error([#{tokenNames.join(', ')}], this.la.id);")
+                lines.push("  }")
+
+                baseCases.push(lines.join('\n'))
             else
               # Terminal first - use lookahead disambiguation
               tokenId = @symbolIds[firstSym]
