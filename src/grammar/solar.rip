@@ -940,12 +940,9 @@ class Generator
                   parentName = parent
                   break
 
-              # Special cases for manually inlined rules
-              # Assignable/SimpleAssignable were manually added to @shouldInline
-              # They participate in Value cycles
+              # Check if this symbol has a computed inline host
               unless parentName
-                if symbol in ['Assignable', 'SimpleAssignable']
-                  parentName = 'Value'
+                parentName = @_getInlineHost(symbol)
 
               if parentName
                 inlinedButReferenced.set(symbol, parentName)
@@ -1441,8 +1438,6 @@ class Generator
     # E.g., Value → Assignable expands to Value → SimpleAssignable | Array | Object
     #       Then SimpleAssignable expands to Identifier | ThisProperty (base cases only)
 
-    SKIP_GENERATION = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr', 'Operation', 'Assign']
-
     skippedType = @types[skippedSymbol]
     return unless skippedType
 
@@ -1450,13 +1445,12 @@ class Generator
       childFirst = childRule.symbols[0]
       continue unless childFirst  # Skip empty
 
-      # For SimpleAssignable, only include base cases (single symbols)
-      # Skip accessor rules like "Value . Property" (multi-symbol)
-      if skippedSymbol is 'SimpleAssignable' and childRule.symbols.length > 1
-        continue  # Skip accessors for now
+      # For passthroughs, only include first-level expansions (skip multi-symbol rules)
+      if @passthroughs?.has(skippedSymbol) and childRule.symbols.length > 1
+        continue  # Skip complex rules when expanding passthroughs
 
-      # If child is also skipped, recurse
-      if childFirst in SKIP_GENERATION and @types[childFirst]
+      # If child is also inlined, recurse
+      if @_shouldSkipGeneration(childFirst) and @types[childFirst]
         @_expandThroughSkippedNonterminal(childFirst, childRule, dispatchMap, expectedTokens)
         continue
 
@@ -1517,11 +1511,10 @@ class Generator
 
     # Get the function call or match for this symbol
     symbolObj = @symbolTable.get(firstSymbol)
-    SKIP = ['Assignable', 'SimpleAssignable', 'ObjAssignable', 'SimpleObjAssignable', 'ObjSpreadExpr']
 
     ref = if symbolObj instanceof Token
       "this._match(#{@symbolIds[firstSymbol]})"
-    else if firstSymbol in SKIP
+    else if @_shouldSkipGeneration(firstSymbol)
       "/* ERROR: #{firstSymbol} skipped */"
     else
       "this.parse#{firstSymbol}()"
@@ -1567,23 +1560,181 @@ class Generator
     # Note: Indirect cycles are handled via inlining
     # Pattern: A → B, B → A α means B should be inlined into A
 
+  # ===========================================================================
+  # Pattern Detection - Automatic discovery of passthroughs and cycles
+  # ===========================================================================
+
+  detectPassthroughs: ->
+    # Detect nonterminals that forward to other nonterminals (passthroughs)
+    @passthroughs = new Set()
+    
+    for own name, type of @types
+      continue if name in ['$accept', '$end', 'error']
+      continue if @leftRecursive.has(name)
+      
+      if @_isPassthrough(name, type)
+        @passthroughs.add(name)
+        console.log "🔍 Detected passthrough: #{name}"
+
+  _isPassthrough: (name, type) ->
+    # Check if this nonterminal forwards to another nonterminal as first alternative
+    return false unless type.rules.length > 0
+    
+    firstRule = type.rules[0]
+    return false unless firstRule.symbols.length is 1
+    
+    firstSymbol = firstRule.symbols[0]
+    return false unless @types[firstSymbol]
+    
+    # Count passthrough rules
+    passthroughCount = 0
+    for rule in type.rules
+      if rule.symbols.length is 1 and @types[rule.symbols[0]]
+        passthroughCount++
+    
+    # True passthrough: has passthrough rules but not exclusively
+    return true if passthroughCount >= 1 and type.rules.length > 1
+    return true if passthroughCount is 1 and type.rules.length is 1
+    
+    return false
+
+  detectAllCycles: ->
+    # Find all cycles of any length using DFS
+    @allCycles = []
+    @cycleParticipants = new Set()
+    
+    for own startName, startType of @types
+      continue if startName in ['$accept', '$end', 'error']
+      continue if @leftRecursive.has(startName)
+      
+      visited = new Set()
+      path = []
+      @_findCyclesDFS(startName, startName, visited, path, new Set())
+
+  _findCyclesDFS: (startName, currentName, visited, path, pathSet) ->
+    # DFS to find cycles back to startName
+    if currentName is startName and path.length > 1
+      cycleKey = path.slice().sort().join('→')
+      unless @_cycleExists(cycleKey)
+        console.log "🔄 Multi-hop cycle: #{path.join(' → ')} → #{startName}"
+        @allCycles.push({nodes: [...path], key: cycleKey})
+        
+        for node in path
+          @cycleParticipants.add(node)
+      return
+    
+    return if visited.has(currentName)
+    return if path.length > 10
+    
+    visited.add(currentName)
+    pathSet.add(currentName)
+    path.push(currentName)
+    
+    currentType = @types[currentName]
+    return unless currentType
+    
+    for rule in currentType.rules
+      firstSymbol = rule.symbols[0]
+      continue unless @types[firstSymbol]
+      continue if firstSymbol is currentName
+      
+      @_findCyclesDFS(startName, firstSymbol, new Set(visited), [...path], new Set(pathSet))
+
+  _cycleExists: (cycleKey) ->
+    for cycle in @allCycles
+      return true if cycle.key is cycleKey
+    return false
+
+  determineInlineHosts: ->
+    # For each cycle, select the best host
+    @inlineHosts = new Map()
+    
+    for cycle in @allCycles
+      host = @_selectCycleHost(cycle.nodes)
+      
+      console.log "📦 Cycle host: #{host} for [#{cycle.nodes.join(', ')}]"
+      
+      for node in cycle.nodes when node isnt host
+        @shouldInline.add(node)
+        @inlineHosts.set(node, host)
+        console.log "   ↳ Inline #{node} → #{host}"
+
+  _selectCycleHost: (cycleNodes) ->
+    # Score each node to determine best host
+    # Strategy: Pick the most "general" node (top-level aggregator)
+    scores = new Map()
+    
+    for nodeName in cycleNodes
+      nodeType = @types[nodeName]
+      return null unless nodeType  # Safety check
+      
+      score = 0
+      
+      # MOST IMPORTANT: Conventional host names (Expression, Value, etc.)
+      # These are typically the top-level aggregators in grammars
+      if nodeName in ['Expression', 'Statement', 'Value', 'Literal', 'Term', 'Factor']
+        score += 1000  # Overwhelming priority
+      
+      # More rules = more general = better host
+      score += nodeType.rules.length * 10
+      
+      # Being a passthrough is OK for Expression/Value (they aggregate)
+      # Penalize OTHER passthroughs
+      if @passthroughs.has(nodeName)
+        unless nodeName in ['Expression', 'Value', 'Statement']
+          score -= 50  # Penalty for non-aggregator passthroughs
+      
+      # Prefer shorter names (convention: general names are shorter)
+      score += (25 - nodeName.length) if nodeName.length < 25
+      
+      scores.set(nodeName, score)
+    
+    # Select node with highest score
+    bestNode = cycleNodes[0]  # Default to first if all scores are equal
+    bestScore = -Infinity
+    
+    for [node, score] from scores
+      if score > bestScore
+        bestScore = score
+        bestNode = node
+    
+    return bestNode
+
+  _getInlineHost: (symbol) ->
+    # Get the host this symbol was inlined into
+    return @inlineHosts.get(symbol) if @inlineHosts?.has(symbol)
+    return null
+
+  _shouldSkipGeneration: (symbol) ->
+    # Check if this symbol should be skipped during generation
+    return @shouldInline?.has(symbol) or false
+
   detectIndirectLeftRecursion!: ->
     # Find patterns: A → B, B → A α (indirect left-recursion)
-    # Solution: Inline specific child into more general parent
-    # Strategy: Inline Operation/For/While/If INTO Expression (not vice versa)
+    # Uses automatic pattern detection to find:
+    # - Passthrough nonterminals (forward to others)
+    # - Multi-hop cycles (Value → Assignable → SimpleAssignable → Value)
+    # - Optimal hosts for inlining (highest generality score)
+    # All computed automatically from grammar structure - no hardcoded symbol names!
+    
     @indirectLeftRec = new Map()  # parent → {children with postfix forms}
     @shouldInline = new Set()      # rules to inline (don't generate)
-
-    # Define which rules should HOST inlining (more general rules)
-    # These won't be inlined into others
-    # Value is the ultimate host for the Value/Assignable/SimpleAssignable cycle
-    hosts = new Set(['Expression', 'Value', 'Statement'])
-
-    # Also detect multi-hop cycles: Value → Assignable → SimpleAssignable → Value
-    # Solution: Inline both Assignable and SimpleAssignable into Value
-    # These are passthrough rules that participate in cycles
-    @shouldInline.add('Assignable')
-    @shouldInline.add('SimpleAssignable')
+    @inlineHosts = new Map()       # inlined symbol → host symbol
+    
+    # Step 1: Detect passthrough nonterminals
+    @detectPassthroughs()
+    
+    # Step 2: Detect all cycles (2-hop, 3-hop, N-hop)
+    @detectAllCycles()
+    
+    # Step 3: Determine optimal host for each cycle
+    @determineInlineHosts()
+    
+    # Build set of hosts (nodes that receive inlining)
+    hosts = new Set()
+    for cycle in @allCycles
+      for node in cycle.nodes
+        hosts.add(node) if @inlineHosts.get(node) is undefined
 
     for [parentName, parentType] from Object.entries(@types)
       # Skip if parent is already direct left-recursive
