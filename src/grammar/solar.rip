@@ -1092,7 +1092,7 @@ class Generator
 
   _generateSwitchFunction: (nonTerminal, rules) ->
     # Generate switch-based dispatch for non-left-recursive nonterminals
-    
+
 
     # Check for empty rule OR rule starting with nullable nonterminal
     emptyRule = rules.find (rule) =>
@@ -1590,32 +1590,32 @@ class Generator
     #   Statement → Return | Import | Export (distinct constructs)
     #
     # Key distinction: Passthroughs participate in cycles, aggregators organize the grammar
-    
+
     return false unless type.rules.length > 0
-    
+
     # Must have at least one single-nonterminal forward rule
     firstRule = type.rules[0]
     return false unless firstRule.symbols.length is 1
-    
+
     firstSymbol = firstRule.symbols[0]
     return false unless @types[firstSymbol]
-    
+
     # Count rules
     totalRules = type.rules.length
     singleNonterminalRules = 0
-    
+
     for rule in type.rules
       if rule.symbols.length is 1 and @types[rule.symbols[0]]
         singleNonterminalRules++
-    
+
     # Passthrough if: ONLY has single-nonterminal rules
     # (Multiple options are fine if they're all forwards: Assignable → SimpleAssignable | Array | Object)
     return false if singleNonterminalRules isnt totalRules
-    
+
     # Additionally: passthrough should be relatively simple (not an aggregator like Line)
     # If it has 3+ alternatives, it's likely an aggregator providing structure
     return false if totalRules >= 3
-    
+
     return true
 
   detectAllCycles: ->
@@ -2628,7 +2628,7 @@ class Generator
       # Check if all forward to the SAME nonterminal
       firstNonterminal = rules[0].symbols[0]
       allSameTarget = rules.every((r) => r.symbols[0] is firstNonterminal)
-      
+
       if allSameTarget
         # All forward to same nonterminal - just use first
         rule = rules[0]
@@ -2640,7 +2640,7 @@ class Generator
         lines = ["    case #{triggerToken}: {"]
         lines.push("      const _saved = this._saveState();")
         lines.push("")
-        
+
         for rule, i in rules
           nonterminal = rule.symbols[0]
           lines.push("      // Try: parse#{nonterminal}")
@@ -2651,11 +2651,11 @@ class Generator
           lines.push("        this._restoreState(_saved);")
           lines.push("      }")
           lines.push("")
-        
+
         lines.push("      // Fallback error")
         lines.push("      this._error([#{triggerToken}], this.la.id);")
         lines.push("    }")
-        
+
         return lines.join('\n')
 
     # Check if all rules are bare (single symbol only)
