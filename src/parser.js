@@ -2631,6 +2631,29 @@ $1 = this.parseParam();
             $3 = this.parseString();
             $1 = ["tagged-template", $1, $3];
             continue;
+      case SYM_FUNC_EXIST:
+            const _savedFUNC_EXIST = this._saveState();
+
+            // Try: Value OptFuncExist String...
+            try {
+              $2 = this.parseOptFuncExist();
+              $3 = this.parseString();
+              $1 = ["tagged-template", $1, $3];
+              continue;
+            } catch (e) {}
+            this._restoreState(_savedFUNC_EXIST);
+
+            // Try: Value OptFuncExist Arguments...
+            try {
+              $2 = this.parseOptFuncExist();
+              $3 = this.parseArguments();
+              $1 = $2 ? ["?call", $1, ...$3] : [$1, ...$3];
+              continue;
+            } catch (e) {}
+            
+            // All variants failed, restore and return
+            this._restoreState(_savedFUNC_EXIST);
+            return $1;
       case SYM_CALL_START:
             $2 = this.parseOptFuncExist();
             $3 = this.parseArguments();

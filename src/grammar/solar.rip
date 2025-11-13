@@ -1914,12 +1914,34 @@ class Generator
 
         for postfixRule in childInfo.postfixRules
           # Find trigger token for this postfix rule
-          trigger = @_findPostfixTrigger(postfixRule, name)
+          # ALSO track nullable nonterminals that were skipped
+          {trigger, skippedNullables} = @_findPostfixTriggerWithNullables(postfixRule, name)
           continue unless trigger
 
           unless postfixRulesByTrigger.has(trigger)
             postfixRulesByTrigger.set(trigger, [])
           postfixRulesByTrigger.get(trigger).push(postfixRule)
+          
+          # GENERIC FIX: For each skipped nullable with non-empty alternatives,
+          # generate additional trigger cases
+          # Example: Value OptFuncExist Arguments - OptFuncExist has FUNC_EXIST alternative
+          # Need to generate case for FUNC_EXIST that looks ahead for CALL_START
+          if skippedNullables?.length > 0
+            for nullableSymbol in skippedNullables
+              nullableType = @types[nullableSymbol]
+              continue unless nullableType
+              
+              # Find non-empty rules of this nullable
+              for nullableRule in nullableType.rules
+                continue if not nullableRule.symbols[0] or nullableRule.symbols[0] is ''
+                
+                # Get the terminal from this non-empty rule
+                firstSym = nullableRule.symbols[0]
+                if not @types[firstSym]  # It's a terminal
+                  # Add this terminal as an additional trigger for the same postfix rule
+                  unless postfixRulesByTrigger.has(firstSym)
+                    postfixRulesByTrigger.set(firstSym, [])
+                  postfixRulesByTrigger.get(firstSym).push(postfixRule)
 
         # Generate cases with disambiguation
         for [trigger, rulesGroup] from postfixRulesByTrigger
@@ -2476,29 +2498,40 @@ class Generator
     """
 
   _findPostfixTrigger: (rule, parentName) ->
-    # Find the trigger token for a postfix rule (used for grouping)
-    # Same logic as in _generateInlinedPostfixCase
+    # Legacy function - calls new version and returns just trigger
+    result = @_findPostfixTriggerWithNullables(rule, parentName)
+    return result.trigger
+
+  _findPostfixTriggerWithNullables: (rule, parentName) ->
+    # Find the trigger token for a postfix rule AND track skipped nullables
+    # GENERIC: Returns {trigger, skippedNullables} for handling optional prefixes
 
     firstSymbol = rule.symbols[0]
     isParentRecursion = firstSymbol and @types[firstSymbol] and parentName and
                         (firstSymbol is parentName or @shouldInline?.has(firstSymbol))
 
     remainingSymbols = if isParentRecursion then rule.symbols.slice(1) else rule.symbols
+    
+    # Track nullable nonterminals we skip over
+    skippedNullables = []
 
     # Find first terminal as trigger
     for symbol in remainingSymbols
       if @types[symbol]
-        continue if @types[symbol].nullable
+        if @types[symbol].nullable
+          # Skip nullable but remember it
+          skippedNullables.push(symbol)
+          continue
         # Non-nullable nonterminal - get first terminal from FIRST set
         firstNames = Array.from(@types[symbol].firsts)
         for name in firstNames
           unless @types[name]
-            return name if @symbolIds[name]
+            return {trigger: name, skippedNullables} if @symbolIds[name]
       else
         # Terminal - this is the trigger
-        return symbol
+        return {trigger: symbol, skippedNullables}
 
-    return null
+    return {trigger: null, skippedNullables}
 
   _generatePostfixLookaheadCase: (trigger, rules, parentName) ->
     # Generate postfix case with lookahead disambiguation for multiple rules
