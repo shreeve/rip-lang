@@ -9,9 +9,9 @@
 </p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-1.5.3-blue.svg" alt="Version"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-1.5.4-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
-  <a href="#status"><img src="https://img.shields.io/badge/tests-962%2F962-brightgreen.svg" alt="Tests"></a>
+  <a href="#status"><img src="https://img.shields.io/badge/tests-968%2F968-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
 </p>
 
@@ -26,28 +26,31 @@ A clean-room **CoffeeScript-inspired compiler** that produces modern JavaScript 
 - 🚀 **Self-hosting** - Rip compiles itself (`bun run parser` works!)
 - ⚡ **~50% smaller** than CoffeeScript (9,839 LOC vs 17,760 LOC)
 - 🎨 **Modern output** - ES2022 with classes, modules, optional chaining
-- ✅ **Production-ready** - 962/962 tests passing (100%)
+- ✅ **Production-ready** - 968/968 tests passing (100%)
 
 ---
 
 ## Status
 
-**Version 1.5.3** - **PRODUCTION READY** 🚀
+**Version 1.5.4** - **PRODUCTION READY** 🚀
 
 **Quality metrics:**
-- ✅ **962/962 tests passing** (100% coverage with table-driven parser on `main`)
-- ✅ **955/962 tests passing** (99.3% with PRD parser on `recursive-descent` branch)
+- ✅ **968/968 tests passing** (100% coverage)
 - ✅ **Self-hosting** - Rip compiles itself, including its own parser generator
 - ✅ **Zero dependencies** - Completely standalone, no npm packages required
 - ✅ **9,839 LOC** - Lean, maintainable codebase (~50% smaller than CoffeeScript)
-
-**Note:** The experimental **Predictive Recursive Descent (PRD) parser** delivers 33x faster performance and is 99.3% complete on the `recursive-descent` branch. See [PRD.md](PRD.md) and [HANDOFF.md](HANDOFF.md) for technical details and current status.
 
 **Complete feature set:**
 - ✅ **110+ node types** - All language constructs fully implemented
 - ✅ **Interactive REPL** - Terminal, browser, and console modes
 - ✅ **Live playground** - Full-featured browser environment with code editor
 - ✅ **43KB bundle** - Brotli-compressed, includes compiler + REPL
+
+**Architecture strengths:**
+- ✅ **Dispatch table** - O(1) lookup for all 110 operations
+- ✅ **S-expression IR** - Simple, clean intermediate representation
+- ✅ **Fast compilation** - ~200ms parser regeneration (self-hosting)
+- ✅ **Modern output** - Clean ES2022 code generation
 
 ---
 
@@ -120,6 +123,13 @@ Rip includes **all of CoffeeScript's beloved features** plus modern enhancements
 | **Async/generators** | Manual syntax | Auto-detected |
 | **Switch statements** | `switch (false)` pattern | Clean if/else chains |
 
+### Compatibility Features
+
+**Both syntaxes work!** Rip auto-converts CoffeeScript style:
+- `args...` → `...args` (prefix/postfix spread)
+- `x ? y` → `x ?? y` (legacy existential, unless ternary)
+- Seamless migration from CoffeeScript! 🎉
+
 ---
 
 ## Why Choose Rip?
@@ -134,7 +144,7 @@ Rip includes **all of CoffeeScript's beloved features** plus modern enhancements
 ### For Developers
 - ✅ **Simple architecture** - S-expressions beat complex AST classes
 - ✅ **Easy to extend** - Add a case, run tests, done!
-- ✅ **Well-tested** - 962/962 tests (100% coverage)
+- ✅ **Well-tested** - 968/968 tests (100% coverage)
 - ✅ **Well-documented** - Complete guides (AGENT.md is gold!)
 - ✅ **Self-hosting** - Rip compiles itself (including parser generator)
 
@@ -202,7 +212,120 @@ echo 'x = 42' | ./bin/rip -s               # Pipe from stdin
 # Build
 bun run parser                             # Rebuild parser (self-hosting!)
 bun run browser                            # Build browser bundle
-bun run test                               # Run all 962 tests
+bun run test                               # Run all 968 tests
+```
+
+---
+
+## Key Features
+
+### Elegant Syntax
+
+```coffee
+# Functions (three styles)
+def greet(name)              # Named, hoisted
+  "Hello, ${name}!"
+
+calculate = (a, b) ->        # Thin arrow (unbound this)
+  a + b
+
+handler = (event) =>         # Fat arrow (bound this)
+  @process event
+
+# Comprehensions (context-aware!)
+squares = (x * x for x in [1..10])     # IIFE (result used)
+
+processItem x for x in items           # Plain loop (result unused)
+```
+
+### Modern JavaScript Features
+
+```coffee
+# Destructuring
+{name, age} = person
+[first, ...rest] = array
+
+# Optional chaining (dual syntax)
+user?.profile?.name          # ES6 native
+arr?[0]                      # CoffeeScript soak
+fn?(arg)                     # Soak call
+
+# Nullish coalescing
+port = config.port ?? 8080
+
+# Async/await auto-detection
+def fetchData
+  data = await fetch "/api/data"
+  data.json()
+# → async function fetchData() { ... }
+```
+
+### Unique Features
+
+```coffee
+# Dammit operator! - Call and await
+result = fetchData!         # → await fetchData()
+user = getUser!(id)         # → await getUser(id)
+
+# Otherwise operator (!?) - Undefined-only coalescing
+timeout = config.timeout !? 5000   # null/0/false are valid!
+name = user.name !? 'Guest'        # Only defaults on undefined
+
+# Void functions - No implicit returns
+def process!                # Always returns undefined
+  doWork()
+  # No return value
+
+# Ruby-style regex
+email =~ /(.+)@(.+)/              # Match with _ capture
+username = _[1]                   # Extract first group
+domain = email[/@(.+)/, 1]        # Inline extraction (group 1)
+suffix = name[/,\s*([js]r|i{1,3})\b/, 1]  # Complex pattern extraction
+
+# Heregex - Extended regex with comments
+pattern = ///
+  ^ \d+      # starts with digits
+  \s*        # optional whitespace
+  [a-z]+     # followed by letters
+  $
+///i
+
+# Heredocs - Smart visual indentation control
+# When closing ''' or """ is preceded only by whitespace,
+# its column position becomes the "left margin" for all content.
+# This makes it easy to visually align content!
+
+code = '''
+  if (x) {
+    return y;
+  }
+  '''                        # Closing at column 2 → strips 2 spaces from all lines
+# Output: "if (x) {\n  return y;\n}"
+
+code = '''
+  if (x) {
+    return y;
+  }
+'''                          # Closing at column 0 → preserves all indentation
+# Output: "  if (x) {\n    return y;\n  }"
+
+# Perfect for code generation - align the closing delimiter where you want!
+template = """
+    function ${name}() {
+      console.log("${message}");
+    }
+    """                      # Closing at column 4 → baseline is column 4
+# Output: "function ${name}() {\n  console.log(\"${message}\");\n}"
+
+# Traditional ternary (plus CoffeeScript's if/then/else)
+result = x > 0 ? 'positive' : 'negative'
+
+# __DATA__ marker (Ruby-inspired)
+config = parseConfig(DATA)
+
+__DATA__
+host=localhost
+port=8080
 ```
 
 ---
@@ -213,7 +336,7 @@ Traditional compilers use complex AST classes. Rip uses **simple arrays**:
 
 ```
 Rip Source → Lexer → Parser → S-Expressions → Codegen → JavaScript
-            (3,145)  (350)     ["=", "x", 42]  (5,246)    (ES2022)
+            (3,145)  (340)    ["=", "x", 42]  (5,246)    (ES2022)
 ```
 
 **Traditional AST approach:**
@@ -237,8 +360,7 @@ case '+': {
 | Component | CoffeeScript | Rip | Savings |
 |-----------|--------------|-----|---------|
 | Lexer+Rewriter | 3,558 LOC | **3,145 LOC** | -11% |
-| Parser | 350 LOC (table) | **350 LOC** (table) | 0% |
-| Parser Generator | 2,285 LOC (Jison) | **928 LOC** (Solar) | -59% |
+| Parser Generator | 2,285 LOC (Jison) | **928 LOC** (Solar, built-in) | -59% |
 | Compiler | 10,346 LOC (AST) | **5,246 LOC** (S-expr) | -49% |
 | **Total** | **17,760 LOC** | **9,839 LOC** | **-45%** |
 
@@ -300,6 +422,24 @@ See [docs/BROWSER.md](docs/BROWSER.md) for details.
 
 ---
 
+## Runtime Compatibility
+
+**Primary targets:**
+- 🎯 **Bun** - First-class support with automatic `.rip` loader
+- 🌐 **Browsers** - 43KB bundle with REPL
+
+**Also supported:**
+- ✅ **Deno** - ES2022 output works natively
+- ✅ **Node.js 12+** - Full compatibility
+
+**ES2022 features used:**
+- ES2015: classes, let/const, arrow functions, template literals, destructuring
+- ES2018: async iteration (for await...of)
+- ES2020: optional chaining (`?.`), nullish coalescing (`??`)
+- ES2022: static class fields, top-level await
+
+---
+
 ## Documentation
 
 **For users:**
@@ -309,8 +449,6 @@ See [docs/BROWSER.md](docs/BROWSER.md) for details.
 
 **Technical references:**
 - [AGENT.md](AGENT.md) - **Complete developer/AI agent guide** (start here!)
-- [PRD.md](PRD.md) - Predictive Recursive Descent parser implementation
-- [HANDOFF.md](HANDOFF.md) - Current work status (PRD parser at 99.3%)
 - [docs/CODEGEN.md](docs/CODEGEN.md) - All 110+ node types
 - [docs/COMPREHENSIONS.md](docs/COMPREHENSIONS.md) - Context-aware comprehension rules
 - [docs/SOLAR.md](docs/SOLAR.md) - Parser generator guide
@@ -321,6 +459,7 @@ See [docs/BROWSER.md](docs/BROWSER.md) for details.
 **For contributors:**
 - [CONTRIBUTING.md](CONTRIBUTING.md) - Development workflow
 - [docs/WORKFLOW.md](docs/WORKFLOW.md) - Command reference
+
 
 ---
 
@@ -360,7 +499,7 @@ rip/
 │       ├── grammar.rip  # Grammar specification
 │       └── solar.rip    # Parser generator
 ├── docs/                # Complete documentation
-├── test/rip/            # 23 test files, 962 tests
+├── test/rip/            # 23 test files, 968 tests
 ├── AGENT.md             # Complete developer guide
 └── README.md            # This file
 ```
@@ -414,23 +553,6 @@ Compiling a 400-line CoffeeScript file with classes, nested switches, and loops:
 
 **Both are functionally equivalent** - Rip just generates cleaner code!
 
----
-
-## Runtime Compatibility
-
-**Primary targets:**
-- 🎯 **Bun** - First-class support with automatic `.rip` loader
-- 🌐 **Browsers** - 43KB bundle with REPL
-
-**Also supported:**
-- ✅ **Deno** - ES2022 output works natively
-- ✅ **Node.js 12+** - Full compatibility
-
-**ES2022 features used:**
-- ES2015: classes, let/const, arrow functions, template literals, destructuring
-- ES2018: async iteration (for await...of)
-- ES2020: optional chaining (`?.`), nullish coalescing (`??`)
-- ES2022: static class fields, top-level await
 
 ---
 
@@ -445,7 +567,7 @@ MIT
 **Inspired by:**
 - **CoffeeScript** - Syntax and lexer foundation
 - **Lisp/Scheme** - S-expression approach
-- **Solar** - Lightning-fast parser generator
+- **Solar** - Lightning-fast parser generator (80ms vs Jison's 12.5s!)
 - **Ruby** - Regex operators, __DATA__ marker
 
 **Built by:** Developers who believe simplicity scales
