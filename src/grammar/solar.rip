@@ -797,28 +797,30 @@ class Generator
         firstSymbol = rule.symbols[0]
         continue unless firstSymbol  # Skip empty rules
 
+        # ORACLE ROUTING ONLY FOR SINGLE-SYMBOL RULES
+        # Multi-symbol rules need full parsing - use fallback generation
+        # Example: Assign → Assignable = Expression (use fallback, not oracle!)
+        if rule.symbols.length > 1
+          hadCycle = true  # Force fallback
+          continue
+
         # SPECIAL CASE: Skip Operation/OperationLine (handled by precedence climbing)
         if firstSymbol in ['Operation', 'OperationLine']
           cyclesSkipped++
           hadCycle = true
           continue
 
-        # CRITICAL CYCLE PREVENTION: Detect if target would call back to parent
-        # Example: Expression → For where For has "Expression FOR ..." creates cycle
-        # Solution: Check if target nonterminal has current nonterminal in its rules
+        # CYCLE PREVENTION: Skip if target has direct rule back to parent
         if @types[firstSymbol]
-          # Check for cycle: does target's FIRST include current nonterminal?
           targetType = @types[firstSymbol]
-
-          # Check if target has any rule starting with current nonterminal
           hasCycle = targetType.rules.some((r) => r.symbols[0] is name)
 
           if hasCycle
             cyclesSkipped++
             hadCycle = true
-            continue  # Skip this alternative to prevent cycle
+            continue  # Skip this alternative
 
-          # Safe - use target's FIRST tokens for routing
+          # Safe - use target's FIRST tokens for routing (single-symbol only!)
           firstSet = targetType.firsts
 
           # Map FIRST tokens to parseXXX call (with passthrough resolution!)
@@ -827,16 +829,13 @@ class Generator
             if tokenId
               # RESOLVE PASSTHROUGH CHAINS to get final destination
               finalTarget = @_resolvePassthrough(firstSymbol, tokenId) or firstSymbol
-              routing[tokenId] = {type: 'nonterminal', target: finalTarget}
+              # Allow multiple routes per token (conflicts!)
+              routing[tokenId] = routing[tokenId] or []
+              routing[tokenId].push({type: 'nonterminal', target: finalTarget})
         else
-          # Terminal alternative - use rule's FIRST (just this terminal)
-          firstSet = @_computeFirst(rule.symbols)
-
-          # Map token to _match call
-          for token from firstSet when token isnt ''
-            tokenId = @symbolIds[token]
-            if tokenId
-              routing[tokenId] = {type: 'terminal', target: firstSymbol, rule: rule}
+          # Terminal alternative - skip (terminals handled by fallback)
+          hadCycle = true  # Force fallback for terminal rules
+          continue
 
       # Only use oracle routing if we got ALL alternatives (no cycles skipped)
       if Object.keys(routing).length > 0 and not hadCycle
@@ -1062,7 +1061,28 @@ class Generator
       if ruleList.length is 1
         cases.push(@_generateRuleCase(tokenId, ruleList[0]))
       else
-        cases.push(@_generateTryCatch(tokenId, ruleList))
+        # Sort by specificity (look at TARGET's average rule length, not this rule's length)
+        sorted = ruleList.sort (a, b) =>
+          # For single-symbol rules, look at target's complexity
+          firstA = a.symbols[0]
+          firstB = b.symbols[0]
+          
+          avgA = if @types[firstA]
+            rules = @types[firstA].rules
+            rules.reduce(((sum, r) -> sum + r.symbols.length), 0) / rules.length
+          else
+            a.symbols.length
+          
+          avgB = if @types[firstB]
+            rules = @types[firstB].rules
+            rules.reduce(((sum, r) -> sum + r.symbols.length), 0) / rules.length
+          else
+            b.symbols.length
+          
+          # Longer (more specific) first
+          avgB - avgA
+        
+        cases.push(@_generateTryCatch(tokenId, sorted))
 
     # Convert token IDs to symbolic constants for error message
     expectedTokens = Array.from(dispatch.keys()).map((id) => @_getConstNameFromId(id)).join(', ')
@@ -1082,36 +1102,44 @@ class Generator
   _generateOracleDispatch: (name) ->
     routing = @routing.get(name)
 
-    # Build dispatch: token → target (filter to minimal set if active)
+    # Routing already grouped by token (tokenId → [routes])
+    # Just need to iterate and generate
+
+    # Generate cases (with try/catch for conflicts)
     cases = []
     validTokens = []
 
-    for own tokenId, route of routing
+    for own tokenId, routes of routing
       constName = @_getConstNameFromId(tokenId)
       validTokens.push(constName)
 
-      if route.type is 'nonterminal'
-        # Call another parser
-        cases.push """
+      if routes.length is 1
+        # Single route - simple case
+        route = routes[0]
+        if route.type is 'nonterminal'
+          cases.push """
           case #{constName}:
             return this.parse#{route.target}();
         """
-      else
-        # Terminal - match and apply action
-        matchConst = @_getConstName(route.target)
-        [captures, ret] = @_compileAction(route.rule)
-        if captures.length > 0
-          captureLines = captures.map((c) -> "          #{c}").join('\n')
-          cases.push """
+        else
+          # Terminal - match and apply action
+          [captures, ret] = @_compileAction(route.rule)
+          if captures.length > 0
+            captureLines = captures.map((c) -> "          #{c}").join('\n')
+            cases.push """
           case #{constName}:
             #{captureLines}
             return #{ret};
         """
-        else
-          cases.push """
+          else
+            cases.push """
           case #{constName}:
             return #{ret};
         """
+      else
+        # Multiple routes - CONFLICT! Generate try/catch with specificity ordering
+        sorted = @_sortRoutesBySpecificity(routes)
+        cases.push(@_generateTryCatchForRoutes(constName, sorted))
 
     tokens = validTokens.join(', ')
     """
@@ -1125,6 +1153,46 @@ class Generator
         }
       }
     """
+
+  # Sort routes by specificity (longer rules first)
+  _sortRoutesBySpecificity: (routes) ->
+    routes.sort (a, b) =>
+      # Get average rule length for each target
+      rulesA = @types[a.target]?.rules or []
+      rulesB = @types[b.target]?.rules or []
+      
+      avgLenA = if rulesA.length > 0
+        rulesA.reduce(((sum, r) -> sum + r.symbols.length), 0) / rulesA.length
+      else
+        0
+      
+      avgLenB = if rulesB.length > 0
+        rulesB.reduce(((sum, r) -> sum + r.symbols.length), 0) / rulesB.length
+      else
+        0
+      
+      # Try longer (more specific) first
+      avgLenB - avgLenA
+  
+  # Generate try/catch for conflicting routes
+  _generateTryCatchForRoutes: (constName, routes) ->
+    lines = []
+    
+    lines.push "        case #{constName}: {"
+    lines.push "          const _saved = this._saveState();"
+    
+    for route, i in routes
+      if i < routes.length - 1
+        lines.push "          try {"
+        lines.push "            return this.parse#{route.target}();"
+        lines.push "          } catch (e) {"
+        lines.push "            this._restoreState(_saved);"
+        lines.push "          }"
+      else
+        lines.push "          return this.parse#{route.target}();"
+    
+    lines.push "        }"
+    lines.join('\n')
 
   # Generate case for a single rule
   _generateRuleCase: (tokenId, rule) ->
