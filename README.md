@@ -35,11 +35,13 @@ A clean-room **CoffeeScript-inspired compiler** that produces modern JavaScript 
 **Version 1.5.3** - **PRODUCTION READY** 🚀
 
 **Quality metrics:**
-- ✅ **962/962 tests passing** (100% coverage with table-driven parser)
-- ✅ **955/962 tests passing** (99.3% with PRD parser - experimental)
+- ✅ **962/962 tests passing** (100% coverage with table-driven parser on `main`)
+- ✅ **955/962 tests passing** (99.3% with PRD parser on `recursive-descent` branch)
 - ✅ **Self-hosting** - Rip compiles itself, including its own parser generator
 - ✅ **Zero dependencies** - Completely standalone, no npm packages required
 - ✅ **9,839 LOC** - Lean, maintainable codebase (~50% smaller than CoffeeScript)
+
+**Note:** The experimental **Predictive Recursive Descent (PRD) parser** delivers 33x faster performance and is 99.3% complete on the `recursive-descent` branch. See [PRD.md](PRD.md) and [HANDOFF.md](HANDOFF.md) for technical details and current status.
 
 **Complete feature set:**
 - ✅ **110+ node types** - All language constructs fully implemented

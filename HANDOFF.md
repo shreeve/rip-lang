@@ -209,15 +209,44 @@ bun run test
 
 ## 📁 Next AI: Start Here
 
-1. **Read this file** (HANDOFF.md) - Current status (you just did!)
-2. **Read PRD.md** - Technical implementation details
-3. **Read AGENT.md** - General Rip development guide
-4. **Verify state:** `bun run test` → 955/962 (99.3%)
-5. **Debug failing tests** - Compare PRD vs table-driven s-expressions
-6. **Fix patterns generically** - No hardcoded symbols!
-7. **Regenerate:** `bun run parser`
-8. **Test:** `bun run test`
-9. **Commit when 100%!**
+### Essential Files to Read (In Order)
+
+**For New AI Starting PRD Work:**
+
+1. **HANDOFF.md** (this file) - Current status and next steps (5 min)
+2. **PRD.md** - Technical implementation and all 21 fixes (15 min)
+3. **AGENT.md** - General Rip development guide (10 min)
+4. **src/grammar/solar.rip** - Parser generator source (~4,550 lines)
+   - Lines 1327-1333: Fix #21 (comma tokens)
+   - Lines 3360-3381: Fix #19 (nullable lookahead)  
+   - Lines 824-833: Fix #20 (EOF validation)
+   - Lines 3849-3865: Fix #19 (separator exclusion)
+   - Search for "GENERIC FIX" to find all 21 fixes
+5. **src/grammar/grammar.rip** - Grammar specification (808 lines, for reference only)
+6. **src/codegen.js** - Code generator (5,246 lines, only if debugging s-expression handling)
+
+**Files That Are Identical to Main Branch:**
+- ✅ `src/grammar/grammar.rip` - UNCHANGED (validates generic approach!)
+- ✅ `src/codegen.js` - UNCHANGED (validates s-expression compatibility!)
+- ✅ `src/lexer.js` - UNCHANGED
+- ✅ `src/compiler.js` - UNCHANGED
+- ✅ `src/browser.js` - UNCHANGED
+- ✅ `src/repl.js` - UNCHANGED
+
+**Files That ARE Different from Main:**
+- 📝 `src/grammar/solar.rip` - All 21 PRD generic fixes
+- 📝 `src/parser.js` - Generated PRD parser (5,337 LOC vs 350 LOC table)
+- 📝 `package.json` - Added `-r` flag to parser script
+- 📝 Documentation files (AGENT.md, README.md, HANDOFF.md, PRD.md, NEXUS.md)
+
+### Quick Start Steps
+
+1. **Verify state:** `bun run test` → 955/962 (99.3%)
+2. **Debug failing tests** - Compare PRD vs table-driven s-expressions
+3. **Fix patterns generically** - No hardcoded symbols!
+4. **Regenerate:** `bun run parser`
+5. **Test:** `bun run test`
+6. **Commit when 100%!**
 
 ### Quick Win Strategy
 

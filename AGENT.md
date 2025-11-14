@@ -296,9 +296,28 @@ fn = function() {
 
 ### Current State
 
+- **Branch:** `recursive-descent`
 - **Status:** 955/962 tests passing (99.3%)
 - **Remaining:** 7 tests
 - **Architecture:** Proven generic, works for any SLR(1) grammar
+
+### Critical Files for PRD Work
+
+**Must Read (in order):**
+1. **HANDOFF.md** - Current state, next steps, all 7 failing tests
+2. **PRD.md** - Complete technical guide, all 21 generic fixes
+3. **This file (AGENT.md)** - General Rip development context
+4. **src/grammar/solar.rip** - Parser generator source (~4,550 lines)
+   - Search for "GENERIC FIX" to find all 21 fixes
+   - Lines 1327-1333, 3629-3636: Fix #21 (return comma tokens)
+   - Lines 3360-3381, 3849-3865: Fix #19 (nullable lookahead)
+   - Lines 824-833: Fix #20 (EOF validation)
+
+**Reference Only (unchanged from main):**
+5. **src/grammar/grammar.rip** - Grammar specification (UNCHANGED!)
+6. **src/codegen.js** - Code generator (UNCHANGED - validates approach!)
+
+**Key Insight:** Only solar.rip and parser.js differ from main. Grammar and codegen are identical, proving the PRD implementation is truly generic!
 
 ### Debugging PRD Issues
 

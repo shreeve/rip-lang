@@ -10,10 +10,21 @@
 
 ## Status
 
-**Current:** 955/962 tests passing (99.3%)
-**Performance:** ~33x faster than table-driven (864K vs 26K parses/sec)
-**Size:** 5,337 LOC vs 350 LOC table-driven (15x larger but 33x faster)
+**Branch:** `recursive-descent`  
+**Current:** 955/962 tests passing (99.3%)  
+**Performance:** ~33x faster than table-driven (864K vs 26K parses/sec)  
+**Size:** 5,337 LOC vs 350 LOC table-driven (15x larger but 33x faster)  
 **Genericity:** 100% - Works with ANY SLR(1) grammar (zero hardcoded symbols)
+
+**What's Different from Main:**
+- ✅ `src/grammar/solar.rip` - 21 generic PRD fixes (~4,550 lines)
+- ✅ `src/parser.js` - Generated PRD parser (5,337 LOC)
+- ✅ `package.json` - Added `-r` flag
+
+**What's UNCHANGED from Main:**
+- ✅ `src/grammar/grammar.rip` - Grammar (proves generic approach!)
+- ✅ `src/codegen.js` - Code generator (proves s-expression compatibility!)
+- ✅ All other source files (lexer, compiler, browser, repl)
 
 ---
 
