@@ -714,12 +714,17 @@ class Generator
     @leftRecursive = new Map  # nonterminal → {base, recursive} rules
 
     # Detect direct left-recursion: A → A sep B
-    for own name, type of @types when name not in ['$accept', '$end', 'error']
+    for own name, type of @types
+      continue if name in ['$accept', '$end', 'error']
+      continue unless type?.rules?.length > 0
+
       base = []
       recursive = []
 
       for rule in type.rules
-        if rule.symbols[0] is name
+        firstSym = rule.symbols[0]
+        # Check if first symbol equals this nonterminal name
+        if firstSym is name
           recursive.push(rule)
         else
           base.push(rule)
@@ -908,11 +913,11 @@ class Generator
         dispatch.get(tokenId).push(rule)
 
     cases = []
-    for [tokenId, rules] from dispatch
-      if rules.length is 1
-        cases.push(@_generateRuleCase(tokenId, rules[0]))
+    for [tokenId, ruleList] from dispatch
+      if ruleList.length is 1
+        cases.push(@_generateRuleCase(tokenId, ruleList[0]))
       else
-        cases.push(@_generateTryCatch(tokenId, rules))
+        cases.push(@_generateTryCatch(tokenId, ruleList))
 
     """
       parse#{name}() {
@@ -934,11 +939,11 @@ class Generator
     """
 
   # Generate try/catch for ambiguous rules
-  _generateTryCatch: (tokenId, rules) ->
+  _generateTryCatch: (tokenId, ruleList) ->
     tries = []
-    for rule, i in rules
+    for rule, i in ruleList
       [capture, ret] = @_compileAction(rule)
-      if i < rules.length - 1
+      if i < ruleList.length - 1
         tries.push """
             try {
               #{capture}
@@ -977,22 +982,23 @@ class Generator
 
     [captures.join('\n          '), returnVal]
 
-  # Compile action to return value
+  # Compile action to return value (SIMPLE!)
   _compileActionReturn: (action, symbols) ->
-    switch typeof action
-      when 'number'
-        "$#{action}"
-      when 'string'
-        if action is 'null'
-          # Fix #21: Single terminal with null → return token
-          if symbols.length is 1 and not @types[symbols[0]]
-            return "$1"
-          else
-            return 'null'
-        # Replace position numbers with $N
-        action.replace(/\b(\d+)\b/g, (_, n) -> "$#{n}")
+    return "$1" if not action or action is 1
+    return "$#{action}" if typeof action is 'number'
+    
+    # Special handling for null (Fix #21: single terminal returns token)
+    if action is 'null'
+      if symbols.length is 1 and not @types[symbols[0]]
+        return "$1"
       else
-        "$1"
+        return 'null'
+    
+    actionStr = String(action)
+    return actionStr if /\$\d+/.test(actionStr)  # Already normalized
+    
+    # Replace all bare numbers with $n
+    actionStr.replace /\b(\d+)\b/g, '$$$1'
 
   # Generate iterative parser for left-recursive nonterminal
   _generateIterative: (name) ->
@@ -1008,13 +1014,23 @@ class Generator
     sepId = @symbolIds[separator]
     firstTokens = @_getFirstTokens({symbols: [elementSymbol]})
 
-    # Compile action for recursive rule (usually [...$1, $3])
-    action = recRule.action or '[...$1, $3]'
-    returnExpr = @_compileActionReturn(action, recRule.symbols)
+    # Check if base and element are terminals or nonterminals
+    baseIsTerminal = not @types[baseSymbol]
+    elementIsTerminal = not @types[elementSymbol]
+
+    baseCall = if baseIsTerminal
+      "this._match(#{@symbolIds[baseSymbol]})"
+    else
+      "this.parse#{baseSymbol}()"
+
+    elementCall = if elementIsTerminal
+      "this._match(#{@symbolIds[elementSymbol]})"
+    else
+      "this.parse#{elementSymbol}()"
 
     """
       parse#{name}() {
-        let $1 = this.parse#{baseSymbol}();
+        let $1 = #{baseCall};
         const elements = [$1];
 
         while (this.la && this.la.id === #{sepId}) {
@@ -1026,7 +1042,7 @@ class Generator
             break;
           }
 
-          const $3 = this.parse#{elementSymbol}();
+          const $3 = #{elementCall};
           elements.push($3);
         }
 
