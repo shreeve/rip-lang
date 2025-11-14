@@ -117,27 +117,6 @@ class Generator
     s = s.replace /^/gm, indent if indent
     s
 
-  # Code builder with explicit indent tracking
-  _codeBuilder: (baseIndent = 2) ->
-    lines = []
-    level = 0
-    indent = ' '.repeat(baseIndent)
-
-    add: (line) ->
-      if line.trim()
-        lines.push(indent.repeat(level) + line.trim())
-      else
-        lines.push('')
-
-    addMulti: (text) ->
-      for line in text.split('\n')
-        @add(line)
-
-    indent: -> level++
-    dedent: -> level-- if level > 0
-
-    render: -> lines.join('\n')
-
   timing: (label, fn) ->
     console.time(label)
     result = fn() if fn
@@ -1127,13 +1106,13 @@ class Generator
   _generateTryCatch: (tokenId, ruleList) ->
     constName = @_getConstNameFromId(tokenId)
     lines = []
-    
+
     lines.push "        case #{constName}: {"
     lines.push "          const _saved = this._saveState();"
-    
+
     for rule, i in ruleList
       [captures, ret] = @_compileAction(rule)
-      
+
       if i < ruleList.length - 1
         lines.push "          try {"
         lines.push("            #{c}") for c in captures
@@ -1144,9 +1123,9 @@ class Generator
       else
         lines.push("          #{c}") for c in captures
         lines.push "          return #{ret};"
-    
+
     lines.push "        }"
-    
+
     lines.join('\n')
 
   # Compile action to captures + return
