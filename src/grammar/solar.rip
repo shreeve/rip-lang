@@ -117,6 +117,27 @@ class Generator
     s = s.replace /^/gm, indent if indent
     s
 
+  # Code builder with explicit indent tracking
+  _codeBuilder: (baseIndent = 2) ->
+    lines = []
+    level = 0
+    indent = ' '.repeat(baseIndent)
+
+    add: (line) ->
+      if line.trim()
+        lines.push(indent.repeat(level) + line.trim())
+      else
+        lines.push('')
+
+    addMulti: (text) ->
+      for line in text.split('\n')
+        @add(line)
+
+    indent: -> level++
+    dedent: -> level-- if level > 0
+
+    render: -> lines.join('\n')
+
   timing: (label, fn) ->
     console.time(label)
     result = fn() if fn
@@ -758,7 +779,7 @@ class Generator
       for rule in type.rules
         firstSymbol = rule.symbols[0]
         continue unless firstSymbol  # Skip empty rules
-        
+
         # SPECIAL CASE: Skip Operation/OperationLine (handled by precedence climbing)
         if firstSymbol in ['Operation', 'OperationLine']
           cyclesSkipped++
@@ -771,18 +792,18 @@ class Generator
         if @types[firstSymbol]
           # Check for cycle: does target's FIRST include current nonterminal?
           targetType = @types[firstSymbol]
-          
+
           # Check if target has any rule starting with current nonterminal
           hasCycle = targetType.rules.some((r) => r.symbols[0] is name)
-          
+
           if hasCycle
             cyclesSkipped++
             hadCycle = true
             continue  # Skip this alternative to prevent cycle
-          
+
           # Safe - use target's FIRST tokens for routing
           firstSet = targetType.firsts
-          
+
           # Map FIRST tokens to parseXXX call
           for token from firstSet when token isnt ''
             tokenId = @symbolIds[token]
@@ -791,7 +812,7 @@ class Generator
         else
           # Terminal alternative - use rule's FIRST (just this terminal)
           firstSet = @_computeFirst(rule.symbols)
-          
+
           # Map token to _match call
           for token from firstSet when token isnt ''
             tokenId = @symbolIds[token]
@@ -1000,18 +1021,18 @@ class Generator
 
     for rule in rules
       firstSymbol = rule.symbols[0]
-      
+
       # SPECIAL CASE: Skip Operation/OperationLine (no parse functions for these)
       if firstSymbol in ['Operation', 'OperationLine']
         continue
-      
+
       # Skip cyclic rules (target calls back to current nonterminal)
       if @types[firstSymbol]
         targetType = @types[firstSymbol]
         hasCycle = targetType.rules.some((r) => r.symbols[0] is name)
         if hasCycle
           continue  # Skip this rule in fallback too
-      
+
       firstTokens = @_getFirstTokens(rule)
       for tokenId in firstTokens
         dispatch.get(tokenId) or dispatch.set(tokenId, [])
@@ -1059,10 +1080,17 @@ class Generator
       else
         # Terminal - match and apply action
         matchConst = @_getConstName(route.target)
-        [capture, ret] = @_compileAction(route.rule)
-        cases.push """
+        [captures, ret] = @_compileAction(route.rule)
+        if captures.length > 0
+          captureLines = captures.map((c) -> "          #{c}").join('\n')
+          cases.push """
           case #{constName}:
-            #{capture}
+            #{captureLines}
+            return #{ret};
+        """
+        else
+          cases.push """
+          case #{constName}:
             return #{ret};
         """
 
@@ -1081,40 +1109,45 @@ class Generator
 
   # Generate case for a single rule
   _generateRuleCase: (tokenId, rule) ->
-    [capture, ret] = @_compileAction(rule)
+    [captures, ret] = @_compileAction(rule)
     constName = @_getConstNameFromId(tokenId)
-    indent = if capture then '\n          ' else ' '
-    """
-        case #{constName}:#{indent}#{capture}#{if capture then '\n          ' else ''}return #{ret};
-    """
+    if captures.length > 0
+      captureLines = captures.map((c) -> "          #{c}").join('\n')
+      """
+        case #{constName}:
+          #{captureLines}
+          return #{ret};
+      """
+    else
+      """
+        case #{constName}: return #{ret};
+      """
 
   # Generate try/catch for ambiguous rules
   _generateTryCatch: (tokenId, ruleList) ->
     constName = @_getConstNameFromId(tokenId)
-    tries = []
+    lines = []
+    
+    lines.push "        case #{constName}: {"
+    lines.push "          const _saved = this._saveState();"
+    
     for rule, i in ruleList
-      [capture, ret] = @_compileAction(rule)
+      [captures, ret] = @_compileAction(rule)
+      
       if i < ruleList.length - 1
-        tries.push """
-            try {
-              #{capture}
-              return #{ret};
-            } catch (e) {
-              this._restoreState(_saved);
-            }
-        """
+        lines.push "          try {"
+        lines.push("            #{c}") for c in captures
+        lines.push "            return #{ret};"
+        lines.push "          } catch (e) {"
+        lines.push "            this._restoreState(_saved);"
+        lines.push "          }"
       else
-        tries.push """
-            #{capture}
-            return #{ret};
-        """
-
-    """
-        case #{constName}: {
-          const _saved = this._saveState();
-          #{tries.join('\n')}
-        }
-    """
+        lines.push("          #{c}") for c in captures
+        lines.push "          return #{ret};"
+    
+    lines.push "        }"
+    
+    lines.join('\n')
 
   # Compile action to captures + return
   _compileAction: (rule) ->
@@ -1131,7 +1164,7 @@ class Generator
     action = rule.action or 1
     returnVal = @_compileActionReturn(action, rule.symbols)
 
-    [captures.join('\n          '), returnVal]
+    [captures, returnVal]  # Return array, not pre-joined string
 
   # Convert symbol to SYM_* constant name
   _getConstName: (symbol) ->
