@@ -739,64 +739,38 @@ class Generator
     # BREAKTHROUGH: Extract routing from SLR(1) tables (oracle-informed generation)
     @_extractOracleRouting()
 
-  # ORACLE-INFORMED ROUTING: Extract routing decisions from SLR(1) tables
-  # This is the breakthrough - tables already solved cycles, we just extract their decisions!
+  # ORACLE-INFORMED ROUTING: Use FIRST sets to extract routing decisions
+  # INSIGHT: Don't walk states - use FIRST sets that are already computed!
   _extractOracleRouting!: ->
     @routing = new Map  # nonterminal → { tokenId: targetNonterminal }
-
-    console.log "Extracting oracle routing from #{@states.length} states..."
-
-    # For each nonterminal, find which alternative handles each token
-    count = 0
+    
+    console.log "Extracting routing using FIRST sets..."
+    
+    # For each nonterminal with multiple alternatives
     for own name, type of @types
       continue if name in ['$accept', '$end', 'error']
-      continue unless type?.rules?.length > 0
-
-      count++
-      if count <= 3
-        console.log "  Checking #{name}..."
-
+      continue unless type?.rules?.length > 1  # Only need routing for multiple alternatives
+      
       routing = {}
-
-      # Find states where we're about to parse this nonterminal
-      # Look for items like: X → • name (where name is our nonterminal)
-      for state in @states
-        for item from state.items
-          # Is this item about to parse our nonterminal?
-          if item.nextSymbol is name
-            # Check what tokens lead here via GOTO
-            # The GOTO tells us: after shifting token T, we go to state S
-            # State S then has: name → • alternative
-
-            # Get the state we'd be in after parsing this nonterminal
-            targetStateId = state.transitions.get(name)
-            continue unless targetStateId
-
-            targetState = @states[targetStateId]
-            continue unless targetState
-
-            # Look at items in target state to see which alternative was chosen
-            for targetItem from targetState.items
-              # Is this an item for our nonterminal?
-              if targetItem.rule.type is name and targetItem.dot is 1
-                # This item is: name → alternative •
-                # Meaning: we parsed 'alternative' to get here
-                alternative = targetItem.rule.symbols[0]
-
-                # What tokens led to this state transition?
-                # Look at the previous state's ACTION table
-                for own tokenId of state.parseTable
-                  continue if tokenId is name  # Skip nonterminals
-
-                  # If this token's action leads to our target, map it
-                  action = state.parseTable[tokenId]
-                  if action and action[0] is 1  # SHIFT
-                    # This token shifts, then might GOTO our nonterminal
-                    routing[tokenId] = alternative
-
+      
+      # For each alternative of this nonterminal
+      for rule in type.rules
+        alternative = rule.symbols[0]
+        continue unless alternative  # Skip empty rules
+        continue unless @types[alternative]  # Only nonterminals need routing
+        
+        # Get FIRST set of this alternative (already computed!)
+        firstSet = @_computeFirst([alternative])
+        
+        # Map each token in FIRST(alternative) → alternative
+        for token from firstSet when token isnt ''  # Skip epsilon
+          tokenId = @symbolIds[token]
+          if tokenId
+            routing[tokenId] = alternative
+      
       if Object.keys(routing).length > 0
         @routing.set(name, routing)
-        console.log "📍 Routing for #{name}: #{Object.keys(routing).length} tokens"
+        console.log "📍 Routing for #{name}: #{Object.keys(routing).length} tokens → #{type.rules.length} alternatives"
 
   # Generate PRD parser
   _generatePRD: ->
@@ -923,11 +897,12 @@ class Generator
   _generatePRDParsers: ->
     parsers = []
 
-    # MINIMAL SET: Only generate functions needed to parse "42" or "x"
-    # Chain: parseRoot → parseBody → parseLine → parseExpression → parseValue → parseLiteral → parseAlphaNumeric → NUMBER
-    # Also: parseValue → parseAssignable → parseSimpleAssignable → parseIdentifier → IDENTIFIER
-    minimalSet = ['Body', 'Line', 'Expression', 'Value', 'Literal', 'AlphaNumeric',
-                  'Assignable', 'SimpleAssignable', 'Identifier']
+    # EXPANDED SET: Include all alternatives that Expression routes to
+    # Expression routes to: Value, Code, Operation, Assign, If, Try, While, For, Switch, Class, Throw, Yield, Def
+    # But we only need the ones for simple literals for now
+    minimalSet = ['Body', 'Line', 'Expression', 'Value', 'Literal', 'AlphaNumeric', 
+                  'Assignable', 'SimpleAssignable', 'Identifier',
+                  'Code', 'Operation', 'Assign', 'If', 'While', 'For', 'Switch', 'Class', 'Throw', 'Yield', 'Def', 'Try']
 
     # Generate parseRoot with EOF check (Fix #20)
     startSymbol = @start or @rules[0]?.type
