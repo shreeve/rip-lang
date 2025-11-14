@@ -45,8 +45,8 @@ bun run parser  # Regenerates src/parser.js from grammar.rip
 
 ## 🎯 Current Status
 
-**Version:** 1.5.3
-**Tests:** 962 passing (100%)
+**Version:** 1.5.4
+**Tests:** 968 passing (100%)
 **Status:** Production-ready, self-hosting fully operational
 
 **Recent accomplishments (November 2025):**
@@ -67,7 +67,7 @@ bun run parser  # Regenerates src/parser.js from grammar.rip
 ```bash
 gh issue list                    # See open issues (Issue #57 - formatter polish)
 git log --oneline -10            # Recent commits
-bun run test                     # Verify: 962/962 tests
+bun run test                     # Verify: 968/968 tests
 bun run parser                   # Test self-hosting ✅
 ```
 
@@ -143,9 +143,9 @@ test/rip/
 ├── async.rip            (34 tests)
 ├── comprehensions.rip   (29 tests)
 ├── functions.rip        (86 tests)
-├── loops.rip            (27 tests)
+├── loops.rip            (34 tests)
 ... 18 more files
-Total: 962 tests (100% passing)
+Total: 968 tests (100% passing)
 ```
 
 ### Test-Driven Development
@@ -333,7 +333,7 @@ git commit -m "Fix: ...
 
 Fixes #N  ← Auto-closes issue!
 
-All tests passing: 962/962 (100%)"
+All tests passing: 968/968 (100%)"
 
 # 10. PR and merge
 git push origin fix/issue-name
@@ -737,7 +737,7 @@ git commit -m "fix bug"  # WRONG - didn't run tests!
 
 ### ✅ Always Test First
 ```bash
-bun run test  # MUST be 962/962 passing
+bun run test  # MUST be 968/968 passing
 git commit
 ```
 
@@ -778,7 +778,7 @@ bun script.rip
 ### Testing
 
 ```bash
-# All tests (962 total)
+# All tests (968 total)
 bun run test
 
 # Specific test file
@@ -955,7 +955,7 @@ git commit -m "Fix: Description
 
 Fixes #N
 
-All tests passing: 962/962 (100%)"
+All tests passing: 968/968 (100%)"
    ```
 
 ---
@@ -1039,7 +1039,7 @@ All tests passing: 962/962 (100%)"
 
 | Directory | Contents |
 |-----------|----------|
-| `test/rip/` | 23 test files, 962 tests total |
+| `test/rip/` | 23 test files, 968 tests total |
 | `test/runner.js` | Test framework |
 
 **Test types:**
@@ -1109,7 +1109,7 @@ Rip has **zero runtime or build dependencies**. This is intentional and must be 
 > - Keep the IR simple (s-expressions)
 > - Keep the pipeline clear (lex → parse → generate)
 > - Keep the code minimal (pattern matching)
-> - Test everything (962/962 tests passing)
+> - Test everything (968/968 tests passing)
 
 **Core practices:**
 
@@ -1158,7 +1158,7 @@ Rip has **zero runtime or build dependencies**. This is intentional and must be 
 ## ✅ Success Criteria
 
 **Before committing:**
-- ✅ All tests pass (962/962 = 100%)
+- ✅ All tests pass (968/968 = 100%)
 - ✅ Code follows existing patterns
 - ✅ Documentation updated (if needed)
 - ✅ Browser bundle rebuilt (if codegen changed)
@@ -1195,7 +1195,7 @@ Rip has **zero runtime or build dependencies**. This is intentional and must be 
 - Total: ~9,000 LOC
 
 **Tests:**
-- 962 tests across 23 files
+- 968 tests across 23 files
 - 100% passing rate
 - Comprehensive coverage
 

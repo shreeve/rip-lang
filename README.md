@@ -9,9 +9,9 @@
 </p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-1.5.3-blue.svg" alt="Version"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-1.5.4-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
-  <a href="#status"><img src="https://img.shields.io/badge/tests-962%2F962-brightgreen.svg" alt="Tests"></a>
+  <a href="#status"><img src="https://img.shields.io/badge/tests-968%2F968-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
 </p>
 
@@ -26,16 +26,16 @@ A clean-room **CoffeeScript-inspired compiler** that produces modern JavaScript 
 - 🚀 **Self-hosting** - Rip compiles itself (`bun run parser` works!)
 - ⚡ **~50% smaller** than CoffeeScript (9,839 LOC vs 17,760 LOC)
 - 🎨 **Modern output** - ES2022 with classes, modules, optional chaining
-- ✅ **Production-ready** - 962/962 tests passing (100%)
+- ✅ **Production-ready** - 968/968 tests passing (100%)
 
 ---
 
 ## Status
 
-**Version 1.5.3** - **PRODUCTION READY** 🚀
+**Version 1.5.4** - **PRODUCTION READY** 🚀
 
 **Quality metrics:**
-- ✅ **962/962 tests passing** (100% coverage)
+- ✅ **968/968 tests passing** (100% coverage)
 - ✅ **Self-hosting** - Rip compiles itself, including its own parser generator
 - ✅ **Zero dependencies** - Completely standalone, no npm packages required
 - ✅ **9,839 LOC** - Lean, maintainable codebase (~50% smaller than CoffeeScript)
@@ -144,7 +144,7 @@ Rip includes **all of CoffeeScript's beloved features** plus modern enhancements
 ### For Developers
 - ✅ **Simple architecture** - S-expressions beat complex AST classes
 - ✅ **Easy to extend** - Add a case, run tests, done!
-- ✅ **Well-tested** - 962/962 tests (100% coverage)
+- ✅ **Well-tested** - 968/968 tests (100% coverage)
 - ✅ **Well-documented** - Complete guides (AGENT.md is gold!)
 - ✅ **Self-hosting** - Rip compiles itself (including parser generator)
 
@@ -212,7 +212,7 @@ echo 'x = 42' | ./bin/rip -s               # Pipe from stdin
 # Build
 bun run parser                             # Rebuild parser (self-hosting!)
 bun run browser                            # Build browser bundle
-bun run test                               # Run all 962 tests
+bun run test                               # Run all 968 tests
 ```
 
 ---
@@ -499,7 +499,7 @@ rip/
 │       ├── grammar.rip  # Grammar specification
 │       └── solar.rip    # Parser generator
 ├── docs/                # Complete documentation
-├── test/rip/            # 23 test files, 962 tests
+├── test/rip/            # 23 test files, 968 tests
 ├── AGENT.md             # Complete developer guide
 └── README.md            # This file
 ```
