@@ -746,17 +746,17 @@ class Generator
     current = nonterminal
     visited = new Set
     chain = [nonterminal]
-    
+
     maxDepth = 10  # Safety limit
     depth = 0
-    
+
     while not visited.has(current) and depth < maxDepth
       visited.add(current)
       depth++
-      
+
       rules = @types[current]?.rules
       break unless rules
-      
+
       # Find single-symbol nonterminal rules that can handle this token
       forwardRules = rules.filter (r) =>
         return false unless r.symbols.length is 1  # Must be single-symbol
@@ -764,17 +764,17 @@ class Generator
         return false unless @types[firstSym]  # Must be nonterminal
         fst = @_getFirstTokens(r)
         tokenId in fst  # Must handle this token
-      
+
       # Only follow if exactly ONE single-symbol forward exists
       break unless forwardRules.length is 1
       rule = forwardRules[0]
-      
+
       nextSymbol = rule.symbols[0]
       break unless @types[nextSymbol]  # Should always be true but check anyway
-      
+
       current = nextSymbol
       chain.push(current)
-    
+
     return if current is nonterminal then null else current
 
   # ORACLE-INFORMED ROUTING: Use FIRST sets to extract routing decisions
