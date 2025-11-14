@@ -39,7 +39,7 @@
 | 5 | Left-Recursion | ✅ Complete | ~60 |
 | 6-12 | Remaining | 🔄 In Progress | TBD |
 
-**Total so far:** ~300 lines clean PRD code in solar.rip  
+**Total so far:** ~300 lines clean PRD code in solar.rip
 **Generated parser:** ~287 lines (needs runtime fixes)
 
 ---
@@ -63,31 +63,31 @@
 These tests failed in solar-old.rip at 99.3%. Clean-room implementation designed to handle them:
 
 ### 1. array destructuring skip
-**Test:** `[a, , c] = [1,2,3]; a + c` should equal 4  
+**Test:** `[a, , c] = [1,2,3]; a + c` should equal 4
 **Solution:** Phase 6.1 - Elision-first rule ordering in Array parser
 
 ### 2. dammit method call
-**File:** test/rip/async.rip  
+**File:** test/rip/async.rip
 **Solution:** Phase 6.5 - Preserve String object metadata (don't convert to primitives)
 
 ### 3. await expression
-**File:** test/rip/async.rip  
+**File:** test/rip/async.rip
 **Solution:** Phase 9.5 - Proper await expression parsing
 
 ### 4. trailing comma multiline
-**File:** test/rip/basic.rip  
+**File:** test/rip/basic.rip
 **Solution:** Phase 6 - Multi-elision handling with comma token return (Fix #21)
 
 ### 5. elision undefined check
-**Test:** `arr = [1,,2]; arr[1]` should return undefined  
+**Test:** `arr = [1,,2]; arr[1]` should return undefined
 **Solution:** Phase 8.5 - Multi-statement parsing (TERMINATOR vs comma distinction)
 
 ### 6. elision destructuring multiple
-**File:** test/rip/basic.rip  
+**File:** test/rip/basic.rip
 **Solution:** Phase 6.1 - Elision-first rule ordering
 
 ### 7. invalid extends
-**Test:** `'3 extends 2'` should fail  
+**Test:** `'3 extends 2'` should fail
 **Solution:** ✅ Phase 3.2 - EOF validation (Fix #20) - **ALREADY IMPLEMENTED!**
 
 ---
