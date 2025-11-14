@@ -716,15 +716,15 @@ class Generator
   # Analyze grammar for PRD patterns
   _analyzePRDPatterns!: ->
     @leftRecursive = new Map  # nonterminal → {base, recursive} rules
-    
+
     # Detect direct left-recursion: A → A sep B
     for own name, type of @types
       continue if name in ['$accept', '$end', 'error']
       continue unless type?.rules?.length > 0
-      
+
       base = []
       recursive = []
-      
+
       for rule in type.rules
         firstSym = rule.symbols[0]
         # Check if first symbol equals this nonterminal name
@@ -732,10 +732,10 @@ class Generator
           recursive.push(rule)
         else
           base.push(rule)
-      
+
       if recursive.length > 0
         @leftRecursive.set(name, {base, recursive})
-    
+
     # BREAKTHROUGH: Extract routing from SLR(1) tables (oracle-informed generation)
     @_extractOracleRouting()
 
@@ -743,14 +743,21 @@ class Generator
   # This is the breakthrough - tables already solved cycles, we just extract their decisions!
   _extractOracleRouting!: ->
     @routing = new Map  # nonterminal → { tokenId: targetNonterminal }
-    
+
+    console.log "Extracting oracle routing from #{@states.length} states..."
+
     # For each nonterminal, find which alternative handles each token
+    count = 0
     for own name, type of @types
       continue if name in ['$accept', '$end', 'error']
       continue unless type?.rules?.length > 0
-      
+
+      count++
+      if count <= 3
+        console.log "  Checking #{name}..."
+
       routing = {}
-      
+
       # Find states where we're about to parse this nonterminal
       # Look for items like: X → • name (where name is our nonterminal)
       for state in @states
@@ -760,14 +767,14 @@ class Generator
             # Check what tokens lead here via GOTO
             # The GOTO tells us: after shifting token T, we go to state S
             # State S then has: name → • alternative
-            
+
             # Get the state we'd be in after parsing this nonterminal
             targetStateId = state.transitions.get(name)
             continue unless targetStateId
-            
+
             targetState = @states[targetStateId]
             continue unless targetState
-            
+
             # Look at items in target state to see which alternative was chosen
             for targetItem from targetState.items
               # Is this an item for our nonterminal?
@@ -775,22 +782,22 @@ class Generator
                 # This item is: name → alternative •
                 # Meaning: we parsed 'alternative' to get here
                 alternative = targetItem.rule.symbols[0]
-                
+
                 # What tokens led to this state transition?
                 # Look at the previous state's ACTION table
                 for own tokenId of state.parseTable
                   continue if tokenId is name  # Skip nonterminals
-                  
+
                   # If this token's action leads to our target, map it
                   action = state.parseTable[tokenId]
                   if action and action[0] is 1  # SHIFT
                     # This token shifts, then might GOTO our nonterminal
                     routing[tokenId] = alternative
-    
+
       if Object.keys(routing).length > 0
         @routing.set(name, routing)
         console.log "📍 Routing for #{name}: #{Object.keys(routing).length} tokens"
-  
+
   # Generate PRD parser
   _generatePRD: ->
     """
@@ -915,17 +922,17 @@ class Generator
   # Generate parse functions for all nonterminals
   _generatePRDParsers: ->
     parsers = []
-    
+
     # MINIMAL SET: Only generate functions needed to parse "42" or "x"
     # Chain: parseRoot → parseBody → parseLine → parseExpression → parseValue → parseLiteral → parseAlphaNumeric → NUMBER
     # Also: parseValue → parseAssignable → parseSimpleAssignable → parseIdentifier → IDENTIFIER
-    minimalSet = ['Body', 'Line', 'Expression', 'Value', 'Literal', 'AlphaNumeric', 
+    minimalSet = ['Body', 'Line', 'Expression', 'Value', 'Literal', 'AlphaNumeric',
                   'Assignable', 'SimpleAssignable', 'Identifier']
-    
+
     # Generate parseRoot with EOF check (Fix #20)
     startSymbol = @start or @rules[0]?.type
     terminatorId = @symbolIds['TERMINATOR'] or 6
-    
+
     parsers.push """
       parseRoot() {
         // Root: '' | Body
@@ -933,26 +940,26 @@ class Generator
         if (!this.la || this.la.id === 1) {
           return ['program'];
         }
-        
+
         const result = this.parseBody();
-        
+
         // EOF validation (Fix #20): ensure all input consumed
         if (this.la && this.la.id !== 1 && this.la.id !== #{terminatorId}) {
           this._error([1], this.la.id);
         }
-        
+
         return ['program', ...result];
       }
     """
-    
+
     # Generate ONLY minimal set for now
     console.log "Generating minimal set: #{minimalSet.join(', ')}"
     for own name, type of @types
       continue if name in ['$accept', '$end', 'error', 'Root']
       continue unless name in minimalSet  # ONLY minimal set
-      
+
       parsers.push(@_generateParserFor(name))
-    
+
     parsers.join(',\n\n') + ','  # Trailing comma for clean structure
 
   # Generate parser function for a single nonterminal
@@ -970,27 +977,27 @@ class Generator
   _generateSimple: (name) ->
     type = @types[name]
     rules = type.rules
-    
+
     # BREAKTHROUGH: Use oracle routing if available (cycle-free!)
     if @routing?.has(name)
       return @_generateOracleDispatch(name)
-    
+
     # Fallback: Build dispatch by FIRST tokens (old way)
     dispatch = new Map
-    
+
     for rule in rules
       firstTokens = @_getFirstTokens(rule)
       for tokenId in firstTokens
         dispatch.get(tokenId) or dispatch.set(tokenId, [])
         dispatch.get(tokenId).push(rule)
-    
+
     cases = []
     for [tokenId, ruleList] from dispatch
       if ruleList.length is 1
         cases.push(@_generateRuleCase(tokenId, ruleList[0]))
       else
         cases.push(@_generateTryCatch(tokenId, ruleList))
-    
+
     """
       parse#{name}() {
         let $1, $2, $3, $4, $5, $6, $7, $8, $9;
@@ -1001,11 +1008,11 @@ class Generator
         }
       }
     """
-  
+
   # Generate oracle-informed dispatcher (cycle-free by construction!)
   _generateOracleDispatch: (name) ->
     routing = @routing.get(name)
-    
+
     # Build dispatch: token → target parser
     cases = []
     for own tokenId, targetNonterminal of routing
@@ -1014,7 +1021,7 @@ class Generator
         case #{tokenId}:
           return this.parse#{targetNonterminal}();
       """
-    
+
     tokens = Object.keys(routing).join(', ')
     """
       parse#{name}() {
