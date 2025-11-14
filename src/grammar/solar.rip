@@ -1185,12 +1185,12 @@ class Generator
       currentType = @types[nonTerminal]
       if currentType and currentType.firsts.size > 0
         currentFirstTokens = Array.from(currentType.firsts)
-        
+
         # Check all inlined nonterminals for rules matching our FIRST set
         for inlinedName from @shouldInline
           inlinedType = @types[inlinedName]
           continue unless inlinedType
-          
+
           # Only add if this nonterminal is directly referenced by a non-inlined parent
           # that also references the current nonterminal (they're siblings)
           isRelevant = false
@@ -1201,13 +1201,13 @@ class Generator
             if parentRefsInlined and parentRefsCurrent
               isRelevant = true
               break
-          
+
           continue unless isRelevant
-          
+
           for inlinedRule in inlinedType.rules
             firstSym = inlinedRule.symbols[0]
             continue unless firstSym and not @types[firstSym]
-            
+
             # Check if this terminal is in our FIRST set
             if currentFirstTokens.includes(firstSym)
               tokenId = @symbolIds[firstSym]
@@ -3357,9 +3357,22 @@ class Generator
       for rule in rules when @types[rule.symbols[0]]
         nonterminal = rule.symbols[0]
         action = @_normalizeActionForPRD(rule.action, rule.symbols)
+        # GENERIC FIX #19: Check if nonterminal is nullable
+        isNullable = @types[nonterminal]?.nullable
+        
         lines.push("      // Try: #{nonterminal}")
         lines.push("      try {")
         lines.push("        $1 = this.parse#{nonterminal}();")
+        
+        if isNullable
+          # After parsing nullable nonterminal, check if trigger token follows
+          # If so, prefer fallback (longer match)
+          lines.push("        // GENERIC FIX #19: Prefer longer match for nullable")
+          lines.push("        if (this.la && this.la.id === #{triggerToken}) {")
+          lines.push("          this._restoreState(_saved);")
+          lines.push("          throw new Error('Try fallback');")
+          lines.push("        }")
+        
         lines.push("        return #{action};")
         lines.push("      } catch (e) {")
         lines.push("        this._restoreState(_saved);")
@@ -3626,7 +3639,13 @@ class Generator
         baseInitLines.push("$#{pos} = this._match(#{constName});")
 
     # Add action evaluation
-    baseInitLines.push("$1 = #{baseAction};")
+    # GENERIC FIX #21: For single-terminal rules with action 'null',
+    # return matched token (like table-driven), not JavaScript null
+    if baseRule.symbols.length is 1 and baseRule.action is 'null' and not @types[baseRule.symbols[0]]
+      # Return the matched token instead of null for sparse arrays
+      baseInitLines.push("return $1;")
+    else
+      baseInitLines.push("$1 = #{baseAction};")
     baseInit = baseInitLines.join('\n        ')
 
     # Check if separator is a terminal or nonterminal
