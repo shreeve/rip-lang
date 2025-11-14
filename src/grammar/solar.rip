@@ -757,11 +757,11 @@ class Generator
       for rule in type.rules
         firstSymbol = rule.symbols[0]
         continue unless firstSymbol  # Skip empty rules
-        
+
         # CRITICAL FIX: Compute FIRST of entire rule, not just first symbol!
         # Expression → For gets FIRST([For]) = {FOR}, not FIRST(For) recursively
         firstSet = @_computeFirst(rule.symbols)
-        
+
         if @types[firstSymbol]
           # Nonterminal alternative - map FIRST tokens to parseXXX call
           for token from firstSet when token isnt ''
