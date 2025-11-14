@@ -860,11 +860,17 @@ class Generator
   # Generate parse functions for all nonterminals
   _generatePRDParsers: ->
     parsers = []
-
+    
+    # MINIMAL SET: Only generate functions needed to parse "42" or "x"
+    # Chain: parseRoot → parseBody → parseLine → parseExpression → parseValue → parseLiteral → parseAlphaNumeric → NUMBER
+    # Also: parseValue → parseAssignable → parseSimpleAssignable → parseIdentifier → IDENTIFIER
+    minimalSet = ['Body', 'Line', 'Expression', 'Value', 'Literal', 'AlphaNumeric', 
+                  'Assignable', 'SimpleAssignable', 'Identifier']
+    
     # Generate parseRoot with EOF check (Fix #20)
     startSymbol = @start or @rules[0]?.type
     terminatorId = @symbolIds['TERMINATOR'] or 6
-
+    
     parsers.push """
       parseRoot() {
         // Root: '' | Body
@@ -872,23 +878,26 @@ class Generator
         if (!this.la || this.la.id === 1) {
           return ['program'];
         }
-
+        
         const result = this.parseBody();
-
+        
         // EOF validation (Fix #20): ensure all input consumed
         if (this.la && this.la.id !== 1 && this.la.id !== #{terminatorId}) {
           this._error([1], this.la.id);
         }
-
+        
         return ['program', ...result];
       }
     """
-
-    # Generate parser for each nonterminal (skip $accept, Root)
+    
+    # Generate ONLY minimal set for now
+    console.log "Generating minimal set: #{minimalSet.join(', ')}"
     for own name, type of @types
       continue if name in ['$accept', '$end', 'error', 'Root']
+      continue unless name in minimalSet  # ONLY minimal set
+      
       parsers.push(@_generateParserFor(name))
-
+    
     parsers.join(',\n\n') + ','  # Trailing comma for clean structure
 
   # Generate parser function for a single nonterminal
@@ -979,13 +988,13 @@ class Generator
       else
         constName = @_getConstName(symbol)
         captures.push("$#{pos} = this._match(#{constName});")
-    
+
     # Compile action string
     action = rule.action or 1
     returnVal = @_compileActionReturn(action, rule.symbols)
-    
+
     [captures.join('\n          '), returnVal]
-  
+
   # Convert symbol to SYM_* constant name
   _getConstName: (symbol) ->
     operatorMap =
@@ -999,7 +1008,7 @@ class Generator
       '&': 'BITAND', '|': 'BITOR', '^': 'BITXOR'
       '&&': 'AND', '||': 'OR', '??': 'NULLISH'
       'SPACE?': 'TERNARY_Q'
-    
+
     safeName = operatorMap[symbol] or symbol.toUpperCase().replace(/[^A-Z0-9_]/g, '_')
     safeName = safeName.replace(/^_+|_+$/g, '')
     "SYM_#{safeName}"
@@ -1022,56 +1031,56 @@ class Generator
     # Replace all bare numbers with $n
     actionStr.replace /\b(\d+)\b/g, '$$$1'
 
-  # Generate iterative parser for left-recursive nonterminal  
+  # Generate iterative parser for left-recursive nonterminal
   _generateIterative: (name) ->
     {base, recursive} = @leftRecursive.get(name)
     baseRule = base[0]
     recRule = recursive[0]
-    
+
     # Pattern: A → B | A sep B
     baseSymbol = baseRule.symbols[0]
     separator = recRule.symbols[1]
     elementSymbol = recRule.symbols[2] or baseSymbol
-    
+
     sepConst = @_getConstName(separator)
     firstTokens = @_getFirstTokens({symbols: [elementSymbol]})
-    
+
     # Compile actions
     baseAction = @_compileActionReturn(baseRule.action, baseRule.symbols)
     recAction = @_compileActionReturn(recRule.action, recRule.symbols)
-    
+
     # Check if base and element are terminals or nonterminals
     baseIsTerminal = not @types[baseSymbol]
     elementIsTerminal = not @types[elementSymbol]
-    
+
     baseCall = if baseIsTerminal
       "this._match(#{@_getConstName(baseSymbol)})"
     else
       "this.parse#{baseSymbol}()"
-    
+
     elementCall = if elementIsTerminal
       "this._match(#{@_getConstName(elementSymbol)})"
     else
       "this.parse#{elementSymbol}()"
-    
+
     """
       parse#{name}() {
         let $1 = #{baseCall};
         $1 = #{baseAction};
-        
+
         while (this.la && this.la.id === #{sepConst}) {
           const _saved = this._saveState();
           const $2 = this._match(#{sepConst});
-          
+
           if (!this.la || ![#{firstTokens.join(', ')}].includes(this.la.id)) {
             this._restoreState(_saved);
             break;
           }
-          
+
           const $3 = #{elementCall};
           $1 = #{recAction};
         }
-        
+
         return $1;
       }
     """
