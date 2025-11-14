@@ -218,7 +218,7 @@ bun run test
 3. **AGENT.md** - General Rip development guide (10 min)
 4. **src/grammar/solar.rip** - Parser generator source (~4,550 lines)
    - Lines 1327-1333: Fix #21 (comma tokens)
-   - Lines 3360-3381: Fix #19 (nullable lookahead)  
+   - Lines 3360-3381: Fix #19 (nullable lookahead)
    - Lines 824-833: Fix #20 (EOF validation)
    - Lines 3849-3865: Fix #19 (separator exclusion)
    - Search for "GENERIC FIX" to find all 21 fixes

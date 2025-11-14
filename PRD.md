@@ -10,10 +10,10 @@
 
 ## Status
 
-**Branch:** `recursive-descent`  
-**Current:** 955/962 tests passing (99.3%)  
-**Performance:** ~33x faster than table-driven (864K vs 26K parses/sec)  
-**Size:** 5,337 LOC vs 350 LOC table-driven (15x larger but 33x faster)  
+**Branch:** `recursive-descent`
+**Current:** 955/962 tests passing (99.3%)
+**Performance:** ~33x faster than table-driven (864K vs 26K parses/sec)
+**Size:** 5,337 LOC vs 350 LOC table-driven (15x larger but 33x faster)
 **Genericity:** 100% - Works with ANY SLR(1) grammar (zero hardcoded symbols)
 
 **What's Different from Main:**
