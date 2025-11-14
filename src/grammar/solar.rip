@@ -167,14 +167,18 @@ class Generator
         # Add symbols to grammar
         addSymbol symbol for symbol in symbols
 
-        # Process semantic actions
+        # Store original action for PRD
+        originalAction = action
+
+        # Process semantic actions for table mode
         if action
           action = @_processGrammarAction action, symbols
           label = 'case ' + (@rules.length + 1) + ':'
           actionGroups[action]?.push(label) or actionGroups[action] = [label]
 
-        # Create rule
+        # Create rule and store original action for PRD
         rule = new Rule type, symbols, @rules.length + 1
+        rule.action = originalAction  # CRITICAL: Store for PRD generation
 
         # Set precedence
         @_assignPrecedence rule, precedence
@@ -986,17 +990,17 @@ class Generator
   _compileActionReturn: (action, symbols) ->
     return "$1" if not action or action is 1
     return "$#{action}" if typeof action is 'number'
-    
+
     # Special handling for null (Fix #21: single terminal returns token)
     if action is 'null'
       if symbols.length is 1 and not @types[symbols[0]]
         return "$1"
       else
         return 'null'
-    
+
     actionStr = String(action)
     return actionStr if /\$\d+/.test(actionStr)  # Already normalized
-    
+
     # Replace all bare numbers with $n
     actionStr.replace /\b(\d+)\b/g, '$$$1'
 
@@ -1013,6 +1017,10 @@ class Generator
 
     sepId = @symbolIds[separator]
     firstTokens = @_getFirstTokens({symbols: [elementSymbol]})
+
+    # Compile actions
+    baseAction = @_compileActionReturn(baseRule.action, baseRule.symbols)
+    recAction = @_compileActionReturn(recRule.action, recRule.symbols)
 
     # Check if base and element are terminals or nonterminals
     baseIsTerminal = not @types[baseSymbol]
@@ -1031,7 +1039,7 @@ class Generator
     """
       parse#{name}() {
         let $1 = #{baseCall};
-        const elements = [$1];
+        $1 = #{baseAction};
 
         while (this.la && this.la.id === #{sepId}) {
           const _saved = this._saveState();
@@ -1043,10 +1051,10 @@ class Generator
           }
 
           const $3 = #{elementCall};
-          elements.push($3);
+          $1 = #{recAction};
         }
 
-        return elements;
+        return $1;
       }
     """
 
