@@ -966,27 +966,31 @@ class Generator
     # Simple case: generate switch on FIRST tokens
     @_generateSimple(name)
 
-  # Generate simple parser (non-recursive)
+  # Generate simple parser (non-recursive) - ORACLE-INFORMED!
   _generateSimple: (name) ->
     type = @types[name]
     rules = type.rules
-
-    # Build dispatch by FIRST tokens
+    
+    # BREAKTHROUGH: Use oracle routing if available (cycle-free!)
+    if @routing?.has(name)
+      return @_generateOracleDispatch(name)
+    
+    # Fallback: Build dispatch by FIRST tokens (old way)
     dispatch = new Map
-
+    
     for rule in rules
       firstTokens = @_getFirstTokens(rule)
       for tokenId in firstTokens
         dispatch.get(tokenId) or dispatch.set(tokenId, [])
         dispatch.get(tokenId).push(rule)
-
+    
     cases = []
     for [tokenId, ruleList] from dispatch
       if ruleList.length is 1
         cases.push(@_generateRuleCase(tokenId, ruleList[0]))
       else
         cases.push(@_generateTryCatch(tokenId, ruleList))
-
+    
     """
       parse#{name}() {
         let $1, $2, $3, $4, $5, $6, $7, $8, $9;
@@ -994,6 +998,31 @@ class Generator
         #{cases.join('\n')}
         default:
           this._error([#{Array.from(dispatch.keys()).join(', ')}], this.la?.id);
+        }
+      }
+    """
+  
+  # Generate oracle-informed dispatcher (cycle-free by construction!)
+  _generateOracleDispatch: (name) ->
+    routing = @routing.get(name)
+    
+    # Build dispatch: token → target parser
+    cases = []
+    for own tokenId, targetNonterminal of routing
+      # Generate direct call (no try/catch, no cycles!)
+      cases.push """
+        case #{tokenId}:
+          return this.parse#{targetNonterminal}();
+      """
+    
+    tokens = Object.keys(routing).join(', ')
+    """
+      parse#{name}() {
+        // Oracle-informed dispatch (cycle-free!)
+        switch (this.la?.id) {
+        #{cases.join('\n')}
+        default:
+          this._error([#{tokens}], this.la?.id);
         }
       }
     """
