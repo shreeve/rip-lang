@@ -716,15 +716,15 @@ class Generator
   # Analyze grammar for PRD patterns
   _analyzePRDPatterns!: ->
     @leftRecursive = new Map  # nonterminal → {base, recursive} rules
-
+    
     # Detect direct left-recursion: A → A sep B
     for own name, type of @types
       continue if name in ['$accept', '$end', 'error']
       continue unless type?.rules?.length > 0
-
+      
       base = []
       recursive = []
-
+      
       for rule in type.rules
         firstSym = rule.symbols[0]
         # Check if first symbol equals this nonterminal name
@@ -732,10 +732,65 @@ class Generator
           recursive.push(rule)
         else
           base.push(rule)
-
+      
       if recursive.length > 0
         @leftRecursive.set(name, {base, recursive})
+    
+    # BREAKTHROUGH: Extract routing from SLR(1) tables (oracle-informed generation)
+    @_extractOracleRouting()
 
+  # ORACLE-INFORMED ROUTING: Extract routing decisions from SLR(1) tables
+  # This is the breakthrough - tables already solved cycles, we just extract their decisions!
+  _extractOracleRouting!: ->
+    @routing = new Map  # nonterminal → { tokenId: targetNonterminal }
+    
+    # For each nonterminal, find which alternative handles each token
+    for own name, type of @types
+      continue if name in ['$accept', '$end', 'error']
+      continue unless type?.rules?.length > 0
+      
+      routing = {}
+      
+      # Find states where we're about to parse this nonterminal
+      # Look for items like: X → • name (where name is our nonterminal)
+      for state in @states
+        for item from state.items
+          # Is this item about to parse our nonterminal?
+          if item.nextSymbol is name
+            # Check what tokens lead here via GOTO
+            # The GOTO tells us: after shifting token T, we go to state S
+            # State S then has: name → • alternative
+            
+            # Get the state we'd be in after parsing this nonterminal
+            targetStateId = state.transitions.get(name)
+            continue unless targetStateId
+            
+            targetState = @states[targetStateId]
+            continue unless targetState
+            
+            # Look at items in target state to see which alternative was chosen
+            for targetItem from targetState.items
+              # Is this an item for our nonterminal?
+              if targetItem.rule.type is name and targetItem.dot is 1
+                # This item is: name → alternative •
+                # Meaning: we parsed 'alternative' to get here
+                alternative = targetItem.rule.symbols[0]
+                
+                # What tokens led to this state transition?
+                # Look at the previous state's ACTION table
+                for own tokenId of state.parseTable
+                  continue if tokenId is name  # Skip nonterminals
+                  
+                  # If this token's action leads to our target, map it
+                  action = state.parseTable[tokenId]
+                  if action and action[0] is 1  # SHIFT
+                    # This token shifts, then might GOTO our nonterminal
+                    routing[tokenId] = alternative
+    
+      if Object.keys(routing).length > 0
+        @routing.set(name, routing)
+        console.log "📍 Routing for #{name}: #{Object.keys(routing).length} tokens"
+  
   # Generate PRD parser
   _generatePRD: ->
     """
