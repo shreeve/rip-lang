@@ -763,17 +763,17 @@ class Generator
         if @types[firstSymbol]
           # Check for cycle: does target's FIRST include current nonterminal?
           targetType = @types[firstSymbol]
-          
+
           # Check if target has any rule starting with current nonterminal
           hasCycle = targetType.rules.some((r) => r.symbols[0] is name)
-          
+
           if hasCycle
             cyclesSkipped++
             continue  # Skip this alternative to prevent cycle
-          
+
           # Safe - use target's FIRST tokens for routing
           firstSet = targetType.firsts
-          
+
           # Map FIRST tokens to parseXXX call
           for token from firstSet when token isnt ''
             tokenId = @symbolIds[token]
@@ -782,7 +782,7 @@ class Generator
         else
           # Terminal alternative - use rule's FIRST (just this terminal)
           firstSet = @_computeFirst(rule.symbols)
-          
+
           # Map token to _match call
           for token from firstSet when token isnt ''
             tokenId = @symbolIds[token]

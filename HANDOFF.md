@@ -342,7 +342,7 @@ Get `echo '42' | ./bin/rip -s` working with all 86 parse functions.
 ```coffee
 Expression: [
   o 'Value'     # FIRST([Value]) = {NUMBER, STRING, IDENTIFIER, ...}
-  o 'For'       # FIRST([For]) = {FOR}  
+  o 'For'       # FIRST([For]) = {FOR}
   o 'While'     # FIRST([While]) = {WHILE}
 ]
 
