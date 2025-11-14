@@ -38,13 +38,12 @@ Rip Source → Lexer → Parser → S-Expressions → Codegen → JavaScript
 
 ## 🎯 Current Status
 
-**Version:** 1.5.3
-**Tests:** 955/962 passing (99.3%) with PRD parser
+**Version:** 1.5.4
+**Tests:** 968/968 passing (100%)
 **Status:** Production-ready, self-hosting fully operational
 
 **Parser modes:**
-- **Table-driven** (default): 350 LOC, 962/962 tests (100%)
-- **PRD** (`-r` flag): 5,337 LOC, 955/962 tests (99.3%), ~33x faster
+- **Table-driven** (default): 350 LOC, 968/968 tests (100%)
 
 **Recent accomplishments (November 2025):**
 - ✅ Predictive Recursive Descent parser at 99.3%
@@ -58,7 +57,7 @@ Rip Source → Lexer → Parser → S-Expressions → Codegen → JavaScript
 ```bash
 gh issue list                    # See open issues
 git log --oneline -10            # Recent commits
-bun run test                     # Verify: 955/962 tests (PRD) or 962/962 (table)
+bun run test                     # Verify: 968/968 tests passing
 bun run parser                   # Test self-hosting ✅
 ```
 
@@ -136,9 +135,9 @@ test/rip/
 ├── async.rip            (34 tests)
 ├── comprehensions.rip   (29 tests)
 ├── functions.rip        (86 tests)
-├── loops.rip            (27 tests)
+├── loops.rip            (34 tests)
 ... 18 more files
-Total: 962 tests
+Total: 968 tests
 ```
 
 ---
@@ -561,7 +560,7 @@ See `docs/CODEGEN.md` for complete catalog (110+ node types).
 ## ✅ Success Criteria
 
 **Before committing:**
-- ✅ All tests pass (955/962 = 99.3% for PRD, or 962/962 = 100% for table)
+- ✅ All tests pass (968/968 = 100%)
 - ✅ Code follows existing patterns
 - ✅ Documentation updated (if needed)
 - ✅ Browser bundle rebuilt (if codegen changed)

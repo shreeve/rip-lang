@@ -61,6 +61,53 @@ test "for-in when item not in list", '''
   result
   ''', ['grape']
 
+# For-of with 'when' guard using 'of' operator
+test "for-of when key of object", '''
+  obj = {a: 1, b: 2, c: 3}
+  obj.d = 4
+  result = []
+  for key of obj when key of {a: true, c: true}
+    result.push(key)
+  result.sort()
+  ''', ['a', 'c']
+
+# For-of with 'when' guard using 'not of' operator
+test "for-of when key not of object", '''
+  obj = {a: 1, b: 2, c: 3}
+  result = []
+  for key of obj when key not of {a: true, c: true}
+    result.push(key)
+  result
+  ''', ['b']
+
+# For-in with 'when' guard using 'instanceof' operator
+test "for-in when instanceof", '''
+  class Fruit
+  class Veggie
+  apple = new Fruit
+  grape = new Fruit
+  carrot = new Veggie
+  items = [apple, grape, carrot]
+  result = []
+  for item in items when item instanceof Fruit
+    result.push(item)
+  result.length
+  ''', 2
+
+# For-in with 'when' guard using 'not instanceof' operator
+test "for-in when not instanceof", '''
+  class Fruit
+  class Veggie
+  apple = new Fruit
+  grape = new Fruit
+  carrot = new Veggie
+  items = [apple, grape, carrot]
+  result = []
+  for item in items when item not instanceof Fruit
+    result.push(item)
+  result.length
+  ''', 1
+
 # Postfix while
 test "postfix while", "i = 0; i += 1 while i < 5; i", 5
 
@@ -134,5 +181,5 @@ test "nested for-in", '''
 # Stats for CODEGEN.md
 # ============================================================================
 # Node types: for-in, for-of, while, until, loop, break, continue, break-if, continue-if
-# Tests: 25 total (25 passing, 0 failing)
-# Coverage: Array iteration, object iteration, while/until, infinite loops, break, continue, nesting, range loops without variable
+# Tests: 34 total (34 passing, 0 failing)
+# Coverage: Array iteration, object iteration, while/until, infinite loops, break, continue, nesting, range loops without variable, guards with in/not in, of/not of, instanceof/not instanceof operators
