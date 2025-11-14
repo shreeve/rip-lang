@@ -73,9 +73,9 @@ parse(input) {
     let $1 = this.parseLine();
     $1 = [$1];
     
-    while (this.la && this.la.id === 6) {
+    while (this.la && this.la.id === SYM_TERMINATOR) {
       const _saved = this._saveState();
-      const $2 = this._match(6);
+      const $2 = this._match(SYM_TERMINATOR);
       
       if (!this.la || ![40, 77, 61, 62, 63, 64, 65, 66, 153, 75, 83, 86, 179, 138, 111, 112, 95, 98, 99, 113, 44, 46, 47, 54, 55, 177, 178, 180, 181, 182, 163, 183, 184, 172, 174, 11, 148, 156, 157, 159, 114, 166, 121, 152, 35, 27, 94, 123, 131].includes(this.la.id)) {
         this._restoreState(_saved);
@@ -331,7 +331,7 @@ parse(input) {
           $1 = this.parseReturn();
           return $1;
     case 11:
-          $1 = this._match(11);
+          $1 = this._match(SYM_STATEMENT);
           return $1;
     case 123:
           $1 = this.parseImport();
@@ -1839,17 +1839,17 @@ parse(input) {
         case 27: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(27);
+      $1 = this._match(SYM_DEF);
           $2 = this.parseIdentifier();
-          $3 = this._match(29);
+          $3 = this._match(SYM_CALL_START);
           $4 = this.parseParamList();
-          $5 = this._match(31);
+          $5 = this._match(SYM_CALL_END);
           $6 = this.parseBlock();
       return ["def", $2, $4, $6];
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(27);
+    $1 = this._match(SYM_DEF);
           $2 = this.parseIdentifier();
           $3 = this.parseBlock();
     return ["def", $2, [], $3];
@@ -1891,29 +1891,29 @@ parse(input) {
         case 35: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(35);
+      $1 = this._match(SYM_YIELD);
       return ["yield"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(35);
+      $1 = this._match(SYM_YIELD);
           $2 = this.parseExpression();
       return ["yield", $2];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(35);
-          $2 = this._match(36);
+      $1 = this._match(SYM_YIELD);
+          $2 = this._match(SYM_INDENT);
           $3 = this.parseObject();
-          $4 = this._match(38);
+          $4 = this._match(SYM_OUTDENT);
       return ["yield", $3];
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(35);
-          $2 = this._match(39);
+    $1 = this._match(SYM_YIELD);
+          $2 = this._match(SYM_FROM);
           $3 = this.parseExpression();
     return ["yield-from", $3];
     }
@@ -1928,15 +1928,15 @@ parse(input) {
         case 36: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(36);
-          $2 = this._match(38);
+      $1 = this._match(SYM_INDENT);
+          $2 = this._match(SYM_OUTDENT);
       return ["block"];
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(36);
+    $1 = this._match(SYM_INDENT);
           $2 = this.parseBody();
-          $3 = this._match(38);
+          $3 = this._match(SYM_OUTDENT);
     return ["block", ...$2];
     }
     default:
@@ -1948,7 +1948,7 @@ parse(input) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
         case 40:
-          $1 = this._match(40);
+          $1 = this._match(SYM_IDENTIFIER);
           return $1;
     default:
       this._error([40], this.la?.id);
@@ -1959,7 +1959,7 @@ parse(input) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
         case 42:
-          $1 = this._match(42);
+          $1 = this._match(SYM_PROPERTY);
           return $1;
     default:
       this._error([42], this.la?.id);
@@ -1970,7 +1970,7 @@ parse(input) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
         case 44:
-          $1 = this._match(44);
+          $1 = this._match(SYM_NUMBER);
           return $1;
     case 46:
           $1 = this.parseString();
@@ -1987,12 +1987,12 @@ parse(input) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
         case 46:
-          $1 = this._match(46);
+          $1 = this._match(SYM_STRING);
           return $1;
     case 47:
-          $1 = this._match(47);
+          $1 = this._match(SYM_STRING_START);
           $2 = this.parseInterpolations();
-          $3 = this._match(49);
+          $3 = this._match(SYM_STRING_END);
           return ["str", ...$2];
     default:
       this._error([46, 47], this.la?.id);
@@ -2003,9 +2003,9 @@ parse(input) {
     let $1 = this.parseInterpolationChunk();
     $1 = [$1];
     
-    while (this.la && this.la.id === 50) {
+    while (this.la && this.la.id === SYM_INTERPOLATIONCHUNK) {
       const _saved = this._saveState();
-      const $2 = this._match(50);
+      const $2 = this._match(SYM_INTERPOLATIONCHUNK);
       
       if (!this.la || ![51, 46, 47].includes(this.la.id)) {
         this._restoreState(_saved);
@@ -2025,25 +2025,25 @@ parse(input) {
         case 51: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(51);
+      $1 = this._match(SYM_INTERPOLATION_START);
           $2 = this.parseBody();
-          $3 = this._match(52);
+          $3 = this._match(SYM_INTERPOLATION_END);
       return $2;
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(51);
-          $2 = this._match(36);
+      $1 = this._match(SYM_INTERPOLATION_START);
+          $2 = this._match(SYM_INDENT);
           $3 = this.parseBody();
-          $4 = this._match(38);
-          $5 = this._match(52);
+          $4 = this._match(SYM_OUTDENT);
+          $5 = this._match(SYM_INTERPOLATION_END);
       return $3;
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(51);
-          $2 = this._match(52);
+    $1 = this._match(SYM_INTERPOLATION_START);
+          $2 = this._match(SYM_INTERPOLATION_END);
     return "";
     }
     case 46:
@@ -2061,12 +2061,12 @@ parse(input) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
         case 54:
-          $1 = this._match(54);
+          $1 = this._match(SYM_REGEX);
           return $1;
     case 55:
-          $1 = this._match(55);
+          $1 = this._match(SYM_REGEX_START);
           $2 = this.parseInvocation();
-          $3 = this._match(57);
+          $3 = this._match(SYM_REGEX_END);
           return ["regex", $2];
     default:
       this._error([54, 55], this.la?.id);
@@ -2080,7 +2080,7 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseRegex();
-          $2 = this._match(59);
+          $2 = this._match(SYM_COMMA);
           $3 = this.parseExpression();
       return ["regex-index", $1, $3];
     } catch (e) {
@@ -2093,7 +2093,7 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseRegex();
-          $2 = this._match(59);
+          $2 = this._match(SYM_COMMA);
           $3 = this.parseExpression();
       return ["regex-index", $1, $3];
     } catch (e) {
@@ -2120,7 +2120,7 @@ parse(input) {
           $1 = this.parseAlphaNumeric();
           return $1;
     case 61:
-          $1 = this._match(61);
+          $1 = this._match(SYM_JS);
           return $1;
     case 54:
           $1 = this.parseRegex();
@@ -2129,19 +2129,19 @@ parse(input) {
           $1 = this.parseRegex();
           return $1;
     case 62:
-          $1 = this._match(62);
+          $1 = this._match(SYM_UNDEFINED);
           return "undefined";
     case 63:
-          $1 = this._match(63);
+          $1 = this._match(SYM_NULL);
           return "null";
     case 64:
-          $1 = this._match(64);
+          $1 = this._match(SYM_BOOL);
           return $1;
     case 65:
-          $1 = this._match(65);
+          $1 = this._match(SYM_INFINITY);
           return $1;
     case 66:
-          $1 = this._match(66);
+          $1 = this._match(SYM_NAN);
           return $1;
     default:
       this._error([44, 46, 47, 61, 54, 55, 62, 63, 64, 65, 66], this.la?.id);
@@ -2155,7 +2155,7 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return ["=", $1, $3];
     } catch (e) {
@@ -2163,25 +2163,25 @@ parse(input) {
     }
     try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(6);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
       return ["=", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return ["=", $1, $4];
     }
     case 77: {
       const _saved = this._saveState();
           try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return ["=", $1, $3];
     } catch (e) {
@@ -2189,25 +2189,25 @@ parse(input) {
     }
     try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(6);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
       return ["=", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return ["=", $1, $4];
     }
     case 61: {
       const _saved = this._saveState();
           try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return ["=", $1, $3];
     } catch (e) {
@@ -2215,25 +2215,25 @@ parse(input) {
     }
     try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(6);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
       return ["=", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return ["=", $1, $4];
     }
     case 62: {
       const _saved = this._saveState();
           try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return ["=", $1, $3];
     } catch (e) {
@@ -2241,25 +2241,25 @@ parse(input) {
     }
     try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(6);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
       return ["=", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return ["=", $1, $4];
     }
     case 63: {
       const _saved = this._saveState();
           try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return ["=", $1, $3];
     } catch (e) {
@@ -2267,25 +2267,25 @@ parse(input) {
     }
     try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(6);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
       return ["=", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return ["=", $1, $4];
     }
     case 64: {
       const _saved = this._saveState();
           try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return ["=", $1, $3];
     } catch (e) {
@@ -2293,25 +2293,25 @@ parse(input) {
     }
     try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(6);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
       return ["=", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return ["=", $1, $4];
     }
     case 65: {
       const _saved = this._saveState();
           try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return ["=", $1, $3];
     } catch (e) {
@@ -2319,25 +2319,25 @@ parse(input) {
     }
     try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(6);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
       return ["=", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return ["=", $1, $4];
     }
     case 66: {
       const _saved = this._saveState();
           try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return ["=", $1, $3];
     } catch (e) {
@@ -2345,25 +2345,25 @@ parse(input) {
     }
     try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(6);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
       return ["=", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return ["=", $1, $4];
     }
     case 153: {
       const _saved = this._saveState();
           try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return ["=", $1, $3];
     } catch (e) {
@@ -2371,25 +2371,25 @@ parse(input) {
     }
     try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(6);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
       return ["=", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return ["=", $1, $4];
     }
     case 75: {
       const _saved = this._saveState();
           try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return ["=", $1, $3];
     } catch (e) {
@@ -2397,25 +2397,25 @@ parse(input) {
     }
     try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(6);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
       return ["=", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return ["=", $1, $4];
     }
     case 83: {
       const _saved = this._saveState();
           try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return ["=", $1, $3];
     } catch (e) {
@@ -2423,25 +2423,25 @@ parse(input) {
     }
     try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(6);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
       return ["=", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return ["=", $1, $4];
     }
     case 86: {
       const _saved = this._saveState();
           try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return ["=", $1, $3];
     } catch (e) {
@@ -2449,25 +2449,25 @@ parse(input) {
     }
     try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(6);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
       return ["=", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return ["=", $1, $4];
     }
     case 179: {
       const _saved = this._saveState();
           try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return ["=", $1, $3];
     } catch (e) {
@@ -2475,25 +2475,25 @@ parse(input) {
     }
     try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(6);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
       return ["=", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return ["=", $1, $4];
     }
     case 138: {
       const _saved = this._saveState();
           try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return ["=", $1, $3];
     } catch (e) {
@@ -2501,25 +2501,25 @@ parse(input) {
     }
     try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(6);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
       return ["=", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return ["=", $1, $4];
     }
     case 111: {
       const _saved = this._saveState();
           try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return ["=", $1, $3];
     } catch (e) {
@@ -2527,25 +2527,25 @@ parse(input) {
     }
     try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(6);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
       return ["=", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return ["=", $1, $4];
     }
     case 112: {
       const _saved = this._saveState();
           try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return ["=", $1, $3];
     } catch (e) {
@@ -2553,25 +2553,25 @@ parse(input) {
     }
     try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(6);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
       return ["=", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return ["=", $1, $4];
     }
     case 95: {
       const _saved = this._saveState();
           try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return ["=", $1, $3];
     } catch (e) {
@@ -2579,25 +2579,25 @@ parse(input) {
     }
     try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(6);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
       return ["=", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return ["=", $1, $4];
     }
     case 98: {
       const _saved = this._saveState();
           try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return ["=", $1, $3];
     } catch (e) {
@@ -2605,25 +2605,25 @@ parse(input) {
     }
     try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(6);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
       return ["=", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return ["=", $1, $4];
     }
     case 99: {
       const _saved = this._saveState();
           try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return ["=", $1, $3];
     } catch (e) {
@@ -2631,25 +2631,25 @@ parse(input) {
     }
     try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(6);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
       return ["=", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return ["=", $1, $4];
     }
     case 113: {
       const _saved = this._saveState();
           try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return ["=", $1, $3];
     } catch (e) {
@@ -2657,25 +2657,25 @@ parse(input) {
     }
     try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(6);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
       return ["=", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return ["=", $1, $4];
     }
     case 44: {
       const _saved = this._saveState();
           try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return ["=", $1, $3];
     } catch (e) {
@@ -2683,25 +2683,25 @@ parse(input) {
     }
     try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(6);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
       return ["=", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return ["=", $1, $4];
     }
     case 46: {
       const _saved = this._saveState();
           try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return ["=", $1, $3];
     } catch (e) {
@@ -2709,25 +2709,25 @@ parse(input) {
     }
     try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(6);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
       return ["=", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return ["=", $1, $4];
     }
     case 47: {
       const _saved = this._saveState();
           try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return ["=", $1, $3];
     } catch (e) {
@@ -2735,25 +2735,25 @@ parse(input) {
     }
     try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(6);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
       return ["=", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return ["=", $1, $4];
     }
     case 54: {
       const _saved = this._saveState();
           try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return ["=", $1, $3];
     } catch (e) {
@@ -2761,25 +2761,25 @@ parse(input) {
     }
     try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(6);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
       return ["=", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return ["=", $1, $4];
     }
     case 55: {
       const _saved = this._saveState();
           try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return ["=", $1, $3];
     } catch (e) {
@@ -2787,18 +2787,18 @@ parse(input) {
     }
     try {
       $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(6);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
       return ["=", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return ["=", $1, $4];
     }
     default:
@@ -2819,7 +2819,7 @@ parse(input) {
     }
     try {
       $1 = this.parseObjAssignable();
-          $2 = this._match(72);
+          $2 = this._match(SYM_COLON);
           $3 = this.parseExpression();
       return [$1, $3, ":"];
     } catch (e) {
@@ -2827,27 +2827,27 @@ parse(input) {
     }
     try {
       $1 = this.parseObjAssignable();
-          $2 = this._match(72);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COLON);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$1, $4, ":"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleObjAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return [$1, $3, "="];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleObjAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return [$1, $4, "="];
     }
     case 42: {
@@ -2860,7 +2860,7 @@ parse(input) {
     }
     try {
       $1 = this.parseObjAssignable();
-          $2 = this._match(72);
+          $2 = this._match(SYM_COLON);
           $3 = this.parseExpression();
       return [$1, $3, ":"];
     } catch (e) {
@@ -2868,27 +2868,27 @@ parse(input) {
     }
     try {
       $1 = this.parseObjAssignable();
-          $2 = this._match(72);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COLON);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$1, $4, ":"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleObjAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return [$1, $3, "="];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleObjAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return [$1, $4, "="];
     }
     case 77: {
@@ -2901,7 +2901,7 @@ parse(input) {
     }
     try {
       $1 = this.parseObjAssignable();
-          $2 = this._match(72);
+          $2 = this._match(SYM_COLON);
           $3 = this.parseExpression();
       return [$1, $3, ":"];
     } catch (e) {
@@ -2909,27 +2909,27 @@ parse(input) {
     }
     try {
       $1 = this.parseObjAssignable();
-          $2 = this._match(72);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COLON);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$1, $4, ":"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleObjAssignable();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
       return [$1, $3, "="];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleObjAssignable();
-          $2 = this._match(68);
-          $3 = this._match(36);
+          $2 = this._match(SYM_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return [$1, $4, "="];
     }
     case 75: {
@@ -2942,17 +2942,17 @@ parse(input) {
     }
     try {
       $1 = this.parseObjAssignable();
-          $2 = this._match(72);
+          $2 = this._match(SYM_COLON);
           $3 = this.parseExpression();
       return [$1, $3, ":"];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseObjAssignable();
-          $2 = this._match(72);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COLON);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return [$1, $4, ":"];
     }
     case 44: {
@@ -2965,17 +2965,17 @@ parse(input) {
     }
     try {
       $1 = this.parseObjAssignable();
-          $2 = this._match(72);
+          $2 = this._match(SYM_COLON);
           $3 = this.parseExpression();
       return [$1, $3, ":"];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseObjAssignable();
-          $2 = this._match(72);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COLON);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return [$1, $4, ":"];
     }
     case 46: {
@@ -2988,17 +2988,17 @@ parse(input) {
     }
     try {
       $1 = this.parseObjAssignable();
-          $2 = this._match(72);
+          $2 = this._match(SYM_COLON);
           $3 = this.parseExpression();
       return [$1, $3, ":"];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseObjAssignable();
-          $2 = this._match(72);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COLON);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return [$1, $4, ":"];
     }
     case 47: {
@@ -3011,17 +3011,17 @@ parse(input) {
     }
     try {
       $1 = this.parseObjAssignable();
-          $2 = this._match(72);
+          $2 = this._match(SYM_COLON);
           $3 = this.parseExpression();
       return [$1, $3, ":"];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseObjAssignable();
-          $2 = this._match(72);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COLON);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
     return [$1, $4, ":"];
     }
     case 78:
@@ -3066,16 +3066,16 @@ parse(input) {
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(77);
-          $2 = this._match(75);
+    $1 = this._match(SYM_AT);
+          $2 = this._match(SYM_LBRACKET);
           $3 = this.parseExpression();
-          $4 = this._match(76);
+          $4 = this._match(SYM_RBRACKET);
     return ["[]", "this", $3];
     }
     case 75:
-          $1 = this._match(75);
+          $1 = this._match(SYM_LBRACKET);
           $2 = this.parseExpression();
-          $3 = this._match(76);
+          $3 = this._match(SYM_RBRACKET);
           return ["computed", $2];
     case 44:
           $1 = this.parseAlphaNumeric();
@@ -3097,13 +3097,13 @@ parse(input) {
         case 78: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(78);
+      $1 = this._match(SYM_ELLIPSIS);
           $2 = this.parseSimpleObjAssignable();
       return ["...", $2];
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(78);
+    $1 = this._match(SYM_ELLIPSIS);
           $2 = this.parseObjSpreadExpr();
     return ["...", $2];
     }
@@ -3116,9 +3116,9 @@ parse(input) {
     let $1 = this.parseSimpleObjAssignable();
     $1 = $1;
     
-    while (this.la && this.la.id === 84) {
+    while (this.la && this.la.id === SYM_OPTFUNCEXIST) {
       const _saved = this._saveState();
-      const $2 = this._match(84);
+      const $2 = this._match(SYM_OPTFUNCEXIST);
       
       if (!this.la || ![29].includes(this.la.id)) {
         this._restoreState(_saved);
@@ -3138,22 +3138,22 @@ parse(input) {
         case 94: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(94);
+      $1 = this._match(SYM_RETURN);
           $2 = this.parseExpression();
       return ["return", $2];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(94);
-          $2 = this._match(36);
+      $1 = this._match(SYM_RETURN);
+          $2 = this._match(SYM_INDENT);
           $3 = this.parseObject();
-          $4 = this._match(38);
+          $4 = this._match(SYM_OUTDENT);
       return ["return", $3];
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(94);
+    $1 = this._match(SYM_RETURN);
     return ["return"];
     }
     default:
@@ -3165,9 +3165,9 @@ parse(input) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
         case 95:
-          $1 = this._match(95);
+          $1 = this._match(SYM_PARAM_START);
           $2 = this.parseParamList();
-          $3 = this._match(96);
+          $3 = this._match(SYM_PARAM_END);
           $4 = this.parseFuncGlyph();
           $5 = this.parseBlock();
           return [$4, $2, $5];
@@ -3188,9 +3188,9 @@ parse(input) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
         case 95:
-          $1 = this._match(95);
+          $1 = this._match(SYM_PARAM_START);
           $2 = this.parseParamList();
-          $3 = this._match(96);
+          $3 = this._match(SYM_PARAM_END);
           $4 = this.parseFuncGlyph();
           $5 = this.parseLine();
           return [$4, $2, $5];
@@ -3211,10 +3211,10 @@ parse(input) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
         case 98:
-          $1 = this._match(98);
+          $1 = this._match(SYM_THIN_ARROW);
           return $1;
     case 99:
-          $1 = this._match(99);
+          $1 = this._match(SYM_FAT_ARROW);
           return $1;
     default:
       this._error([98, 99], this.la?.id);
@@ -3225,7 +3225,7 @@ parse(input) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
         case 59:
-          $1 = this._match(59);
+          $1 = this._match(SYM_COMMA);
           return $1;
     default:
       this._error([59], this.la?.id);
@@ -3233,12 +3233,12 @@ parse(input) {
   },
 
   parseParamList() {
-    let $1 = this._match(undefined);
+    let $1 = this._match(SYM_);
     $1 = [];
     
-    while (this.la && this.la.id === 59) {
+    while (this.la && this.la.id === SYM_COMMA) {
       const _saved = this._saveState();
-      const $2 = this._match(59);
+      const $2 = this._match(SYM_COMMA);
       
       if (!this.la || ![40, 77, 75, 113, 78].includes(this.la.id)) {
         this._restoreState(_saved);
@@ -3264,7 +3264,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseParamVar();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
     return ["default", $1, $3];
     }
@@ -3277,7 +3277,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseParamVar();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
     return ["default", $1, $3];
     }
@@ -3290,7 +3290,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseParamVar();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
     return ["default", $1, $3];
     }
@@ -3303,20 +3303,20 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseParamVar();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
     return ["default", $1, $3];
     }
     case 78: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(78);
+      $1 = this._match(SYM_ELLIPSIS);
           $2 = this.parseParamVar();
       return ["rest", $2];
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(78);
+    $1 = this._match(SYM_ELLIPSIS);
     return ["expansion"];
     }
     default:
@@ -3348,7 +3348,7 @@ parse(input) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
         case 78:
-          $1 = this._match(78);
+          $1 = this._match(SYM_ELLIPSIS);
           $2 = this.parseExpression();
           return ["...", $2];
     default:
@@ -3369,7 +3369,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -3377,7 +3377,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -3385,7 +3385,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -3393,7 +3393,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -3401,128 +3401,128 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseSlice();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseSlice();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseRegexWithIndex();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return [$3[0], $1, ...$3.slice(1)];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseSlice();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseSlice();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
     return ["optindex", $1, $5];
     }
     case 77: {
@@ -3535,7 +3535,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -3543,7 +3543,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -3551,7 +3551,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -3559,7 +3559,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -3567,135 +3567,135 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseSlice();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseSlice();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseRegexWithIndex();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return [$3[0], $1, ...$3.slice(1)];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseSlice();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseSlice();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
     return ["optindex", $1, $5];
     }
     case 95: {
       const _saved = this._saveState();
           try {
       $1 = this.parseValue();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -3703,7 +3703,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -3711,7 +3711,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -3719,7 +3719,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -3727,136 +3727,136 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseSlice();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseSlice();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseRegexWithIndex();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return [$3[0], $1, ...$3.slice(1)];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseSlice();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseSlice();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseCode();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -3864,7 +3864,7 @@ parse(input) {
     }
     try {
       $1 = this.parseCode();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -3872,7 +3872,7 @@ parse(input) {
     }
     try {
       $1 = this.parseCode();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -3880,7 +3880,7 @@ parse(input) {
     }
     try {
       $1 = this.parseCode();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -3888,62 +3888,62 @@ parse(input) {
     }
     try {
       $1 = this.parseCode();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseCode();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseCode();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseCode();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseCode();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseCode();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
     return ["?[]", $1, $5];
     }
     case 75: {
       const _saved = this._saveState();
           try {
       $1 = this.parseValue();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -3951,7 +3951,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -3959,7 +3959,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -3967,7 +3967,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -3975,135 +3975,135 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseSlice();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseSlice();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseRegexWithIndex();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return [$3[0], $1, ...$3.slice(1)];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseSlice();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseSlice();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
     return ["optindex", $1, $5];
     }
     case 113: {
       const _saved = this._saveState();
           try {
       $1 = this.parseValue();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -4111,7 +4111,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -4119,7 +4119,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -4127,7 +4127,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -4135,135 +4135,135 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseSlice();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseSlice();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseRegexWithIndex();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return [$3[0], $1, ...$3.slice(1)];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseSlice();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseSlice();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
     return ["optindex", $1, $5];
     }
     case 44: {
       const _saved = this._saveState();
           try {
       $1 = this.parseValue();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -4271,7 +4271,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -4279,7 +4279,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -4287,7 +4287,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -4295,135 +4295,135 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseSlice();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseSlice();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseRegexWithIndex();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return [$3[0], $1, ...$3.slice(1)];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseSlice();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseSlice();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
     return ["optindex", $1, $5];
     }
     case 46: {
       const _saved = this._saveState();
           try {
       $1 = this.parseValue();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -4431,7 +4431,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -4439,7 +4439,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -4447,7 +4447,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -4455,135 +4455,135 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseSlice();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseSlice();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseRegexWithIndex();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return [$3[0], $1, ...$3.slice(1)];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseSlice();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseSlice();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
     return ["optindex", $1, $5];
     }
     case 47: {
       const _saved = this._saveState();
           try {
       $1 = this.parseValue();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -4591,7 +4591,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -4599,7 +4599,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -4607,7 +4607,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -4615,135 +4615,135 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseSlice();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseSlice();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseRegexWithIndex();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return [$3[0], $1, ...$3.slice(1)];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseSlice();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseSlice();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
     return ["optindex", $1, $5];
     }
     case 61: {
       const _saved = this._saveState();
           try {
       $1 = this.parseValue();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -4751,7 +4751,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -4759,7 +4759,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -4767,7 +4767,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -4775,135 +4775,135 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseSlice();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseSlice();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseRegexWithIndex();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return [$3[0], $1, ...$3.slice(1)];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseSlice();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseSlice();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
     return ["optindex", $1, $5];
     }
     case 54: {
       const _saved = this._saveState();
           try {
       $1 = this.parseValue();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -4911,7 +4911,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -4919,7 +4919,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -4927,7 +4927,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -4935,135 +4935,135 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseSlice();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseSlice();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseRegexWithIndex();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return [$3[0], $1, ...$3.slice(1)];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseSlice();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseSlice();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
     return ["optindex", $1, $5];
     }
     case 55: {
       const _saved = this._saveState();
           try {
       $1 = this.parseValue();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -5071,7 +5071,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -5079,7 +5079,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -5087,7 +5087,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -5095,135 +5095,135 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseSlice();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseSlice();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseRegexWithIndex();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return [$3[0], $1, ...$3.slice(1)];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseSlice();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseSlice();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
     return ["optindex", $1, $5];
     }
     case 62: {
       const _saved = this._saveState();
           try {
       $1 = this.parseValue();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -5231,7 +5231,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -5239,7 +5239,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -5247,7 +5247,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -5255,135 +5255,135 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseSlice();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseSlice();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseRegexWithIndex();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return [$3[0], $1, ...$3.slice(1)];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseSlice();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseSlice();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
     return ["optindex", $1, $5];
     }
     case 63: {
       const _saved = this._saveState();
           try {
       $1 = this.parseValue();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -5391,7 +5391,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -5399,7 +5399,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -5407,7 +5407,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -5415,135 +5415,135 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseSlice();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseSlice();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseRegexWithIndex();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return [$3[0], $1, ...$3.slice(1)];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseSlice();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseSlice();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
     return ["optindex", $1, $5];
     }
     case 64: {
       const _saved = this._saveState();
           try {
       $1 = this.parseValue();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -5551,7 +5551,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -5559,7 +5559,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -5567,7 +5567,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -5575,135 +5575,135 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseSlice();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseSlice();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseRegexWithIndex();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return [$3[0], $1, ...$3.slice(1)];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseSlice();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseSlice();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
     return ["optindex", $1, $5];
     }
     case 65: {
       const _saved = this._saveState();
           try {
       $1 = this.parseValue();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -5711,7 +5711,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -5719,7 +5719,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -5727,7 +5727,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -5735,135 +5735,135 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseSlice();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseSlice();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseRegexWithIndex();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return [$3[0], $1, ...$3.slice(1)];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseSlice();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseSlice();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
     return ["optindex", $1, $5];
     }
     case 66: {
       const _saved = this._saveState();
           try {
       $1 = this.parseValue();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -5871,7 +5871,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -5879,7 +5879,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -5887,7 +5887,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -5895,135 +5895,135 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseSlice();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseSlice();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseRegexWithIndex();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return [$3[0], $1, ...$3.slice(1)];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseSlice();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseSlice();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
     return ["optindex", $1, $5];
     }
     case 153: {
       const _saved = this._saveState();
           try {
       $1 = this.parseValue();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -6031,7 +6031,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -6039,7 +6039,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -6047,7 +6047,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -6055,135 +6055,135 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseSlice();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseSlice();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseRegexWithIndex();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return [$3[0], $1, ...$3.slice(1)];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseSlice();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseSlice();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
     return ["optindex", $1, $5];
     }
     case 83: {
       const _saved = this._saveState();
           try {
       $1 = this.parseValue();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -6191,7 +6191,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -6199,7 +6199,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -6207,7 +6207,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -6215,135 +6215,135 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseSlice();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseSlice();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseRegexWithIndex();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return [$3[0], $1, ...$3.slice(1)];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseSlice();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseSlice();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
     return ["optindex", $1, $5];
     }
     case 86: {
       const _saved = this._saveState();
           try {
       $1 = this.parseValue();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -6351,7 +6351,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -6359,7 +6359,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -6367,7 +6367,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -6375,135 +6375,135 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseSlice();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseSlice();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseRegexWithIndex();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return [$3[0], $1, ...$3.slice(1)];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseSlice();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseSlice();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
     return ["optindex", $1, $5];
     }
     case 179: {
       const _saved = this._saveState();
           try {
       $1 = this.parseValue();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -6511,7 +6511,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -6519,7 +6519,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -6527,7 +6527,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -6535,135 +6535,135 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseSlice();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseSlice();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseRegexWithIndex();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return [$3[0], $1, ...$3.slice(1)];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseSlice();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseSlice();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
     return ["optindex", $1, $5];
     }
     case 138: {
       const _saved = this._saveState();
           try {
       $1 = this.parseValue();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -6671,7 +6671,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -6679,7 +6679,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -6687,7 +6687,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -6695,135 +6695,135 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseSlice();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseSlice();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseRegexWithIndex();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return [$3[0], $1, ...$3.slice(1)];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseSlice();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseSlice();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
     return ["optindex", $1, $5];
     }
     case 111: {
       const _saved = this._saveState();
           try {
       $1 = this.parseValue();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -6831,7 +6831,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -6839,7 +6839,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -6847,7 +6847,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -6855,135 +6855,135 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseSlice();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseSlice();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseRegexWithIndex();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return [$3[0], $1, ...$3.slice(1)];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseSlice();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseSlice();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
     return ["optindex", $1, $5];
     }
     case 112: {
       const _saved = this._saveState();
           try {
       $1 = this.parseValue();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -6991,7 +6991,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -6999,7 +6999,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -7007,7 +7007,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -7015,135 +7015,135 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseSlice();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseSlice();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseRegexWithIndex();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return [$3[0], $1, ...$3.slice(1)];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseSlice();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseSlice();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
     return ["optindex", $1, $5];
     }
     case 98: {
       const _saved = this._saveState();
           try {
       $1 = this.parseValue();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -7151,7 +7151,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -7159,7 +7159,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -7167,7 +7167,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -7175,136 +7175,136 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseSlice();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseSlice();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseRegexWithIndex();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return [$3[0], $1, ...$3.slice(1)];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseSlice();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseSlice();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseCode();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -7312,7 +7312,7 @@ parse(input) {
     }
     try {
       $1 = this.parseCode();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -7320,7 +7320,7 @@ parse(input) {
     }
     try {
       $1 = this.parseCode();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -7328,7 +7328,7 @@ parse(input) {
     }
     try {
       $1 = this.parseCode();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -7336,62 +7336,62 @@ parse(input) {
     }
     try {
       $1 = this.parseCode();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseCode();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseCode();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseCode();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseCode();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseCode();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
     return ["?[]", $1, $5];
     }
     case 99: {
       const _saved = this._saveState();
           try {
       $1 = this.parseValue();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -7399,7 +7399,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -7407,7 +7407,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -7415,7 +7415,7 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -7423,136 +7423,136 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseSlice();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseSlice();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseRegexWithIndex();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return [$3[0], $1, ...$3.slice(1)];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseSlice();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseSlice();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(107);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_ES6_OPTIONAL_INDEX);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
       return ["optindex", $1, $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseCode();
-          $2 = this._match(87);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", $1, $3];
     } catch (e) {
@@ -7560,7 +7560,7 @@ parse(input) {
     }
     try {
       $1 = this.parseCode();
-          $2 = this._match(88);
+          $2 = this._match(SYM_OPT_DOT);
           $3 = this.parseProperty();
       return ["?.", $1, $3];
     } catch (e) {
@@ -7568,7 +7568,7 @@ parse(input) {
     }
     try {
       $1 = this.parseCode();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
           $3 = this.parseProperty();
       return ["::", $1, $3];
     } catch (e) {
@@ -7576,7 +7576,7 @@ parse(input) {
     }
     try {
       $1 = this.parseCode();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
           $3 = this.parseProperty();
       return ["?::", $1, $3];
     } catch (e) {
@@ -7584,55 +7584,55 @@ parse(input) {
     }
     try {
       $1 = this.parseCode();
-          $2 = this._match(89);
+          $2 = this._match(SYM_PROTO);
       return ["::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseCode();
-          $2 = this._match(90);
+          $2 = this._match(SYM_OPT_PROTO);
       return ["?::", $1, "prototype"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseCode();
-          $2 = this._match(91);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseCode();
-          $2 = this._match(91);
-          $3 = this._match(36);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
       return ["[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseCode();
-          $2 = this._match(93);
-          $3 = this._match(91);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
           $4 = this.parseExpression();
-          $5 = this._match(92);
+          $5 = this._match(SYM_INDEX_END);
       return ["?[]", $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseCode();
-          $2 = this._match(93);
-          $3 = this._match(91);
-          $4 = this._match(36);
+          $2 = this._match(SYM_INDEX_SOAK);
+          $3 = this._match(SYM_INDEX_START);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
-          $7 = this._match(92);
+          $6 = this._match(SYM_OUTDENT);
+          $7 = this._match(SYM_INDEX_END);
     return ["?[]", $1, $5];
     }
     default:
@@ -8142,28 +8142,28 @@ parse(input) {
         case 83: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(83);
-          $2 = this._match(87);
+      $1 = this._match(SYM_SUPER);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
       return [".", "super", $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(83);
-          $2 = this._match(91);
+      $1 = this._match(SYM_SUPER);
+          $2 = this._match(SYM_INDEX_START);
           $3 = this.parseExpression();
-          $4 = this._match(92);
+          $4 = this._match(SYM_INDEX_END);
       return ["[]", "super", $3];
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(83);
-          $2 = this._match(91);
-          $3 = this._match(36);
+    $1 = this._match(SYM_SUPER);
+          $2 = this._match(SYM_INDEX_START);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
-          $6 = this._match(92);
+          $5 = this._match(SYM_OUTDENT);
+          $6 = this._match(SYM_INDEX_END);
     return ["[]", "super", $4];
     }
     default:
@@ -8175,13 +8175,13 @@ parse(input) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
         case 111:
-          $1 = this._match(111);
-          $2 = this._match(87);
+          $1 = this._match(SYM_NEW_TARGET);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
           return [".", "new", $3];
     case 112:
-          $1 = this._match(112);
-          $2 = this._match(87);
+          $1 = this._match(SYM_IMPORT_META);
+          $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
           return [".", "import", $3];
     default:
@@ -8195,75 +8195,75 @@ parse(input) {
         case 113: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(113);
+      $1 = this._match(SYM_LBRACE);
           $2 = this.parseObjAssignable();
-          $3 = this._match(72);
+          $3 = this._match(SYM_COLON);
           $4 = this.parseExpression();
-          $5 = this._match(114);
+          $5 = this._match(SYM_FOR);
           $6 = this.parseForVariables();
-          $7 = this._match(116);
+          $7 = this._match(SYM_FOROF);
           $8 = this.parseExpression();
           $9 = this.parseOptComma();
-          $10 = this._match(117);
+          $10 = this._match(SYM_RBRACE);
       return ["object-comprehension", $2, $4, [["for-of", $6, $8, false]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(113);
+      $1 = this._match(SYM_LBRACE);
           $2 = this.parseObjAssignable();
-          $3 = this._match(72);
+          $3 = this._match(SYM_COLON);
           $4 = this.parseExpression();
-          $5 = this._match(114);
+          $5 = this._match(SYM_FOR);
           $6 = this.parseForVariables();
-          $7 = this._match(116);
+          $7 = this._match(SYM_FOROF);
           $8 = this.parseExpression();
-          $9 = this._match(118);
+          $9 = this._match(SYM_WHEN);
           $10 = this.parseExpression();
           $11 = this.parseOptComma();
-          $12 = this._match(117);
+          $12 = this._match(SYM_RBRACE);
       return ["object-comprehension", $2, $4, [["for-of", $6, $8, false]], [$10]];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(113);
+      $1 = this._match(SYM_LBRACE);
           $2 = this.parseObjAssignable();
-          $3 = this._match(72);
+          $3 = this._match(SYM_COLON);
           $4 = this.parseExpression();
-          $5 = this._match(114);
-          $6 = this._match(119);
+          $5 = this._match(SYM_FOR);
+          $6 = this._match(SYM_OWN);
           $7 = this.parseForVariables();
-          $8 = this._match(116);
+          $8 = this._match(SYM_FOROF);
           $9 = this.parseExpression();
           $10 = this.parseOptComma();
-          $11 = this._match(117);
+          $11 = this._match(SYM_RBRACE);
       return ["object-comprehension", $2, $4, [["for-of", $7, $9, true]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(113);
+      $1 = this._match(SYM_LBRACE);
           $2 = this.parseObjAssignable();
-          $3 = this._match(72);
+          $3 = this._match(SYM_COLON);
           $4 = this.parseExpression();
-          $5 = this._match(114);
-          $6 = this._match(119);
+          $5 = this._match(SYM_FOR);
+          $6 = this._match(SYM_OWN);
           $7 = this.parseForVariables();
-          $8 = this._match(116);
+          $8 = this._match(SYM_FOROF);
           $9 = this.parseExpression();
-          $10 = this._match(118);
+          $10 = this._match(SYM_WHEN);
           $11 = this.parseExpression();
           $12 = this.parseOptComma();
-          $13 = this._match(117);
+          $13 = this._match(SYM_RBRACE);
       return ["object-comprehension", $2, $4, [["for-of", $7, $9, true]], [$11]];
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(113);
+    $1 = this._match(SYM_LBRACE);
           $2 = this.parseAssignList();
           $3 = this.parseOptComma();
-          $4 = this._match(117);
+          $4 = this._match(SYM_RBRACE);
     return ["object", ...$2];
     }
     default:
@@ -8272,12 +8272,12 @@ parse(input) {
   },
 
   parseAssignList() {
-    let $1 = this._match(undefined);
+    let $1 = this._match(SYM_);
     $1 = [];
     
-    while (this.la && this.la.id === 59) {
+    while (this.la && this.la.id === SYM_COMMA) {
       const _saved = this._saveState();
-      const $2 = this._match(59);
+      const $2 = this._match(SYM_COMMA);
       
       if (!this.la || ![40, 42, 77, 75, 44, 46, 47, 78].includes(this.la.id)) {
         this._restoreState(_saved);
@@ -8297,29 +8297,29 @@ parse(input) {
         case 121: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(121);
+      $1 = this._match(SYM_CLASS);
       return ["class", null, null];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(121);
+      $1 = this._match(SYM_CLASS);
           $2 = this.parseBlock();
       return ["class", null, null, $2];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(121);
-          $2 = this._match(122);
+      $1 = this._match(SYM_CLASS);
+          $2 = this._match(SYM_EXTENDS);
           $3 = this.parseExpression();
       return ["class", null, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(121);
-          $2 = this._match(122);
+      $1 = this._match(SYM_CLASS);
+          $2 = this._match(SYM_EXTENDS);
           $3 = this.parseExpression();
           $4 = this.parseBlock();
       return ["class", null, $3, $4];
@@ -8327,14 +8327,14 @@ parse(input) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(121);
+      $1 = this._match(SYM_CLASS);
           $2 = this.parseSimpleAssignable();
       return ["class", $2, null];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(121);
+      $1 = this._match(SYM_CLASS);
           $2 = this.parseSimpleAssignable();
           $3 = this.parseBlock();
       return ["class", $2, null, $3];
@@ -8342,17 +8342,17 @@ parse(input) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(121);
+      $1 = this._match(SYM_CLASS);
           $2 = this.parseSimpleAssignable();
-          $3 = this._match(122);
+          $3 = this._match(SYM_EXTENDS);
           $4 = this.parseExpression();
       return ["class", $2, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(121);
+    $1 = this._match(SYM_CLASS);
           $2 = this.parseSimpleAssignable();
-          $3 = this._match(122);
+          $3 = this._match(SYM_EXTENDS);
           $4 = this.parseExpression();
           $5 = this.parseBlock();
     return ["class", $2, $4, $5];
@@ -8368,71 +8368,71 @@ parse(input) {
         case 123: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(123);
+      $1 = this._match(SYM_IMPORT);
           $2 = this.parseString();
       return ["import", "{}", $2];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(123);
+      $1 = this._match(SYM_IMPORT);
           $2 = this.parseImportDefaultSpecifier();
-          $3 = this._match(39);
+          $3 = this._match(SYM_FROM);
           $4 = this.parseString();
       return ["import", $2, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(123);
+      $1 = this._match(SYM_IMPORT);
           $2 = this.parseImportNamespaceSpecifier();
-          $3 = this._match(39);
+          $3 = this._match(SYM_FROM);
           $4 = this.parseString();
       return ["import", $2, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(123);
-          $2 = this._match(113);
-          $3 = this._match(117);
-          $4 = this._match(39);
+      $1 = this._match(SYM_IMPORT);
+          $2 = this._match(SYM_LBRACE);
+          $3 = this._match(SYM_RBRACE);
+          $4 = this._match(SYM_FROM);
           $5 = this.parseString();
       return ["import", "{}", $5];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(123);
-          $2 = this._match(113);
+      $1 = this._match(SYM_IMPORT);
+          $2 = this._match(SYM_LBRACE);
           $3 = this.parseImportSpecifierList();
           $4 = this.parseOptComma();
-          $5 = this._match(117);
-          $6 = this._match(39);
+          $5 = this._match(SYM_RBRACE);
+          $6 = this._match(SYM_FROM);
           $7 = this.parseString();
       return ["import", $3, $7];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(123);
+      $1 = this._match(SYM_IMPORT);
           $2 = this.parseImportDefaultSpecifier();
-          $3 = this._match(59);
+          $3 = this._match(SYM_COMMA);
           $4 = this.parseImportNamespaceSpecifier();
-          $5 = this._match(39);
+          $5 = this._match(SYM_FROM);
           $6 = this.parseString();
       return ["import", [$2, $4], $6];
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(123);
+    $1 = this._match(SYM_IMPORT);
           $2 = this.parseImportDefaultSpecifier();
-          $3 = this._match(59);
-          $4 = this._match(113);
+          $3 = this._match(SYM_COMMA);
+          $4 = this._match(SYM_LBRACE);
           $5 = this.parseImportSpecifierList();
           $6 = this.parseOptComma();
-          $7 = this._match(117);
-          $8 = this._match(39);
+          $7 = this._match(SYM_RBRACE);
+          $8 = this._match(SYM_FROM);
           $9 = this.parseString();
     return ["import", [$2, $5], $9];
     }
@@ -8445,9 +8445,9 @@ parse(input) {
     let $1 = this.parseImportSpecifier();
     $1 = [$1];
     
-    while (this.la && this.la.id === 59) {
+    while (this.la && this.la.id === SYM_COMMA) {
       const _saved = this._saveState();
-      const $2 = this._match(59);
+      const $2 = this._match(SYM_COMMA);
       
       if (!this.la || ![40, 129].includes(this.la.id)) {
         this._restoreState(_saved);
@@ -8473,20 +8473,20 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseIdentifier();
-          $2 = this._match(128);
+          $2 = this._match(SYM_AS);
           $3 = this.parseIdentifier();
     return [$1, $3];
     }
     case 129: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(129);
+      $1 = this._match(SYM_DEFAULT);
       return $1;
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(129);
-          $2 = this._match(128);
+    $1 = this._match(SYM_DEFAULT);
+          $2 = this._match(SYM_AS);
           $3 = this.parseIdentifier();
     return [$1, $3];
     }
@@ -8510,8 +8510,8 @@ parse(input) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
         case 130:
-          $1 = this._match(130);
-          $2 = this._match(128);
+          $1 = this._match(SYM_IMPORT_ALL);
+          $2 = this._match(SYM_AS);
           $3 = this.parseIdentifier();
           return ["*", $3];
     default:
@@ -8525,110 +8525,110 @@ parse(input) {
         case 131: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(131);
-          $2 = this._match(113);
-          $3 = this._match(117);
+      $1 = this._match(SYM_EXPORT);
+          $2 = this._match(SYM_LBRACE);
+          $3 = this._match(SYM_RBRACE);
       return ["export", "{}"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(131);
-          $2 = this._match(113);
+      $1 = this._match(SYM_EXPORT);
+          $2 = this._match(SYM_LBRACE);
           $3 = this.parseExportSpecifierList();
           $4 = this.parseOptComma();
-          $5 = this._match(117);
+          $5 = this._match(SYM_RBRACE);
       return ["export", $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(131);
+      $1 = this._match(SYM_EXPORT);
           $2 = this.parseClass();
       return ["export", $2];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(131);
+      $1 = this._match(SYM_EXPORT);
           $2 = this.parseDef();
       return ["export", $2];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(131);
+      $1 = this._match(SYM_EXPORT);
           $2 = this.parseIdentifier();
-          $3 = this._match(68);
+          $3 = this._match(SYM_ASSIGN);
           $4 = this.parseExpression();
       return ["export", ["=", $2, $4]];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(131);
+      $1 = this._match(SYM_EXPORT);
           $2 = this.parseIdentifier();
-          $3 = this._match(68);
-          $4 = this._match(6);
+          $3 = this._match(SYM_ASSIGN);
+          $4 = this._match(SYM_TERMINATOR);
           $5 = this.parseExpression();
       return ["export", ["=", $2, $5]];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(131);
+      $1 = this._match(SYM_EXPORT);
           $2 = this.parseIdentifier();
-          $3 = this._match(68);
-          $4 = this._match(36);
+          $3 = this._match(SYM_ASSIGN);
+          $4 = this._match(SYM_INDENT);
           $5 = this.parseExpression();
-          $6 = this._match(38);
+          $6 = this._match(SYM_OUTDENT);
       return ["export", ["=", $2, $5]];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(131);
-          $2 = this._match(129);
+      $1 = this._match(SYM_EXPORT);
+          $2 = this._match(SYM_DEFAULT);
           $3 = this.parseExpression();
       return ["export-default", $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(131);
-          $2 = this._match(129);
-          $3 = this._match(36);
+      $1 = this._match(SYM_EXPORT);
+          $2 = this._match(SYM_DEFAULT);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseObject();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return ["export-default", $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(131);
-          $2 = this._match(133);
-          $3 = this._match(39);
+      $1 = this._match(SYM_EXPORT);
+          $2 = this._match(SYM_EXPORT_ALL);
+          $3 = this._match(SYM_FROM);
           $4 = this.parseString();
       return ["export-all", $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(131);
-          $2 = this._match(113);
-          $3 = this._match(117);
-          $4 = this._match(39);
+      $1 = this._match(SYM_EXPORT);
+          $2 = this._match(SYM_LBRACE);
+          $3 = this._match(SYM_RBRACE);
+          $4 = this._match(SYM_FROM);
           $5 = this.parseString();
       return ["export-from", "{}", $5];
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(131);
-          $2 = this._match(113);
+    $1 = this._match(SYM_EXPORT);
+          $2 = this._match(SYM_LBRACE);
           $3 = this.parseExportSpecifierList();
           $4 = this.parseOptComma();
-          $5 = this._match(117);
-          $6 = this._match(39);
+          $5 = this._match(SYM_RBRACE);
+          $6 = this._match(SYM_FROM);
           $7 = this.parseString();
     return ["export-from", $3, $7];
     }
@@ -8641,9 +8641,9 @@ parse(input) {
     let $1 = this.parseExportSpecifier();
     $1 = [$1];
     
-    while (this.la && this.la.id === 59) {
+    while (this.la && this.la.id === SYM_COMMA) {
       const _saved = this._saveState();
-      const $2 = this._match(59);
+      const $2 = this._match(SYM_COMMA);
       
       if (!this.la || ![40, 129].includes(this.la.id)) {
         this._restoreState(_saved);
@@ -8670,27 +8670,27 @@ parse(input) {
     }
     try {
       $1 = this.parseIdentifier();
-          $2 = this._match(128);
+          $2 = this._match(SYM_AS);
           $3 = this.parseIdentifier();
       return [$1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseIdentifier();
-          $2 = this._match(128);
-          $3 = this._match(129);
+          $2 = this._match(SYM_AS);
+          $3 = this._match(SYM_DEFAULT);
     return [$1, $3];
     }
     case 129: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(129);
+      $1 = this._match(SYM_DEFAULT);
       return $1;
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(129);
-          $2 = this._match(128);
+    $1 = this._match(SYM_DEFAULT);
+          $2 = this._match(SYM_AS);
           $3 = this.parseIdentifier();
     return [$1, $3];
     }
@@ -8721,7 +8721,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(135);
+          $2 = this._match(SYM_ES6_OPTIONAL_CALL);
           $3 = this.parseArguments();
     return ["optcall", $1, ...$3];
     }
@@ -8744,7 +8744,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(135);
+          $2 = this._match(SYM_ES6_OPTIONAL_CALL);
           $3 = this.parseArguments();
     return ["optcall", $1, ...$3];
     }
@@ -8767,7 +8767,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(135);
+          $2 = this._match(SYM_ES6_OPTIONAL_CALL);
           $3 = this.parseArguments();
     return ["optcall", $1, ...$3];
     }
@@ -8790,7 +8790,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(135);
+          $2 = this._match(SYM_ES6_OPTIONAL_CALL);
           $3 = this.parseArguments();
     return ["optcall", $1, ...$3];
     }
@@ -8813,7 +8813,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(135);
+          $2 = this._match(SYM_ES6_OPTIONAL_CALL);
           $3 = this.parseArguments();
     return ["optcall", $1, ...$3];
     }
@@ -8836,7 +8836,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(135);
+          $2 = this._match(SYM_ES6_OPTIONAL_CALL);
           $3 = this.parseArguments();
     return ["optcall", $1, ...$3];
     }
@@ -8859,7 +8859,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(135);
+          $2 = this._match(SYM_ES6_OPTIONAL_CALL);
           $3 = this.parseArguments();
     return ["optcall", $1, ...$3];
     }
@@ -8882,7 +8882,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(135);
+          $2 = this._match(SYM_ES6_OPTIONAL_CALL);
           $3 = this.parseArguments();
     return ["optcall", $1, ...$3];
     }
@@ -8905,7 +8905,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(135);
+          $2 = this._match(SYM_ES6_OPTIONAL_CALL);
           $3 = this.parseArguments();
     return ["optcall", $1, ...$3];
     }
@@ -8928,7 +8928,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(135);
+          $2 = this._match(SYM_ES6_OPTIONAL_CALL);
           $3 = this.parseArguments();
     return ["optcall", $1, ...$3];
     }
@@ -8951,7 +8951,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(135);
+          $2 = this._match(SYM_ES6_OPTIONAL_CALL);
           $3 = this.parseArguments();
     return ["optcall", $1, ...$3];
     }
@@ -8974,7 +8974,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(135);
+          $2 = this._match(SYM_ES6_OPTIONAL_CALL);
           $3 = this.parseArguments();
     return ["optcall", $1, ...$3];
     }
@@ -8997,7 +8997,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(135);
+          $2 = this._match(SYM_ES6_OPTIONAL_CALL);
           $3 = this.parseArguments();
     return ["optcall", $1, ...$3];
     }
@@ -9020,7 +9020,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(135);
+          $2 = this._match(SYM_ES6_OPTIONAL_CALL);
           $3 = this.parseArguments();
     return ["optcall", $1, ...$3];
     }
@@ -9043,7 +9043,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(135);
+          $2 = this._match(SYM_ES6_OPTIONAL_CALL);
           $3 = this.parseArguments();
     return ["optcall", $1, ...$3];
     }
@@ -9066,7 +9066,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(135);
+          $2 = this._match(SYM_ES6_OPTIONAL_CALL);
           $3 = this.parseArguments();
     return ["optcall", $1, ...$3];
     }
@@ -9089,7 +9089,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(135);
+          $2 = this._match(SYM_ES6_OPTIONAL_CALL);
           $3 = this.parseArguments();
     return ["optcall", $1, ...$3];
     }
@@ -9113,13 +9113,13 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(135);
+          $2 = this._match(SYM_ES6_OPTIONAL_CALL);
           $3 = this.parseArguments();
       return ["optcall", $1, ...$3];
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(83);
+    $1 = this._match(SYM_SUPER);
           $2 = this.parseArguments();
     return ["super", ...$2];
     }
@@ -9143,13 +9143,13 @@ parse(input) {
     }
     try {
       $1 = this.parseValue();
-          $2 = this._match(135);
+          $2 = this._match(SYM_ES6_OPTIONAL_CALL);
           $3 = this.parseArguments();
       return ["optcall", $1, ...$3];
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(86);
+    $1 = this._match(SYM_DYNAMIC_IMPORT);
           $2 = this.parseArguments();
     return ["import", ...$2];
     }
@@ -9172,7 +9172,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(135);
+          $2 = this._match(SYM_ES6_OPTIONAL_CALL);
           $3 = this.parseArguments();
     return ["optcall", $1, ...$3];
     }
@@ -9195,7 +9195,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(135);
+          $2 = this._match(SYM_ES6_OPTIONAL_CALL);
           $3 = this.parseArguments();
     return ["optcall", $1, ...$3];
     }
@@ -9218,7 +9218,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(135);
+          $2 = this._match(SYM_ES6_OPTIONAL_CALL);
           $3 = this.parseArguments();
     return ["optcall", $1, ...$3];
     }
@@ -9241,7 +9241,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(135);
+          $2 = this._match(SYM_ES6_OPTIONAL_CALL);
           $3 = this.parseArguments();
     return ["optcall", $1, ...$3];
     }
@@ -9264,7 +9264,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(135);
+          $2 = this._match(SYM_ES6_OPTIONAL_CALL);
           $3 = this.parseArguments();
     return ["optcall", $1, ...$3];
     }
@@ -9287,7 +9287,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseValue();
-          $2 = this._match(135);
+          $2 = this._match(SYM_ES6_OPTIONAL_CALL);
           $3 = this.parseArguments();
     return ["optcall", $1, ...$3];
     }
@@ -9300,7 +9300,7 @@ parse(input) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
         case 136:
-          $1 = this._match(136);
+          $1 = this._match(SYM_FUNC_EXIST);
           return true;
     default:
       this._error([136], this.la?.id);
@@ -9313,16 +9313,16 @@ parse(input) {
         case 29: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(29);
-          $2 = this._match(31);
+      $1 = this._match(SYM_CALL_START);
+          $2 = this._match(SYM_CALL_END);
       return [];
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(29);
+    $1 = this._match(SYM_CALL_START);
           $2 = this.parseArgList();
           $3 = this.parseOptComma();
-          $4 = this._match(31);
+          $4 = this._match(SYM_CALL_END);
     return $2;
     }
     default:
@@ -9334,10 +9334,10 @@ parse(input) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
         case 138:
-          $1 = this._match(138);
+          $1 = this._match(SYM_THIS);
           return "this";
     case 77:
-          $1 = this._match(77);
+          $1 = this._match(SYM_AT);
           return "this";
     default:
       this._error([138, 77], this.la?.id);
@@ -9348,7 +9348,7 @@ parse(input) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
         case 77:
-          $1 = this._match(77);
+          $1 = this._match(SYM_AT);
           $2 = this.parseProperty();
           return [".", "this", $2];
     default:
@@ -9362,24 +9362,24 @@ parse(input) {
         case 75: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(75);
-          $2 = this._match(76);
+      $1 = this._match(SYM_LBRACKET);
+          $2 = this._match(SYM_RBRACKET);
       return ["array"];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(75);
+      $1 = this._match(SYM_LBRACKET);
           $2 = this.parseElisions();
-          $3 = this._match(76);
+          $3 = this._match(SYM_RBRACKET);
       return ["array", ...$2];
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(75);
+    $1 = this._match(SYM_LBRACKET);
           $2 = this.parseArgElisionList();
           $3 = this.parseOptElisions();
-          $4 = this._match(76);
+          $4 = this._match(SYM_RBRACKET);
     return ["array", ...$2, ...$3];
     }
     default:
@@ -9391,10 +9391,10 @@ parse(input) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
         case 143:
-          $1 = this._match(143);
+          $1 = this._match(SYM_RANGE_INCL);
           return "..";
     case 78:
-          $1 = this._match(78);
+          $1 = this._match(SYM_ELLIPSIS);
           return "...";
     default:
       this._error([143, 78], this.la?.id);
@@ -9405,11 +9405,11 @@ parse(input) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
         case 75:
-          $1 = this._match(75);
+          $1 = this._match(SYM_LBRACKET);
           $2 = this.parseExpression();
           $3 = this.parseRangeDots();
           $4 = this.parseExpression();
-          $5 = this._match(76);
+          $5 = this._match(SYM_RBRACKET);
           return [$3, $2, $4];
     default:
       this._error([75], this.la?.id);
@@ -10138,9 +10138,9 @@ parse(input) {
     let $1 = this.parseArg();
     $1 = [$1];
     
-    while (this.la && this.la.id === 59) {
+    while (this.la && this.la.id === SYM_COMMA) {
       const _saved = this._saveState();
-      const $2 = this._match(59);
+      const $2 = this._match(SYM_COMMA);
       
       if (!this.la || ![40, 77, 61, 62, 63, 64, 65, 66, 153, 75, 83, 86, 179, 138, 111, 112, 95, 98, 99, 113, 44, 46, 47, 54, 55, 177, 178, 180, 181, 182, 163, 183, 184, 172, 174, 11, 148, 156, 157, 159, 114, 166, 121, 152, 35, 27, 94, 123, 131, 78].includes(this.la.id)) {
         this._restoreState(_saved);
@@ -10360,7 +10360,7 @@ parse(input) {
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(78);
+    $1 = this._match(SYM_ELLIPSIS);
     return "...";
     }
     default:
@@ -10372,9 +10372,9 @@ parse(input) {
     let $1 = this.parseArgElision();
     $1 = $1;
     
-    while (this.la && this.la.id === 59) {
+    while (this.la && this.la.id === SYM_COMMA) {
       const _saved = this._saveState();
-      const $2 = this._match(59);
+      const $2 = this._match(SYM_COMMA);
       
       if (!this.la || ![40, 77, 95, 75, 113, 44, 46, 47, 61, 54, 55, 62, 63, 64, 65, 66, 153, 83, 86, 179, 138, 111, 112, 98, 99, 177, 178, 180, 181, 182, 163, 183, 184, 148, 114, 166, 121, 152, 35, 27, 172, 174, 94, 11, 123, 131, 156, 157, 159, 78, 59].includes(this.la.id)) {
         this._restoreState(_saved);
@@ -10561,7 +10561,7 @@ parse(input) {
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(59);
+    $1 = this._match(SYM_COMMA);
           $2 = this.parseElisions();
     return [...$2];
     }
@@ -10574,9 +10574,9 @@ parse(input) {
     let $1 = this.parseElision();
     $1 = [$1];
     
-    while (this.la && this.la.id === 146) {
+    while (this.la && this.la.id === SYM_ELISION) {
       const _saved = this._saveState();
-      const $2 = this._match(146);
+      const $2 = this._match(SYM_ELISION);
       
       if (!this.la || ![59].includes(this.la.id)) {
         this._restoreState(_saved);
@@ -10591,19 +10591,19 @@ parse(input) {
   },
 
   parseElision() {
-    let $1 = this._match(59);
+    let $1 = this._match(SYM_COMMA);
     $1 = $1;
     
-    while (this.la && this.la.id === 6) {
+    while (this.la && this.la.id === SYM_TERMINATOR) {
       const _saved = this._saveState();
-      const $2 = this._match(6);
+      const $2 = this._match(SYM_TERMINATOR);
       
       if (!this.la || ![59].includes(this.la.id)) {
         this._restoreState(_saved);
         break;
       }
       
-      const $3 = this._match(59);
+      const $3 = this._match(SYM_COMMA);
       $1 = $1;
     }
     
@@ -10614,9 +10614,9 @@ parse(input) {
     let $1 = this.parseExpression();
     $1 = $1;
     
-    while (this.la && this.la.id === 59) {
+    while (this.la && this.la.id === SYM_COMMA) {
       const _saved = this._saveState();
-      const $2 = this._match(59);
+      const $2 = this._match(SYM_COMMA);
       
       if (!this.la || ![40, 77, 75, 113, 44, 61, 54, 55, 62, 63, 64, 65, 66, 153, 83, 86, 179, 138, 111, 112, 95, 98, 99, 46, 47, 177, 178, 180, 181, 182, 163, 183, 184, 148, 114, 166, 121, 152, 35, 27, 172, 174, 94, 11, 123, 131, 156, 157, 159].includes(this.la.id)) {
         this._restoreState(_saved);
@@ -10636,14 +10636,14 @@ parse(input) {
         case 148: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(148);
+      $1 = this._match(SYM_TRY);
           $2 = this.parseBlock();
       return ["try", $2];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(148);
+      $1 = this._match(SYM_TRY);
           $2 = this.parseBlock();
           $3 = this.parseCatch();
       return ["try", $2, $3];
@@ -10651,18 +10651,18 @@ parse(input) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(148);
+      $1 = this._match(SYM_TRY);
           $2 = this.parseBlock();
-          $3 = this._match(150);
+          $3 = this._match(SYM_FINALLY);
           $4 = this.parseBlock();
       return ["try", $2, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(148);
+    $1 = this._match(SYM_TRY);
           $2 = this.parseBlock();
           $3 = this.parseCatch();
-          $4 = this._match(150);
+          $4 = this._match(SYM_FINALLY);
           $5 = this.parseBlock();
     return ["try", $2, $3, $5];
     }
@@ -10677,7 +10677,7 @@ parse(input) {
         case 151: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(151);
+      $1 = this._match(SYM_CATCH);
           $2 = this.parseIdentifier();
           $3 = this.parseBlock();
       return [$2, $3];
@@ -10685,14 +10685,14 @@ parse(input) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(151);
+      $1 = this._match(SYM_CATCH);
           $2 = this.parseObject();
           $3 = this.parseBlock();
       return [$2, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(151);
+    $1 = this._match(SYM_CATCH);
           $2 = this.parseBlock();
     return [null, $2];
     }
@@ -10707,16 +10707,16 @@ parse(input) {
         case 152: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(152);
+      $1 = this._match(SYM_THROW);
           $2 = this.parseExpression();
       return ["throw", $2];
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(152);
-          $2 = this._match(36);
+    $1 = this._match(SYM_THROW);
+          $2 = this._match(SYM_INDENT);
           $3 = this.parseObject();
-          $4 = this._match(38);
+          $4 = this._match(SYM_OUTDENT);
     return ["throw", $3];
     }
     default:
@@ -10730,18 +10730,18 @@ parse(input) {
         case 153: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(153);
+      $1 = this._match(SYM_LPAREN);
           $2 = this.parseBody();
-          $3 = this._match(154);
+          $3 = this._match(SYM_RPAREN);
       return $2.length === 1 ? $2[0] : $2;
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(153);
-          $2 = this._match(36);
+    $1 = this._match(SYM_LPAREN);
+          $2 = this._match(SYM_INDENT);
           $3 = this.parseBody();
-          $4 = this._match(38);
-          $5 = this._match(154);
+          $4 = this._match(SYM_OUTDENT);
+          $5 = this._match(SYM_RPAREN);
     return $3.length === 1 ? $3[0] : $3;
     }
     default:
@@ -10755,30 +10755,30 @@ parse(input) {
         case 156: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(156);
+      $1 = this._match(SYM_WHILE);
           $2 = this.parseExpression();
       return ["while", $2];
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(156);
+    $1 = this._match(SYM_WHILE);
           $2 = this.parseExpression();
-          $3 = this._match(118);
+          $3 = this._match(SYM_WHEN);
           $4 = this.parseExpression();
     return ["while", $2, $4];
     }
     case 157: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(157);
+      $1 = this._match(SYM_UNTIL);
           $2 = this.parseExpression();
       return ["until", $2];
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(157);
+    $1 = this._match(SYM_UNTIL);
           $2 = this.parseExpression();
-          $3 = this._match(118);
+          $3 = this._match(SYM_WHEN);
           $4 = this.parseExpression();
     return ["until", $2, $4];
     }
@@ -11059,13 +11059,13 @@ parse(input) {
         case 159: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(159);
+      $1 = this._match(SYM_LOOP);
           $2 = this.parseBlock();
       return ["loop", $2];
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(159);
+    $1 = this._match(SYM_LOOP);
           $2 = this.parseExpression();
     return ["loop", [$2]];
     }
@@ -11080,9 +11080,9 @@ parse(input) {
         case 114: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(114);
+      $1 = this._match(SYM_FOR);
           $2 = this.parseForVariables();
-          $3 = this._match(160);
+          $3 = this._match(SYM_FORIN);
           $4 = this.parseExpression();
           $5 = this.parseBlock();
       return ["for-in"  , $2, $4, null, null, $5];
@@ -11090,11 +11090,11 @@ parse(input) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(114);
+      $1 = this._match(SYM_FOR);
           $2 = this.parseForVariables();
-          $3 = this._match(160);
+          $3 = this._match(SYM_FORIN);
           $4 = this.parseExpression();
-          $5 = this._match(118);
+          $5 = this._match(SYM_WHEN);
           $6 = this.parseExpression();
           $7 = this.parseBlock();
       return ["for-in"  , $2, $4, null, $6, $7];
@@ -11102,11 +11102,11 @@ parse(input) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(114);
+      $1 = this._match(SYM_FOR);
           $2 = this.parseForVariables();
-          $3 = this._match(160);
+          $3 = this._match(SYM_FORIN);
           $4 = this.parseExpression();
-          $5 = this._match(161);
+          $5 = this._match(SYM_BY);
           $6 = this.parseExpression();
           $7 = this.parseBlock();
       return ["for-in"  , $2, $4, $6, null, $7];
@@ -11114,13 +11114,13 @@ parse(input) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(114);
+      $1 = this._match(SYM_FOR);
           $2 = this.parseForVariables();
-          $3 = this._match(160);
+          $3 = this._match(SYM_FORIN);
           $4 = this.parseExpression();
-          $5 = this._match(118);
+          $5 = this._match(SYM_WHEN);
           $6 = this.parseExpression();
-          $7 = this._match(161);
+          $7 = this._match(SYM_BY);
           $8 = this.parseExpression();
           $9 = this.parseBlock();
       return ["for-in"  , $2, $4, $8, $6, $9];
@@ -11128,13 +11128,13 @@ parse(input) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(114);
+      $1 = this._match(SYM_FOR);
           $2 = this.parseForVariables();
-          $3 = this._match(160);
+          $3 = this._match(SYM_FORIN);
           $4 = this.parseExpression();
-          $5 = this._match(161);
+          $5 = this._match(SYM_BY);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
           $9 = this.parseBlock();
       return ["for-in"  , $2, $4, $6, $8, $9];
@@ -11142,9 +11142,9 @@ parse(input) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(114);
+      $1 = this._match(SYM_FOR);
           $2 = this.parseForVariables();
-          $3 = this._match(116);
+          $3 = this._match(SYM_FOROF);
           $4 = this.parseExpression();
           $5 = this.parseBlock();
       return ["for-of"  , $2, $4, false, null, $5];
@@ -11152,11 +11152,11 @@ parse(input) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(114);
+      $1 = this._match(SYM_FOR);
           $2 = this.parseForVariables();
-          $3 = this._match(116);
+          $3 = this._match(SYM_FOROF);
           $4 = this.parseExpression();
-          $5 = this._match(118);
+          $5 = this._match(SYM_WHEN);
           $6 = this.parseExpression();
           $7 = this.parseBlock();
       return ["for-of"  , $2, $4, false, $6, $7];
@@ -11164,10 +11164,10 @@ parse(input) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(114);
-          $2 = this._match(119);
+      $1 = this._match(SYM_FOR);
+          $2 = this._match(SYM_OWN);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
           $6 = this.parseBlock();
       return ["for-of"  , $3, $5, true, null, $6];
@@ -11175,12 +11175,12 @@ parse(input) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(114);
-          $2 = this._match(119);
+      $1 = this._match(SYM_FOR);
+          $2 = this._match(SYM_OWN);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
           $8 = this.parseBlock();
       return ["for-of"  , $3, $5, true, $7, $8];
@@ -11188,9 +11188,9 @@ parse(input) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(114);
+      $1 = this._match(SYM_FOR);
           $2 = this.parseForVariables();
-          $3 = this._match(162);
+          $3 = this._match(SYM_FORFROM);
           $4 = this.parseExpression();
           $5 = this.parseBlock();
       return ["for-from", $2, $4, false, null, $5];
@@ -11198,11 +11198,11 @@ parse(input) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(114);
+      $1 = this._match(SYM_FOR);
           $2 = this.parseForVariables();
-          $3 = this._match(162);
+          $3 = this._match(SYM_FORFROM);
           $4 = this.parseExpression();
-          $5 = this._match(118);
+          $5 = this._match(SYM_WHEN);
           $6 = this.parseExpression();
           $7 = this.parseBlock();
       return ["for-from", $2, $4, false, $6, $7];
@@ -11210,10 +11210,10 @@ parse(input) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(114);
-          $2 = this._match(163);
+      $1 = this._match(SYM_FOR);
+          $2 = this._match(SYM_AWAIT);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
           $6 = this.parseBlock();
       return ["for-from", $3, $5, true, null, $6];
@@ -11221,12 +11221,12 @@ parse(input) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(114);
-          $2 = this._match(163);
+      $1 = this._match(SYM_FOR);
+          $2 = this._match(SYM_AWAIT);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
           $8 = this.parseBlock();
       return ["for-from", $3, $5, true, $7, $8];
@@ -11234,7 +11234,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(114);
+      $1 = this._match(SYM_FOR);
           $2 = this.parseRange();
           $3 = this.parseBlock();
       return ["for-in"  , [], $2, null, null, $3];
@@ -11242,9 +11242,9 @@ parse(input) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(114);
+      $1 = this._match(SYM_FOR);
           $2 = this.parseRange();
-          $3 = this._match(161);
+          $3 = this._match(SYM_BY);
           $4 = this.parseExpression();
           $5 = this.parseBlock();
       return ["for-in"  , [], $2, $4, null, $5];
@@ -11253,9 +11253,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -11263,11 +11263,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -11275,11 +11275,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -11287,13 +11287,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -11301,13 +11301,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -11315,9 +11315,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -11325,11 +11325,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -11337,10 +11337,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -11348,12 +11348,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -11361,9 +11361,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -11371,11 +11371,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -11383,10 +11383,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -11394,12 +11394,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -11407,16 +11407,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -11424,9 +11424,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -11434,11 +11434,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -11446,11 +11446,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -11458,13 +11458,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -11472,13 +11472,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -11486,9 +11486,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -11496,11 +11496,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -11508,10 +11508,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -11519,12 +11519,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -11532,9 +11532,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -11542,11 +11542,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -11554,10 +11554,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -11565,12 +11565,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -11578,16 +11578,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -11595,9 +11595,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -11605,11 +11605,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -11617,11 +11617,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -11629,13 +11629,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -11643,13 +11643,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -11657,9 +11657,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -11667,11 +11667,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -11679,10 +11679,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -11690,12 +11690,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -11703,9 +11703,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -11713,11 +11713,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -11725,10 +11725,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -11736,12 +11736,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -11749,16 +11749,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -11766,9 +11766,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -11776,11 +11776,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -11788,11 +11788,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -11800,13 +11800,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -11814,13 +11814,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -11828,9 +11828,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -11838,11 +11838,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -11850,10 +11850,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -11861,12 +11861,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -11874,9 +11874,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -11884,11 +11884,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -11896,10 +11896,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -11907,12 +11907,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -11920,16 +11920,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -11937,9 +11937,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -11947,11 +11947,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -11959,11 +11959,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -11971,13 +11971,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -11985,13 +11985,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -11999,9 +11999,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -12009,11 +12009,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -12021,10 +12021,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -12032,12 +12032,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -12045,9 +12045,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -12055,11 +12055,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -12067,10 +12067,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -12078,12 +12078,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -12091,16 +12091,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -12108,9 +12108,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -12118,11 +12118,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -12130,11 +12130,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -12142,13 +12142,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -12156,13 +12156,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -12170,9 +12170,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -12180,11 +12180,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -12192,10 +12192,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -12203,12 +12203,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -12216,9 +12216,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -12226,11 +12226,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -12238,10 +12238,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -12249,12 +12249,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -12262,16 +12262,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -12279,9 +12279,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -12289,11 +12289,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -12301,11 +12301,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -12313,13 +12313,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -12327,13 +12327,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -12341,9 +12341,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -12351,11 +12351,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -12363,10 +12363,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -12374,12 +12374,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -12387,9 +12387,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -12397,11 +12397,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -12409,10 +12409,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -12420,12 +12420,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -12433,16 +12433,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -12450,9 +12450,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -12460,11 +12460,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -12472,11 +12472,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -12484,13 +12484,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -12498,13 +12498,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -12512,9 +12512,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -12522,11 +12522,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -12534,10 +12534,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -12545,12 +12545,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -12558,9 +12558,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -12568,11 +12568,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -12580,10 +12580,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -12591,12 +12591,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -12604,16 +12604,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -12621,9 +12621,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -12631,11 +12631,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -12643,11 +12643,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -12655,13 +12655,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -12669,13 +12669,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -12683,9 +12683,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -12693,11 +12693,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -12705,10 +12705,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -12716,12 +12716,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -12729,9 +12729,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -12739,11 +12739,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -12751,10 +12751,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -12762,12 +12762,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -12775,16 +12775,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -12792,9 +12792,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -12802,11 +12802,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -12814,11 +12814,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -12826,13 +12826,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -12840,13 +12840,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -12854,9 +12854,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -12864,11 +12864,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -12876,10 +12876,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -12887,12 +12887,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -12900,9 +12900,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -12910,11 +12910,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -12922,10 +12922,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -12933,12 +12933,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -12946,16 +12946,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -12963,9 +12963,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -12973,11 +12973,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -12985,11 +12985,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -12997,13 +12997,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -13011,13 +13011,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -13025,9 +13025,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -13035,11 +13035,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -13047,10 +13047,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -13058,12 +13058,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -13071,9 +13071,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -13081,11 +13081,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -13093,10 +13093,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -13104,12 +13104,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -13117,16 +13117,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -13134,9 +13134,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -13144,11 +13144,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -13156,11 +13156,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -13168,13 +13168,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -13182,13 +13182,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -13196,9 +13196,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -13206,11 +13206,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -13218,10 +13218,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -13229,12 +13229,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -13242,9 +13242,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -13252,11 +13252,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -13264,10 +13264,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -13275,12 +13275,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -13288,16 +13288,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -13305,9 +13305,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -13315,11 +13315,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -13327,11 +13327,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -13339,13 +13339,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -13353,13 +13353,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -13367,9 +13367,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -13377,11 +13377,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -13389,10 +13389,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -13400,12 +13400,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -13413,9 +13413,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -13423,11 +13423,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -13435,10 +13435,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -13446,12 +13446,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -13459,16 +13459,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -13476,9 +13476,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -13486,11 +13486,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -13498,11 +13498,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -13510,13 +13510,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -13524,13 +13524,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -13538,9 +13538,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -13548,11 +13548,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -13560,10 +13560,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -13571,12 +13571,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -13584,9 +13584,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -13594,11 +13594,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -13606,10 +13606,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -13617,12 +13617,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -13630,16 +13630,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -13647,9 +13647,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -13657,11 +13657,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -13669,11 +13669,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -13681,13 +13681,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -13695,13 +13695,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -13709,9 +13709,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -13719,11 +13719,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -13731,10 +13731,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -13742,12 +13742,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -13755,9 +13755,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -13765,11 +13765,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -13777,10 +13777,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -13788,12 +13788,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -13801,16 +13801,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -13818,9 +13818,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -13828,11 +13828,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -13840,11 +13840,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -13852,13 +13852,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -13866,13 +13866,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -13880,9 +13880,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -13890,11 +13890,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -13902,10 +13902,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -13913,12 +13913,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -13926,9 +13926,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -13936,11 +13936,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -13948,10 +13948,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -13959,12 +13959,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -13972,16 +13972,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -13989,9 +13989,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -13999,11 +13999,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -14011,11 +14011,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -14023,13 +14023,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -14037,13 +14037,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -14051,9 +14051,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -14061,11 +14061,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -14073,10 +14073,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -14084,12 +14084,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -14097,9 +14097,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -14107,11 +14107,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -14119,10 +14119,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -14130,12 +14130,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -14143,16 +14143,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -14160,9 +14160,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -14170,11 +14170,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -14182,11 +14182,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -14194,13 +14194,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -14208,13 +14208,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -14222,9 +14222,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -14232,11 +14232,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -14244,10 +14244,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -14255,12 +14255,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -14268,9 +14268,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -14278,11 +14278,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -14290,10 +14290,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -14301,12 +14301,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -14314,16 +14314,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -14331,9 +14331,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -14341,11 +14341,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -14353,11 +14353,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -14365,13 +14365,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -14379,13 +14379,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -14393,9 +14393,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -14403,11 +14403,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -14415,10 +14415,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -14426,12 +14426,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -14439,9 +14439,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -14449,11 +14449,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -14461,10 +14461,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -14472,12 +14472,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -14485,16 +14485,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -14502,9 +14502,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -14512,11 +14512,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -14524,11 +14524,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -14536,13 +14536,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -14550,13 +14550,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -14564,9 +14564,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -14574,11 +14574,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -14586,10 +14586,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -14597,12 +14597,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -14610,9 +14610,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -14620,11 +14620,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -14632,10 +14632,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -14643,12 +14643,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -14656,16 +14656,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -14673,9 +14673,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -14683,11 +14683,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -14695,11 +14695,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -14707,13 +14707,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -14721,13 +14721,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -14735,9 +14735,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -14745,11 +14745,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -14757,10 +14757,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -14768,12 +14768,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -14781,9 +14781,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -14791,11 +14791,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -14803,10 +14803,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -14814,12 +14814,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -14827,16 +14827,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -14844,9 +14844,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -14854,11 +14854,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -14866,11 +14866,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -14878,13 +14878,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -14892,13 +14892,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -14906,9 +14906,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -14916,11 +14916,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -14928,10 +14928,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -14939,12 +14939,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -14952,9 +14952,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -14962,11 +14962,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -14974,10 +14974,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -14985,12 +14985,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -14998,16 +14998,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -15015,9 +15015,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -15025,11 +15025,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -15037,11 +15037,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -15049,13 +15049,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -15063,13 +15063,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -15077,9 +15077,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -15087,11 +15087,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -15099,10 +15099,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -15110,12 +15110,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -15123,9 +15123,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -15133,11 +15133,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -15145,10 +15145,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -15156,12 +15156,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -15169,16 +15169,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -15186,9 +15186,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -15196,11 +15196,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -15208,11 +15208,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -15220,13 +15220,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -15234,13 +15234,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -15248,9 +15248,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -15258,11 +15258,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -15270,10 +15270,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -15281,12 +15281,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -15294,9 +15294,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -15304,11 +15304,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -15316,10 +15316,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -15327,12 +15327,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -15340,16 +15340,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -15357,9 +15357,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -15367,11 +15367,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -15379,11 +15379,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -15391,13 +15391,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -15405,13 +15405,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -15419,9 +15419,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -15429,11 +15429,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -15441,10 +15441,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -15452,12 +15452,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -15465,9 +15465,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -15475,11 +15475,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -15487,10 +15487,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -15498,12 +15498,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -15511,16 +15511,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -15528,9 +15528,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -15538,11 +15538,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -15550,11 +15550,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -15562,13 +15562,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -15576,13 +15576,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -15590,9 +15590,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -15600,11 +15600,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -15612,10 +15612,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -15623,12 +15623,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -15636,9 +15636,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -15646,11 +15646,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -15658,10 +15658,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -15669,12 +15669,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -15682,16 +15682,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -15699,9 +15699,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -15709,11 +15709,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -15721,11 +15721,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -15733,13 +15733,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -15747,13 +15747,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -15761,9 +15761,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -15771,11 +15771,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -15783,10 +15783,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -15794,12 +15794,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -15807,9 +15807,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -15817,11 +15817,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -15829,10 +15829,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -15840,12 +15840,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -15853,16 +15853,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -15870,9 +15870,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -15880,11 +15880,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -15892,11 +15892,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -15904,13 +15904,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -15918,13 +15918,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -15932,9 +15932,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -15942,11 +15942,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -15954,10 +15954,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -15965,12 +15965,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -15978,9 +15978,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -15988,11 +15988,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -16000,10 +16000,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -16011,12 +16011,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -16024,16 +16024,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -16041,9 +16041,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -16051,11 +16051,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -16063,11 +16063,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -16075,13 +16075,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -16089,13 +16089,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -16103,9 +16103,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -16113,11 +16113,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -16125,10 +16125,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -16136,12 +16136,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -16149,9 +16149,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -16159,11 +16159,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -16171,10 +16171,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -16182,12 +16182,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -16195,16 +16195,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -16212,9 +16212,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -16222,11 +16222,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -16234,11 +16234,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -16246,13 +16246,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -16260,13 +16260,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -16274,9 +16274,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -16284,11 +16284,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -16296,10 +16296,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -16307,12 +16307,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -16320,9 +16320,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -16330,11 +16330,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -16342,10 +16342,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -16353,12 +16353,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -16366,16 +16366,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -16383,9 +16383,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -16393,11 +16393,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -16405,11 +16405,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -16417,13 +16417,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -16431,13 +16431,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -16445,9 +16445,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -16455,11 +16455,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -16467,10 +16467,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -16478,12 +16478,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -16491,9 +16491,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -16501,11 +16501,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -16513,10 +16513,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -16524,12 +16524,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -16537,16 +16537,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -16554,9 +16554,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -16564,11 +16564,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -16576,11 +16576,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -16588,13 +16588,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -16602,13 +16602,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -16616,9 +16616,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -16626,11 +16626,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -16638,10 +16638,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -16649,12 +16649,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -16662,9 +16662,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -16672,11 +16672,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -16684,10 +16684,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -16695,12 +16695,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -16708,16 +16708,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -16725,9 +16725,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -16735,11 +16735,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -16747,11 +16747,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -16759,13 +16759,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -16773,13 +16773,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -16787,9 +16787,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -16797,11 +16797,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -16809,10 +16809,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -16820,12 +16820,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -16833,9 +16833,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -16843,11 +16843,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -16855,10 +16855,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -16866,12 +16866,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -16879,16 +16879,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -16896,9 +16896,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -16906,11 +16906,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -16918,11 +16918,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -16930,13 +16930,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -16944,13 +16944,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -16958,9 +16958,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -16968,11 +16968,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -16980,10 +16980,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -16991,12 +16991,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -17004,9 +17004,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -17014,11 +17014,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -17026,10 +17026,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -17037,12 +17037,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -17050,16 +17050,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -17067,9 +17067,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -17077,11 +17077,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -17089,11 +17089,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -17101,13 +17101,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -17115,13 +17115,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -17129,9 +17129,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -17139,11 +17139,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -17151,10 +17151,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -17162,12 +17162,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -17175,9 +17175,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -17185,11 +17185,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -17197,10 +17197,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -17208,12 +17208,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -17221,16 +17221,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -17238,9 +17238,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -17248,11 +17248,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -17260,11 +17260,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -17272,13 +17272,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -17286,13 +17286,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -17300,9 +17300,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -17310,11 +17310,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -17322,10 +17322,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -17333,12 +17333,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -17346,9 +17346,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -17356,11 +17356,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -17368,10 +17368,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -17379,12 +17379,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -17392,16 +17392,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -17409,9 +17409,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -17419,11 +17419,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -17431,11 +17431,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -17443,13 +17443,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -17457,13 +17457,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -17471,9 +17471,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -17481,11 +17481,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -17493,10 +17493,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -17504,12 +17504,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -17517,9 +17517,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -17527,11 +17527,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -17539,10 +17539,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -17550,12 +17550,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -17563,16 +17563,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -17580,9 +17580,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -17590,11 +17590,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -17602,11 +17602,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -17614,13 +17614,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -17628,13 +17628,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -17642,9 +17642,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -17652,11 +17652,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -17664,10 +17664,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -17675,12 +17675,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -17688,9 +17688,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -17698,11 +17698,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -17710,10 +17710,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -17721,12 +17721,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -17734,16 +17734,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -17751,9 +17751,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -17761,11 +17761,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -17773,11 +17773,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -17785,13 +17785,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -17799,13 +17799,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -17813,9 +17813,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -17823,11 +17823,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -17835,10 +17835,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -17846,12 +17846,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -17859,9 +17859,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -17869,11 +17869,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -17881,10 +17881,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -17892,12 +17892,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -17905,16 +17905,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -17922,9 +17922,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -17932,11 +17932,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -17944,11 +17944,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -17956,13 +17956,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -17970,13 +17970,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -17984,9 +17984,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -17994,11 +17994,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -18006,10 +18006,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -18017,12 +18017,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -18030,9 +18030,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -18040,11 +18040,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -18052,10 +18052,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -18063,12 +18063,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -18076,16 +18076,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -18093,9 +18093,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -18103,11 +18103,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -18115,11 +18115,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -18127,13 +18127,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -18141,13 +18141,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -18155,9 +18155,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -18165,11 +18165,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -18177,10 +18177,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -18188,12 +18188,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -18201,9 +18201,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -18211,11 +18211,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -18223,10 +18223,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -18234,12 +18234,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -18247,16 +18247,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -18264,9 +18264,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -18274,11 +18274,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -18286,11 +18286,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -18298,13 +18298,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -18312,13 +18312,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -18326,9 +18326,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -18336,11 +18336,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -18348,10 +18348,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -18359,12 +18359,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -18372,9 +18372,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -18382,11 +18382,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -18394,10 +18394,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -18405,12 +18405,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -18418,16 +18418,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -18435,9 +18435,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -18445,11 +18445,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -18457,11 +18457,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -18469,13 +18469,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -18483,13 +18483,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -18497,9 +18497,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -18507,11 +18507,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -18519,10 +18519,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -18530,12 +18530,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -18543,9 +18543,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -18553,11 +18553,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -18565,10 +18565,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -18576,12 +18576,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -18589,16 +18589,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -18606,9 +18606,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -18616,11 +18616,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -18628,11 +18628,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -18640,13 +18640,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -18654,13 +18654,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -18668,9 +18668,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -18678,11 +18678,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -18690,10 +18690,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -18701,12 +18701,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -18714,9 +18714,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -18724,11 +18724,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -18736,10 +18736,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -18747,12 +18747,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -18760,16 +18760,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -18777,9 +18777,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -18787,11 +18787,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -18799,11 +18799,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -18811,13 +18811,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -18825,13 +18825,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -18839,9 +18839,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -18849,11 +18849,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -18861,10 +18861,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -18872,12 +18872,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -18885,9 +18885,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -18895,11 +18895,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -18907,10 +18907,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -18918,12 +18918,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -18931,16 +18931,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -18948,9 +18948,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -18958,11 +18958,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -18970,11 +18970,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -18982,13 +18982,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -18996,13 +18996,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -19010,9 +19010,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -19020,11 +19020,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -19032,10 +19032,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -19043,12 +19043,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -19056,9 +19056,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -19066,11 +19066,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -19078,10 +19078,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -19089,12 +19089,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -19102,16 +19102,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -19119,9 +19119,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -19129,11 +19129,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -19141,11 +19141,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -19153,13 +19153,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -19167,13 +19167,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -19181,9 +19181,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -19191,11 +19191,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -19203,10 +19203,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -19214,12 +19214,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -19227,9 +19227,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -19237,11 +19237,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -19249,10 +19249,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -19260,12 +19260,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -19273,16 +19273,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -19290,9 +19290,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -19300,11 +19300,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -19312,11 +19312,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -19324,13 +19324,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -19338,13 +19338,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -19352,9 +19352,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -19362,11 +19362,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -19374,10 +19374,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -19385,12 +19385,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -19398,9 +19398,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -19408,11 +19408,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -19420,10 +19420,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -19431,12 +19431,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -19444,16 +19444,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -19461,9 +19461,9 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], []];
     } catch (e) {
@@ -19471,11 +19471,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, null]], [$7]];
     } catch (e) {
@@ -19483,11 +19483,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], []];
     } catch (e) {
@@ -19495,13 +19495,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
-          $8 = this._match(161);
+          $8 = this._match(SYM_BY);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $9]], [$7]];
     } catch (e) {
@@ -19509,13 +19509,13 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(160);
+          $4 = this._match(SYM_FORIN);
           $5 = this.parseExpression();
-          $6 = this._match(161);
+          $6 = this._match(SYM_BY);
           $7 = this.parseExpression();
-          $8 = this._match(118);
+          $8 = this._match(SYM_WHEN);
           $9 = this.parseExpression();
       return ["comprehension", $1, [["for-in"  , $3, $5, $7]], [$9]];
     } catch (e) {
@@ -19523,9 +19523,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], []];
     } catch (e) {
@@ -19533,11 +19533,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(116);
+          $4 = this._match(SYM_FOROF);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $3, $5, false]], [$7]];
     } catch (e) {
@@ -19545,10 +19545,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], []];
     } catch (e) {
@@ -19556,12 +19556,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(119);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_OWN);
           $4 = this.parseForVariables();
-          $5 = this._match(116);
+          $5 = this._match(SYM_FOROF);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-of"  , $4, $6, true]], [$8]];
     } catch (e) {
@@ -19569,9 +19569,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], []];
     } catch (e) {
@@ -19579,11 +19579,11 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseForVariables();
-          $4 = this._match(162);
+          $4 = this._match(SYM_FORFROM);
           $5 = this.parseExpression();
-          $6 = this._match(118);
+          $6 = this._match(SYM_WHEN);
           $7 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $3, $5, false, null]], [$7]];
     } catch (e) {
@@ -19591,10 +19591,10 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], []];
     } catch (e) {
@@ -19602,12 +19602,12 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
-          $3 = this._match(163);
+          $2 = this._match(SYM_FOR);
+          $3 = this._match(SYM_AWAIT);
           $4 = this.parseForVariables();
-          $5 = this._match(162);
+          $5 = this._match(SYM_FORFROM);
           $6 = this.parseExpression();
-          $7 = this._match(118);
+          $7 = this._match(SYM_WHEN);
           $8 = this.parseExpression();
       return ["comprehension", $1, [["for-from", $4, $6, true, null]], [$8]];
     } catch (e) {
@@ -19615,16 +19615,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
       return ["comprehension", $1, [["for-in", [], $3, null]], []];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(114);
+          $2 = this._match(SYM_FOR);
           $3 = this.parseRange();
-          $4 = this._match(161);
+          $4 = this._match(SYM_BY);
           $5 = this.parseExpression();
     return ["comprehension", $1, [["for-in", [], $3, $5]], []];
     }
@@ -19645,7 +19645,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseForVar();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
     return ["default", $1, $3];
     }
@@ -19658,7 +19658,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseForVar();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
     return ["default", $1, $3];
     }
@@ -19671,7 +19671,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseForVar();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
     return ["default", $1, $3];
     }
@@ -19684,7 +19684,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseForVar();
-          $2 = this._match(68);
+          $2 = this._match(SYM_ASSIGN);
           $3 = this.parseExpression();
     return ["default", $1, $3];
     }
@@ -19725,7 +19725,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseForValue();
-          $2 = this._match(59);
+          $2 = this._match(SYM_COMMA);
           $3 = this.parseForValue();
     return [$1, $3];
     }
@@ -19738,7 +19738,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseForValue();
-          $2 = this._match(59);
+          $2 = this._match(SYM_COMMA);
           $3 = this.parseForValue();
     return [$1, $3];
     }
@@ -19751,7 +19751,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseForValue();
-          $2 = this._match(59);
+          $2 = this._match(SYM_COMMA);
           $3 = this.parseForValue();
     return [$1, $3];
     }
@@ -19764,7 +19764,7 @@ parse(input) {
       this._restoreState(_saved);
     }
     $1 = this.parseForValue();
-          $2 = this._match(59);
+          $2 = this._match(SYM_COMMA);
           $3 = this.parseForValue();
     return [$1, $3];
     }
@@ -19779,42 +19779,42 @@ parse(input) {
         case 166: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(166);
+      $1 = this._match(SYM_SWITCH);
           $2 = this.parseExpression();
-          $3 = this._match(36);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseWhens();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return ["switch", $2, $4, null];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(166);
+      $1 = this._match(SYM_SWITCH);
           $2 = this.parseExpression();
-          $3 = this._match(36);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseWhens();
-          $5 = this._match(168);
+          $5 = this._match(SYM_ELSE);
           $6 = this.parseBlock();
-          $7 = this._match(38);
+          $7 = this._match(SYM_OUTDENT);
       return ["switch", $2, $4, $6];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(166);
-          $2 = this._match(36);
+      $1 = this._match(SYM_SWITCH);
+          $2 = this._match(SYM_INDENT);
           $3 = this.parseWhens();
-          $4 = this._match(38);
+          $4 = this._match(SYM_OUTDENT);
       return ["switch", null, $3, null];
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(166);
-          $2 = this._match(36);
+    $1 = this._match(SYM_SWITCH);
+          $2 = this._match(SYM_INDENT);
           $3 = this.parseWhens();
-          $4 = this._match(168);
+          $4 = this._match(SYM_ELSE);
           $5 = this.parseBlock();
-          $6 = this._match(38);
+          $6 = this._match(SYM_OUTDENT);
     return ["switch", null, $3, $5];
     }
     default:
@@ -19826,9 +19826,9 @@ parse(input) {
     let $1 = this.parseWhen();
     $1 = [$1];
     
-    while (this.la && this.la.id === 169) {
+    while (this.la && this.la.id === SYM_WHEN) {
       const _saved = this._saveState();
-      const $2 = this._match(169);
+      const $2 = this._match(SYM_WHEN);
       
       if (!this.la || ![170].includes(this.la.id)) {
         this._restoreState(_saved);
@@ -19848,17 +19848,17 @@ parse(input) {
         case 170: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(170);
+      $1 = this._match(SYM_LEADING_WHEN);
           $2 = this.parseSimpleArgs();
           $3 = this.parseBlock();
       return ["when", $2, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(170);
+    $1 = this._match(SYM_LEADING_WHEN);
           $2 = this.parseSimpleArgs();
           $3 = this.parseBlock();
-          $4 = this._match(6);
+          $4 = this._match(SYM_TERMINATOR);
     return ["when", $2, $3];
     }
     default:
@@ -19867,19 +19867,19 @@ parse(input) {
   },
 
   parseIfBlock() {
-    let $1 = this._match(172);
+    let $1 = this._match(SYM_IF);
     $1 = ["if", $2, $3];
     
-    while (this.la && this.la.id === 168) {
+    while (this.la && this.la.id === SYM_ELSE) {
       const _saved = this._saveState();
-      const $2 = this._match(168);
+      const $2 = this._match(SYM_ELSE);
       
       if (!this.la || ![172].includes(this.la.id)) {
         this._restoreState(_saved);
         break;
       }
       
-      const $3 = this._match(172);
+      const $3 = this._match(SYM_IF);
       $1 = $1.length === 3 ? ["if", $1[1], $1[2], ["if", $4, $5]] : [...$1, ["if", $4, $5]];
     }
     
@@ -19892,17 +19892,17 @@ parse(input) {
         case 174: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(174);
+      $1 = this._match(SYM_UNLESS);
           $2 = this.parseExpression();
           $3 = this.parseBlock();
       return ["unless", $2, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
-    $1 = this._match(174);
+    $1 = this._match(SYM_UNLESS);
           $2 = this.parseExpression();
           $3 = this.parseBlock();
-          $4 = this._match(168);
+          $4 = this._match(SYM_ELSE);
           $5 = this.parseBlock();
     return ["if", ["!", $2], $3, $5];
     }
@@ -19924,7 +19924,7 @@ parse(input) {
     }
     try {
       $1 = this.parseIfBlock();
-          $2 = this._match(168);
+          $2 = this._match(SYM_ELSE);
           $3 = this.parseBlock();
       return $1.length === 3 ? ["if", $1[1], $1[2], $3] : [...$1, $3];
     } catch (e) {
@@ -19932,14 +19932,14 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -19953,14 +19953,14 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -19968,7 +19968,7 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseStatement();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
@@ -19976,7 +19976,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
@@ -19984,14 +19984,14 @@ parse(input) {
     }
     try {
       $1 = this.parseStatement();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
       return ["unless", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -19999,7 +19999,7 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseStatement();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
@@ -20007,7 +20007,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
@@ -20015,14 +20015,14 @@ parse(input) {
     }
     try {
       $1 = this.parseStatement();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
       return ["unless", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20030,7 +20030,7 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseStatement();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
@@ -20038,7 +20038,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
@@ -20046,14 +20046,14 @@ parse(input) {
     }
     try {
       $1 = this.parseStatement();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
       return ["unless", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20061,7 +20061,7 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseStatement();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
@@ -20069,7 +20069,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
@@ -20077,14 +20077,14 @@ parse(input) {
     }
     try {
       $1 = this.parseStatement();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
       return ["unless", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20092,14 +20092,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20107,14 +20107,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20122,14 +20122,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20137,14 +20137,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20152,14 +20152,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20167,14 +20167,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20182,14 +20182,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20197,14 +20197,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20212,14 +20212,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20227,14 +20227,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20242,14 +20242,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20257,14 +20257,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20272,14 +20272,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20287,14 +20287,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20302,14 +20302,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20317,14 +20317,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20332,14 +20332,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20347,14 +20347,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20362,14 +20362,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20377,14 +20377,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20392,14 +20392,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20407,14 +20407,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20422,14 +20422,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20437,14 +20437,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20452,14 +20452,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20467,14 +20467,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20482,14 +20482,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20497,14 +20497,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20512,14 +20512,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20527,14 +20527,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20542,14 +20542,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20557,14 +20557,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20572,14 +20572,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20587,14 +20587,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20602,14 +20602,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20617,14 +20617,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20632,14 +20632,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20647,14 +20647,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20662,14 +20662,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20677,14 +20677,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20692,14 +20692,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20707,14 +20707,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20722,14 +20722,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(175);
+          $2 = this._match(SYM_POST_IF);
           $3 = this.parseExpression();
       return ["if", $3, [$1]];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(176);
+          $2 = this._match(SYM_POST_UNLESS);
           $3 = this.parseExpression();
     return ["unless", $3, [$1]];
     }
@@ -20742,15 +20742,15 @@ parse(input) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
         case 177:
-          $1 = this._match(177);
+          $1 = this._match(SYM_UNARY);
           $2 = this.parseExpressionLine();
           return [$1, $2];
     case 178:
-          $1 = this._match(178);
+          $1 = this._match(SYM_DO);
           $2 = this.parseExpressionLine();
           return ["do-iife", $2];
     case 179:
-          $1 = this._match(179);
+          $1 = this._match(SYM_DO_IIFE);
           $2 = this.parseCodeLine();
           return ["do-iife", $2];
     default:
@@ -20764,7 +20764,7 @@ parse(input) {
         case 177: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(177);
+      $1 = this._match(SYM_UNARY);
           $2 = this.parseExpression();
       return [$1, $2];
     } catch (e) {
@@ -20772,14 +20772,14 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -20787,7 +20787,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -20795,7 +20795,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -20803,7 +20803,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -20811,7 +20811,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -20819,7 +20819,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -20827,7 +20827,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -20835,7 +20835,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -20843,7 +20843,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -20851,7 +20851,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -20859,7 +20859,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -20867,7 +20867,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -20875,7 +20875,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -20883,23 +20883,23 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
     return ["?:", $1, $3, $5];
     }
     case 178: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(178);
+      $1 = this._match(SYM_DO);
           $2 = this.parseExpression();
       return ["do-iife", $2];
     } catch (e) {
@@ -20907,14 +20907,14 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -20922,7 +20922,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -20930,7 +20930,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -20938,7 +20938,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -20946,7 +20946,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -20954,7 +20954,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -20962,7 +20962,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -20970,7 +20970,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -20978,7 +20978,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -20986,7 +20986,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -20994,7 +20994,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -21002,7 +21002,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -21010,7 +21010,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -21018,23 +21018,23 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
     return ["?:", $1, $3, $5];
     }
     case 180: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(180);
+      $1 = this._match(SYM_UNARY_MATH);
           $2 = this.parseExpression();
       return [$1, $2];
     } catch (e) {
@@ -21042,14 +21042,14 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -21057,7 +21057,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -21065,7 +21065,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -21073,7 +21073,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -21081,7 +21081,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -21089,7 +21089,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -21097,7 +21097,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -21105,7 +21105,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -21113,7 +21113,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -21121,7 +21121,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -21129,7 +21129,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -21137,7 +21137,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -21145,7 +21145,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -21153,23 +21153,23 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
     return ["?:", $1, $3, $5];
     }
     case 181: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(181);
+      $1 = this._match(SYM_MINUS);
           $2 = this.parseExpression();
       return ["-", $2];
     } catch (e) {
@@ -21177,14 +21177,14 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -21192,7 +21192,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -21200,7 +21200,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -21208,7 +21208,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -21216,7 +21216,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -21224,7 +21224,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -21232,7 +21232,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -21240,7 +21240,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -21248,7 +21248,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -21256,7 +21256,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -21264,7 +21264,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -21272,7 +21272,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -21280,7 +21280,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -21288,23 +21288,23 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
     return ["?:", $1, $3, $5];
     }
     case 182: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(182);
+      $1 = this._match(SYM_PLUS);
           $2 = this.parseExpression();
       return ["+", $2];
     } catch (e) {
@@ -21312,14 +21312,14 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -21327,7 +21327,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -21335,7 +21335,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -21343,7 +21343,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -21351,7 +21351,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -21359,7 +21359,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -21367,7 +21367,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -21375,7 +21375,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -21383,7 +21383,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -21391,7 +21391,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -21399,7 +21399,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -21407,7 +21407,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -21415,7 +21415,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -21423,47 +21423,47 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
     return ["?:", $1, $3, $5];
     }
     case 163: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(163);
+      $1 = this._match(SYM_AWAIT);
           $2 = this.parseExpression();
       return ["await", $2];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
-      $1 = this._match(163);
-          $2 = this._match(36);
+      $1 = this._match(SYM_AWAIT);
+          $2 = this._match(SYM_INDENT);
           $3 = this.parseObject();
-          $4 = this._match(38);
+          $4 = this._match(SYM_OUTDENT);
       return ["await", $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -21471,7 +21471,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -21479,7 +21479,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -21487,7 +21487,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -21495,7 +21495,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -21503,7 +21503,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -21511,7 +21511,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -21519,7 +21519,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -21527,7 +21527,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -21535,7 +21535,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -21543,7 +21543,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -21551,7 +21551,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -21559,7 +21559,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -21567,23 +21567,23 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
     return ["?:", $1, $3, $5];
     }
     case 183: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(183);
+      $1 = this._match(SYM_DEC);
           $2 = this.parseSimpleAssignable();
       return ["--", $2, false];
     } catch (e) {
@@ -21591,14 +21591,14 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -21606,7 +21606,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -21614,7 +21614,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -21622,7 +21622,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -21630,7 +21630,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -21638,7 +21638,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -21646,7 +21646,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -21654,7 +21654,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -21662,7 +21662,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -21670,7 +21670,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -21678,7 +21678,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -21686,7 +21686,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -21694,7 +21694,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -21702,23 +21702,23 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
     return ["?:", $1, $3, $5];
     }
     case 184: {
       const _saved = this._saveState();
           try {
-      $1 = this._match(184);
+      $1 = this._match(SYM_INC);
           $2 = this.parseSimpleAssignable();
       return ["++", $2, false];
     } catch (e) {
@@ -21726,14 +21726,14 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -21741,7 +21741,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -21749,7 +21749,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -21757,7 +21757,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -21765,7 +21765,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -21773,7 +21773,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -21781,7 +21781,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -21789,7 +21789,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -21797,7 +21797,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -21805,7 +21805,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -21813,7 +21813,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -21821,7 +21821,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -21829,7 +21829,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -21837,16 +21837,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
     return ["?:", $1, $3, $5];
     }
@@ -21854,28 +21854,28 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(183);
+          $2 = this._match(SYM_DEC);
       return ["--", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(184);
+          $2 = this._match(SYM_INC);
       return ["++", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -21883,7 +21883,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -21891,7 +21891,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -21899,7 +21899,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -21907,7 +21907,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -21915,7 +21915,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -21923,7 +21923,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -21931,7 +21931,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -21939,7 +21939,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -21947,7 +21947,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -21955,7 +21955,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -21963,7 +21963,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -21971,7 +21971,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -21979,7 +21979,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -21987,9 +21987,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
       return ["?:", $1, $3, $5];
     } catch (e) {
@@ -21997,7 +21997,7 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22005,17 +22005,17 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$2, $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(6);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
     return [$2, $1, $4];
     }
@@ -22023,28 +22023,28 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(183);
+          $2 = this._match(SYM_DEC);
       return ["--", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(184);
+          $2 = this._match(SYM_INC);
       return ["++", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -22052,7 +22052,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -22060,7 +22060,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22068,7 +22068,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -22076,7 +22076,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22084,7 +22084,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22092,7 +22092,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -22100,7 +22100,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -22108,7 +22108,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -22116,7 +22116,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -22124,7 +22124,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -22132,7 +22132,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -22140,7 +22140,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -22148,7 +22148,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22156,9 +22156,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
       return ["?:", $1, $3, $5];
     } catch (e) {
@@ -22166,7 +22166,7 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22174,17 +22174,17 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$2, $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(6);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
     return [$2, $1, $4];
     }
@@ -22192,28 +22192,28 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(183);
+          $2 = this._match(SYM_DEC);
       return ["--", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(184);
+          $2 = this._match(SYM_INC);
       return ["++", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -22221,7 +22221,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -22229,7 +22229,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22237,7 +22237,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -22245,7 +22245,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22253,7 +22253,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22261,7 +22261,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -22269,7 +22269,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -22277,7 +22277,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -22285,7 +22285,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -22293,7 +22293,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -22301,7 +22301,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -22309,7 +22309,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -22317,7 +22317,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22325,9 +22325,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
       return ["?:", $1, $3, $5];
     } catch (e) {
@@ -22335,7 +22335,7 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22343,17 +22343,17 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$2, $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(6);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
     return [$2, $1, $4];
     }
@@ -22361,28 +22361,28 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(183);
+          $2 = this._match(SYM_DEC);
       return ["--", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(184);
+          $2 = this._match(SYM_INC);
       return ["++", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -22390,7 +22390,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -22398,7 +22398,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22406,7 +22406,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -22414,7 +22414,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22422,7 +22422,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22430,7 +22430,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -22438,7 +22438,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -22446,7 +22446,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -22454,7 +22454,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -22462,7 +22462,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -22470,7 +22470,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -22478,7 +22478,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -22486,7 +22486,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22494,9 +22494,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
       return ["?:", $1, $3, $5];
     } catch (e) {
@@ -22504,7 +22504,7 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22512,17 +22512,17 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$2, $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(6);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
     return [$2, $1, $4];
     }
@@ -22530,28 +22530,28 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(183);
+          $2 = this._match(SYM_DEC);
       return ["--", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(184);
+          $2 = this._match(SYM_INC);
       return ["++", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -22559,7 +22559,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -22567,7 +22567,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22575,7 +22575,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -22583,7 +22583,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22591,7 +22591,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22599,7 +22599,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -22607,7 +22607,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -22615,7 +22615,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -22623,7 +22623,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -22631,7 +22631,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -22639,7 +22639,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -22647,7 +22647,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -22655,7 +22655,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22663,9 +22663,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
       return ["?:", $1, $3, $5];
     } catch (e) {
@@ -22673,7 +22673,7 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22681,17 +22681,17 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$2, $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(6);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
     return [$2, $1, $4];
     }
@@ -22699,28 +22699,28 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(183);
+          $2 = this._match(SYM_DEC);
       return ["--", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(184);
+          $2 = this._match(SYM_INC);
       return ["++", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -22728,7 +22728,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -22736,7 +22736,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22744,7 +22744,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -22752,7 +22752,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22760,7 +22760,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22768,7 +22768,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -22776,7 +22776,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -22784,7 +22784,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -22792,7 +22792,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -22800,7 +22800,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -22808,7 +22808,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -22816,7 +22816,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -22824,7 +22824,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22832,9 +22832,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
       return ["?:", $1, $3, $5];
     } catch (e) {
@@ -22842,7 +22842,7 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22850,17 +22850,17 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$2, $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(6);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
     return [$2, $1, $4];
     }
@@ -22868,28 +22868,28 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(183);
+          $2 = this._match(SYM_DEC);
       return ["--", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(184);
+          $2 = this._match(SYM_INC);
       return ["++", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -22897,7 +22897,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -22905,7 +22905,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22913,7 +22913,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -22921,7 +22921,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22929,7 +22929,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -22937,7 +22937,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -22945,7 +22945,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -22953,7 +22953,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -22961,7 +22961,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -22969,7 +22969,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -22977,7 +22977,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -22985,7 +22985,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -22993,7 +22993,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23001,9 +23001,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
       return ["?:", $1, $3, $5];
     } catch (e) {
@@ -23011,7 +23011,7 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23019,17 +23019,17 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$2, $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(6);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
     return [$2, $1, $4];
     }
@@ -23037,28 +23037,28 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(183);
+          $2 = this._match(SYM_DEC);
       return ["--", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(184);
+          $2 = this._match(SYM_INC);
       return ["++", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -23066,7 +23066,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -23074,7 +23074,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23082,7 +23082,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -23090,7 +23090,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23098,7 +23098,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23106,7 +23106,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -23114,7 +23114,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -23122,7 +23122,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -23130,7 +23130,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -23138,7 +23138,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -23146,7 +23146,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -23154,7 +23154,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -23162,7 +23162,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23170,9 +23170,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
       return ["?:", $1, $3, $5];
     } catch (e) {
@@ -23180,7 +23180,7 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23188,17 +23188,17 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$2, $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(6);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
     return [$2, $1, $4];
     }
@@ -23206,28 +23206,28 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(183);
+          $2 = this._match(SYM_DEC);
       return ["--", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(184);
+          $2 = this._match(SYM_INC);
       return ["++", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -23235,7 +23235,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -23243,7 +23243,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23251,7 +23251,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -23259,7 +23259,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23267,7 +23267,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23275,7 +23275,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -23283,7 +23283,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -23291,7 +23291,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -23299,7 +23299,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -23307,7 +23307,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -23315,7 +23315,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -23323,7 +23323,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -23331,7 +23331,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23339,9 +23339,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
       return ["?:", $1, $3, $5];
     } catch (e) {
@@ -23349,7 +23349,7 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23357,17 +23357,17 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$2, $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(6);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
     return [$2, $1, $4];
     }
@@ -23375,28 +23375,28 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(183);
+          $2 = this._match(SYM_DEC);
       return ["--", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(184);
+          $2 = this._match(SYM_INC);
       return ["++", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -23404,7 +23404,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -23412,7 +23412,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23420,7 +23420,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -23428,7 +23428,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23436,7 +23436,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23444,7 +23444,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -23452,7 +23452,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -23460,7 +23460,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -23468,7 +23468,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -23476,7 +23476,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -23484,7 +23484,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -23492,7 +23492,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -23500,7 +23500,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23508,9 +23508,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
       return ["?:", $1, $3, $5];
     } catch (e) {
@@ -23518,7 +23518,7 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23526,17 +23526,17 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$2, $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(6);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
     return [$2, $1, $4];
     }
@@ -23544,28 +23544,28 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(183);
+          $2 = this._match(SYM_DEC);
       return ["--", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(184);
+          $2 = this._match(SYM_INC);
       return ["++", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -23573,7 +23573,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -23581,7 +23581,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23589,7 +23589,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -23597,7 +23597,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23605,7 +23605,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23613,7 +23613,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -23621,7 +23621,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -23629,7 +23629,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -23637,7 +23637,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -23645,7 +23645,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -23653,7 +23653,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -23661,7 +23661,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -23669,7 +23669,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23677,9 +23677,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
       return ["?:", $1, $3, $5];
     } catch (e) {
@@ -23687,7 +23687,7 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23695,17 +23695,17 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$2, $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(6);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
     return [$2, $1, $4];
     }
@@ -23713,28 +23713,28 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(183);
+          $2 = this._match(SYM_DEC);
       return ["--", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(184);
+          $2 = this._match(SYM_INC);
       return ["++", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -23742,7 +23742,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -23750,7 +23750,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23758,7 +23758,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -23766,7 +23766,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23774,7 +23774,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23782,7 +23782,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -23790,7 +23790,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -23798,7 +23798,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -23806,7 +23806,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -23814,7 +23814,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -23822,7 +23822,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -23830,7 +23830,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -23838,7 +23838,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23846,9 +23846,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
       return ["?:", $1, $3, $5];
     } catch (e) {
@@ -23856,7 +23856,7 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23864,17 +23864,17 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$2, $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(6);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
     return [$2, $1, $4];
     }
@@ -23882,28 +23882,28 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(183);
+          $2 = this._match(SYM_DEC);
       return ["--", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(184);
+          $2 = this._match(SYM_INC);
       return ["++", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -23911,7 +23911,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -23919,7 +23919,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23927,7 +23927,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -23935,7 +23935,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23943,7 +23943,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -23951,7 +23951,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -23959,7 +23959,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -23967,7 +23967,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -23975,7 +23975,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -23983,7 +23983,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -23991,7 +23991,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -23999,7 +23999,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -24007,7 +24007,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24015,9 +24015,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
       return ["?:", $1, $3, $5];
     } catch (e) {
@@ -24025,7 +24025,7 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24033,17 +24033,17 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$2, $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(6);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
     return [$2, $1, $4];
     }
@@ -24051,28 +24051,28 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(183);
+          $2 = this._match(SYM_DEC);
       return ["--", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(184);
+          $2 = this._match(SYM_INC);
       return ["++", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -24080,7 +24080,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -24088,7 +24088,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24096,7 +24096,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -24104,7 +24104,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24112,7 +24112,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24120,7 +24120,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -24128,7 +24128,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -24136,7 +24136,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -24144,7 +24144,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -24152,7 +24152,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -24160,7 +24160,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -24168,7 +24168,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -24176,7 +24176,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24184,9 +24184,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
       return ["?:", $1, $3, $5];
     } catch (e) {
@@ -24194,7 +24194,7 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24202,17 +24202,17 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$2, $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(6);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
     return [$2, $1, $4];
     }
@@ -24220,28 +24220,28 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(183);
+          $2 = this._match(SYM_DEC);
       return ["--", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(184);
+          $2 = this._match(SYM_INC);
       return ["++", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -24249,7 +24249,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -24257,7 +24257,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24265,7 +24265,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -24273,7 +24273,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24281,7 +24281,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24289,7 +24289,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -24297,7 +24297,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -24305,7 +24305,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -24313,7 +24313,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -24321,7 +24321,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -24329,7 +24329,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -24337,7 +24337,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -24345,7 +24345,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24353,9 +24353,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
       return ["?:", $1, $3, $5];
     } catch (e) {
@@ -24363,7 +24363,7 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24371,17 +24371,17 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$2, $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(6);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
     return [$2, $1, $4];
     }
@@ -24389,28 +24389,28 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(183);
+          $2 = this._match(SYM_DEC);
       return ["--", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(184);
+          $2 = this._match(SYM_INC);
       return ["++", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -24418,7 +24418,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -24426,7 +24426,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24434,7 +24434,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -24442,7 +24442,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24450,7 +24450,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24458,7 +24458,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -24466,7 +24466,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -24474,7 +24474,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -24482,7 +24482,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -24490,7 +24490,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -24498,7 +24498,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -24506,7 +24506,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -24514,7 +24514,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24522,9 +24522,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
       return ["?:", $1, $3, $5];
     } catch (e) {
@@ -24532,7 +24532,7 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24540,17 +24540,17 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$2, $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(6);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
     return [$2, $1, $4];
     }
@@ -24558,28 +24558,28 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(183);
+          $2 = this._match(SYM_DEC);
       return ["--", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(184);
+          $2 = this._match(SYM_INC);
       return ["++", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -24587,7 +24587,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -24595,7 +24595,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24603,7 +24603,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -24611,7 +24611,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24619,7 +24619,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24627,7 +24627,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -24635,7 +24635,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -24643,7 +24643,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -24651,7 +24651,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -24659,7 +24659,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -24667,7 +24667,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -24675,7 +24675,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -24683,7 +24683,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24691,9 +24691,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
       return ["?:", $1, $3, $5];
     } catch (e) {
@@ -24701,7 +24701,7 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24709,17 +24709,17 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$2, $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(6);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
     return [$2, $1, $4];
     }
@@ -24727,28 +24727,28 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(183);
+          $2 = this._match(SYM_DEC);
       return ["--", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(184);
+          $2 = this._match(SYM_INC);
       return ["++", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -24756,7 +24756,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -24764,7 +24764,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24772,7 +24772,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -24780,7 +24780,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24788,7 +24788,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24796,7 +24796,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -24804,7 +24804,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -24812,7 +24812,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -24820,7 +24820,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -24828,7 +24828,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -24836,7 +24836,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -24844,7 +24844,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -24852,7 +24852,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24860,9 +24860,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
       return ["?:", $1, $3, $5];
     } catch (e) {
@@ -24870,7 +24870,7 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24878,17 +24878,17 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$2, $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(6);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
     return [$2, $1, $4];
     }
@@ -24896,28 +24896,28 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(183);
+          $2 = this._match(SYM_DEC);
       return ["--", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(184);
+          $2 = this._match(SYM_INC);
       return ["++", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -24925,7 +24925,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -24933,7 +24933,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24941,7 +24941,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -24949,7 +24949,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24957,7 +24957,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -24965,7 +24965,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -24973,7 +24973,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -24981,7 +24981,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -24989,7 +24989,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -24997,7 +24997,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -25005,7 +25005,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -25013,7 +25013,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -25021,7 +25021,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25029,9 +25029,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
       return ["?:", $1, $3, $5];
     } catch (e) {
@@ -25039,7 +25039,7 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25047,17 +25047,17 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$2, $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(6);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
     return [$2, $1, $4];
     }
@@ -25065,28 +25065,28 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(183);
+          $2 = this._match(SYM_DEC);
       return ["--", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(184);
+          $2 = this._match(SYM_INC);
       return ["++", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -25094,7 +25094,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -25102,7 +25102,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25110,7 +25110,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -25118,7 +25118,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25126,7 +25126,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25134,7 +25134,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -25142,7 +25142,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -25150,7 +25150,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -25158,7 +25158,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -25166,7 +25166,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -25174,7 +25174,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -25182,7 +25182,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -25190,7 +25190,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25198,9 +25198,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
       return ["?:", $1, $3, $5];
     } catch (e) {
@@ -25208,7 +25208,7 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25216,17 +25216,17 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$2, $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(6);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
     return [$2, $1, $4];
     }
@@ -25234,28 +25234,28 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(183);
+          $2 = this._match(SYM_DEC);
       return ["--", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(184);
+          $2 = this._match(SYM_INC);
       return ["++", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -25263,7 +25263,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -25271,7 +25271,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25279,7 +25279,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -25287,7 +25287,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25295,7 +25295,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25303,7 +25303,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -25311,7 +25311,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -25319,7 +25319,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -25327,7 +25327,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -25335,7 +25335,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -25343,7 +25343,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -25351,7 +25351,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -25359,7 +25359,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25367,9 +25367,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
       return ["?:", $1, $3, $5];
     } catch (e) {
@@ -25377,7 +25377,7 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25385,17 +25385,17 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$2, $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(6);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
     return [$2, $1, $4];
     }
@@ -25403,28 +25403,28 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(183);
+          $2 = this._match(SYM_DEC);
       return ["--", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(184);
+          $2 = this._match(SYM_INC);
       return ["++", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -25432,7 +25432,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -25440,7 +25440,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25448,7 +25448,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -25456,7 +25456,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25464,7 +25464,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25472,7 +25472,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -25480,7 +25480,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -25488,7 +25488,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -25496,7 +25496,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -25504,7 +25504,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -25512,7 +25512,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -25520,7 +25520,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -25528,7 +25528,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25536,9 +25536,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
       return ["?:", $1, $3, $5];
     } catch (e) {
@@ -25546,7 +25546,7 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25554,17 +25554,17 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$2, $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(6);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
     return [$2, $1, $4];
     }
@@ -25572,28 +25572,28 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(183);
+          $2 = this._match(SYM_DEC);
       return ["--", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(184);
+          $2 = this._match(SYM_INC);
       return ["++", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -25601,7 +25601,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -25609,7 +25609,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25617,7 +25617,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -25625,7 +25625,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25633,7 +25633,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25641,7 +25641,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -25649,7 +25649,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -25657,7 +25657,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -25665,7 +25665,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -25673,7 +25673,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -25681,7 +25681,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -25689,7 +25689,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -25697,7 +25697,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25705,9 +25705,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
       return ["?:", $1, $3, $5];
     } catch (e) {
@@ -25715,7 +25715,7 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25723,17 +25723,17 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$2, $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(6);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
     return [$2, $1, $4];
     }
@@ -25741,28 +25741,28 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(183);
+          $2 = this._match(SYM_DEC);
       return ["--", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(184);
+          $2 = this._match(SYM_INC);
       return ["++", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -25770,7 +25770,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -25778,7 +25778,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25786,7 +25786,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -25794,7 +25794,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25802,7 +25802,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25810,7 +25810,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -25818,7 +25818,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -25826,7 +25826,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -25834,7 +25834,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -25842,7 +25842,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -25850,7 +25850,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -25858,7 +25858,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -25866,7 +25866,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25874,9 +25874,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
       return ["?:", $1, $3, $5];
     } catch (e) {
@@ -25884,7 +25884,7 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25892,17 +25892,17 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$2, $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(6);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
     return [$2, $1, $4];
     }
@@ -25910,28 +25910,28 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(183);
+          $2 = this._match(SYM_DEC);
       return ["--", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(184);
+          $2 = this._match(SYM_INC);
       return ["++", $1, true];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -25939,7 +25939,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -25947,7 +25947,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25955,7 +25955,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -25963,7 +25963,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25971,7 +25971,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -25979,7 +25979,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -25987,7 +25987,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -25995,7 +25995,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -26003,7 +26003,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -26011,7 +26011,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -26019,7 +26019,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -26027,7 +26027,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -26035,7 +26035,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -26043,9 +26043,9 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
       return ["?:", $1, $3, $5];
     } catch (e) {
@@ -26053,7 +26053,7 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -26061,17 +26061,17 @@ parse(input) {
     }
     try {
       $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(36);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_INDENT);
           $4 = this.parseExpression();
-          $5 = this._match(38);
+          $5 = this._match(SYM_OUTDENT);
       return [$2, $1, $4];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseSimpleAssignable();
-          $2 = this._match(199);
-          $3 = this._match(6);
+          $2 = this._match(SYM_COMPOUND_ASSIGN);
+          $3 = this._match(SYM_TERMINATOR);
           $4 = this.parseExpression();
     return [$2, $1, $4];
     }
@@ -26079,14 +26079,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -26094,7 +26094,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -26102,7 +26102,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -26110,7 +26110,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -26118,7 +26118,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -26126,7 +26126,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -26134,7 +26134,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -26142,7 +26142,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -26150,7 +26150,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -26158,7 +26158,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -26166,7 +26166,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -26174,7 +26174,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -26182,7 +26182,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -26190,16 +26190,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
     return ["?:", $1, $3, $5];
     }
@@ -26207,14 +26207,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -26222,7 +26222,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -26230,7 +26230,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -26238,7 +26238,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -26246,7 +26246,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -26254,7 +26254,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -26262,7 +26262,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -26270,7 +26270,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -26278,7 +26278,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -26286,7 +26286,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -26294,7 +26294,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -26302,7 +26302,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -26310,7 +26310,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -26318,16 +26318,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
     return ["?:", $1, $3, $5];
     }
@@ -26335,14 +26335,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -26350,7 +26350,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -26358,7 +26358,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -26366,7 +26366,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -26374,7 +26374,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -26382,7 +26382,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -26390,7 +26390,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -26398,7 +26398,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -26406,7 +26406,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -26414,7 +26414,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -26422,7 +26422,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -26430,7 +26430,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -26438,7 +26438,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -26446,16 +26446,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
     return ["?:", $1, $3, $5];
     }
@@ -26463,14 +26463,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -26478,7 +26478,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -26486,7 +26486,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -26494,7 +26494,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -26502,7 +26502,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -26510,7 +26510,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -26518,7 +26518,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -26526,7 +26526,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -26534,7 +26534,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -26542,7 +26542,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -26550,7 +26550,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -26558,7 +26558,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -26566,7 +26566,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -26574,16 +26574,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
     return ["?:", $1, $3, $5];
     }
@@ -26591,14 +26591,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -26606,7 +26606,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -26614,7 +26614,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -26622,7 +26622,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -26630,7 +26630,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -26638,7 +26638,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -26646,7 +26646,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -26654,7 +26654,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -26662,7 +26662,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -26670,7 +26670,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -26678,7 +26678,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -26686,7 +26686,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -26694,7 +26694,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -26702,16 +26702,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
     return ["?:", $1, $3, $5];
     }
@@ -26719,14 +26719,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -26734,7 +26734,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -26742,7 +26742,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -26750,7 +26750,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -26758,7 +26758,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -26766,7 +26766,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -26774,7 +26774,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -26782,7 +26782,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -26790,7 +26790,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -26798,7 +26798,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -26806,7 +26806,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -26814,7 +26814,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -26822,7 +26822,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -26830,16 +26830,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
     return ["?:", $1, $3, $5];
     }
@@ -26847,14 +26847,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -26862,7 +26862,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -26870,7 +26870,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -26878,7 +26878,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -26886,7 +26886,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -26894,7 +26894,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -26902,7 +26902,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -26910,7 +26910,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -26918,7 +26918,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -26926,7 +26926,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -26934,7 +26934,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -26942,7 +26942,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -26950,7 +26950,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -26958,16 +26958,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
     return ["?:", $1, $3, $5];
     }
@@ -26975,14 +26975,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -26990,7 +26990,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -26998,7 +26998,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -27006,7 +27006,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -27014,7 +27014,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -27022,7 +27022,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -27030,7 +27030,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -27038,7 +27038,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -27046,7 +27046,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -27054,7 +27054,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -27062,7 +27062,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -27070,7 +27070,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -27078,7 +27078,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -27086,16 +27086,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
     return ["?:", $1, $3, $5];
     }
@@ -27103,14 +27103,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -27118,7 +27118,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -27126,7 +27126,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -27134,7 +27134,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -27142,7 +27142,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -27150,7 +27150,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -27158,7 +27158,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -27166,7 +27166,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -27174,7 +27174,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -27182,7 +27182,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -27190,7 +27190,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -27198,7 +27198,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -27206,7 +27206,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -27214,16 +27214,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
     return ["?:", $1, $3, $5];
     }
@@ -27231,14 +27231,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -27246,7 +27246,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -27254,7 +27254,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -27262,7 +27262,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -27270,7 +27270,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -27278,7 +27278,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -27286,7 +27286,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -27294,7 +27294,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -27302,7 +27302,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -27310,7 +27310,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -27318,7 +27318,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -27326,7 +27326,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -27334,7 +27334,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -27342,16 +27342,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
     return ["?:", $1, $3, $5];
     }
@@ -27359,14 +27359,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -27374,7 +27374,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -27382,7 +27382,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -27390,7 +27390,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -27398,7 +27398,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -27406,7 +27406,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -27414,7 +27414,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -27422,7 +27422,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -27430,7 +27430,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -27438,7 +27438,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -27446,7 +27446,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -27454,7 +27454,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -27462,7 +27462,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -27470,16 +27470,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
     return ["?:", $1, $3, $5];
     }
@@ -27487,14 +27487,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -27502,7 +27502,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -27510,7 +27510,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -27518,7 +27518,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -27526,7 +27526,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -27534,7 +27534,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -27542,7 +27542,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -27550,7 +27550,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -27558,7 +27558,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -27566,7 +27566,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -27574,7 +27574,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -27582,7 +27582,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -27590,7 +27590,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -27598,16 +27598,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
     return ["?:", $1, $3, $5];
     }
@@ -27615,14 +27615,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -27630,7 +27630,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -27638,7 +27638,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -27646,7 +27646,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -27654,7 +27654,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -27662,7 +27662,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -27670,7 +27670,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -27678,7 +27678,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -27686,7 +27686,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -27694,7 +27694,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -27702,7 +27702,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -27710,7 +27710,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -27718,7 +27718,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -27726,16 +27726,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
     return ["?:", $1, $3, $5];
     }
@@ -27743,14 +27743,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -27758,7 +27758,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -27766,7 +27766,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -27774,7 +27774,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -27782,7 +27782,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -27790,7 +27790,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -27798,7 +27798,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -27806,7 +27806,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -27814,7 +27814,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -27822,7 +27822,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -27830,7 +27830,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -27838,7 +27838,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -27846,7 +27846,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -27854,16 +27854,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
     return ["?:", $1, $3, $5];
     }
@@ -27871,14 +27871,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -27886,7 +27886,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -27894,7 +27894,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -27902,7 +27902,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -27910,7 +27910,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -27918,7 +27918,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -27926,7 +27926,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -27934,7 +27934,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -27942,7 +27942,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -27950,7 +27950,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -27958,7 +27958,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -27966,7 +27966,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -27974,7 +27974,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -27982,16 +27982,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
     return ["?:", $1, $3, $5];
     }
@@ -27999,14 +27999,14 @@ parse(input) {
       const _saved = this._saveState();
           try {
       $1 = this.parseExpression();
-          $2 = this._match(185);
+          $2 = this._match(SYM_QUESTION);
       return ["?", $1];
     } catch (e) {
       this._restoreState(_saved);
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(182);
+          $2 = this._match(SYM_PLUS);
           $3 = this.parseExpression();
       return ["+", $1, $3];
     } catch (e) {
@@ -28014,7 +28014,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(181);
+          $2 = this._match(SYM_MINUS);
           $3 = this.parseExpression();
       return ["-", $1, $3];
     } catch (e) {
@@ -28022,7 +28022,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(186);
+          $2 = this._match(SYM_MATH);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -28030,7 +28030,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(187);
+          $2 = this._match(SYM_POWER);
           $3 = this.parseExpression();
       return ["**", $1, $3];
     } catch (e) {
@@ -28038,7 +28038,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(188);
+          $2 = this._match(SYM_SHIFT);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -28046,7 +28046,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(189);
+          $2 = this._match(SYM_COMPARE);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
@@ -28054,7 +28054,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(190);
+          $2 = this._match(SYM_BITAND);
           $3 = this.parseExpression();
       return ["&", $1, $3];
     } catch (e) {
@@ -28062,7 +28062,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(191);
+          $2 = this._match(SYM_BITXOR);
           $3 = this.parseExpression();
       return ["^", $1, $3];
     } catch (e) {
@@ -28070,7 +28070,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(192);
+          $2 = this._match(SYM_BITOR);
           $3 = this.parseExpression();
       return ["|", $1, $3];
     } catch (e) {
@@ -28078,7 +28078,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(193);
+          $2 = this._match(SYM_AND);
           $3 = this.parseExpression();
       return ["&&", $1, $3];
     } catch (e) {
@@ -28086,7 +28086,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(194);
+          $2 = this._match(SYM_OR);
           $3 = this.parseExpression();
       return ["||", $1, $3];
     } catch (e) {
@@ -28094,7 +28094,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(195);
+          $2 = this._match(SYM_NULLISH);
           $3 = this.parseExpression();
       return ["??", $1, $3];
     } catch (e) {
@@ -28102,7 +28102,7 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(196);
+          $2 = this._match(SYM_OTHERWISE);
           $3 = this.parseExpression();
       return ["!?", $1, $3];
     } catch (e) {
@@ -28110,16 +28110,16 @@ parse(input) {
     }
     try {
       $1 = this.parseExpression();
-          $2 = this._match(197);
+          $2 = this._match(SYM_RELATION);
           $3 = this.parseExpression();
       return [$2, $1, $3];
     } catch (e) {
       this._restoreState(_saved);
     }
     $1 = this.parseExpression();
-          $2 = this._match(198);
+          $2 = this._match(SYM_TERNARY_Q);
           $3 = this.parseExpression();
-          $4 = this._match(72);
+          $4 = this._match(SYM_COLON);
           $5 = this.parseExpression();
     return ["?:", $1, $3, $5];
     }
@@ -28132,7 +28132,7 @@ parse(input) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
         case 179:
-          $1 = this._match(179);
+          $1 = this._match(SYM_DO_IIFE);
           $2 = this.parseCode();
           return ["do-iife", $2];
     default:

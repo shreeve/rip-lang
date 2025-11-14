@@ -977,14 +977,32 @@ class Generator
       if @types[symbol]
         captures.push("$#{pos} = this.parse#{symbol}();")
       else
-        id = @symbolIds[symbol]
-        captures.push("$#{pos} = this._match(#{id});")
-
+        constName = @_getConstName(symbol)
+        captures.push("$#{pos} = this._match(#{constName});")
+    
     # Compile action string
     action = rule.action or 1
     returnVal = @_compileActionReturn(action, rule.symbols)
-
+    
     [captures.join('\n          '), returnVal]
+  
+  # Convert symbol to SYM_* constant name
+  _getConstName: (symbol) ->
+    operatorMap =
+      ',': 'COMMA', '=': 'ASSIGN', ':': 'COLON'
+      '[': 'LBRACKET', ']': 'RBRACKET', '{': 'LBRACE', '}': 'RBRACE'
+      '(': 'LPAREN', ')': 'RPAREN', '@': 'AT'
+      '.': 'DOT', '?.': 'OPT_DOT', '::': 'PROTO', '?::': 'OPT_PROTO'
+      '->': 'THIN_ARROW', '=>': 'FAT_ARROW', '...': 'ELLIPSIS', '..': 'RANGE_INCL'
+      '+': 'PLUS', '-': 'MINUS', '++': 'INC', '--': 'DEC'
+      '**': 'POWER', '?': 'QUESTION', '!?': 'OTHERWISE'
+      '&': 'BITAND', '|': 'BITOR', '^': 'BITXOR'
+      '&&': 'AND', '||': 'OR', '??': 'NULLISH'
+      'SPACE?': 'TERNARY_Q'
+    
+    safeName = operatorMap[symbol] or symbol.toUpperCase().replace(/[^A-Z0-9_]/g, '_')
+    safeName = safeName.replace(/^_+|_+$/g, '')
+    "SYM_#{safeName}"
 
   # Compile action to return value (SIMPLE!)
   _compileActionReturn: (action, symbols) ->
@@ -1004,56 +1022,56 @@ class Generator
     # Replace all bare numbers with $n
     actionStr.replace /\b(\d+)\b/g, '$$$1'
 
-  # Generate iterative parser for left-recursive nonterminal
+  # Generate iterative parser for left-recursive nonterminal  
   _generateIterative: (name) ->
     {base, recursive} = @leftRecursive.get(name)
     baseRule = base[0]
     recRule = recursive[0]
-
+    
     # Pattern: A → B | A sep B
     baseSymbol = baseRule.symbols[0]
     separator = recRule.symbols[1]
     elementSymbol = recRule.symbols[2] or baseSymbol
-
-    sepId = @symbolIds[separator]
+    
+    sepConst = @_getConstName(separator)
     firstTokens = @_getFirstTokens({symbols: [elementSymbol]})
-
+    
     # Compile actions
     baseAction = @_compileActionReturn(baseRule.action, baseRule.symbols)
     recAction = @_compileActionReturn(recRule.action, recRule.symbols)
-
+    
     # Check if base and element are terminals or nonterminals
     baseIsTerminal = not @types[baseSymbol]
     elementIsTerminal = not @types[elementSymbol]
-
+    
     baseCall = if baseIsTerminal
-      "this._match(#{@symbolIds[baseSymbol]})"
+      "this._match(#{@_getConstName(baseSymbol)})"
     else
       "this.parse#{baseSymbol}()"
-
+    
     elementCall = if elementIsTerminal
-      "this._match(#{@symbolIds[elementSymbol]})"
+      "this._match(#{@_getConstName(elementSymbol)})"
     else
       "this.parse#{elementSymbol}()"
-
+    
     """
       parse#{name}() {
         let $1 = #{baseCall};
         $1 = #{baseAction};
-
-        while (this.la && this.la.id === #{sepId}) {
+        
+        while (this.la && this.la.id === #{sepConst}) {
           const _saved = this._saveState();
-          const $2 = this._match(#{sepId});
-
+          const $2 = this._match(#{sepConst});
+          
           if (!this.la || ![#{firstTokens.join(', ')}].includes(this.la.id)) {
             this._restoreState(_saved);
             break;
           }
-
+          
           const $3 = #{elementCall};
           $1 = #{recAction};
         }
-
+        
         return $1;
       }
     """
