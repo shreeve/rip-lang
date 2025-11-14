@@ -1,299 +1,255 @@
-# PRD Parser Generator - Handoff at 93.8%
+# PRD Parser Handoff: 99.3% Complete
 
 ## 🎯 Current State
 
-**Tests passing:** 902/962 (93.8%)
-**Remaining:** 60 tests (6.2%)
-**Just 60 tests to 100%!**
+**Parser Mode:** Predictive Recursive Descent (PRD)
+**Tests Passing:** 955/962 (99.3%)
+**Remaining:** 7 tests (0.7%)
+**Status:** Production-quality generic PRD implementation, nearly complete!
 
 ---
 
-## 🏆 What's Been Accomplished
+## 📊 Test Progress History
 
-### Session Progress
-- **Session 1:** 585 → 852 tests (+267, +45.6%)
-- **Session 2:** 852 → 902 tests (+50, +5.2%)
-- **Total:** 261 → 902 tests (+641, +246%!)
-
-### 9 Production-Ready Generic Fixes
-
-All fixes are **100% generic** - work for ANY SLR(1) grammar:
-
-1. **Nullable-First Rule Inclusion** - Enables conflict detection for nullable-first rules
-2. **Refined Separator Exclusion** - Only excludes separator for terminal base elements in while loops
-3. **Inline Code Overlap Handling** - Uses full inline code in try/catch for complex overlaps
-4. **Bare Nonterminal/Terminal Disambiguation** - Handles Arg → Splat vs Arg → ... patterns (+29 tests!)
-5. **Generic Host Selection** - Uses diversity ratio instead of hardcoded names
-6. **Generic Nested Pattern Detection** - Detects nested recursion by structure
-7. **Position Remapping in Multi-Separator** - Correctly maps rule positions to generated variables (+5 tests)
-8. **Postfix Variant Sorting** - Tries specific patterns before general ones (+8 tests)
-9. **Nullable Prefix in Postfix Rules** - Generates cases for skipped nullable alternatives (+6 tests)
-
-### Files at 100% (9 files!)
-✅ arrows.rip
-✅ compatibility.rip
-✅ data.rip
-✅ guards.rip
-✅ literals.rip
-✅ modules.rip
-✅ properties.rip
-✅ regex.rip
-✅ assignment.rip (44/46, 97.8%)
-
-### Near-Perfect Files (95-98%):
-- optional.rip: 98.1% (53/54) - 1 test
-- classes.rip: 95.2% (20/21) - 1 test
-- comprehensions.rip: 97.4% (37/39) - 2 tests
-- operators.rip: 98.0% (49/50) - 1 test
-- parens.rip: 96.7% (29/30) - 1 test
-- semicolons.rip: 98.5% (65/66) - 1 test
-- strings.rip: 97.6% (40/41) - 1 test
+| Session | Tests | % | Gain |
+|---------|-------|---|------|
+| Origin | 261 | 27.1% | - |
+| Session 1 | 852 | 88.6% | +591 |
+| Session 2 | 902 | 93.8% | +50 |
+| Session 3 | 945 | 98.2% | +43 |
+| Session 4 | 953 | 99.1% | +8 |
+| Session 5 | 955 | 99.3% | +2 |
+| **Total** | **955** | **99.3%** | **+694** |
 
 ---
 
-## 🎯 Remaining: 60 Tests (6.2%)
+## 🐛 Remaining 7 Failing Tests
 
-### Quick Wins (6-7 tests):
-**Six files with only 1 test failing each!**
-- Fix these individually for guaranteed progress
-- May reveal common patterns
+### 1. array destructuring skip
+**Test:** `[a, , c] = [1,2,3]; a + c` should equal 4
+**File:** test/rip/assignment.rip
+**Issue:** Array destructuring patterns with elisions (skipped elements)
 
-### High-Leverage Issues:
-1. **Statement Postfix Disambiguation** (~10-15 tests)
-   - `break if x > 5` fails
-   - Affects loops.rip, control.rip, functions.rip
-   - Partially implemented, needs debugging
+### 2. dammit method call
+**File:** test/rip/async.rip
+**Issue:** DO_IIFE parsing with method calls using dammit operator
 
-2. **Multiline Standalone Parsing** (~4-8 tests)
-   - `{a: 1\n  b: 2}` fails when starting line
-   - Backtracking issue in parseExpression/parseValue
+### 3. await expression
+**File:** test/rip/async.rip
+**Issue:** Await expression evaluation
 
-### Long Tail:
-- **stabilization.rip:** 20 tests - Complex edge cases
-- **Others:** ~15 tests scattered
+### 4. trailing comma multiline
+**File:** test/rip/basic.rip
+**Issue:** Multiline arrays with trailing commas
 
----
+### 5. elision undefined check
+**Test:** `arr = [1,,2]; arr[1]` should return undefined
+**File:** test/rip/basic.rip
+**Issue:** Multi-statement parsing with sparse arrays
 
-## 🔧 Critical Context
+### 6. elision destructuring multiple
+**File:** test/rip/basic.rip
+**Issue:** Complex destructuring with multiple elisions
 
-### All Failures are Parser Issues
-The codegen.js file is from production (962/962 passing). **All test failures are because PRD generates wrong s-expressions**, not codegen bugs.
-
-**To debug:**
-```bash
-echo 'code' | ./bin/rip -s  # PRD s-expression
-echo 'code' | rip -s        # Production s-expression
-# Compare - if different, it's a parser bug!
-```
-
-### Grammar is Unchanged
-Zero modifications to grammar.rip throughout both sessions. All fixes in solar.rip (parser generator).
-
-### All Code is 100% Generic
-- Zero hardcoded symbol names in logic
-- Structural pattern detection only
-- Works for ANY SLR(1) grammar
-- Examples in comments are for illustration only
+### 7. invalid extends
+**File:** test/rip/errors.rip
+**Issue:** Should fail on invalid syntax like `'3 extends 2'` (needs EOF check)
 
 ---
 
-## 📁 File Locations
+## ✅ Implemented Generic Fixes
+
+All fixes are **100% generic** - work for ANY SLR(1) grammar!
+
+### Fix #19: Nullable Lookahead & Separator Handling
+**Location:** solar.rip lines 3360-3381, 3849-3865
+
+**Problem:** Nullable nonterminals always succeed, blocking longer matches
+
+**Solution:** Check if trigger token follows after parsing nullable, throw to try fallback
+
+**Also:** Refined separator exclusion in iterative parsers
+
+### Fix #20: EOF Validation
+**Location:** solar.rip lines 824-833
+
+**Problem:** Parser accepts partial input (`'3 extends 2'` → just `3`)
+
+**Solution:** After parseRoot(), check all tokens consumed (allow trailing TERMINATOR)
+
+### Fix #21: Return Comma Tokens (Not Null)
+**Location:** solar.rip lines 1327-1333, 3629-3636
+
+**Problem:** PRD interprets action `'null'` as JavaScript null, creates dense arrays
+
+**Solution:** For single-terminal rules with action `'null'`, return matched token
+
+**Impact:** Creates sparse arrays `[1, , 2]` instead of `[1, null, 2]`
+
+### Plus: 18 Earlier Generic Fixes from Sessions 1-4
+
+All documented in solar.rip with GENERIC FIX comments.
+
+---
+
+## 🔧 Critical Files
 
 **Source:**
-- `src/grammar/solar.rip` - Parser generator (~4,200 lines)
-- `src/grammar/grammar.rip` - Grammar (unchanged)
-- `src/parser.js` - Generated parser (~5,160 lines)
+- `src/grammar/solar.rip` - Parser generator (~4,550 lines, all generic)
+- `src/grammar/grammar.rip` - Grammar specification (UNCHANGED throughout!)
+- `src/parser.js` - Generated parser (~5,337 lines)
+- `src/codegen.js` - Code generator (UNCHANGED, production-ready)
 
 **Regenerate:**
 ```bash
 cd /Users/shreeve/Data/Code
 rip rip-lang/src/grammar/solar.rip -r -o rip-lang/src/parser.js rip-lang/src/grammar/grammar.rip
+
+# Or from within repo:
+cd /Users/shreeve/Data/Code/rip-lang
+bun run parser  # Uses -r flag from package.json
 ```
 
 **Test:**
 ```bash
 cd /Users/shreeve/Data/Code/rip-lang
-bun run test  # Should show 902/962 passing (93.8%)
+bun run test  # Should show 955/962 (99.3%)
 ```
 
 ---
 
-## 🐛 Known Issues to Fix
+## 🎯 Path to 100% (7 tests remaining)
 
-### Issue #1: Statement POST_IF Disambiguation (HIGH PRIORITY)
+### Priority 1: Array Destructuring & Elisions (4-5 tests)
 
-**Problem:** `break if x > 5` fails with "expected OUTDENT, got POST_IF"
+**Tests affected:**
+- array destructuring skip
+- trailing comma multiline
+- elision undefined check
+- elision destructuring multiple
 
-**Symptoms:**
-- loops.rip: 5 failures (loop with break/continue)
-- control.rip: 6 failures (if/unless with statements)
-- functions.rip: 3 failures (returns in conditionals)
+**Root cause:** Multi-elision arrays like `[,,1,2,,]` fail to parse
 
-**Root Cause:**
-If and While both have rules starting with Statement:
+**Current behavior:**
+- `[1,,2]` works → `(array 1 , 2)` ✓
+- `[,,1,2,,]` fails with parse error ✗
+
+**Solution needed:** Adjust parseArray logic to handle pure elision start (try Elisions before ArgElisionList)
+
+**Expected impact:** +4-5 tests → 959-960/962
+
+### Priority 2: EOF Check for Error Tests (1 test)
+
+**Test:** invalid extends - should fail on `'3 extends 2'`
+
+**Status:** Fix #20 implemented but may need adjustment
+
+**Expected impact:** +1 test → 960-961/962
+
+### Priority 3: Async Edge Cases (2 tests)
+
+**Tests:** dammit method call, await expression
+
+**Investigation needed:** Individual test analysis
+
+**Expected impact:** +2 tests → 962/962 (100%)!
+
+---
+
+## 💡 Key Insights
+
+### What Works Brilliantly
+
+1. **Generic architecture** - Zero hardcoded symbol names, works for any SLR(1) grammar
+2. **Comma token pattern** - Using actual comma tokens (not null) for sparse arrays
+3. **Separator restoration** - Save/restore state prevents token consumption bugs
+4. **Try/catch disambiguation** - Clean handling of ambiguous cases
+
+### What's Tricky
+
+1. **Array syntax ambiguity** - Three rules all start with `[`: empty, pure elisions, mixed
+2. **Multi-statement parsing** - Elisions in multi-line contexts need careful handling
+3. **Bun loader caching** - Bootstrap from different directory to avoid cache issues
+
+---
+
+## 🔍 Debug Commands
+
+```bash
+# Compare PRD vs table-driven
+echo 'code' | ./bin/rip -s          # PRD (99.3%)
+echo 'code' | rip -s                 # System rip (table-driven, 100%)
+
+# Check specific patterns
+echo '[,,1,2,,]' | ./bin/rip -s      # Pure elisions
+echo '[a, , c]' | ./bin/rip -s       # Mixed elements/elisions
+echo '[1,,2]' | ./bin/rip -s         # Works ✓
+
+# Test specific files
+bun test/runner.js test/rip/assignment.rip
+bun test/runner.js test/rip/basic.rip
+bun test/runner.js test/rip/async.rip
+
+# Full test suite
+bun run test
 ```
-If: Statement POST_IF Expression
-If: Statement POST_UNLESS Expression
-While: Statement WhileSource
+
+---
+
+## 🌟 What's Been Proven
+
+- ✅ **Generic PRD generation works** (99.3% completion)
+- ✅ **21 production-ready generic fixes**
+- ✅ **Performance excellent** (~33x faster than table-driven)
+- ✅ **Zero grammar modifications** (grammar.rip unchanged)
+- ✅ **Clean code** (all fixes are generic algorithms)
+- ✅ **Self-hosting** (bun run parser works)
+
+---
+
+## 📁 Next AI: Start Here
+
+1. **Read this file** (HANDOFF.md) - Current status (you just did!)
+2. **Read PRD.md** - Technical implementation details
+3. **Read AGENT.md** - General Rip development guide
+4. **Verify state:** `bun run test` → 955/962 (99.3%)
+5. **Debug failing tests** - Compare PRD vs table-driven s-expressions
+6. **Fix patterns generically** - No hardcoded symbols!
+7. **Regenerate:** `bun run parser`
+8. **Test:** `bun run test`
+9. **Commit when 100%!**
+
+### Quick Win Strategy
+
+The array destructuring/elision tests are all related. Fix the parseArray try/catch ordering:
+
+```bash
+# Test the pattern
+echo '[,,1,2,,]' | ./bin/rip -s  # Should work like system rip
+echo '[,,1,2,,]' | rip -s         # Compare
+
+# The fix is likely in parseArray - try pure Elisions before ArgElisionList
+# Reorder the try/catch blocks in the generated parseArray or in solar.rip
 ```
 
-All generate identical case labels from Statement's FIRST set:
-```javascript
-case SYM_RETURN: case SYM_STATEMENT: case SYM_IMPORT: case SYM_EXPORT:
-```
+**Expected result:** 4-5 tests fixed → 960/962 (99.5%)
 
-Only one survives after merging!
-
-**Current Status:**
-- Try/catch generation implemented (solar.rip lines 1920-1969)
-- Case label regex fixed to match try/catch blocks (line 2087)
-- But cases still not merging correctly
-
-**Debug Steps:**
-1. Check if If try/catch case label format is correct
-2. Verify baseCasesByTrigger groups them (line 2080-2096)
-3. Check handler extraction from complex try/catch (line 2116)
-4. Test merge logic for complex cases (line 2120-2205)
-
-**Expected Impact:** +10-15 tests
+Then tackle the remaining 2-3 async/error tests individually.
 
 ---
 
-### Issue #2: Multiline Object/Array Standalone
+## 🎉 Bottom Line
 
-**Problem:** Objects/arrays with TERMINATOR separators fail when starting a line:
-```rip
-{a: 1
-  b: 2}        # Fails: "expected expression, got {"
+**You're inheriting a 99.3% complete, fully generic PRD parser implementation!**
 
-{a: 1, b: 2}  # Works (inline with commas)
+The hard architectural work is done. The remaining 7 tests are specific edge cases:
+- 4-5 related to array elisions (common root cause)
+- 2-3 individual async/error tests
 
-x = {a: 1
-  b: 2}        # Works (after assignment)
-```
+**This is finishable in 1-2 focused hours!** 🚀
 
-**Same with arrays:**
-```rip
-[,,1,2,,]      # Fails: "expected expression, got ["
-[,1]           # Works
-x = [,,1,2,,]  # Loses assignment (outputs just "x")
-```
-
-**Root Cause:** Complex backtracking in parseExpression → parseValue interaction. When parseValue tries parseArray/parseObject, something causes throw before returning result.
-
-**Files Affected:**
-- basic.rip: 4-6 tests (elisions, multiline arrays)
-- classes.rip: 1 test (static methods with @property)
-- stabilization.rip: ~3 tests
-
-**Expected Impact:** +4-8 tests
+All code is production-quality, 100% generic, and ready for the final push to 100%.
 
 ---
 
-### Issue #3: Unary Operator Precedence (1 test)
-
-**Problem:** `-5 + 10` produces `(- (+ 5 10))` instead of `(+ (- 5) 10)`
-
-**Test:** operators.rip "addition negative"
-
-**Root Cause:** Prefix unary operators consume entire right side instead of just their operand.
-
-**Note:** Check if this is actually a parser bug or codegen interpretation issue. Compare s-expressions first.
-
----
-
-## 🔑 Key Methods in solar.rip
-
-**Recently Modified (Session 2):**
-- `_generateWithInlining` (line ~1831) - Main inlining function, handles If/While/For
-- `_generateInlinedPrefixCase` (line ~2651) - Generates prefix operator cases
-- `_generateInlinedPostfixCase` (line ~2686) - Generates postfix cases with precedence
-- `_findPostfixTriggerWithNullables` (line ~2505) - Tracks skipped nullables (NEW)
-- `_selectCycleHost` (line ~1687) - Generic host selection using diversity ratio
-- `_generateIterativeParser` (line ~3104) - Multi-separator lists, position remapping
-- Overlap merging logic (lines 2070-2300) - Enhanced for complex cases
-
----
-
-## 📈 Test Progress
-
-| Milestone | Tests | % | Change |
-|-----------|-------|---|--------|
-| Origin | 261 | 27.1% | - |
-| Session 0 end | 585 | 60.8% | +324 |
-| Session 1 end | 852 | 88.6% | +267 |
-| **Session 2 end** | **902** | **93.8%** | **+50** |
-
----
-
-## 💡 For Next AI
-
-### Start Here:
-
-1. **Read NEXT-STEPS-SESSION-3.md** (5 min) - Clear execution plan
-2. **Read this file** (10 min) - Complete technical status
-3. **Verify current state:** `bun run test` → should show 902/962
-
-### Quick Wins Strategy:
-
-Pick off 6 files with 1 test each:
-- Test the failure
-- Compare PRD vs production s-expressions
-- Fix the parser bug generically
-- **Guaranteed +6 tests minimum**
-
-### Then High-Leverage:
-
-Debug Statement disambiguation:
-- Add logging to trace why cases aren't merging
-- Fix the merge logic
-- **Could unlock +10-15 tests**
-
----
-
-## ⚠️ Critical Principles
-
-### MUST MAINTAIN:
-
-1. **100% Generic Code**
-   - NO hardcoded symbol names in logic
-   - Use structural properties: @types, @symbolIds, @operators
-   - Examples in comments are OK, but no 'if symbol is "Expression"' in code
-
-2. **Don't Modify Parser.js Directly**
-   - It's generated - changes will be lost
-   - All fixes must be in solar.rip
-   - Regenerate after every solar.rip change
-
-3. **Grammar is Untouched**
-   - grammar.rip unchanged throughout both sessions
-   - Keep this principle!
-
-4. **Codegen is Production Code**
-   - codegen.js works perfectly (962/962 with table-driven)
-   - All failures are parser bugs (wrong s-expressions)
-   - Compare PRD vs production s-expressions to confirm
-
----
-
-## 🚀 Path to 100%
-
-**Conservative:** 10-15 hours
-**Optimistic:** 6-10 hours (if Statement fix unlocks many)
-
-**You're 93.8% there with proven generic architecture. The foundation is rock-solid!**
-
----
-
-## 🎓 Innovation Validated
-
-- ✅ Oracle-informed generation works
-- ✅ Automatic conflict detection works
-- ✅ Generic pattern detection works
-- ✅ Performance real (33x faster)
-- ✅ Output quality excellent
-- ✅ **This is publishable research!**
-
----
-
-**Good luck! The remaining 60 tests are individual patterns, not architecture. You've inherited something remarkable!** 🎯
+**May the Force be with you!** ⭐
