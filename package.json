@@ -29,7 +29,7 @@
   ],
   "scripts": {
     "browser": "bun scripts/build-browser.js",
-    "parser": "bun src/grammar/solar.rip -r -o src/parser.js src/grammar/grammar.rip",
+    "parser": "bun src/grammar/solar.rip -o src/parser.js src/grammar/grammar.rip",
     "serve": "bun scripts/serve.js",
     "test": "bun test/runner.js",
     "version": "./bin/rip -v",
