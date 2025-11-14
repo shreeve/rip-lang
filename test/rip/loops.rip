@@ -45,6 +45,22 @@ test "while loop", "i = 0; sum = 0; while i < 5\n  sum += i\n  i += 1\nsum", 10
 # While with guard
 test "while when", "i = 0\nsum = 0\nwhile i < 10\n  if i % 2 == 0\n    sum += i\n  i += 1\nsum", 20
 
+# For-in with 'when' guard using 'in' operator
+test "for-in when item in list", '''
+  result = []
+  for item in ['apple', 'grape', 'banana'] when item in ['apple', 'banana']
+    result.push(item)
+  result
+  ''', ['apple', 'banana']
+
+# For-in with 'when' guard using 'not in' operator
+test "for-in when item not in list", '''
+  result = []
+  for item in ['apple', 'grape', 'banana'] when item not in ['apple', 'banana']
+    result.push(item)
+  result
+  ''', ['grape']
+
 # Postfix while
 test "postfix while", "i = 0; i += 1 while i < 5; i", 5
 

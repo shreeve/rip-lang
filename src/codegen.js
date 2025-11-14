@@ -178,13 +178,18 @@ export class CodeGenerator {
 
     let [head, ...rest] = sexpr;
 
-    // Preserve async sigil metadata before converting to primitive
+    // Preserve async sigil metadata and invert flag before converting to primitive
     const headAwaitMetadata = (head instanceof String) ? head.await : undefined;
+    const headInvertMetadata = (head instanceof String) ? head.invert : undefined;
 
     // Convert head to primitive
     if (head instanceof String) {
       head = head.valueOf();
     }
+
+    // Restore metadata on the primitive sexpr[0] (mutation is OK - we own this sexpr)
+    if (headAwaitMetadata !== undefined) sexpr[0].await = headAwaitMetadata;
+    if (headInvertMetadata !== undefined) sexpr[0].invert = headInvertMetadata;
 
     // If head is an array (branch containing multiple statements), recurse into each
     if (Array.isArray(head)) {
@@ -2076,7 +2081,9 @@ export class CodeGenerator {
    */
   generateInstanceof(head, rest, context, sexpr) {
     const [expr, type] = rest;
-    return `(${this.generate(expr, 'value')} instanceof ${this.generate(type, 'value')})`;
+    const isNegated = sexpr[0]?.invert;
+    const result = `(${this.generate(expr, 'value')} instanceof ${this.generate(type, 'value')})`;
+    return isNegated ? `(!${result})` : result;
   }
 
   /**
@@ -2097,12 +2104,14 @@ export class CodeGenerator {
   generateIn(head, rest, context, sexpr) {
     const [key, container] = rest;
     const keyCode = this.generate(key, 'value');
+    const isNegated = sexpr[0]?.invert;
 
     // Object literal → Use JavaScript 'in' for property checks
     // Pattern: ["in", key, ["object", ...pairs]]
     if (Array.isArray(container) && container[0] === 'object') {
       const objCode = this.generate(container, 'value');
-      return `(${keyCode} in ${objCode})`;
+      const result = `(${keyCode} in ${objCode})`;
+      return isNegated ? `(!${result})` : result;
     }
 
     // Everything else (arrays, strings, variables) → Runtime check
@@ -2114,7 +2123,8 @@ export class CodeGenerator {
     // - .includes() for arrays/strings (checks values)
     // - 'in' for objects (checks properties)
     const containerCode = this.generate(container, 'value');
-    return `(Array.isArray(${containerCode}) || typeof ${containerCode} === 'string' ? ${containerCode}.includes(${keyCode}) : (${keyCode} in ${containerCode}))`;
+    const result = `(Array.isArray(${containerCode}) || typeof ${containerCode} === 'string' ? ${containerCode}.includes(${keyCode}) : (${keyCode} in ${containerCode}))`;
+    return isNegated ? `(!${result})` : result;
   }
 
   /**
@@ -2125,7 +2135,9 @@ export class CodeGenerator {
     const [value, container] = rest;
     const valueCode = this.generate(value, 'value');
     const containerCode = this.generate(container, 'value');
-    return `(${valueCode} in ${containerCode})`;
+    const isNegated = sexpr[0]?.invert;
+    const result = `(${valueCode} in ${containerCode})`;
+    return isNegated ? `(!${result})` : result;
   }
 
   /**
