@@ -1,7 +1,7 @@
 # PRD Parser - Passthrough Resolution Milestone
 
-**Date:** November 14, 2025  
-**Status:** Core breakthrough achieved! 🎉  
+**Date:** November 14, 2025
+**Status:** Core breakthrough achieved! 🎉
 **Branch:** `recursive-descent`
 
 ---
@@ -20,7 +20,7 @@
 | `null` | `(program null)` | ✅ |
 | `undefined` | `(program undefined)` | ✅ |
 
-**Parser size:** 2,759 lines (clean, readable)  
+**Parser size:** 2,759 lines (clean, readable)
 **Generation time:** ~70ms
 
 ---
@@ -64,20 +64,20 @@ parseSimpleAssignable() { return parseValue(); }  // CYCLE!
 _resolvePassthrough: (nonterminal, tokenId) ->
   current = nonterminal
   visited = new Set
-  
+
   while not visited.has(current)
     visited.add(current)
-    
+
     # Find single-symbol nonterminal rules that handle this token
     forwardRules = @types[current].rules.filter (r) =>
       r.symbols.length is 1 and          # Single symbol
       @types[r.symbols[0]] and           # Nonterminal
       tokenId in @_getFirstTokens(r)     # Handles this token
-    
+
     break unless forwardRules.length is 1  # Ambiguous or base case
-    
+
     current = forwardRules[0].symbols[0]  # Follow the chain
-  
+
   return current  # Final destination
 ```
 
@@ -92,18 +92,18 @@ _resolvePassthrough: (nonterminal, tokenId) ->
 ## 🔧 Three Critical Bugs Fixed
 
 ### 1. Token Consumption (Session start)
-**Bug:** `this.tokenStream[this.tokenPos++]` (post-increment)  
-**Fix:** `this.tokenStream[++this.tokenPos]` (prefix increment)  
+**Bug:** `this.tokenStream[this.tokenPos++]` (post-increment)
+**Fix:** `this.tokenStream[++this.tokenPos]` (prefix increment)
 **Impact:** Parser was stuck on same token forever
 
 ### 2. Direct Cycle Detection (Session start)
-**Bug:** `Expression → For` included postfix forms (`Expression FOR ...`)  
-**Fix:** Skip alternatives where target has rules starting with parent  
+**Bug:** `Expression → For` included postfix forms (`Expression FOR ...`)
+**Fix:** Skip alternatives where target has rules starting with parent
 **Impact:** Prevented 79 immediate cycles
 
 ### 3. Passthrough Chain Resolution (Just now!)
-**Bug:** `Value → Assignable → SimpleAssignable → Value` (3-hop cycle)  
-**Fix:** Resolve chains per-token at generation time  
+**Bug:** `Value → Assignable → SimpleAssignable → Value` (3-hop cycle)
+**Fix:** Resolve chains per-token at generation time
 **Impact:** Eliminates function call indirection, prevents multi-hop cycles
 
 ---
@@ -149,16 +149,16 @@ _resolvePassthrough: (nonterminal, tokenId) ->
 
 ## 💡 Key Insights
 
-1. **Passthroughs are compile-time aliases**  
+1. **Passthroughs are compile-time aliases**
    Grammar indirection ≠ parsing steps
 
-2. **Per-token resolution prevents explosion**  
+2. **Per-token resolution prevents explosion**
    Different tokens follow different chains
 
-3. **Stop at ambiguity**  
+3. **Stop at ambiguity**
    Multiple rules → use try/catch (correct!)
 
-4. **SLR(1) table encodes the paths**  
+4. **SLR(1) table encodes the paths**
    We're just extracting what it already knows
 
 ---
@@ -177,9 +177,9 @@ _resolvePassthrough: (nonterminal, tokenId) ->
 
 ## 📝 Session Summary
 
-**Session goal:** Debug runtime hang, get '42' parsing  
-**Achieved:** Fixed 3 bugs, implemented passthrough resolution, 7 test cases work  
-**Breakthrough:** Per-token chain resolution (publishable technique)  
+**Session goal:** Debug runtime hang, get '42' parsing
+**Achieved:** Fixed 3 bugs, implemented passthrough resolution, 7 test cases work
+**Breakthrough:** Per-token chain resolution (publishable technique)
 **Status:** Solid foundation, ready for feature expansion
 
 **Next AI:** Read this file + HANDOFF.md, implement Phase 1 (arrays, calls, operators)
@@ -187,4 +187,3 @@ _resolvePassthrough: (nonterminal, tokenId) ->
 ---
 
 **May the Force be with you!** ⭐
-
