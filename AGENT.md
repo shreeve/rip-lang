@@ -1,14 +1,30 @@
 # AI Agent Guide for Rip
 
-**Purpose:** This document helps AI assistants understand and work with the Rip language compiler.
+**Purpose:** This document helps AI assistants and developers understand and work with the Rip language compiler.
 
-**What is Rip:** An elegant CoffeeScript-inspired scripting language that compiles to modern JavaScript (ES2022), featuring zero dependencies, self-hosting capability, and an S-expression intermediate representation.
+**What is Rip:** An elegant scripting language that compiles to modern JavaScript (ES2022), featuring zero dependencies, self-hosting capability, and an S-expression intermediate representation.
 
 ---
 
 ## 🚀 Quick Start (5 Minutes)
 
-### Step 1: Essential Commands
+### Step 1: Read These First (in order)
+
+1. **This file (AGENT.md)** - Complete guide, you're reading it now!
+2. **README.md** - Skim for features and user perspective
+3. **CONTRIBUTING.md** - GitHub workflow with examples
+4. **docs/WORKFLOW.md** - Command reference card
+
+### Step 2: Understand the Pipeline
+
+```
+Rip Source → Lexer → Parser → S-Expressions → Codegen → JavaScript
+            (3,146)  (340)    (arrays!)      (5,246)    (ES2022)
+```
+
+**Key insight:** S-expressions (simple arrays like `["=", "x", 42]`) are the IR, not complex AST nodes. This makes the compiler ~50% smaller than CoffeeScript.
+
+### Step 3: Essential Commands
 
 ```bash
 # Debug any code
@@ -25,39 +41,33 @@ bun --no-cache test/runner.js test/rip   # Clear Bun cache
 bun run parser  # Regenerates src/parser.js from grammar.rip
 ```
 
-### Step 2: Understand the Pipeline
-
-```
-Rip Source → Lexer → Parser → S-Expressions → Codegen → JavaScript
-            (3,146)  (5,337)   (arrays!)      (5,246)    (ES2022)
-```
-
-**Key insight:** S-expressions (simple arrays like `["=", "x", 42]`) are the IR, not complex AST nodes. This makes the compiler ~50% smaller than CoffeeScript.
-
 ---
 
 ## 🎯 Current Status
 
 **Version:** 1.5.4
-**Tests:** 968/968 passing (100%)
+**Tests:** 968 passing (100%)
 **Status:** Production-ready, self-hosting fully operational
 
-**Parser modes:**
-- **Table-driven** (default): 350 LOC, 968/968 tests (100%)
-
 **Recent accomplishments (November 2025):**
-- ✅ Predictive Recursive Descent parser at 99.3%
-- ✅ Generic Fix #21: Return comma tokens for sparse arrays
-- ✅ Generic Fix #19: Nullable lookahead and separator handling
-- ✅ All 110 operations in dispatch table (O(1) lookup)
-- ✅ Massive cleanup: Removed 2,017 lines of dead/duplicate code (28%)
-- ✅ Self-hosting restored by fixing 'in' operator (v1.4.2)
+- ✅ Issue #52 (Phase 1) - Dispatch table architecture, 71 cases extracted
+- ✅ Issue #54 (Phase 2) - All 110 cases in dispatch table (100% complete!)
+- ✅ Massive cleanup - Removed 2,017 lines of dead/duplicate code (28%!)
+- ✅ Issue #51 - Standardized test formatting (""" → ''')
+- ✅ **Critical fix:** Restored self-hosting by fixing 'in' operator (v1.4.2)
+- ✅ **S-expression refactoring:** generateNot, generateIn use IR-level checks (v1.4.3)
+- ✅ **Result:** 5,246 clean, organized LOC
+
+**Key principles demonstrated:**
+- Work at s-expression level, NOT string manipulation (Issues #46, #49)
+- Simple pattern matching beats complex logic
+- All 110 operations in dispatch table (O(1) lookup)
 
 **Check current state:**
 ```bash
-gh issue list                    # See open issues
+gh issue list                    # See open issues (Issue #57 - formatter polish)
 git log --oneline -10            # Recent commits
-bun run test                     # Verify: 968/968 tests passing
+bun run test                     # Verify: 968/968 tests
 bun run parser                   # Test self-hosting ✅
 ```
 
@@ -72,8 +82,8 @@ bun run parser                   # Test self-hosting ✅
 │ Source │───>│   Lexer    │───>│  Parser  │───>│ Codegen │
 │  Code  │    │  (Coffee)  │    │  (Solar) │    │  (Rip)  │
 └────────┘    └────────────┘    └──────────┘    └─────────┘
-                 3,145 LOC       5,337 LOC       5,246 LOC
-               15 yrs tested   Generated!    S-expr w/Dispatch!
+                 3,145 LOC          340 LOC       5,246 LOC
+               15 yrs tested     Generated!   S-expr w/Dispatch!
 ```
 
 ### Files You'll Modify
@@ -82,7 +92,7 @@ bun run parser                   # Test self-hosting ✅
 |------|---------|-----------|----------|
 | `src/codegen.js` | Code generator | ✅ YES | No |
 | `src/grammar/grammar.rip` | Grammar rules | ⚠️ Expert | `bun run parser` |
-| `src/grammar/solar.rip` | Parser generator | ✅ YES (PRD work) | `bun run parser` |
+| `src/grammar/solar.rip` | Parser generator | ❌ Given (runtime fixes only) | `bun run parser` |
 | `src/compiler.js` | Pipeline | ✅ YES | No |
 | `src/lexer.js` | Tokenizer | ⚠️ Rewriter only | No |
 | `src/parser.js` | Parser | ❌ NEVER | Generated |
@@ -102,8 +112,6 @@ bun run parser                   # Test self-hosting ✅
 ["def", "fn", params, body]             // Function definition
 ["comprehension", expr, iterators, guards]  // Comprehension
 ["for-in", vars, iterable, step, guard, body]  // For loop
-["array", ...elements]                  // Array literal
-[","]                                   // Elision (sparse array hole)
 ```
 
 See `docs/CODEGEN.md` for complete catalog (110+ node types).
@@ -137,7 +145,18 @@ test/rip/
 ├── functions.rip        (86 tests)
 ├── loops.rip            (34 tests)
 ... 18 more files
-Total: 968 tests
+Total: 968 tests (100% passing)
+```
+
+### Test-Driven Development
+
+```bash
+# 1. Add failing test
+# 2. Run: bun test/runner.js test/rip/FILE.rip
+# 3. Verify it fails
+# 4. Implement fix
+# 5. Run tests until they pass
+# 6. Run ALL tests: bun run test
 ```
 
 ---
@@ -180,22 +199,296 @@ vim src/codegen.js
 bun run test
 ```
 
-### Work on PRD Parser
+### Modify Parser Runtime Behavior
 
 ```bash
-# 1. Edit solar.rip (parser generator)
-vim src/grammar/solar.rip
+# Example: Improve error messages or parser behavior
 
-# 2. Regenerate parser with PRD flag
-bun run parser  # Uses -r flag from package.json
+# 1. Edit solar.rip (NOT parser.js!)
+vim src/grammar/solar.rip
+# Edit the parseError function, parse function, etc.
+
+# 2. Regenerate parser
+bun run parser  # Compiles solar.rip and regenerates parser.js
 
 # 3. Test
 bun run test
-
-# 4. Compare with table-driven
-bun src/grammar/solar.rip -o src/parser-table.js src/grammar/grammar.rip
-# Switch parsers and compare results
 ```
+
+---
+
+## 🎓 Key Concepts
+
+### 1. Dispatch Table Architecture (NEW in v1.4.x)
+
+**O(1) lookup for all 110 node types:**
+
+```javascript
+// src/codegen.js lines 32-141
+static GENERATORS = {
+  'if': 'generateIf',
+  'class': 'generateClass',
+  '+': 'generateBinaryOp',
+  // ... all 110 node types
+};
+
+generate(sexpr, context) {
+  const method = GENERATORS[head];
+  if (method) return this[method](head, rest, context, sexpr);
+  // Fallback for function calls
+}
+```
+
+**To add/modify a feature:**
+1. Find the operator in `GENERATORS` table (lines 32-141)
+2. Locate the generator method (e.g., `generateIf`)
+3. Modify the method
+4. Test!
+
+### 2. Context-Aware Generation
+
+**Most important concept in Rip!**
+
+```javascript
+generate(sexpr, context = 'statement')
+// context: 'statement' | 'value'
+```
+
+**Example - Comprehensions:**
+```coffeescript
+# Value context (result used) → IIFE
+result = (x * 2 for x in arr)
+
+# Statement context (result discarded) → Plain loop
+for x in arr
+  x * 2
+doMore()  # ← comprehension not last, result unused
+```
+
+**Read:** `docs/COMPREHENSIONS.md` for complete rules
+
+### 3. Block Unwrapping
+
+Parser wraps statements in `["block", ...]` everywhere:
+
+```javascript
+if (Array.isArray(body) && body[0] === 'block') {
+  const statements = body.slice(1);  // ALWAYS unwrap!
+}
+```
+
+### 4. String Object Metadata
+
+Lexer attaches metadata to String objects (not primitives):
+
+```javascript
+// Check BEFORE converting to primitive
+if (sexpr instanceof String) {
+  const metadata = sexpr.quote || sexpr.heregex || sexpr.await;
+}
+```
+
+### 5. Variable Scoping
+
+CoffeeScript-style function scoping:
+
+```javascript
+// Program level
+let a, b, fn;
+
+// Function level - only NEW variables
+fn = function() {
+  let x, y;  // New vars
+  a = 1;     // Uses outer 'a' (closure)
+};
+```
+
+**Implementation:**
+- `collectProgramVariables()` - Top-level
+- `collectFunctionVariables()` - Function-local (excludes outer)
+
+---
+
+## 📋 GitHub Workflow
+
+**Follow the 10-step workflow in `docs/WORKFLOW.md`**
+
+### Quick Version
+
+```bash
+# 1-2. Find bug, create issue
+gh issue create --title "..." --label "bug"
+
+# 3. Create branch
+git checkout -b fix/issue-name
+
+# 4-6. Write tests, implement, verify
+bun run test  # Must pass!
+
+# 7. Build browser (if code changed)
+bun run browser
+
+# 8-9. Commit with issue reference
+git commit -m "Fix: ...
+
+Fixes #N  ← Auto-closes issue!
+
+All tests passing: 968/968 (100%)"
+
+# 10. PR and merge
+git push origin fix/issue-name
+gh pr create --title "..." --body "Fixes #N"
+gh pr merge <number> --squash --delete-branch
+```
+
+**The magic:** `Fixes #N` in commit/PR auto-closes the issue when merged!
+
+---
+
+## 🐛 Debugging Tips
+
+### When Tests Fail
+
+```bash
+# 1. Run the specific test
+bun test/runner.js test/rip/FILE.rip
+
+# 2. Check generated code
+echo 'test code' | ./bin/rip -c
+
+# 3. Check s-expression
+echo 'test code' | ./bin/rip -s
+
+# 4. If Bun is caching old code
+bun --no-cache test/runner.js test/rip
+```
+
+### When Code Won't Compile
+
+```bash
+# Improved error messages show line/column!
+./bin/rip -c file.rip
+# → Parse error at line 157, column 27 (token: ...)
+
+# Check tokens
+./bin/rip -t file.rip | grep -A 5 -B 5 "problem"
+```
+
+### When Generated Code Looks Wrong
+
+```bash
+# Compare with CoffeeScript
+coffee -c file.coffee  # CoffeeScript output
+./bin/rip -c file.coffee  # Rip output
+# Compare the two
+```
+
+---
+
+## ⚠️ Critical Don'ts
+
+### Never Edit These Files Directly
+
+- ❌ `src/parser.js` - Generated file
+- ❌ `src/grammar/solar.rip` - Given (parser generator)
+
+### Always Do These
+
+- ✅ Run `bun run test` before committing
+- ✅ Run `bun run browser` after codegen changes
+- ✅ Include `Fixes #N` in commits
+- ✅ Update test counts in README.md
+- ✅ Follow existing code patterns
+
+---
+
+## 📚 Documentation Map
+
+**For Developers:**
+- **AGENT.md** (this file) - Complete reference (start here!)
+- `CONTRIBUTING.md` - Workflow with examples
+- `docs/WORKFLOW.md` - Quick command reference
+- `ISSUE-*.md` - Complex issue handoffs (if they exist)
+
+**Technical Reference:**
+- `docs/CODEGEN.md` - All 110+ node types
+- `docs/COMPREHENSIONS.md` - Context rules
+- `docs/SOLAR.md` - Parser generator guide
+- `docs/STRING.md` - String metadata
+- `docs/REGEX-PLUS.md` - Ruby-style regex
+
+**User Docs:**
+- `README.md` - User guide with examples
+
+---
+
+## 🔄 Architecture Deep Dive
+
+### Why S-Expressions?
+
+**Traditional AST:**
+```javascript
+class BinaryOp {
+  constructor(op, left, right) { ... }
+  compile() { /* 50+ lines */ }
+}
+```
+
+**Rip's S-Expressions:**
+```javascript
+case '+': {
+  const [left, right] = rest;
+  return `(${this.generate(left)} + ${this.generate(right)})`;
+}
+```
+
+**Result:** 50% less code, easier to maintain!
+
+### Codegen.js Architecture (v1.4.6)
+
+**Key sections:**
+```
+Lines 17-146:    Class setup, dispatch table (GENERATORS)
+Lines 148-380:   compile(), variable collection
+Lines 388-667:   generate() method (dispatch + function call handling)
+Lines 680-3350:  Extracted generator methods (110 methods, organized)
+Lines 3355-5237: Helper methods (formatting, analysis, etc.)
+```
+
+**Notable generator methods (s-expression approach):**
+- `generateIn()` - Runtime type check for string literals (critical for bootstrap!)
+- `generateNot()` - IR-level precedence checking (clean output)
+- `flattenBinaryChain()` - S-expression transform (Issue #46)
+- `generateComprehensionWithTarget()` - Direct array building (Issue #49)
+
+**Finding a generator:**
+1. Check dispatch table (lines 32-141) - maps operator → method name
+2. Jump to method (e.g., `generateIf` around line 3609)
+3. Modify as needed
+
+### Helper Functions Overview
+
+**Variable collection:**
+- `collectProgramVariables(sexpr)` - Top-level vars
+- `collectFunctionVariables(body)` - Function-local vars
+
+**Body generation:**
+- `generateFunctionBody(body, params, sideEffectOnly)` - Functions with implicit returns
+- `generateMethodBody(body, autoAssignments, isConstructor, params)` - Class methods
+- `generateLoopBody(body)` - Loops without returns
+- `generateBlockWithReturns(block)` - IIFE blocks
+
+**String processing:**
+- `extractStringContent(strObj)` - Heredoc handling
+- `processHeregex(content)` - Strip whitespace/comments
+
+**Detection:**
+- `containsAwait(sexpr)` - Auto-async
+- `containsYield(sexpr)` - Auto-generator
+
+**S-expression transforms:**
+- `flattenBinaryChain(sexpr)` - Flatten nested logical operators
+- `findPostfixConditional(expr)` - Extract postfix if/unless from calls
 
 ---
 
@@ -214,132 +507,412 @@ generate(sexpr, context = 'statement')
 - **Statement context** (result discarded) → Plain loop
 - **Value context** (result used) → IIFE with array building
 
-### Sparse Arrays (Elisions)
+**Example - Conditionals:**
+- **Statement context:** `if (x > 0) { return 'positive'; }`
+- **Value context:** `(x > 0 ? 'positive' : undefined)`
 
-Arrays with "holes" use comma tokens in s-expressions:
+### Auto-Detection
+
+Functions automatically become `async` or `function*`:
 
 ```javascript
-// Source: [1, , 2]
-// S-expr: (array 1 , 2)
-// Codegen checks: if element === ',' then empty slot
-// Output: [1, , 2]
+containsAwait(sexpr)  // → async function
+containsYield(sexpr)  // → function*
 ```
 
-### String Object Metadata
+Stops at function boundaries (nested functions checked separately).
 
-Lexer attaches metadata to String objects (not primitives):
+### Critical Edge Cases
 
+**1. for-of with guards and value variables:**
 ```javascript
-// Check BEFORE converting to primitive
-if (sexpr instanceof String) {
-  const metadata = sexpr.quote || sexpr.heregex || sexpr.await;
+// Correct order: own check → value assign → guard check
+for (const k in obj) {
+  if (obj.hasOwnProperty(k)) {
+    const v = obj[k];  // BEFORE guard
+    if (guard) { }     // After v is defined
+  }
 }
 ```
 
-### Variable Scoping
+**2. Postfix conditionals in assignments:**
+```rip
+x = 5 unless done
+# Generate: if (!done) x = 5;
+# NOT: x = (!done ? 5 : undefined)  ← Would always assign!
+```
 
-CoffeeScript-style function scoping:
-
-```javascript
-// Program level
-let a, b, fn;
-
-// Function level - only NEW variables
-fn = function() {
-  let x, y;  // New vars
-  a = 1;     // Uses outer 'a' (closure)
-};
+**3. Switch in value context:**
+```rip
+result = switch x
+  when 1 then 'one'
+  when 2 then 'two'
+# Needs IIFE wrapper, not statement form
 ```
 
 ---
 
-## ⚠️ Critical Don'ts
+## 📖 Language Features Quick Reference
 
-### Never Edit These Files Directly
+### Dual Optional Syntax (10 operators)
 
-- ❌ `src/parser.js` - Generated file
-- ⚠️ `src/grammar/solar.rip` - Only edit for PRD work
+**CoffeeScript soak style:**
+- `arr?[0]` → `(arr != null ? arr[0] : undefined)`
+- `fn?(x)` → `(typeof fn === 'function' ? fn(x) : undefined)`
 
-### Always Do These
+**ES6 optional chaining:**
+- `obj?.prop` → `obj?.prop` (native)
+- `arr?.[0]` → `arr?.[0]` (native)
+- `fn?.(x)` → `fn?.(x)` (native)
 
-- ✅ Run `bun run test` before committing
-- ✅ Run `bun run browser` after codegen changes
-- ✅ Include `Fixes #N` in commits
-- ✅ Update test counts in README.md
-- ✅ Follow existing code patterns
+Both can be mixed: `obj?.arr?[0]`
+
+### Sigil Operators (!)
+
+**At call-site (dammit):** Calls AND awaits
+```rip
+result = fetchData!      # → await fetchData()
+user = getUser!(id)      # → await getUser(id)
+```
+
+**At definition (void):** Suppresses returns
+```rip
+def process!             # → function process() { ...; return; }
+  doWork()
+```
+
+### Comprehensions (Context-Aware)
+
+- **Value context** (result used) → IIFE builds array
+- **Statement context** (result discarded) → Plain loop
+
+See `docs/COMPREHENSIONS.md` for complete rules.
+
+### CoffeeScript Compatibility
+
+The lexer automatically converts:
+- Postfix spread: `args...` → `...args`
+- Legacy existential: `x ? y` → `x ?? y` (unless ternary)
 
 ---
 
-## 📚 Documentation Map
+## 🔍 Common Issues & Solutions
 
-**For AI Agents:**
-- **AGENT.md** (this file) - Complete reference (start here!)
-- **HANDOFF.md** - Current PRD work status and next steps
-- **PRD.md** - Technical details of PRD parser implementation
-- `CONTRIBUTING.md` - Workflow with examples
-- `docs/WORKFLOW.md` - Quick command reference
+### "Unknown s-expression type: X"
 
-**Technical Reference:**
-- `docs/CODEGEN.md` - All 110+ node types
-- `docs/COMPREHENSIONS.md` - Context rules
-- `docs/SOLAR.md` - Parser generator guide
-- `docs/STRING.md` - String metadata
-- `docs/REGEX-PLUS.md` - Ruby-style regex
+**Problem:** Codegen missing a case for this pattern
 
-**User Docs:**
-- `README.md` - User guide with examples
+**Solution:**
+```bash
+echo 'your code' | ./bin/rip -s  # See what parser emits
+grep "'X':" src/codegen.js  # Check if in dispatch table
+# Add the missing generator method if needed
+```
+
+### "Unexpected token" in Output
+
+**Problem:** Generated JavaScript has syntax error
+
+**Solution:**
+```bash
+echo 'your code' | ./bin/rip -c  # See generated code
+echo 'your code' | ./bin/rip -s  # Check the s-expression
+# Fix the codegen logic for that pattern
+```
+
+### Tests Not Reflecting Changes
+
+**Problem:** Bun aggressively caches compiled modules
+
+**Solution:**
+```bash
+bun --no-cache test/runner.js test/rip
+```
 
 ---
 
-## 🔄 PRD Parser Work
+## 🎨 Code Style Principles
 
-### Current State (Nov 14, 2025)
+Follow these principles:
 
-- **Branch:** `recursive-descent`
-- **Approach:** Clean-room rebuild (streamlined)
-- **Status:** Phase 1-5 complete (~300 lines infrastructure)
-- **Previous:** solar-old.rip at 955/962 (99.3%) - saved as reference backup
-- **Goal:** Match grammar → emit s-expressions (ruthless simplicity)
+1. **Keep it clean** - No ugly hacks, readable code
+2. **Keep it simple** - S-expressions over complex AST
+3. **Keep it tested** - 100% test coverage
+4. **Keep it efficient** - Optimize hot paths
+5. **Keep it documented** - Update docs with changes
 
-### Critical Files for PRD Work
+**Example of clean code:**
+```javascript
+// ✅ Good - clear, simple
+case '+': {
+  const [left, right] = rest;
+  return `(${this.generate(left, 'value')} + ${this.generate(right, 'value')})`;
+}
 
-**Current Clean-Room Implementation:**
-1. **PLAN.md** - Complete 12-phase specification (~60+ hours)
-2. **HANDOFF.md** - Current state, clean-room rationale, next steps
-3. **notes/prd-patterns.md** - 21 generic fixes documented from solar-old.rip
-4. **notes/failure-analysis.md** - Root cause analysis of 7 failing tests
-5. **src/grammar/solar.rip** - Clean implementation (~1,300 lines: 995 original + 300 PRD)
-6. **src/grammar/solar-old.rip** - Reference backup (99.3% baseline, ~4,550 lines)
+// ❌ Bad - overly complex
+case '+': return this.buildBinaryExpression(rest[0], rest[1], '+', {precedence: 5});
+```
 
-**Unchanged from main:**
-7. **src/grammar/grammar.rip** - Grammar specification (UNCHANGED!)
-8. **src/codegen.js** - Code generator (UNCHANGED - validates approach!)
+---
 
-**Key Insight:** Building from original clean solar.rip (~1,000 lines) with minimal PRD additions. Reference solar-old.rip for patterns, but don't copy bulk code.
+## 🏆 Complete Workflow Example
 
-### Debugging PRD Issues
+**Complete workflow for any issue:**
+
+1. Identify the bug or feature need
+2. Create issue via `gh issue create`
+3. Create feature branch: `git checkout -b fix/descriptive-name`
+4. Write failing tests
+5. Implement the fix
+6. Verify all tests pass: `bun run test`
+7. Build browser bundle: `bun run browser` (if codegen changed)
+8. Commit with `Fixes #N` reference
+9. Create PR with `gh pr create`
+10. Merge with `gh pr merge --squash --delete-branch`
+
+**All issues auto-close via `Fixes #N` in PR descriptions!**
+
+---
+
+## 💡 Pro Tips
+
+### 1. Understand Before Changing
 
 ```bash
-# Compare PRD vs table-driven
-echo 'code' | ./bin/rip -s          # PRD output
-echo 'code' | rip -s                 # System rip (table-driven)
-
-# Switch between parsers
-bun run parser                       # Generate PRD (has -r flag)
-bun src/grammar/solar.rip -o src/parser.js src/grammar/grammar.rip  # Table
-
-# Test specific failures
-echo '[,,1,2,,]' | ./bin/rip -s      # Elision multiple
-echo '[a, , c] = [1,2,3]; a + c' | ./bin/rip  # Array destructuring skip
+# Don't guess - inspect!
+echo 'code' | ./bin/rip -s  # See what parser emits
+grep "'pattern'" src/codegen.js  # Check dispatch table
 ```
 
-### Generic Fixes in solar.rip
+### 2. Use Existing Patterns
 
-All fixes use structural pattern detection, no hardcoded symbol names:
+```bash
+# Find similar generators
+grep "similar pattern" src/codegen.js
+# Copy and adapt, don't reinvent
+```
 
-- **Fix #19:** Nullable lookahead (lines 3360-3381, 3849-3865)
-- **Fix #20:** EOF validation (lines 824-833)
-- **Fix #21:** Return comma tokens (lines 1327-1333, 3629-3636)
+### 3. Test Edge Cases
+
+```coffeescript
+# Don't just test the happy path
+test "normal", "x = 1", 1
+test "with null", "x = null", null
+test "with undefined", "x = undefined", undefined
+test "empty array", "x = []", []
+```
+
+### 4. Use Dispatch Table Comments
+
+```javascript
+// Every generator is documented:
+/**
+ * Generate if statement
+ * Pattern: ["if", condition, thenBranch, ...elseBranches]
+ */
+generateIf(head, rest, context, sexpr) {
+  // Implementation
+}
+```
+
+---
+
+## 🚨 Common Pitfalls (Avoid These!)
+
+### ❌ Editing Generated Files
+```bash
+vim src/parser.js  # WRONG - will be overwritten!
+```
+
+### ✅ Edit Source, Then Regenerate
+```bash
+vim src/grammar/grammar.rip  # RIGHT
+bun run parser               # Regenerate parser.js
+```
+
+### ❌ Forgetting to Test
+```bash
+git commit -m "fix bug"  # WRONG - didn't run tests!
+```
+
+### ✅ Always Test First
+```bash
+bun run test  # MUST be 968/968 passing
+git commit
+```
+
+### ❌ Missing Issue Reference
+```bash
+git commit -m "Fix comprehension bug"  # WRONG - issue won't auto-close!
+```
+
+### ✅ Always Reference Issue
+```bash
+git commit -m "Fix: Description
+
+Fixes #N  # RIGHT - auto-closes issue!
+"
+```
+
+---
+
+## 🔧 Development Commands
+
+### Running Code
+
+```bash
+# Run .rip files directly (Bun loader auto-compiles)
+bun script.rip
+
+# Or use rip command to execute
+./bin/rip script.rip
+
+# Interactive REPL
+./bin/rip
+
+# Compile to JavaScript (use -c or -o flag)
+./bin/rip -c input.rip
+./bin/rip -o output.js input.rip
+```
+
+### Testing
+
+```bash
+# All tests (968 total)
+bun run test
+
+# Specific test file
+bun test/runner.js test/rip/functions.rip
+
+# During development (bypass Bun cache)
+bun --no-cache test/runner.js test/rip
+```
+
+### Debugging
+
+```bash
+# See ONLY tokens (lexer output)
+echo 'x = 42' | ./bin/rip -t
+
+# See ONLY s-expressions (parser output)
+echo 'x = 42' | ./bin/rip -s
+
+# See ONLY JavaScript (codegen output, default for stdin)
+echo 'x = 42' | ./bin/rip
+echo 'x = 42' | ./bin/rip -c
+
+# Mix and match - see s-expressions AND JavaScript
+echo 'x = 42' | ./bin/rip -s -c
+
+# Full debug mode - see everything
+echo 'x = 42' | ./bin/rip -s -t -c
+```
+
+**Note:** When piping from stdin, the default is to compile (show JavaScript). When running `.rip` files, the default is to execute them.
+
+### Build Commands
+
+```bash
+bun run parser   # Rebuild parser from grammar (self-hosting)
+bun run browser  # Build 48KB browser bundle
+bun run serve    # Start dev server (REPL at localhost:3000)
+```
+
+---
+
+## 📋 Quick Pattern Reference
+
+### Common S-Expression Patterns
+
+```javascript
+// Assignment
+["=", target, value]
+
+// Function definition
+["def", "name", params, body]
+
+// Arrow functions
+["->", params, body]   // Thin arrow (unbound this)
+["=>", params, body]   // Fat arrow (bound this)
+
+// Conditionals
+["if", condition, thenBlock, elseBlock?]
+["unless", condition, body]
+["?:", condition, trueExpr, falseExpr]  // Ternary
+
+// Loops
+["for-in", vars, iterable, step?, guard?, body]
+["for-of", vars, object, guard?, body]
+["while", condition, body]
+
+// Data structures
+["array", ...elements]
+["object", ...pairs]  // pairs: [key, value]
+
+// Operators
+["+", left, right]
+["==", left, right]  // Maps to ===
+["&&", left, right]
+
+// Property access
+[".", obj, "prop"]
+["?..", obj, "prop"]  // Optional
+["[]", arr, index]
+["?[]", arr, index]   // Soak
+
+// Special
+["await", expr]
+["yield", expr]
+["return", expr?]
+```
+
+See `docs/CODEGEN.md` for complete catalog (110+ node types).
+
+---
+
+## 🎯 Finding Your Way Around
+
+### Where to Look for Specific Things
+
+**Syntax/Grammar Issues:**
+- Check: `src/grammar/grammar.rip`
+- Regenerate: `bun run parser`
+
+**Code Generation Issues:**
+- Check: `src/codegen.js`
+- Check dispatch table: lines 32-141
+- Search: `grep "generateXXX" src/codegen.js`
+
+**Parser Runtime Issues:**
+- Check: `src/grammar/solar.rip`
+- Functions: `parseError`, `parse`
+- Regenerate: `bun run parser`
+
+**Test Failures:**
+- Check: `test/rip/CATEGORY.rip`
+- Categories: assignment, async, comprehensions, functions, loops, etc.
+
+**Context Rules:**
+- Read: `docs/COMPREHENSIONS.md`
+- This is CRITICAL for understanding statement vs value context
+
+---
+
+## 🌟 Self-Hosting
+
+Rip compiles itself, including its parser generator:
+
+```bash
+# Rebuild the parser in one command
+bun run parser
+
+# What happens:
+# 1. Bun runs solar.rip (parser generator, written in Rip)
+# 2. Solar reads grammar.rip (grammar spec, written in Rip)
+# 3. Outputs parser.js (complete parser)
+```
+
+**Zero external tools required.** Everything needed to modify and rebuild Rip is included.
 
 ---
 
@@ -376,170 +949,195 @@ All fixes use structural pattern detection, no hardcoded symbol names:
    bun run test
    ```
 
+6. **Commit:**
+   ```bash
+git commit -m "Fix: Description
+
+Fixes #N
+
+All tests passing: 968/968 (100%)"
+   ```
+
 ---
 
-## 📖 Language Features Quick Reference
+## 🔄 Recent Major Work (November 2025)
 
-### Dual Optional Syntax (10 operators)
+### Dispatch Table Refactoring (Issues #52, #54)
 
-**CoffeeScript soak style:**
-- `arr?[0]` → `(arr != null ? arr[0] : undefined)`
-- `fn?(x)` → `(typeof fn === 'function' ? fn(x) : undefined)`
+**Phase 1 (v1.4.0):**
+- Created dispatch table infrastructure
+- Extracted 71/110 cases (65%)
+- All operators, property access, functions, loops
 
-**ES6 optional chaining:**
-- `obj?.prop` → `obj?.prop` (native)
-- `arr?.[0]` → `arr?.[0]` (native)
-- `fn?.(x)` → `fn?.(x)` (native)
+**Phase 2 (v1.4.1):**
+- Extracted remaining 39/110 cases (35%)
+- Exception handling, switch, comprehensions, classes, modules, special forms
+- **All 110 node types in dispatch table** ✅
 
-### Sigil Operators (!)
+**Benefits:**
+- O(1) lookup vs O(n) switch
+- Clear organization by category
+- Easy to find and modify any generator
+- DRY principle (shared methods for similar operations)
 
-**At call-site (dammit):** Calls AND awaits
+### Code Cleanup (November 2025)
+
+**Removed 2,017 lines of dead/duplicate code (28%):**
+- Duplicate inline functions (findPostfixConditional defined 2x)
+- Old cases (oldPropertyDot, oldDef) - 47 lines
+- Dead switch cases (error-throwing, forwarding) - 381 lines
+- **ALL Phase 2 duplicate cases** - 1,614 lines! (never removed after extraction)
+- Pointless switch wrapper with only default case
+- **Result:** 7,263 → 5,246 LOC (27.8% reduction!)
+
+### Critical Fixes & Refactoring
+
+**v1.4.2 - Self-hosting restored:**
+- Fixed 'in' operator with string literals
+- JavaScript's `in` checks numeric indices on strings, NOT characters!
+- Pattern: `'\n' in action` → runtime check with `.includes()` for strings/arrays
+- Parser regeneration (`bun run parser`) works ✅
+- Added 7 tests for string literal behavior
+
+**v1.4.3 - S-expression refactoring:**
+- Converted generateNot() to check operand TYPE at IR level
+- No regex on generated code (following Issues #46, #49 philosophy)
+- Clean output: `!1`, `!x`, `!obj.prop` (no extra parens)
+- Conservative for complex: `!(a + b)` (keeps parens for safety)
+
+---
+
+## 📊 File Organization
+
+### Main Source Files
+
+| File | Purpose | Can Modify? | Notes |
+|------|---------|-------------|-------|
+| `src/lexer.js` | Tokenization + rewriter | ⚠️ Rewriter only | 3,145 LOC |
+| `src/parser.js` | S-expression parser | ❌ Generated (don't edit) | 340 LOC |
+| `src/codegen.js` | JavaScript generator | ✅ Main work happens here | 5,246 LOC |
+| `src/compiler.js` | Pipeline orchestration | ✅ Yes | 250 LOC |
+| `src/repl.js` | Terminal REPL | ✅ Yes | |
+| `src/browser.js` | Browser integration | ✅ Yes | |
+
+**Codegen v1.4.1 Architecture:**
+- Uses dispatch table architecture (Issues #52, #54)
+- 110 extracted generator methods (organized by category)
+- Dispatch table at lines 32-141
+- Check `GENERATORS` to find which method handles each case
+
+### Grammar and Generator
+
+| File | Purpose | Can Modify? |
+|------|---------|-------------|
+| `src/grammar/grammar.rip` | Grammar specification | ⚠️ Expert only |
+| `src/grammar/solar.rip` | Parser generator | ❌ No (given) |
+
+**To regenerate parser:** `bun run parser`
+
+### Test Files
+
+| Directory | Contents |
+|-----------|----------|
+| `test/rip/` | 23 test files, 968 tests total |
+| `test/runner.js` | Test framework |
+
+**Test types:**
 ```rip
-result = fetchData!      # → await fetchData()
-user = getUser!(id)      # → await getUser(id)
-```
-
-**At definition (void):** Suppresses returns
-```rip
-def process!             # → function process() { ...; return; }
-  doWork()
-```
-
-### Comprehensions (Context-Aware)
-
-- **Value context** (result used) → IIFE builds array
-- **Statement context** (result discarded) → Plain loop
-
-See `docs/COMPREHENSIONS.md` for complete rules.
-
----
-
-## 🔍 Common Issues & Solutions
-
-### "Unknown s-expression type: X"
-
-**Problem:** Codegen missing a case for this pattern
-
-**Solution:**
-```bash
-echo 'your code' | ./bin/rip -s  # See what parser emits
-grep "'X':" src/codegen.js  # Check if in dispatch table
-# Add the missing generator method if needed
-```
-
-### Tests Not Reflecting Changes
-
-**Problem:** Bun aggressively caches compiled modules
-
-**Solution:**
-```bash
-bun --no-cache test/runner.js test/rip
-```
-
-### Parser Regeneration Issues
-
-**Problem:** Changes to solar.rip not reflected in parser.js
-
-**Solution:**
-```bash
-# Clear cache and regenerate
-bun --clear-cache run parser
-
-# Or use system rip to bootstrap
-cd /Users/shreeve/Data/Code
-rip rip-lang/src/grammar/solar.rip -r -o rip-lang/src/parser.js rip-lang/src/grammar/grammar.rip
+test "name", "code", expectedResult  # Execute and compare
+code "name", "input", "output"       # Compare generated code
+fail "name", "code"                  # Expect compilation failure
 ```
 
 ---
 
-## 🎨 Code Style Principles
+## 🎓 Understanding Rip's Design
 
-1. **Keep it clean** - No ugly hacks, readable code
-2. **Keep it simple** - S-expressions over complex AST
-3. **Keep it tested** - 100% test coverage
-4. **Keep it efficient** - Optimize hot paths
-5. **Keep it documented** - Update docs with changes
+### Why S-Expressions Over AST?
 
-**Example of clean code:**
+**Comparison:**
+
+| Approach | Lines of Code | Complexity | Extensibility |
+|----------|---------------|------------|---------------|
+| Traditional AST (CoffeeScript) | 10,346 LOC | High (OOP hierarchy) | Hard |
+| S-Expressions (Rip) | 5,246 LOC | Low (pattern matching) | Easy |
+
+**Result: ~50% smaller implementation**
+
+### Why Context Parameter?
+
+**Same syntax, different output:**
+```coffeescript
+# Source (identical)
+for x in arr then x * 2
+```
+
+**Output depends on usage:**
 ```javascript
-// ✅ Good - clear, simple
-case '+': {
-  const [left, right] = rest;
-  return `(${this.generate(left, 'value')} + ${this.generate(right, 'value')})`;
-}
+// Used: result = (for x in arr then x * 2)
+(() => {
+  const result = [];
+  for (const x of arr) { result.push(x * 2); }
+  return result;
+})()
 
-// ❌ Bad - overly complex
-case '+': return this.buildBinaryExpression(rest[0], rest[1], '+', {precedence: 5});
+// Unused: (for x in arr then x * 2); doMore()
+for (const x of arr) { (x * 2); }
 ```
+
+Context-aware generation = smarter, more efficient code!
 
 ---
 
-## 🌟 Self-Hosting
+## 🔧 Zero Dependencies
 
-Rip compiles itself, including its parser generator:
+Rip has **zero runtime or build dependencies**. This is intentional and must be maintained. Everything needed is in the source:
 
-```bash
-# Rebuild the parser in one command
-bun run parser
-
-# What happens:
-# 1. Bun runs solar.rip (parser generator, written in Rip)
-# 2. Solar reads grammar.rip (grammar spec, written in Rip)
-# 3. Outputs parser.js (complete parser)
-```
-
-**Zero external tools required.** Everything needed to modify and rebuild Rip is included.
+- Full compiler
+- Parser generator (solar.rip)
+- Test framework
+- Browser bundler
+- REPL (terminal, browser, console)
 
 ---
 
-## 📋 Quick Pattern Reference
+## 💬 Philosophy
 
-### Common S-Expression Patterns
+**From the project's core values:**
 
-```javascript
-// Assignment
-["=", target, value]
+> Simplicity scales.
+> - Keep the IR simple (s-expressions)
+> - Keep the pipeline clear (lex → parse → generate)
+> - Keep the code minimal (pattern matching)
+> - Test everything (968/968 tests passing)
 
-// Function definition
-["def", "name", params, body]
+**Core practices:**
 
-// Arrow functions
-["->", params, body]   // Thin arrow (unbound this)
-["=>", params, body]   // Fat arrow (bound this)
+> Follow the workflow.
+> Write tests first.
+> Keep it clean.
+> Document everything.
 
-// Conditionals
-["if", condition, thenBlock, elseBlock?]
-["unless", condition, body]
-["?:", condition, trueExpr, falseExpr]  // Ternary
+---
 
-// Loops
-["for-in", vars, iterable, step?, guard?, body]
-["for-of", vars, object, guard?, body]
-["while", condition, body]
+## 🚀 Extended Reading
 
-// Data structures
-["array", ...elements]
-["array", 1, ",", 2]   // Sparse: [1, , 2] - comma is elision marker!
-["object", ...pairs]   // pairs: [key, value]
+**When you need deep knowledge:**
 
-// Operators
-["+", left, right]
-["==", left, right]  // Maps to ===
-["&&", left, right]
+### For Comprehension Work
+1. `docs/COMPREHENSIONS.md` - Complete context rules
+2. `test/rip/comprehensions.rip` - All test cases
+3. Search `src/codegen.js` for `generateComprehension` method
 
-// Property access
-[".", obj, "prop"]
-["?.", obj, "prop"]  // Optional
-["[]", arr, index]
-["?[]", arr, index]   // Soak
+### For Grammar Work
+1. `docs/SOLAR.md` - Parser generator guide
+2. `src/grammar/grammar.rip` - Grammar specification
+3. `src/grammar/solar.rip` - Parser generator source
 
-// Special
-["await", expr]
-["yield", expr]
-["return", expr?]
-```
-
-See `docs/CODEGEN.md` for complete catalog (110+ node types).
+### For General Development
+1. `docs/CODEGEN.md` - All 110+ node types
+2. `docs/STRING.md` - String metadata
+3. `docs/REGEX-PLUS.md` - Ruby-style regex
 
 ---
 
@@ -550,10 +1148,10 @@ See `docs/CODEGEN.md` for complete catalog (110+ node types).
 1. ✅ Read this file (you're ready after this!)
 2. ✅ Run `bun run test` (verify everything passes)
 3. ✅ Check `gh issue list` (see what's open)
-4. ✅ Read HANDOFF.md if working on PRD parser
-5. ✅ Read PRD.md for technical details on PRD implementation
-6. ✅ Create appropriate branch: `git checkout -b fix/descriptive-name`
-7. ✅ Follow the test-driven workflow
+4. ✅ If handoff docs exist, read any `ISSUE-*.md` files
+5. ✅ Create appropriate branch: `git checkout -b fix/descriptive-name`
+6. ✅ Follow the test-driven workflow
+7. ✅ Reference `docs/WORKFLOW.md` for complete process
 
 ---
 
@@ -574,22 +1172,38 @@ See `docs/CODEGEN.md` for complete catalog (110+ node types).
 
 ---
 
-## 💬 Philosophy
+## 🎓 Quick Tips Summary
 
-**From the project's core values:**
+1. **Start with tests** - Look at passing tests to understand patterns
+2. **Use `-s` liberally** - See exactly what parser emits
+3. **Check dispatch table first** - Lines 32-141 show all mappings
+4. **Context matters** - Pass correct context ('statement' vs 'value')
+5. **Check String objects** - Metadata flows through String objects
+6. **Unwrap blocks** - Parser wraps statements in blocks everywhere
+7. **Test immediately** - Don't modify without running tests
+8. **Commit often** - Small, focused commits are better
 
-> Simplicity scales.
-> - Keep the IR simple (s-expressions)
-> - Keep the pipeline clear (lex → parse → generate)
-> - Keep the code minimal (pattern matching)
-> - Test everything
+---
 
-**Core practices:**
+## 📊 Project Metrics (v1.4.6)
 
-> Follow the workflow.
-> Write tests first.
-> Keep it clean.
-> Document everything.
+**Codebase:**
+- Lexer+Rewriter: 3,145 LOC
+- Parser (generated): 340 LOC
+- Codegen: 5,246 LOC (dispatch table + s-expression approach)
+- Compiler: 250 LOC
+- Total: ~9,000 LOC
+
+**Tests:**
+- 968 tests across 23 files
+- 100% passing rate
+- Comprehensive coverage
+
+**Comparison to CoffeeScript:**
+- ~50% smaller implementation
+- Zero dependencies
+- Self-hosting (fully operational)
+- Modern ES2022 output
 
 ---
 
