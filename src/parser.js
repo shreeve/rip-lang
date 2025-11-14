@@ -132,13 +132,13 @@ parse(input) {
   case SYM_DYNAMIC_IMPORT:
     return this.parseExpression();
   case SYM_RETURN:
-    return this.parseStatement();
+    return this.parseReturn();
   case SYM_PARAM_START:
-    return this.parseExpressionLine();
+    return this.parseCodeLine();
   case SYM_THIN_ARROW:
-    return this.parseExpressionLine();
+    return this.parseCodeLine();
   case SYM_FAT_ARROW:
-    return this.parseExpressionLine();
+    return this.parseCodeLine();
   case SYM_NEW_TARGET:
     return this.parseExpression();
   case SYM_IMPORT_META:
@@ -150,9 +150,9 @@ parse(input) {
   case SYM_CLASS:
     return this.parseExpression();
   case SYM_IMPORT:
-    return this.parseStatement();
+    return this.parseImport();
   case SYM_EXPORT:
-    return this.parseStatement();
+    return this.parseExport();
   case SYM_THIS:
     return this.parseExpression();
   case SYM_TRY:
@@ -176,11 +176,11 @@ parse(input) {
   case SYM_UNLESS:
     return this.parseExpression();
   case SYM_UNARY:
-    return this.parseExpressionLine();
+    return this.parseOperationLine();
   case SYM_DO:
-    return this.parseExpressionLine();
+    return this.parseOperationLine();
   case SYM_DO_IIFE:
-    return this.parseExpressionLine();
+    return this.parseOperationLine();
   case SYM_UNARY_MATH:
     return this.parseExpression();
   case SYM_MINUS:
@@ -721,9 +721,9 @@ parse(input) {
       case SYM_NUMBER:
     return this.parseAlphaNumeric();
   case SYM_STRING:
-    return this.parseAlphaNumeric();
+    return this.parseString();
   case SYM_STRING_START:
-    return this.parseAlphaNumeric();
+    return this.parseString();
   case SYM_REGEX:
     return this.parseRegex();
   case SYM_REGEX_START:
@@ -756,55 +756,55 @@ parse(input) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
       case SYM_IDENTIFIER:
-    return this.parseAssignable();
+    return this.parseIdentifier();
   case SYM_NUMBER:
-    return this.parseAssignable();
+    return this.parseSimpleAssignable();
   case SYM_STRING:
-    return this.parseAssignable();
+    return this.parseSimpleAssignable();
   case SYM_STRING_START:
-    return this.parseAssignable();
+    return this.parseSimpleAssignable();
   case SYM_REGEX:
-    return this.parseAssignable();
+    return this.parseSimpleAssignable();
   case SYM_REGEX_START:
-    return this.parseAssignable();
+    return this.parseSimpleAssignable();
   case SYM_JS:
-    return this.parseAssignable();
+    return this.parseSimpleAssignable();
   case SYM_UNDEFINED:
-    return this.parseAssignable();
+    return this.parseSimpleAssignable();
   case SYM_NULL:
-    return this.parseAssignable();
+    return this.parseSimpleAssignable();
   case SYM_BOOL:
-    return this.parseAssignable();
+    return this.parseSimpleAssignable();
   case SYM_INFINITY:
-    return this.parseAssignable();
+    return this.parseSimpleAssignable();
   case SYM_NAN:
-    return this.parseAssignable();
+    return this.parseSimpleAssignable();
   case SYM_LBRACKET:
     return this.parseAssignable();
   case SYM_AT:
-    return this.parseAssignable();
+    return this.parseThisProperty();
   case SYM_SUPER:
-    return this.parseAssignable();
+    return this.parseSimpleAssignable();
   case SYM_DYNAMIC_IMPORT:
-    return this.parseAssignable();
+    return this.parseSimpleAssignable();
   case SYM_PARAM_START:
-    return this.parseAssignable();
+    return this.parseSimpleAssignable();
   case SYM_THIN_ARROW:
-    return this.parseAssignable();
+    return this.parseSimpleAssignable();
   case SYM_FAT_ARROW:
-    return this.parseAssignable();
+    return this.parseSimpleAssignable();
   case SYM_NEW_TARGET:
-    return this.parseAssignable();
+    return this.parseSimpleAssignable();
   case SYM_IMPORT_META:
-    return this.parseAssignable();
+    return this.parseSimpleAssignable();
   case SYM_LBRACE:
     return this.parseAssignable();
   case SYM_THIS:
-    return this.parseAssignable();
+    return this.parseSimpleAssignable();
   case SYM_LPAREN:
-    return this.parseAssignable();
+    return this.parseSimpleAssignable();
   case SYM_DO_IIFE:
-    return this.parseAssignable();
+    return this.parseSimpleAssignable();
     default:
       this._error([SYM_IDENTIFIER, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LBRACKET, SYM_AT, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_LBRACE, SYM_THIS, SYM_LPAREN, SYM_DO_IIFE], this.la?.id);
     }
@@ -815,19 +815,19 @@ parse(input) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
       case SYM_IDENTIFIER:
-    return this.parseSimpleObjAssignable();
+    return this.parseIdentifier();
   case SYM_PROPERTY:
-    return this.parseSimpleObjAssignable();
+    return this.parseProperty();
   case SYM_NUMBER:
-    return this.parseObjAssignable();
+    return this.parseAlphaNumeric();
   case SYM_STRING:
-    return this.parseObjAssignable();
+    return this.parseString();
   case SYM_STRING_START:
-    return this.parseObjAssignable();
+    return this.parseString();
   case SYM_LBRACKET:
     return this.parseObjAssignable();
   case SYM_AT:
-    return this.parseSimpleObjAssignable();
+    return this.parseThisProperty();
   case SYM_ELLIPSIS:
     return this.parseObjRestValue();
     default:
@@ -855,15 +855,15 @@ parse(input) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
       case SYM_IDENTIFIER:
-    return this.parseSimpleObjAssignable();
+    return this.parseIdentifier();
   case SYM_PROPERTY:
-    return this.parseSimpleObjAssignable();
+    return this.parseProperty();
   case SYM_NUMBER:
     return this.parseAlphaNumeric();
   case SYM_STRING:
-    return this.parseAlphaNumeric();
+    return this.parseString();
   case SYM_STRING_START:
-    return this.parseAlphaNumeric();
+    return this.parseString();
   case SYM_LBRACKET:
               $1 = this._match(SYM_LBRACKET);
           $2 = this.parseExpression();
@@ -1017,16 +1017,16 @@ parse(input) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
       case SYM_IDENTIFIER:
-    return this.parseParamVar();
+    return this.parseIdentifier();
   case SYM_LBRACKET:
-    return this.parseParamVar();
+    return this.parseArray();
   case SYM_AT:
-    return this.parseParamVar();
+    return this.parseThisProperty();
   case SYM_ELLIPSIS:
               $1 = this._match(SYM_ELLIPSIS);
     return ["expansion"];
   case SYM_LBRACE:
-    return this.parseParamVar();
+    return this.parseObject();
     default:
       this._error([SYM_IDENTIFIER, SYM_LBRACKET, SYM_AT, SYM_ELLIPSIS, SYM_LBRACE], this.la?.id);
     }
@@ -1125,7 +1125,7 @@ parse(input) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
       case SYM_IDENTIFIER:
-    return this.parseSimpleAssignable();
+    return this.parseIdentifier();
   case SYM_NUMBER:
     return this.parseSimpleAssignable();
   case SYM_STRING:
@@ -1151,7 +1151,7 @@ parse(input) {
   case SYM_LBRACKET:
     return this.parseArray();
   case SYM_AT:
-    return this.parseSimpleAssignable();
+    return this.parseThisProperty();
   case SYM_SUPER:
     return this.parseSimpleAssignable();
   case SYM_DYNAMIC_IMPORT:
@@ -1929,11 +1929,11 @@ parse(input) {
   case SYM_RETURN:
     return this.parseExpression();
   case SYM_PARAM_START:
-    return this.parseExpressionLine();
+    return this.parseCodeLine();
   case SYM_THIN_ARROW:
-    return this.parseExpressionLine();
+    return this.parseCodeLine();
   case SYM_FAT_ARROW:
-    return this.parseExpressionLine();
+    return this.parseCodeLine();
   case SYM_NEW_TARGET:
     return this.parseExpression();
   case SYM_IMPORT_META:
@@ -1971,11 +1971,11 @@ parse(input) {
   case SYM_UNLESS:
     return this.parseExpression();
   case SYM_UNARY:
-    return this.parseExpressionLine();
+    return this.parseOperationLine();
   case SYM_DO:
-    return this.parseExpressionLine();
+    return this.parseOperationLine();
   case SYM_DO_IIFE:
-    return this.parseExpressionLine();
+    return this.parseOperationLine();
   case SYM_UNARY_MATH:
     return this.parseExpression();
   case SYM_MINUS:
@@ -2016,49 +2016,49 @@ parse(input) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
       case SYM_STATEMENT:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_DEF:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_YIELD:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_IDENTIFIER:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_NUMBER:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_STRING:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_STRING_START:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_REGEX:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_REGEX_START:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_COMMA:
-    return this.parseElisions();
+    return this.parseElision();
   case SYM_JS:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_UNDEFINED:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_NULL:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_BOOL:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_INFINITY:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_NAN:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_LBRACKET:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_AT:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_ELLIPSIS:
-    return this.parseArg();
+    return this.parseSplat();
   case SYM_SUPER:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_DYNAMIC_IMPORT:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_RETURN:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_PARAM_START:
     return this.parseArg();
   case SYM_THIN_ARROW:
@@ -2066,41 +2066,41 @@ parse(input) {
   case SYM_FAT_ARROW:
     return this.parseArg();
   case SYM_NEW_TARGET:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_IMPORT_META:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_LBRACE:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_FOR:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_CLASS:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_IMPORT:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_EXPORT:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_THIS:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_TRY:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_THROW:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_LPAREN:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_WHILE:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_UNTIL:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_LOOP:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_AWAIT:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_SWITCH:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_IF:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_UNLESS:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_UNARY:
     return this.parseArg();
   case SYM_DO:
@@ -2108,15 +2108,15 @@ parse(input) {
   case SYM_DO_IIFE:
     return this.parseArg();
   case SYM_UNARY_MATH:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_MINUS:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_PLUS:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_DEC:
-    return this.parseArg();
+    return this.parseExpression();
   case SYM_INC:
-    return this.parseArg();
+    return this.parseExpression();
     default:
       this._error([SYM_STATEMENT, SYM_DEF, SYM_YIELD, SYM_IDENTIFIER, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_COMMA, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LBRACKET, SYM_AT, SYM_ELLIPSIS, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_RETURN, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_LBRACE, SYM_FOR, SYM_CLASS, SYM_IMPORT, SYM_EXPORT, SYM_THIS, SYM_TRY, SYM_THROW, SYM_LPAREN, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_AWAIT, SYM_SWITCH, SYM_IF, SYM_UNLESS, SYM_UNARY, SYM_DO, SYM_DO_IIFE, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_DEC, SYM_INC], this.la?.id);
     }
@@ -2508,13 +2508,13 @@ parse(input) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
       case SYM_IDENTIFIER:
-    return this.parseForVar();
+    return this.parseIdentifier();
   case SYM_LBRACKET:
-    return this.parseForVar();
+    return this.parseArray();
   case SYM_AT:
-    return this.parseForVar();
+    return this.parseThisProperty();
   case SYM_LBRACE:
-    return this.parseForVar();
+    return this.parseObject();
     default:
       this._error([SYM_IDENTIFIER, SYM_LBRACKET, SYM_AT, SYM_LBRACE], this.la?.id);
     }
@@ -2542,13 +2542,13 @@ parse(input) {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
       case SYM_IDENTIFIER:
-    return this.parseForValue();
+    return this.parseIdentifier();
   case SYM_LBRACKET:
-    return this.parseForValue();
+    return this.parseArray();
   case SYM_AT:
-    return this.parseForValue();
+    return this.parseThisProperty();
   case SYM_LBRACE:
-    return this.parseForValue();
+    return this.parseObject();
     default:
       this._error([SYM_IDENTIFIER, SYM_LBRACKET, SYM_AT, SYM_LBRACE], this.la?.id);
     }

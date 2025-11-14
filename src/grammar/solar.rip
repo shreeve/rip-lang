@@ -739,6 +739,44 @@ class Generator
     # BREAKTHROUGH: Extract routing from SLR(1) tables (oracle-informed generation)
     @_extractOracleRouting()
 
+  # Resolve passthrough chains to get final destination
+  # Value + IDENTIFIER → follows Assignable → SimpleAssignable → Identifier
+  _resolvePassthrough: (nonterminal, tokenId) ->
+    # Follow single-rule chains FOR THIS TOKEN until we hit something non-passthrough
+    current = nonterminal
+    visited = new Set
+    chain = [nonterminal]
+    
+    maxDepth = 10  # Safety limit
+    depth = 0
+    
+    while not visited.has(current) and depth < maxDepth
+      visited.add(current)
+      depth++
+      
+      rules = @types[current]?.rules
+      break unless rules
+      
+      # Find single-symbol nonterminal rules that can handle this token
+      forwardRules = rules.filter (r) =>
+        return false unless r.symbols.length is 1  # Must be single-symbol
+        firstSym = r.symbols[0]
+        return false unless @types[firstSym]  # Must be nonterminal
+        fst = @_getFirstTokens(r)
+        tokenId in fst  # Must handle this token
+      
+      # Only follow if exactly ONE single-symbol forward exists
+      break unless forwardRules.length is 1
+      rule = forwardRules[0]
+      
+      nextSymbol = rule.symbols[0]
+      break unless @types[nextSymbol]  # Should always be true but check anyway
+      
+      current = nextSymbol
+      chain.push(current)
+    
+    return if current is nonterminal then null else current
+
   # ORACLE-INFORMED ROUTING: Use FIRST sets to extract routing decisions
   # INSIGHT: Don't walk states - use FIRST sets that are already computed!
   _extractOracleRouting!: ->
@@ -783,11 +821,13 @@ class Generator
           # Safe - use target's FIRST tokens for routing
           firstSet = targetType.firsts
 
-          # Map FIRST tokens to parseXXX call
+          # Map FIRST tokens to parseXXX call (with passthrough resolution!)
           for token from firstSet when token isnt ''
             tokenId = @symbolIds[token]
             if tokenId
-              routing[tokenId] = {type: 'nonterminal', target: firstSymbol}
+              # RESOLVE PASSTHROUGH CHAINS to get final destination
+              finalTarget = @_resolvePassthrough(firstSymbol, tokenId) or firstSymbol
+              routing[tokenId] = {type: 'nonterminal', target: finalTarget}
         else
           # Terminal alternative - use rule's FIRST (just this terminal)
           firstSet = @_computeFirst(rule.symbols)
@@ -973,9 +1013,9 @@ class Generator
   _generateParserFor: (name) ->
     type = @types[name]
 
-    # SPECIAL CASE: Operation/OperationLine are operator precedence (don't generate)
+    # SPECIAL CASE: Skip problematic nonterminals
     if name in ['Operation', 'OperationLine']
-      console.log "⚡ Skipping parse#{name} (operators handled by precedence climbing)"
+      console.log "⚡ Skip parse#{name} (precedence climbing TODO)"
       return ""
 
     # Check if left-recursive
