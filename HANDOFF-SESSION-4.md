@@ -63,7 +63,7 @@ if startsWithTerminal
 **Pattern Identified:**
 ```
 ✓ [1,]      - Single trailing comma works
-✗ [1,,]     - Double trailing comma FAILS  
+✗ [1,,]     - Double trailing comma FAILS
 ✓ [,,1]     - Leading commas work
 ✗ [1,2,,]   - Double trailing FAILS
 ✗ [,,1,2,,] - Both ends with double FAILS
@@ -75,7 +75,7 @@ if startsWithTerminal
 ```javascript
 case SYM_COMMA: {
   const _saved = this._saveState();
-  
+
   // Try: OptComma
   try {
     $1 = this.parseOptComma();  // This SUCCEEDS!
@@ -83,7 +83,7 @@ case SYM_COMMA: {
   } catch (e) {  // Never reaches
     this._restoreState(_saved);
   }
-  
+
   // Fallback: , Elisions (never reached!)
   $1 = this._match(SYM_COMMA);
   $2 = this.parseElisions();
@@ -123,7 +123,7 @@ case SYM_COMMA:
   return [];
 ```
 
-**Generator Fix Needed:**  
+**Generator Fix Needed:**
 The mixed terminal/nonterminal fix (lines 3304-3346) generates try/catch, but for this case we need lookahead-based branching. May need a special case for "nullable alternative" patterns where one branch is a subset of another.
 
 **Files Affected:**
@@ -144,7 +144,7 @@ The mixed terminal/nonterminal fix (lines 3304-3346) generates try/catch, but fo
 2. Check if it's a parser or codegen issue
 3. Trace through DO_IIFE handling
 
-#### Test: "await expression"  
+#### Test: "await expression"
 **Expected:** 15
 **Actual:** "[object Promise]10"
 
@@ -177,7 +177,7 @@ grep "dammit method call" test/rip/async.rip -A 2
 
 ### Issue #4: Invalid Extends (1 test)
 
-**Test:** "invalid extends"  
+**Test:** "invalid extends"
 **Current:** Expected failure but succeeded
 
 **Analysis:** This is an error-handling test. It's testing that invalid syntax is caught. If it's succeeding, either:
@@ -321,7 +321,7 @@ case SYM_COMMA:
 ## 📊 Code Quality
 
 - ✅ All fixes 100% generic
-- ✅ No hardcoded symbol names in logic  
+- ✅ No hardcoded symbol names in logic
 - ✅ Grammar unchanged throughout all sessions
 - ✅ Two clean commits with clear messages
 - ✅ 18 total generic fixes across all sessions
@@ -380,7 +380,7 @@ This is a **greedy vs non-greedy** ambiguity, needs lookahead, not try/catch.
 **You're 0.9% from 100%!**
 
 - 18 generic fixes proven
-- Architecture validated  
+- Architecture validated
 - Grammar unchanged
 - Two clean commits
 
@@ -394,4 +394,3 @@ This is a **greedy vs non-greedy** ambiguity, needs lookahead, not try/catch.
 ---
 
 **All code is production-ready and 100% generic. The finish line is in sight!** 🎉
-

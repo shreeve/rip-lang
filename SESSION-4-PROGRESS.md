@@ -25,7 +25,7 @@
 - Checks if first symbol is terminal or nonterminal before matching
 - **Impact:** +5 tests (945 → 950)
 
-**Commit 2: `4abe9e4`** - Fix: Add inlined Invocation rules to sibling nonterminals  
+**Commit 2: `4abe9e4`** - Fix: Add inlined Invocation rules to sibling nonterminals
 - Adds SUPER Arguments from inlined Invocation to parseSuper
 - Only adds rules for siblings (share same parent) to avoid over-expansion
 - **Impact:** +3 tests (950 → 953)
@@ -93,7 +93,7 @@ for own parentName, parentType of @types
 
 **Tests:**
 1. "elision multiple": `[,,1,2,,].length` → expects 5
-2. "elision destructuring simple": `[,a] = arr; a` 
+2. "elision destructuring simple": `[,a] = arr; a`
 3. "elision destructuring multiple": `[,a,,b,,c] = arr; [a,b,c]`
 4. "elision undefined check": `arr[1]` for `[1,,2]` → expects undefined, gets null
 5. "trailing comma multiline": Multiline array with trailing commas
@@ -170,7 +170,7 @@ bun run test  # 953/962 (99.1%)
 
 # Test specific patterns
 echo 'super(arg)' | ./bin/rip -s        # Works ✓
-echo '{@property: 42}' | ./bin/rip -s   # Works ✓  
+echo '{@property: 42}' | ./bin/rip -s   # Works ✓
 echo '[,,1,2,,]' | ./bin/rip -s         # Fails ✗
 
 # Regenerate
@@ -214,4 +214,3 @@ rip rip-lang/src/grammar/solar.rip -r -o rip-lang/src/parser.js rip-lang/src/gra
 The hard architectural work is done. Remaining issues are specific parsing edge cases.
 
 **Total generic fixes across all sessions: 18!**
-
