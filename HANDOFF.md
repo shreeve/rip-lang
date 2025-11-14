@@ -324,32 +324,127 @@ Then tackle the remaining 2-3 async/error tests individually.
 
 ## 🔍 NEXT SESSION: Systematic Runtime Debugging
 
-**Goal:** Get `echo '42' | ./bin/rip -s` working with minimal set (6 parse functions)
+### Goal
+Get `echo '42' | ./bin/rip -s` working with all 86 parse functions.
 
-**The Problem:**
-- Parser generates successfully (all 86 functions)
-- Runtime hangs (infinite loop somewhere)
-- Need to trace execution to find where
+**Expected output:**
+```
+(program
+  42
+)
+```
 
-**What Works:**
-- ✅ Infrastructure (left-recursion, actions, constants)
-- ✅ Oracle routing extraction via FIRST sets (49 routes for Expression)
-- ✅ All 86 functions generate
-- ❌ Runtime hangs (doesn't consume tokens or has deeper cycle)
+### The Breakthrough: Oracle-Informed Routing
 
-**Debugging Strategy:**
-1. Add trace logging to generated parse() and parseRoot()
-2. Test: `echo '42' | ./bin/rip -s` with traces
-3. Find which parse function loops
-4. Check: token consumption, action execution, cycle detection
+**Theory:** Use FIRST sets (already computed by SLR(1) analysis) to generate cycle-free routing at generation time.
 
-**Files Needed:**
-- `src/grammar/solar.rip` - 1,471 lines, current implementation
-- `src/grammar/grammar.rip` - 808 lines, the grammar
-- `src/grammar/solar-old.rip` - 4,551 lines, working reference (use for comparison only)
+**Example:**
+```coffee
+Expression: [
+  o 'Value'     # FIRST([Value]) = {NUMBER, STRING, IDENTIFIER, ...}
+  o 'For'       # FIRST([For]) = {FOR}  
+  o 'While'     # FIRST([While]) = {WHILE}
+]
+
+# Generate:
+parseExpression() {
+  switch (this.la?.id) {
+    case SYM_NUMBER: return this.parseValue();   // Oracle decided!
+    case SYM_FOR: return this.parseFor();
+    case SYM_WHILE: return this.parseWhile();
+  }
+}
+```
+
+**Key insight:** FIRST sets are disjoint, each token routes to ONE alternative. No cycles!
+
+### The Current Problem
+
+Parser generates but hangs at runtime. Need to debug:
+
+1. **Token consumption:** Are tokens being consumed?
+2. **Parse chain:** Does parseBody → parseLine → parseExpression → parseValue → parseLiteral → parseAlphaNumeric work?
+3. **Terminal handling:** Does parseAlphaNumeric match NUMBER token correctly?
+4. **Deeper cycles:** Is there another cycle we haven't caught?
+
+### Debugging Strategy
+
+**Step 1: Add trace logging**
+Modify `_generatePRDMethods` in solar.rip to add logging:
+```coffee
+parse(input) {
+  // ... existing code ...
+  console.log('Tokens:', this.tokenStream.map(t => t.id));
+  return this.parseRoot();
+}
+```
+
+Add to `_generateOracleDispatch`:
+```coffee
+parse#{name}() {
+  console.log('parse#{name}, la:', this.la?.id);
+  // ... rest
+}
+```
+
+**Step 2: Test and trace**
+```bash
+echo '42' | timeout 3 ./bin/rip -s 2>&1 | head -50
+# Watch which functions are called repeatedly
+```
+
+**Step 3: Find the loop**
+- Which function loops?
+- Does it consume tokens?
+- Is oracle routing actually being used?
+- Does try/catch throw and retry infinitely?
+
+**Step 4: Fix**
+Likely issues:
+- Token stream building (lexer interface)
+- Try/catch in non-oracle functions loops
+- Terminal handling in oracle dispatch
+- Action returns undefined
+
+### Key Files
+
+**Implementation (lines to focus on):**
+- `src/grammar/solar.rip` (1,471 lines)
+  - Lines 742-780: Oracle routing extraction (_extractOracleRouting)
+  - Lines 989-1030: Oracle dispatch generation (_generateOracleDispatch)
+  - Lines 1003-1056: Iterative loops (_generateIterative)
+  - Lines 827-854: parse() method generation
+
+**Grammar:**
+- `src/grammar/grammar.rip` (808 lines)
+  - Line 14-17: Root rules
+  - Line 20-24: Body rules (left-recursive)
+  - Line 45: Expression rules (13 alternatives)
+  - Line 101-105: AlphaNumeric rules (NUMBER + String)
+
+**Reference (use for comparison only):**
+- `src/grammar/solar-old.rip` (4,551 lines, 99.3% working)
+
+**Documentation:**
 - `PLAN.md` - Complete strategy
-- `notes/prd-patterns.md` - 21 fixes documented
-- `notes/failure-analysis.md` - 7 test analysis
+- `notes/prd-patterns.md` - 21 generic fixes
+- `notes/failure-analysis.md` - 7 failing test analysis
+
+### Philosophy
+
+**MATCH GRAMMAR → EMIT SEXPS**
+
+Keep it simple. Don't over-engineer. The table-driven parser is 350 lines - PRD should be comparable.
+
+### Success Path
+
+**Once '42' works:**
+1. Test `x` (identifier)
+2. Test `x = 42` (assignment)
+3. Test `1 + 2` (operators)
+4. Expand incrementally to all 962 tests
+
+**This is publishable!** Novel oracle-informed PRD generation using FIRST sets.
 
 ---
 
