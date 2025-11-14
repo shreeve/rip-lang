@@ -1,11 +1,13 @@
 # PRD Parser Handoff: Clean-Room Rebuild in Progress
 
-## 🎯 Current State (As of Nov 14, 2025)
+## 🎯 Current State (As of Nov 14, 2025 - End of Session)
 
-**Approach:** Clean-room PRD implementation (streamlined)
-**Status:** Phase 1-5 complete, infrastructure working
-**Code:** ~300 lines in solar.rip (vs 4,500 in solar-old.rip backup)
+**Approach:** Oracle-informed PRD using FIRST sets
+**Status:** Infrastructure complete (~500 lines), runtime debugging needed
+**Code:** solar.rip 1,471 lines (+476 from original 995)
 **Philosophy:** Match grammar → emit s-expressions (ruthless simplicity)
+
+**Breakthrough:** Use FIRST(rule) for routing - theoretically sound, needs runtime debug
 
 **Previous attempt:** 955/962 tests (99.3%) in solar-old.rip - available as reference backup
 
@@ -320,19 +322,34 @@ Then tackle the remaining 2-3 async/error tests individually.
 
 ---
 
-## 📁 Files for Next Session
+## 🔍 NEXT SESSION: Systematic Runtime Debugging
 
-**Clean implementation (current work):**
-- `src/grammar/solar.rip` - ~1,300 lines (995 original + ~300 PRD code)
-- `src/parser.js` - Generated PRD parser (~287 lines, needs runtime fixes)
-- `PLAN.md` - Complete 12-phase specification
-- `notes/prd-patterns.md` - 21 generic fixes documented
-- `notes/failure-analysis.md` - 7 test root causes
+**Goal:** Get `echo '42' | ./bin/rip -s` working with minimal set (6 parse functions)
 
-**Reference (99.3% baseline):**
-- `src/grammar/solar-old.rip` - Previous attempt (4,550 lines, works but complex)
+**The Problem:**
+- Parser generates successfully (all 86 functions)
+- Runtime hangs (infinite loop somewhere)
+- Need to trace execution to find where
 
-**Strategy:** Reference solar-old.rip for algorithms, implement cleanly in solar.rip.
+**What Works:**
+- ✅ Infrastructure (left-recursion, actions, constants)
+- ✅ Oracle routing extraction via FIRST sets (49 routes for Expression)
+- ✅ All 86 functions generate
+- ❌ Runtime hangs (doesn't consume tokens or has deeper cycle)
+
+**Debugging Strategy:**
+1. Add trace logging to generated parse() and parseRoot()
+2. Test: `echo '42' | ./bin/rip -s` with traces
+3. Find which parse function loops
+4. Check: token consumption, action execution, cycle detection
+
+**Files Needed:**
+- `src/grammar/solar.rip` - 1,471 lines, current implementation
+- `src/grammar/grammar.rip` - 808 lines, the grammar
+- `src/grammar/solar-old.rip` - 4,551 lines, working reference (use for comparison only)
+- `PLAN.md` - Complete strategy
+- `notes/prd-patterns.md` - 21 fixes documented
+- `notes/failure-analysis.md` - 7 test analysis
 
 ---
 
