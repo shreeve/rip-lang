@@ -743,6 +743,7 @@ class Generator
   # INSIGHT: Don't walk states - use FIRST sets that are already computed!
   _extractOracleRouting!: ->
     @routing = new Map  # nonterminal → { tokenId: target }
+    @hasCycles = new Set  # nonterminals with cycles (use fallback for these)
     cyclesSkipped = 0
 
     # For each nonterminal with multiple alternatives
@@ -751,11 +752,18 @@ class Generator
       continue unless type?.rules?.length > 1  # Only need routing for multiple alternatives
 
       routing = {}
+      hadCycle = false
 
       # For each rule of this nonterminal
       for rule in type.rules
         firstSymbol = rule.symbols[0]
         continue unless firstSymbol  # Skip empty rules
+        
+        # SPECIAL CASE: Skip Operation/OperationLine (handled by precedence climbing)
+        if firstSymbol in ['Operation', 'OperationLine']
+          cyclesSkipped++
+          hadCycle = true
+          continue
 
         # CRITICAL CYCLE PREVENTION: Detect if target would call back to parent
         # Example: Expression → For where For has "Expression FOR ..." creates cycle
@@ -763,17 +771,18 @@ class Generator
         if @types[firstSymbol]
           # Check for cycle: does target's FIRST include current nonterminal?
           targetType = @types[firstSymbol]
-
+          
           # Check if target has any rule starting with current nonterminal
           hasCycle = targetType.rules.some((r) => r.symbols[0] is name)
-
+          
           if hasCycle
             cyclesSkipped++
+            hadCycle = true
             continue  # Skip this alternative to prevent cycle
-
+          
           # Safe - use target's FIRST tokens for routing
           firstSet = targetType.firsts
-
+          
           # Map FIRST tokens to parseXXX call
           for token from firstSet when token isnt ''
             tokenId = @symbolIds[token]
@@ -782,17 +791,20 @@ class Generator
         else
           # Terminal alternative - use rule's FIRST (just this terminal)
           firstSet = @_computeFirst(rule.symbols)
-
+          
           # Map token to _match call
           for token from firstSet when token isnt ''
             tokenId = @symbolIds[token]
             if tokenId
               routing[tokenId] = {type: 'terminal', target: firstSymbol, rule: rule}
 
-      if Object.keys(routing).length > 0
+      # Only use oracle routing if we got ALL alternatives (no cycles skipped)
+      if Object.keys(routing).length > 0 and not hadCycle
         @routing.set(name, routing)
+      else if hadCycle
+        @hasCycles.add(name)
 
-    console.log "Oracle routing: #{@routing.size} nonterminals, #{cyclesSkipped} cycles prevented"
+    console.log "Oracle routing: #{@routing.size} nonterminals, #{cyclesSkipped} cycles → fallback"
 
   # Generate PRD parser
   _generatePRD: ->
@@ -947,19 +959,24 @@ class Generator
       }
     """
 
-    # For now: Generate ALL 86 functions (no filtering)
-    # Oracle routing will handle the dispatching correctly
-    console.log "Generating all 86 functions..."
+    # Generate parse functions (skipping special cases)
+    console.log "Generating parse functions..."
     for own name, type of @types
       continue if name in ['$accept', '$end', 'error', 'Root']
 
-      parsers.push(@_generateParserFor(name))
+      func = @_generateParserFor(name)
+      parsers.push(func) if func  # Only add non-empty functions
 
     parsers.join(',\n\n') + ','  # Trailing comma for clean structure
 
   # Generate parser function for a single nonterminal
   _generateParserFor: (name) ->
     type = @types[name]
+
+    # SPECIAL CASE: Operation/OperationLine are operator precedence (don't generate)
+    if name in ['Operation', 'OperationLine']
+      console.log "⚡ Skipping parse#{name} (operators handled by precedence climbing)"
+      return ""
 
     # Check if left-recursive
     if @leftRecursive.has(name)
@@ -978,9 +995,23 @@ class Generator
       return @_generateOracleDispatch(name)
 
     # Fallback: Build dispatch by FIRST tokens (old way)
+    # CYCLE PREVENTION: Skip rules that would create cycles
     dispatch = new Map
 
     for rule in rules
+      firstSymbol = rule.symbols[0]
+      
+      # SPECIAL CASE: Skip Operation/OperationLine (no parse functions for these)
+      if firstSymbol in ['Operation', 'OperationLine']
+        continue
+      
+      # Skip cyclic rules (target calls back to current nonterminal)
+      if @types[firstSymbol]
+        targetType = @types[firstSymbol]
+        hasCycle = targetType.rules.some((r) => r.symbols[0] is name)
+        if hasCycle
+          continue  # Skip this rule in fallback too
+      
       firstTokens = @_getFirstTokens(rule)
       for tokenId in firstTokens
         dispatch.get(tokenId) or dispatch.set(tokenId, [])
@@ -993,13 +1024,16 @@ class Generator
       else
         cases.push(@_generateTryCatch(tokenId, ruleList))
 
+    # Convert token IDs to symbolic constants for error message
+    expectedTokens = Array.from(dispatch.keys()).map((id) => @_getConstNameFromId(id)).join(', ')
+
     """
       parse#{name}() {
         let $1, $2, $3, $4, $5, $6, $7, $8, $9;
         switch (this.la?.id) {
         #{cases.join('\n')}
         default:
-          this._error([#{Array.from(dispatch.keys()).join(', ')}], this.la?.id);
+          this._error([#{expectedTokens}], this.la?.id);
         }
       }
     """
@@ -1048,13 +1082,15 @@ class Generator
   # Generate case for a single rule
   _generateRuleCase: (tokenId, rule) ->
     [capture, ret] = @_compileAction(rule)
+    constName = @_getConstNameFromId(tokenId)
     indent = if capture then '\n          ' else ' '
     """
-        case #{tokenId}:#{indent}#{capture}#{if capture then '\n          ' else ''}return #{ret};
+        case #{constName}:#{indent}#{capture}#{if capture then '\n          ' else ''}return #{ret};
     """
 
   # Generate try/catch for ambiguous rules
   _generateTryCatch: (tokenId, ruleList) ->
+    constName = @_getConstNameFromId(tokenId)
     tries = []
     for rule, i in ruleList
       [capture, ret] = @_compileAction(rule)
@@ -1074,7 +1110,7 @@ class Generator
         """
 
     """
-        case #{tokenId}: {
+        case #{constName}: {
           const _saved = this._saveState();
           #{tries.join('\n')}
         }

@@ -215,73 +215,321 @@ parse(input) {
   },
 
   parseExpression() {
-    // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case SYM_DEF:
-    return this.parseDef();
-  case SYM_YIELD:
-    return this.parseYield();
-  case SYM_IDENTIFIER:
-    return this.parseAssign();
-  case SYM_NUMBER:
-    return this.parseAssign();
-  case SYM_STRING:
-    return this.parseAssign();
-  case SYM_STRING_START:
-    return this.parseAssign();
-  case SYM_REGEX:
-    return this.parseAssign();
-  case SYM_REGEX_START:
-    return this.parseAssign();
-  case SYM_JS:
-    return this.parseAssign();
-  case SYM_UNDEFINED:
-    return this.parseAssign();
-  case SYM_NULL:
-    return this.parseAssign();
-  case SYM_BOOL:
-    return this.parseAssign();
-  case SYM_INFINITY:
-    return this.parseAssign();
-  case SYM_NAN:
-    return this.parseAssign();
-  case SYM_LBRACKET:
-    return this.parseAssign();
-  case SYM_AT:
-    return this.parseAssign();
-  case SYM_SUPER:
-    return this.parseAssign();
-  case SYM_DYNAMIC_IMPORT:
-    return this.parseAssign();
-  case SYM_PARAM_START:
-    return this.parseAssign();
-  case SYM_THIN_ARROW:
-    return this.parseAssign();
-  case SYM_FAT_ARROW:
-    return this.parseAssign();
-  case SYM_NEW_TARGET:
-    return this.parseAssign();
-  case SYM_IMPORT_META:
-    return this.parseAssign();
-  case SYM_LBRACE:
-    return this.parseAssign();
-  case SYM_CLASS:
-    return this.parseClass();
-  case SYM_THIS:
-    return this.parseAssign();
-  case SYM_TRY:
-    return this.parseTry();
-  case SYM_THROW:
-    return this.parseThrow();
-  case SYM_LPAREN:
-    return this.parseAssign();
-  case SYM_SWITCH:
-    return this.parseSwitch();
-  case SYM_DO_IIFE:
-    return this.parseAssign();
+        case SYM_IDENTIFIER: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseValue();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseAssign();
+    return $1;
+    }
+    case SYM_AT: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseValue();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseAssign();
+    return $1;
+    }
+    case SYM_PARAM_START: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseValue();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    try {
+      $1 = this.parseCode();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseAssign();
+    return $1;
+    }
+    case SYM_LBRACKET: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseValue();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseAssign();
+    return $1;
+    }
+    case SYM_LBRACE: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseValue();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseAssign();
+    return $1;
+    }
+    case SYM_NUMBER: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseValue();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseAssign();
+    return $1;
+    }
+    case SYM_STRING: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseValue();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseAssign();
+    return $1;
+    }
+    case SYM_STRING_START: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseValue();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseAssign();
+    return $1;
+    }
+    case SYM_JS: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseValue();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseAssign();
+    return $1;
+    }
+    case SYM_REGEX: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseValue();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseAssign();
+    return $1;
+    }
+    case SYM_REGEX_START: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseValue();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseAssign();
+    return $1;
+    }
+    case SYM_UNDEFINED: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseValue();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseAssign();
+    return $1;
+    }
+    case SYM_NULL: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseValue();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseAssign();
+    return $1;
+    }
+    case SYM_BOOL: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseValue();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseAssign();
+    return $1;
+    }
+    case SYM_INFINITY: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseValue();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseAssign();
+    return $1;
+    }
+    case SYM_NAN: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseValue();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseAssign();
+    return $1;
+    }
+    case SYM_LPAREN: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseValue();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseAssign();
+    return $1;
+    }
+    case SYM_SUPER: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseValue();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseAssign();
+    return $1;
+    }
+    case SYM_DYNAMIC_IMPORT: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseValue();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseAssign();
+    return $1;
+    }
+    case SYM_DO_IIFE: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseValue();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseAssign();
+    return $1;
+    }
+    case SYM_THIS: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseValue();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseAssign();
+    return $1;
+    }
+    case SYM_NEW_TARGET: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseValue();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseAssign();
+    return $1;
+    }
+    case SYM_IMPORT_META: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseValue();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseAssign();
+    return $1;
+    }
+    case SYM_THIN_ARROW: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseValue();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    try {
+      $1 = this.parseCode();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseAssign();
+    return $1;
+    }
+    case SYM_FAT_ARROW: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseValue();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    try {
+      $1 = this.parseCode();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseAssign();
+    return $1;
+    }
+    case SYM_TRY:
+          $1 = this.parseTry();
+          return $1;
+    case SYM_SWITCH:
+          $1 = this.parseSwitch();
+          return $1;
+    case SYM_CLASS:
+          $1 = this.parseClass();
+          return $1;
+    case SYM_THROW:
+          $1 = this.parseThrow();
+          return $1;
+    case SYM_YIELD:
+          $1 = this.parseYield();
+          return $1;
+    case SYM_DEF:
+          $1 = this.parseDef();
+          return $1;
     default:
-      this._error([SYM_DEF, SYM_YIELD, SYM_IDENTIFIER, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LBRACKET, SYM_AT, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_LBRACE, SYM_CLASS, SYM_THIS, SYM_TRY, SYM_THROW, SYM_LPAREN, SYM_SWITCH, SYM_DO_IIFE], this.la?.id);
+      this._error([SYM_IDENTIFIER, SYM_AT, SYM_PARAM_START, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_TRY, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF], this.la?.id);
     }
   },
 
@@ -300,23 +548,19 @@ parse(input) {
   },
 
   parseExpressionLine() {
-    // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case SYM_PARAM_START:
-    return this.parseCodeLine();
-  case SYM_THIN_ARROW:
-    return this.parseCodeLine();
-  case SYM_FAT_ARROW:
-    return this.parseCodeLine();
-  case SYM_UNARY:
-    return this.parseOperationLine();
-  case SYM_DO:
-    return this.parseOperationLine();
-  case SYM_DO_IIFE:
-    return this.parseOperationLine();
+        case SYM_PARAM_START:
+          $1 = this.parseCodeLine();
+          return $1;
+    case SYM_THIN_ARROW:
+          $1 = this.parseCodeLine();
+          return $1;
+    case SYM_FAT_ARROW:
+          $1 = this.parseCodeLine();
+          return $1;
     default:
-      this._error([SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_UNARY, SYM_DO, SYM_DO_IIFE], this.la?.id);
+      this._error([SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW], this.la?.id);
     }
   },
 
@@ -351,22 +595,22 @@ parse(input) {
   parseIdentifier() {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-        case 40:
+        case SYM_IDENTIFIER:
           $1 = this._match(SYM_IDENTIFIER);
           return $1;
     default:
-      this._error([40], this.la?.id);
+      this._error([SYM_IDENTIFIER], this.la?.id);
     }
   },
 
   parseProperty() {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-        case 42:
+        case SYM_PROPERTY:
           $1 = this._match(SYM_PROPERTY);
           return $1;
     default:
-      this._error([42], this.la?.id);
+      this._error([SYM_PROPERTY], this.la?.id);
     }
   },
 
@@ -808,12 +1052,12 @@ parse(input) {
   parseSplat() {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-        case 78:
+        case SYM_ELLIPSIS:
           $1 = this._match(SYM_ELLIPSIS);
           $2 = this.parseExpression();
           return ["...", $2];
     default:
-      this._error([78], this.la?.id);
+      this._error([SYM_ELLIPSIS], this.la?.id);
     }
   },
 
@@ -936,61 +1180,237 @@ parse(input) {
   },
 
   parseValue() {
-    // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case SYM_IDENTIFIER:
-    return this.parseAssignable();
-  case SYM_NUMBER:
-    return this.parseLiteral();
-  case SYM_STRING:
-    return this.parseLiteral();
-  case SYM_STRING_START:
-    return this.parseLiteral();
-  case SYM_REGEX:
-    return this.parseLiteral();
-  case SYM_REGEX_START:
-    return this.parseLiteral();
-  case SYM_JS:
-    return this.parseLiteral();
-  case SYM_UNDEFINED:
-    return this.parseLiteral();
-  case SYM_NULL:
-    return this.parseLiteral();
-  case SYM_BOOL:
-    return this.parseLiteral();
-  case SYM_INFINITY:
-    return this.parseLiteral();
-  case SYM_NAN:
-    return this.parseLiteral();
-  case SYM_LBRACKET:
-    return this.parseRange();
-  case SYM_AT:
-    return this.parseThis();
-  case SYM_SUPER:
-    return this.parseSuper();
-  case SYM_DYNAMIC_IMPORT:
-    return this.parseAssignable();
-  case SYM_PARAM_START:
-    return this.parseAssignable();
-  case SYM_THIN_ARROW:
-    return this.parseAssignable();
-  case SYM_FAT_ARROW:
-    return this.parseAssignable();
-  case SYM_NEW_TARGET:
-    return this.parseMetaProperty();
-  case SYM_IMPORT_META:
-    return this.parseMetaProperty();
-  case SYM_LBRACE:
-    return this.parseAssignable();
-  case SYM_THIS:
-    return this.parseThis();
-  case SYM_LPAREN:
-    return this.parseParenthetical();
-  case SYM_DO_IIFE:
-    return this.parseDoIife();
+        case SYM_IDENTIFIER:
+          $1 = this.parseAssignable();
+          return $1;
+    case SYM_AT: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseAssignable();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseThis();
+    return $1;
+    }
+    case SYM_JS: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseAssignable();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseLiteral();
+    return $1;
+    }
+    case SYM_UNDEFINED: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseAssignable();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseLiteral();
+    return $1;
+    }
+    case SYM_NULL: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseAssignable();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseLiteral();
+    return $1;
+    }
+    case SYM_BOOL: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseAssignable();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseLiteral();
+    return $1;
+    }
+    case SYM_INFINITY: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseAssignable();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseLiteral();
+    return $1;
+    }
+    case SYM_NAN: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseAssignable();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseLiteral();
+    return $1;
+    }
+    case SYM_LPAREN: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseAssignable();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseParenthetical();
+    return $1;
+    }
+    case SYM_LBRACKET: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseAssignable();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseRange();
+    return $1;
+    }
+    case SYM_SUPER: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseAssignable();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseSuper();
+    return $1;
+    }
+    case SYM_DYNAMIC_IMPORT:
+          $1 = this.parseAssignable();
+          return $1;
+    case SYM_DO_IIFE: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseAssignable();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseDoIife();
+    return $1;
+    }
+    case SYM_THIS: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseAssignable();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseThis();
+    return $1;
+    }
+    case SYM_NEW_TARGET: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseAssignable();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseMetaProperty();
+    return $1;
+    }
+    case SYM_IMPORT_META: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseAssignable();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseMetaProperty();
+    return $1;
+    }
+    case SYM_PARAM_START:
+          $1 = this.parseAssignable();
+          return $1;
+    case SYM_THIN_ARROW:
+          $1 = this.parseAssignable();
+          return $1;
+    case SYM_FAT_ARROW:
+          $1 = this.parseAssignable();
+          return $1;
+    case SYM_LBRACE:
+          $1 = this.parseAssignable();
+          return $1;
+    case SYM_NUMBER: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseAssignable();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseLiteral();
+    return $1;
+    }
+    case SYM_STRING: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseAssignable();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseLiteral();
+    return $1;
+    }
+    case SYM_STRING_START: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseAssignable();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseLiteral();
+    return $1;
+    }
+    case SYM_REGEX: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseAssignable();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseLiteral();
+    return $1;
+    }
+    case SYM_REGEX_START: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseAssignable();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseLiteral();
+    return $1;
+    }
     default:
-      this._error([SYM_IDENTIFIER, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LBRACKET, SYM_AT, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_LBRACE, SYM_THIS, SYM_LPAREN, SYM_DO_IIFE], this.la?.id);
+      this._error([SYM_IDENTIFIER, SYM_AT, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_LBRACKET, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START], this.la?.id);
     }
   },
 
@@ -1140,24 +1560,24 @@ parse(input) {
   parseImportDefaultSpecifier() {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-        case 40:
+        case SYM_IDENTIFIER:
           $1 = this.parseIdentifier();
           return $1;
     default:
-      this._error([40], this.la?.id);
+      this._error([SYM_IDENTIFIER], this.la?.id);
     }
   },
 
   parseImportNamespaceSpecifier() {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-        case 130:
+        case SYM_IMPORT_ALL:
           $1 = this._match(SYM_IMPORT_ALL);
           $2 = this._match(SYM_AS);
           $3 = this.parseIdentifier();
           return ["*", $3];
     default:
-      this._error([130], this.la?.id);
+      this._error([SYM_IMPORT_ALL], this.la?.id);
     }
   },
 
@@ -1216,17 +1636,16 @@ parse(input) {
   },
 
   parseInvocation() {
-    // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case SYM_SUPER:
-    $1 = this._match(SYM_SUPER);
+        case SYM_SUPER:
+          $1 = this._match(SYM_SUPER);
           $2 = this.parseArguments();
-    return ["super", ...$2];
-  case SYM_DYNAMIC_IMPORT:
-    $1 = this._match(SYM_DYNAMIC_IMPORT);
+          return ["super", ...$2];
+    case SYM_DYNAMIC_IMPORT:
+          $1 = this._match(SYM_DYNAMIC_IMPORT);
           $2 = this.parseArguments();
-    return ["import", ...$2];
+          return ["import", ...$2];
     default:
       this._error([SYM_SUPER, SYM_DYNAMIC_IMPORT], this.la?.id);
     }
@@ -1277,12 +1696,12 @@ parse(input) {
   parseThisProperty() {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-        case 77:
+        case SYM_AT:
           $1 = this._match(SYM_AT);
           $2 = this.parseProperty();
           return [".", "this", $2];
     default:
-      this._error([77], this.la?.id);
+      this._error([SYM_AT], this.la?.id);
     }
   },
 
@@ -1319,7 +1738,7 @@ parse(input) {
   parseRange() {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-        case 75:
+        case SYM_LBRACKET:
           $1 = this._match(SYM_LBRACKET);
           $2 = this.parseExpression();
           $3 = this.parseRangeDots();
@@ -1327,7 +1746,7 @@ parse(input) {
           $5 = this._match(SYM_RBRACKET);
           return [$3, $2, $4];
     default:
-      this._error([75], this.la?.id);
+      this._error([SYM_LBRACKET], this.la?.id);
     }
   },
 
@@ -1858,25 +2277,37 @@ parse(input) {
   },
 
   parseWhile() {
-    // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case SYM_STATEMENT:
-    return this.parseStatement();
-  case SYM_RETURN:
-    return this.parseStatement();
-  case SYM_IMPORT:
-    return this.parseStatement();
-  case SYM_EXPORT:
-    return this.parseStatement();
-  case SYM_WHILE:
-    return this.parseWhileSource();
-  case SYM_UNTIL:
-    return this.parseWhileSource();
-  case SYM_LOOP:
-    return this.parseLoop();
+        case SYM_WHILE:
+          $1 = this.parseWhileSource();
+          $2 = this.parseBlock();
+          return $1.length === 2 ? [$1[0], $1[1], $2]   : [$1[0], $1[1], $1[2], $2];
+    case SYM_UNTIL:
+          $1 = this.parseWhileSource();
+          $2 = this.parseBlock();
+          return $1.length === 2 ? [$1[0], $1[1], $2]   : [$1[0], $1[1], $1[2], $2];
+    case SYM_RETURN:
+          $1 = this.parseStatement();
+          $2 = this.parseWhileSource();
+          return $2.length === 2 ? [$2[0], $2[1], [$1]] : [$2[0], $2[1], $2[2], [$1]];
+    case SYM_STATEMENT:
+          $1 = this.parseStatement();
+          $2 = this.parseWhileSource();
+          return $2.length === 2 ? [$2[0], $2[1], [$1]] : [$2[0], $2[1], $2[2], [$1]];
+    case SYM_IMPORT:
+          $1 = this.parseStatement();
+          $2 = this.parseWhileSource();
+          return $2.length === 2 ? [$2[0], $2[1], [$1]] : [$2[0], $2[1], $2[2], [$1]];
+    case SYM_EXPORT:
+          $1 = this.parseStatement();
+          $2 = this.parseWhileSource();
+          return $2.length === 2 ? [$2[0], $2[1], [$1]] : [$2[0], $2[1], $2[2], [$1]];
+    case SYM_LOOP:
+          $1 = this.parseLoop();
+          return $1;
     default:
-      this._error([SYM_STATEMENT, SYM_RETURN, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP], this.la?.id);
+      this._error([SYM_WHILE, SYM_UNTIL, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_LOOP], this.la?.id);
     }
   },
 
@@ -1894,16 +2325,179 @@ parse(input) {
   },
 
   parseFor() {
-    // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case SYM_FOR:
+        case SYM_FOR: {
+      const _saved = this._saveState();
+          try {
+      $1 = this._match(SYM_FOR);
+          $2 = this.parseForVariables();
+          $3 = this._match(SYM_FORIN);
+          $4 = this.parseExpression();
+          $5 = this.parseBlock();
+      return ["for-in"  , $2, $4, null, null, $5];
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    try {
+      $1 = this._match(SYM_FOR);
+          $2 = this.parseForVariables();
+          $3 = this._match(SYM_FORIN);
+          $4 = this.parseExpression();
+          $5 = this._match(SYM_WHEN);
+          $6 = this.parseExpression();
+          $7 = this.parseBlock();
+      return ["for-in"  , $2, $4, null, $6, $7];
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    try {
+      $1 = this._match(SYM_FOR);
+          $2 = this.parseForVariables();
+          $3 = this._match(SYM_FORIN);
+          $4 = this.parseExpression();
+          $5 = this._match(SYM_BY);
+          $6 = this.parseExpression();
+          $7 = this.parseBlock();
+      return ["for-in"  , $2, $4, $6, null, $7];
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    try {
+      $1 = this._match(SYM_FOR);
+          $2 = this.parseForVariables();
+          $3 = this._match(SYM_FORIN);
+          $4 = this.parseExpression();
+          $5 = this._match(SYM_WHEN);
+          $6 = this.parseExpression();
+          $7 = this._match(SYM_BY);
+          $8 = this.parseExpression();
+          $9 = this.parseBlock();
+      return ["for-in"  , $2, $4, $8, $6, $9];
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    try {
+      $1 = this._match(SYM_FOR);
+          $2 = this.parseForVariables();
+          $3 = this._match(SYM_FORIN);
+          $4 = this.parseExpression();
+          $5 = this._match(SYM_BY);
+          $6 = this.parseExpression();
+          $7 = this._match(SYM_WHEN);
+          $8 = this.parseExpression();
+          $9 = this.parseBlock();
+      return ["for-in"  , $2, $4, $6, $8, $9];
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    try {
+      $1 = this._match(SYM_FOR);
+          $2 = this.parseForVariables();
+          $3 = this._match(SYM_FOROF);
+          $4 = this.parseExpression();
+          $5 = this.parseBlock();
+      return ["for-of"  , $2, $4, false, null, $5];
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    try {
+      $1 = this._match(SYM_FOR);
+          $2 = this.parseForVariables();
+          $3 = this._match(SYM_FOROF);
+          $4 = this.parseExpression();
+          $5 = this._match(SYM_WHEN);
+          $6 = this.parseExpression();
+          $7 = this.parseBlock();
+      return ["for-of"  , $2, $4, false, $6, $7];
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    try {
+      $1 = this._match(SYM_FOR);
+          $2 = this._match(SYM_OWN);
+          $3 = this.parseForVariables();
+          $4 = this._match(SYM_FOROF);
+          $5 = this.parseExpression();
+          $6 = this.parseBlock();
+      return ["for-of"  , $3, $5, true, null, $6];
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    try {
+      $1 = this._match(SYM_FOR);
+          $2 = this._match(SYM_OWN);
+          $3 = this.parseForVariables();
+          $4 = this._match(SYM_FOROF);
+          $5 = this.parseExpression();
+          $6 = this._match(SYM_WHEN);
+          $7 = this.parseExpression();
+          $8 = this.parseBlock();
+      return ["for-of"  , $3, $5, true, $7, $8];
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    try {
+      $1 = this._match(SYM_FOR);
+          $2 = this.parseForVariables();
+          $3 = this._match(SYM_FORFROM);
+          $4 = this.parseExpression();
+          $5 = this.parseBlock();
+      return ["for-from", $2, $4, false, null, $5];
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    try {
+      $1 = this._match(SYM_FOR);
+          $2 = this.parseForVariables();
+          $3 = this._match(SYM_FORFROM);
+          $4 = this.parseExpression();
+          $5 = this._match(SYM_WHEN);
+          $6 = this.parseExpression();
+          $7 = this.parseBlock();
+      return ["for-from", $2, $4, false, $6, $7];
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    try {
+      $1 = this._match(SYM_FOR);
+          $2 = this._match(SYM_AWAIT);
+          $3 = this.parseForVariables();
+          $4 = this._match(SYM_FORFROM);
+          $5 = this.parseExpression();
+          $6 = this.parseBlock();
+      return ["for-from", $3, $5, true, null, $6];
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    try {
+      $1 = this._match(SYM_FOR);
+          $2 = this._match(SYM_AWAIT);
+          $3 = this.parseForVariables();
+          $4 = this._match(SYM_FORFROM);
+          $5 = this.parseExpression();
+          $6 = this._match(SYM_WHEN);
+          $7 = this.parseExpression();
+          $8 = this.parseBlock();
+      return ["for-from", $3, $5, true, $7, $8];
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    try {
+      $1 = this._match(SYM_FOR);
+          $2 = this.parseRange();
+          $3 = this.parseBlock();
+      return ["for-in"  , [], $2, null, null, $3];
+    } catch (e) {
+      this._restoreState(_saved);
+    }
     $1 = this._match(SYM_FOR);
           $2 = this.parseRange();
           $3 = this._match(SYM_BY);
           $4 = this.parseExpression();
           $5 = this.parseBlock();
     return ["for-in"  , [], $2, $4, null, $5];
+    }
     default:
       this._error([SYM_FOR], this.la?.id);
     }
@@ -2049,149 +2643,98 @@ parse(input) {
   },
 
   parseIf() {
-    // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case SYM_STATEMENT:
-    return this.parseStatement();
-  case SYM_RETURN:
-    return this.parseStatement();
-  case SYM_IMPORT:
-    return this.parseStatement();
-  case SYM_EXPORT:
-    return this.parseStatement();
-  case SYM_IF:
-    return this.parseIfBlock();
-  case SYM_UNLESS:
-    return this.parseUnlessBlock();
-    default:
-      this._error([SYM_STATEMENT, SYM_RETURN, SYM_IMPORT, SYM_EXPORT, SYM_IF, SYM_UNLESS], this.la?.id);
+        case SYM_IF: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseIfBlock();
+      return $1;
+    } catch (e) {
+      this._restoreState(_saved);
     }
-  },
-
-  parseOperationLine() {
-    // Oracle-informed dispatch (cycle-free!)
-    let $1, $2, $3, $4, $5, $6, $7, $8, $9;
-    switch (this.la?.id) {
-      case SYM_UNARY:
-    $1 = this._match(SYM_UNARY);
-          $2 = this.parseExpressionLine();
-    return [$1, $2];
-  case SYM_DO:
-    $1 = this._match(SYM_DO);
-          $2 = this.parseExpressionLine();
-    return ["do-iife", $2];
-  case SYM_DO_IIFE:
-    $1 = this._match(SYM_DO_IIFE);
-          $2 = this.parseCodeLine();
-    return ["do-iife", $2];
-    default:
-      this._error([SYM_UNARY, SYM_DO, SYM_DO_IIFE], this.la?.id);
+    $1 = this.parseIfBlock();
+          $2 = this._match(SYM_ELSE);
+          $3 = this.parseBlock();
+    return $1.length === 3 ? ["if", $1[1], $1[2], $3] : [...$1, $3];
     }
-  },
-
-  parseOperation() {
-    // Oracle-informed dispatch (cycle-free!)
-    let $1, $2, $3, $4, $5, $6, $7, $8, $9;
-    switch (this.la?.id) {
-      case SYM_IDENTIFIER:
-    return this.parseSimpleAssignable();
-  case SYM_NUMBER:
-    return this.parseSimpleAssignable();
-  case SYM_STRING:
-    return this.parseSimpleAssignable();
-  case SYM_STRING_START:
-    return this.parseSimpleAssignable();
-  case SYM_REGEX:
-    return this.parseSimpleAssignable();
-  case SYM_REGEX_START:
-    return this.parseSimpleAssignable();
-  case SYM_JS:
-    return this.parseSimpleAssignable();
-  case SYM_UNDEFINED:
-    return this.parseSimpleAssignable();
-  case SYM_NULL:
-    return this.parseSimpleAssignable();
-  case SYM_BOOL:
-    return this.parseSimpleAssignable();
-  case SYM_INFINITY:
-    return this.parseSimpleAssignable();
-  case SYM_NAN:
-    return this.parseSimpleAssignable();
-  case SYM_LBRACKET:
-    return this.parseSimpleAssignable();
-  case SYM_AT:
-    return this.parseSimpleAssignable();
-  case SYM_SUPER:
-    return this.parseSimpleAssignable();
-  case SYM_DYNAMIC_IMPORT:
-    return this.parseSimpleAssignable();
-  case SYM_PARAM_START:
-    return this.parseSimpleAssignable();
-  case SYM_THIN_ARROW:
-    return this.parseSimpleAssignable();
-  case SYM_FAT_ARROW:
-    return this.parseSimpleAssignable();
-  case SYM_NEW_TARGET:
-    return this.parseSimpleAssignable();
-  case SYM_IMPORT_META:
-    return this.parseSimpleAssignable();
-  case SYM_LBRACE:
-    return this.parseSimpleAssignable();
-  case SYM_THIS:
-    return this.parseSimpleAssignable();
-  case SYM_LPAREN:
-    return this.parseSimpleAssignable();
-  case SYM_AWAIT:
-    $1 = this._match(SYM_AWAIT);
-          $2 = this._match(SYM_INDENT);
-          $3 = this.parseObject();
-          $4 = this._match(SYM_OUTDENT);
-    return ["await", $3];
-  case SYM_UNARY:
-    $1 = this._match(SYM_UNARY);
-          $2 = this.parseExpression();
-    return [$1, $2];
-  case SYM_DO:
-    $1 = this._match(SYM_DO);
-          $2 = this.parseExpression();
-    return ["do-iife", $2];
-  case SYM_DO_IIFE:
-    return this.parseSimpleAssignable();
-  case SYM_UNARY_MATH:
-    $1 = this._match(SYM_UNARY_MATH);
-          $2 = this.parseExpression();
-    return [$1, $2];
-  case SYM_MINUS:
-    $1 = this._match(SYM_MINUS);
-          $2 = this.parseExpression();
-    return ["-", $2];
-  case SYM_PLUS:
-    $1 = this._match(SYM_PLUS);
-          $2 = this.parseExpression();
-    return ["+", $2];
-  case SYM_DEC:
-    $1 = this._match(SYM_DEC);
-          $2 = this.parseSimpleAssignable();
-    return ["--", $2, false];
-  case SYM_INC:
-    $1 = this._match(SYM_INC);
-          $2 = this.parseSimpleAssignable();
-    return ["++", $2, false];
+    case SYM_UNLESS:
+          $1 = this.parseUnlessBlock();
+          return $1;
+    case SYM_RETURN: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseStatement();
+          $2 = this._match(SYM_POST_IF);
+          $3 = this.parseExpression();
+      return ["if", $3, [$1]];
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseStatement();
+          $2 = this._match(SYM_POST_UNLESS);
+          $3 = this.parseExpression();
+    return ["unless", $3, [$1]];
+    }
+    case SYM_STATEMENT: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseStatement();
+          $2 = this._match(SYM_POST_IF);
+          $3 = this.parseExpression();
+      return ["if", $3, [$1]];
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseStatement();
+          $2 = this._match(SYM_POST_UNLESS);
+          $3 = this.parseExpression();
+    return ["unless", $3, [$1]];
+    }
+    case SYM_IMPORT: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseStatement();
+          $2 = this._match(SYM_POST_IF);
+          $3 = this.parseExpression();
+      return ["if", $3, [$1]];
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseStatement();
+          $2 = this._match(SYM_POST_UNLESS);
+          $3 = this.parseExpression();
+    return ["unless", $3, [$1]];
+    }
+    case SYM_EXPORT: {
+      const _saved = this._saveState();
+          try {
+      $1 = this.parseStatement();
+          $2 = this._match(SYM_POST_IF);
+          $3 = this.parseExpression();
+      return ["if", $3, [$1]];
+    } catch (e) {
+      this._restoreState(_saved);
+    }
+    $1 = this.parseStatement();
+          $2 = this._match(SYM_POST_UNLESS);
+          $3 = this.parseExpression();
+    return ["unless", $3, [$1]];
+    }
     default:
-      this._error([SYM_IDENTIFIER, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LBRACKET, SYM_AT, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_LBRACE, SYM_THIS, SYM_LPAREN, SYM_AWAIT, SYM_UNARY, SYM_DO, SYM_DO_IIFE, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_DEC, SYM_INC], this.la?.id);
+      this._error([SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT], this.la?.id);
     }
   },
 
   parseDoIife() {
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-        case 179:
+        case SYM_DO_IIFE:
           $1 = this._match(SYM_DO_IIFE);
           $2 = this.parseCode();
           return ["do-iife", $2];
     default:
-      this._error([179], this.la?.id);
+      this._error([SYM_DO_IIFE], this.la?.id);
     }
   },
 
