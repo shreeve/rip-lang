@@ -743,8 +743,7 @@ class Generator
   # INSIGHT: Don't walk states - use FIRST sets that are already computed!
   _extractOracleRouting!: ->
     @routing = new Map  # nonterminal → { tokenId: target }
-
-    console.log "Extracting routing using FIRST sets..."
+    cyclesSkipped = 0
 
     # For each nonterminal with multiple alternatives
     for own name, type of @types
@@ -758,18 +757,33 @@ class Generator
         firstSymbol = rule.symbols[0]
         continue unless firstSymbol  # Skip empty rules
 
-        # CRITICAL FIX: Compute FIRST of entire rule, not just first symbol!
-        # Expression → For gets FIRST([For]) = {FOR}, not FIRST(For) recursively
-        firstSet = @_computeFirst(rule.symbols)
-
+        # CRITICAL CYCLE PREVENTION: Detect if target would call back to parent
+        # Example: Expression → For where For has "Expression FOR ..." creates cycle
+        # Solution: Check if target nonterminal has current nonterminal in its rules
         if @types[firstSymbol]
-          # Nonterminal alternative - map FIRST tokens to parseXXX call
+          # Check for cycle: does target's FIRST include current nonterminal?
+          targetType = @types[firstSymbol]
+          
+          # Check if target has any rule starting with current nonterminal
+          hasCycle = targetType.rules.some((r) => r.symbols[0] is name)
+          
+          if hasCycle
+            cyclesSkipped++
+            continue  # Skip this alternative to prevent cycle
+          
+          # Safe - use target's FIRST tokens for routing
+          firstSet = targetType.firsts
+          
+          # Map FIRST tokens to parseXXX call
           for token from firstSet when token isnt ''
             tokenId = @symbolIds[token]
             if tokenId
               routing[tokenId] = {type: 'nonterminal', target: firstSymbol}
         else
-          # Terminal alternative - map token to _match call
+          # Terminal alternative - use rule's FIRST (just this terminal)
+          firstSet = @_computeFirst(rule.symbols)
+          
+          # Map token to _match call
           for token from firstSet when token isnt ''
             tokenId = @symbolIds[token]
             if tokenId
@@ -777,7 +791,8 @@ class Generator
 
       if Object.keys(routing).length > 0
         @routing.set(name, routing)
-        console.log "📍 Routing for #{name}: #{Object.keys(routing).length} tokens → #{type.rules.length} alternatives"
+
+    console.log "Oracle routing: #{@routing.size} nonterminals, #{cyclesSkipped} cycles prevented"
 
   # Generate PRD parser
   _generatePRD: ->
@@ -862,7 +877,7 @@ class Generator
         this._error([expected], this.la?.id);
       }
       const token = this.la.value;
-      this.la = this.tokenStream[this.tokenPos++];
+      this.la = this.tokenStream[++this.tokenPos];
       return token;
     },
 
@@ -998,20 +1013,21 @@ class Generator
     validTokens = []
 
     for own tokenId, route of routing
-      validTokens.push(tokenId)
+      constName = @_getConstNameFromId(tokenId)
+      validTokens.push(constName)
 
       if route.type is 'nonterminal'
         # Call another parser
         cases.push """
-          case #{tokenId}:
+          case #{constName}:
             return this.parse#{route.target}();
         """
       else
         # Terminal - match and apply action
-        constName = @_getConstName(route.target)
+        matchConst = @_getConstName(route.target)
         [capture, ret] = @_compileAction(route.rule)
         cases.push """
-          case #{tokenId}:
+          case #{constName}:
             #{capture}
             return #{ret};
         """
@@ -1098,6 +1114,12 @@ class Generator
     safeName = operatorMap[symbol] or symbol.toUpperCase().replace(/[^A-Z0-9_]/g, '_')
     safeName = safeName.replace(/^_+|_+$/g, '')
     "SYM_#{safeName}"
+
+  # Convert token ID to SYM_* constant name (for case labels)
+  _getConstNameFromId: (tokenId) ->
+    tokenName = @tokenNames[tokenId]
+    return "#{tokenId}" unless tokenName  # Fallback to number if not found
+    @_getConstName(tokenName)
 
   # Compile action to return value (SIMPLE!)
   _compileActionReturn: (action, symbols) ->

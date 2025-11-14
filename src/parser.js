@@ -15,7 +15,7 @@ const parserInstance = {
     this._error([expected], this.la?.id);
   }
   const token = this.la.value;
-  this.la = this.tokenStream[this.tokenPos++];
+  this.la = this.tokenStream[++this.tokenPos];
   return token;
 },
 
@@ -93,106 +93,106 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 11:
+      case SYM_STATEMENT:
     return this.parseStatement();
-  case 27:
+  case SYM_DEF:
     return this.parseExpression();
-  case 35:
+  case SYM_YIELD:
     return this.parseExpression();
-  case 40:
+  case SYM_IDENTIFIER:
     return this.parseExpression();
-  case 44:
+  case SYM_NUMBER:
     return this.parseExpression();
-  case 46:
+  case SYM_STRING:
     return this.parseExpression();
-  case 47:
+  case SYM_STRING_START:
     return this.parseExpression();
-  case 54:
+  case SYM_REGEX:
     return this.parseExpression();
-  case 55:
+  case SYM_REGEX_START:
     return this.parseExpression();
-  case 61:
+  case SYM_JS:
     return this.parseExpression();
-  case 62:
+  case SYM_UNDEFINED:
     return this.parseExpression();
-  case 63:
+  case SYM_NULL:
     return this.parseExpression();
-  case 64:
+  case SYM_BOOL:
     return this.parseExpression();
-  case 65:
+  case SYM_INFINITY:
     return this.parseExpression();
-  case 66:
+  case SYM_NAN:
     return this.parseExpression();
-  case 75:
+  case SYM_LBRACKET:
     return this.parseExpression();
-  case 77:
+  case SYM_AT:
     return this.parseExpression();
-  case 83:
+  case SYM_SUPER:
     return this.parseExpression();
-  case 86:
+  case SYM_DYNAMIC_IMPORT:
     return this.parseExpression();
-  case 94:
+  case SYM_RETURN:
     return this.parseStatement();
-  case 95:
+  case SYM_PARAM_START:
     return this.parseExpressionLine();
-  case 98:
+  case SYM_THIN_ARROW:
     return this.parseExpressionLine();
-  case 99:
+  case SYM_FAT_ARROW:
     return this.parseExpressionLine();
-  case 111:
+  case SYM_NEW_TARGET:
     return this.parseExpression();
-  case 112:
+  case SYM_IMPORT_META:
     return this.parseExpression();
-  case 113:
+  case SYM_LBRACE:
     return this.parseExpression();
-  case 114:
+  case SYM_FOR:
     return this.parseExpression();
-  case 121:
+  case SYM_CLASS:
     return this.parseExpression();
-  case 123:
+  case SYM_IMPORT:
     return this.parseStatement();
-  case 131:
+  case SYM_EXPORT:
     return this.parseStatement();
-  case 138:
+  case SYM_THIS:
     return this.parseExpression();
-  case 148:
+  case SYM_TRY:
     return this.parseExpression();
-  case 152:
+  case SYM_THROW:
     return this.parseExpression();
-  case 153:
+  case SYM_LPAREN:
     return this.parseExpression();
-  case 156:
+  case SYM_WHILE:
     return this.parseExpression();
-  case 157:
+  case SYM_UNTIL:
     return this.parseExpression();
-  case 159:
+  case SYM_LOOP:
     return this.parseExpression();
-  case 163:
+  case SYM_AWAIT:
     return this.parseExpression();
-  case 166:
+  case SYM_SWITCH:
     return this.parseExpression();
-  case 172:
+  case SYM_IF:
     return this.parseExpression();
-  case 174:
+  case SYM_UNLESS:
     return this.parseExpression();
-  case 177:
+  case SYM_UNARY:
     return this.parseExpressionLine();
-  case 178:
+  case SYM_DO:
     return this.parseExpressionLine();
-  case 179:
+  case SYM_DO_IIFE:
     return this.parseExpressionLine();
-  case 180:
+  case SYM_UNARY_MATH:
     return this.parseExpression();
-  case 181:
+  case SYM_MINUS:
     return this.parseExpression();
-  case 182:
+  case SYM_PLUS:
     return this.parseExpression();
-  case 183:
+  case SYM_DEC:
     return this.parseExpression();
-  case 184:
+  case SYM_INC:
     return this.parseExpression();
     default:
-      this._error([11, 27, 35, 40, 44, 46, 47, 54, 55, 61, 62, 63, 64, 65, 66, 75, 77, 83, 86, 94, 95, 98, 99, 111, 112, 113, 114, 121, 123, 131, 138, 148, 152, 153, 156, 157, 159, 163, 166, 172, 174, 177, 178, 179, 180, 181, 182, 183, 184], this.la?.id);
+      this._error([SYM_STATEMENT, SYM_DEF, SYM_YIELD, SYM_IDENTIFIER, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LBRACKET, SYM_AT, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_RETURN, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_LBRACE, SYM_FOR, SYM_CLASS, SYM_IMPORT, SYM_EXPORT, SYM_THIS, SYM_TRY, SYM_THROW, SYM_LPAREN, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_AWAIT, SYM_SWITCH, SYM_IF, SYM_UNLESS, SYM_UNARY, SYM_DO, SYM_DO_IIFE, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_DEC, SYM_INC], this.la?.id);
     }
   },
 
@@ -200,17 +200,17 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 11:
+      case SYM_STATEMENT:
     $1 = this._match(SYM_STATEMENT);
     return $1;
-  case 94:
+  case SYM_RETURN:
     return this.parseReturn();
-  case 123:
+  case SYM_IMPORT:
     return this.parseImport();
-  case 131:
+  case SYM_EXPORT:
     return this.parseExport();
     default:
-      this._error([11, 94, 123, 131], this.la?.id);
+      this._error([SYM_STATEMENT, SYM_RETURN, SYM_IMPORT, SYM_EXPORT], this.la?.id);
     }
   },
 
@@ -218,106 +218,70 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 11:
-    return this.parseFor();
-  case 27:
+      case SYM_DEF:
     return this.parseDef();
-  case 35:
+  case SYM_YIELD:
     return this.parseYield();
-  case 40:
-    return this.parseFor();
-  case 44:
-    return this.parseFor();
-  case 46:
-    return this.parseFor();
-  case 47:
-    return this.parseFor();
-  case 54:
-    return this.parseFor();
-  case 55:
-    return this.parseFor();
-  case 61:
-    return this.parseFor();
-  case 62:
-    return this.parseFor();
-  case 63:
-    return this.parseFor();
-  case 64:
-    return this.parseFor();
-  case 65:
-    return this.parseFor();
-  case 66:
-    return this.parseFor();
-  case 75:
-    return this.parseFor();
-  case 77:
-    return this.parseFor();
-  case 83:
-    return this.parseFor();
-  case 86:
-    return this.parseFor();
-  case 94:
-    return this.parseFor();
-  case 95:
-    return this.parseFor();
-  case 98:
-    return this.parseFor();
-  case 99:
-    return this.parseFor();
-  case 111:
-    return this.parseFor();
-  case 112:
-    return this.parseFor();
-  case 113:
-    return this.parseFor();
-  case 114:
-    return this.parseFor();
-  case 121:
+  case SYM_IDENTIFIER:
+    return this.parseAssign();
+  case SYM_NUMBER:
+    return this.parseAssign();
+  case SYM_STRING:
+    return this.parseAssign();
+  case SYM_STRING_START:
+    return this.parseAssign();
+  case SYM_REGEX:
+    return this.parseAssign();
+  case SYM_REGEX_START:
+    return this.parseAssign();
+  case SYM_JS:
+    return this.parseAssign();
+  case SYM_UNDEFINED:
+    return this.parseAssign();
+  case SYM_NULL:
+    return this.parseAssign();
+  case SYM_BOOL:
+    return this.parseAssign();
+  case SYM_INFINITY:
+    return this.parseAssign();
+  case SYM_NAN:
+    return this.parseAssign();
+  case SYM_LBRACKET:
+    return this.parseAssign();
+  case SYM_AT:
+    return this.parseAssign();
+  case SYM_SUPER:
+    return this.parseAssign();
+  case SYM_DYNAMIC_IMPORT:
+    return this.parseAssign();
+  case SYM_PARAM_START:
+    return this.parseAssign();
+  case SYM_THIN_ARROW:
+    return this.parseAssign();
+  case SYM_FAT_ARROW:
+    return this.parseAssign();
+  case SYM_NEW_TARGET:
+    return this.parseAssign();
+  case SYM_IMPORT_META:
+    return this.parseAssign();
+  case SYM_LBRACE:
+    return this.parseAssign();
+  case SYM_CLASS:
     return this.parseClass();
-  case 123:
-    return this.parseFor();
-  case 131:
-    return this.parseFor();
-  case 138:
-    return this.parseFor();
-  case 148:
-    return this.parseFor();
-  case 152:
+  case SYM_THIS:
+    return this.parseAssign();
+  case SYM_TRY:
+    return this.parseTry();
+  case SYM_THROW:
     return this.parseThrow();
-  case 153:
-    return this.parseFor();
-  case 156:
-    return this.parseFor();
-  case 157:
-    return this.parseFor();
-  case 159:
-    return this.parseFor();
-  case 163:
-    return this.parseFor();
-  case 166:
+  case SYM_LPAREN:
+    return this.parseAssign();
+  case SYM_SWITCH:
     return this.parseSwitch();
-  case 172:
-    return this.parseFor();
-  case 174:
-    return this.parseFor();
-  case 177:
-    return this.parseFor();
-  case 178:
-    return this.parseFor();
-  case 179:
-    return this.parseFor();
-  case 180:
-    return this.parseFor();
-  case 181:
-    return this.parseFor();
-  case 182:
-    return this.parseFor();
-  case 183:
-    return this.parseFor();
-  case 184:
-    return this.parseFor();
+  case SYM_DO_IIFE:
+    return this.parseAssign();
     default:
-      this._error([11, 27, 35, 40, 44, 46, 47, 54, 55, 61, 62, 63, 64, 65, 66, 75, 77, 83, 86, 94, 95, 98, 99, 111, 112, 113, 114, 121, 123, 131, 138, 148, 152, 153, 156, 157, 159, 163, 166, 172, 174, 177, 178, 179, 180, 181, 182, 183, 184], this.la?.id);
+      this._error([SYM_DEF, SYM_YIELD, SYM_IDENTIFIER, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LBRACKET, SYM_AT, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_LBRACE, SYM_CLASS, SYM_THIS, SYM_TRY, SYM_THROW, SYM_LPAREN, SYM_SWITCH, SYM_DO_IIFE], this.la?.id);
     }
   },
 
@@ -325,13 +289,13 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 27:
+      case SYM_DEF:
     $1 = this._match(SYM_DEF);
           $2 = this.parseIdentifier();
           $3 = this.parseBlock();
     return ["def", $2, [], $3];
     default:
-      this._error([27], this.la?.id);
+      this._error([SYM_DEF], this.la?.id);
     }
   },
 
@@ -339,20 +303,20 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 95:
+      case SYM_PARAM_START:
     return this.parseCodeLine();
-  case 98:
+  case SYM_THIN_ARROW:
     return this.parseCodeLine();
-  case 99:
+  case SYM_FAT_ARROW:
     return this.parseCodeLine();
-  case 177:
+  case SYM_UNARY:
     return this.parseOperationLine();
-  case 178:
+  case SYM_DO:
     return this.parseOperationLine();
-  case 179:
+  case SYM_DO_IIFE:
     return this.parseOperationLine();
     default:
-      this._error([95, 98, 99, 177, 178, 179], this.la?.id);
+      this._error([SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_UNARY, SYM_DO, SYM_DO_IIFE], this.la?.id);
     }
   },
 
@@ -360,13 +324,13 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 35:
+      case SYM_YIELD:
     $1 = this._match(SYM_YIELD);
           $2 = this._match(SYM_FROM);
           $3 = this.parseExpression();
     return ["yield-from", $3];
     default:
-      this._error([35], this.la?.id);
+      this._error([SYM_YIELD], this.la?.id);
     }
   },
 
@@ -374,13 +338,13 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 36:
+      case SYM_INDENT:
     $1 = this._match(SYM_INDENT);
           $2 = this.parseBody();
           $3 = this._match(SYM_OUTDENT);
     return ["block", ...$2];
     default:
-      this._error([36], this.la?.id);
+      this._error([SYM_INDENT], this.la?.id);
     }
   },
 
@@ -410,15 +374,15 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 44:
+      case SYM_NUMBER:
     $1 = this._match(SYM_NUMBER);
     return $1;
-  case 46:
+  case SYM_STRING:
     return this.parseString();
-  case 47:
+  case SYM_STRING_START:
     return this.parseString();
     default:
-      this._error([44, 46, 47], this.la?.id);
+      this._error([SYM_NUMBER, SYM_STRING, SYM_STRING_START], this.la?.id);
     }
   },
 
@@ -426,16 +390,16 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 46:
+      case SYM_STRING:
     $1 = this._match(SYM_STRING);
     return $1;
-  case 47:
+  case SYM_STRING_START:
     $1 = this._match(SYM_STRING_START);
           $2 = this.parseInterpolations();
           $3 = this._match(SYM_STRING_END);
     return ["str", ...$2];
     default:
-      this._error([46, 47], this.la?.id);
+      this._error([SYM_STRING, SYM_STRING_START], this.la?.id);
     }
   },
 
@@ -463,16 +427,16 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 46:
+      case SYM_STRING:
     return this.parseString();
-  case 47:
+  case SYM_STRING_START:
     return this.parseString();
-  case 51:
+  case SYM_INTERPOLATION_START:
     $1 = this._match(SYM_INTERPOLATION_START);
           $2 = this._match(SYM_INTERPOLATION_END);
     return "";
     default:
-      this._error([46, 47, 51], this.la?.id);
+      this._error([SYM_STRING, SYM_STRING_START, SYM_INTERPOLATION_START], this.la?.id);
     }
   },
 
@@ -480,16 +444,16 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 54:
+      case SYM_REGEX:
     $1 = this._match(SYM_REGEX);
     return $1;
-  case 55:
+  case SYM_REGEX_START:
     $1 = this._match(SYM_REGEX_START);
           $2 = this.parseInvocation();
           $3 = this._match(SYM_REGEX_END);
     return ["regex", $2];
     default:
-      this._error([54, 55], this.la?.id);
+      this._error([SYM_REGEX, SYM_REGEX_START], this.la?.id);
     }
   },
 
@@ -497,12 +461,12 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 54:
+      case SYM_REGEX:
     return this.parseRegex();
-  case 55:
+  case SYM_REGEX_START:
     return this.parseRegex();
     default:
-      this._error([54, 55], this.la?.id);
+      this._error([SYM_REGEX, SYM_REGEX_START], this.la?.id);
     }
   },
 
@@ -510,36 +474,36 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 44:
+      case SYM_NUMBER:
     return this.parseAlphaNumeric();
-  case 46:
+  case SYM_STRING:
     return this.parseAlphaNumeric();
-  case 47:
+  case SYM_STRING_START:
     return this.parseAlphaNumeric();
-  case 54:
+  case SYM_REGEX:
     return this.parseRegex();
-  case 55:
+  case SYM_REGEX_START:
     return this.parseRegex();
-  case 61:
+  case SYM_JS:
     $1 = this._match(SYM_JS);
     return $1;
-  case 62:
+  case SYM_UNDEFINED:
     $1 = this._match(SYM_UNDEFINED);
     return "undefined";
-  case 63:
+  case SYM_NULL:
     $1 = this._match(SYM_NULL);
     return "null";
-  case 64:
+  case SYM_BOOL:
     $1 = this._match(SYM_BOOL);
     return $1;
-  case 65:
+  case SYM_INFINITY:
     $1 = this._match(SYM_INFINITY);
     return $1;
-  case 66:
+  case SYM_NAN:
     $1 = this._match(SYM_NAN);
     return $1;
     default:
-      this._error([44, 46, 47, 54, 55, 61, 62, 63, 64, 65, 66], this.la?.id);
+      this._error([SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN], this.la?.id);
     }
   },
 
@@ -547,58 +511,58 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 40:
+      case SYM_IDENTIFIER:
     return this.parseAssignable();
-  case 44:
+  case SYM_NUMBER:
     return this.parseAssignable();
-  case 46:
+  case SYM_STRING:
     return this.parseAssignable();
-  case 47:
+  case SYM_STRING_START:
     return this.parseAssignable();
-  case 54:
+  case SYM_REGEX:
     return this.parseAssignable();
-  case 55:
+  case SYM_REGEX_START:
     return this.parseAssignable();
-  case 61:
+  case SYM_JS:
     return this.parseAssignable();
-  case 62:
+  case SYM_UNDEFINED:
     return this.parseAssignable();
-  case 63:
+  case SYM_NULL:
     return this.parseAssignable();
-  case 64:
+  case SYM_BOOL:
     return this.parseAssignable();
-  case 65:
+  case SYM_INFINITY:
     return this.parseAssignable();
-  case 66:
+  case SYM_NAN:
     return this.parseAssignable();
-  case 75:
+  case SYM_LBRACKET:
     return this.parseAssignable();
-  case 77:
+  case SYM_AT:
     return this.parseAssignable();
-  case 83:
+  case SYM_SUPER:
     return this.parseAssignable();
-  case 86:
+  case SYM_DYNAMIC_IMPORT:
     return this.parseAssignable();
-  case 95:
+  case SYM_PARAM_START:
     return this.parseAssignable();
-  case 98:
+  case SYM_THIN_ARROW:
     return this.parseAssignable();
-  case 99:
+  case SYM_FAT_ARROW:
     return this.parseAssignable();
-  case 111:
+  case SYM_NEW_TARGET:
     return this.parseAssignable();
-  case 112:
+  case SYM_IMPORT_META:
     return this.parseAssignable();
-  case 113:
+  case SYM_LBRACE:
     return this.parseAssignable();
-  case 138:
+  case SYM_THIS:
     return this.parseAssignable();
-  case 153:
+  case SYM_LPAREN:
     return this.parseAssignable();
-  case 179:
+  case SYM_DO_IIFE:
     return this.parseAssignable();
     default:
-      this._error([40, 44, 46, 47, 54, 55, 61, 62, 63, 64, 65, 66, 75, 77, 83, 86, 95, 98, 99, 111, 112, 113, 138, 153, 179], this.la?.id);
+      this._error([SYM_IDENTIFIER, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LBRACKET, SYM_AT, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_LBRACE, SYM_THIS, SYM_LPAREN, SYM_DO_IIFE], this.la?.id);
     }
   },
 
@@ -606,24 +570,24 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 40:
+      case SYM_IDENTIFIER:
     return this.parseSimpleObjAssignable();
-  case 42:
+  case SYM_PROPERTY:
     return this.parseSimpleObjAssignable();
-  case 44:
+  case SYM_NUMBER:
     return this.parseObjAssignable();
-  case 46:
+  case SYM_STRING:
     return this.parseObjAssignable();
-  case 47:
+  case SYM_STRING_START:
     return this.parseObjAssignable();
-  case 75:
+  case SYM_LBRACKET:
     return this.parseObjAssignable();
-  case 77:
+  case SYM_AT:
     return this.parseSimpleObjAssignable();
-  case 78:
+  case SYM_ELLIPSIS:
     return this.parseObjRestValue();
     default:
-      this._error([40, 42, 44, 46, 47, 75, 77, 78], this.la?.id);
+      this._error([SYM_IDENTIFIER, SYM_PROPERTY, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_LBRACKET, SYM_AT, SYM_ELLIPSIS], this.la?.id);
     }
   },
 
@@ -631,14 +595,14 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 40:
+      case SYM_IDENTIFIER:
     return this.parseIdentifier();
-  case 42:
+  case SYM_PROPERTY:
     return this.parseProperty();
-  case 77:
+  case SYM_AT:
     return this.parseThisProperty();
     default:
-      this._error([40, 42, 77], this.la?.id);
+      this._error([SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT], this.la?.id);
     }
   },
 
@@ -646,29 +610,29 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 40:
+      case SYM_IDENTIFIER:
     return this.parseSimpleObjAssignable();
-  case 42:
+  case SYM_PROPERTY:
     return this.parseSimpleObjAssignable();
-  case 44:
+  case SYM_NUMBER:
     return this.parseAlphaNumeric();
-  case 46:
+  case SYM_STRING:
     return this.parseAlphaNumeric();
-  case 47:
+  case SYM_STRING_START:
     return this.parseAlphaNumeric();
-  case 75:
+  case SYM_LBRACKET:
     $1 = this._match(SYM_LBRACKET);
           $2 = this.parseExpression();
           $3 = this._match(SYM_RBRACKET);
     return ["computed", $2];
-  case 77:
+  case SYM_AT:
     $1 = this._match(SYM_AT);
           $2 = this._match(SYM_LBRACKET);
           $3 = this.parseExpression();
           $4 = this._match(SYM_RBRACKET);
     return ["[]", "this", $3];
     default:
-      this._error([40, 42, 44, 46, 47, 75, 77], this.la?.id);
+      this._error([SYM_IDENTIFIER, SYM_PROPERTY, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_LBRACKET, SYM_AT], this.la?.id);
     }
   },
 
@@ -676,12 +640,12 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 78:
+      case SYM_ELLIPSIS:
     $1 = this._match(SYM_ELLIPSIS);
           $2 = this.parseObjSpreadExpr();
     return ["...", $2];
     default:
-      this._error([78], this.la?.id);
+      this._error([SYM_ELLIPSIS], this.la?.id);
     }
   },
 
@@ -709,11 +673,11 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 94:
+      case SYM_RETURN:
     $1 = this._match(SYM_RETURN);
     return ["return"];
     default:
-      this._error([94], this.la?.id);
+      this._error([SYM_RETURN], this.la?.id);
     }
   },
 
@@ -721,19 +685,19 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 95:
+      case SYM_PARAM_START:
     $1 = this._match(SYM_PARAM_START);
           $2 = this.parseParamList();
           $3 = this._match(SYM_PARAM_END);
           $4 = this.parseFuncGlyph();
           $5 = this.parseBlock();
     return [$4, $2, $5];
-  case 98:
+  case SYM_THIN_ARROW:
     return this.parseFuncGlyph();
-  case 99:
+  case SYM_FAT_ARROW:
     return this.parseFuncGlyph();
     default:
-      this._error([95, 98, 99], this.la?.id);
+      this._error([SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW], this.la?.id);
     }
   },
 
@@ -741,19 +705,19 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 95:
+      case SYM_PARAM_START:
     $1 = this._match(SYM_PARAM_START);
           $2 = this.parseParamList();
           $3 = this._match(SYM_PARAM_END);
           $4 = this.parseFuncGlyph();
           $5 = this.parseLine();
     return [$4, $2, $5];
-  case 98:
+  case SYM_THIN_ARROW:
     return this.parseFuncGlyph();
-  case 99:
+  case SYM_FAT_ARROW:
     return this.parseFuncGlyph();
     default:
-      this._error([95, 98, 99], this.la?.id);
+      this._error([SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW], this.la?.id);
     }
   },
 
@@ -761,14 +725,14 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 98:
+      case SYM_THIN_ARROW:
     $1 = this._match(SYM_THIN_ARROW);
     return $1;
-  case 99:
+  case SYM_FAT_ARROW:
     $1 = this._match(SYM_FAT_ARROW);
     return $1;
     default:
-      this._error([98, 99], this.la?.id);
+      this._error([SYM_THIN_ARROW, SYM_FAT_ARROW], this.la?.id);
     }
   },
 
@@ -776,11 +740,11 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 59:
+      case SYM_COMMA:
     $1 = this._match(SYM_COMMA);
     return $1;
     default:
-      this._error([59], this.la?.id);
+      this._error([SYM_COMMA], this.la?.id);
     }
   },
 
@@ -808,19 +772,19 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 40:
+      case SYM_IDENTIFIER:
     return this.parseParamVar();
-  case 75:
+  case SYM_LBRACKET:
     return this.parseParamVar();
-  case 77:
+  case SYM_AT:
     return this.parseParamVar();
-  case 78:
+  case SYM_ELLIPSIS:
     $1 = this._match(SYM_ELLIPSIS);
     return ["expansion"];
-  case 113:
+  case SYM_LBRACE:
     return this.parseParamVar();
     default:
-      this._error([40, 75, 77, 78, 113], this.la?.id);
+      this._error([SYM_IDENTIFIER, SYM_LBRACKET, SYM_AT, SYM_ELLIPSIS, SYM_LBRACE], this.la?.id);
     }
   },
 
@@ -828,16 +792,16 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 40:
+      case SYM_IDENTIFIER:
     return this.parseIdentifier();
-  case 75:
+  case SYM_LBRACKET:
     return this.parseArray();
-  case 77:
+  case SYM_AT:
     return this.parseThisProperty();
-  case 113:
+  case SYM_LBRACE:
     return this.parseObject();
     default:
-      this._error([40, 75, 77, 113], this.la?.id);
+      this._error([SYM_IDENTIFIER, SYM_LBRACKET, SYM_AT, SYM_LBRACE], this.la?.id);
     }
   },
 
@@ -857,58 +821,58 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 40:
+      case SYM_IDENTIFIER:
     return this.parseValue();
-  case 44:
+  case SYM_NUMBER:
     return this.parseValue();
-  case 46:
+  case SYM_STRING:
     return this.parseValue();
-  case 47:
+  case SYM_STRING_START:
     return this.parseValue();
-  case 54:
+  case SYM_REGEX:
     return this.parseValue();
-  case 55:
+  case SYM_REGEX_START:
     return this.parseValue();
-  case 61:
+  case SYM_JS:
     return this.parseValue();
-  case 62:
+  case SYM_UNDEFINED:
     return this.parseValue();
-  case 63:
+  case SYM_NULL:
     return this.parseValue();
-  case 64:
+  case SYM_BOOL:
     return this.parseValue();
-  case 65:
+  case SYM_INFINITY:
     return this.parseValue();
-  case 66:
+  case SYM_NAN:
     return this.parseValue();
-  case 75:
+  case SYM_LBRACKET:
     return this.parseValue();
-  case 77:
+  case SYM_AT:
     return this.parseValue();
-  case 83:
+  case SYM_SUPER:
     return this.parseValue();
-  case 86:
+  case SYM_DYNAMIC_IMPORT:
     return this.parseValue();
-  case 95:
+  case SYM_PARAM_START:
     return this.parseCode();
-  case 98:
+  case SYM_THIN_ARROW:
     return this.parseCode();
-  case 99:
+  case SYM_FAT_ARROW:
     return this.parseCode();
-  case 111:
+  case SYM_NEW_TARGET:
     return this.parseValue();
-  case 112:
+  case SYM_IMPORT_META:
     return this.parseValue();
-  case 113:
+  case SYM_LBRACE:
     return this.parseValue();
-  case 138:
+  case SYM_THIS:
     return this.parseValue();
-  case 153:
+  case SYM_LPAREN:
     return this.parseValue();
-  case 179:
+  case SYM_DO_IIFE:
     return this.parseValue();
     default:
-      this._error([40, 44, 46, 47, 54, 55, 61, 62, 63, 64, 65, 66, 75, 77, 83, 86, 95, 98, 99, 111, 112, 113, 138, 153, 179], this.la?.id);
+      this._error([SYM_IDENTIFIER, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LBRACKET, SYM_AT, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_LBRACE, SYM_THIS, SYM_LPAREN, SYM_DO_IIFE], this.la?.id);
     }
   },
 
@@ -916,58 +880,58 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 40:
+      case SYM_IDENTIFIER:
     return this.parseSimpleAssignable();
-  case 44:
+  case SYM_NUMBER:
     return this.parseSimpleAssignable();
-  case 46:
+  case SYM_STRING:
     return this.parseSimpleAssignable();
-  case 47:
+  case SYM_STRING_START:
     return this.parseSimpleAssignable();
-  case 54:
+  case SYM_REGEX:
     return this.parseSimpleAssignable();
-  case 55:
+  case SYM_REGEX_START:
     return this.parseSimpleAssignable();
-  case 61:
+  case SYM_JS:
     return this.parseSimpleAssignable();
-  case 62:
+  case SYM_UNDEFINED:
     return this.parseSimpleAssignable();
-  case 63:
+  case SYM_NULL:
     return this.parseSimpleAssignable();
-  case 64:
+  case SYM_BOOL:
     return this.parseSimpleAssignable();
-  case 65:
+  case SYM_INFINITY:
     return this.parseSimpleAssignable();
-  case 66:
+  case SYM_NAN:
     return this.parseSimpleAssignable();
-  case 75:
+  case SYM_LBRACKET:
     return this.parseArray();
-  case 77:
+  case SYM_AT:
     return this.parseSimpleAssignable();
-  case 83:
+  case SYM_SUPER:
     return this.parseSimpleAssignable();
-  case 86:
+  case SYM_DYNAMIC_IMPORT:
     return this.parseSimpleAssignable();
-  case 95:
+  case SYM_PARAM_START:
     return this.parseSimpleAssignable();
-  case 98:
+  case SYM_THIN_ARROW:
     return this.parseSimpleAssignable();
-  case 99:
+  case SYM_FAT_ARROW:
     return this.parseSimpleAssignable();
-  case 111:
+  case SYM_NEW_TARGET:
     return this.parseSimpleAssignable();
-  case 112:
+  case SYM_IMPORT_META:
     return this.parseSimpleAssignable();
-  case 113:
+  case SYM_LBRACE:
     return this.parseObject();
-  case 138:
+  case SYM_THIS:
     return this.parseSimpleAssignable();
-  case 153:
+  case SYM_LPAREN:
     return this.parseSimpleAssignable();
-  case 179:
+  case SYM_DO_IIFE:
     return this.parseSimpleAssignable();
     default:
-      this._error([40, 44, 46, 47, 54, 55, 61, 62, 63, 64, 65, 66, 75, 77, 83, 86, 95, 98, 99, 111, 112, 113, 138, 153, 179], this.la?.id);
+      this._error([SYM_IDENTIFIER, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LBRACKET, SYM_AT, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_LBRACE, SYM_THIS, SYM_LPAREN, SYM_DO_IIFE], this.la?.id);
     }
   },
 
@@ -975,58 +939,58 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 40:
-    return this.parseInvocation();
-  case 44:
-    return this.parseInvocation();
-  case 46:
-    return this.parseInvocation();
-  case 47:
-    return this.parseInvocation();
-  case 54:
-    return this.parseInvocation();
-  case 55:
-    return this.parseInvocation();
-  case 61:
-    return this.parseInvocation();
-  case 62:
-    return this.parseInvocation();
-  case 63:
-    return this.parseInvocation();
-  case 64:
-    return this.parseInvocation();
-  case 65:
-    return this.parseInvocation();
-  case 66:
-    return this.parseInvocation();
-  case 75:
-    return this.parseInvocation();
-  case 77:
+      case SYM_IDENTIFIER:
+    return this.parseAssignable();
+  case SYM_NUMBER:
+    return this.parseLiteral();
+  case SYM_STRING:
+    return this.parseLiteral();
+  case SYM_STRING_START:
+    return this.parseLiteral();
+  case SYM_REGEX:
+    return this.parseLiteral();
+  case SYM_REGEX_START:
+    return this.parseLiteral();
+  case SYM_JS:
+    return this.parseLiteral();
+  case SYM_UNDEFINED:
+    return this.parseLiteral();
+  case SYM_NULL:
+    return this.parseLiteral();
+  case SYM_BOOL:
+    return this.parseLiteral();
+  case SYM_INFINITY:
+    return this.parseLiteral();
+  case SYM_NAN:
+    return this.parseLiteral();
+  case SYM_LBRACKET:
+    return this.parseRange();
+  case SYM_AT:
     return this.parseThis();
-  case 83:
+  case SYM_SUPER:
     return this.parseSuper();
-  case 86:
-    return this.parseInvocation();
-  case 95:
-    return this.parseInvocation();
-  case 98:
-    return this.parseInvocation();
-  case 99:
-    return this.parseInvocation();
-  case 111:
+  case SYM_DYNAMIC_IMPORT:
+    return this.parseAssignable();
+  case SYM_PARAM_START:
+    return this.parseAssignable();
+  case SYM_THIN_ARROW:
+    return this.parseAssignable();
+  case SYM_FAT_ARROW:
+    return this.parseAssignable();
+  case SYM_NEW_TARGET:
     return this.parseMetaProperty();
-  case 112:
+  case SYM_IMPORT_META:
     return this.parseMetaProperty();
-  case 113:
-    return this.parseInvocation();
-  case 138:
+  case SYM_LBRACE:
+    return this.parseAssignable();
+  case SYM_THIS:
     return this.parseThis();
-  case 153:
-    return this.parseInvocation();
-  case 179:
+  case SYM_LPAREN:
+    return this.parseParenthetical();
+  case SYM_DO_IIFE:
     return this.parseDoIife();
     default:
-      this._error([40, 44, 46, 47, 54, 55, 61, 62, 63, 64, 65, 66, 75, 77, 83, 86, 95, 98, 99, 111, 112, 113, 138, 153, 179], this.la?.id);
+      this._error([SYM_IDENTIFIER, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LBRACKET, SYM_AT, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_LBRACE, SYM_THIS, SYM_LPAREN, SYM_DO_IIFE], this.la?.id);
     }
   },
 
@@ -1034,7 +998,7 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 83:
+      case SYM_SUPER:
     $1 = this._match(SYM_SUPER);
           $2 = this._match(SYM_INDEX_START);
           $3 = this._match(SYM_INDENT);
@@ -1043,7 +1007,7 @@ parse(input) {
           $6 = this._match(SYM_INDEX_END);
     return ["[]", "super", $4];
     default:
-      this._error([83], this.la?.id);
+      this._error([SYM_SUPER], this.la?.id);
     }
   },
 
@@ -1051,18 +1015,18 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 111:
+      case SYM_NEW_TARGET:
     $1 = this._match(SYM_NEW_TARGET);
           $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
     return [".", "new", $3];
-  case 112:
+  case SYM_IMPORT_META:
     $1 = this._match(SYM_IMPORT_META);
           $2 = this._match(SYM_DOT);
           $3 = this.parseProperty();
     return [".", "import", $3];
     default:
-      this._error([111, 112], this.la?.id);
+      this._error([SYM_NEW_TARGET, SYM_IMPORT_META], this.la?.id);
     }
   },
 
@@ -1070,14 +1034,14 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 113:
+      case SYM_LBRACE:
     $1 = this._match(SYM_LBRACE);
           $2 = this.parseAssignList();
           $3 = this.parseOptComma();
           $4 = this._match(SYM_RBRACE);
     return ["object", ...$2];
     default:
-      this._error([113], this.la?.id);
+      this._error([SYM_LBRACE], this.la?.id);
     }
   },
 
@@ -1105,7 +1069,7 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 121:
+      case SYM_CLASS:
     $1 = this._match(SYM_CLASS);
           $2 = this.parseSimpleAssignable();
           $3 = this._match(SYM_EXTENDS);
@@ -1113,7 +1077,7 @@ parse(input) {
           $5 = this.parseBlock();
     return ["class", $2, $4, $5];
     default:
-      this._error([121], this.la?.id);
+      this._error([SYM_CLASS], this.la?.id);
     }
   },
 
@@ -1121,7 +1085,7 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 123:
+      case SYM_IMPORT:
     $1 = this._match(SYM_IMPORT);
           $2 = this.parseImportDefaultSpecifier();
           $3 = this._match(SYM_COMMA);
@@ -1133,7 +1097,7 @@ parse(input) {
           $9 = this.parseString();
     return ["import", [$2, $5], $9];
     default:
-      this._error([123], this.la?.id);
+      this._error([SYM_IMPORT], this.la?.id);
     }
   },
 
@@ -1161,15 +1125,15 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 40:
+      case SYM_IDENTIFIER:
     return this.parseIdentifier();
-  case 129:
+  case SYM_DEFAULT:
     $1 = this._match(SYM_DEFAULT);
           $2 = this._match(SYM_AS);
           $3 = this.parseIdentifier();
     return [$1, $3];
     default:
-      this._error([40, 129], this.la?.id);
+      this._error([SYM_IDENTIFIER, SYM_DEFAULT], this.la?.id);
     }
   },
 
@@ -1201,7 +1165,7 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 131:
+      case SYM_EXPORT:
     $1 = this._match(SYM_EXPORT);
           $2 = this._match(SYM_LBRACE);
           $3 = this.parseExportSpecifierList();
@@ -1211,7 +1175,7 @@ parse(input) {
           $7 = this.parseString();
     return ["export-from", $3, $7];
     default:
-      this._error([131], this.la?.id);
+      this._error([SYM_EXPORT], this.la?.id);
     }
   },
 
@@ -1239,15 +1203,15 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 40:
+      case SYM_IDENTIFIER:
     return this.parseIdentifier();
-  case 129:
+  case SYM_DEFAULT:
     $1 = this._match(SYM_DEFAULT);
           $2 = this._match(SYM_AS);
           $3 = this.parseIdentifier();
     return [$1, $3];
     default:
-      this._error([40, 129], this.la?.id);
+      this._error([SYM_IDENTIFIER, SYM_DEFAULT], this.la?.id);
     }
   },
 
@@ -1255,62 +1219,16 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 40:
-    return this.parseValue();
-  case 44:
-    return this.parseValue();
-  case 46:
-    return this.parseValue();
-  case 47:
-    return this.parseValue();
-  case 54:
-    return this.parseValue();
-  case 55:
-    return this.parseValue();
-  case 61:
-    return this.parseValue();
-  case 62:
-    return this.parseValue();
-  case 63:
-    return this.parseValue();
-  case 64:
-    return this.parseValue();
-  case 65:
-    return this.parseValue();
-  case 66:
-    return this.parseValue();
-  case 75:
-    return this.parseValue();
-  case 77:
-    return this.parseValue();
-  case 83:
+      case SYM_SUPER:
     $1 = this._match(SYM_SUPER);
           $2 = this.parseArguments();
     return ["super", ...$2];
-  case 86:
+  case SYM_DYNAMIC_IMPORT:
     $1 = this._match(SYM_DYNAMIC_IMPORT);
           $2 = this.parseArguments();
     return ["import", ...$2];
-  case 95:
-    return this.parseValue();
-  case 98:
-    return this.parseValue();
-  case 99:
-    return this.parseValue();
-  case 111:
-    return this.parseValue();
-  case 112:
-    return this.parseValue();
-  case 113:
-    return this.parseValue();
-  case 138:
-    return this.parseValue();
-  case 153:
-    return this.parseValue();
-  case 179:
-    return this.parseValue();
     default:
-      this._error([40, 44, 46, 47, 54, 55, 61, 62, 63, 64, 65, 66, 75, 77, 83, 86, 95, 98, 99, 111, 112, 113, 138, 153, 179], this.la?.id);
+      this._error([SYM_SUPER, SYM_DYNAMIC_IMPORT], this.la?.id);
     }
   },
 
@@ -1318,11 +1236,11 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 136:
+      case SYM_FUNC_EXIST:
     $1 = this._match(SYM_FUNC_EXIST);
     return true;
     default:
-      this._error([136], this.la?.id);
+      this._error([SYM_FUNC_EXIST], this.la?.id);
     }
   },
 
@@ -1330,14 +1248,14 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 29:
+      case SYM_CALL_START:
     $1 = this._match(SYM_CALL_START);
           $2 = this.parseArgList();
           $3 = this.parseOptComma();
           $4 = this._match(SYM_CALL_END);
     return $2;
     default:
-      this._error([29], this.la?.id);
+      this._error([SYM_CALL_START], this.la?.id);
     }
   },
 
@@ -1345,14 +1263,14 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 77:
+      case SYM_AT:
     $1 = this._match(SYM_AT);
     return "this";
-  case 138:
+  case SYM_THIS:
     $1 = this._match(SYM_THIS);
     return "this";
     default:
-      this._error([77, 138], this.la?.id);
+      this._error([SYM_AT, SYM_THIS], this.la?.id);
     }
   },
 
@@ -1372,14 +1290,14 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 75:
+      case SYM_LBRACKET:
     $1 = this._match(SYM_LBRACKET);
           $2 = this.parseArgElisionList();
           $3 = this.parseOptElisions();
           $4 = this._match(SYM_RBRACKET);
     return ["array", ...$2, ...$3];
     default:
-      this._error([75], this.la?.id);
+      this._error([SYM_LBRACKET], this.la?.id);
     }
   },
 
@@ -1387,14 +1305,14 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 78:
+      case SYM_ELLIPSIS:
     $1 = this._match(SYM_ELLIPSIS);
     return "...";
-  case 143:
+  case SYM_RANGE_INCL:
     $1 = this._match(SYM_RANGE_INCL);
     return "..";
     default:
-      this._error([78, 143], this.la?.id);
+      this._error([SYM_ELLIPSIS, SYM_RANGE_INCL], this.la?.id);
     }
   },
 
@@ -1417,110 +1335,110 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 11:
+      case SYM_STATEMENT:
     return this.parseExpression();
-  case 27:
+  case SYM_DEF:
     return this.parseExpression();
-  case 35:
+  case SYM_YIELD:
     return this.parseExpression();
-  case 40:
+  case SYM_IDENTIFIER:
     return this.parseExpression();
-  case 44:
+  case SYM_NUMBER:
     return this.parseExpression();
-  case 46:
+  case SYM_STRING:
     return this.parseExpression();
-  case 47:
+  case SYM_STRING_START:
     return this.parseExpression();
-  case 54:
+  case SYM_REGEX:
     return this.parseExpression();
-  case 55:
+  case SYM_REGEX_START:
     return this.parseExpression();
-  case 61:
+  case SYM_JS:
     return this.parseExpression();
-  case 62:
+  case SYM_UNDEFINED:
     return this.parseExpression();
-  case 63:
+  case SYM_NULL:
     return this.parseExpression();
-  case 64:
+  case SYM_BOOL:
     return this.parseExpression();
-  case 65:
+  case SYM_INFINITY:
     return this.parseExpression();
-  case 66:
+  case SYM_NAN:
     return this.parseExpression();
-  case 75:
+  case SYM_LBRACKET:
     return this.parseExpression();
-  case 77:
+  case SYM_AT:
     return this.parseExpression();
-  case 78:
+  case SYM_ELLIPSIS:
     return this.parseRangeDots();
-  case 83:
+  case SYM_SUPER:
     return this.parseExpression();
-  case 86:
+  case SYM_DYNAMIC_IMPORT:
     return this.parseExpression();
-  case 94:
+  case SYM_RETURN:
     return this.parseExpression();
-  case 95:
+  case SYM_PARAM_START:
     return this.parseExpression();
-  case 98:
+  case SYM_THIN_ARROW:
     return this.parseExpression();
-  case 99:
+  case SYM_FAT_ARROW:
     return this.parseExpression();
-  case 111:
+  case SYM_NEW_TARGET:
     return this.parseExpression();
-  case 112:
+  case SYM_IMPORT_META:
     return this.parseExpression();
-  case 113:
+  case SYM_LBRACE:
     return this.parseExpression();
-  case 114:
+  case SYM_FOR:
     return this.parseExpression();
-  case 121:
+  case SYM_CLASS:
     return this.parseExpression();
-  case 123:
+  case SYM_IMPORT:
     return this.parseExpression();
-  case 131:
+  case SYM_EXPORT:
     return this.parseExpression();
-  case 138:
+  case SYM_THIS:
     return this.parseExpression();
-  case 143:
+  case SYM_RANGE_INCL:
     return this.parseRangeDots();
-  case 148:
+  case SYM_TRY:
     return this.parseExpression();
-  case 152:
+  case SYM_THROW:
     return this.parseExpression();
-  case 153:
+  case SYM_LPAREN:
     return this.parseExpression();
-  case 156:
+  case SYM_WHILE:
     return this.parseExpression();
-  case 157:
+  case SYM_UNTIL:
     return this.parseExpression();
-  case 159:
+  case SYM_LOOP:
     return this.parseExpression();
-  case 163:
+  case SYM_AWAIT:
     return this.parseExpression();
-  case 166:
+  case SYM_SWITCH:
     return this.parseExpression();
-  case 172:
+  case SYM_IF:
     return this.parseExpression();
-  case 174:
+  case SYM_UNLESS:
     return this.parseExpression();
-  case 177:
+  case SYM_UNARY:
     return this.parseExpression();
-  case 178:
+  case SYM_DO:
     return this.parseExpression();
-  case 179:
+  case SYM_DO_IIFE:
     return this.parseExpression();
-  case 180:
+  case SYM_UNARY_MATH:
     return this.parseExpression();
-  case 181:
+  case SYM_MINUS:
     return this.parseExpression();
-  case 182:
+  case SYM_PLUS:
     return this.parseExpression();
-  case 183:
+  case SYM_DEC:
     return this.parseExpression();
-  case 184:
+  case SYM_INC:
     return this.parseExpression();
     default:
-      this._error([11, 27, 35, 40, 44, 46, 47, 54, 55, 61, 62, 63, 64, 65, 66, 75, 77, 78, 83, 86, 94, 95, 98, 99, 111, 112, 113, 114, 121, 123, 131, 138, 143, 148, 152, 153, 156, 157, 159, 163, 166, 172, 174, 177, 178, 179, 180, 181, 182, 183, 184], this.la?.id);
+      this._error([SYM_STATEMENT, SYM_DEF, SYM_YIELD, SYM_IDENTIFIER, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LBRACKET, SYM_AT, SYM_ELLIPSIS, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_RETURN, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_LBRACE, SYM_FOR, SYM_CLASS, SYM_IMPORT, SYM_EXPORT, SYM_THIS, SYM_RANGE_INCL, SYM_TRY, SYM_THROW, SYM_LPAREN, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_AWAIT, SYM_SWITCH, SYM_IF, SYM_UNLESS, SYM_UNARY, SYM_DO, SYM_DO_IIFE, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_DEC, SYM_INC], this.la?.id);
     }
   },
 
@@ -1548,109 +1466,109 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 11:
+      case SYM_STATEMENT:
     return this.parseExpression();
-  case 27:
+  case SYM_DEF:
     return this.parseExpression();
-  case 35:
+  case SYM_YIELD:
     return this.parseExpression();
-  case 40:
+  case SYM_IDENTIFIER:
     return this.parseExpression();
-  case 44:
+  case SYM_NUMBER:
     return this.parseExpression();
-  case 46:
+  case SYM_STRING:
     return this.parseExpression();
-  case 47:
+  case SYM_STRING_START:
     return this.parseExpression();
-  case 54:
+  case SYM_REGEX:
     return this.parseExpression();
-  case 55:
+  case SYM_REGEX_START:
     return this.parseExpression();
-  case 61:
+  case SYM_JS:
     return this.parseExpression();
-  case 62:
+  case SYM_UNDEFINED:
     return this.parseExpression();
-  case 63:
+  case SYM_NULL:
     return this.parseExpression();
-  case 64:
+  case SYM_BOOL:
     return this.parseExpression();
-  case 65:
+  case SYM_INFINITY:
     return this.parseExpression();
-  case 66:
+  case SYM_NAN:
     return this.parseExpression();
-  case 75:
+  case SYM_LBRACKET:
     return this.parseExpression();
-  case 77:
+  case SYM_AT:
     return this.parseExpression();
-  case 78:
+  case SYM_ELLIPSIS:
     $1 = this._match(SYM_ELLIPSIS);
     return "...";
-  case 83:
+  case SYM_SUPER:
     return this.parseExpression();
-  case 86:
+  case SYM_DYNAMIC_IMPORT:
     return this.parseExpression();
-  case 94:
+  case SYM_RETURN:
     return this.parseExpression();
-  case 95:
+  case SYM_PARAM_START:
     return this.parseExpressionLine();
-  case 98:
+  case SYM_THIN_ARROW:
     return this.parseExpressionLine();
-  case 99:
+  case SYM_FAT_ARROW:
     return this.parseExpressionLine();
-  case 111:
+  case SYM_NEW_TARGET:
     return this.parseExpression();
-  case 112:
+  case SYM_IMPORT_META:
     return this.parseExpression();
-  case 113:
+  case SYM_LBRACE:
     return this.parseExpression();
-  case 114:
+  case SYM_FOR:
     return this.parseExpression();
-  case 121:
+  case SYM_CLASS:
     return this.parseExpression();
-  case 123:
+  case SYM_IMPORT:
     return this.parseExpression();
-  case 131:
+  case SYM_EXPORT:
     return this.parseExpression();
-  case 138:
+  case SYM_THIS:
     return this.parseExpression();
-  case 148:
+  case SYM_TRY:
     return this.parseExpression();
-  case 152:
+  case SYM_THROW:
     return this.parseExpression();
-  case 153:
+  case SYM_LPAREN:
     return this.parseExpression();
-  case 156:
+  case SYM_WHILE:
     return this.parseExpression();
-  case 157:
+  case SYM_UNTIL:
     return this.parseExpression();
-  case 159:
+  case SYM_LOOP:
     return this.parseExpression();
-  case 163:
+  case SYM_AWAIT:
     return this.parseExpression();
-  case 166:
+  case SYM_SWITCH:
     return this.parseExpression();
-  case 172:
+  case SYM_IF:
     return this.parseExpression();
-  case 174:
+  case SYM_UNLESS:
     return this.parseExpression();
-  case 177:
+  case SYM_UNARY:
     return this.parseExpressionLine();
-  case 178:
+  case SYM_DO:
     return this.parseExpressionLine();
-  case 179:
+  case SYM_DO_IIFE:
     return this.parseExpressionLine();
-  case 180:
+  case SYM_UNARY_MATH:
     return this.parseExpression();
-  case 181:
+  case SYM_MINUS:
     return this.parseExpression();
-  case 182:
+  case SYM_PLUS:
     return this.parseExpression();
-  case 183:
+  case SYM_DEC:
     return this.parseExpression();
-  case 184:
+  case SYM_INC:
     return this.parseExpression();
     default:
-      this._error([11, 27, 35, 40, 44, 46, 47, 54, 55, 61, 62, 63, 64, 65, 66, 75, 77, 78, 83, 86, 94, 95, 98, 99, 111, 112, 113, 114, 121, 123, 131, 138, 148, 152, 153, 156, 157, 159, 163, 166, 172, 174, 177, 178, 179, 180, 181, 182, 183, 184], this.la?.id);
+      this._error([SYM_STATEMENT, SYM_DEF, SYM_YIELD, SYM_IDENTIFIER, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LBRACKET, SYM_AT, SYM_ELLIPSIS, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_RETURN, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_LBRACE, SYM_FOR, SYM_CLASS, SYM_IMPORT, SYM_EXPORT, SYM_THIS, SYM_TRY, SYM_THROW, SYM_LPAREN, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_AWAIT, SYM_SWITCH, SYM_IF, SYM_UNLESS, SYM_UNARY, SYM_DO, SYM_DO_IIFE, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_DEC, SYM_INC], this.la?.id);
     }
   },
 
@@ -1678,110 +1596,110 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 11:
+      case SYM_STATEMENT:
     return this.parseArg();
-  case 27:
+  case SYM_DEF:
     return this.parseArg();
-  case 35:
+  case SYM_YIELD:
     return this.parseArg();
-  case 40:
+  case SYM_IDENTIFIER:
     return this.parseArg();
-  case 44:
+  case SYM_NUMBER:
     return this.parseArg();
-  case 46:
+  case SYM_STRING:
     return this.parseArg();
-  case 47:
+  case SYM_STRING_START:
     return this.parseArg();
-  case 54:
+  case SYM_REGEX:
     return this.parseArg();
-  case 55:
+  case SYM_REGEX_START:
     return this.parseArg();
-  case 59:
+  case SYM_COMMA:
     return this.parseElisions();
-  case 61:
+  case SYM_JS:
     return this.parseArg();
-  case 62:
+  case SYM_UNDEFINED:
     return this.parseArg();
-  case 63:
+  case SYM_NULL:
     return this.parseArg();
-  case 64:
+  case SYM_BOOL:
     return this.parseArg();
-  case 65:
+  case SYM_INFINITY:
     return this.parseArg();
-  case 66:
+  case SYM_NAN:
     return this.parseArg();
-  case 75:
+  case SYM_LBRACKET:
     return this.parseArg();
-  case 77:
+  case SYM_AT:
     return this.parseArg();
-  case 78:
+  case SYM_ELLIPSIS:
     return this.parseArg();
-  case 83:
+  case SYM_SUPER:
     return this.parseArg();
-  case 86:
+  case SYM_DYNAMIC_IMPORT:
     return this.parseArg();
-  case 94:
+  case SYM_RETURN:
     return this.parseArg();
-  case 95:
+  case SYM_PARAM_START:
     return this.parseArg();
-  case 98:
+  case SYM_THIN_ARROW:
     return this.parseArg();
-  case 99:
+  case SYM_FAT_ARROW:
     return this.parseArg();
-  case 111:
+  case SYM_NEW_TARGET:
     return this.parseArg();
-  case 112:
+  case SYM_IMPORT_META:
     return this.parseArg();
-  case 113:
+  case SYM_LBRACE:
     return this.parseArg();
-  case 114:
+  case SYM_FOR:
     return this.parseArg();
-  case 121:
+  case SYM_CLASS:
     return this.parseArg();
-  case 123:
+  case SYM_IMPORT:
     return this.parseArg();
-  case 131:
+  case SYM_EXPORT:
     return this.parseArg();
-  case 138:
+  case SYM_THIS:
     return this.parseArg();
-  case 148:
+  case SYM_TRY:
     return this.parseArg();
-  case 152:
+  case SYM_THROW:
     return this.parseArg();
-  case 153:
+  case SYM_LPAREN:
     return this.parseArg();
-  case 156:
+  case SYM_WHILE:
     return this.parseArg();
-  case 157:
+  case SYM_UNTIL:
     return this.parseArg();
-  case 159:
+  case SYM_LOOP:
     return this.parseArg();
-  case 163:
+  case SYM_AWAIT:
     return this.parseArg();
-  case 166:
+  case SYM_SWITCH:
     return this.parseArg();
-  case 172:
+  case SYM_IF:
     return this.parseArg();
-  case 174:
+  case SYM_UNLESS:
     return this.parseArg();
-  case 177:
+  case SYM_UNARY:
     return this.parseArg();
-  case 178:
+  case SYM_DO:
     return this.parseArg();
-  case 179:
+  case SYM_DO_IIFE:
     return this.parseArg();
-  case 180:
+  case SYM_UNARY_MATH:
     return this.parseArg();
-  case 181:
+  case SYM_MINUS:
     return this.parseArg();
-  case 182:
+  case SYM_PLUS:
     return this.parseArg();
-  case 183:
+  case SYM_DEC:
     return this.parseArg();
-  case 184:
+  case SYM_INC:
     return this.parseArg();
     default:
-      this._error([11, 27, 35, 40, 44, 46, 47, 54, 55, 59, 61, 62, 63, 64, 65, 66, 75, 77, 78, 83, 86, 94, 95, 98, 99, 111, 112, 113, 114, 121, 123, 131, 138, 148, 152, 153, 156, 157, 159, 163, 166, 172, 174, 177, 178, 179, 180, 181, 182, 183, 184], this.la?.id);
+      this._error([SYM_STATEMENT, SYM_DEF, SYM_YIELD, SYM_IDENTIFIER, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_COMMA, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LBRACKET, SYM_AT, SYM_ELLIPSIS, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_RETURN, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_LBRACE, SYM_FOR, SYM_CLASS, SYM_IMPORT, SYM_EXPORT, SYM_THIS, SYM_TRY, SYM_THROW, SYM_LPAREN, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_AWAIT, SYM_SWITCH, SYM_IF, SYM_UNLESS, SYM_UNARY, SYM_DO, SYM_DO_IIFE, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_DEC, SYM_INC], this.la?.id);
     }
   },
 
@@ -1789,12 +1707,12 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 59:
+      case SYM_COMMA:
     $1 = this._match(SYM_COMMA);
           $2 = this.parseElisions();
     return [...$2];
     default:
-      this._error([59], this.la?.id);
+      this._error([SYM_COMMA], this.la?.id);
     }
   },
 
@@ -1862,7 +1780,7 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 148:
+      case SYM_TRY:
     $1 = this._match(SYM_TRY);
           $2 = this.parseBlock();
           $3 = this.parseCatch();
@@ -1870,7 +1788,7 @@ parse(input) {
           $5 = this.parseBlock();
     return ["try", $2, $3, $5];
     default:
-      this._error([148], this.la?.id);
+      this._error([SYM_TRY], this.la?.id);
     }
   },
 
@@ -1878,12 +1796,12 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 151:
+      case SYM_CATCH:
     $1 = this._match(SYM_CATCH);
           $2 = this.parseBlock();
     return [null, $2];
     default:
-      this._error([151], this.la?.id);
+      this._error([SYM_CATCH], this.la?.id);
     }
   },
 
@@ -1891,14 +1809,14 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 152:
+      case SYM_THROW:
     $1 = this._match(SYM_THROW);
           $2 = this._match(SYM_INDENT);
           $3 = this.parseObject();
           $4 = this._match(SYM_OUTDENT);
     return ["throw", $3];
     default:
-      this._error([152], this.la?.id);
+      this._error([SYM_THROW], this.la?.id);
     }
   },
 
@@ -1906,7 +1824,7 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 153:
+      case SYM_LPAREN:
     $1 = this._match(SYM_LPAREN);
           $2 = this._match(SYM_INDENT);
           $3 = this.parseBody();
@@ -1914,7 +1832,7 @@ parse(input) {
           $5 = this._match(SYM_RPAREN);
     return $3.length === 1 ? $3[0] : $3;
     default:
-      this._error([153], this.la?.id);
+      this._error([SYM_LPAREN], this.la?.id);
     }
   },
 
@@ -1922,20 +1840,20 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 156:
+      case SYM_WHILE:
     $1 = this._match(SYM_WHILE);
           $2 = this.parseExpression();
           $3 = this._match(SYM_WHEN);
           $4 = this.parseExpression();
     return ["while", $2, $4];
-  case 157:
+  case SYM_UNTIL:
     $1 = this._match(SYM_UNTIL);
           $2 = this.parseExpression();
           $3 = this._match(SYM_WHEN);
           $4 = this.parseExpression();
     return ["until", $2, $4];
     default:
-      this._error([156, 157], this.la?.id);
+      this._error([SYM_WHILE, SYM_UNTIL], this.la?.id);
     }
   },
 
@@ -1943,106 +1861,22 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 11:
-    return this.parseExpression();
-  case 27:
-    return this.parseExpression();
-  case 35:
-    return this.parseExpression();
-  case 40:
-    return this.parseExpression();
-  case 44:
-    return this.parseExpression();
-  case 46:
-    return this.parseExpression();
-  case 47:
-    return this.parseExpression();
-  case 54:
-    return this.parseExpression();
-  case 55:
-    return this.parseExpression();
-  case 61:
-    return this.parseExpression();
-  case 62:
-    return this.parseExpression();
-  case 63:
-    return this.parseExpression();
-  case 64:
-    return this.parseExpression();
-  case 65:
-    return this.parseExpression();
-  case 66:
-    return this.parseExpression();
-  case 75:
-    return this.parseExpression();
-  case 77:
-    return this.parseExpression();
-  case 83:
-    return this.parseExpression();
-  case 86:
-    return this.parseExpression();
-  case 94:
-    return this.parseExpression();
-  case 95:
-    return this.parseExpression();
-  case 98:
-    return this.parseExpression();
-  case 99:
-    return this.parseExpression();
-  case 111:
-    return this.parseExpression();
-  case 112:
-    return this.parseExpression();
-  case 113:
-    return this.parseExpression();
-  case 114:
-    return this.parseExpression();
-  case 121:
-    return this.parseExpression();
-  case 123:
-    return this.parseExpression();
-  case 131:
-    return this.parseExpression();
-  case 138:
-    return this.parseExpression();
-  case 148:
-    return this.parseExpression();
-  case 152:
-    return this.parseExpression();
-  case 153:
-    return this.parseExpression();
-  case 156:
-    return this.parseExpression();
-  case 157:
-    return this.parseExpression();
-  case 159:
+      case SYM_STATEMENT:
+    return this.parseStatement();
+  case SYM_RETURN:
+    return this.parseStatement();
+  case SYM_IMPORT:
+    return this.parseStatement();
+  case SYM_EXPORT:
+    return this.parseStatement();
+  case SYM_WHILE:
+    return this.parseWhileSource();
+  case SYM_UNTIL:
+    return this.parseWhileSource();
+  case SYM_LOOP:
     return this.parseLoop();
-  case 163:
-    return this.parseExpression();
-  case 166:
-    return this.parseExpression();
-  case 172:
-    return this.parseExpression();
-  case 174:
-    return this.parseExpression();
-  case 177:
-    return this.parseExpression();
-  case 178:
-    return this.parseExpression();
-  case 179:
-    return this.parseExpression();
-  case 180:
-    return this.parseExpression();
-  case 181:
-    return this.parseExpression();
-  case 182:
-    return this.parseExpression();
-  case 183:
-    return this.parseExpression();
-  case 184:
-    return this.parseExpression();
     default:
-      this._error([11, 27, 35, 40, 44, 46, 47, 54, 55, 61, 62, 63, 64, 65, 66, 75, 77, 83, 86, 94, 95, 98, 99, 111, 112, 113, 114, 121, 123, 131, 138, 148, 152, 153, 156, 157, 159, 163, 166, 172, 174, 177, 178, 179, 180, 181, 182, 183, 184], this.la?.id);
+      this._error([SYM_STATEMENT, SYM_RETURN, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP], this.la?.id);
     }
   },
 
@@ -2050,12 +1884,12 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 159:
+      case SYM_LOOP:
     $1 = this._match(SYM_LOOP);
           $2 = this.parseExpression();
     return ["loop", [$2]];
     default:
-      this._error([159], this.la?.id);
+      this._error([SYM_LOOP], this.la?.id);
     }
   },
 
@@ -2063,106 +1897,15 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 11:
-    return this.parseExpression();
-  case 27:
-    return this.parseExpression();
-  case 35:
-    return this.parseExpression();
-  case 40:
-    return this.parseExpression();
-  case 44:
-    return this.parseExpression();
-  case 46:
-    return this.parseExpression();
-  case 47:
-    return this.parseExpression();
-  case 54:
-    return this.parseExpression();
-  case 55:
-    return this.parseExpression();
-  case 61:
-    return this.parseExpression();
-  case 62:
-    return this.parseExpression();
-  case 63:
-    return this.parseExpression();
-  case 64:
-    return this.parseExpression();
-  case 65:
-    return this.parseExpression();
-  case 66:
-    return this.parseExpression();
-  case 75:
-    return this.parseExpression();
-  case 77:
-    return this.parseExpression();
-  case 83:
-    return this.parseExpression();
-  case 86:
-    return this.parseExpression();
-  case 94:
-    return this.parseExpression();
-  case 95:
-    return this.parseExpression();
-  case 98:
-    return this.parseExpression();
-  case 99:
-    return this.parseExpression();
-  case 111:
-    return this.parseExpression();
-  case 112:
-    return this.parseExpression();
-  case 113:
-    return this.parseExpression();
-  case 114:
-    return this.parseExpression();
-  case 121:
-    return this.parseExpression();
-  case 123:
-    return this.parseExpression();
-  case 131:
-    return this.parseExpression();
-  case 138:
-    return this.parseExpression();
-  case 148:
-    return this.parseExpression();
-  case 152:
-    return this.parseExpression();
-  case 153:
-    return this.parseExpression();
-  case 156:
-    return this.parseExpression();
-  case 157:
-    return this.parseExpression();
-  case 159:
-    return this.parseExpression();
-  case 163:
-    return this.parseExpression();
-  case 166:
-    return this.parseExpression();
-  case 172:
-    return this.parseExpression();
-  case 174:
-    return this.parseExpression();
-  case 177:
-    return this.parseExpression();
-  case 178:
-    return this.parseExpression();
-  case 179:
-    return this.parseExpression();
-  case 180:
-    return this.parseExpression();
-  case 181:
-    return this.parseExpression();
-  case 182:
-    return this.parseExpression();
-  case 183:
-    return this.parseExpression();
-  case 184:
-    return this.parseExpression();
+      case SYM_FOR:
+    $1 = this._match(SYM_FOR);
+          $2 = this.parseRange();
+          $3 = this._match(SYM_BY);
+          $4 = this.parseExpression();
+          $5 = this.parseBlock();
+    return ["for-in"  , [], $2, $4, null, $5];
     default:
-      this._error([11, 27, 35, 40, 44, 46, 47, 54, 55, 61, 62, 63, 64, 65, 66, 75, 77, 83, 86, 94, 95, 98, 99, 111, 112, 113, 114, 121, 123, 131, 138, 148, 152, 153, 156, 157, 159, 163, 166, 172, 174, 177, 178, 179, 180, 181, 182, 183, 184], this.la?.id);
+      this._error([SYM_FOR], this.la?.id);
     }
   },
 
@@ -2170,16 +1913,16 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 40:
+      case SYM_IDENTIFIER:
     return this.parseForVar();
-  case 75:
+  case SYM_LBRACKET:
     return this.parseForVar();
-  case 77:
+  case SYM_AT:
     return this.parseForVar();
-  case 113:
+  case SYM_LBRACE:
     return this.parseForVar();
     default:
-      this._error([40, 75, 77, 113], this.la?.id);
+      this._error([SYM_IDENTIFIER, SYM_LBRACKET, SYM_AT, SYM_LBRACE], this.la?.id);
     }
   },
 
@@ -2187,16 +1930,16 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 40:
+      case SYM_IDENTIFIER:
     return this.parseIdentifier();
-  case 75:
+  case SYM_LBRACKET:
     return this.parseArray();
-  case 77:
+  case SYM_AT:
     return this.parseThisProperty();
-  case 113:
+  case SYM_LBRACE:
     return this.parseObject();
     default:
-      this._error([40, 75, 77, 113], this.la?.id);
+      this._error([SYM_IDENTIFIER, SYM_LBRACKET, SYM_AT, SYM_LBRACE], this.la?.id);
     }
   },
 
@@ -2204,16 +1947,16 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 40:
+      case SYM_IDENTIFIER:
     return this.parseForValue();
-  case 75:
+  case SYM_LBRACKET:
     return this.parseForValue();
-  case 77:
+  case SYM_AT:
     return this.parseForValue();
-  case 113:
+  case SYM_LBRACE:
     return this.parseForValue();
     default:
-      this._error([40, 75, 77, 113], this.la?.id);
+      this._error([SYM_IDENTIFIER, SYM_LBRACKET, SYM_AT, SYM_LBRACE], this.la?.id);
     }
   },
 
@@ -2221,7 +1964,7 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 166:
+      case SYM_SWITCH:
     $1 = this._match(SYM_SWITCH);
           $2 = this._match(SYM_INDENT);
           $3 = this.parseWhens();
@@ -2230,7 +1973,7 @@ parse(input) {
           $6 = this._match(SYM_OUTDENT);
     return ["switch", null, $3, $5];
     default:
-      this._error([166], this.la?.id);
+      this._error([SYM_SWITCH], this.la?.id);
     }
   },
 
@@ -2258,14 +2001,14 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 170:
+      case SYM_LEADING_WHEN:
     $1 = this._match(SYM_LEADING_WHEN);
           $2 = this.parseSimpleArgs();
           $3 = this.parseBlock();
           $4 = this._match(SYM_TERMINATOR);
     return ["when", $2, $3];
     default:
-      this._error([170], this.la?.id);
+      this._error([SYM_LEADING_WHEN], this.la?.id);
     }
   },
 
@@ -2293,7 +2036,7 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 174:
+      case SYM_UNLESS:
     $1 = this._match(SYM_UNLESS);
           $2 = this.parseExpression();
           $3 = this.parseBlock();
@@ -2301,7 +2044,7 @@ parse(input) {
           $5 = this.parseBlock();
     return ["if", ["!", $2], $3, $5];
     default:
-      this._error([174], this.la?.id);
+      this._error([SYM_UNLESS], this.la?.id);
     }
   },
 
@@ -2309,106 +2052,20 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 11:
-    return this.parseExpression();
-  case 27:
-    return this.parseExpression();
-  case 35:
-    return this.parseExpression();
-  case 40:
-    return this.parseExpression();
-  case 44:
-    return this.parseExpression();
-  case 46:
-    return this.parseExpression();
-  case 47:
-    return this.parseExpression();
-  case 54:
-    return this.parseExpression();
-  case 55:
-    return this.parseExpression();
-  case 61:
-    return this.parseExpression();
-  case 62:
-    return this.parseExpression();
-  case 63:
-    return this.parseExpression();
-  case 64:
-    return this.parseExpression();
-  case 65:
-    return this.parseExpression();
-  case 66:
-    return this.parseExpression();
-  case 75:
-    return this.parseExpression();
-  case 77:
-    return this.parseExpression();
-  case 83:
-    return this.parseExpression();
-  case 86:
-    return this.parseExpression();
-  case 94:
-    return this.parseExpression();
-  case 95:
-    return this.parseExpression();
-  case 98:
-    return this.parseExpression();
-  case 99:
-    return this.parseExpression();
-  case 111:
-    return this.parseExpression();
-  case 112:
-    return this.parseExpression();
-  case 113:
-    return this.parseExpression();
-  case 114:
-    return this.parseExpression();
-  case 121:
-    return this.parseExpression();
-  case 123:
-    return this.parseExpression();
-  case 131:
-    return this.parseExpression();
-  case 138:
-    return this.parseExpression();
-  case 148:
-    return this.parseExpression();
-  case 152:
-    return this.parseExpression();
-  case 153:
-    return this.parseExpression();
-  case 156:
-    return this.parseExpression();
-  case 157:
-    return this.parseExpression();
-  case 159:
-    return this.parseExpression();
-  case 163:
-    return this.parseExpression();
-  case 166:
-    return this.parseExpression();
-  case 172:
-    return this.parseExpression();
-  case 174:
-    return this.parseExpression();
-  case 177:
-    return this.parseExpression();
-  case 178:
-    return this.parseExpression();
-  case 179:
-    return this.parseExpression();
-  case 180:
-    return this.parseExpression();
-  case 181:
-    return this.parseExpression();
-  case 182:
-    return this.parseExpression();
-  case 183:
-    return this.parseExpression();
-  case 184:
-    return this.parseExpression();
+      case SYM_STATEMENT:
+    return this.parseStatement();
+  case SYM_RETURN:
+    return this.parseStatement();
+  case SYM_IMPORT:
+    return this.parseStatement();
+  case SYM_EXPORT:
+    return this.parseStatement();
+  case SYM_IF:
+    return this.parseIfBlock();
+  case SYM_UNLESS:
+    return this.parseUnlessBlock();
     default:
-      this._error([11, 27, 35, 40, 44, 46, 47, 54, 55, 61, 62, 63, 64, 65, 66, 75, 77, 83, 86, 94, 95, 98, 99, 111, 112, 113, 114, 121, 123, 131, 138, 148, 152, 153, 156, 157, 159, 163, 166, 172, 174, 177, 178, 179, 180, 181, 182, 183, 184], this.la?.id);
+      this._error([SYM_STATEMENT, SYM_RETURN, SYM_IMPORT, SYM_EXPORT, SYM_IF, SYM_UNLESS], this.la?.id);
     }
   },
 
@@ -2416,20 +2073,20 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 177:
+      case SYM_UNARY:
     $1 = this._match(SYM_UNARY);
           $2 = this.parseExpressionLine();
     return [$1, $2];
-  case 178:
+  case SYM_DO:
     $1 = this._match(SYM_DO);
           $2 = this.parseExpressionLine();
     return ["do-iife", $2];
-  case 179:
+  case SYM_DO_IIFE:
     $1 = this._match(SYM_DO_IIFE);
           $2 = this.parseCodeLine();
     return ["do-iife", $2];
     default:
-      this._error([177, 178, 179], this.la?.id);
+      this._error([SYM_UNARY, SYM_DO, SYM_DO_IIFE], this.la?.id);
     }
   },
 
@@ -2437,106 +2094,92 @@ parse(input) {
     // Oracle-informed dispatch (cycle-free!)
     let $1, $2, $3, $4, $5, $6, $7, $8, $9;
     switch (this.la?.id) {
-      case 11:
-    return this.parseExpression();
-  case 27:
-    return this.parseExpression();
-  case 35:
-    return this.parseExpression();
-  case 40:
+      case SYM_IDENTIFIER:
     return this.parseSimpleAssignable();
-  case 44:
+  case SYM_NUMBER:
     return this.parseSimpleAssignable();
-  case 46:
+  case SYM_STRING:
     return this.parseSimpleAssignable();
-  case 47:
+  case SYM_STRING_START:
     return this.parseSimpleAssignable();
-  case 54:
+  case SYM_REGEX:
     return this.parseSimpleAssignable();
-  case 55:
+  case SYM_REGEX_START:
     return this.parseSimpleAssignable();
-  case 61:
+  case SYM_JS:
     return this.parseSimpleAssignable();
-  case 62:
+  case SYM_UNDEFINED:
     return this.parseSimpleAssignable();
-  case 63:
+  case SYM_NULL:
     return this.parseSimpleAssignable();
-  case 64:
+  case SYM_BOOL:
     return this.parseSimpleAssignable();
-  case 65:
+  case SYM_INFINITY:
     return this.parseSimpleAssignable();
-  case 66:
+  case SYM_NAN:
     return this.parseSimpleAssignable();
-  case 75:
+  case SYM_LBRACKET:
     return this.parseSimpleAssignable();
-  case 77:
+  case SYM_AT:
     return this.parseSimpleAssignable();
-  case 83:
+  case SYM_SUPER:
     return this.parseSimpleAssignable();
-  case 86:
+  case SYM_DYNAMIC_IMPORT:
     return this.parseSimpleAssignable();
-  case 94:
-    return this.parseExpression();
-  case 95:
+  case SYM_PARAM_START:
     return this.parseSimpleAssignable();
-  case 98:
+  case SYM_THIN_ARROW:
     return this.parseSimpleAssignable();
-  case 99:
+  case SYM_FAT_ARROW:
     return this.parseSimpleAssignable();
-  case 111:
+  case SYM_NEW_TARGET:
     return this.parseSimpleAssignable();
-  case 112:
+  case SYM_IMPORT_META:
     return this.parseSimpleAssignable();
-  case 113:
+  case SYM_LBRACE:
     return this.parseSimpleAssignable();
-  case 114:
-    return this.parseExpression();
-  case 121:
-    return this.parseExpression();
-  case 123:
-    return this.parseExpression();
-  case 131:
-    return this.parseExpression();
-  case 138:
+  case SYM_THIS:
     return this.parseSimpleAssignable();
-  case 148:
-    return this.parseExpression();
-  case 152:
-    return this.parseExpression();
-  case 153:
+  case SYM_LPAREN:
     return this.parseSimpleAssignable();
-  case 156:
-    return this.parseExpression();
-  case 157:
-    return this.parseExpression();
-  case 159:
-    return this.parseExpression();
-  case 163:
-    return this.parseExpression();
-  case 166:
-    return this.parseExpression();
-  case 172:
-    return this.parseExpression();
-  case 174:
-    return this.parseExpression();
-  case 177:
-    return this.parseExpression();
-  case 178:
-    return this.parseExpression();
-  case 179:
+  case SYM_AWAIT:
+    $1 = this._match(SYM_AWAIT);
+          $2 = this._match(SYM_INDENT);
+          $3 = this.parseObject();
+          $4 = this._match(SYM_OUTDENT);
+    return ["await", $3];
+  case SYM_UNARY:
+    $1 = this._match(SYM_UNARY);
+          $2 = this.parseExpression();
+    return [$1, $2];
+  case SYM_DO:
+    $1 = this._match(SYM_DO);
+          $2 = this.parseExpression();
+    return ["do-iife", $2];
+  case SYM_DO_IIFE:
     return this.parseSimpleAssignable();
-  case 180:
-    return this.parseExpression();
-  case 181:
-    return this.parseExpression();
-  case 182:
-    return this.parseExpression();
-  case 183:
-    return this.parseExpression();
-  case 184:
-    return this.parseExpression();
+  case SYM_UNARY_MATH:
+    $1 = this._match(SYM_UNARY_MATH);
+          $2 = this.parseExpression();
+    return [$1, $2];
+  case SYM_MINUS:
+    $1 = this._match(SYM_MINUS);
+          $2 = this.parseExpression();
+    return ["-", $2];
+  case SYM_PLUS:
+    $1 = this._match(SYM_PLUS);
+          $2 = this.parseExpression();
+    return ["+", $2];
+  case SYM_DEC:
+    $1 = this._match(SYM_DEC);
+          $2 = this.parseSimpleAssignable();
+    return ["--", $2, false];
+  case SYM_INC:
+    $1 = this._match(SYM_INC);
+          $2 = this.parseSimpleAssignable();
+    return ["++", $2, false];
     default:
-      this._error([11, 27, 35, 40, 44, 46, 47, 54, 55, 61, 62, 63, 64, 65, 66, 75, 77, 83, 86, 94, 95, 98, 99, 111, 112, 113, 114, 121, 123, 131, 138, 148, 152, 153, 156, 157, 159, 163, 166, 172, 174, 177, 178, 179, 180, 181, 182, 183, 184], this.la?.id);
+      this._error([SYM_IDENTIFIER, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LBRACKET, SYM_AT, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_LBRACE, SYM_THIS, SYM_LPAREN, SYM_AWAIT, SYM_UNARY, SYM_DO, SYM_DO_IIFE, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_DEC, SYM_INC], this.la?.id);
     }
   },
 
