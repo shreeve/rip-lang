@@ -1,9 +1,65 @@
 # Clean-Room PRD Parser Reimplementation - COMPLETE SPECIFICATION
 
-**Status:** Ready to implement  
-**Validation:** All corrections applied, all 7 failing tests explicitly addressed  
-**Timeline:** 64-88 hours (2-2.5 weeks focused development)  
+**Status:** Streamlined implementation in progress (Phase 1-5 complete)  
+**Current:** ~300 lines of clean PRD code (vs 4,500 in solar-old.rip)  
+**Approach:** Ruthless simplicity - match grammar, emit s-expressions  
 **Goal:** 962/962 tests passing (100%), ~30-35x performance improvement
+
+---
+
+## 🎯 Streamlined Implementation Path (CURRENT APPROACH)
+
+**Core insight:** "ALL WE NEED TO DO IS MATCH THE GRAMMAR AND EMIT THE PROPER SEXPS!"
+
+The table-driven parser is 350 lines and handles 100% of cases. A PRD parser doesn't need to be 4,550 lines!
+
+### What We're Actually Building
+
+**Simple mapping:**
+```coffee
+# For each grammar rule:
+Type → Symbol1 Symbol2 Symbol3  action
+
+# Generate:
+parseType() {
+  $1 = parse(Symbol1)
+  $2 = parse(Symbol2)  
+  $3 = parse(Symbol3)
+  return action($1, $2, $3)
+}
+```
+
+**Three complications:**
+1. **Left-recursion** → convert to loop (well-defined)
+2. **Conflicts** → try/catch (well-defined)
+3. **Actions** → compile to return statements (parse and substitute)
+
+### Current Progress (Committed: 1152f5d)
+
+✅ **Phase 1:** Documented 21 fixes, analyzed 7 failing tests  
+✅ **Phase 2:** Added `-r` flag, PRD mode infrastructure  
+✅ **Phase 3:** Parse primitives (_match, _saveState, _restoreState, EOF validation)  
+✅ **Phase 4:** Simple parser generation (switch dispatch on FIRST sets)  
+✅ **Phase 5:** Left-recursion detection and iterative loops  
+
+**Result:** ~300 lines in solar.rip, generates ~287 line parser
+
+### Next Steps (Phases 6-12)
+
+Focus on getting tests passing incrementally:
+- Fix action compilation (handle all action types properly)
+- Fix token handling (preserve String object metadata)
+- Add try/catch disambiguation for conflicts
+- Test constantly, fix issues immediately
+- Target: 30-40% tests passing first, then iterate to 100%
+
+**Philosophy:** Clean code that looks hand-written. No over-engineering.
+
+---
+
+## 📋 Full Specification (64-86 Hour Plan)
+
+Below is the complete specification with all 12 phases. Use as reference, but prioritize getting tests passing over implementing every detail.
 
 ---
 
@@ -12,7 +68,7 @@
 Keep proven PRD architecture from solar-old.rip (99.3% success validates it) but implement with corrected logic, complete specifications, and incremental testing. Design solutions for 7 known failures into core architecture from the start.
 
 **Key principles:**
-- ✅ Leverage 21 proven generic fixes from solar-old.rip
+- ✅ Leverage 21 proven generic fixes from solar-old.rip (reference, don't copy)
 - ✅ Build incrementally with test checkpoints
 - ✅ Design for known failures upfront (not patches)
 - ✅ Maintain 100% generic approach (works for ANY SLR(1) grammar)
