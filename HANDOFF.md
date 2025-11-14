@@ -1,15 +1,50 @@
-# PRD Parser Handoff: 99.3% Complete
+# PRD Parser Handoff: Clean-Room Rebuild in Progress
 
-## 🎯 Current State
+## 🎯 Current State (As of Nov 14, 2025)
 
-**Parser Mode:** Predictive Recursive Descent (PRD)
-**Tests Passing:** 955/962 (99.3%)
-**Remaining:** 7 tests (0.7%)
-**Status:** Production-quality generic PRD implementation, nearly complete!
+**Approach:** Clean-room PRD implementation (streamlined)
+**Status:** Phase 1-5 complete, infrastructure working
+**Code:** ~300 lines in solar.rip (vs 4,500 in solar-old.rip backup)
+**Philosophy:** Match grammar → emit s-expressions (ruthless simplicity)
+
+**Previous attempt:** 955/962 tests (99.3%) in solar-old.rip - available as reference backup
 
 ---
 
-## 📊 Test Progress History
+## 🔄 Clean-Room Restart (November 14, 2025)
+
+**Why restart:** solar-old.rip reached 99.3% (955/962) but accumulated complexity:
+- ~4,550 lines with patches and workarounds
+- Hard to debug remaining 7 test failures
+- Opportunity for cleaner, more maintainable implementation
+
+**New approach:**
+- Start from original solar.rip (995 lines, table-driven only)
+- Add minimal PRD generation (~300 lines of new code)
+- Focus: Match grammar rules → emit s-expressions (that's it!)
+- Reference solar-old.rip for patterns, but don't copy bulk code
+
+**Backup:** solar-old.rip saved as reference (99.3% baseline safe)
+
+---
+
+## 📊 Implementation Progress
+
+| Phase | Description | Status | LOC Added |
+|-------|-------------|--------|-----------|
+| 1 | Study & Document | ✅ Complete | ~50 (notes) |
+| 2 | Infrastructure | ✅ Complete | ~50 |
+| 3 | Parse Primitives | ✅ Complete | ~80 |
+| 4 | Simple Parsers | ✅ Complete | ~60 |
+| 5 | Left-Recursion | ✅ Complete | ~60 |
+| 6-12 | Remaining | 🔄 In Progress | TBD |
+
+**Total so far:** ~300 lines clean PRD code in solar.rip  
+**Generated parser:** ~287 lines (needs runtime fixes)
+
+---
+
+## 📊 Previous Attempt History (solar-old.rip)
 
 | Session | Tests | % | Gain |
 |---------|-------|---|------|
@@ -23,37 +58,37 @@
 
 ---
 
-## 🐛 Remaining 7 Failing Tests
+## 🐛 Target: 7 Failing Tests (From Previous Attempt)
+
+These tests failed in solar-old.rip at 99.3%. Clean-room implementation designed to handle them:
 
 ### 1. array destructuring skip
-**Test:** `[a, , c] = [1,2,3]; a + c` should equal 4
-**File:** test/rip/assignment.rip
-**Issue:** Array destructuring patterns with elisions (skipped elements)
+**Test:** `[a, , c] = [1,2,3]; a + c` should equal 4  
+**Solution:** Phase 6.1 - Elision-first rule ordering in Array parser
 
 ### 2. dammit method call
-**File:** test/rip/async.rip
-**Issue:** DO_IIFE parsing with method calls using dammit operator
+**File:** test/rip/async.rip  
+**Solution:** Phase 6.5 - Preserve String object metadata (don't convert to primitives)
 
 ### 3. await expression
-**File:** test/rip/async.rip
-**Issue:** Await expression evaluation
+**File:** test/rip/async.rip  
+**Solution:** Phase 9.5 - Proper await expression parsing
 
 ### 4. trailing comma multiline
-**File:** test/rip/basic.rip
-**Issue:** Multiline arrays with trailing commas
+**File:** test/rip/basic.rip  
+**Solution:** Phase 6 - Multi-elision handling with comma token return (Fix #21)
 
 ### 5. elision undefined check
-**Test:** `arr = [1,,2]; arr[1]` should return undefined
-**File:** test/rip/basic.rip
-**Issue:** Multi-statement parsing with sparse arrays
+**Test:** `arr = [1,,2]; arr[1]` should return undefined  
+**Solution:** Phase 8.5 - Multi-statement parsing (TERMINATOR vs comma distinction)
 
 ### 6. elision destructuring multiple
-**File:** test/rip/basic.rip
-**Issue:** Complex destructuring with multiple elisions
+**File:** test/rip/basic.rip  
+**Solution:** Phase 6.1 - Elision-first rule ordering
 
 ### 7. invalid extends
-**File:** test/rip/errors.rip
-**Issue:** Should fail on invalid syntax like `'3 extends 2'` (needs EOF check)
+**Test:** `'3 extends 2'` should fail  
+**Solution:** ✅ Phase 3.2 - EOF validation (Fix #20) - **ALREADY IMPLEMENTED!**
 
 ---
 
@@ -269,15 +304,35 @@ Then tackle the remaining 2-3 async/error tests individually.
 
 ## 🎉 Bottom Line
 
-**You're inheriting a 99.3% complete, fully generic PRD parser implementation!**
+**Clean-room approach:** Building PRD parser from scratch with ruthless simplicity.
 
-The hard architectural work is done. The remaining 7 tests are specific edge cases:
-- 4-5 related to array elisions (common root cause)
-- 2-3 individual async/error tests
+**Current status:**
+- ✅ Infrastructure complete (Phases 1-5)
+- ✅ ~300 lines of clean, generic code
+- ✅ Documentation complete (PLAN.md, notes/)
+- 🔄 Needs: action compilation fixes, testing, iteration to 100%
 
-**This is finishable in 1-2 focused hours!** 🚀
+**Backup:** solar-old.rip (99.3%, 955/962) available as reference - patterns proven, but code too complex.
 
-All code is production-quality, 100% generic, and ready for the final push to 100%.
+**Goal:** Cleaner implementation that matches grammar → emits s-expressions. Generic for ANY SLR(1) grammar.
+
+**Estimated remaining:** Phases 6-12 per PLAN.md, iterating until tests pass.
+
+---
+
+## 📁 Files for Next Session
+
+**Clean implementation (current work):**
+- `src/grammar/solar.rip` - ~1,300 lines (995 original + ~300 PRD code)
+- `src/parser.js` - Generated PRD parser (~287 lines, needs runtime fixes)
+- `PLAN.md` - Complete 12-phase specification
+- `notes/prd-patterns.md` - 21 generic fixes documented
+- `notes/failure-analysis.md` - 7 test root causes
+
+**Reference (99.3% baseline):**
+- `src/grammar/solar-old.rip` - Previous attempt (4,550 lines, works but complex)
+
+**Strategy:** Reference solar-old.rip for algorithms, implement cleanly in solar.rip.
 
 ---
 
