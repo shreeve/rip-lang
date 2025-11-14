@@ -2331,7 +2331,7 @@ $1 = this.parseParam();
     const _posSave = this._saveState();
     $2 = this._match(SYM_COMMA);
     // Check if another element follows (restore state if not)
-    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_ELLIPSIS].includes(this.la.id)) {
+    if (!this.la || this.la.id === SYM_EOF || this.la.id === SYM_COMMA || ![SYM_IDENTIFIER, SYM_AT, SYM_LBRACKET, SYM_LBRACE, SYM_ELLIPSIS].includes(this.la.id)) {
       this._restoreState(_posSave);
       break;
     }
@@ -2984,7 +2984,7 @@ $1 = this.parseAssignObj();
     const _posSave = this._saveState();
     $2 = this._match(SYM_COMMA);
     // Check if another element follows (restore state if not)
-    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT, SYM_LBRACKET, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_ELLIPSIS].includes(this.la.id)) {
+    if (!this.la || this.la.id === SYM_EOF || this.la.id === SYM_COMMA || ![SYM_IDENTIFIER, SYM_PROPERTY, SYM_AT, SYM_LBRACKET, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_ELLIPSIS].includes(this.la.id)) {
       this._restoreState(_posSave);
       break;
     }
@@ -3197,7 +3197,7 @@ $1 = this.parseAssignObj();
     const _posSave = this._saveState();
     $2 = this._match(SYM_COMMA);
     // Check if another element follows (restore state if not)
-    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_DEFAULT].includes(this.la.id)) {
+    if (!this.la || this.la.id === SYM_EOF || this.la.id === SYM_COMMA || ![SYM_IDENTIFIER, SYM_DEFAULT].includes(this.la.id)) {
       this._restoreState(_posSave);
       break;
     }
@@ -3425,7 +3425,7 @@ $1 = this.parseAssignObj();
     const _posSave = this._saveState();
     $2 = this._match(SYM_COMMA);
     // Check if another element follows (restore state if not)
-    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_DEFAULT].includes(this.la.id)) {
+    if (!this.la || this.la.id === SYM_EOF || this.la.id === SYM_COMMA || ![SYM_IDENTIFIER, SYM_DEFAULT].includes(this.la.id)) {
       this._restoreState(_posSave);
       break;
     }
@@ -4276,7 +4276,7 @@ $1 = this.parseAssignObj();
     const _posSave = this._saveState();
     $2 = this._match(SYM_COMMA);
     // Check if another element follows (restore state if not)
-    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_LBRACKET, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_IF, SYM_UNLESS, SYM_STATEMENT, SYM_TRY, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_RETURN, SYM_IMPORT, SYM_EXPORT, SYM_ELLIPSIS].includes(this.la.id)) {
+    if (!this.la || this.la.id === SYM_EOF || this.la.id === SYM_COMMA || ![SYM_IDENTIFIER, SYM_AT, SYM_JS, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_LBRACKET, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_PARAM_START, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_REGEX, SYM_REGEX_START, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_IF, SYM_UNLESS, SYM_STATEMENT, SYM_TRY, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_RETURN, SYM_IMPORT, SYM_EXPORT, SYM_ELLIPSIS].includes(this.la.id)) {
       this._restoreState(_posSave);
       break;
     }
@@ -4605,7 +4605,7 @@ $1 = this.parseAssignObj();
     const _posSave = this._saveState();
     $2 = this._match(SYM_COMMA);
     // Check if another element follows (restore state if not)
-    if (!this.la || this.la.id === SYM_EOF || ![SYM_IDENTIFIER, SYM_AT, SYM_PARAM_START, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_ELLIPSIS, SYM_COMMA].includes(this.la.id)) {
+    if (!this.la || this.la.id === SYM_EOF || this.la.id === SYM_COMMA || ![SYM_IDENTIFIER, SYM_AT, SYM_PARAM_START, SYM_LBRACKET, SYM_LBRACE, SYM_NUMBER, SYM_STRING, SYM_STRING_START, SYM_JS, SYM_REGEX, SYM_REGEX_START, SYM_UNDEFINED, SYM_NULL, SYM_BOOL, SYM_INFINITY, SYM_NAN, SYM_LPAREN, SYM_SUPER, SYM_DYNAMIC_IMPORT, SYM_DO_IIFE, SYM_THIS, SYM_NEW_TARGET, SYM_IMPORT_META, SYM_THIN_ARROW, SYM_FAT_ARROW, SYM_UNARY, SYM_DO, SYM_UNARY_MATH, SYM_MINUS, SYM_PLUS, SYM_AWAIT, SYM_DEC, SYM_INC, SYM_TRY, SYM_FOR, SYM_SWITCH, SYM_CLASS, SYM_THROW, SYM_YIELD, SYM_DEF, SYM_IF, SYM_UNLESS, SYM_RETURN, SYM_STATEMENT, SYM_IMPORT, SYM_EXPORT, SYM_WHILE, SYM_UNTIL, SYM_LOOP, SYM_ELLIPSIS, SYM_COMMA].includes(this.la.id)) {
       this._restoreState(_posSave);
       break;
     }
@@ -4811,6 +4811,11 @@ $1 = this.parseAssignObj();
       // Try: OptComma
       try {
         $1 = this.parseOptComma();
+        // GENERIC FIX #19: Prefer longer match for nullable
+        if (this.la && this.la.id === SYM_COMMA) {
+          this._restoreState(_saved);
+          throw new Error('Try fallback');
+        }
         return [];
       } catch (e) {
         this._restoreState(_saved);
@@ -4842,7 +4847,7 @@ $1 = this.parseAssignObj();
   parseElision() {
     let $1;
     $1 = this._match(SYM_COMMA);
-        $1 = null;
+        return $1;
 
     while (this.la && this.la.id === SYM_TERMINATOR) {
       const _posSave = this._saveState();

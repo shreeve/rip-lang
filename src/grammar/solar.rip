@@ -3359,11 +3359,11 @@ class Generator
         action = @_normalizeActionForPRD(rule.action, rule.symbols)
         # GENERIC FIX #19: Check if nonterminal is nullable
         isNullable = @types[nonterminal]?.nullable
-        
+
         lines.push("      // Try: #{nonterminal}")
         lines.push("      try {")
         lines.push("        $1 = this.parse#{nonterminal}();")
-        
+
         if isNullable
           # After parsing nullable nonterminal, check if trigger token follows
           # If so, prefer fallback (longer match)
@@ -3372,7 +3372,7 @@ class Generator
           lines.push("          this._restoreState(_saved);")
           lines.push("          throw new Error('Try fallback');")
           lines.push("        }")
-        
+
         lines.push("        return #{action};")
         lines.push("      } catch (e) {")
         lines.push("        this._restoreState(_saved);")
@@ -3846,12 +3846,15 @@ class Generator
 
             action = normalizedAction
 
+            # GENERIC FIX #19: Exclude comma separator to avoid greedy trailing comma parsing
+            excludeCheck = if triggerConst is 'SYM_COMMA' then "this.la.id === #{triggerConst} || " else ""
+            
             separatorCases.push """
               if (this.la.id === #{triggerConst}) {
                 const _posSave = this._saveState();
                 $2 = this._match(#{triggerConst});
                 // Check if another element follows (restore state if not)
-                if (!this.la || this.la.id === SYM_EOF || ![#{baseFirstSet}].includes(this.la.id)) {
+                if (!this.la || this.la.id === SYM_EOF || #{excludeCheck}![#{baseFirstSet}].includes(this.la.id)) {
                   this._restoreState(_posSave);
                   break;
                 }
