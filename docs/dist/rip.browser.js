@@ -3478,9 +3478,14 @@ class CodeGenerator {
       return;
     let [head, ...rest] = sexpr;
     const headAwaitMetadata = head instanceof String ? head.await : undefined;
+    const headInvertMetadata = head instanceof String ? head.invert : undefined;
     if (head instanceof String) {
       head = head.valueOf();
     }
+    if (headAwaitMetadata !== undefined)
+      sexpr[0].await = headAwaitMetadata;
+    if (headInvertMetadata !== undefined)
+      sexpr[0].invert = headInvertMetadata;
     if (Array.isArray(head)) {
       sexpr.forEach((item) => this.collectProgramVariables(item));
       return;
@@ -4738,23 +4743,30 @@ ${this.indent()}}`;
   }
   generateInstanceof(head, rest, context, sexpr) {
     const [expr, type] = rest;
-    return `(${this.generate(expr, "value")} instanceof ${this.generate(type, "value")})`;
+    const isNegated = sexpr[0]?.invert;
+    const result = `(${this.generate(expr, "value")} instanceof ${this.generate(type, "value")})`;
+    return isNegated ? `(!${result})` : result;
   }
   generateIn(head, rest, context, sexpr) {
     const [key2, container] = rest;
     const keyCode = this.generate(key2, "value");
+    const isNegated = sexpr[0]?.invert;
     if (Array.isArray(container) && container[0] === "object") {
       const objCode = this.generate(container, "value");
-      return `(${keyCode} in ${objCode})`;
+      const result2 = `(${keyCode} in ${objCode})`;
+      return isNegated ? `(!${result2})` : result2;
     }
     const containerCode = this.generate(container, "value");
-    return `(Array.isArray(${containerCode}) || typeof ${containerCode} === 'string' ? ${containerCode}.includes(${keyCode}) : (${keyCode} in ${containerCode}))`;
+    const result = `(Array.isArray(${containerCode}) || typeof ${containerCode} === 'string' ? ${containerCode}.includes(${keyCode}) : (${keyCode} in ${containerCode}))`;
+    return isNegated ? `(!${result})` : result;
   }
   generateOf(head, rest, context, sexpr) {
     const [value, container] = rest;
     const valueCode = this.generate(value, "value");
     const containerCode = this.generate(container, "value");
-    return `(${valueCode} in ${containerCode})`;
+    const isNegated = sexpr[0]?.invert;
+    const result = `(${valueCode} in ${containerCode})`;
+    return isNegated ? `(!${result})` : result;
   }
   generateRegexMatch(head, rest, context, sexpr) {
     const [left2, right2] = rest;
@@ -7078,8 +7090,8 @@ function compileToJS(source, options = {}) {
   return compiler.compileToJS(source);
 }
 // src/browser.js
-var VERSION = "1.5.2";
-var BUILD_DATE = "2025-11-09@09:58:56GMT";
+var VERSION = "1.5.4";
+var BUILD_DATE = "2025-11-14@09:32:13GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
