@@ -294,30 +294,29 @@ fn = function() {
 
 ## 🔄 PRD Parser Work
 
-### Current State
+### Current State (Nov 14, 2025)
 
 - **Branch:** `recursive-descent`
-- **Status:** 955/962 tests passing (99.3%)
-- **Remaining:** 7 tests
-- **Architecture:** Proven generic, works for any SLR(1) grammar
+- **Approach:** Clean-room rebuild (streamlined)
+- **Status:** Phase 1-5 complete (~300 lines infrastructure)
+- **Previous:** solar-old.rip at 955/962 (99.3%) - saved as reference backup
+- **Goal:** Match grammar → emit s-expressions (ruthless simplicity)
 
 ### Critical Files for PRD Work
 
-**Must Read (in order):**
-1. **HANDOFF.md** - Current state, next steps, all 7 failing tests
-2. **PRD.md** - Complete technical guide, all 21 generic fixes
-3. **This file (AGENT.md)** - General Rip development context
-4. **src/grammar/solar.rip** - Parser generator source (~4,550 lines)
-   - Search for "GENERIC FIX" to find all 21 fixes
-   - Lines 1327-1333, 3629-3636: Fix #21 (return comma tokens)
-   - Lines 3360-3381, 3849-3865: Fix #19 (nullable lookahead)
-   - Lines 824-833: Fix #20 (EOF validation)
+**Current Clean-Room Implementation:**
+1. **PLAN.md** - Complete 12-phase specification (~60+ hours)
+2. **HANDOFF.md** - Current state, clean-room rationale, next steps
+3. **notes/prd-patterns.md** - 21 generic fixes documented from solar-old.rip
+4. **notes/failure-analysis.md** - Root cause analysis of 7 failing tests
+5. **src/grammar/solar.rip** - Clean implementation (~1,300 lines: 995 original + 300 PRD)
+6. **src/grammar/solar-old.rip** - Reference backup (99.3% baseline, ~4,550 lines)
 
-**Reference Only (unchanged from main):**
-5. **src/grammar/grammar.rip** - Grammar specification (UNCHANGED!)
-6. **src/codegen.js** - Code generator (UNCHANGED - validates approach!)
+**Unchanged from main:**
+7. **src/grammar/grammar.rip** - Grammar specification (UNCHANGED!)
+8. **src/codegen.js** - Code generator (UNCHANGED - validates approach!)
 
-**Key Insight:** Only solar.rip and parser.js differ from main. Grammar and codegen are identical, proving the PRD implementation is truly generic!
+**Key Insight:** Building from original clean solar.rip (~1,000 lines) with minimal PRD additions. Reference solar-old.rip for patterns, but don't copy bulk code.
 
 ### Debugging PRD Issues
 
