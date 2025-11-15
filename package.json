@@ -28,8 +28,12 @@
     "CHANGELOG.md"
   ],
   "scripts": {
+    "benchmark": "bun scripts/benchmark-parser.js",
+    "benchmark:parser": "bun scripts/benchmark-parser-only.js",
+    "benchmark:actions": "bun scripts/benchmark-parser-actions.js",
     "browser": "bun scripts/build-browser.js",
     "parser": "bun src/grammar/solar.rip -o src/parser.js src/grammar/grammar.rip",
+    "parser:old": "cd && rip $c/solar-parser/src/solar.rip -o $c/rip-lang/src/parser.js $c/rip-lang/src/grammar/grammar.rip",
     "serve": "bun scripts/serve.js",
     "test": "bun test/runner.js",
     "version": "./bin/rip -v",

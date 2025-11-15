@@ -98,7 +98,6 @@ class Generator
       @timing 'buildLRAutomaton' , => @buildLRAutomaton()     # Build LR(0) automaton
       @timing 'processLookaheads', => @processLookaheads()    # Compute FIRST/FOLLOW and assign lookaheads
       @timing 'buildParseTable'  , => @buildParseTable()      # Build parse table with default actions
-      @timing 'detectAliases'    , => @detectAliases()        # Detect aliases
 
   # ============================================================================
   # Helper Functions
@@ -565,16 +564,16 @@ class Generator
             if solution.bydefault
               # Categorize conflict type
               isEmpty = item.rule.symbols.length is 0 or (item.rule.symbols.length is 1 and item.rule.symbols[0] is '')
-              isAlias = item.rule.symbols.length is 1 and types[item.rule.symbols[0]]  # Single nonterminal
+              isPassthrough = item.rule.symbols.length is 1 and types[item.rule.symbols[0]]  # Single nonterminal
               hasPrecedence = op and item.rule.precedence > 0
               isReduceReduce = which[0] is REDUCE
 
               # Determine category
-              category = isEmpty        ? 'empty-optional' : \
-                         isAlias        ? 'alias'          : \
-                         hasPrecedence  ? 'precedence'     : \
-                         isReduceReduce ? 'reduce-reduce'  : \
-                                          'ambiguous'
+              category = 'empty-optional' if isEmpty
+              category = 'passthrough' if !isEmpty and isPassthrough
+              category = 'precedence' if !isEmpty and !isPassthrough and hasPrecedence
+              category = 'reduce-reduce' if !isEmpty and !isPassthrough and !hasPrecedence and isReduceReduce
+              category = 'ambiguous' if !isEmpty and !isPassthrough and !hasPrecedence and !isReduceReduce
 
               # Only count and track problematic conflicts (exclude benign ones)
               if category is 'reduce-reduce' or category is 'ambiguous'
@@ -645,84 +644,6 @@ class Generator
     @defaultActions = defaults
 
   # ============================================================================
-  # Alias Optimization
-  # ============================================================================
-
-  detectAliases!: ->
-    console.log "\n⚡ Detecting aliases..."
-
-    @aliases = {}  # symbolId → ultimate symbolId
-    aliasStrings = []
-
-    for own name, type of @types when name not in ['$accept', '$end', 'error']
-      # Must have exactly one rule
-      continue unless type.rules?.length is 1
-
-      rule = type.rules[0]
-
-      # Must be single-symbol production
-      continue unless rule.symbols.length is 1
-
-      target = rule.symbols[0]
-
-      # Target must be a nonterminal
-      continue unless @types[target]
-
-      # Action must be trivial (just return $1)
-      continue unless @_isTrivialAction(rule.action)
-
-      # Follow aliases to ultimate target
-      ultimate = @_followAliasChain(target)
-
-      if ultimate and ultimate isnt target
-        fromId = @symbolIds[name]
-        toId = @symbolIds[ultimate]
-        @aliases[fromId] = toId
-        aliasStrings.push "#{name} → #{ultimate}"
-
-    console.log "  Found #{aliasStrings.length} aliases:"
-    for alias in aliasStrings.slice(0, 10)
-      console.log "    #{alias}"
-    console.log "    ... and #{aliasStrings.length - 10} more" if aliasStrings.length > 10
-
-  _isTrivialAction: (action) ->
-    # Check if action just returns first symbol (no transformation)
-    return true unless action
-    return true if action is 1
-    return true if action is '$1'
-    return true if action is '$$[$0]'
-    return true if String(action).match(/^\s*1\s*$/)
-    false
-
-  _followAliasChain: (symbol) ->
-    visited = new Set
-    current = symbol
-    maxDepth = 50
-    depth = 0
-
-    loop
-      break if depth++ > maxDepth
-      break if visited.has(current)
-      visited.add(current)
-
-      type = @types[current]
-      break unless type
-
-      # Not an alias? This is the end
-      break unless type.rules.length is 1
-
-      rule = type.rules[0]
-      break unless rule.symbols.length is 1
-      break unless @_isTrivialAction(rule.action)
-
-      next = rule.symbols[0]
-      break unless @types[next]
-
-      current = next
-
-    current
-
-  # ============================================================================
   # Code Generation
   # ============================================================================
 
@@ -757,119 +678,21 @@ class Generator
   _generateModuleCore: ->
     tableCode = @_generateTableCode @parseTable
 
-    # Calculate table width
-    maxSymbol = Math.max(...Object.values(@symbolIds))
-    width = maxSymbol + 1
-
     """{
-      width: #{width},
       symbolIds: #{JSON.stringify @symbolIds},
       tokenNames: #{JSON.stringify(@tokenNames).replace /"([0-9]+)":/g, "$1:"},
-      aliases: #{JSON.stringify(@aliases or {}).replace(/"([0-9]+)":/g, "$1:")},
-      rules: #{JSON.stringify @ruleData},
-      table: null,
-
-      _table: #{tableCode},
-      _setup() {
-        if (this.table) return;
-        const start = performance.now();
-        this.table = new Uint16Array(763 * #{width});
-        for (const packed of this._table) {
-          const idx = packed >>> 16;
-          const val = packed & 0xFFFF;
-          this.table[idx] = val;
-        }
-        console.log('Table inflated in ' + (performance.now() - start).toFixed(2) + 'ms');
-        delete this._table;
-      },
-
-      action: #{@performAction},
+      ruleData: #{JSON.stringify @ruleData},
+      parseTable: #{tableCode},
+      defaultActions: #{JSON.stringify(@defaultActions).replace /"([0-9]+)":/g, "$1:"},
+      performAction: #{@performAction},
       #{String(@parseError).replace(/^function /, '')},
       #{String(@parse     ).replace(/^function /, '')},
       trace() {},
       yy: {},
-    }
-    """
+    }"""
 
   _generateTableCode: (stateTable) ->
-    # Generate packed indices table for 80% size reduction
-    console.log "\n🗜️  Generating packed table (indices + values)..."
-
-    # Find max symbol ID
-    maxSymbol = 0
-    for own symbolId of @symbolIds
-      id = @symbolIds[symbolId]
-      maxSymbol = id if id > maxSymbol
-
-    tableWidth = maxSymbol + 1
-    stateCount = @states.length
-
-    console.log "  Table dimensions: #{stateCount} states × #{tableWidth} symbols"
-    console.log "  Max state: #{stateCount - 1}, Max symbol: #{maxSymbol}"
-
-    # Pack non-zero entries as: (index << 16) | value
-    packed = []
-    nonZeroEntries = 0
-    defaultsUsed = 0
-
-    for stateId in [0...stateCount]
-      state = stateTable[stateId]
-      defaultAction = @defaultActions[stateId]
-
-      # Store default action at index 0 (symbol 0)
-      if defaultAction
-        entry = @_encodeAction(defaultAction)
-        if entry isnt 0
-          idx = stateId * tableWidth + 0
-          packed.push((idx << 16) | entry)
-          defaultsUsed++
-          nonZeroEntries++
-
-      # Store specific actions
-      if state
-        for own symbolId, action of state
-          sid = parseInt(symbolId)
-          entry = @_encodeAction(action)
-          if entry isnt 0
-            idx = stateId * tableWidth + sid
-            packed.push((idx << 16) | entry)
-            nonZeroEntries++
-
-    packedSize = packed.length * 4
-    fullSize = stateCount * tableWidth * 2
-
-    console.log "  Non-zero entries: #{nonZeroEntries} / #{stateCount * tableWidth} (#{(nonZeroEntries * 100 / (stateCount * tableWidth)).toFixed(1)}%)"
-    console.log "  States with defaults: #{defaultsUsed}"
-    console.log "  Packed size: #{(packedSize / 1024).toFixed(1)} KB (vs #{(fullSize / 1024).toFixed(1)} KB uncompressed)"
-    console.log "  Savings: #{(100 - packedSize * 100 / fullSize).toFixed(1)}%"
-
-    # Generate packed Uint32Array (will be inflated on first parse)
-    """new Uint32Array([#{packed.join(',')}])"""
-
-  # Encode action as 16-bit value
-  # GOTO entries (nonterminals): bare state number (NOT encoded, stored as-is)
-  # Shift/Reduce/Accept: (value << 2) | type
-  #   Type in LOW 2 bits: 1=shift, 2=reduce, 3=accept
-  #   Value in HIGH 14 bits: state number (for shift) or rule ID (for reduce)
-  _encodeAction: (action) ->
-    return 0 unless action
-
-    # GOTO entries are bare numbers (nonterminal transitions) - store as-is
-    if typeof action is 'number'
-      if action >= 65536
-        throw new Error "GOTO state #{action} too large for 16-bit storage (max 65535)"
-      return action  # Raw state number, no encoding
-
-    # Shift/Reduce/Accept are [type, value] arrays
-    type = action[0]
-    value = action[1] or 0
-
-    # Validate range
-    if value >= 16384
-      throw new Error "Value #{value} too large for 14-bit encoding (max 16383)"
-
-    # Pack: (value << 2) | type
-    (value << 2) | type
+    JSON.stringify(stateTable, null, 0).replace /"([0-9]+)"(?=:)/g, "$1"
 
   # ============================================================================
   # Runtime Parser
@@ -892,24 +715,10 @@ class Generator
       throw error
 
   parse: (input) ->
-    @table or @_setup() # setup table on first run
-
-    # Optimized flat table parser using Uint16Array with alias elimination
-    [table, width] = [@table, @width]
-    [SHIFT, REDUCE, ACCEPT] = [1, 2, 3]
+    [stk, val, loc] = [[0], [null], []]
+    [parseTable, yytext, yylineno, yyleng, recovering] = [@parseTable, '', 0, 0, 0]
     [TERROR, EOF] = [2, 1]
 
-    # Stack initialization (optimized state stack, dynamic val/loc)
-    stk = new Uint16Array(1000)  # State stack (pre-allocated for speed)
-    stkTop = 0
-    stk[0] = 0
-
-    val = [null]                  # Value stack (dynamic)
-    loc = []                      # Location stack (dynamic)
-
-    [yytext, yylineno, yyleng, recovering] = ['', 0, 0, 0]
-
-    # Setup lexer
     lexer = Object.create @lexer
     sharedState = {yy: {}}
     sharedState.yy[k] = v for own k, v of @yy
@@ -928,59 +737,44 @@ class Generator
     else
       Object.getPrototypeOf(this).parseError
 
-    # Tokenize upfront for better performance
     lex = =>
       token = lexer.lex() or EOF
       token = @symbolIds[token] or token unless typeof token is 'number'
       token
 
-    [symbol, preErrorSymbol, yyval] = [null, null, {}]
+    [symbol, preErrorSymbol, state, action, r, yyval, p, len, newState, expected] =
+      [null, null, null, null, null, {}, null, null, null, null]
 
     loop
-      state = stk[stkTop]
+      state = stk[stk.length - 1]
+      action = @defaultActions[state] or (
+        symbol = lex() if not symbol?
+        parseTable[state]?[symbol]
+      )
 
-      # Get symbol if needed
-      symbol = lex() if not symbol?
-
-      # Lookup action in flat table
-      idx = state * width + symbol
-      entry = table[idx]
-
-      # If no specific action, try default (symbol 0)
-      if entry is 0
-        entry = table[state * width + 0]
-
-      # Decode action (type in LOW 2 bits, value in HIGH 14 bits)
-      actionType = entry & 0x3
-      actionValue = entry >>> 2
-
-      # Error if no action
-      unless entry
+      unless action?.length and action[0]
         errStr = ''
         unless recovering
-          expected = []
-          # Find expected tokens
-          for sym in [TERROR+1...width]
-            testEntry = table[state * width + sym]
-            expected.push("'#{@tokenNames[sym]}'") if testEntry and @tokenNames[sym]
-
+          expected = ("'#{@tokenNames[p]}'" for own p of parseTable[state] when @tokenNames[p] and p > TERROR)
         errStr = if lexer.showPosition
           "Parse error on line #{yylineno + 1}:\n#{lexer.showPosition()}\nExpecting #{expected.join(', ')}, got '#{@tokenNames[symbol] or symbol}'"
         else
           "Parse error on line #{yylineno + 1}: Unexpected #{if symbol is EOF then "end of input" else "'#{@tokenNames[symbol] or symbol}'"}"
 
-        @parseError errStr, {
-          text: lexer.match
-          token: @tokenNames[symbol] or symbol
-          line: lexer.yylineno
-          loc: yyloc
-          expected
-        }
+          @parseError errStr, {
+            text: lexer.match
+            token: @tokenNames[symbol] or symbol
+            line: lexer.yylineno
+            loc: yyloc
+            expected
+          }
         throw new Error errStr
 
-      switch actionType
-        when SHIFT # 1
-          stk[++stkTop] = actionValue
+      throw new Error "Parse Error: multiple actions possible at state: #{state}, token: #{symbol}" if action[0] instanceof Array and action.length > 1
+
+      switch action[0]
+        when 1 # shift
+          stk.push symbol, action[1]
           val.push lexer.yytext
           loc.push lexer.yylloc
           symbol = null
@@ -990,11 +784,8 @@ class Generator
           else
             [symbol, preErrorSymbol] = [preErrorSymbol, null]
 
-        when REDUCE # 2
-          ruleId = actionValue
-          rule = @rules[ruleId]
-          len = rule[1]
-
+        when 2 # reduce
+          len = @ruleData[action[1]][1]
           yyval.$ = val[val.length - len]
           [locFirst, locLast] = [loc[loc.length - (len or 1)], loc[loc.length - 1]]
           yyval._$ = {
@@ -1003,32 +794,21 @@ class Generator
           }
           yyval._$.range = [locFirst.range[0], locLast.range[1]] if ranges
 
-          r = @action.apply yyval, [yytext, yyleng, yylineno, sharedState.yy, ruleId, val, loc]
+          r = @performAction.apply yyval, [yytext, yyleng, yylineno, sharedState.yy, action[1], val, loc]
           yyval.$ = r if r?
 
           if len
-            stkTop -= len
+            stk.length -= len * 2
             val.length -= len
             loc.length -= len
 
-          # Get the reduced symbol (check for alias)
-          gotoSymbol = rule[0]
-
-          # Optimize: skip aliases!
-          # If this symbol is just an alias to another, jump directly
-          if @aliases?[gotoSymbol]
-            gotoSymbol = @aliases[gotoSymbol]
-
-          # GOTO: look up next state (stored as raw state number)
-          gotoState = stk[stkTop]
-          gotoIdx = gotoState * width + gotoSymbol
-          gotoEntry = table[gotoIdx]
-
-          stk[++stkTop] = gotoEntry  # No decoding needed
+          stk.push @ruleData[action[1]][0]
           val.push yyval.$
           loc.push yyval._$
+          newState = parseTable[stk[stk.length - 2]][stk[stk.length - 1]]
+          stk.push newState
 
-        when ACCEPT # 3
+        when 3 # accept
           return val[val.length - 1]
 
   trace!: (msg) -> # Debug output (no-op by default)

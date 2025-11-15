@@ -1,0 +1,28 @@
+==========================================
+  Parser Performance - All Metrics
+==========================================
+
+1️⃣  PARSING ACTIONS (table lookups)
+
+  Actions/sec: 3,098,014.34
+  Time per action: 286.60μs (286.60ns)
+
+2️⃣  PARSER ONLY (no lexer, no codegen)
+
+Parses/sec: 126.96
+Parses/sec: 117.85
+Average: 7.78ms
+
+3️⃣  FULL COMPILATION (lexer + parser + codegen)
+
+Parses/sec: 23.8
+Parses/sec: 30.23
+Average: 34.31ms
+
+==========================================
+✓ Key Metrics Summary
+
+  Actions/sec: Primary optimization target
+  Parser files/sec: Shows parser-only improvement
+  Full compilation: Real-world user experience
+==========================================

@@ -1,0 +1,45 @@
+Solar Parser Benchmark
+======================
+
+Source file: solar.rip
+Lines: 996
+Size: 35,736 bytes (34.9 KB)
+
+Warming up (10 runs)...
+Warmup complete.
+
+Quick benchmark (100 iterations)...
+
+Quick Benchmark Results:
+------------------------
+Total time: 2.86s
+Iterations: 100
+Parses/sec: 34.96
+
+Per-parse statistics:
+  Min:    24.77ms
+  Median: 28.26ms
+  Average: 28.60ms
+  P95:    32.52ms
+  P99:    37.81ms
+  Max:    37.81ms
+
+Extended benchmark (5s duration)...
+
+Extended Benchmark Results:
+---------------------------
+Total time: 5.01s
+Iterations: 198
+Parses/sec: 39.53
+Average: 25.30ms
+
+Throughput:
+  1,412,557.75 bytes/sec (1.35 MB/sec)
+  39,369.47 lines/sec
+
+Memory Usage:
+  RSS: 233.56 MB
+  Heap Used: 16.01 MB
+  Heap Total: 92.83 MB
+
+✓ Benchmark complete!

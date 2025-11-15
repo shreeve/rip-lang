@@ -1,0 +1,54 @@
+Parser-Only Benchmark (No Lexer, No Codegen)
+==============================================
+
+Source file: solar.rip
+Lines: 996
+Size: 35,736 bytes (34.9 KB)
+
+Pre-lexing source (one time only)...
+Tokens: 6,648
+
+Warming up (100 runs)...
+Warmup complete.
+
+Quick benchmark (1000 iterations)...
+
+Quick Benchmark Results:
+------------------------
+Total time: 6.30s
+Iterations: 1,000
+Parses/sec: 158.72
+
+Per-parse statistics:
+  Min:    5.53ms
+  Median: 6.28ms
+  Average: 6.30ms
+  P95:    6.95ms
+  P99:    7.40ms
+  Max:    7.97ms
+
+Extended benchmark (5s duration)...
+
+Extended Benchmark Results:
+---------------------------
+Total time: 5.00s
+Iterations: 750
+Parses/sec: 149.97
+Average: 6.67ms
+
+Throughput:
+  5,359,240.39 bytes/sec (5.11 MB/sec)
+  149,367.68 lines/sec
+  996,984.28 tokens/sec
+
+Memory Usage:
+  RSS: 170.23 MB
+  Heap Used: 34.61 MB
+  Heap Total: 73.09 MB
+
+============================================================
+NOTE: This measures PARSER ONLY (no lexer, no codegen)
+For full compilation benchmark, use: bun run benchmark
+============================================================
+
+✓ Benchmark complete!

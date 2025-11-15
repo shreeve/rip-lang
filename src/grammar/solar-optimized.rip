@@ -570,11 +570,11 @@ class Generator
               isReduceReduce = which[0] is REDUCE
 
               # Determine category
-              category = isEmpty        ? 'empty-optional' : \
-                         isAlias        ? 'alias'          : \
-                         hasPrecedence  ? 'precedence'     : \
-                         isReduceReduce ? 'reduce-reduce'  : \
-                                          'ambiguous'
+              category = 'empty-optional' if isEmpty
+              category = 'alias' if !isEmpty and isAlias
+              category = 'precedence' if !isEmpty and !isAlias and hasPrecedence
+              category = 'reduce-reduce' if !isEmpty and !isAlias and !hasPrecedence and isReduceReduce
+              category = 'ambiguous' if !isEmpty and !isAlias and !hasPrecedence and !isReduceReduce
 
               # Only count and track problematic conflicts (exclude benign ones)
               if category is 'reduce-reduce' or category is 'ambiguous'
@@ -903,7 +903,7 @@ class Generator
     stk = new Uint16Array(1000)  # State stack (pre-allocated for speed)
     stkTop = 0
     stk[0] = 0
-
+    
     val = [null]                  # Value stack (dynamic)
     loc = []                      # Location stack (dynamic)
 
