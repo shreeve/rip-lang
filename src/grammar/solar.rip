@@ -600,7 +600,7 @@ class Generator
           else if action is NONASSOC
             state[@symbolIds[stackSymbol]] = undefined
 
-    @_computeDefaultActions @parseTable = states
+    @parseTable = states
 
   # Resolve conflicts using precedence and associativity
   _resolveConflict: (rule, op, reduce, shift) ->
@@ -627,21 +627,6 @@ class Generator
       solution.action = reduce
 
     solution
-
-  # Compute default actions for single-action states
-  _computeDefaultActions!: (states) ->
-    defaults = {}
-    for state, k in states
-      actionCount = 0
-      lastAction = null
-
-      for own action of state
-        actionCount++
-        lastAction = state[action]
-
-      defaults[k] = lastAction if actionCount is 1 and lastAction[0] is 2
-
-    @defaultActions = defaults
 
   # ============================================================================
   # Code Generation
@@ -683,7 +668,6 @@ class Generator
       tokenNames: #{JSON.stringify(@tokenNames).replace /"([0-9]+)":/g, "$1:"},
       ruleData: #{JSON.stringify @ruleData},
       parseTable: #{tableCode},
-      defaultActions: #{JSON.stringify(@defaultActions).replace /"([0-9]+)":/g, "$1:"},
       performAction: #{@performAction},
       #{String(@parseError).replace(/^function /, '')},
       #{String(@parse     ).replace(/^function /, '')},
@@ -747,10 +731,8 @@ class Generator
 
     loop
       state = stk[stk.length - 1]
-      action = @defaultActions[state] or (
-        symbol = lex() if not symbol?
-        parseTable[state]?[symbol]
-      )
+      symbol = lex() if not symbol?
+      action = parseTable[state]?[symbol]
 
       unless action?.length and action[0]
         errStr = ''
