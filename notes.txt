@@ -192,3 +192,35 @@ _normalizeActionForPRD: (action, symbols) ->
   return "$#{action}" if typeof action is 'number'
   action = String(action)
   /\$\d+/.test(action) ? action : action.replace /(\d+)/g, '$$$1'
+
+==
+
+PLUGGABLE LANGUAGE ARCHITECTURE (Future Enhancement)
+
+The parser.js file essentially describes the Rip language in a compressed form
+(268KB parseTable is 92% of the file). This could be split into:
+
+Generic Components (reusable across languages):
+  src/solar.rip          # Parser generator engine (already generic!)
+  src/parser.js          # Generic LR(1) parsing algorithm (~6KB)
+  src/compiler.js        # Thin orchestrator (loads language plugins)
+
+Language-Specific Components:
+  src/lang/rip/lexer.js     # Tokenization rules (3,145 LOC)
+  src/lang/rip/grammar.rip  # Grammar definition (source)
+  src/lang/rip/syntax.js    # Parse tables (GENERATED, 268KB)
+  src/lang/rip/codegen.js   # Code generation (5,265 LOC)
+
+Benefits:
+  • Pluggable languages (CoffeeScript, TypeScript-lite, etc.)
+  • Smaller individual files (runtime is tiny, languages separate)
+  • Clear separation of concerns (algorithm vs data)
+  • Better testability (test parser algorithm independently)
+  • Makes Solar a true multi-language parser toolkit
+
+syntax.js contains:
+  • symbolIds, tokenNames (metadata)
+  • parseTable (the huge one - 268KB)
+  • ruleTable, ruleActions (execution logic)
+
+Build: solar grammar.rip -o lang/rip/syntax.js
