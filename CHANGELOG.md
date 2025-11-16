@@ -5,6 +5,16 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.6] - 2025-11-16
+
+### Fixed
+- **Package completeness** - Ensure all compiled files included in npm package
+  - Regenerated parser with optimized encoding
+  - Rebuilt browser bundles (44.55 KB compressed)
+  - All compiled artifacts present and current
+
+All 968 tests passing (100%) ✅
+
 ## [1.5.5] - 2025-11-16
 
 ### Changed
