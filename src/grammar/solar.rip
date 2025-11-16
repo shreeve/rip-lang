@@ -178,13 +178,13 @@ class Generator
 
     # Generate parser components
     actionsCode = @_generateActionCode actionGroups
-    @ruleData = ruleTable
+    @ruleTable = ruleTable
     @_buildTokenMappings()
 
-    parameters = "yytext, yyleng, yylineno, yy, yystate, $$, _$"
+    parameters = "rule, vals, locs, shared"
     parameters += ', ' + @parseParams.join(', ') if @parseParams?.length
 
-    @actions = "(#{parameters}) => {\n#{actionsCode}\n#{@indent}}"
+    @ruleActions = "(#{parameters}) => {\n#{actionsCode}\n#{@indent}}"
 
   _parseHandle: (handle) ->
     if Array.isArray handle
@@ -204,7 +204,7 @@ class Generator
     switch @mode
 
       when 'sexp'
-        getToken = (_, n) -> "$$[$0#{parseInt(n, 10) - symbols.length || ''}]"
+        getToken = (_, n) -> "$[$0#{parseInt(n, 10) - symbols.length || ''}]"
 
         # Replace token references with calculated $$[n] references
         switch typeof action
@@ -274,10 +274,11 @@ class Generator
   _generateActionCode: (actionGroups) ->
     actions = []
 
-    # Add $0 variable for token position references
-    actions.push @double + 'const $0 = $$.length - 1;'
+    # Add $0 variable for rule value references
+    actions.push @double + 'const $ = vals;'
+    actions.push @double + 'const $0 = vals.length - 1;'
 
-    actions.push @double + 'switch (yystate) {'
+    actions.push @double + 'switch (rule) {'
     for action, labels of actionGroups
       if '\n' in action
         actions.push @triple + labels.join(' ')
@@ -666,9 +667,9 @@ class Generator
     """{
       symbolIds: #{JSON.stringify @symbolIds},
       tokenNames: #{JSON.stringify(@tokenNames).replace /"([0-9]+)":/g, "$1:"},
-      ruleData: #{JSON.stringify @ruleData},
       parseTable: #{tableCode},
-      actions: #{@actions},
+      ruleTable: #{JSON.stringify @ruleTable},
+      ruleActions: #{@ruleActions},
       #{String(@parseError).replace(/^function /, '')},
       #{String(@parse     ).replace(/^function /, '')},
       trace() {},
@@ -767,7 +768,7 @@ class Generator
             [symbol, preErrorSymbol] = [preErrorSymbol, null]
 
         when 2 # reduce
-          len = @ruleData[action[1] * 2 + 1]
+          len = @ruleTable[action[1] * 2 + 1]
           yyval.$ = val[val.length - len]
           [locFirst, locLast] = [loc[loc.length - (len or 1)], loc[loc.length - 1]]
           yyval._$ = {
@@ -776,7 +777,7 @@ class Generator
           }
           yyval._$.range = [locFirst.range[0], locLast.range[1]] if ranges
 
-          r = @actions.apply yyval, [yytext, yyleng, yylineno, sharedState.yy, action[1], val, loc]
+          r = @ruleActions.apply yyval, [action[1], val, loc, sharedState.yy]
           yyval.$ = r if r?
 
           if len
@@ -784,7 +785,7 @@ class Generator
             val.length -= len
             loc.length -= len
 
-          stk.push @ruleData[action[1] * 2]
+          stk.push @ruleTable[action[1] * 2]
           val.push yyval.$
           loc.push yyval._$
           newState = parseTable[stk[stk.length - 2]][stk[stk.length - 1]]
