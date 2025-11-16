@@ -5,6 +5,27 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.5] - 2025-11-16
+
+### Changed
+- **Parser optimization: Sign-based parseTable encoding** - 28.7% faster parsing!
+  - Transformed parseTable from `[type, value]` arrays to semantic integers
+  - Positive N = GOTO/SHIFT to state N (forward movement)
+  - Negative -N = REDUCE by rule N (contraction)
+  - 0 = ACCEPT (parsing complete)
+  - undefined = ERROR (syntax error)
+  - **Performance improvements:**
+    - Parse speed: 28.7% faster (3.27ms → 2.33ms average)
+    - Full compile: 16.3% faster (15.24ms → 12.75ms)
+    - File size: 24.5% smaller (291.9KB → 220.4KB, -71.5KB)
+  - **Why it's fast:** Direct integer comparison (`action > 0`, `action < 0`) instead of array unpacking, better cache locality, fewer allocations
+  - The sign bit elegantly encodes operation semantics
+  - Updated src/grammar/solar.rip with optimized encoding
+  - Regenerated src/parser.js with new format
+  - Documented in AGENT.md architecture section
+
+All 968 tests passing (100%) ✅
+
 ## [1.5.3] - 2025-11-09
 
 ### Added

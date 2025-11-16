@@ -30,7 +30,7 @@ Release a new version of Rip:
 
 • bump the patch number (the z in x.y.z) of package.json
 • bun run parser && bun run browser
-• update the CHANGELOG.md file
+• update the CHANGELOG.md file to bring it current
 • commit and push
 • npm publish
 

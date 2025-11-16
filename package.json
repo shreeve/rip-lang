@@ -1,6 +1,6 @@
 {
   "name": "rip-lang",
-  "version": "1.5.4",
+  "version": "1.5.5",
   "description": "A lightweight scripting language that compiles to modern JavaScript",
   "type": "module",
   "main": "src/compiler.js",
