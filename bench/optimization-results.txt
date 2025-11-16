@@ -1,0 +1,38 @@
+=== BASELINE (before unit production optimization) ===
+=== Parser Performance Benchmark ===
+
+solar.rip                 parse: 5.54ms  lex+gen: 21.90ms  full: 27.44ms
+grammar.rip               parse: 3.47ms  lex+gen: 9.24ms  full: 12.71ms
+functions.rip             parse: 0.80ms  lex+gen: 4.78ms  full: 5.58ms
+
+──────────────────────────────────────────────────────────────────────
+Average parse only:           3.27ms (21.5% of total)
+Average full compile:         15.24ms
+
+Parser size:                  291.9KB
+
+=== WITH ALIAS OPTIMIZATION (87 rules with fast path) ===
+=== Parser Performance Benchmark ===
+
+solar.rip                 parse: 5.98ms  lex+gen: 23.04ms  full: 29.02ms
+grammar.rip               parse: 3.47ms  lex+gen: 9.59ms  full: 13.06ms
+functions.rip             parse: 0.86ms  lex+gen: 4.89ms  full: 5.75ms
+
+──────────────────────────────────────────────────────────────────────
+Average parse only:           3.44ms (21.6% of total)
+Average full compile:         15.94ms
+
+Parser size:                  292.3KB
+
+=== AFTER ParamVar/ForVar MERGE (4 fewer grammar rules) ===
+=== Parser Performance Benchmark ===
+
+solar.rip                 parse: 5.59ms  lex+gen: 22.52ms  full: 28.11ms
+grammar.rip               parse: 3.48ms  lex+gen: 9.69ms  full: 13.17ms
+functions.rip             parse: 0.84ms  lex+gen: 5.03ms  full: 5.87ms
+
+──────────────────────────────────────────────────────────────────────
+Average parse only:           3.30ms (21.0% of total)
+Average full compile:         15.72ms
+
+Parser size:                  291.7KB
