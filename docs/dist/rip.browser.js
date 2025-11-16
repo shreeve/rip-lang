@@ -7083,7 +7083,7 @@ function compileToJS(source, options = {}) {
 }
 // src/browser.js
 var VERSION = "1.5.5";
-var BUILD_DATE = "2025-11-16@06:58:41GMT";
+var BUILD_DATE = "2025-11-16@06:59:28GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
