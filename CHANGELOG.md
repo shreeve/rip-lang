@@ -5,6 +5,17 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.7] - 2025-11-16
+
+### Changed
+- **Documentation updates** - Updated all version references to 1.5.7
+  - Updated README.md version badge and status section
+  - Updated AGENT.md current status section
+  - Regenerated parser and browser bundles with correct version
+  - All compiled artifacts current and properly versioned
+
+All 968 tests passing (100%) ✅
+
 ## [1.5.6] - 2025-11-16
 
 ### Fixed
