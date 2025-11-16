@@ -132,7 +132,7 @@ class Generator
 
   _buildRules: (grammar) ->
     actionGroups = {}
-    ruleTable    = [0] # No entry in slot 0
+    ruleTable    = [0, 0] # Flat array: [typeId, count] pairs starting at index 0
     @symbolIds   = {"$accept": 0, "$end": 1, "error": 2}  # Add reserved symbols
     symbolId     = 3 # Next available symbol ID (after special symbols)
 
@@ -173,7 +173,7 @@ class Generator
         @_assignPrecedence rule, precedence
 
         @rules.push rule
-        ruleTable.push [@symbolIds[type], if symbols[0] is '' then 0 else symbols.length]
+        ruleTable.push @symbolIds[type], if symbols[0] is '' then 0 else symbols.length
         @types[type].rules.push rule
 
     # Generate parser components
@@ -184,7 +184,7 @@ class Generator
     parameters = "yytext, yyleng, yylineno, yy, yystate, $$, _$"
     parameters += ', ' + @parseParams.join(', ') if @parseParams?.length
 
-    @performAction = "function anonymous(#{parameters}) {\n#{actionsCode}\n#{@indent}}"
+    @actions = "(#{parameters}) => {\n#{actionsCode}\n#{@indent}}"
 
   _parseHandle: (handle) ->
     if Array.isArray handle
@@ -641,7 +641,7 @@ class Generator
 
     const parserInstance = #{parserInstance}
 
-    function createParser(yyInit = {}) {
+    const createParser = (yyInit = {}) => {
       const p = Object.create(parserInstance);
       Object.defineProperty(p, "yy", {
         value: { ...yyInit },
@@ -668,7 +668,7 @@ class Generator
       tokenNames: #{JSON.stringify(@tokenNames).replace /"([0-9]+)":/g, "$1:"},
       ruleData: #{JSON.stringify @ruleData},
       parseTable: #{tableCode},
-      performAction: #{@performAction},
+      actions: #{@actions},
       #{String(@parseError).replace(/^function /, '')},
       #{String(@parse     ).replace(/^function /, '')},
       trace() {},
@@ -767,7 +767,7 @@ class Generator
             [symbol, preErrorSymbol] = [preErrorSymbol, null]
 
         when 2 # reduce
-          len = @ruleData[action[1]][1]
+          len = @ruleData[action[1] * 2 + 1]
           yyval.$ = val[val.length - len]
           [locFirst, locLast] = [loc[loc.length - (len or 1)], loc[loc.length - 1]]
           yyval._$ = {
@@ -776,7 +776,7 @@ class Generator
           }
           yyval._$.range = [locFirst.range[0], locLast.range[1]] if ranges
 
-          r = @performAction.apply yyval, [yytext, yyleng, yylineno, sharedState.yy, action[1], val, loc]
+          r = @actions.apply yyval, [yytext, yyleng, yylineno, sharedState.yy, action[1], val, loc]
           yyval.$ = r if r?
 
           if len
@@ -784,7 +784,7 @@ class Generator
             val.length -= len
             loc.length -= len
 
-          stk.push @ruleData[action[1]][0]
+          stk.push @ruleData[action[1] * 2]
           val.push yyval.$
           loc.push yyval._$
           newState = parseTable[stk[stk.length - 2]][stk[stk.length - 1]]
