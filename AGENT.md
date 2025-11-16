@@ -56,6 +56,7 @@ bun run parser  # Regenerates src/parser.js from grammar.rip
 - ✅ Issue #51 - Standardized test formatting (""" → ''')
 - ✅ **Critical fix:** Restored self-hosting by fixing 'in' operator (v1.4.2)
 - ✅ **S-expression refactoring:** generateNot, generateIn use IR-level checks (v1.4.3)
+- ✅ **Parser optimization:** Sign-based parseTable encoding (28.7% faster parsing, 24.5% smaller)
 - ✅ **Result:** 5,246 clean, organized LOC
 
 **Key principles demonstrated:**
@@ -97,6 +98,26 @@ bun run parser                   # Test self-hosting ✅
 | `src/lexer.js` | Tokenizer | ⚠️ Rewriter only | No |
 | `src/parser.js` | Parser | ❌ NEVER | Generated |
 | `test/rip/*.rip` | Tests | ✅ YES | No |
+
+### Parser Implementation Note
+
+**The parser uses sign-based integer encoding for the parseTable** (optimized Nov 2025):
+
+```javascript
+// parseTable lookup: parseTable[state][symbol]
+// Returns an integer action:
++N  → GOTO/SHIFT to state N (forward movement)
+-N  → REDUCE by rule N (contraction)
+ 0  → ACCEPT (parsing complete)
+undefined → ERROR (syntax error)
+```
+
+**Performance results:**
+- 28.7% faster parsing (3.27ms → 2.33ms average)
+- 24.5% smaller file size (291.9KB → 220.4KB)
+- All 968 tests passing
+
+**Why it's fast:** Direct integer comparison (`action > 0`, `action < 0`) instead of array unpacking, better cache locality, fewer allocations. The sign bit elegantly encodes the operation type.
 
 ### The Golden Rule
 

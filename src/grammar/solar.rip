@@ -677,7 +677,29 @@ class Generator
     }"""
 
   _generateTableCode: (stateTable) ->
-    JSON.stringify(stateTable, null, 0).replace /"([0-9]+)"(?=:)/g, "$1"
+    # Transform to optimized integer encoding:
+    # - Positive N = SHIFT/GOTO to state N
+    # - Negative -N = REDUCE by rule N
+    # - 0 = ACCEPT
+    # - missing = ERROR
+    optimized = stateTable.map (state) ->
+      newState = {}
+      for own symbol, action of state
+        continue unless action
+        if Array.isArray action
+          # Terminal actions: [type, value]
+          [type, value] = action
+          newState[symbol] = switch type
+            when 1 then value     # SHIFT: positive
+            when 2 then -value    # REDUCE: negative
+            when 3 then 0         # ACCEPT: zero
+            else action
+        else
+          # GOTO: already a plain integer
+          newState[symbol] = action
+      newState
+
+    JSON.stringify(optimized, null, 0).replace /"/g, ''
 
   # ============================================================================
   # Runtime Parser
@@ -735,7 +757,7 @@ class Generator
       symbol = lex() if not symbol?
       action = parseTable[state]?[symbol]
 
-      unless action?.length and action[0]
+      unless action?
         errStr = ''
         unless recovering
           expected = ("'#{@tokenNames[p]}'" for own p of parseTable[state] when @tokenNames[p] and p > TERROR)
@@ -753,46 +775,43 @@ class Generator
           }
         throw new Error errStr
 
-      throw new Error "Parse Error: multiple actions possible at state: #{state}, token: #{symbol}" if action[0] instanceof Array and action.length > 1
+      if action > 0  # SHIFT or GOTO
+        stk.push symbol, action
+        val.push lexer.yytext
+        loc.push lexer.yylloc
+        symbol = null
+        unless preErrorSymbol
+          [yyleng, yytext, yylineno, yyloc] = [lexer.yyleng, lexer.yytext, lexer.yylineno, lexer.yylloc]
+          recovering-- if recovering > 0
+        else
+          [symbol, preErrorSymbol] = [preErrorSymbol, null]
 
-      switch action[0]
-        when 1 # shift
-          stk.push symbol, action[1]
-          val.push lexer.yytext
-          loc.push lexer.yylloc
-          symbol = null
-          unless preErrorSymbol
-            [yyleng, yytext, yylineno, yyloc] = [lexer.yyleng, lexer.yytext, lexer.yylineno, lexer.yylloc]
-            recovering-- if recovering > 0
-          else
-            [symbol, preErrorSymbol] = [preErrorSymbol, null]
+      else if action < 0  # REDUCE
+        len = @ruleTable[(-action) * 2 + 1]
+        yyval.$ = val[val.length - len]
+        [locFirst, locLast] = [loc[loc.length - (len or 1)], loc[loc.length - 1]]
+        yyval._$ = {
+          first_line: locFirst.first_line, last_line: locLast.last_line
+          first_column: locFirst.first_column, last_column: locLast.last_column
+        }
+        yyval._$.range = [locFirst.range[0], locLast.range[1]] if ranges
 
-        when 2 # reduce
-          len = @ruleTable[action[1] * 2 + 1]
-          yyval.$ = val[val.length - len]
-          [locFirst, locLast] = [loc[loc.length - (len or 1)], loc[loc.length - 1]]
-          yyval._$ = {
-            first_line: locFirst.first_line, last_line: locLast.last_line
-            first_column: locFirst.first_column, last_column: locLast.last_column
-          }
-          yyval._$.range = [locFirst.range[0], locLast.range[1]] if ranges
+        r = @ruleActions.apply yyval, [-action, val, loc, sharedState.yy]
+        yyval.$ = r if r?
 
-          r = @ruleActions.apply yyval, [action[1], val, loc, sharedState.yy]
-          yyval.$ = r if r?
+        if len
+          stk.length -= len * 2
+          val.length -= len
+          loc.length -= len
 
-          if len
-            stk.length -= len * 2
-            val.length -= len
-            loc.length -= len
+        stk.push @ruleTable[(-action) * 2]
+        val.push yyval.$
+        loc.push yyval._$
+        newState = parseTable[stk[stk.length - 2]][stk[stk.length - 1]]
+        stk.push newState
 
-          stk.push @ruleTable[action[1] * 2]
-          val.push yyval.$
-          loc.push yyval._$
-          newState = parseTable[stk[stk.length - 2]][stk[stk.length - 1]]
-          stk.push newState
-
-        when 3 # accept
-          return val[val.length - 1]
+      else if action is 0  # ACCEPT
+        return val[val.length - 1]
 
   trace!: (msg) -> # Debug output (no-op by default)
     console.log msg if @options?.debug
