@@ -93,23 +93,23 @@ Simple utility module (pairs with module.rip):
 
 ```bash
 # Just run it! (thanks to bunfig.toml + rip-loader.js)
-bun www/examples/fibonacci.rip
+bun docs/examples/fibonacci.rip
 
 # Import and use modules
-bun www/examples/module.rip
+bun docs/examples/module.rip
 ```
 
 **Other options:**
 
 ```bash
 # Compile to JavaScript
-./bin/rip www/examples/fibonacci.rip
+./bin/rip docs/examples/fibonacci.rip
 
 # See s-expressions
-./bin/rip -s www/examples/fibonacci.rip
+./bin/rip -s docs/examples/fibonacci.rip
 
 # Compile to file
-./bin/rip -o output.js www/examples/fibonacci.rip
+./bin/rip -o output.js docs/examples/fibonacci.rip
 
 # Try in the REPL
 ./bin/rip

@@ -119,7 +119,7 @@ http://localhost:3000/
 # (auto-redirects to REPL)
 ```
 
-Visit `www/repl.html` for a full-featured browser REPL with **two powerful tabs:**
+Visit `docs/repl.html` for a full-featured browser REPL with **two powerful tabs:**
 
 #### Tab 1: REPL Console
 
@@ -420,9 +420,9 @@ bun run build:browser
 **2. Upload to CDN:**
 ```bash
 # Upload all three versions
-aws s3 cp www/dist/rip.browser.js s3://your-bucket/
-aws s3 cp www/dist/rip.browser.min.js s3://your-bucket/
-aws s3 cp www/dist/rip.browser.min.js.br s3://your-bucket/
+aws s3 cp docs/dist/rip.browser.js s3://your-bucket/
+aws s3 cp docs/dist/rip.browser.min.js s3://your-bucket/
+aws s3 cp docs/dist/rip.browser.min.js.br s3://your-bucket/
 ```
 
 **3. Configure CDN headers:**
@@ -865,7 +865,7 @@ Use browser builds for:
 
 ## 📚 Examples
 
-See the `www/examples/` directory for working demos:
+See the `docs/examples/` directory for working demos:
 
 **index.html** - Landing page with REPL redirect
 
@@ -978,6 +978,6 @@ Then serve `node_modules/rip-lang/dist/rip.browser.min.js`
 ---
 
 **See Also:**
-- Examples: `www/examples/` directory
+- Examples: `docs/examples/` directory
 - Server: `bun run serve`
 - Build: `bun run build:browser`

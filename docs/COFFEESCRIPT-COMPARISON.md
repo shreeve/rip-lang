@@ -207,7 +207,7 @@ See [COMPREHENSIONS.md](COMPREHENSIONS.md) for complete spec.
 **Rip:** Three distinct modes!
 
 1. **Terminal REPL** - `./bin/rip` (persistent history, commands)
-2. **Browser REPL** - `www/repl.html` (beautiful UI, live compiler)
+2. **Browser REPL** - `docs/repl.html` (beautiful UI, live compiler)
 3. **Console REPL** - `rip('code')` (quick tests anywhere)
 
 See [BROWSER.md](BROWSER.md) for complete guide.
