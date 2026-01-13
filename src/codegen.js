@@ -462,7 +462,7 @@ export class CodeGenerator {
       if (sexpr.startsWith('"') || sexpr.startsWith("'") || sexpr.startsWith('`')) {
         // Warn but handle gracefully
         if (this.options.debug) {
-          console.warn('[RIP] Unexpected quoted primitive string (should be String object):', sexpr);
+          console.warn('[Rip] Unexpected quoted primitive string (should be String object):', sexpr);
         }
 
         // Fallback to simple processing
@@ -3339,7 +3339,7 @@ export class CodeGenerator {
         // If it has quotes, warn and strip them
         if (part.startsWith('"') || part.startsWith("'")) {
           if (this.options.debug) {
-            console.warn('[RIP] Unexpected quoted primitive in str interpolation:', part);
+            console.warn('[Rip] Unexpected quoted primitive in str interpolation:', part);
           }
           result += part.slice(1, -1);
         } else {

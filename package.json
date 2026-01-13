@@ -1,15 +1,15 @@
 {
   "name": "rip-lang",
   "version": "1.5.7",
-  "description": "A lightweight scripting language that compiles to modern JavaScript",
+  "description": "A modern language that compiles to JavaScript",
   "type": "module",
   "main": "src/compiler.js",
-  "browser": "www/dist/rip.browser.js",
+  "browser": "docs/dist/rip.browser.js",
   "exports": {
     ".": {
       "bun": "./src/compiler.js",
       "node": "./src/compiler.js",
-      "browser": "./www/dist/rip.browser.js",
+      "browser": "./docs/dist/rip.browser.js",
       "default": "./src/compiler.js"
     },
     "./loader": "./rip-loader.js"
@@ -36,16 +36,18 @@
     "pack": "npm pack --dry-run"
   },
   "keywords": [
+    "rip",
     "compiler",
     "language",
     "s-expression",
     "lisp",
     "bun",
     "browser",
-    "transpiler",
-    "coffeescript",
     "parser",
-    "rip"
+    "transpiler",
+    "javascript",
+    "es2022",
+    "coffeescript"
   ],
   "engines": {
     "bun": ">=1.0.0"

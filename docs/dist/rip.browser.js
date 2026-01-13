@@ -3641,7 +3641,7 @@ class CodeGenerator {
     if (typeof sexpr === "string") {
       if (sexpr.startsWith('"') || sexpr.startsWith("'") || sexpr.startsWith("`")) {
         if (this.options.debug) {
-          console.warn("[RIP] Unexpected quoted primitive string (should be String object):", sexpr);
+          console.warn("[Rip] Unexpected quoted primitive string (should be String object):", sexpr);
         }
         const content = sexpr.slice(1, -1);
         if (content.includes(`
