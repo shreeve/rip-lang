@@ -5,7 +5,7 @@
 <h1 align="center">Rip</h1>
 
 <p align="center">
-  <strong>Elegant reactive language that compiles to modern JavaScript</strong>
+  <strong>Elegant reactive code that compiles to modern JavaScript</strong>
 </p>
 
 <p align="center">
