@@ -5,7 +5,7 @@
 <h1 align="center">Rip</h1>
 
 <p align="center">
-  <strong>Elegant CoffeeScript-inspired language → Modern JavaScript (ES2022)</strong>
+  <strong>Elegant reactive language that compiles to modern JavaScript</strong>
 </p>
 
 <p align="center">
