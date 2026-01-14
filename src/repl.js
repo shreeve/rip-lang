@@ -103,41 +103,41 @@ export class RipREPL {
 let __currentEffect = null, __pendingEffects = new Set();
 function __signal(v) {
   const subs = new Set();
-  let notifying = false;
-  return {
-    get value() { if (__currentEffect) { subs.add(__currentEffect); __currentEffect.dependencies.add(subs); } return v; },
+  let notifying = false, locked = false, dead = false;
+  const s = {
+    get value() { if (dead) return v; if (__currentEffect) { subs.add(__currentEffect); __currentEffect.dependencies.add(subs); } return v; },
     set value(n) {
-      if (n !== v && !notifying) {
-        v = n;
-        notifying = true;
-        for (const s of subs) if (s.markDirty) s.markDirty();
-        for (const s of subs) if (!s.markDirty) __pendingEffects.add(s);
-        const fx = [...__pendingEffects]; __pendingEffects.clear();
-        for (const e of fx) e.run();
-        notifying = false;
-      }
+      if (dead || locked || n === v || notifying) return;
+      v = n;
+      notifying = true;
+      for (const sub of subs) if (sub.markDirty) sub.markDirty();
+      for (const sub of subs) if (!sub.markDirty) __pendingEffects.add(sub);
+      const fx = [...__pendingEffects]; __pendingEffects.clear();
+      for (const e of fx) e.run();
+      notifying = false;
     },
     read() { return v; },
+    lock() { locked = true; return s; },
+    free() { subs.clear(); return s; },
+    kill() { dead = true; subs.clear(); return v; },
     valueOf() { return this.value; },
     toString() { return String(this.value); },
     [Symbol.toPrimitive](hint) { return hint === 'string' ? this.toString() : this.valueOf(); }
   };
+  return s;
 }
 function __computed(fn) {
-  let v, dirty = true;
+  let v, dirty = true, locked = false, dead = false;
   const subs = new Set();
   const c = {
     dependencies: new Set(),
     markDirty() {
-      if (!dirty) {
-        dirty = true;
-        for (const s of subs) if (s.markDirty) s.markDirty();
-        for (const s of subs) if (!s.markDirty) __pendingEffects.add(s);
-      }
+      if (dead || locked || !dirty) { if (!dead && !locked && !dirty) { dirty = true; for (const s of subs) if (s.markDirty) s.markDirty(); for (const s of subs) if (!s.markDirty) __pendingEffects.add(s); } }
     },
     get value() {
+      if (dead) return v;
       if (__currentEffect) { subs.add(__currentEffect); __currentEffect.dependencies.add(subs); }
-      if (dirty) {
+      if (dirty && !locked) {
         for (const d of c.dependencies) d.delete(c); c.dependencies.clear();
         const prev = __currentEffect; __currentEffect = c;
         try { v = fn(); } finally { __currentEffect = prev; }
@@ -145,6 +145,10 @@ function __computed(fn) {
       }
       return v;
     },
+    read() { return dead ? v : c.value; },
+    lock() { locked = true; c.value; return c; },
+    free() { for (const d of c.dependencies) d.delete(c); c.dependencies.clear(); subs.clear(); return c; },
+    kill() { dead = true; const result = v; c.free(); return result; },
     valueOf() { return this.value; },
     toString() { return String(this.value); },
     [Symbol.toPrimitive](hint) { return hint === 'string' ? this.toString() : this.valueOf(); }
@@ -159,10 +163,10 @@ function __effect(fn) {
       const prev = __currentEffect; __currentEffect = e;
       try { fn(); } finally { __currentEffect = prev; }
     },
-    dispose() { for (const d of e.dependencies) d.delete(e); e.dependencies.clear(); }
+    free() { for (const d of e.dependencies) d.delete(e); e.dependencies.clear(); }
   };
   e.run();
-  return () => e.dispose();
+  return () => e.free();
 }
 function __batch(fn) { fn(); }
 function __readonly(v) { return Object.freeze({ value: v }); }
