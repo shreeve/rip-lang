@@ -39,6 +39,7 @@ export class RipREPL {
     this.buffer = '';   // Multi-line input buffer
     this.history = [];  // Command history
     this.historyFile = path.join(os.homedir(), '.rip_history');
+    this.reactiveVars = new Set();  // Track reactive variables across lines
 
     // Create persistent VM context (like a sandboxed global scope)
     this.context = vm.createContext({
@@ -51,6 +52,9 @@ export class RipREPL {
       clearInterval,
       // Add any other globals you want available
     });
+
+    // Inject reactive runtime once into context (so all reactive code shares same tracking)
+    this.injectReactiveRuntime();
 
     this.rl = readline.createInterface({
       input: process.stdin,
@@ -90,6 +94,80 @@ export class RipREPL {
   printWelcome() {
     console.log(`${colors.bright}Rip ${VERSION}${colors.reset} - Interactive REPL`);
     console.log(`${colors.gray}Type ${colors.cyan}.help${colors.gray} for commands, ${colors.cyan}Ctrl+C${colors.gray} to exit${colors.reset}\n`);
+  }
+
+  injectReactiveRuntime() {
+    // Inject reactive runtime into REPL context once
+    // This ensures all reactive code shares the same __currentEffect, etc.
+    const runtimeCode = `
+let __currentEffect = null, __pendingEffects = new Set();
+function __signal(v) {
+  const subs = new Set();
+  let notifying = false;
+  return {
+    get value() { if (__currentEffect) { subs.add(__currentEffect); __currentEffect.dependencies.add(subs); } return v; },
+    set value(n) {
+      if (n !== v && !notifying) {
+        v = n;
+        notifying = true;
+        for (const s of subs) if (s.markDirty) s.markDirty();
+        for (const s of subs) if (!s.markDirty) __pendingEffects.add(s);
+        const fx = [...__pendingEffects]; __pendingEffects.clear();
+        for (const e of fx) e.run();
+        notifying = false;
+      }
+    },
+    peek() { return v; },
+    valueOf() { return this.value; },
+    toString() { return String(this.value); },
+    [Symbol.toPrimitive](hint) { return hint === 'string' ? this.toString() : this.valueOf(); }
+  };
+}
+function __computed(fn) {
+  let v, dirty = true;
+  const subs = new Set();
+  const c = {
+    dependencies: new Set(),
+    markDirty() {
+      if (!dirty) {
+        dirty = true;
+        for (const s of subs) if (s.markDirty) s.markDirty();
+        for (const s of subs) if (!s.markDirty) __pendingEffects.add(s);
+      }
+    },
+    get value() {
+      if (__currentEffect) { subs.add(__currentEffect); __currentEffect.dependencies.add(subs); }
+      if (dirty) {
+        for (const d of c.dependencies) d.delete(c); c.dependencies.clear();
+        const prev = __currentEffect; __currentEffect = c;
+        try { v = fn(); } finally { __currentEffect = prev; }
+        dirty = false;
+      }
+      return v;
+    },
+    valueOf() { return this.value; },
+    toString() { return String(this.value); },
+    [Symbol.toPrimitive](hint) { return hint === 'string' ? this.toString() : this.valueOf(); }
+  };
+  return c;
+}
+function __effect(fn) {
+  const e = {
+    dependencies: new Set(),
+    run() {
+      for (const d of e.dependencies) d.delete(e); e.dependencies.clear();
+      const prev = __currentEffect; __currentEffect = e;
+      try { fn(); } finally { __currentEffect = prev; }
+    },
+    dispose() { for (const d of e.dependencies) d.delete(e); e.dependencies.clear(); }
+  };
+  e.run();
+  return () => e.dispose();
+}
+function __batch(fn) { fn(); }
+function __readonly(v) { return Object.freeze({ value: v }); }
+`;
+    vm.runInContext(runtimeCode, this.context);
   }
 
   handleLine(line) {
@@ -213,11 +291,22 @@ export class RipREPL {
       this.history.push(code);
 
       // Compile Rip to JavaScript with debug options
+      // skipReactiveRuntime: runtime is already injected into context
+      // reactiveVars: track reactive variables across REPL lines
       const compiler = new Compiler({
         showTokens: this.showTokens,
-        showSExpr: this.showSExp
+        showSExpr: this.showSExp,
+        skipReactiveRuntime: true,
+        reactiveVars: this.reactiveVars
       });
       const result = compiler.compile(code);
+
+      // Capture any new reactive variables declared in this line
+      if (result.reactiveVars) {
+        for (const v of result.reactiveVars) {
+          this.reactiveVars.add(v);
+        }
+      }
 
       const js = result.code;
 
@@ -287,6 +376,9 @@ export class RipREPL {
           clearTimeout,
           clearInterval,
         });
+        // Re-inject reactive runtime and clear reactive vars
+        this.injectReactiveRuntime();
+        this.reactiveVars = new Set();
         this.buffer = '';
         console.log(`${colors.green}Context cleared${colors.reset}`);
         break;

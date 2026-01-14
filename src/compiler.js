@@ -256,15 +256,20 @@ export class Compiler {
       console.log();
     }
 
-    // Step 3: Generate JavaScript code (pass dataSection to generator)
-    const generator = new CodeGenerator({ dataSection });
+    // Step 3: Generate JavaScript code (pass dataSection and options to generator)
+    const generator = new CodeGenerator({
+      dataSection,
+      skipReactiveRuntime: this.options.skipReactiveRuntime,
+      reactiveVars: this.options.reactiveVars  // Pass existing reactive vars for REPL
+    });
     let code = generator.compile(sexpr);
 
     return {
       tokens,
       sexpr,
       code,
-      data: dataSection  // Include data section in result
+      data: dataSection,  // Include data section in result
+      reactiveVars: generator.reactiveVars  // Return reactive vars for REPL tracking
     };
   }
 

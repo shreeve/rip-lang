@@ -156,6 +156,10 @@ export class CodeGenerator {
     this.indentString = '  '; // 2 spaces
     this.comprehensionDepth = 0; // Track nesting to avoid wasteful nested IIFEs
     this.dataSection = options.dataSection; // __DATA__ content if present
+    // Initialize reactiveVars from options (for REPL persistence across lines)
+    if (options.reactiveVars) {
+      this.reactiveVars = new Set(options.reactiveVars);
+    }
   }
 
   /**
@@ -819,8 +823,8 @@ export class CodeGenerator {
       needsBlankLine = true;
     }
 
-    // 3b. Emit reactive runtime if used
-    if (this.usesReactivity) {
+    // 3b. Emit reactive runtime if used (unless skipRuntime option is set)
+    if (this.usesReactivity && !this.options.skipReactiveRuntime) {
       code += this.getReactiveRuntime();
       needsBlankLine = true;
     }
