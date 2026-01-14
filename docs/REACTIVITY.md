@@ -1,3 +1,5 @@
+<p><img src="rip.svg" alt="Rip Logo" width="200"></p>
+
 # Rip Reactivity
 
 > **The Language IS the Framework**
