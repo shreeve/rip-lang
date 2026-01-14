@@ -1,3 +1,5 @@
+<p><img src="rip.svg" alt="Rip Logo" width="100"></p>
+
 # Why YES Rip: An Alternative to Complexity
 
 ## The Case For Rip

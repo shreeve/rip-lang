@@ -1,3 +1,5 @@
+<p><img src="rip.svg" alt="Rip Logo" width="100"></p>
+
 # GitHub Workflow Quick Reference
 
 **For AI Agents & Developers**

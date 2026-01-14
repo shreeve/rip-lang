@@ -1,3 +1,5 @@
+<p><img src="rip.svg" alt="Rip Logo" width="100"></p>
+
 # Rip in the Browser
 
 **Complete Compiler in Just 43KB + Triple REPL Support**

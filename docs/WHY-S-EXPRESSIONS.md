@@ -1,3 +1,5 @@
+<p><img src="rip.svg" alt="Rip Logo" width="100"></p>
+
 # Why S-Expressions? The Core of Rip's Philosophy
 
 **TL;DR:** S-expressions make compilers 50% smaller, 10x easier to maintain, and infinitely more elegant.

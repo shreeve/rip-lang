@@ -1,3 +1,5 @@
+<p><img src="rip.svg" alt="Rip Logo" width="100"></p>
+
 # Why Not CoffeeScript: The Case Against Revival
 
 ## Executive Summary

@@ -1,3 +1,5 @@
+<p><img src="rip.svg" alt="Rip Logo" width="100"></p>
+
 # Rip Template Syntax
 
 > **The Language IS the Framework**

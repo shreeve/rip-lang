@@ -1,3 +1,5 @@
+<p><img src="rip.svg" alt="Rip Logo" width="100"></p>
+
 # Special Operators - Complete Guide
 
 ## Dammit Operator (`!`)

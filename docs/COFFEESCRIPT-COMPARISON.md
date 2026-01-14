@@ -1,3 +1,5 @@
+<p><img src="rip.svg" alt="Rip Logo" width="100"></p>
+
 # Rip vs CoffeeScript - Feature Comparison
 
 **Version:** 1.6.0 (Stable Release)

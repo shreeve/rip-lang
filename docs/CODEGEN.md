@@ -1,3 +1,5 @@
+<p><img src="rip.svg" alt="Rip Logo" width="100"></p>
+
 # Code Generator Reference
 
 **Version:** 1.0.0 - **Stable Release!** 🎉

@@ -1,3 +1,5 @@
+<p><img src="rip.svg" alt="Rip Logo" width="100"></p>
+
 # Rip Regex+ Features
 
 **Ruby-Inspired Regex Matching with Automatic Capture**
