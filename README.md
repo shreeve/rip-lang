@@ -506,8 +506,8 @@ See [docs/BROWSER.md](docs/BROWSER.md) for details.
 - [docs/BROWSER.md](docs/BROWSER.md) - Browser usage & REPLs
 
 **Future features (specifications):**
-- [docs/COMPONENTS.md](docs/COMPONENTS.md) - Component system (Phase 2 - coming soon)
-- [docs/TEMPLATES.md](docs/TEMPLATES.md) - Template DSL (Phase 3 - coming soon)
+- [docs/TEMPLATES.md](docs/TEMPLATES.md) - Template DSL (Phase 2 - next!)
+- [docs/COMPONENTS.md](docs/COMPONENTS.md) - Component system (Phase 3 - uses templates + reactivity)
 
 **For contributors:**
 - [CONTRIBUTING.md](CONTRIBUTING.md) - Development workflow

@@ -12,9 +12,9 @@
 
 1. **This file (AGENT.md)** - Complete guide, you're reading it now!
 2. **README.md** - Skim for features and user perspective
-3. **docs/REACTIVITY.md** - **NEW!** The reactive system (Phase 1 complete)
-4. **docs/COMPONENTS.md** - Component specification (Phase 2 - next up!)
-5. **docs/TEMPLATES.md** - Template DSL specification (Phase 3)
+3. **docs/REACTIVITY.md** - **Phase 1 COMPLETE** - reactive system
+4. **docs/TEMPLATES.md** - **Phase 2 - NEXT!** - template DSL (HTML generation)
+5. **docs/COMPONENTS.md** - Phase 3 - components (uses templates + reactivity)
 6. **CONTRIBUTING.md** - GitHub workflow with examples
 7. **docs/WORKFLOW.md** - Command reference card
 
@@ -69,11 +69,16 @@ bun run parser  # Regenerates src/parser.js from grammar.rip
 - ✅ Massive cleanup - 5,246 clean LOC
 - ✅ Parser optimization - 28.7% faster, 24.5% smaller
 
-**Next up (Phase 2 - Components):**
-- 🔜 `component` keyword and grammar
-- 🔜 `render` block parsing
+**Next up (Phase 2 - Templates):**
+- 🔜 Template syntax lexing (`div.class#id`, `@event:`)
+- 🔜 Template grammar for HTML generation
+- 🔜 Event handlers, conditionals, loops in templates
+- 🔜 See: `docs/TEMPLATES.md` for specification
+
+**Then (Phase 3 - Components):**
+- 🔜 `component` keyword (uses templates + reactivity)
 - 🔜 Props system (`@prop`)
-- 🔜 Lifecycle hooks (`mounted:`, `unmounted:`)
+- 🔜 Lifecycle hooks
 - 🔜 See: `docs/COMPONENTS.md` for specification
 
 **Check current state:**
@@ -131,11 +136,19 @@ count = 20  # Effect fires automatically!
 echo 'count := 10' | ./bin/rip -c
 ```
 
-### What's Next (Phase 2)
+### What's Next (Phase 2 - Templates)
 
-See `docs/COMPONENTS.md` for the component system specification:
+See `docs/TEMPLATES.md` for the template DSL specification:
+- `div.class#id` syntax
+- `@event: handler` event binding
+- `for`/`if` in templates
+- Attribute handling
+
+### Then (Phase 3 - Components)
+
+See `docs/COMPONENTS.md` - combines templates + reactivity:
 - `component` keyword
-- `render` block
+- `render` block (uses templates!)
 - Props (`@prop`)
 - Lifecycle hooks
 
