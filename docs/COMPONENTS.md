@@ -13,7 +13,7 @@ Rip provides component syntax as **language-level constructs**, not library patt
 | `component` | Define a component (like `class` but for UI) |
 | `render` | Template block that describes the UI |
 | `style` | Scoped styles block for component CSS |
-| `trigger` | Side effect block (see [REACTIVITY.md](REACTIVITY.md)) |
+| `effect` | Side effect block (see [REACTIVITY.md](REACTIVITY.md)) |
 
 | Concept | Syntax | Purpose | When It Activates |
 |---------|--------|---------|-------------------|
@@ -24,7 +24,7 @@ Rip provides component syntax as **language-level constructs**, not library patt
 | **Methods** | `:` `->` | Private actions | Called explicitly |
 | **Exposed** | `:` `∞>` / `~>` | Public actions | Called by parent |
 | **Lifecycle** | `mounted:` etc. | Setup/teardown | Component lifecycle |
-| **Triggers** | `trigger:` | Side effects | Dependencies change |
+| **Effects** | `effect` | Side effects | Dependencies change |
 
 ---
 
@@ -106,13 +106,13 @@ component Name
     # After any reactive update
 
   # ═══════════════════════════════════════════
-  # Triggers (side effects)
+  # Effects (side effects)
   # ═══════════════════════════════════════════
-  trigger: ->
+  effect ->
     # Runs when dependencies change
     localStorage.setItem "items", JSON.stringify items
 
-  trigger: ->
+  effect ->
     # Return function for cleanup
     interval = setInterval (-> tick()), 1000
     -> clearInterval interval
@@ -557,8 +557,8 @@ component TodoApp
     saved = localStorage.getItem STORAGE_KEY
     todos = JSON.parse saved if saved
 
-  # Triggers
-  trigger: ->
+  # Effects
+  effect ->
     localStorage.setItem STORAGE_KEY, JSON.stringify todos
 
   # Render
@@ -616,7 +616,7 @@ component TodoApp
 2. **Templates are code** — The `render` block is Rip syntax, not a separate template language
 3. **Styles are colocated** — CSS lives with the component, scoped automatically
 4. **No ceremony** — No imports, exports, or registration needed
-5. **Everything is reactive** — State, derived values, and triggers just work
+5. **Everything is reactive** — State, derived values, and effects just work
 
 ---
 

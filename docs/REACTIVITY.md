@@ -10,24 +10,24 @@ Rip provides reactive primitives as **language-level operators**, not library im
 
 | Operator | Name | Purpose |
 |----------|------|---------|
-| `∞=` | Always equals | Reactive derived value (auto-updates when dependencies change) |
-| `~=` | Always equals (ASCII) | Same as `∞=` for ASCII-only environments |
+| `:=` | Signal | Reactive state variable |
+| `∞=` | Derived | Computed value (auto-updates when dependencies change) |
+| `~=` | Derived (ASCII) | Same as `∞=` for ASCII-only environments |
 | `=!` | Readonly | Constant that cannot be reassigned |
-| `∞>` | Exposed method | Public method callable by parent component |
-| `~>` | Exposed method (ASCII) | Same as `∞>` for ASCII-only environments |
+| `effect` | Effect | Side effect that runs when dependencies change |
 
 ---
 
-## Reactive State
+## Reactive State (`:=`)
 
-Regular assignment creates reactive state:
+The signal operator creates reactive state:
 
 ```coffee
-count = 0              # Reactive state (just assignment)
-name = "world"         # Another reactive state
+count := 0              # Reactive signal
+name := "world"         # Another reactive signal
 ```
 
-State changes automatically trigger updates in any derived values or UI that depends on them.
+State changes automatically trigger updates in any derived values or effects that depend on them.
 
 ---
 
@@ -36,17 +36,17 @@ State changes automatically trigger updates in any derived values or UI that dep
 The "always equals" operator creates a value that automatically recomputes when its dependencies change:
 
 ```coffee
-count = 0
-doubled ∞= count * 2   # Always equals count * 2
+count := 0
+doubled ∞= count * 2    # Always equals count * 2
 
-count = 5              # doubled automatically becomes 10
-count = 10             # doubled automatically becomes 20
+count = 5               # doubled automatically becomes 10
+count = 10              # doubled automatically becomes 20
 ```
 
 **ASCII alternative:** Use `~=` if your environment doesn't support Unicode:
 
 ```coffee
-doubled ~= count * 2   # Same as ∞=
+doubled ~= count * 2    # Same as ∞=
 ```
 
 ---
@@ -59,58 +59,58 @@ The readonly operator creates a constant that cannot be reassigned:
 API_URL =! "https://api.example.com"
 MAX_RETRIES =! 3
 
-API_URL = "other"      # Error: cannot reassign readonly value
+API_URL = "other"       # Silently ignored - value stays unchanged
 ```
 
 ---
 
-## Exposed Methods (`∞>` / `~>`)
+## Side Effects (`effect`)
 
-The exposed method operator marks a method as part of the component's public interface, callable by parent components:
-
-```coffee
-component TextField
-  value = ""
-
-  focus ∞>: ->         # Exposed to parent
-    @inputRef.focus()
-
-  clear ∞>: ->         # Exposed to parent
-    value = ""
-
-# Parent can call:
-# textFieldRef.focus()
-# textFieldRef.clear()
-```
-
-**ASCII alternative:** Use `~>` if your environment doesn't support Unicode:
+The `effect` keyword defines a side effect block that runs when its dependencies change:
 
 ```coffee
-focus ~>: ->
-  @inputRef.focus()
+count := 0
+
+effect -> console.log "Count changed to:", count
+
+count = 5    # Logs: "Count changed to: 5"
+count = 10   # Logs: "Count changed to: 10"
 ```
 
----
-
-## Side Effects (`trigger`)
-
-The `trigger` keyword defines a side effect block that runs when its dependencies change:
-
-```coffee
-count = 0
-
-trigger: ->
-  console.log "Count changed to:", count
-
-count = 5   # Logs: "Count changed to: 5"
-count = 10  # Logs: "Count changed to: 10"
-```
-
-Triggers are useful for:
+Effects are useful for:
 - Logging and debugging
 - Syncing with external systems
 - Analytics tracking
 - Local storage persistence
+
+---
+
+## Auto-Unwrapping
+
+Reactive variables automatically unwrap in most contexts:
+
+```coffee
+count := 10
+
+# All of these work automatically:
+doubled ∞= count * 2         # Arithmetic
+message = "Count: #{count}"  # String interpolation
+console.log count            # Function arguments
+
+# Explicit access when needed:
+count.read()                 # Get value without tracking dependencies
++count                       # Unary plus (same as count.value)
+```
+
+---
+
+## Reactive Variable Methods
+
+| Method | Purpose |
+|--------|---------|
+| `x.read()` | Get value without tracking (for effects that shouldn't re-run) |
+| `x.value` | Direct access to the underlying value |
+| `+x` | Shorthand for `x.value` (triggers tracking in effects) |
 
 ---
 
@@ -120,27 +120,50 @@ The Rip compiler transforms reactive operators into efficient JavaScript:
 
 ```coffee
 # Rip source
-count = 0
+count := 0
 doubled ∞= count * 2
+effect -> console.log doubled
 ```
 
 ```javascript
 // Compiled output (conceptual)
-const count = signal(0);
-const doubled = computed(() => count.value * 2);
+const count = __signal(0);
+const doubled = __computed(() => count.value * 2);
+__effect(() => console.log(doubled.value));
 ```
 
-The exact runtime implementation may vary, but the key point is: **you write simple assignments, the compiler handles the reactivity**.
+The runtime is **automatically inlined** - no external dependencies required.
+
+---
+
+## Zero Overhead for Non-Reactive Code
+
+If your code doesn't use reactive features, no runtime is injected:
+
+```coffee
+# Non-reactive code
+x = 10
+y = x * 2
+console.log y
+```
+
+```javascript
+// Clean output - no reactive runtime
+let x, y;
+x = 10;
+y = x * 2;
+console.log(y);
+```
 
 ---
 
 ## Comparison with Other Frameworks
 
-| Concept | React | Vue | Svelte | Rip |
-|---------|-------|-----|--------|-----|
-| State | `useState()` | `ref()` | `let x = 0` | `x = 0` |
-| Derived | `useMemo()` | `computed()` | `$: x * 2` | `x ∞= y * 2` |
-| Effect | `useEffect()` | `watch()` | `$: { }` | `trigger: ->` |
+| Concept | React | Vue | Solid | Rip |
+|---------|-------|-----|-------|-----|
+| State | `useState()` | `ref()` | `createSignal()` | `x := 0` |
+| Derived | `useMemo()` | `computed()` | `createMemo()` | `x ∞= y * 2` |
+| Effect | `useEffect()` | `watch()` | `createEffect()` | `effect ->` |
 | Constant | `const` | `const` | `const` | `x =! 0` |
 
 Rip's approach: **No imports, no hooks, no special functions. Just operators.**
@@ -151,5 +174,6 @@ Rip's approach: **No imports, no hooks, no special functions. Just operators.**
 
 1. **Syntax over API** — Reactive primitives are operators, not function calls
 2. **Implicit tracking** — Dependencies are detected automatically
-3. **Minimal boilerplate** — No `useState`, no `.value`, no `$:`
+3. **Minimal boilerplate** — No `useState`, no `.value` in most cases
 4. **Familiar feel** — Looks like regular assignment, behaves reactively
+5. **Zero dependencies** — Runtime is inlined, no external packages needed
