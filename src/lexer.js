@@ -1793,7 +1793,7 @@ addTokenData = function(token, data) {
 JS_KEYWORDS = ['true', 'false', 'null', 'this', 'new', 'delete', 'typeof', 'in', 'instanceof', 'return', 'throw', 'break', 'continue', 'debugger', 'yield', 'await', 'if', 'else', 'switch', 'for', 'while', 'do', 'try', 'catch', 'finally', 'class', 'extends', 'super', 'import', 'export', 'default'];
 
 // Rip-only keywords.
-RIP_KEYWORDS = ['undefined', 'Infinity', 'NaN', 'then', 'unless', 'until', 'loop', 'of', 'by', 'when', 'def', 'trigger', 'component', 'render', 'style', 'mounted', 'unmounted', 'updated'];
+RIP_KEYWORDS = ['undefined', 'Infinity', 'NaN', 'then', 'unless', 'until', 'loop', 'of', 'by', 'when', 'def', 'effect', 'component', 'render', 'style', 'mounted', 'unmounted', 'updated'];
 
 RIP_ALIAS_MAP = {
   and: '&&',

@@ -100,7 +100,7 @@ export class CodeGenerator {
     'signal': 'generateSignal',
     'derived': 'generateDerived',
     'readonly': 'generateReadonly',
-    'trigger': 'generateTrigger',
+    'effect': 'generateEffect',
 
     // Control flow - Simple statements
     'break': 'generateBreak',
@@ -1522,11 +1522,11 @@ export class CodeGenerator {
   }
 
   /**
-   * Generate trigger (effect)
-   * Pattern: ["trigger", block]
+   * Generate effect (reactive side effect)
+   * Pattern: ["effect", block]
    * Output: __effect(() => { block })
    */
-  generateTrigger(head, rest, context, sexpr) {
+  generateEffect(head, rest, context, sexpr) {
     const [body] = rest;
     this.usesReactivity = true;
 

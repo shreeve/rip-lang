@@ -50,7 +50,7 @@ grammar =
     o 'ReactiveAssign'
     o 'DerivedAssign'
     o 'ReadonlyAssign'
-    o 'TriggerBlock'
+    o 'EffectBlock'
     o 'If'
     o 'Try'
     o 'While'
@@ -89,10 +89,10 @@ grammar =
     o 'Assignable READONLY_ASSIGN INDENT Expression OUTDENT', '["readonly", 1, 4]'
   ]
 
-  # Reactive: Trigger block - side effects that run when dependencies change
-  TriggerBlock: [
-    o 'TRIGGER FuncGlyph Block', '["trigger", 3]'
-    o 'TRIGGER Block'          , '["trigger", 2]'
+  # Reactive: Effect block - side effects that run when dependencies change
+  EffectBlock: [
+    o 'EFFECT FuncGlyph Block', '["effect", 3]'
+    o 'EFFECT Block'          , '["effect", 2]'
   ]
 
   # Expressions which are written in single line and would otherwise require being
