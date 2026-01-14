@@ -12,8 +12,11 @@
 
 1. **This file (AGENT.md)** - Complete guide, you're reading it now!
 2. **README.md** - Skim for features and user perspective
-3. **CONTRIBUTING.md** - GitHub workflow with examples
-4. **docs/WORKFLOW.md** - Command reference card
+3. **docs/REACTIVITY.md** - **NEW!** The reactive system (Phase 1 complete)
+4. **docs/COMPONENTS.md** - Component specification (Phase 2 - next up!)
+5. **docs/TEMPLATES.md** - Template DSL specification (Phase 3)
+6. **CONTRIBUTING.md** - GitHub workflow with examples
+7. **docs/WORKFLOW.md** - Command reference card
 
 ### Step 2: Understand the Pipeline
 
@@ -47,30 +50,94 @@ bun run parser  # Regenerates src/parser.js from grammar.rip
 
 **Version:** 2.0.0
 **Tests:** 968 passing (100%)
-**Status:** Production-ready, self-hosting fully operational
+**Status:** Production-ready, self-hosting fully operational, **Reactivity Phase 1 COMPLETE**
 
-**Recent accomplishments (November 2025):**
-- ✅ Issue #52 (Phase 1) - Dispatch table architecture, 71 cases extracted
-- ✅ Issue #54 (Phase 2) - All 110 cases in dispatch table (100% complete!)
-- ✅ Massive cleanup - Removed 2,017 lines of dead/duplicate code (28%!)
-- ✅ Issue #51 - Standardized test formatting (""" → ''')
-- ✅ **Critical fix:** Restored self-hosting by fixing 'in' operator (v1.4.2)
-- ✅ **S-expression refactoring:** generateNot, generateIn use IR-level checks (v1.4.3)
-- ✅ **Parser optimization:** Sign-based parseTable encoding (28.7% faster parsing, 24.5% smaller)
-- ✅ **Result:** 5,246 clean, organized LOC
+**Recent accomplishments (January 2026):**
+- ✅ **REACTIVITY SYSTEM (v2.0.0)** - Full reactive primitives as language-level operators:
+  - `:=` signal assignment (reactive state)
+  - `∞=` / `~=` derived values (computed)
+  - `effect ->` side effects (renamed from `trigger`)
+  - `=!` readonly values
+  - Auto-unwrapping (no `.value` needed in most cases)
+  - Lifecycle methods: `read()`, `lock()`, `free()`, `kill()`
+  - Zero overhead for non-reactive code (runtime only injected when needed)
+- ✅ **Comprehensive documentation** - `docs/REACTIVITY.md` with FAQ, examples, tracking table
+- ✅ Runtime implemented in `src/codegen.js` (inlined) and `src/repl.js`
 
-**Key principles demonstrated:**
-- Work at s-expression level, NOT string manipulation (Issues #46, #49)
-- Simple pattern matching beats complex logic
-- All 110 operations in dispatch table (O(1) lookup)
+**Previous accomplishments (November 2025):**
+- ✅ Dispatch table architecture - All 110 cases (O(1) lookup)
+- ✅ Massive cleanup - 5,246 clean LOC
+- ✅ Parser optimization - 28.7% faster, 24.5% smaller
+
+**Next up (Phase 2 - Components):**
+- 🔜 `component` keyword and grammar
+- 🔜 `render` block parsing
+- 🔜 Props system (`@prop`)
+- 🔜 Lifecycle hooks (`mounted:`, `unmounted:`)
+- 🔜 See: `docs/COMPONENTS.md` for specification
 
 **Check current state:**
 ```bash
-gh issue list                    # See open issues (Issue #57 - formatter polish)
 git log --oneline -10            # Recent commits
 bun run test                     # Verify: 968/968 tests
 bun run parser                   # Test self-hosting ✅
+./bin/rip                        # Test REPL with reactivity
 ```
+
+---
+
+## ⚡ Reactivity System (v2.0.0)
+
+**Phase 1 is COMPLETE!** Rip now has language-level reactive primitives.
+
+### Reactive Operators
+
+| Operator | Name | Example |
+|----------|------|---------|
+| `:=` | Signal | `count := 0` |
+| `∞=` / `~=` | Derived | `doubled ∞= count * 2` |
+| `effect` | Effect | `effect -> console.log count` |
+| `=!` | Readonly | `MAX =! 100` |
+
+### Lifecycle Methods
+
+| Method | Purpose |
+|--------|---------|
+| `x.read()` | Get value without tracking |
+| `x.lock()` | Make readonly |
+| `x.free()` | Unsubscribe from dependencies |
+| `x.kill()` | Cleanup and return final value |
+
+### Key Implementation Files
+
+| File | What's There |
+|------|--------------|
+| `src/codegen.js` | Runtime code (lines ~5389-5465), generators for signal/derived/effect |
+| `src/repl.js` | REPL runtime (persists across lines) |
+| `src/lexer.js` | Tokens: `:=`, `∞=`, `~=`, `=!`, `effect` |
+| `src/grammar/grammar.rip` | Grammar rules for reactive assignments |
+
+### Testing Reactivity
+
+```bash
+# Test in REPL
+./bin/rip
+count := 10
+doubled ∞= count * 2
+effect -> console.log "Doubled:", doubled
+count = 20  # Effect fires automatically!
+
+# Check compiled output
+echo 'count := 10' | ./bin/rip -c
+```
+
+### What's Next (Phase 2)
+
+See `docs/COMPONENTS.md` for the component system specification:
+- `component` keyword
+- `render` block
+- Props (`@prop`)
+- Lifecycle hooks
 
 ---
 

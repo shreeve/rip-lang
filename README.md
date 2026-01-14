@@ -95,6 +95,9 @@ Rip includes **all of CoffeeScript's beloved features** plus modern enhancements
 
 | Feature | Syntax | Benefit |
 |---------|--------|---------|
+| **🆕 Reactive signals** | `count := 0` | Language-level reactivity |
+| **🆕 Derived values** | `doubled ∞= count * 2` | Auto-updating computed values |
+| **🆕 Effects** | `effect -> console.log count` | Automatic side effects |
 | **Dammit operator** | `fetchData!` → `await fetchData()` | Call and await in one |
 | **Otherwise operator** | `val !? default` | Undefined-only coalescing (null/false/0 are valid) |
 | **Void functions** | `def process!` | Suppress implicit returns |
@@ -277,6 +280,33 @@ def fetchData
   data.json()
 # → async function fetchData() { ... }
 ```
+
+### Reactivity (NEW in v2.0.0!)
+
+```coffee
+# Reactive signals - state that triggers updates
+count := 0
+name := "world"
+
+# Derived values - always equal their expression
+doubled ∞= count * 2        # Auto-updates when count changes
+message ∞= "Hello, #{name}" # Auto-updates when name changes
+
+# Effects - side effects that run when dependencies change
+effect -> console.log "Count is now: #{count}"
+
+# Assignment triggers reactivity
+count = 5   # Effect runs, logs "Count is now: 5"
+count = 10  # Effect runs, logs "Count is now: 10"
+
+# Lifecycle methods
+count.read()   # Get value without tracking
+count.lock()   # Make readonly
+count.free()   # Unsubscribe from dependencies
+count.kill()   # Cleanup and return final value
+```
+
+**See [docs/REACTIVITY.md](docs/REACTIVITY.md) for complete guide with FAQ.**
 
 ### Unique Features
 
@@ -462,6 +492,7 @@ See [docs/BROWSER.md](docs/BROWSER.md) for details.
 
 **For users:**
 - [README.md](README.md) - This file (overview and quick start)
+- [docs/REACTIVITY.md](docs/REACTIVITY.md) - **🆕 Reactive system guide** (signals, effects, FAQ)
 - [docs/examples/](docs/examples/) - Example programs
 - [CHANGELOG.md](CHANGELOG.md) - Version history
 
@@ -473,6 +504,10 @@ See [docs/BROWSER.md](docs/BROWSER.md) for details.
 - [docs/STRING.md](docs/STRING.md) - String metadata reference
 - [docs/REGEX-PLUS.md](docs/REGEX-PLUS.md) - Ruby-style regex features
 - [docs/BROWSER.md](docs/BROWSER.md) - Browser usage & REPLs
+
+**Future features (specifications):**
+- [docs/COMPONENTS.md](docs/COMPONENTS.md) - Component system (Phase 2 - coming soon)
+- [docs/TEMPLATES.md](docs/TEMPLATES.md) - Template DSL (Phase 3 - coming soon)
 
 **For contributors:**
 - [CONTRIBUTING.md](CONTRIBUTING.md) - Development workflow
