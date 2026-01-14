@@ -112,7 +112,7 @@ count.read()             # Get value without tracking dependencies
 | `x.value` | Direct access to the underlying value |
 | `+x` | Shorthand for `x.value` (triggers tracking in effects) |
 | `x.lock()` | Make value readonly (can read but can't change) |
-| `x.dispose()` | Unsubscribe from all dependencies (signal still works) |
+| `x.free()` | Unsubscribe from all dependencies (signal still works) |
 | `x.kill()` | Clean up everything and return final value |
 
 ---
@@ -181,7 +181,7 @@ config = { theme: "light" }  # Silently ignored
 config.theme                  # Still "dark"
 ```
 
-### Disposing Subscriptions
+### Freeing Subscriptions
 
 Unsubscribe a computed/effect from its dependencies:
 
@@ -189,8 +189,8 @@ Unsubscribe a computed/effect from its dependencies:
 count := 0
 doubled ∞= count * 2
 
-doubled.dispose()  # No longer updates when count changes
-count = 10         # doubled stays at its last value
+doubled.free()  # No longer updates when count changes
+count = 10      # doubled stays at its last value
 ```
 
 ### Killing a Signal
@@ -298,7 +298,7 @@ effect ->
 
 Reactive subscriptions are automatically cleaned up when:
 - A component unmounts (in UI context)
-- You call `.dispose()` on a computed/effect
+- You call `.free()` on a computed/effect
 - You call `.kill()` on a signal
 
 For long-running apps, explicitly dispose effects you no longer need:
@@ -324,18 +324,18 @@ Or just read the value without killing:
 plainNumber = +count  # Get value, signal stays alive
 ```
 
-### What's the difference between `.dispose()` and `.kill()`?
+### What's the difference between `.free()` and `.kill()`?
 
 | Method | Signal Lives? | Returns | Use Case |
 |--------|---------------|---------|----------|
-| `.dispose()` | ✅ Yes | Nothing | Stop updates but keep signal |
+| `.free()` | ✅ Yes | Nothing | Stop updates but keep signal |
 | `.kill()` | ❌ No | Final value | Complete cleanup |
 
 ```coffee
 count := 10
 
-count.dispose()  # Signal works, just no subscribers
-count = 20       # Works fine
+count.free()   # Signal works, just no subscribers
+count = 20     # Works fine
 
 # vs
 
