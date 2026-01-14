@@ -45,6 +45,16 @@ export function signal(initialValue) {
     // Allow reading without tracking
     peek() {
       return value;
+    },
+    // Auto-unwrap for REPL and primitive coercion
+    valueOf() {
+      return this.value;
+    },
+    toString() {
+      return String(this.value);
+    },
+    [Symbol.toPrimitive](hint) {
+      return hint === 'string' ? this.toString() : this.valueOf();
     }
   };
 }
@@ -106,6 +116,16 @@ export function computed(fn) {
         dirty = false;
       }
       return value;
+    },
+    // Auto-unwrap for REPL and primitive coercion
+    valueOf() {
+      return this.value;
+    },
+    toString() {
+      return String(this.value);
+    },
+    [Symbol.toPrimitive](hint) {
+      return hint === 'string' ? this.toString() : this.valueOf();
     }
   };
 

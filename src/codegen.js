@@ -5397,7 +5397,11 @@ function __signal(v) {
         notifying = false;
       }
     },
-    peek() { return v; }
+    peek() { return v; },
+    // Auto-unwrap for REPL and primitive coercion
+    valueOf() { return this.value; },
+    toString() { return String(this.value); },
+    [Symbol.toPrimitive](hint) { return hint === 'string' ? this.toString() : this.valueOf(); }
   };
 }
 function __computed(fn) {
@@ -5421,7 +5425,11 @@ function __computed(fn) {
         dirty = false;
       }
       return v;
-    }
+    },
+    // Auto-unwrap for REPL and primitive coercion
+    valueOf() { return this.value; },
+    toString() { return String(this.value); },
+    [Symbol.toPrimitive](hint) { return hint === 'string' ? this.toString() : this.valueOf(); }
   };
   return c;
 }
