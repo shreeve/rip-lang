@@ -43,7 +43,7 @@ export function signal(initialValue) {
       }
     },
     // Allow reading without tracking
-    peek() {
+    read() {
       return value;
     },
     // Auto-unwrap for REPL and primitive coercion
@@ -104,10 +104,10 @@ export function computed(fn) {
       }
       return value;
     },
-    peek() {
+    read() {
       if (dirty) {
         const prevEffect = currentEffect;
-        currentEffect = null; // Don't track during peek
+        currentEffect = null; // Don't track during read
         try {
           value = fn();
         } finally {

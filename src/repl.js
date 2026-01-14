@@ -117,7 +117,7 @@ function __signal(v) {
         notifying = false;
       }
     },
-    peek() { return v; },
+    read() { return v; },
     valueOf() { return this.value; },
     toString() { return String(this.value); },
     [Symbol.toPrimitive](hint) { return hint === 'string' ? this.toString() : this.valueOf(); }

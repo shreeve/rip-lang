@@ -1161,7 +1161,12 @@ export class CodeGenerator {
    */
   generatePropertyAccess(head, rest, context, sexpr) {
     const [obj, prop] = rest;
+
+    // Don't auto-unwrap reactive vars when accessing their methods/properties
+    // e.g., count.read() should NOT become count.value.read()
+    this.suppressReactiveUnwrap = true;
     const objCode = this.generate(obj, 'value');
+    this.suppressReactiveUnwrap = false;
 
     // Wrap numeric literals, object literals, await, and yield in parens
     const isNumberLiteral = CodeGenerator.NUMBER_LITERAL_REGEX.test(objCode);
@@ -5401,7 +5406,7 @@ function __signal(v) {
         notifying = false;
       }
     },
-    peek() { return v; },
+    read() { return v; },
     // Auto-unwrap for REPL and primitive coercion
     valueOf() { return this.value; },
     toString() { return String(this.value); },
