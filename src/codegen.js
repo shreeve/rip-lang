@@ -97,6 +97,7 @@ export class CodeGenerator {
     'return': 'generateReturn',
 
     // Reactive primitives
+    'signal': 'generateSignal',
     'derived': 'generateDerived',
     'readonly': 'generateReadonly',
     'trigger': 'generateTrigger',
@@ -488,6 +489,11 @@ export class CodeGenerator {
       // Note: This is NOT where we check for dammit operator (!)
       // The ! is only meaningful at CALL sites, not identifier references
       // e.g., `x = fetchData` assigns the function, `x = fetchData!` calls it
+
+      // Auto-unwrap reactive variables (signals/computed) by adding .value
+      if (this.reactiveVars?.has(sexpr) && !this.suppressReactiveUnwrap) {
+        return `${sexpr}.value`;
+      }
       return sexpr;
     }
 
@@ -1089,12 +1095,17 @@ export class CodeGenerator {
     }
 
     // Generate target code (strip ! sigil metadata for assignment LHS)
+    // IMPORTANT: Suppress reactive auto-unwrap for assignment targets
+    // User writes: count.value = 20 → should NOT become count.value.value = 20
     let targetCode;
     if (target instanceof String && target.await !== undefined) {
       // Target has sigil - just use the clean name (don't apply dammit operator)
       targetCode = target.valueOf();
     } else {
+      // Suppress reactive unwrap for assignment targets
+      this.suppressReactiveUnwrap = true;
       targetCode = this.generate(target, 'value');
+      this.suppressReactiveUnwrap = false;
     }
 
     let valueCode = this.generate(value, 'value');
@@ -1441,6 +1452,22 @@ export class CodeGenerator {
   //-------------------------------------------------------------------------
 
   /**
+   * Generate reactive signal (:=)
+   * Pattern: ["signal", name, expression]
+   * Output: const name = __signal(expression)
+   */
+  generateSignal(head, rest, context, sexpr) {
+    const [name, expr] = rest;
+    this.usesReactivity = true;
+    const nameCode = this.generate(name, 'value');
+    const exprCode = this.generate(expr, 'value');
+    // Track this variable as reactive for auto-unwrapping
+    if (!this.reactiveVars) this.reactiveVars = new Set();
+    this.reactiveVars.add(typeof name === 'string' ? name : name.valueOf());
+    return `const ${nameCode} = __signal(${exprCode})`;
+  }
+
+  /**
    * Generate derived value (∞= or ~=)
    * Pattern: ["derived", name, expression]
    * Output: const name = __computed(() => expression)
@@ -1448,9 +1475,12 @@ export class CodeGenerator {
   generateDerived(head, rest, context, sexpr) {
     const [name, expr] = rest;
     this.usesReactivity = true;
-    const nameCode = this.generate(name, 'value');
+    // Track this variable as reactive for auto-unwrapping
+    if (!this.reactiveVars) this.reactiveVars = new Set();
+    const varName = typeof name === 'string' ? name : name.valueOf();
+    this.reactiveVars.add(varName);
     const exprCode = this.generate(expr, 'value');
-    return `const ${nameCode} = __computed(() => ${exprCode})`;
+    return `const ${varName} = __computed(() => ${exprCode})`;
   }
 
   /**
@@ -5331,12 +5361,26 @@ export class CodeGenerator {
    */
   getReactiveRuntime() {
     return `// === Rip Reactive Runtime ===
-let __currentEffect = null, __batchDepth = 0, __pendingEffects = new Set();
+let __currentEffect = null, __pendingEffects = new Set();
 function __signal(v) {
   const subs = new Set();
+  let notifying = false;
   return {
     get value() { if (__currentEffect) { subs.add(__currentEffect); __currentEffect.dependencies.add(subs); } return v; },
-    set value(n) { if (n !== v) { v = n; for (const e of subs) __batchDepth > 0 ? __pendingEffects.add(e) : e.run(); } },
+    set value(n) {
+      if (n !== v && !notifying) {
+        v = n;
+        notifying = true;
+        // Mark all computeds dirty first
+        for (const s of subs) if (s.markDirty) s.markDirty();
+        // Then queue effects
+        for (const s of subs) if (!s.markDirty) __pendingEffects.add(s);
+        // Flush effects
+        const fx = [...__pendingEffects]; __pendingEffects.clear();
+        for (const e of fx) e.run();
+        notifying = false;
+      }
+    },
     peek() { return v; }
   };
 }
@@ -5345,7 +5389,13 @@ function __computed(fn) {
   const subs = new Set();
   const c = {
     dependencies: new Set(),
-    run() { dirty = true; for (const e of subs) __batchDepth > 0 ? __pendingEffects.add(e) : e.run(); },
+    markDirty() {
+      if (!dirty) {
+        dirty = true;
+        for (const s of subs) if (s.markDirty) s.markDirty();
+        for (const s of subs) if (!s.markDirty) __pendingEffects.add(s);
+      }
+    },
     get value() {
       if (__currentEffect) { subs.add(__currentEffect); __currentEffect.dependencies.add(subs); }
       if (dirty) {
@@ -5373,10 +5423,8 @@ function __effect(fn) {
   return () => e.dispose();
 }
 function __batch(fn) {
-  __batchDepth++;
-  try { fn(); } finally {
-    if (--__batchDepth === 0) { const fx = [...__pendingEffects]; __pendingEffects.clear(); for (const e of fx) e.run(); }
-  }
+  // Simple batch - just run the function, signals handle their own notifications
+  fn();
 }
 function __readonly(v) { return Object.freeze({ value: v }); }
 // === End Reactive Runtime ===

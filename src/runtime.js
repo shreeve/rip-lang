@@ -2,13 +2,12 @@
 // Rip Reactive Runtime
 // ============================================================================
 // Minimal reactive primitives that get inlined into compiled output.
-// Zero dependencies, ~150 lines.
+// Zero dependencies.
 
 // Current tracking context (the effect/computed currently being executed)
 let currentEffect = null;
 
-// Batch state
-let batchDepth = 0;
+// Pending effects to run
 let pendingEffects = new Set();
 
 // ============================================================================
@@ -17,8 +16,9 @@ let pendingEffects = new Set();
 export function signal(initialValue) {
   let value = initialValue;
   const subscribers = new Set();
+  let notifying = false;
 
-  const sig = {
+  return {
     get value() {
       // Track dependency if we're inside an effect/computed
       if (currentEffect) {
@@ -28,16 +28,18 @@ export function signal(initialValue) {
       return value;
     },
     set value(newValue) {
-      if (newValue !== value) {
+      if (newValue !== value && !notifying) {
         value = newValue;
-        // Notify all subscribers
-        for (const effect of subscribers) {
-          if (batchDepth > 0) {
-            pendingEffects.add(effect);
-          } else {
-            effect.run();
-          }
-        }
+        notifying = true;
+        // Mark all computeds dirty first
+        for (const s of subscribers) if (s.markDirty) s.markDirty();
+        // Then queue effects
+        for (const s of subscribers) if (!s.markDirty) pendingEffects.add(s);
+        // Flush effects
+        const fx = [...pendingEffects];
+        pendingEffects.clear();
+        for (const e of fx) e.run();
+        notifying = false;
       }
     },
     // Allow reading without tracking
@@ -45,8 +47,6 @@ export function signal(initialValue) {
       return value;
     }
   };
-
-  return sig;
 }
 
 // ============================================================================
@@ -58,17 +58,13 @@ export function computed(fn) {
   const subscribers = new Set();
 
   const comp = {
-    // Internal effect to track dependencies
     dependencies: new Set(),
-    run() {
-      dirty = true;
-      // Notify our subscribers that we changed
-      for (const effect of subscribers) {
-        if (batchDepth > 0) {
-          pendingEffects.add(effect);
-        } else {
-          effect.run();
-        }
+    markDirty() {
+      if (!dirty) {
+        dirty = true;
+        // Propagate to dependent computeds first, then queue effects
+        for (const s of subscribers) if (s.markDirty) s.markDirty();
+        for (const s of subscribers) if (!s.markDirty) pendingEffects.add(s);
       }
     },
     get value() {
@@ -155,23 +151,10 @@ export function effect(fn) {
 }
 
 // ============================================================================
-// Batch - Group updates to prevent cascading
+// Batch - Group updates (simplified - signals handle their own notifications)
 // ============================================================================
 export function batch(fn) {
-  batchDepth++;
-  try {
-    fn();
-  } finally {
-    batchDepth--;
-    if (batchDepth === 0) {
-      // Run all pending effects
-      const effects = [...pendingEffects];
-      pendingEffects.clear();
-      for (const effect of effects) {
-        effect.run();
-      }
-    }
-  }
+  fn();
 }
 
 // ============================================================================
@@ -180,110 +163,3 @@ export function batch(fn) {
 export function readonly(value) {
   return Object.freeze({ value });
 }
-
-// ============================================================================
-// Runtime code as string (for inlining into compiled output)
-// ============================================================================
-export const RUNTIME_CODE = `
-// === Rip Reactive Runtime ===
-let __currentEffect = null;
-let __batchDepth = 0;
-let __pendingEffects = new Set();
-
-function __signal(initialValue) {
-  let value = initialValue;
-  const subscribers = new Set();
-  return {
-    get value() {
-      if (__currentEffect) {
-        subscribers.add(__currentEffect);
-        __currentEffect.dependencies.add(subscribers);
-      }
-      return value;
-    },
-    set value(newValue) {
-      if (newValue !== value) {
-        value = newValue;
-        for (const effect of subscribers) {
-          if (__batchDepth > 0) {
-            __pendingEffects.add(effect);
-          } else {
-            effect.run();
-          }
-        }
-      }
-    },
-    peek() { return value; }
-  };
-}
-
-function __computed(fn) {
-  let value, dirty = true;
-  const subscribers = new Set();
-  const comp = {
-    dependencies: new Set(),
-    run() {
-      dirty = true;
-      for (const effect of subscribers) {
-        if (__batchDepth > 0) __pendingEffects.add(effect);
-        else effect.run();
-      }
-    },
-    get value() {
-      if (__currentEffect) {
-        subscribers.add(__currentEffect);
-        __currentEffect.dependencies.add(subscribers);
-      }
-      if (dirty) {
-        for (const dep of comp.dependencies) dep.delete(comp);
-        comp.dependencies.clear();
-        const prev = __currentEffect;
-        __currentEffect = comp;
-        try { value = fn(); }
-        finally { __currentEffect = prev; }
-        dirty = false;
-      }
-      return value;
-    }
-  };
-  return comp;
-}
-
-function __effect(fn) {
-  const eff = {
-    dependencies: new Set(),
-    run() {
-      for (const dep of eff.dependencies) dep.delete(eff);
-      eff.dependencies.clear();
-      const prev = __currentEffect;
-      __currentEffect = eff;
-      try { fn(); }
-      finally { __currentEffect = prev; }
-    },
-    dispose() {
-      for (const dep of eff.dependencies) dep.delete(eff);
-      eff.dependencies.clear();
-    }
-  };
-  eff.run();
-  return () => eff.dispose();
-}
-
-function __batch(fn) {
-  __batchDepth++;
-  try { fn(); }
-  finally {
-    __batchDepth--;
-    if (__batchDepth === 0) {
-      const effects = [...__pendingEffects];
-      __pendingEffects.clear();
-      for (const effect of effects) effect.run();
-    }
-  }
-}
-
-function __readonly(value) {
-  return Object.freeze({ value });
-}
-// === End Rip Reactive Runtime ===
-`;

@@ -1125,6 +1125,8 @@ export var Lexer = class Lexer {
       tag = 'EXPORT_ALL';
     } else if (value === '∞=' || value === '~=') {
       tag = 'DERIVED_ASSIGN';
+    } else if (value === ':=') {
+      tag = 'REACTIVE_ASSIGN';
     } else if (value === '=!') {
       tag = 'READONLY_ASSIGN';
     } else if (value === '∞>' || value === '~>') {
@@ -1831,7 +1833,7 @@ export var JS_FORBIDDEN = JS_KEYWORDS.concat(RESERVED).concat(STRICT_PROSCRIBED)
 BOM = 65279;
 
 // Token matching regexes.
-IDENTIFIER = /^(?!\d)((?:(?!\s)[$\w\x7f-\uffff])+!?)([^\n\S]*:(?!:))?/; // rip: allow optional trailing ! for async calls
+IDENTIFIER = /^(?!\d)((?:(?!\s)[$\w\x7f-\uffff])+!?)([^\n\S]*:(?![=:]))?/; // rip: allow optional trailing ! for async calls; exclude := and ::
 // Is this a property name?
 
 NUMBER = /^0b[01](?:_?[01])*n?|^0o[0-7](?:_?[0-7])*n?|^0x[\da-f](?:_?[\da-f])*n?|^\d+(?:_\d+)*n|^(?:\d+(?:_\d+)*)?\.?\d+(?:_\d+)*(?:e[+-]?\d+(?:_\d+)*)?/i; // binary
@@ -1842,8 +1844,9 @@ NUMBER = /^0b[01](?:_?[01])*n?|^0o[0-7](?:_?[0-7])*n?|^0x[\da-f](?:_?[\da-f])*n?
 // decimal without support for numeric literal separators for reference:
 // \d*\.?\d+ (?:e[+-]?\d+)?
 
-OPERATOR = /^(?:[-=∞~]>|∞=|~=|=!|===|!==|!\?|\?\?|=~|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?(\.|::)|\.{2,3})/; // function
+OPERATOR = /^(?:[-=∞~]>|∞=|~=|:=|=!|===|!==|!\?|\?\?|=~|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?(\.|::)|\.{2,3})/; // function
 // ∞> and ~> are exposed method arrows (reactive)
+// := is reactive signal assignment
 // ∞= and ~= are derived assign (reactive computed values)
 // =! is readonly assign (reactive constant)
 // Added === and !== for explicit strict equality (compiles same as == and !=)
