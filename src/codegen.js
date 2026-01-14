@@ -208,14 +208,26 @@ export class CodeGenerator {
       return; // Don't collect vars from exports
     }
 
+    // Reactive assignments declare their own const - track them but don't add to programVars
+    if (head === 'signal' || head === 'derived' || head === 'readonly') {
+      const [target] = rest;
+      const varName = typeof target === 'string' ? target : target.valueOf();
+      if (!this.reactiveVars) this.reactiveVars = new Set();
+      this.reactiveVars.add(varName);
+      return; // These generate const declarations
+    }
+
     // Assignment - track the target at program level
     if (CodeGenerator.ASSIGNMENT_OPS.has(head)) {
       const [target, value] = rest;
 
       // Simple variable assignment (including String objects with sigils)
+      // Skip if it's a reactive variable (already declared as const)
       if (typeof target === 'string' || target instanceof String) {
         const varName = target instanceof String ? target.valueOf() : target;
-        this.programVars.add(varName);
+        if (!this.reactiveVars?.has(varName)) {
+          this.programVars.add(varName);
+        }
       }
       // Array destructuring: ["array", item1, item2, ...]
       else if (Array.isArray(target) && target[0] === 'array') {
@@ -1095,14 +1107,17 @@ export class CodeGenerator {
     }
 
     // Generate target code (strip ! sigil metadata for assignment LHS)
-    // IMPORTANT: Suppress reactive auto-unwrap for assignment targets
-    // User writes: count.value = 20 → should NOT become count.value.value = 20
+    // Handle reactive variable assignments: count = 20 → count.value = 20
     let targetCode;
     if (target instanceof String && target.await !== undefined) {
       // Target has sigil - just use the clean name (don't apply dammit operator)
       targetCode = target.valueOf();
+    } else if (typeof target === 'string' && this.reactiveVars?.has(target)) {
+      // Simple reactive variable assignment: count = 20 → count.value = 20
+      targetCode = `${target}.value`;
     } else {
-      // Suppress reactive unwrap for assignment targets
+      // Suppress reactive unwrap for other assignment targets (property access, etc.)
+      // This prevents count.value = 20 from becoming count.value.value = 20
       this.suppressReactiveUnwrap = true;
       targetCode = this.generate(target, 'value');
       this.suppressReactiveUnwrap = false;
@@ -1459,12 +1474,13 @@ export class CodeGenerator {
   generateSignal(head, rest, context, sexpr) {
     const [name, expr] = rest;
     this.usesReactivity = true;
-    const nameCode = this.generate(name, 'value');
+    // Use raw name (don't auto-unwrap for declaration)
+    const varName = typeof name === 'string' ? name : name.valueOf();
     const exprCode = this.generate(expr, 'value');
-    // Track this variable as reactive for auto-unwrapping
+    // Track this variable as reactive for auto-unwrapping (already done in collectProgramVariables)
     if (!this.reactiveVars) this.reactiveVars = new Set();
-    this.reactiveVars.add(typeof name === 'string' ? name : name.valueOf());
-    return `const ${nameCode} = __signal(${exprCode})`;
+    this.reactiveVars.add(varName);
+    return `const ${varName} = __signal(${exprCode})`;
   }
 
   /**
