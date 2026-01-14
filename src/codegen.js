@@ -96,6 +96,11 @@ export class CodeGenerator {
     '=>': 'generateFatArrow',
     'return': 'generateReturn',
 
+    // Reactive primitives
+    'derived': 'generateDerived',
+    'readonly': 'generateReadonly',
+    'trigger': 'generateTrigger',
+
     // Control flow - Simple statements
     'break': 'generateBreak',
     'break-if': 'generateBreakIf',
@@ -796,6 +801,12 @@ export class CodeGenerator {
       needsBlankLine = true;
     }
 
+    // 3b. Emit reactive runtime if used
+    if (this.usesReactivity) {
+      code += this.getReactiveRuntime();
+      needsBlankLine = true;
+    }
+
     // 4. Initialize DATA if __DATA__ section present
     if (this.dataSection !== null && this.dataSection !== undefined) {
       code += 'var DATA;\n';
@@ -1423,6 +1434,62 @@ export class CodeGenerator {
     }
 
     return `return ${this.generate(expr, 'value')}`;
+  }
+
+  //-------------------------------------------------------------------------
+  // REACTIVE PRIMITIVES
+  //-------------------------------------------------------------------------
+
+  /**
+   * Generate derived value (∞= or ~=)
+   * Pattern: ["derived", name, expression]
+   * Output: const name = __computed(() => expression)
+   */
+  generateDerived(head, rest, context, sexpr) {
+    const [name, expr] = rest;
+    this.usesReactivity = true;
+    const nameCode = this.generate(name, 'value');
+    const exprCode = this.generate(expr, 'value');
+    return `const ${nameCode} = __computed(() => ${exprCode})`;
+  }
+
+  /**
+   * Generate readonly value (=!)
+   * Pattern: ["readonly", name, expression]
+   * Output: const name = __readonly(expression)
+   */
+  generateReadonly(head, rest, context, sexpr) {
+    const [name, expr] = rest;
+    this.usesReactivity = true;
+    const nameCode = this.generate(name, 'value');
+    const exprCode = this.generate(expr, 'value');
+    return `const ${nameCode} = __readonly(${exprCode})`;
+  }
+
+  /**
+   * Generate trigger (effect)
+   * Pattern: ["trigger", block]
+   * Output: __effect(() => { block })
+   */
+  generateTrigger(head, rest, context, sexpr) {
+    const [body] = rest;
+    this.usesReactivity = true;
+
+    // Generate the body
+    let bodyCode;
+    if (Array.isArray(body) && body[0] === 'block') {
+      const statements = body.slice(1);
+      const stmts = this.withIndent(() => this.formatStatements(statements));
+      bodyCode = `{\n${stmts.join('\n')}\n${this.indent()}}`;
+    } else if (Array.isArray(body) && (body[0] === '->' || body[0] === '=>')) {
+      // It's already a function, just generate it
+      const fnCode = this.generate(body, 'value');
+      return `__effect(${fnCode})`;
+    } else {
+      bodyCode = `{ ${this.generate(body, 'value')}; }`;
+    }
+
+    return `__effect(() => ${bodyCode})`;
   }
 
   //-------------------------------------------------------------------------
@@ -5252,6 +5319,68 @@ export class CodeGenerator {
       return `(() => { ${code} })()`;
     }
     return code;
+  }
+
+  //-------------------------------------------------------------------------
+  // REACTIVE RUNTIME
+  //-------------------------------------------------------------------------
+
+  /**
+   * Get the reactive runtime code to inject
+   * Returns minified inline runtime for signal/computed/effect/batch
+   */
+  getReactiveRuntime() {
+    return `// === Rip Reactive Runtime ===
+let __currentEffect = null, __batchDepth = 0, __pendingEffects = new Set();
+function __signal(v) {
+  const subs = new Set();
+  return {
+    get value() { if (__currentEffect) { subs.add(__currentEffect); __currentEffect.dependencies.add(subs); } return v; },
+    set value(n) { if (n !== v) { v = n; for (const e of subs) __batchDepth > 0 ? __pendingEffects.add(e) : e.run(); } },
+    peek() { return v; }
+  };
+}
+function __computed(fn) {
+  let v, dirty = true;
+  const subs = new Set();
+  const c = {
+    dependencies: new Set(),
+    run() { dirty = true; for (const e of subs) __batchDepth > 0 ? __pendingEffects.add(e) : e.run(); },
+    get value() {
+      if (__currentEffect) { subs.add(__currentEffect); __currentEffect.dependencies.add(subs); }
+      if (dirty) {
+        for (const d of c.dependencies) d.delete(c); c.dependencies.clear();
+        const prev = __currentEffect; __currentEffect = c;
+        try { v = fn(); } finally { __currentEffect = prev; }
+        dirty = false;
+      }
+      return v;
+    }
+  };
+  return c;
+}
+function __effect(fn) {
+  const e = {
+    dependencies: new Set(),
+    run() {
+      for (const d of e.dependencies) d.delete(e); e.dependencies.clear();
+      const prev = __currentEffect; __currentEffect = e;
+      try { fn(); } finally { __currentEffect = prev; }
+    },
+    dispose() { for (const d of e.dependencies) d.delete(e); e.dependencies.clear(); }
+  };
+  e.run();
+  return () => e.dispose();
+}
+function __batch(fn) {
+  __batchDepth++;
+  try { fn(); } finally {
+    if (--__batchDepth === 0) { const fx = [...__pendingEffects]; __pendingEffects.clear(); for (const e of fx) e.run(); }
+  }
+}
+function __readonly(v) { return Object.freeze({ value: v }); }
+// === End Reactive Runtime ===
+`;
   }
 }
 

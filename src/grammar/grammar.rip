@@ -47,6 +47,9 @@ grammar =
     o 'Code'
     o 'Operation'
     o 'Assign'
+    o 'DerivedAssign'
+    o 'ReadonlyAssign'
+    o 'TriggerBlock'
     o 'If'
     o 'Try'
     o 'While'
@@ -62,6 +65,26 @@ grammar =
   Def: [
     o 'DEF Identifier CALL_START ParamList CALL_END Block', '["def", 2, 4, 6]'
     o 'DEF Identifier Block'                              , '["def", 2, [], 3]'  # No params
+  ]
+
+  # Reactive: Derived assignment (∞= or ~=) - computed values that auto-update
+  DerivedAssign: [
+    o 'Assignable DERIVED_ASSIGN Expression'               , '["derived", 1, 3]'
+    o 'Assignable DERIVED_ASSIGN TERMINATOR Expression'    , '["derived", 1, 4]'
+    o 'Assignable DERIVED_ASSIGN INDENT Expression OUTDENT', '["derived", 1, 4]'
+  ]
+
+  # Reactive: Readonly assignment (=!) - constants that cannot be reassigned
+  ReadonlyAssign: [
+    o 'Assignable READONLY_ASSIGN Expression'               , '["readonly", 1, 3]'
+    o 'Assignable READONLY_ASSIGN TERMINATOR Expression'    , '["readonly", 1, 4]'
+    o 'Assignable READONLY_ASSIGN INDENT Expression OUTDENT', '["readonly", 1, 4]'
+  ]
+
+  # Reactive: Trigger block - side effects that run when dependencies change
+  TriggerBlock: [
+    o 'TRIGGER FuncGlyph Block', '["trigger", 3]'
+    o 'TRIGGER Block'          , '["trigger", 2]'
   ]
 
   # Expressions which are written in single line and would otherwise require being
