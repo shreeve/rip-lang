@@ -1,4 +1,4 @@
-<p><img src="rip.svg" alt="Rip Logo" width="200"></p>
+<p><img src="rip.svg" alt="Rip Logo" width="100"></p>
 
 # Rip Reactivity
 
