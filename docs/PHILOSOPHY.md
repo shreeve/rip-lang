@@ -19,25 +19,25 @@ Rip is a CoffeeScript-inspired language that compiles to modern JavaScript. But 
 ## The Rip Ecosystem
 
 ```
-┌───────────────────────────────────────────────────────────────┐
-│                         Rip Language                          │
-│           "Elegant syntax → Modern JavaScript"                │
-│        Reactivity, Components, Templates built-in             │
-├───────────────────────────────────────────────────────────────┤
-│  @rip/ui      │  @rip/api     │  @rip/server  │  @rip/schema  │
-│  Components   │  API Toolkit  │  App Server   │  Database DSL │
-└───────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────┐
+│                            Rip Language                            │
+│              "Elegant syntax → Modern JavaScript"                  │
+│           Reactivity, Components, Templates built-in               │
+├────────────────────────────────────────────────────────────────────┤
+│ @rip-lang/ui │ @rip-lang/api │ @rip-lang/server │ @rip-lang/schema │
+│ Components   │ API Toolkit   │ App Server       │ Database DSL     │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
 | Package | Description | Status |
 |---------|-------------|--------|
 | **rip** | The language: reactivity, components, templates | ✅ Core |
-| **@rip/ui** | Pre-built component library | 📐 Planned |
-| **@rip/api** | API toolkit (Express-like) | 🔧 In Progress |
-| **@rip/server** | Multi-process app server | 🔧 In Progress |
-| **@rip/schema** | Database DSL (ActiveRecord-like) | 🔧 In Progress |
-| **@rip/data** | DuckDB-based data platform | 🔧 In Progress |
-| **@rip/parser** | SLR(1) parser generator | ✅ Working |
+| **@rip-lang/ui** | Pre-built component library | 📐 Planned |
+| **@rip-lang/api** | API toolkit (Express-like) | 🔧 In Progress |
+| **@rip-lang/server** | Multi-process app server | 🔧 In Progress |
+| **@rip-lang/schema** | Database DSL (ActiveRecord-like) | 🔧 In Progress |
+| **@rip-lang/data** | DuckDB-based data platform | 🔧 In Progress |
+| **@rip-lang/parser** | SLR(1) parser generator | ✅ Working |
 
 ---
 
