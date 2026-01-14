@@ -154,6 +154,24 @@ Rip includes **all of CoffeeScript's beloved features** plus modern enhancements
 >
 > Keep the IR simple (s-expressions), keep the pipeline clear (lex → parse → generate), keep the code minimal (pattern matching). Test everything.
 
+### vs Other Frameworks
+
+The modern web is drowning in complexity. Rip offers a different path: **the language IS the framework**.
+
+| Feature | Rip | React | Svelte | Vue |
+|---------|-----|-------|--------|-----|
+| **Bundle size** | ~47KB | ~140KB | ~2KB* | ~34KB* |
+| **Build required** | No | Yes | Yes | Usually |
+| **Reactivity** | Language-level | Library hooks | Compiler magic | Library refs |
+| **Learning curve** | Rip syntax | Hooks rules | Svelte syntax | Options vs Composition |
+
+*Svelte/Vue sizes are runtime only—they require build tools.
+
+**Why Rip wins:**
+- **vs React** — No hook rules, no build step, cleaner syntax
+- **vs Svelte** — No build step required, runs directly in browser
+- **vs Vue** — Language-level reactivity, not library-level
+
 ---
 
 ## Installation

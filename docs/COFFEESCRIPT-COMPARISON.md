@@ -1,8 +1,8 @@
 # Rip vs CoffeeScript - Feature Comparison
 
-**Version:** 1.0.0 (Stable Release)
+**Version:** 1.5.7 (Stable Release)
 **Last Updated:** 2025-11-01
-**Test Results:** 864/864 rip tests (100%) ✅
+**Test Results:** 968/968 rip tests (100%) ✅
 
 ---
 
@@ -489,8 +489,8 @@ export { add }
 
 ## 📊 Test Coverage
 
-### Rip v1.0.0
-- **Tests:** 864/864 (100%) ✅
+### Rip v1.5.7
+- **Tests:** 968/968 (100%) ✅
 - **Files:** 20 organized test files
 - **Coverage:** 110+ node types, all features
 - **Compatibility:** 45 tests for CoffeeScript dual syntax
@@ -696,7 +696,7 @@ See [BROWSER.md](BROWSER.md) for complete guide.
 - ✅ Stable, reliable
 
 ### Rip
-- ✅ 100% test coverage (843 tests)
+- ✅ 100% test coverage (968 tests)
 - ✅ Self-hosting (compiles itself)
 - ✅ Modern output (ES2022)
 - ✅ Clean architecture
@@ -715,7 +715,7 @@ See [BROWSER.md](BROWSER.md) for complete guide.
 ✅ **Clean:** 50% smaller implementation
 ✅ **Fast:** 30% faster compilation
 ✅ **Compatible:** Dual syntax support (ES6 + CoffeeScript)
-✅ **Tested:** 100% coverage (843/843)
+✅ **Tested:** 100% coverage (968/968)
 
 **For existing CoffeeScript projects:**
 - Migration is straightforward (~95% syntax identical)
