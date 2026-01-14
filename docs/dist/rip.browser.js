@@ -5510,7 +5510,7 @@ export default ${target}`;
       } else if (typeof part === "string") {
         if (part.startsWith('"') || part.startsWith("'")) {
           if (this.options.debug) {
-            console.warn("[RIP] Unexpected quoted primitive in str interpolation:", part);
+            console.warn("[Rip] Unexpected quoted primitive in str interpolation:", part);
           }
           result += part.slice(1, -1);
         } else {
@@ -7082,8 +7082,8 @@ function compileToJS(source, options = {}) {
   return compiler.compileToJS(source);
 }
 // src/browser.js
-var VERSION = "1.5.7";
-var BUILD_DATE = "2025-11-16@07:41:08GMT";
+var VERSION = "1.6.0";
+var BUILD_DATE = "2026-01-14@04:16:56GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
