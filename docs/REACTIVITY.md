@@ -93,13 +93,13 @@ Reactive variables automatically unwrap in most contexts:
 count := 10
 
 # All of these work automatically:
-doubled ∞= count * 2         # Arithmetic
+doubled ∞= count * 2     # Arithmetic
 message = "Count: #{count}"  # String interpolation
-console.log count            # Function arguments
+console.log count        # Function arguments
 
 # Explicit access when needed:
-count.read()                 # Get value without tracking dependencies
-+count                       # Unary plus (same as count.value)
+count.read()             # Get value without tracking dependencies
++count                   # Unary plus (same as count.value)
 ```
 
 ---
@@ -111,6 +111,237 @@ count.read()                 # Get value without tracking dependencies
 | `x.read()` | Get value without tracking (for effects that shouldn't re-run) |
 | `x.value` | Direct access to the underlying value |
 | `+x` | Shorthand for `x.value` (triggers tracking in effects) |
+| `x.lock()` | Make value readonly (can read but can't change) |
+| `x.dispose()` | Unsubscribe from all dependencies (signal still works) |
+| `x.kill()` | Clean up everything and return final value |
+
+---
+
+## Dependency Tracking
+
+Understanding when dependencies are tracked is key to effective reactive programming.
+
+### What Tracks Dependencies?
+
+| Expression | Tracks? | Why |
+|------------|---------|-----|
+| `count * 2` | ✅ Yes | Arithmetic triggers `.valueOf()` |
+| `"Count: #{count}"` | ✅ Yes | Interpolation triggers `.toString()` |
+| `console.log count` | ✅ Yes | Coercion triggers `.valueOf()` |
+| `+count` | ✅ Yes | Unary plus triggers `.valueOf()` |
+| `count.value` | ✅ Yes | Direct `.value` access |
+| `count.read()` | ❌ No | Explicit non-tracking read |
+| `y = count` | ❌ No | Assigns signal object, not value |
+
+### Example: Tracking vs Non-Tracking
+
+```coffee
+count := 10
+
+# Effect A: Subscribes to count (will re-run when count changes)
+effect -> console.log "A: #{count}"
+
+# Effect B: Does NOT subscribe (won't re-run)
+effect -> console.log "B: #{count.read()}"
+
+count = 20
+# Output:
+#   A: 20    ← Effect A re-ran
+#            ← Effect B did NOT re-run
+```
+
+### When to Use `.read()`
+
+Use `.read()` when you need the current value but don't want to create a dependency:
+
+```coffee
+count := 0
+lastSaved := 0
+
+effect ->
+  # We want to log count changes, but compare against lastSaved
+  # without re-running when lastSaved changes
+  if count != lastSaved.read()
+    console.log "Unsaved changes: #{count}"
+```
+
+---
+
+## Lifecycle & Cleanup
+
+### Locking a Signal
+
+Make a signal readonly (subscriptions stay active):
+
+```coffee
+config := { theme: "dark" }
+config.lock()
+
+config = { theme: "light" }  # Silently ignored
+config.theme                  # Still "dark"
+```
+
+### Disposing Subscriptions
+
+Unsubscribe a computed/effect from its dependencies:
+
+```coffee
+count := 0
+doubled ∞= count * 2
+
+doubled.dispose()  # No longer updates when count changes
+count = 10         # doubled stays at its last value
+```
+
+### Killing a Signal
+
+Clean up completely and get the final value:
+
+```coffee
+count := 10
+finalValue = count.kill()  # Returns 10, signal is now dead
+
+count = 20  # Error or no-op (signal is dead)
+```
+
+### Effect Cleanup
+
+Effects can return a cleanup function:
+
+```coffee
+effect ->
+  interval = setInterval (-> tick()), 1000
+  -> clearInterval interval  # Cleanup when effect re-runs or disposes
+```
+
+---
+
+## Real-World Example
+
+A complete reactive counter with persistence:
+
+```coffee
+# Reactive state
+count := parseInt(localStorage.getItem("count")) or 0
+
+# Derived values
+doubled ∞= count * 2
+isEven ∞= count % 2 == 0
+message ∞= "Count is #{count} (#{isEven ? 'even' : 'odd'})"
+
+# Side effect: persist to localStorage
+effect ->
+  localStorage.setItem "count", count
+
+# Side effect: log changes
+effect ->
+  console.log message
+
+# Usage
+count = 5
+# Console: "Count is 5 (odd)"
+# localStorage: "5"
+
+count = 10
+# Console: "Count is 10 (even)"
+# localStorage: "10"
+```
+
+---
+
+## FAQ
+
+### What's the difference between `+x` and just `x`?
+
+In most contexts they're the same, but **assignment is different**:
+
+```coffee
+count := 10
+
+y = count      # y is the SIGNAL OBJECT itself
+z = +count     # z is 10 (the number)
+
+y + 1          # Works (coerces to 11)
+typeof y       # "object"
+typeof z       # "number"
+```
+
+Use `+x` when you explicitly need the primitive value.
+
+### Does string interpolation track dependencies?
+
+**Yes!** String interpolation calls `.toString()` which tracks:
+
+```coffee
+count := 0
+
+effect -> console.log "Count: #{count}"  # ← Subscribes to count
+
+count = 5  # Effect re-runs, logs "Count: 5"
+```
+
+### When would I use `.read()` vs `+x`?
+
+| Use | When |
+|-----|------|
+| `+x` | Normal use - you want reactivity |
+| `x.read()` | Inside effects when you DON'T want to subscribe |
+
+```coffee
+effect ->
+  # +count would make this effect re-run when count changes
+  # count.read() gets the value without subscribing
+  initialValue = count.read()
+```
+
+### What about memory management?
+
+Reactive subscriptions are automatically cleaned up when:
+- A component unmounts (in UI context)
+- You call `.dispose()` on a computed/effect
+- You call `.kill()` on a signal
+
+For long-running apps, explicitly dispose effects you no longer need:
+
+```coffee
+stop = effect -> console.log count
+# ... later ...
+stop()  # Disposes the effect
+```
+
+### Can I convert a reactive variable back to normal?
+
+Use `.kill()` to get the final value and destroy the signal:
+
+```coffee
+count := 10
+plainNumber = count.kill()  # Returns 10, signal is destroyed
+```
+
+Or just read the value without killing:
+
+```coffee
+plainNumber = +count  # Get value, signal stays alive
+```
+
+### What's the difference between `.dispose()` and `.kill()`?
+
+| Method | Signal Lives? | Returns | Use Case |
+|--------|---------------|---------|----------|
+| `.dispose()` | ✅ Yes | Nothing | Stop updates but keep signal |
+| `.kill()` | ❌ No | Final value | Complete cleanup |
+
+```coffee
+count := 10
+
+count.dispose()  # Signal works, just no subscribers
+count = 20       # Works fine
+
+# vs
+
+value = count.kill()  # Returns 10, signal is dead
+count = 20            # No-op or error
+```
 
 ---
 
