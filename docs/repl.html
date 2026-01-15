@@ -1115,18 +1115,24 @@ console.log "Domain:", domain</textarea>
         document.body.appendChild(demoFrame);
         const demoContext = demoFrame.contentWindow;
 
-        // Inject document references to the real demo output
-        demoContext.document = {
+        // Create a proxy document that redirects to demoOutput
+        const proxyDocument = {
           getElementById: (id) => demoOutput.querySelector(`#${id}`),
           querySelector: (sel) => demoOutput.querySelector(sel),
           querySelectorAll: (sel) => demoOutput.querySelectorAll(sel),
           createElement: (tag) => document.createElement(tag),
           createTextNode: (text) => document.createTextNode(text)
         };
-        demoContext.console = console;
 
-        // Execute the compiled code
-        demoContext.eval(js);
+        // Wrap the code to use our proxy document
+        const wrappedJs = `
+          const document = arguments[0];
+          const console = arguments[1];
+          ${js}
+        `;
+
+        // Execute with injected document proxy
+        new Function(wrappedJs).call(demoContext, proxyDocument, console);
 
       } catch (error) {
         demoOutput.innerHTML = `<div class="demo-error">Error: ${error.message}</div>`;
