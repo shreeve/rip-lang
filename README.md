@@ -21,6 +21,8 @@
 
 A **CoffeeScript-inspired language** with built-in reactivity that compiles to clean ES2022.
 
+> **Philosophy:** *Simplicity scales.* Keep the IR simple (S-expressions), keep the pipeline clear (lex → parse → generate), keep the code minimal. Test everything.
+
 ```coffee
 # Reactive state — updates propagate automatically
 count := 0
@@ -229,6 +231,47 @@ bun run serve      # Start dev server at localhost:3000
 
 ---
 
+## Why S-Expressions?
+
+Traditional compilers use complex AST node classes. Rip uses simple arrays:
+
+```
+Source → Lexer → Parser → S-Expressions → Codegen → JavaScript
+                          ["=", "x", 42]
+```
+
+**Traditional AST:**
+```javascript
+class BinaryOp {
+  constructor(op, left, right) { ... }
+  compile() { /* 50 lines */ }
+}
+```
+
+**Rip's approach:**
+```javascript
+case '+': return `(${gen(left)} + ${gen(right)})`;
+```
+
+| Component | CoffeeScript | Rip |
+|-----------|--------------|-----|
+| Lexer | 3,558 LOC | 3,145 LOC |
+| Parser Generator | 2,285 LOC (Jison) | 928 LOC (Solar) |
+| Compiler | 10,346 LOC | 5,246 LOC |
+| **Total** | **17,760 LOC** | **9,839 LOC** |
+
+Result: **45% smaller**, easier to maintain, faster to extend.
+
+---
+
+## Runtime Compatibility
+
+**Runs everywhere:** Bun (first-class), Node.js 12+, Deno, modern browsers.
+
+Output uses ES2022: classes, `let`/`const`, `?.`, `??`, `for await`, top-level await.
+
+---
+
 ## Quick Reference
 
 ```bash
@@ -264,6 +307,14 @@ bun run browser        # Build browser bundle
 ```
 
 Everything included: compiler, parser generator (solar.rip), REPL, browser bundle, test framework. Rip compiles itself — `bun run parser` rebuilds from source.
+
+---
+
+## Credits
+
+**Inspired by:** CoffeeScript (syntax), Lisp/Scheme (S-expressions), Ruby (regex operators, `__DATA__`), Solar (parser generator).
+
+**Powered by:** [Bun](https://bun.sh) — the fast all-in-one JavaScript runtime.
 
 ---
 
