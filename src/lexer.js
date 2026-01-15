@@ -1717,6 +1717,10 @@ export var Lexer = class Lexer {
     if (this.tag() === 'RENDER') {
       return false;
     }
+    // In render blocks, don't treat .class as continuation - it's a nested element
+    if (this.inRender && /^\s*\./.test(this.chunk)) {
+      return false;
+    }
     return LINE_CONTINUER.test(this.chunk) || (ref = this.tag(), indexOf.call(UNFINISHED, ref) >= 0);
   }
 

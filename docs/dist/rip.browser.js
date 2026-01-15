@@ -1705,6 +1705,9 @@ ${line}`;
     if (this.tag() === "RENDER") {
       return false;
     }
+    if (this.inRender && /^\s*\./.test(this.chunk)) {
+      return false;
+    }
     return LINE_CONTINUER.test(this.chunk) || (ref = this.tag(), indexOf.call(UNFINISHED, ref) >= 0);
   }
   validateUnicodeCodePointEscapes(str, options) {
@@ -9274,7 +9277,7 @@ function compileToJS(source, options = {}) {
 }
 // src/browser.js
 var VERSION = "2.2.1";
-var BUILD_DATE = "2026-01-15@12:09:29GMT";
+var BUILD_DATE = "2026-01-15@12:15:55GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

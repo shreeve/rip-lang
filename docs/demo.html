@@ -443,13 +443,13 @@ effect ->
 # ============================================
 
 # Lines starting with .class default to div
-# (nested shorthand has a known bug - use explicit div for nesting)
+# No need to write div.class — just .class works!
 component PugDemo
   render
     .pugCard
-      div.pugHeader "Pug-Style Syntax"
-      div.pugBody "Lines starting with .class automatically become div elements."
-      div.pugFooter "No need to write div.class — just .class works!"
+      .pugHeader "Pug-Style Syntax"
+      .pugBody "Lines starting with .class automatically become div elements."
+      .pugFooter "No need to write div.class — just .class works!"
 
 pugDemo = new PugDemo()
 pugDemo.mount document.getElementById("pug-mount")
