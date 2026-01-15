@@ -528,13 +528,16 @@
 # A counter component with Pug-style template syntax
 component Counter
   count = 0
+  dozen ~= count * 12
   inc: -> count += 1
   dec: -> count -= 1
   render
     .counter
+      i "Did you know that"
       button @click: this.dec, "−"
       span.value count
       button @click: this.inc, "+"
+      span "dozen is #{dozen} items?"
 
 counter = new Counter()
 counter.mount document.getElementById("counter-mount")
