@@ -77,6 +77,10 @@
       background: #1e1e1e;
     }
 
+    .tab[data-tab="demo"].active {
+      border-bottom-color: #e94560;
+    }
+
     .content {
       flex: 1;
       display: flex;
@@ -290,6 +294,104 @@
     }
 
 
+    /* Demo Pane Styles */
+    .demo-output {
+      flex: 1;
+      min-height: 0;
+      padding: 20px;
+      background: #1a1a2e;
+      overflow: auto;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    .demo-output h2 {
+      color: #00d4ff;
+      font-size: 1.2rem;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid #3e3e42;
+    }
+
+    .demo-output .demo-section {
+      margin-bottom: 1.5rem;
+      padding: 1rem;
+      background: #0f3460;
+      border-radius: 8px;
+    }
+
+    .demo-output .counter {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      justify-content: center;
+    }
+
+    .demo-output button {
+      background: #e94560;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-size: 1.2rem;
+      border-radius: 5px;
+      cursor: pointer;
+      min-width: 50px;
+    }
+
+    .demo-output button:hover {
+      background: #ff6b6b;
+    }
+
+    .demo-output .value {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #ff6b6b;
+      min-width: 60px;
+      text-align: center;
+    }
+
+    .demo-output input[type="text"],
+    .demo-output input[type="number"] {
+      background: #16213e;
+      border: 1px solid #3e3e42;
+      color: #d4d4d4;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    .demo-output .greeting {
+      font-size: 1.5rem;
+      color: #4ec9b0;
+      margin-top: 0.5rem;
+    }
+
+    .demo-output .derived {
+      margin-top: 1rem;
+      color: #858585;
+    }
+
+    .demo-output .derived span {
+      color: #ce9178;
+      font-weight: bold;
+    }
+
+    .demo-error {
+      background: #3c1618;
+      color: #f48771;
+      padding: 1rem;
+      border-radius: 4px;
+      font-family: monospace;
+      white-space: pre-wrap;
+    }
+
+    .run-btn-primary {
+      background: #e94560 !important;
+    }
+
+    .run-btn-primary:hover {
+      background: #ff6b6b !important;
+    }
+
     /* Scrollbar styling */
     ::-webkit-scrollbar {
       width: 10px;
@@ -352,6 +454,7 @@
 
   <div class="tabs">
     <button class="tab active" data-tab="compiler">Live Compiler</button>
+    <button class="tab" data-tab="demo">Live Demo</button>
     <button class="tab" data-tab="repl">REPL Console</button>
   </div>
 
@@ -368,6 +471,84 @@
         <div class="repl-input-area">
           <span class="repl-prompt-text" id="prompt">rip&gt;</span>
           <input type="text" class="repl-input" id="repl-input" placeholder="Enter Rip code..." autofocus>
+        </div>
+      </div>
+    </div>
+
+    <!-- Demo Pane -->
+    <div class="pane" id="demo-pane">
+      <div class="compiler-container">
+        <div class="editor-pane" id="demo-editor-left">
+          <div class="pane-header">
+            <span>Rip Source</span>
+            <div class="pane-header-buttons">
+              <button id="demo-reset-btn" title="Reset to default demo">Reset</button>
+              <button class="run-btn-primary" id="demo-run-btn" title="Run the demo (Cmd+Enter)">Run</button>
+            </div>
+          </div>
+          <textarea class="editor" id="demo-editor" spellcheck="false"># ============================================
+# Reactivity Demo - Edit me!
+# ============================================
+
+# Signals hold reactive state
+count := 0
+
+# Derived values auto-update
+doubled ∞= count * 2
+squared ∞= count * count
+isEven ∞= if count % 2 == 0 then "Yes" else "No"
+
+# Effects run when dependencies change
+effect ->
+  document.getElementById("count-display").textContent = count
+  document.getElementById("doubled").textContent = doubled
+  document.getElementById("squared").textContent = squared
+  document.getElementById("is-even").textContent = isEven
+
+document.getElementById("inc").onclick = => count += 1
+document.getElementById("dec").onclick = => count -= 1
+
+# ============================================
+# Two-way binding
+# ============================================
+
+name := "World"
+
+effect ->
+  document.getElementById("greeting-name").textContent = name
+
+document.getElementById("name-input").oninput = (e) =>
+  name = e.target.value || "World"
+</textarea>
+        </div>
+
+        <div class="resizer" id="demo-resizer"></div>
+
+        <div class="editor-pane" id="demo-editor-right">
+          <div class="pane-header">
+            <span>Live Output</span>
+          </div>
+          <div class="demo-output" id="demo-output">
+            <h2>Counter with Derived Values</h2>
+            <div class="demo-section">
+              <div class="counter">
+                <button id="dec">−</button>
+                <span class="value" id="count-display">0</span>
+                <button id="inc">+</button>
+              </div>
+              <div class="derived">
+                Doubled: <span id="doubled">0</span> | 
+                Squared: <span id="squared">0</span> |
+                Even? <span id="is-even">Yes</span>
+              </div>
+            </div>
+
+            <h2>Two-Way Binding</h2>
+            <div class="demo-section">
+              <input type="text" id="name-input" placeholder="Enter your name..." value="World">
+              <div class="greeting">Hello, <span id="greeting-name">World</span>!</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -460,10 +641,13 @@ console.log "Domain:", domain</textarea>
         document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
         document.getElementById(`${tabName}-pane`).classList.add('active');
 
-        // Focus appropriate input
+        // Focus appropriate input and run setup
         if (tabName === 'repl') {
           document.getElementById('repl-input').focus();
-        } else {
+        } else if (tabName === 'demo') {
+          // Auto-run demo when switching to demo tab
+          setTimeout(() => runDemo(), 50);
+        } else if (tabName === 'compiler') {
           compileCode();  // Update compiler output
         }
       });
@@ -856,6 +1040,115 @@ console.log "Domain:", domain</textarea>
 
     // Initial compile
     compileCode();
+
+    // ========================================================================
+    // Live Demo Implementation
+    // ========================================================================
+
+    const demoEditor = document.getElementById('demo-editor');
+    const demoOutput = document.getElementById('demo-output');
+    const demoRunBtn = document.getElementById('demo-run-btn');
+    const demoResetBtn = document.getElementById('demo-reset-btn');
+    const demoResizer = document.getElementById('demo-resizer');
+    const demoLeftPane = document.getElementById('demo-editor-left');
+    const demoRightPane = document.getElementById('demo-editor-right');
+
+    // Store default demo code
+    const defaultDemoCode = demoEditor.value;
+
+    // Store default demo HTML
+    const defaultDemoHTML = demoOutput.innerHTML;
+
+    // Demo resizer
+    if (demoResizer && demoLeftPane && demoRightPane) {
+      let isDemoResizing = false;
+
+      demoResizer.addEventListener('mousedown', (e) => {
+        isDemoResizing = true;
+        document.body.style.cursor = 'col-resize';
+        e.preventDefault();
+      });
+
+      document.addEventListener('mousemove', (e) => {
+        if (!isDemoResizing) return;
+
+        const container = demoResizer.parentElement;
+        const containerRect = container.getBoundingClientRect();
+        const offsetX = e.clientX - containerRect.left;
+        const containerWidth = containerRect.width;
+
+        let leftPercent = (offsetX / containerWidth) * 100;
+        leftPercent = Math.max(20, Math.min(80, leftPercent));
+
+        demoLeftPane.style.flexBasis = `${leftPercent}%`;
+        demoRightPane.style.flexBasis = `${100 - leftPercent}%`;
+      });
+
+      document.addEventListener('mouseup', () => {
+        if (isDemoResizing) {
+          isDemoResizing = false;
+          document.body.style.cursor = 'default';
+        }
+      });
+    }
+
+    // Create isolated iframe for demo execution
+    let demoFrame = null;
+
+    function runDemo() {
+      try {
+        const source = demoEditor.value;
+        const result = compile(source);
+        let js = result.code;
+
+        // Reset the demo output HTML
+        demoOutput.innerHTML = defaultDemoHTML;
+
+        // Remove any existing demo iframe
+        if (demoFrame) {
+          demoFrame.remove();
+        }
+
+        // Create fresh iframe for isolated execution
+        demoFrame = document.createElement('iframe');
+        demoFrame.style.display = 'none';
+        document.body.appendChild(demoFrame);
+        const demoContext = demoFrame.contentWindow;
+
+        // Inject document references to the real demo output
+        demoContext.document = {
+          getElementById: (id) => demoOutput.querySelector(`#${id}`),
+          querySelector: (sel) => demoOutput.querySelector(sel),
+          querySelectorAll: (sel) => demoOutput.querySelectorAll(sel),
+          createElement: (tag) => document.createElement(tag),
+          createTextNode: (text) => document.createTextNode(text)
+        };
+        demoContext.console = console;
+
+        // Execute the compiled code
+        demoContext.eval(js);
+
+      } catch (error) {
+        demoOutput.innerHTML = `<div class="demo-error">Error: ${error.message}</div>`;
+      }
+    }
+
+    // Run button
+    demoRunBtn.addEventListener('click', runDemo);
+
+    // Reset button
+    demoResetBtn.addEventListener('click', () => {
+      demoEditor.value = defaultDemoCode;
+      runDemo();
+    });
+
+    // Keyboard shortcut for demo (Cmd/Ctrl+Enter when demo tab is active)
+    demoEditor.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        runDemo();
+      }
+    });
   </script>
 </body>
 </html>
