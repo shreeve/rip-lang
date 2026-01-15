@@ -46,7 +46,7 @@ button.(active && "bg-blue-500")       # Conditional classes
 
 Lists now have O(1) performance for ALL operations:
 - **Add item**: Create 1 node (not rebuild all)
-- **Remove item**: Remove 1 node (not rebuild all)  
+- **Remove item**: Remove 1 node (not rebuild all)
 - **Reorder**: Move existing nodes (not recreate)
 - **Selection change**: Per-item effects update independently
 
