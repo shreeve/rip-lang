@@ -160,6 +160,26 @@
       text-align: center;
       color: #ff6b6b;
     }
+    .pugCard {
+      background: #0f3460;
+      border-radius: 8px;
+      padding: 1rem;
+      margin: 0.5rem 0;
+    }
+    .pugHeader {
+      color: #00d4ff;
+      font-size: 1.2rem;
+      font-weight: bold;
+      margin-bottom: 0.5rem;
+    }
+    .pugBody { color: #ccc; }
+    .pugFooter {
+      color: #888;
+      font-size: 0.9rem;
+      margin-top: 0.5rem;
+      border-top: 1px solid #1a1a2e;
+      padding-top: 0.5rem;
+    }
     code {
       background: #0f3460;
       padding: 0.2rem 0.5rem;
@@ -237,6 +257,12 @@
   <div class="demo-box">
     <div id="component-mount"></div>
     <p class="note">State: <span id="component-state">0</span></p>
+  </div>
+
+  <h2>7. Pug-Style Shorthand</h2>
+  <p>Lines starting with <code>.class</code> default to <code>div</code>.</p>
+  <div class="demo-box">
+    <div id="pug-mount"></div>
   </div>
 
   <h2>The Code</h2>
@@ -411,6 +437,22 @@ miniCounter.mount document.getElementById("component-mount")
 # Show component state reactively
 effect ->
   document.getElementById("component-state").textContent = miniCounter.value.value
+
+# ============================================
+# Demo 7: Pug-style shorthand
+# ============================================
+
+# Lines starting with .class default to div
+# (nested shorthand has a known bug - use explicit div for nesting)
+component PugDemo
+  render
+    .pugCard
+      div.pugHeader "Pug-Style Syntax"
+      div.pugBody "Lines starting with .class automatically become div elements."
+      div.pugFooter "No need to write div.class — just .class works!"
+
+pugDemo = new PugDemo()
+pugDemo.mount document.getElementById("pug-mount")
   </script>
 
   <script>
