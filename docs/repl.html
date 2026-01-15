@@ -534,10 +534,10 @@ component Counter
   render
     .counter
       i "Did you know that"
-      button @click: this.dec, "−"
+      button @click: @dec, "−"
       span.value count
-      button @click: this.inc, "+"
-      span "dozen is #{dozen} items?"
+      button @click: @inc, "+"
+      i "dozen is #{dozen} items?"
 
 counter = new Counter()
 counter.mount document.getElementById("counter-mount")
