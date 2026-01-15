@@ -2,7 +2,7 @@
 
 # Rip vs CoffeeScript - Feature Comparison
 
-**Version:** 2.0.0 (Stable Release)
+**Version:** 2.0.1 (Stable Release)
 **Last Updated:** 2025-11-01
 **Test Results:** 968/968 rip tests (100%) ✅
 
@@ -491,7 +491,7 @@ export { add }
 
 ## 📊 Test Coverage
 
-### Rip v2.0.0
+### Rip v2.0.1
 - **Tests:** 968/968 (100%) ✅
 - **Files:** 20 organized test files
 - **Coverage:** 110+ node types, all features

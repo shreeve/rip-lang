@@ -92,10 +92,10 @@ component Counter
   @label
   @initialValue = 0
   count = @initialValue
-  
+
   mounted: -> console.log "Counter ready"
   increment: -> @count += 1
-  
+
   render
     div.counter
       span @label
