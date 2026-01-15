@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rip Reactivity Demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2rem;
+      background: #1a1a2e;
+      color: #eee;
+      line-height: 1.6;
+    }
+    h1 { color: #00d4ff; margin-bottom: 0.5rem; }
+    h2 { color: #ff6b6b; margin-top: 2rem; }
+    .subtitle { color: #888; margin-bottom: 2rem; }
+    .demo-box {
+      background: #16213e;
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin: 1rem 0;
+      border: 1px solid #0f3460;
+    }
+    .counter {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      font-size: 1.5rem;
+    }
+    .counter button {
+      font-size: 1.5rem;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      border: none;
+      background: #00d4ff;
+      color: #1a1a2e;
+      cursor: pointer;
+      font-weight: bold;
+      transition: transform 0.1s, background 0.2s;
+    }
+    .counter button:hover { background: #00a8cc; }
+    .counter button:active { transform: scale(0.95); }
+    .value {
+      font-size: 3rem;
+      font-weight: bold;
+      min-width: 80px;
+      text-align: center;
+      color: #00d4ff;
+    }
+    .derived {
+      color: #ff6b6b;
+      font-size: 1.2rem;
+      margin-top: 0.5rem;
+    }
+    input[type="text"], input[type="range"] {
+      padding: 0.75rem;
+      font-size: 1rem;
+      border-radius: 8px;
+      border: 1px solid #0f3460;
+      background: #0f3460;
+      color: #eee;
+      width: 100%;
+      margin: 0.5rem 0;
+    }
+    input[type="range"] { padding: 0.5rem; }
+    .greeting {
+      font-size: 2rem;
+      color: #00d4ff;
+      margin: 1rem 0;
+    }
+    .log {
+      background: #0f3460;
+      padding: 1rem;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 0.9rem;
+      max-height: 150px;
+      overflow-y: auto;
+      margin-top: 1rem;
+    }
+    .log-entry { margin: 0.25rem 0; color: #888; }
+    .log-entry:last-child { color: #00d4ff; }
+    .todo-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid #0f3460;
+    }
+    .todo-item:last-child { border-bottom: none; }
+    .todo-item input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+    .todo-item.done span { text-decoration: line-through; color: #666; }
+    .todo-input {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .todo-input input { flex: 1; }
+    .todo-input button {
+      padding: 0.75rem 1.5rem;
+      background: #00d4ff;
+      border: none;
+      border-radius: 8px;
+      color: #1a1a2e;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .stats { color: #888; margin-top: 1rem; }
+    code {
+      background: #0f3460;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }
+    pre {
+      background: #0f3460;
+      padding: 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>Rip Reactivity Demo</h1>
+  <p class="subtitle">Language-level reactive primitives in action</p>
+
+  <h2>1. Counter with Derived Values</h2>
+  <p>Signals (<code>:=</code>) hold state. Derived values (<code>∞=</code>) auto-update.</p>
+  <div class="demo-box">
+    <div class="counter">
+      <button id="dec">−</button>
+      <span class="value" id="count-display">0</span>
+      <button id="inc">+</button>
+    </div>
+    <div class="derived">
+      Doubled: <span id="doubled">0</span> | 
+      Squared: <span id="squared">0</span> |
+      Even? <span id="is-even">Yes</span>
+    </div>
+  </div>
+
+  <h2>2. Two-Way Binding</h2>
+  <p>Type your name — the greeting updates reactively.</p>
+  <div class="demo-box">
+    <input type="text" id="name-input" placeholder="Enter your name..." value="World">
+    <div class="greeting">Hello, <span id="greeting-name">World</span>!</div>
+  </div>
+
+  <h2>3. Effect Log</h2>
+  <p>Effects (<code>effect -></code>) run when dependencies change.</p>
+  <div class="demo-box">
+    <input type="range" id="slider" min="0" max="100" value="50">
+    <div>Value: <span id="slider-value">50</span></div>
+    <div class="log" id="effect-log"></div>
+  </div>
+
+  <h2>4. Todo List</h2>
+  <p>Reactive state with computed stats.</p>
+  <div class="demo-box">
+    <div class="todo-input">
+      <input type="text" id="todo-input" placeholder="Add a todo...">
+      <button id="add-todo">Add</button>
+    </div>
+    <div id="todo-list"></div>
+    <div class="stats" id="todo-stats"></div>
+  </div>
+
+  <h2>The Code</h2>
+  <p>This is the Rip code powering this demo:</p>
+  <pre><code id="source-code"></code></pre>
+
+  <script src="dist/rip.browser.min.js"></script>
+  <script type="text/rip" id="demo-source">
+# ============================================
+# Demo 1: Counter with derived values
+# ============================================
+
+count := 0
+
+doubled ∞= count * 2
+squared ∞= count * count
+isEven ∞= if count % 2 == 0 then "Yes" else "No"
+
+effect ->
+  document.getElementById("count-display").textContent = count
+  document.getElementById("doubled").textContent = doubled
+  document.getElementById("squared").textContent = squared
+  document.getElementById("is-even").textContent = isEven
+
+document.getElementById("inc").onclick = -> count += 1
+document.getElementById("dec").onclick = -> count -= 1
+
+# ============================================
+# Demo 2: Two-way binding
+# ============================================
+
+name := "World"
+
+effect ->
+  document.getElementById("greeting-name").textContent = name
+
+document.getElementById("name-input").oninput = (e) ->
+  name = e.target.value || "World"
+
+# ============================================
+# Demo 3: Effect log
+# ============================================
+
+slider := 50
+logEntries := []
+
+effect ->
+  document.getElementById("slider-value").textContent = slider
+  logEntries.push "Slider changed to #{slider} at #{new Date().toLocaleTimeString()}"
+  if logEntries.length > 10
+    logEntries.shift()
+  log = document.getElementById("effect-log")
+  log.innerHTML = logEntries.map((e) -> "<div class='log-entry'>#{e}</div>").join("")
+  log.scrollTop = log.scrollHeight
+
+document.getElementById("slider").oninput = (e) ->
+  slider = parseInt(e.target.value)
+
+# ============================================
+# Demo 4: Todo list
+# ============================================
+
+todos := []
+nextId := 1
+
+totalCount ∞= todos.length
+doneCount ∞= todos.filter((t) -> t.done).length
+pendingCount ∞= totalCount - doneCount
+
+renderTodos = ->
+  list = document.getElementById("todo-list")
+  list.innerHTML = todos.map((todo) ->
+    checked = if todo.done then "checked" else ""
+    doneClass = if todo.done then "done" else ""
+    """
+    <div class="todo-item #{doneClass}">
+      <input type="checkbox" #{checked} data-id="#{todo.id}">
+      <span>#{todo.text}</span>
+    </div>
+    """
+  ).join("")
+  
+  # Add event listeners
+  for checkbox in list.querySelectorAll("input[type=checkbox]")
+    checkbox.onchange = (e) ->
+      id = parseInt(e.target.dataset.id)
+      for todo in todos
+        if todo.id == id
+          todo.done = e.target.checked
+      todos = [...todos]  # Trigger reactivity
+
+effect ->
+  renderTodos()
+  document.getElementById("todo-stats").textContent = 
+    "#{doneCount}/#{totalCount} done, #{pendingCount} pending"
+
+addTodo = ->
+  input = document.getElementById("todo-input")
+  text = input.value.trim()
+  if text
+    todos = [...todos, { id: nextId, text: text, done: false }]
+    nextId += 1
+    input.value = ""
+
+document.getElementById("add-todo").onclick = addTodo
+document.getElementById("todo-input").onkeydown = (e) ->
+  if e.key == "Enter"
+    addTodo()
+
+# Add some initial todos
+todos = [
+  { id: nextId++, text: "Try the counter above", done: false }
+  { id: nextId++, text: "Type your name", done: false }
+  { id: nextId++, text: "Move the slider", done: false }
+  { id: nextId++, text: "Check off this todo!", done: false }
+]
+  </script>
+
+  <script>
+    // Display the source code
+    const source = document.getElementById('demo-source').textContent;
+    document.getElementById('source-code').textContent = source.trim();
+  </script>
+</body>
+</html>
