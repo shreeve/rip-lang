@@ -215,7 +215,7 @@ document.getElementById("name-input").oninput = (e) =>
 # ============================================
 
 slider := 50
-logEntries := []
+logEntries = []  # Regular array, not a signal
 
 effect ->
   document.getElementById("slider-value").textContent = slider
