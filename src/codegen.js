@@ -2471,6 +2471,27 @@ export class CodeGenerator {
 
       // Regular attribute
       if (typeof key === 'string') {
+        // Two-way binding: __bind_value__ pattern (from value <=> var)
+        if (key.startsWith('__bind_') && key.endsWith('__')) {
+          const prop = key.slice(7, -2);  // Extract property name
+          const valueCode = this.generateInComponent(value, 'value');
+          
+          // Determine event and value accessor based on property
+          let event, valueAccessor;
+          if (prop === 'checked') {
+            event = 'change';
+            valueAccessor = 'e.target.checked';
+          } else {
+            event = 'input';
+            valueAccessor = 'e.target.value';
+          }
+          
+          // Set up two-way binding: value → element and element → value
+          this._fgSetupLines.push(`__effect(() => { ${elVar}.${prop} = ${valueCode}; });`);
+          this._fgCreateLines.push(`${elVar}.addEventListener('${event}', (e) => ${valueCode} = ${valueAccessor});`);
+          continue;
+        }
+        
         // Check if value contains any reactive dependencies
         const hasReactiveDeps = this.fgHasReactiveDeps(value);
         

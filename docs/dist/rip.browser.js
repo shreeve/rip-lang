@@ -5384,6 +5384,21 @@ ${this.indent()}}`;
         continue;
       }
       if (typeof key2 === "string") {
+        if (key2.startsWith("__bind_") && key2.endsWith("__")) {
+          const prop = key2.slice(7, -2);
+          const valueCode = this.generateInComponent(value, "value");
+          let event, valueAccessor;
+          if (prop === "checked") {
+            event = "change";
+            valueAccessor = "e.target.checked";
+          } else {
+            event = "input";
+            valueAccessor = "e.target.value";
+          }
+          this._fgSetupLines.push(`__effect(() => { ${elVar}.${prop} = ${valueCode}; });`);
+          this._fgCreateLines.push(`${elVar}.addEventListener('${event}', (e) => ${valueCode} = ${valueAccessor});`);
+          continue;
+        }
         const hasReactiveDeps = this.fgHasReactiveDeps(value);
         if (hasReactiveDeps) {
           const valueCode = this.generateInComponent(value, "value");
@@ -9277,7 +9292,7 @@ function compileToJS(source, options = {}) {
 }
 // src/browser.js
 var VERSION = "2.2.2";
-var BUILD_DATE = "2026-01-15@18:49:23GMT";
+var BUILD_DATE = "2026-01-15@22:12:31GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

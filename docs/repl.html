@@ -548,10 +548,9 @@ counter.mount document.getElementById("counter-mount")
 
 component Greeter
   name = "World"
-  onInput: (e) -> name = e.target.value
   render
     .greeter
-      input @input: this.onInput, value: name
+      input value <=> name
       .greeting
         span "Hello, "
         span.name name
