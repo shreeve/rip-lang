@@ -19,14 +19,15 @@
 
 ## What is Rip?
 
-A **CoffeeScript-inspired language** with built-in reactivity that compiles to clean ES2022. If you loved CoffeeScript's elegance but wanted modern JavaScript output and reactive primitives baked into the language — Rip is for you.
+Rip is a modern reactive language that compiles to JavaScript. It takes the elegant, readable syntax that made CoffeeScript beloved and brings it into the modern era — with ES2022 output, built-in reactivity, and a clean component system for building UIs.
 
-**Key highlights:**
-- **Zero dependencies** — completely standalone, includes its own parser generator
-- **Self-hosting** — Rip compiles itself (`bun run parser` rebuilds from source)
-- **Modern output** — ES2022 with classes, modules, optional chaining, nullish coalescing
-- **Built-in reactivity** — signals, derived values, and effects as language primitives
-- **50% smaller** — 9,839 LOC vs CoffeeScript's 17,760 LOC
+The compiler is completely standalone with zero dependencies, and it's self-hosting: Rip compiles itself. At ~10,000 lines of code, it's half the size of CoffeeScript while producing cleaner, more modern output.
+
+**What makes Rip different:**
+- **Reactive primitives** — signals, derived values, and effects built into the language
+- **Modern output** — ES2022 with native classes, `?.`, `??`, modules
+- **Zero dependencies** — everything included, even the parser generator
+- **Self-hosting** — `bun run parser` rebuilds the compiler from source
 
 ---
 
