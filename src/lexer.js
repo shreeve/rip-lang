@@ -1145,8 +1145,6 @@ export var Lexer = class Lexer {
       tag = 'REACTIVE_ASSIGN';
     } else if (value === '=!') {
       tag = 'READONLY_ASSIGN';
-    } else if (value === '~>') {
-      tag = 'EXPOSED_ARROW';
     } else if (indexOf.call(MATH, value) >= 0) {
       tag = 'MATH';
     } else if (indexOf.call(COMPARE, value) >= 0) {
@@ -1868,8 +1866,7 @@ NUMBER = /^0b[01](?:_?[01])*n?|^0o[0-7](?:_?[0-7])*n?|^0x[\da-f](?:_?[\da-f])*n?
 // decimal without support for numeric literal separators for reference:
 // \d*\.?\d+ (?:e[+-]?\d+)?
 
-OPERATOR = /^(?:<=>|[-=~]>|~=|:=|=!|===|!==|!\?|\?\?|=~|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?(\.|::)|\.{2,3})/; // function
-// ~> is exposed method arrow (reactive)
+OPERATOR = /^(?:<=>|[-=]>|~=|:=|=!|===|!==|!\?|\?\?|=~|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?(\.|::)|\.{2,3})/; // function
 // := is reactive signal assignment
 // ~= is derived assign (reactive computed values)
 // =! is readonly assign (reactive constant)

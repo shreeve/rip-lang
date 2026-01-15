@@ -23,8 +23,7 @@ Rip provides component syntax as **language-level constructs**, not library patt
 | **Props** | `@name` | Input from parent | Parent changes |
 | **State** | `=` | Local mutable data | Manual assignment |
 | **Derived** | `~=` | Computed values | Dependencies change |
-| **Methods** | `:` `->` | Private actions | Called explicitly |
-| **Exposed** | `:` `∞>` / `~>` | Public actions | Called by parent |
+| **Methods** | `:` `->` | Component actions | Called explicitly |
 | **Lifecycle** | `mounted:` etc. | Setup/teardown | Component lifecycle |
 | **Effects** | `effect` | Side effects | Dependencies change |
 
