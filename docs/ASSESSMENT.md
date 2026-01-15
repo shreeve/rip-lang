@@ -29,7 +29,7 @@ effect -> console.log count   # Effect (auto-runs)
 
 | Aspect | Rating | Notes |
 |--------|--------|-------|
-| Syntax | A+ | `=`, `~=`, `∞=` are elegant and unique |
+| Syntax | A+ | `=`, `~=`, `:=` are elegant and unique |
 | Semantics | A | Proper dependency tracking, lazy computed |
 | Performance | A- | Efficient - only recomputes when needed |
 | Scalability | A | Works the same at any scale |

@@ -78,7 +78,7 @@ grammar =
     o 'Assignable REACTIVE_ASSIGN INDENT Expression OUTDENT', '["signal", 1, 4]'
   ]
 
-  # Reactive: Derived assignment (∞= or ~=) - computed values that auto-update
+  # Reactive: Derived assignment (~=) - computed values that auto-update
   DerivedAssign: [
     o 'Assignable DERIVED_ASSIGN Expression'               , '["derived", 1, 3]'
     o 'Assignable DERIVED_ASSIGN TERMINATOR Expression'    , '["derived", 1, 4]'

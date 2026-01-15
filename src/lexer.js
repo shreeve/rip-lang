@@ -273,8 +273,8 @@ export var Lexer = class Lexer {
   // though `is` means `===` otherwise.
   identifierToken() {
     var afterNot, alias, colon, colonOffset, colonToken, id, idLength, input, match, poppedToken, prev, prevprev, ref, ref1, ref10, ref11, ref12, ref2, ref3, ref4, ref5, ref6, ref7, ref8, ref9, regExSuper, sup, tag, tagToken, tokenData;
-    // Check for reactive operators before treating ∞ as identifier
-    if (/^[∞~][=>]/.test(this.chunk) || /^=!/.test(this.chunk)) {
+    // Check for reactive operators before treating ~ as identifier
+    if (/^~[=>]/.test(this.chunk) || /^=!/.test(this.chunk)) {
       return 0; // Let literalToken handle these
     }
     if (!(match = IDENTIFIER.exec(this.chunk))) {
@@ -1139,13 +1139,13 @@ export var Lexer = class Lexer {
       tag = 'EXPORT_ALL';
     } else if (value === '<=>') {
       tag = 'BIND';
-    } else if (value === '∞=' || value === '~=') {
+    } else if (value === '~=') {
       tag = 'DERIVED_ASSIGN';
     } else if (value === ':=') {
       tag = 'REACTIVE_ASSIGN';
     } else if (value === '=!') {
       tag = 'READONLY_ASSIGN';
-    } else if (value === '∞>' || value === '~>') {
+    } else if (value === '~>') {
       tag = 'EXPOSED_ARROW';
     } else if (indexOf.call(MATH, value) >= 0) {
       tag = 'MATH';
@@ -1868,10 +1868,10 @@ NUMBER = /^0b[01](?:_?[01])*n?|^0o[0-7](?:_?[0-7])*n?|^0x[\da-f](?:_?[\da-f])*n?
 // decimal without support for numeric literal separators for reference:
 // \d*\.?\d+ (?:e[+-]?\d+)?
 
-OPERATOR = /^(?:<=>|[-=∞~]>|∞=|~=|:=|=!|===|!==|!\?|\?\?|=~|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?(\.|::)|\.{2,3})/; // function
-// ∞> and ~> are exposed method arrows (reactive)
+OPERATOR = /^(?:<=>|[-=~]>|~=|:=|=!|===|!==|!\?|\?\?|=~|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?(\.|::)|\.{2,3})/; // function
+// ~> is exposed method arrow (reactive)
 // := is reactive signal assignment
-// ∞= and ~= are derived assign (reactive computed values)
+// ~= is derived assign (reactive computed values)
 // =! is readonly assign (reactive constant)
 // Added === and !== for explicit strict equality (compiles same as == and !=)
 // !? (otherwise operator) must come before ?? and before !=

@@ -1507,7 +1507,7 @@ export class CodeGenerator {
   }
 
   /**
-   * Generate derived value (∞= or ~=)
+   * Generate derived value (~=)
    * Pattern: ["derived", name, expression]
    * Output: const name = __computed(() => expression)
    */
@@ -1783,7 +1783,7 @@ export class CodeGenerator {
     // Categorize statements
     const props = [];          // @prop declarations
     const stateVars = [];      // Regular assignments (reactive state)
-    const derivedVars = [];    // ∞= or ~= (computed)
+    const derivedVars = [];    // ~= (computed)
     const readonlyVars = [];   // =! (constants)
     const methods = [];        // Method definitions
     const lifecycleHooks = []; // mounted:, unmounted:, updated:

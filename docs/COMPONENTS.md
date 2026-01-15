@@ -22,7 +22,7 @@ Rip provides component syntax as **language-level constructs**, not library patt
 | **Constants** | `=!` | Readonly values | Never changes |
 | **Props** | `@name` | Input from parent | Parent changes |
 | **State** | `=` | Local mutable data | Manual assignment |
-| **Derived** | `∞=` / `~=` | Computed values | Dependencies change |
+| **Derived** | `~=` | Computed values | Dependencies change |
 | **Methods** | `:` `->` | Private actions | Called explicitly |
 | **Exposed** | `:` `∞>` / `~>` | Public actions | Called by parent |
 | **Lifecycle** | `mounted:` etc. | Setup/teardown | Component lifecycle |
@@ -71,9 +71,9 @@ component Name
   # ═══════════════════════════════════════════
   # Derived (always equals)
   # ═══════════════════════════════════════════
-  filtered ∞= items.filter (i) -> i.active
-  total ∞= items.reduce ((sum, i) -> sum + i.price), 0
-  isEmpty ∞= items.length is 0
+  filtered ~= items.filter (i) -> i.active
+  total ~= items.reduce ((sum, i) -> sum + i.price), 0
+  isEmpty ~= items.length is 0
 
   # ═══════════════════════════════════════════
   # Methods (private)
@@ -192,7 +192,7 @@ component Card
   @children
 
   # Props accessed with @ prefix
-  fullTitle ∞= "#{@title}: #{@subtitle}" if @subtitle
+  fullTitle ~= "#{@title}: #{@subtitle}" if @subtitle
 
   render
     div.card
@@ -260,10 +260,10 @@ component Cart
   taxRate = 0.08
 
   # These auto-update when dependencies change
-  subtotal ∞= items.reduce ((sum, i) -> sum + i.price), 0
-  tax ∞= subtotal * taxRate
-  total ∞= subtotal + tax
-  isEmpty ∞= items.length is 0
+  subtotal ~= items.reduce ((sum, i) -> sum + i.price), 0
+  tax ~= subtotal * taxRate
+  total ~= subtotal + tax
+  isEmpty ~= items.length is 0
 
   render
     div
@@ -536,13 +536,13 @@ component TodoApp
   filter = "all"
 
   # Derived
-  filtered ∞= switch filter
+  filtered ~= switch filter
     when "active" then todos.filter (t) -> not t.done
     when "completed" then todos.filter (t) -> t.done
     else todos
 
-  remaining ∞= todos.filter((t) -> not t.done).length
-  allDone ∞= todos.length > 0 and remaining is 0
+  remaining ~= todos.filter((t) -> not t.done).length
+  allDone ~= todos.length > 0 and remaining is 0
 
   # Methods
   add: ->

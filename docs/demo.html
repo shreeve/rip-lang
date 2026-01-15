@@ -199,7 +199,7 @@
   <p class="subtitle">Language-level reactive primitives in action</p>
 
   <h2>1. Counter with Derived Values</h2>
-  <p>Signals (<code>:=</code>) hold state. Derived values (<code>∞=</code>) auto-update.</p>
+  <p>Signals (<code>:=</code>) hold state. Derived values (<code>~=</code>) auto-update.</p>
   <div class="demo-box">
     <div class="counter">
       <button id="dec">−</button>
@@ -277,9 +277,9 @@
 
 count := 0
 
-doubled ∞= count * 2
-squared ∞= count * count
-isEven ∞= if count % 2 == 0 then "Yes" else "No"
+doubled ~= count * 2
+squared ~= count * count
+isEven ~= if count % 2 == 0 then "Yes" else "No"
 
 effect ->
   document.getElementById("count-display").textContent = count

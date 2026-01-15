@@ -468,7 +468,7 @@ ${code}`;
   }
   identifierToken() {
     var afterNot, alias, colon, colonOffset, colonToken, id, idLength, input, match, poppedToken, prev, prevprev, ref, ref1, ref10, ref11, ref12, ref2, ref3, ref4, ref5, ref6, ref7, ref8, ref9, regExSuper, sup, tag, tagToken, tokenData;
-    if (/^[∞~][=>]/.test(this.chunk) || /^=!/.test(this.chunk)) {
+    if (/^~[=>]/.test(this.chunk) || /^=!/.test(this.chunk)) {
       return 0;
     }
     if (!(match = IDENTIFIER.exec(this.chunk))) {
@@ -1223,13 +1223,13 @@ ${line}`;
       tag = "EXPORT_ALL";
     } else if (value === "<=>") {
       tag = "BIND";
-    } else if (value === "∞=" || value === "~=") {
+    } else if (value === "~=") {
       tag = "DERIVED_ASSIGN";
     } else if (value === ":=") {
       tag = "REACTIVE_ASSIGN";
     } else if (value === "=!") {
       tag = "READONLY_ASSIGN";
-    } else if (value === "∞>" || value === "~>") {
+    } else if (value === "~>") {
       tag = "EXPOSED_ARROW";
     } else if (indexOf.call(MATH, value) >= 0) {
       tag = "MATH";
@@ -1806,7 +1806,7 @@ var JS_FORBIDDEN = JS_KEYWORDS.concat(RESERVED).concat(STRICT_PROSCRIBED);
 BOM = 65279;
 IDENTIFIER = /^(?!\d)((?:(?!\s)[$\w\x7f-\uffff])+!?)([^\n\S]*:(?![=:]))?/;
 NUMBER = /^0b[01](?:_?[01])*n?|^0o[0-7](?:_?[0-7])*n?|^0x[\da-f](?:_?[\da-f])*n?|^\d+(?:_\d+)*n|^(?:\d+(?:_\d+)*)?\.?\d+(?:_\d+)*(?:e[+-]?\d+(?:_\d+)*)?/i;
-OPERATOR = /^(?:<=>|[-=∞~]>|∞=|~=|:=|=!|===|!==|!\?|\?\?|=~|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?(\.|::)|\.{2,3})/;
+OPERATOR = /^(?:<=>|[-=~]>|~=|:=|=!|===|!==|!\?|\?\?|=~|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?(\.|::)|\.{2,3})/;
 WHITESPACE = /^[^\n\S]+/;
 COMMENT = /^(\s*)###([^#][\s\S]*?)(?:###([^\n\S]*)|###$)|^((?:\s*#(?!##[^#]).*)+)/;
 CODE = /^[-=]>/;
@@ -9277,7 +9277,7 @@ function compileToJS(source, options = {}) {
 }
 // src/browser.js
 var VERSION = "2.2.1";
-var BUILD_DATE = "2026-01-15@12:15:55GMT";
+var BUILD_DATE = "2026-01-15@17:48:19GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

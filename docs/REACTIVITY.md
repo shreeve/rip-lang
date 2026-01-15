@@ -13,8 +13,7 @@ Rip provides reactive primitives as **language-level operators**, not library im
 | Operator | Name | Purpose |
 |----------|------|---------|
 | `:=` | Signal | Reactive state variable |
-| `∞=` | Derived | Computed value (auto-updates when dependencies change) |
-| `~=` | Derived (ASCII) | Same as `∞=` for ASCII-only environments |
+| `~=` | Derived | Computed value (auto-updates when dependencies change) |
 | `=!` | Readonly | Constant that cannot be reassigned |
 | `effect` | Effect | Side effect that runs when dependencies change |
 
@@ -33,22 +32,16 @@ State changes automatically trigger updates in any derived values or effects tha
 
 ---
 
-## Derived Values (`∞=` / `~=`)
+## Derived Values (`~=`)
 
 The "always equals" operator creates a value that automatically recomputes when its dependencies change:
 
 ```coffee
 count := 0
-doubled ∞= count * 2    # Always equals count * 2
+doubled ~= count * 2    # Always equals count * 2
 
 count = 5               # doubled automatically becomes 10
 count = 10              # doubled automatically becomes 20
-```
-
-**ASCII alternative:** Use `~=` if your environment doesn't support Unicode:
-
-```coffee
-doubled ~= count * 2    # Same as ∞=
 ```
 
 ---
@@ -95,7 +88,7 @@ Reactive variables automatically unwrap in most contexts:
 count := 10
 
 # All of these work automatically:
-doubled ∞= count * 2     # Arithmetic
+doubled ~= count * 2     # Arithmetic
 message = "Count: #{count}"  # String interpolation
 console.log count        # Function arguments
 
@@ -189,7 +182,7 @@ Unsubscribe a computed/effect from its dependencies:
 
 ```coffee
 count := 0
-doubled ∞= count * 2
+doubled ~= count * 2
 
 doubled.free()  # No longer updates when count changes
 count = 10      # doubled stays at its last value
@@ -227,9 +220,9 @@ A complete reactive counter with persistence:
 count := parseInt(localStorage.getItem("count")) or 0
 
 # Derived values
-doubled ∞= count * 2
-isEven ∞= count % 2 == 0
-message ∞= "Count is #{count} (#{isEven ? 'even' : 'odd'})"
+doubled ~= count * 2
+isEven ~= count % 2 == 0
+message ~= "Count is #{count} (#{isEven ? 'even' : 'odd'})"
 
 # Side effect: persist to localStorage
 effect ->
@@ -354,7 +347,7 @@ The Rip compiler transforms reactive operators into efficient JavaScript:
 ```coffee
 # Rip source
 count := 0
-doubled ∞= count * 2
+doubled ~= count * 2
 effect -> console.log doubled
 ```
 
@@ -395,7 +388,7 @@ console.log(y);
 | Concept | React | Vue | Solid | Rip |
 |---------|-------|-----|-------|-----|
 | State | `useState()` | `ref()` | `createSignal()` | `x := 0` |
-| Derived | `useMemo()` | `computed()` | `createMemo()` | `x ∞= y * 2` |
+| Derived | `useMemo()` | `computed()` | `createMemo()` | `x ~= y * 2` |
 | Effect | `useEffect()` | `watch()` | `createEffect()` | `effect ->` |
 | Constant | `const` | `const` | `const` | `x =! 0` |
 

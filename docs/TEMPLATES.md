@@ -440,7 +440,7 @@ ul
     li item.name
 
 # Or using derived value
-filtered ∞= items.filter (x) -> x.active
+filtered ~= items.filter (x) -> x.active
 
 render
   ul
@@ -490,7 +490,7 @@ Card title: "User Info"
 
 ```coffee
 # Store component in variable
-page ∞= switch route
+page ~= switch route
   when "/" then HomePage
   when "/settings" then SettingsPage
   when "/profile" then ProfilePage
@@ -724,7 +724,7 @@ component ProductCard
   quantity = 1
   isHovered = false
 
-  total ∞= @product.price * quantity
+  total ~= @product.price * quantity
 
   increment: ->
     quantity = Math.min quantity + 1, @product.stock

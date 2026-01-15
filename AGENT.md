@@ -63,7 +63,7 @@ bun run parser  # Regenerates src/parser.js from grammar.rip
   - Runtime helpers: `h()`, `txt()`, `frag()`, `cx()`
 - ✅ **REACTIVITY SYSTEM (v2.0.0)** - Full reactive primitives as language-level operators:
   - `:=` signal assignment (reactive state)
-  - `∞=` / `~=` derived values (computed)
+  - `~=` derived values (computed)
   - `effect ->` side effects (renamed from `trigger`)
   - `=!` readonly values
   - Auto-unwrapping (no `.value` needed in most cases)
@@ -105,7 +105,7 @@ bun run parser                   # Test self-hosting ✅
 | Operator | Name | Example |
 |----------|------|---------|
 | `:=` | Signal | `count := 0` |
-| `∞=` / `~=` | Derived | `doubled ∞= count * 2` |
+| `~=` | Derived | `doubled ~= count * 2` |
 | `effect` | Effect | `effect -> console.log count` |
 | `=!` | Readonly | `MAX =! 100` |
 
@@ -124,7 +124,7 @@ bun run parser                   # Test self-hosting ✅
 |------|--------------|
 | `src/codegen.js` | Runtime code (lines ~5389-5465), generators for signal/derived/effect |
 | `src/repl.js` | REPL runtime (persists across lines) |
-| `src/lexer.js` | Tokens: `:=`, `∞=`, `~=`, `=!`, `effect` |
+| `src/lexer.js` | Tokens: `:=`, `~=`, `=!`, `effect` |
 | `src/grammar/grammar.rip` | Grammar rules for reactive assignments |
 
 ### Testing Reactivity
@@ -133,7 +133,7 @@ bun run parser                   # Test self-hosting ✅
 # Test in REPL
 ./bin/rip
 count := 10
-doubled ∞= count * 2
+doubled ~= count * 2
 effect -> console.log "Doubled:", doubled
 count = 20  # Effect fires automatically!
 
