@@ -2469,7 +2469,7 @@ Rewriter = (function() {
         // which is probably always unintended.
         // Furthermore don't allow this in the first line of a literal array
         // or explicit object, as that creates grammatical ambiguities (#5368).
-        if (indexOf.call(IMPLICIT_FUNC, tag) >= 0 && this.indexOfTag(i + 1, 'INDENT') > -1 && this.looksObjectish(i + 2) && !this.findTagsBackwards(i, ['CLASS', 'EXTENDS', 'IF', 'CATCH', 'SWITCH', 'LEADING_WHEN', 'FOR', 'WHILE', 'UNTIL']) && !(((ref1 = (s = (ref2 = stackTop()) != null ? ref2[0] : void 0)) === '{' || ref1 === '[') && !isImplicit(stackTop()) && this.findTagsBackwards(i, s))) {
+        if (indexOf.call(IMPLICIT_FUNC, tag) >= 0 && this.indexOfTag(i + 1, 'INDENT') > -1 && this.looksObjectish(i + 2) && !this.findTagsBackwards(i, ['CLASS', 'COMPONENT', 'EXTENDS', 'IF', 'CATCH', 'SWITCH', 'LEADING_WHEN', 'FOR', 'WHILE', 'UNTIL']) && !(((ref1 = (s = (ref2 = stackTop()) != null ? ref2[0] : void 0)) === '{' || ref1 === '[') && !isImplicit(stackTop()) && this.findTagsBackwards(i, s))) {
           startImplicitCall(i + 1);
           stack.push(['INDENT', i + 2]);
           return forward(3);
@@ -3025,6 +3025,17 @@ Rewriter = (function() {
         return TEMPLATE_TAGS.has(tagPart);
       };
 
+      // Helper to check if name is a component (PascalCase)
+      const isComponent = (name) => {
+        if (!name || typeof name !== 'string') return false;
+        return /^[A-Z]/.test(name);
+      };
+
+      // Helper to check if name is a template element (HTML tag or component)
+      const isTemplateTag = (name) => {
+        return isHtmlTag(name) || isComponent(name);
+      };
+
       // Helper to check if an expression ending at position i starts with an HTML tag
       const startsWithHtmlTag = (tokens, i) => {
         let j = i;
@@ -3164,7 +3175,7 @@ Rewriter = (function() {
           // Check if this looks like a template element
           let isTemplateElement = false;
 
-          if (tag === 'IDENTIFIER' && isHtmlTag(token[1])) {
+          if (tag === 'IDENTIFIER' && isTemplateTag(token[1])) {
             isTemplateElement = true;
           } else if (tag === 'PROPERTY' || tag === 'STRING' || tag === 'CALL_END' || tag === ')') {
             isTemplateElement = startsWithHtmlTag(tokens, i);
@@ -3470,7 +3481,7 @@ LINEBREAKS = ['TERMINATOR', 'INDENT', 'OUTDENT'];
 CALL_CLOSERS = ['.', '?.', '::', '?::'];
 
 // Tokens that prevent a subsequent indent from ending implicit calls/objects
-CONTROL_IN_IMPLICIT = ['IF', 'TRY', 'FINALLY', 'CATCH', 'CLASS', 'SWITCH'];
+CONTROL_IN_IMPLICIT = ['IF', 'TRY', 'FINALLY', 'CATCH', 'CLASS', 'COMPONENT', 'SWITCH'];
 
 // Tokens that are swallowed up by the parser, never leading to code generation.
 // You can spot these in `grammar.rip` because the `o` function second

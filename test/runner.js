@@ -47,6 +47,14 @@ function normalizeCode(code) {
     .trim();
 }
 
+// Strip reactive runtime from code (for component tests)
+function stripRuntime(code) {
+  return code
+    .replace(/\/\/ === Rip Reactive Runtime ===[\s\S]*?\/\/ === End Reactive Runtime ===/g, '')
+    .replace(/let __currentEffect[\s\S]*?function __readonly\([^)]*\)\s*\{[^}]*\}/g, '')
+    .trim();
+}
+
 // Test helper: Execute code and compare result
 // Note: This is async to support await - but await on non-promises is instant,
 // so synchronous tests have zero performance impact
@@ -143,6 +151,49 @@ function code(name, sourceCode, expectedCode) {
   }
 }
 
+// Test helper: Compile and compare generated code (strips reactive runtime)
+// Use for component tests where we only want to compare the class output
+function codeBody(name, sourceCode, expectedCode) {
+  try {
+    const result = compile(sourceCode);
+    const actualStripped = stripRuntime(result.code);
+    const actualNorm = normalizeCode(actualStripped);
+    const expectedNorm = normalizeCode(expectedCode);
+
+    if (actualNorm === expectedNorm) {
+      fileTests.pass++;
+      totalTests.pass++;
+      console.log(`  ${colors.green}✓${colors.reset} ${name}`);
+    } else {
+      fileTests.fail++;
+      totalTests.fail++;
+      console.log(`  ${colors.red}✗${colors.reset} ${name}`);
+      failures.push({
+        file: currentFile,
+        test: name,
+        type: 'codeBody',
+        expected: expectedCode,
+        actual: actualStripped,
+        normalized: {
+          expected: expectedNorm,
+          actual: actualNorm
+        }
+      });
+    }
+  } catch (error) {
+    fileTests.fail++;
+    totalTests.fail++;
+    console.log(`  ${colors.red}✗${colors.reset} ${name} - ${error.message.split('\n')[0]}`);
+    failures.push({
+      file: currentFile,
+      test: name,
+      type: 'codeBody',
+      error: error.message,
+      sourceCode
+    });
+  }
+}
+
 // Test helper: Expect failure (compilation or execution)
 function fail(name, sourceCode) {
   try {
@@ -192,6 +243,7 @@ async function runTestFile(filePath) {
     const testEnv = {
       test,
       code,
+      codeBody,
       fail,
       console,
       // For async tests
@@ -258,7 +310,7 @@ function printFailures() {
       console.log(`   Actual:   ${failure.actual}`);
     }
 
-    if (failure.type === 'code') {
+    if (failure.type === 'code' || failure.type === 'codeBody') {
       console.log(`   Expected code:`);
       console.log(`   ${failure.expected}`);
       console.log(`   Actual code:`);

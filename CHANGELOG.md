@@ -7,6 +7,60 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-01-14
+
+### Added - Reactive UI Framework
+
+**Phase 1: Reactivity** (previously released)
+- Signal-based reactivity: `count = 0` creates reactive state
+- Derived values: `doubled ~= count * 2` auto-tracks dependencies
+- Effects: `effect -> console.log count` runs on changes
+- Runtime: `__signal()`, `__computed()`, `__effect()`, `__batch()`, `__readonly()`
+
+**Phase 2: Templates**
+- Indentation-based template syntax in `render` blocks
+- CSS-style selectors: `div#main.card.active`
+- Event handlers: `@click: handler`
+- Event modifiers: `@click.prevent.stop: handler`
+- Two-way binding: `input value <=> username`
+- Spread attributes: `div ...props`
+- Dynamic classes: `div.('btn', isActive && 'active')` (clsx-style)
+- Control flow: `if`/`else`, `for` loops in templates
+- Special attributes: `key:`, `ref:`
+- Multiple roots via `DocumentFragment`
+- Runtime helpers: `h()`, `frag()`, `txt()`, `cx()`
+
+**Phase 3: Components**
+- `component` keyword for defining UI components
+- Props system:
+  - Required: `@label`
+  - Optional: `@label?`
+  - Default: `@label = "default"`
+  - Rest: `@...rest`
+- Reactive state within components (auto-signals)
+- Derived values within components (auto-computed)
+- Component composition: `Button label: "Click"` inside render
+- Children/slots: `@children` prop for nested content
+- Lifecycle hooks: `mounted:`, `unmounted:`
+- Reactive re-rendering via effect-based mount
+
+### Changed
+- Grammar extended with `component`, `render`, `style` keywords
+- Lexer handles template contexts (ID selectors, arrow injection)
+- Codegen generates ES6 classes for components
+
+### Technical Details
+- Components compile to ES6 classes with constructor, render, mount, unmount
+- Props validated at construction (required props throw if missing)
+- State variables become `__signal()` calls
+- Derived values become `__computed()` calls
+- `mount()` wraps render in `__effect()` for reactive updates
+- PascalCase names in templates trigger component instantiation
+
+All 1033 tests passing (100%) ✅
+
+---
+
 ## [1.5.7] - 2025-11-16
 
 ### Changed

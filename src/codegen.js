@@ -108,6 +108,8 @@ export class CodeGenerator {
 
     // Templates
     'render': 'generateRender',
+    'style': 'generateStyle',
+    'component': 'generateComponent',
 
     // Control flow - Simple statements
     'break': 'generateBreak',
@@ -257,6 +259,11 @@ export class CodeGenerator {
     // def/arrow functions - DON'T recurse (they have their own scope)
     if (head === 'def' || head === '->' || head === '=>') {
       return; // Stop - don't collect from function bodies
+    }
+
+    // component - DON'T recurse (components have their own scope)
+    if (head === 'component') {
+      return; // Stop - don't collect from component bodies
     }
 
     // If/unless - recurse into branches (assignments in conditionals still need hoisting)
@@ -1569,6 +1576,17 @@ export class CodeGenerator {
   }
 
   /**
+   * Check if name is a component (PascalCase)
+   * PascalCase names are always components, even if lowercase matches an HTML tag
+   * e.g., Button is a component, button is an HTML tag
+   */
+  isComponent(name) {
+    if (!name || typeof name !== 'string') return false;
+    // PascalCase = starts with uppercase letter
+    return /^[A-Z]/.test(name);
+  }
+
+  /**
    * Parse event handler from object key
    * Returns { eventName, modifiers, handler } or null
    */
@@ -1730,6 +1748,530 @@ export class CodeGenerator {
     // Multiple roots - use frag()
     const elements = statements.map(s => this.generateTemplateElement(s));
     return `frag(${elements.join(', ')})`;
+  }
+
+  /**
+   * Generate style block (scoped CSS)
+   * Pattern: ["style", block] or ["style", "global", block]
+   * Note: Style blocks are currently a stub - CSS processing TBD
+   */
+  generateStyle(head, rest, context, sexpr) {
+    // For now, style blocks are ignored (CSS would need separate handling)
+    // TODO: Implement CSS extraction and scoping
+    return '/* style block placeholder */';
+  }
+
+  /**
+   * Generate a component definition
+   * Pattern: ["component", name, block]
+   * 
+   * Components compile to ES6 classes with:
+   * - State as reactive signals
+   * - Derived as computed values  
+   * - render() method returning DOM
+   * - Lifecycle methods (mounted, unmounted, updated)
+   */
+  generateComponent(head, rest, context, sexpr) {
+    const [name, body] = rest;
+    const componentName = typeof name === 'string' ? name : this.generate(name, 'value');
+    
+    this.usesTemplates = true;
+    
+    // Extract component body statements
+    const statements = Array.isArray(body) && body[0] === 'block' ? body.slice(1) : [];
+    
+    // Categorize statements
+    const props = [];          // @prop declarations
+    const stateVars = [];      // Regular assignments (reactive state)
+    const derivedVars = [];    // ∞= or ~= (computed)
+    const readonlyVars = [];   // =! (constants)
+    const methods = [];        // Method definitions
+    const lifecycleHooks = []; // mounted:, unmounted:, updated:
+    const effects = [];        // effect blocks
+    let renderBlock = null;    // render block
+    let styleBlock = null;     // style block
+    
+    // Track component member names for this.X transformation
+    const memberNames = new Set();      // All members (for identifier → this.X)
+    const reactiveMembers = new Set();  // State/derived only (need .value)
+    
+    for (const stmt of statements) {
+      if (!Array.isArray(stmt)) continue;
+      
+      const [op] = stmt;
+      
+      if (op === 'prop') {
+        props.push(stmt);
+        memberNames.add(stmt[1]);
+        // Props are NOT reactive - no .value needed
+      } else if (op === 'prop-rest') {
+        props.push(stmt);
+        memberNames.add(stmt[1]);
+      } else if (op === '=' && typeof stmt[1] === 'string') {
+        // Check for lifecycle hooks: mounted:, unmounted:, updated:
+        const varName = stmt[1];
+        if (['mounted', 'unmounted', 'updated'].includes(varName)) {
+          lifecycleHooks.push(stmt);
+        } else {
+          stateVars.push(stmt);
+          memberNames.add(varName);
+          reactiveMembers.add(varName);  // State needs .value
+        }
+      } else if (op === 'signal') {
+        stateVars.push(stmt);
+        memberNames.add(stmt[1]);
+        reactiveMembers.add(stmt[1]);  // Signal needs .value
+      } else if (op === 'derived') {
+        derivedVars.push(stmt);
+        memberNames.add(stmt[1]);
+        reactiveMembers.add(stmt[1]);  // Derived needs .value
+      } else if (op === 'readonly') {
+        readonlyVars.push(stmt);
+        memberNames.add(stmt[1]);
+        // Readonly is NOT reactive - no .value needed
+      } else if (op === 'effect') {
+        effects.push(stmt);
+      } else if (op === 'render') {
+        renderBlock = stmt;
+      } else if (op === 'style') {
+        styleBlock = stmt;
+      } else if (op === 'object' && stmt.length >= 2) {
+        // Method definition: methodName: -> body
+        methods.push(stmt);
+        // Add method names
+        for (let i = 1; i < stmt.length; i++) {
+          if (Array.isArray(stmt[i])) memberNames.add(stmt[i][0]);
+        }
+      }
+    }
+    
+    // Save current component context
+    const prevComponentMembers = this.componentMembers;
+    const prevReactiveMembers = this.reactiveMembers;
+    this.componentMembers = memberNames;
+    this.reactiveMembers = reactiveMembers;
+    
+    // Generate class
+    const lines = [];
+    lines.push(`class ${componentName} {`);
+    
+    // Constructor
+    lines.push('  constructor(props = {}) {');
+    
+    // Props handling
+    if (props.length > 0) {
+      for (const prop of props) {
+        if (prop[0] === 'prop') {
+          const propName = prop[1];
+          if (prop.length === 2) {
+            // Required prop
+            lines.push(`    if (props.${propName} === undefined) throw new Error('Required prop: ${propName}');`);
+            lines.push(`    this.${propName} = props.${propName};`);
+          } else if (prop[2] === 'optional') {
+            // Optional prop
+            lines.push(`    this.${propName} = props.${propName};`);
+          } else {
+            // Prop with default
+            const defaultVal = this.generateInComponent(prop[2], 'value');
+            lines.push(`    this.${propName} = props.${propName} ?? ${defaultVal};`);
+          }
+        } else if (prop[0] === 'prop-rest') {
+          const restName = prop[1];
+          const propNames = props.filter(p => p[0] === 'prop').map(p => p[1]);
+          lines.push(`    const { ${propNames.join(', ')}, ...${restName} } = props;`);
+          lines.push(`    this.${restName} = ${restName};`);
+        }
+      }
+    }
+    
+    // Constants
+    for (const [, varName, value] of readonlyVars) {
+      const val = this.generateInComponent(value, 'value');
+      lines.push(`    this.${varName} = ${val};`);
+    }
+    
+    // Components always use reactivity (mount uses __effect for reactive re-rendering)
+    this.usesReactivity = true;
+    
+    for (const stmt of stateVars) {
+      if (stmt[0] === 'signal') {
+        const [, varName, value] = stmt;
+        const val = this.generateInComponent(value, 'value');
+        lines.push(`    this.${varName} = __signal(${val});`);
+      } else {
+        // Regular assignment becomes signal
+        const [, varName, value] = stmt;
+        const val = this.generateInComponent(value, 'value');
+        lines.push(`    this.${varName} = __signal(${val});`);
+      }
+    }
+    
+    // Derived (computed)
+    for (const [, varName, expr] of derivedVars) {
+      const val = this.generateInComponent(expr, 'value');
+      lines.push(`    this.${varName} = __computed(() => ${val});`);
+    }
+    
+    // Effects
+    for (const effect of effects) {
+      const body = effect[1];
+      const effectCode = this.generateInComponent(body, 'value');
+      lines.push(`    __effect(${effectCode});`);
+    }
+    
+    lines.push('  }');
+    
+    // Methods
+    for (const methodStmt of methods) {
+      // methodStmt is ['object', [methodName, funcDef], ...]
+      for (let i = 1; i < methodStmt.length; i++) {
+        const [methodName, funcDef] = methodStmt[i];
+        if (Array.isArray(funcDef) && (funcDef[0] === '->' || funcDef[0] === '=>')) {
+          const [, params, body] = funcDef;
+          const paramStr = Array.isArray(params) ? params.map(p => this.generateParam(p)).join(', ') : '';
+          const bodyCode = this.generateInComponent(body, 'value');
+          lines.push(`  ${methodName}(${paramStr}) { return ${bodyCode}; }`);
+        }
+      }
+    }
+    
+    // Lifecycle hooks
+    for (const [, hookName, hookValue] of lifecycleHooks) {
+      if (Array.isArray(hookValue) && (hookValue[0] === '->' || hookValue[0] === '=>')) {
+        const [, params, body] = hookValue;
+        const bodyCode = this.generateInComponent(body, 'value');
+        lines.push(`  ${hookName}() { return ${bodyCode}; }`);
+      }
+    }
+    
+    // Render method
+    if (renderBlock) {
+      const renderBody = renderBlock[1];
+      const renderCode = this.generateComponentRender(renderBody);
+      lines.push(`  render() { return ${renderCode}; }`);
+    }
+    
+    // Mount method - wraps render in effect for reactive updates
+    lines.push('  mount(target) {');
+    lines.push('    this._target = target;');
+    lines.push('    this._dispose = __effect(() => {');
+    lines.push('      const el = this.render();');
+    lines.push('      if (this._el) this._el.replaceWith(el);');
+    lines.push('      else target.appendChild(el);');
+    lines.push('      this._el = el;');
+    lines.push('    });');
+    lines.push('    if (this.mounted) this.mounted();');
+    lines.push('    return this;');
+    lines.push('  }');
+    
+    // Unmount method - disposes effect and removes element
+    lines.push('  unmount() {');
+    lines.push('    if (this.unmounted) this.unmounted();');
+    lines.push('    if (this._dispose) this._dispose();');
+    lines.push('    if (this._el && this._el.parentNode) {');
+    lines.push('      this._el.parentNode.removeChild(this._el);');
+    lines.push('    }');
+    lines.push('  }');
+    
+    lines.push('}');
+    
+    // Restore previous context
+    this.componentMembers = prevComponentMembers;
+    this.reactiveMembers = prevReactiveMembers;
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Generate code inside component context (transforms member access to this.X.value)
+   */
+  generateInComponent(sexpr, context) {
+    // Simple identifier that's a reactive member (state/derived) → this.X.value
+    if (typeof sexpr === 'string' && this.reactiveMembers && this.reactiveMembers.has(sexpr)) {
+      return `this.${sexpr}.value`;
+    }
+    
+    // For arrays, we need to transform member references recursively
+    // Transform the s-expression before generating
+    if (Array.isArray(sexpr) && this.reactiveMembers) {
+      const transformed = this.transformComponentMembers(sexpr);
+      return this.generate(transformed, context);
+    }
+    
+    // Otherwise use regular generation
+    return this.generate(sexpr, context);
+  }
+
+  /**
+   * Recursively transform s-expression to replace member identifiers with this.X.value
+   * For component context where state variables are signals
+   * 
+   * Handles:
+   * - Simple identifiers: count → this.count.value (only if reactive)
+   * - Property access @X: (. this X) → (. (. this X) value) (only if X is reactive)
+   */
+  transformComponentMembers(sexpr) {
+    if (!Array.isArray(sexpr)) {
+      // Transform simple member identifiers that are reactive to this.member.value
+      if (typeof sexpr === 'string' && this.reactiveMembers && this.reactiveMembers.has(sexpr)) {
+        return ['.', ['.', 'this', sexpr], 'value'];  // Transform to this.member.value
+      }
+      return sexpr;
+    }
+    
+    // Special case: (. this memberName) for @member syntax
+    // Transform to (. (. this memberName) value) only if member is reactive
+    if (sexpr[0] === '.' && sexpr[1] === 'this' && typeof sexpr[2] === 'string') {
+      const memberName = sexpr[2];
+      if (this.reactiveMembers && this.reactiveMembers.has(memberName)) {
+        return ['.', sexpr, 'value'];  // this.X → this.X.value
+      }
+      return sexpr;  // Props/readonly/methods stay as this.X
+    }
+    
+    // Recursively transform array elements
+    return sexpr.map(item => this.transformComponentMembers(item));
+  }
+
+  /**
+   * Generate render block in component context
+   */
+  generateComponentRender(body) {
+    if (!Array.isArray(body) || body[0] !== 'block') {
+      return this.generateComponentTemplateElement(body);
+    }
+
+    const statements = body.slice(1);
+    if (statements.length === 0) return 'null';
+    if (statements.length === 1) return this.generateComponentTemplateElement(statements[0]);
+
+    // Multiple roots - use frag()
+    const elements = statements.map(s => this.generateComponentTemplateElement(s));
+    return `frag(${elements.join(', ')})`;
+  }
+
+  /**
+   * Generate template element in component context (uses this.X for members)
+   */
+  generateComponentTemplateElement(sexpr) {
+    // String literal → text or tag
+    if (typeof sexpr === 'string') {
+      // Check if it's a member reference
+      if (this.componentMembers && this.componentMembers.has(sexpr)) {
+        return `this.${sexpr}.value`;
+      }
+      if (sexpr.startsWith('"') || sexpr.startsWith("'") || sexpr.startsWith('`')) {
+        return sexpr;
+      }
+      // Plain tag
+      return `h('${sexpr}', 0)`;
+    }
+    
+    // String object → same handling
+    if (sexpr instanceof String) {
+      const val = sexpr.valueOf();
+      if (this.componentMembers && this.componentMembers.has(val)) {
+        return `this.${val}.value`;
+      }
+    }
+
+    // Arrays need component-aware processing
+    if (Array.isArray(sexpr)) {
+      const [head, ...rest] = sexpr;
+      const headStr = typeof head === 'string' ? head : (head instanceof String ? head.valueOf() : null);
+      
+      // Component instantiation (PascalCase names) - check BEFORE HTML tags
+      if (headStr && this.isComponent(headStr)) {
+        return this.generateComponentInstance(headStr, rest);
+      }
+      
+      // HTML tags - use h() with component-aware children
+      if (headStr && this.isHtmlTag && this.isHtmlTag(headStr)) {
+        return this.generateComponentH(headStr, [], rest);
+      }
+      
+      // Property access (div.class or this.member)
+      if (headStr === '.') {
+        const [, obj, prop] = sexpr;
+        // Handle @children → this.children (it's already DOM content, no txt() wrapper)
+        if (obj === 'this' && prop === 'children') {
+          return `this.children`;
+        }
+        const { tag, classes } = this.collectTemplateClasses(sexpr);
+        if (tag && this.isHtmlTag && this.isHtmlTag(tag)) {
+          return this.generateComponentH(tag, classes, []);
+        }
+      }
+      
+      // Call (div args...)
+      if (Array.isArray(head)) {
+        const { tag, classes } = this.collectTemplateClasses(head);
+        if (tag && this.isHtmlTag && this.isHtmlTag(tag)) {
+          return this.generateComponentH(tag, classes, rest);
+        }
+      }
+      
+      // Arrow function for children
+      if (headStr === '->' || headStr === '=>') {
+        const [params, body] = rest;
+        return this.generateComponentRender(body);
+      }
+      
+      // For other s-expressions, use regular template generation
+      // but wrap identifiers appropriately
+      return this.generateTemplateElement(sexpr);
+    }
+    
+    return this.generateTemplateElement(sexpr);
+  }
+
+  /**
+   * Generate h() call in component context
+   */
+  generateComponentH(tag, classes, args) {
+    this.usesTemplates = true;
+    
+    const props = {};
+    const spreads = [];
+    const children = [];
+    let refVar = null;
+
+    for (const arg of args) {
+      // Arrow function = children
+      if (Array.isArray(arg) && (arg[0] === '->' || arg[0] === '=>')) {
+        const block = arg[2];
+        if (Array.isArray(block) && block[0] === 'block') {
+          children.push(...block.slice(1).map(s => this.generateComponentTemplateElement(s)));
+        } else {
+          children.push(this.generateComponentTemplateElement(block));
+        }
+      }
+      // Spread = ...props
+      else if (Array.isArray(arg) && arg[0] === '...') {
+        spreads.push(this.generateInComponent(arg[1], 'value'));
+      }
+      // Object = attributes/events
+      else if (Array.isArray(arg) && arg[0] === 'object') {
+        for (const pair of arg.slice(1)) {
+          if (Array.isArray(pair) && pair.length >= 2) {
+            const [key, value] = pair;
+            
+            // Check for binding directive
+            const bindInfo = this.parseBindingDirective(key, value, tag);
+            if (bindInfo) {
+              props[bindInfo.prop] = bindInfo.valueExpr;
+              props[bindInfo.event] = bindInfo.handler;
+              continue;
+            }
+            
+            // Check for event handler
+            const eventInfo = this.parseEventHandler(key, value);
+            if (eventInfo) {
+              const handler = eventInfo.modifiers.length > 0
+                ? this.wrapEventHandler(eventInfo.handler, eventInfo.modifiers)
+                : eventInfo.handler;
+              props[`on${eventInfo.eventName}`] = handler;
+            } else {
+              const keyStr = typeof key === 'string' ? key : this.generate(key, 'value');
+              if (keyStr === 'ref') {
+                refVar = typeof value === 'string' ? value : this.generate(value, 'value');
+              } else if (keyStr === 'key') {
+                props.key = this.generateInComponent(value, 'value');
+              } else {
+                props[keyStr] = this.generateInComponent(value, 'value');
+              }
+            }
+          }
+        }
+      }
+      // String = text child  
+      else if (typeof arg === 'string') {
+        if (this.componentMembers && this.componentMembers.has(arg)) {
+          children.push(`this.${arg}.value`);
+        } else if (arg.startsWith('"') || arg.startsWith("'") || arg.startsWith('`')) {
+          children.push(arg);
+        } else {
+          children.push(`String(${arg})`);
+        }
+      }
+      // Other = nested element
+      else {
+        children.push(this.generateComponentTemplateElement(arg));
+      }
+    }
+
+    // Build tag string with classes
+    const tagStr = classes.length > 0 ? `${tag}.${classes.join('.')}` : tag;
+    
+    // Build props string
+    const propsStr = this.buildPropsString(props, spreads);
+    const childrenStr = this.buildChildrenString(children);
+    let result = `h('${tagStr}', ${propsStr}${childrenStr})`;
+
+    if (refVar) {
+      result = `(${refVar} = ${result})`;
+    }
+
+    return result;
+  }
+
+  /**
+   * Generate component instantiation in template context
+   * Button label: "Click" → new Button({ label: "Click" }).render()
+   */
+  generateComponentInstance(componentName, args) {
+    const props = {};
+    const children = [];
+    
+    for (const arg of args) {
+      // Object = props
+      if (Array.isArray(arg) && arg[0] === 'object') {
+        for (let i = 1; i < arg.length; i++) {
+          const [key, value] = arg[i];
+          if (typeof key === 'string') {
+            props[key] = this.generateInComponent(value, 'value');
+          }
+        }
+      }
+      // Arrow function = children
+      else if (Array.isArray(arg) && (arg[0] === '->' || arg[0] === '=>')) {
+        const block = arg[2];
+        if (Array.isArray(block) && block[0] === 'block') {
+          children.push(...block.slice(1).map(s => this.generateComponentTemplateElement(s)));
+        } else {
+          children.push(this.generateComponentTemplateElement(block));
+        }
+      }
+      // String = text child or prop shorthand
+      else if (typeof arg === 'string') {
+        if (arg.startsWith('"') || arg.startsWith("'") || arg.startsWith('`')) {
+          children.push(arg);
+        } else if (this.reactiveMembers && this.reactiveMembers.has(arg)) {
+          children.push(`this.${arg}.value`);
+        } else {
+          children.push(`String(${arg})`);
+        }
+      }
+      // Other = nested element
+      else {
+        children.push(this.generateComponentTemplateElement(arg));
+      }
+    }
+    
+    // Build props object
+    const propsEntries = Object.entries(props);
+    let propsStr = '{}';
+    if (propsEntries.length > 0 || children.length > 0) {
+      const entries = propsEntries.map(([k, v]) => `${k}: ${v}`);
+      // Pass children as special prop if present
+      if (children.length > 0) {
+        const childrenStr = children.length === 1 ? children[0] : `[${children.join(', ')}]`;
+        entries.push(`children: ${childrenStr}`);
+      }
+      propsStr = entries.length > 0 ? `{ ${entries.join(', ')} }` : '{}';
+    }
+    
+    return `new ${componentName}(${propsStr}).render()`;
   }
 
   /**

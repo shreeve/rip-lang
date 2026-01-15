@@ -624,15 +624,24 @@ component TodoApp
 
 ## Implementation Status
 
-> **Note:** The component system is specified but not yet implemented in the Rip compiler. This document serves as the specification for the upcoming implementation.
+> **Implemented in Rip 2.0** — The component system is fully functional.
 
-**Roadmap:**
-- [ ] Add `component` keyword to grammar
-- [ ] Implement `render` block parsing
-- [ ] Add `style` block parsing with scoping
-- [ ] Implement props system (`@prop`)
-- [ ] Add lifecycle hooks
-- [ ] Integrate with reactivity primitives
+**Completed ✅:**
+- [x] `component` keyword in grammar
+- [x] `render` block parsing and codegen
+- [x] Props system: `@prop`, `@prop?`, `@prop = default`, `@...rest`
+- [x] Lifecycle hooks: `mounted:`, `unmounted:`
+- [x] Reactive state: `count = 0` → `__signal(0)`
+- [x] Derived values: `doubled ~= count * 2` → `__computed()`
+- [x] Component composition: `Button label: "Click"` in render
+- [x] Children/slots: `@children` prop with nested content
+- [x] Reactive re-rendering via `__effect` in `mount()`
+
+**Pending:**
+- [ ] `style` block parsing with scoping
+- [ ] Named slots (`@header`, `@footer`)
+- [ ] Fine-grained DOM updates
+- [ ] Error boundaries
 
 See [REACTIVITY.md](REACTIVITY.md) for the reactive operators used within components.
 See [TEMPLATES.md](TEMPLATES.md) for the template DSL reference.

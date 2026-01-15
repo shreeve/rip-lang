@@ -52,6 +52,8 @@ grammar =
     o 'ReadonlyAssign'
     o 'EffectBlock'
     o 'RenderBlock'
+    o 'StyleBlock'
+    o 'Component'
     o 'If'
     o 'Try'
     o 'While'
@@ -99,6 +101,39 @@ grammar =
   # Template: Render block - UI templates that compile to DOM operations
   RenderBlock: [
     o 'RENDER Block', '["render", 2]'
+  ]
+
+  # Template: Style block - scoped CSS for components
+  StyleBlock: [
+    o 'STYLE Block', '["style", 2]'
+  ]
+
+  # Component: Define a reactive UI component
+  Component: [
+    o 'COMPONENT Identifier INDENT ComponentBody OUTDENT', '["component", 2, ["block", ...4]]'
+  ]
+
+  # ComponentBody: Like Body but also allows prop declarations
+  ComponentBody: [
+    o 'ComponentLine'                         , '[1]'
+    o 'ComponentBody TERMINATOR ComponentLine', '[...1, 3]'
+    o 'ComponentBody TERMINATOR'
+  ]
+
+  ComponentLine: [
+    o 'Expression'
+    o 'ExpressionLine'
+    o 'Statement'
+    o 'PropDecl'
+  ]
+
+  # Prop declaration: @name, @name?, @name = default, @...rest
+  # Only valid inside ComponentBody
+  PropDecl: [
+    o '@ PROPERTY'              , '["prop", 2]'
+    o '@ PROPERTY ?'            , '["prop", 2, "optional"]'
+    o '@ PROPERTY = Expression' , '["prop", 2, 4]'
+    o '@ ... IDENTIFIER'        , '["prop-rest", 3]'
   ]
 
   # Expressions which are written in single line and would otherwise require being
