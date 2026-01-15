@@ -12,6 +12,7 @@
       box-sizing: border-box;
     }
 
+    /* Hide body until fully initialized to prevent render flicker */
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: #1e1e1e;
@@ -19,6 +20,11 @@
       height: 100vh;
       display: flex;
       flex-direction: column;
+      opacity: 0;
+    }
+
+    body.ready {
+      opacity: 1;
     }
 
     .header {
@@ -88,10 +94,6 @@
       overflow: hidden;
     }
 
-    /* Hide content until JS initializes correct tab (prevents flash) */
-    .content.loading {
-      visibility: hidden;
-    }
 
     .pane {
       display: none;
@@ -498,7 +500,7 @@
     <button class="tab" data-tab="repl">REPL Console</button>
   </div>
 
-  <div class="content loading">
+  <div class="content">
     <!-- REPL Pane -->
     <div class="pane" id="repl-pane">
       <div class="repl-container">
@@ -727,8 +729,8 @@ console.log "Domain:", domain</textarea>
       switchToTab(initialTab);
     }
 
-    // Remove loading class to show content (prevents flash of wrong tab)
-    document.querySelector('.content').classList.remove('loading');
+    // Show page now that everything is initialized (prevents render flicker)
+    document.body.classList.add('ready');
 
     // ========================================================================
     // Resizable Panes (Live Compiler)
