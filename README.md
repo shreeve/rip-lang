@@ -107,21 +107,56 @@ fn?(arg)                 # Safe call
 
 ## Unique Features
 
+### New Operators & Syntax
+
 | Feature | Example | What it does |
 |---------|---------|--------------|
 | **Ruby `.new()`** | `Counter.new()` | Ruby-style constructor → `new Counter()` |
 | **Dammit `!`** | `fetchData!` | Calls the function AND awaits it |
 | **Void `!`** | `def process!` | Suppresses implicit return (always returns undefined) |
 | **Otherwise `!?`** | `val !? 5` | Defaults only if `undefined` (null/0/false are kept!) |
-| **Signal `:=`** | `count := 0` | Creates reactive state |
-| **Derived `~=`** | `doubled ~= count * 2` | Auto-updates when dependencies change |
-| **Effect** | `effect -> log x` | Runs whenever referenced signals change |
-| **Match `=~`** | `str =~ /(\w+)/` | Ruby-style regex, captures in `_[1]` |
+| **Floor div `//`** | `7 // 2` | Floor division → `Math.floor(7 / 2)` = 3 |
+| **True mod `%%`** | `-1 %% 3` | True modulo (not remainder) → 2, not -1 |
+| **Readonly `=!`** | `MAX =! 100` | Immutable constant (can't reassign) |
 | **Ternary `?:`** | `x > 0 ? 'yes' : 'no'` | JS-style ternary (plus CoffeeScript's if/then/else) |
 | **Dual optional** | `a?.b` and `a?[0]` | Both ES6 native and CoffeeScript soak styles |
+
+### Regex Enhancements
+
+| Feature | Example | What it does |
+|---------|---------|--------------|
+| **Match `=~`** | `str =~ /(\w+)/` | Ruby-style regex, captures in `_[1]` |
+| **Regex index** | `str[/pat/, 1]` | Extract capture group directly |
 | **Heregex** | `///pat # comment///` | Extended regex with comments and whitespace |
+
+### Strings & Data
+
+| Feature | Example | What it does |
+|---------|---------|--------------|
 | **Heredoc** | `'''` closing column | Smart indentation — closing position sets left margin |
 | **`__DATA__`** | `__DATA__\nconfig...` | Ruby-style inline data section, accessible as `DATA` |
+
+### Reactivity (Built-in)
+
+| Feature | Example | What it does |
+|---------|---------|--------------|
+| **Signal `:=`** | `count := 0` | Creates reactive state container |
+| **Derived `~=`** | `doubled ~= count * 2` | Auto-updates when dependencies change |
+| **Effect** | `effect -> log x` | Runs whenever referenced signals change |
+
+### Components & Templates
+
+| Feature | Example | What it does |
+|---------|---------|--------------|
+| **Component** | `component Counter` | Define reactive UI component |
+| **Render** | `render` block | Indentation-based HTML templates |
+| **Props** | `@prop`, `@prop?`, `@prop = default` | Component input from parent |
+| **Rest props** | `@...rest` | Capture remaining props |
+| **Two-way bind** | `input value <=> name` | Bidirectional data binding |
+| **Event handlers** | `@click: handler` | DOM event binding |
+| **Lifecycle** | `mounted:`, `unmounted:` | Component lifecycle hooks |
+| **Context API** | `setContext`, `getContext` | Pass data down component tree |
+| **Fine-grained** | No virtual DOM | Surgical DOM updates via signals |
 
 ---
 
