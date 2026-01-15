@@ -681,29 +681,46 @@ console.log "Domain:", domain</textarea>
     // Tab Switching
     // ========================================================================
 
+    function switchToTab(tabName) {
+      // Update URL hash
+      window.location.hash = tabName;
+
+      // Update active tab
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelector(`.tab[data-tab="${tabName}"]`).classList.add('active');
+
+      // Update active pane
+      document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+      document.getElementById(`${tabName}-pane`).classList.add('active');
+
+      // Focus appropriate input and run setup
+      if (tabName === 'repl') {
+        document.getElementById('repl-input').focus();
+      } else if (tabName === 'demo') {
+        // Auto-run demo when switching to demo tab
+        setTimeout(() => runDemo(), 50);
+      } else if (tabName === 'compiler') {
+        compileCode();  // Update compiler output
+      }
+    }
+
     document.querySelectorAll('.tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        const tabName = tab.dataset.tab;
-
-        // Update active tab
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-
-        // Update active pane
-        document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
-        document.getElementById(`${tabName}-pane`).classList.add('active');
-
-        // Focus appropriate input and run setup
-        if (tabName === 'repl') {
-          document.getElementById('repl-input').focus();
-        } else if (tabName === 'demo') {
-          // Auto-run demo when switching to demo tab
-          setTimeout(() => runDemo(), 50);
-        } else if (tabName === 'compiler') {
-          compileCode();  // Update compiler output
-        }
-      });
+      tab.addEventListener('click', () => switchToTab(tab.dataset.tab));
     });
+
+    // Handle browser back/forward
+    window.addEventListener('hashchange', () => {
+      const hash = window.location.hash.slice(1);
+      if (['compiler', 'demo', 'repl'].includes(hash)) {
+        switchToTab(hash);
+      }
+    });
+
+    // Initialize from URL hash on page load
+    const initialTab = window.location.hash.slice(1);
+    if (['compiler', 'demo', 'repl'].includes(initialTab)) {
+      switchToTab(initialTab);
+    }
 
     // ========================================================================
     // Resizable Panes (Live Compiler)
