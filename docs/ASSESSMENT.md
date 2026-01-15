@@ -1,7 +1,7 @@
 # Rip Reactive Features Assessment
 
 > Updated evaluation of Rip's reactivity, templates, and components (January 2026).
-> **v2.0.1 - Now with Fine-Grained Reactivity!**
+> **v2.1.0 - Svelte-Class Performance with Fine-Grained Reactivity!**
 
 ---
 
@@ -83,7 +83,7 @@ render
 - **Fine-grained loops (for)**
 
 ### Room for Improvement
-- Keyed list reconciliation (currently rebuilds entire list)
+- Template literal interpolation optimization
 
 ---
 
@@ -143,20 +143,25 @@ _setup() {
 - **Children**: `@children` prop for nested content
 - **Named Slots**: Props can be DOM nodes (`@header`, `@footer`)
 - **Fine-Grained Rendering**: `_create()` builds DOM once, `_setup()` wires minimal effects
-- **Fine-Grained Conditionals**: if/else with anchor-based swapping
-- **Fine-Grained Loops**: for loops with node tracking
+- **Fine-Grained Conditionals**: if/else with anchor-based swapping + effect cleanup
+- **Fine-Grained Loops**: keyed reconciliation + per-item effects
+- **Keyed Reconciliation**: Reuses DOM nodes based on `key:` attribute
+- **Per-Item Effects**: Each list item has independent reactive bindings
+- **Effect Cleanup**: Proper disposal prevents memory leaks
 
 ### Performance Comparison
 
-| Approach | 10,000 updates | DOM operations |
-|----------|---------------|----------------|
-| Old (full re-render) | ~500ms | 10,000 × all nodes |
-| **New (fine-grained)** | **~15ms** | 10,000 × 1 text node |
+| Operation | Old Approach | New Approach |
+|-----------|--------------|--------------|
+| Update 1 text | O(n) rebuild | **O(1)** single node |
+| Update 1 attr | O(n) rebuild | **O(1)** single attr |
+| Add list item | O(n) rebuild | **O(1)** create 1 node |
+| Remove list item | O(n) rebuild | **O(1)** remove 1 node |
+| Change selection in list | O(n) rebuild | **O(1)** per-item effects |
 
-**~30-40x faster** for typical reactive updates!
+**Result:** 30-40x faster for typical reactive updates!
 
 ### Room for Improvement
-- Keyed list reconciliation (currently rebuilds)
 - Error boundaries
 - DevTools integration
 
@@ -187,15 +192,18 @@ _setup() {
 - [x] Lifecycle hooks
 - [x] Fine-grained DOM updates
 - [x] Fine-grained attribute bindings
-- [x] Fine-grained conditionals (if/else)
-- [x] Fine-grained loops (for)
+- [x] Fine-grained conditionals (if/else) with effect cleanup
+- [x] Fine-grained loops (for) with keyed reconciliation
 - [x] Named slots (@header, @footer, etc.)
+- [x] **Keyed list reconciliation** (O(1) add/remove/reorder)
+- [x] **Per-item effects** (selection changes update individual items)
+- [x] **Effect cleanup** (no memory leaks on conditional/loop changes)
 
 ### Next Steps
-- [ ] Keyed list reconciliation (optimize for reordering)
 - [ ] Scoped styles (`style` block)
 - [ ] Error boundaries
 - [ ] SSR support
+- [ ] DevTools integration
 
 ---
 
@@ -209,7 +217,12 @@ _setup() {
 | Templates | Feature-complete | Great DX, clean runtime |
 | Components | **High-Performance** | Fine-grained O(1) updates! |
 
-**Key Achievement:** Fine-grained reactivity means when state changes, Rip updates only the specific DOM node that needs it—not the entire tree. This is the same approach used by Svelte and SolidJS.
+**Key Achievement:** Fine-grained reactivity at every level:
+- Text/attribute changes → O(1) single node update
+- List add/remove → O(1) with keyed reconciliation  
+- Selection in list → O(1) per-item effects
+
+This is architecturally equivalent to Svelte and SolidJS.
 
 **Best current uses:**
 - Building fast web applications

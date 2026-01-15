@@ -2077,7 +2077,6 @@ export class CodeGenerator {
     this._fgTextCount = 0;
     this._fgCreateLines = [];
     this._fgSetupLines = [];
-    this._fgDisposeLines = [];
     
     // Parse the body
     const statements = Array.isArray(body) && body[0] === 'block' ? body.slice(1) : [body];
@@ -2100,7 +2099,6 @@ export class CodeGenerator {
     return {
       createLines: this._fgCreateLines,
       setupLines: this._fgSetupLines,
-      disposeLines: this._fgDisposeLines,
       rootVar
     };
   }
@@ -2129,7 +2127,6 @@ export class CodeGenerator {
       if (sexpr.startsWith('"') || sexpr.startsWith("'") || sexpr.startsWith('`')) {
         // Static text
         const textVar = this.fgNewText();
-        const textContent = sexpr.slice(1, -1); // Remove quotes
         this._fgCreateLines.push(`${textVar} = document.createTextNode(${sexpr});`);
         return textVar;
       }
@@ -2297,13 +2294,38 @@ export class CodeGenerator {
   }
 
   /**
+   * Check if an s-expression contains any reactive member references
+   */
+  fgHasReactiveDeps(sexpr) {
+    if (!this.reactiveMembers || this.reactiveMembers.size === 0) return false;
+    
+    if (typeof sexpr === 'string') {
+      return this.reactiveMembers.has(sexpr);
+    }
+    
+    if (!Array.isArray(sexpr)) return false;
+    
+    // Check for (. this reactiveMember) pattern
+    if (sexpr[0] === '.' && sexpr[1] === 'this' && typeof sexpr[2] === 'string') {
+      return this.reactiveMembers.has(sexpr[2]);
+    }
+    
+    // Recursively check children
+    for (const child of sexpr) {
+      if (this.fgHasReactiveDeps(child)) return true;
+    }
+    
+    return false;
+  }
+
+  /**
    * Process attributes and events for an element
    */
   fgProcessAttributes(elVar, objExpr) {
     // objExpr = ['object', [key, value], [key, value], ...]
     for (let i = 1; i < objExpr.length; i++) {
       const [key, value] = objExpr[i];
-      
+
       // Event handler: @click or (. this eventName)
       if (Array.isArray(key) && key[0] === '.' && key[1] === 'this') {
         const eventName = key[2];
@@ -2312,13 +2334,16 @@ export class CodeGenerator {
         this._fgCreateLines.push(`${elVar}.addEventListener('${eventName}', (e) => (${handlerCode})(e));`);
         continue;
       }
-      
+
       // Regular attribute
       if (typeof key === 'string') {
-        // Check if value is reactive
-        if (typeof value === 'string' && this.reactiveMembers && this.reactiveMembers.has(value)) {
-          // Dynamic attribute
-          this._fgSetupLines.push(`__effect(() => { ${elVar}.setAttribute('${key}', this.${value}.value); });`);
+        // Check if value contains any reactive dependencies
+        const hasReactiveDeps = this.fgHasReactiveDeps(value);
+        
+        if (hasReactiveDeps) {
+          // Dynamic attribute - wrap in effect
+          const valueCode = this.generateInComponent(value, 'value');
+          this._fgSetupLines.push(`__effect(() => { ${elVar}.setAttribute('${key}', ${valueCode}); });`);
         } else {
           // Static attribute
           const valueCode = this.generateInComponent(value, 'value');
@@ -2366,11 +2391,13 @@ export class CodeGenerator {
     // Create anchor comment that marks where conditional content goes
     const anchorVar = this.fgNewElement('if');
     const contentVar = `${anchorVar}_content`;
-    const stateVar = `${anchorVar}_showing`;  // Track which branch is showing
+    const stateVar = `${anchorVar}_showing`;    // Track which branch is showing
+    const disposersVar = `${anchorVar}_dispose`; // Track effects to cleanup
     
     this._fgCreateLines.push(`${anchorVar} = document.createComment('if');`);
     this._fgCreateLines.push(`${contentVar} = null;`);
     this._fgCreateLines.push(`${stateVar} = null;`);  // null, 'then', or 'else'
+    this._fgCreateLines.push(`${disposersVar} = [];`);
     
     // Generate condition expression
     const condCode = this.generateInComponent(condition, 'value');
@@ -2408,8 +2435,19 @@ export class CodeGenerator {
     effectLines.push(`  const show = !!(${condCode});`);
     effectLines.push(`  const want = show ? 'then' : ${elseBlock ? "'else'" : 'null'};`);
     effectLines.push(`  if (want === ${stateVar}) return;`);  // No change needed
+    effectLines.push(`  // Cleanup old content and effects`);
+    effectLines.push(`  ${disposersVar}.forEach(d => d());`);
+    effectLines.push(`  ${disposersVar} = [];`);
     effectLines.push(`  if (${contentVar}) { ${contentVar}.remove(); ${contentVar} = null; }`);
     effectLines.push(`  ${stateVar} = want;`);
+    
+    // Helper to wrap effect calls for tracking
+    const wrapEffects = (lines) => {
+      return lines.map(line => 
+        line.replace(/__effect\(\(\)/g, `${disposersVar}.push(__effect(()`)
+            .replace(/\}\);$/, '}));')
+      );
+    };
     
     // Create then content
     effectLines.push(`  if (want === 'then') {`);
@@ -2418,7 +2456,7 @@ export class CodeGenerator {
     }
     effectLines.push(`    ${contentVar} = ${thenVar};`);
     effectLines.push(`    ${anchorVar}.parentNode.insertBefore(${contentVar}, ${anchorVar}.nextSibling);`);
-    for (const line of thenSetupLines) {
+    for (const line of wrapEffects(thenSetupLines)) {
       effectLines.push(`    ${line}`);
     }
     effectLines.push(`  }`);
@@ -2431,7 +2469,7 @@ export class CodeGenerator {
       }
       effectLines.push(`    ${contentVar} = ${elseVar};`);
       effectLines.push(`    ${anchorVar}.parentNode.insertBefore(${contentVar}, ${anchorVar}.nextSibling);`);
-      for (const line of elseSetupLines) {
+      for (const line of wrapEffects(elseSetupLines)) {
         effectLines.push(`    ${line}`);
       }
       effectLines.push(`  }`);
@@ -2445,18 +2483,20 @@ export class CodeGenerator {
   }
 
   /**
-   * Process a for loop
+   * Process a for loop with keyed reconciliation and per-item effects
    * Pattern: ['for-in', [vars], collection, guard?, step?, body]
    */
   fgProcessLoop(sexpr) {
     const [head, vars, collection, guard, step, body] = sexpr;
     
-    // Create anchor and nodes array
+    // Create anchor and tracking structures
     const anchorVar = this.fgNewElement('for');
-    const nodesVar = `${anchorVar}_nodes`;
+    const mapVar = `${anchorVar}_map`;      // Map<key, {node, item, disposers}>
+    const keysVar = `${anchorVar}_keys`;    // Array of keys in order
     
     this._fgCreateLines.push(`${anchorVar} = document.createComment('for');`);
-    this._fgCreateLines.push(`${nodesVar} = [];`);
+    this._fgCreateLines.push(`${mapVar} = new Map();`);
+    this._fgCreateLines.push(`${keysVar} = [];`);
     
     // Get variable name(s)
     const varNames = Array.isArray(vars) ? vars : [vars];
@@ -2466,16 +2506,36 @@ export class CodeGenerator {
     // Generate collection expression
     const collectionCode = this.generateInComponent(collection, 'value');
     
+    // Extract key expression from body if present
+    let keyExpr = null;
+    if (Array.isArray(body) && body[0] === 'block' && body.length > 1) {
+      const firstChild = body[1];
+      if (Array.isArray(firstChild)) {
+        for (const arg of firstChild) {
+          if (Array.isArray(arg) && arg[0] === 'object') {
+            for (let i = 1; i < arg.length; i++) {
+              const [k, v] = arg[i];
+              if (k === 'key') {
+                keyExpr = this.generate(v, 'value');
+                break;
+              }
+            }
+          }
+          if (keyExpr) break;
+        }
+      }
+    }
+    if (!keyExpr) {
+      keyExpr = itemVar;
+    }
+    
     // Save state and generate item template
     const savedCreateLines = this._fgCreateLines;
     const savedSetupLines = this._fgSetupLines;
     
-    // We need to create a function that generates a single item's DOM
-    // For now, inline the creation in the effect
     this._fgCreateLines = [];
     this._fgSetupLines = [];
     
-    // Temporarily add item var to scope so it generates correctly
     const itemNode = this.fgProcessBlock(body);
     const itemCreateLines = this._fgCreateLines;
     const itemSetupLines = this._fgSetupLines;
@@ -2484,34 +2544,84 @@ export class CodeGenerator {
     this._fgCreateLines = savedCreateLines;
     this._fgSetupLines = savedSetupLines;
     
-    // Generate the effect that manages the list
+    // Check if there are reactive bindings that need per-item effects
+    const hasItemEffects = itemSetupLines.length > 0;
+    
+    // Generate the keyed reconciliation effect
     const effectLines = [];
     effectLines.push(`__effect(() => {`);
     effectLines.push(`  const items = ${collectionCode};`);
     effectLines.push(`  const parent = ${anchorVar}.parentNode;`);
-    effectLines.push(`  // Remove old nodes`);
-    effectLines.push(`  for (const n of ${nodesVar}) n.remove();`);
-    effectLines.push(`  ${nodesVar} = [];`);
-    effectLines.push(`  // Create new nodes`);
-    effectLines.push(`  let insertPoint = ${anchorVar}.nextSibling;`);
+    effectLines.push(`  const newKeys = [];`);
+    effectLines.push(`  const newMap = new Map();`);
+    effectLines.push(``);
+    effectLines.push(`  // Build new keys and reuse/create nodes`);
     effectLines.push(`  for (let ${indexVar} = 0; ${indexVar} < items.length; ${indexVar}++) {`);
     effectLines.push(`    const ${itemVar} = items[${indexVar}];`);
+    effectLines.push(`    const key = ${keyExpr};`);
+    effectLines.push(`    newKeys.push(key);`);
+    effectLines.push(``);
+    effectLines.push(`    // Check if we can reuse existing node`);
+    effectLines.push(`    let entry = ${mapVar}.get(key);`);
+    effectLines.push(`    if (entry) {`);
+    effectLines.push(`      // Reuse node but dispose old effects (index may have changed)`);
+    effectLines.push(`      entry.disposers.forEach(d => d());`);
+    effectLines.push(`      entry.disposers = [];`);
+    effectLines.push(`    } else {`);
+    effectLines.push(`      // Create new node`);
     
-    // Create item DOM
+    // Indent item creation
     for (const line of itemCreateLines) {
-      // Replace bare itemVar references with the loop variable
-      effectLines.push(`    ${line}`);
-    }
-    effectLines.push(`    const node = ${itemNode};`);
-    effectLines.push(`    parent.insertBefore(node, insertPoint);`);
-    effectLines.push(`    ${nodesVar}.push(node);`);
-    
-    // Setup effects for item (if any)
-    for (const line of itemSetupLines) {
-      effectLines.push(`    ${line}`);
+      effectLines.push(`      ${line}`);
     }
     
+    effectLines.push(`      entry = { node: ${itemNode}, item: ${itemVar}, disposers: [] };`);
+    effectLines.push(`    }`);
+    
+    // Always create fresh effects with current index
+    if (hasItemEffects) {
+      for (let line of itemSetupLines) {
+        // Replace element references with entry.node
+        // The itemNode is the root element for this item
+        line = line.replace(new RegExp(itemNode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), 'entry.node');
+        
+        // Wrap __effect calls to collect disposers
+        const wrappedLine = line.replace(
+          /__effect\(\(\) => \{/g, 
+          'entry.disposers.push(__effect(() => {'
+        ).replace(
+          /\}\);$/g,
+          '}));'
+        );
+        effectLines.push(`    ${wrappedLine}`);
+      }
+    }
+    
+    effectLines.push(`    newMap.set(key, entry);`);
     effectLines.push(`  }`);
+    effectLines.push(``);
+    effectLines.push(`  // Remove nodes and dispose their effects`);
+    effectLines.push(`  for (const [key, entry] of ${mapVar}) {`);
+    effectLines.push(`    if (!newMap.has(key)) {`);
+    effectLines.push(`      entry.disposers.forEach(d => d());`);
+    effectLines.push(`      entry.node.remove();`);
+    effectLines.push(`    }`);
+    effectLines.push(`  }`);
+    effectLines.push(``);
+    effectLines.push(`  // Reorder/insert nodes to match new order`);
+    effectLines.push(`  let prevNode = ${anchorVar};`);
+    effectLines.push(`  for (const key of newKeys) {`);
+    effectLines.push(`    const entry = newMap.get(key);`);
+    effectLines.push(`    const node = entry.node;`);
+    effectLines.push(`    if (node.previousSibling !== prevNode) {`);
+    effectLines.push(`      parent.insertBefore(node, prevNode.nextSibling);`);
+    effectLines.push(`    }`);
+    effectLines.push(`    prevNode = node;`);
+    effectLines.push(`  }`);
+    effectLines.push(``);
+    effectLines.push(`  // Update tracking`);
+    effectLines.push(`  ${mapVar} = newMap;`);
+    effectLines.push(`  ${keysVar} = newKeys;`);
     effectLines.push(`});`);
     
     this._fgSetupLines.push(effectLines.join('\n    '));
