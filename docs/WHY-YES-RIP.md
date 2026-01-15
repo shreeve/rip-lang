@@ -6,7 +6,7 @@
 
 That "Why Not" document makes strong arguments, but here's the **counter-argument**—a working, tested, **production-ready** language that offers a different path.
 
-**Rip isn't vaporware. It's real. Version 2.0.1. 968/968 tests passing. Self-hosting. Zero dependencies. Available now.**
+**Rip isn't vaporware. It's real. Version 2.1.0. 968/968 tests passing. Self-hosting. Zero dependencies. Available now.**
 
 ### The Philosophical Divide: Freedom vs Fear
 
