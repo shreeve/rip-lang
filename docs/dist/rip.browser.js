@@ -5075,6 +5075,7 @@ ${this.indent()}}`;
       }
     }
     lines.push("  mount(target) {");
+    lines.push('    if (typeof target === "string") target = document.querySelector(target);');
     lines.push("    this._target = target;");
     lines.push("    this._root = this._create();");
     lines.push("    target.appendChild(this._root);");
@@ -9292,7 +9293,7 @@ function compileToJS(source, options = {}) {
 }
 // src/browser.js
 var VERSION = "2.2.2";
-var BUILD_DATE = "2026-01-15@22:12:31GMT";
+var BUILD_DATE = "2026-01-15@22:17:59GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

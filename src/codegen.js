@@ -1982,7 +1982,9 @@ export class CodeGenerator {
     }
     
     // Mount method - creates DOM once, then sets up effects
+    // Accepts element or selector string (e.g., "#app" or ".container")
     lines.push('  mount(target) {');
+    lines.push('    if (typeof target === "string") target = document.querySelector(target);');
     lines.push('    this._target = target;');
     lines.push('    this._root = this._create();');
     lines.push('    target.appendChild(this._root);');

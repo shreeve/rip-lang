@@ -540,7 +540,7 @@ component Counter
       i "dozen is #{dozen} items?"
 
 counter = new Counter()
-counter.mount document.getElementById("counter-mount")
+counter.mount "#counter-mount"
 
 # ============================================
 # Component with Two-Way Binding
@@ -557,7 +557,7 @@ component Greeter
         span "!"
 
 greeter = new Greeter()
-greeter.mount document.getElementById("greeter-mount")
+greeter.mount "#greeter-mount"
 
 # ============================================
 # Derived Values (~= always equal)
@@ -581,7 +581,7 @@ component Calculator
         span.result squared
 
 calc = new Calculator()
-calc.mount document.getElementById("calc-mount")
+calc.mount "#calc-mount"
 </textarea>
         </div>
 
