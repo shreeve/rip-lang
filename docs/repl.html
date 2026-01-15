@@ -88,6 +88,11 @@
       overflow: hidden;
     }
 
+    /* Hide content until JS initializes correct tab (prevents flash) */
+    .content.loading {
+      visibility: hidden;
+    }
+
     .pane {
       display: none;
       flex: 1;
@@ -493,7 +498,7 @@
     <button class="tab" data-tab="repl">REPL Console</button>
   </div>
 
-  <div class="content">
+  <div class="content loading">
     <!-- REPL Pane -->
     <div class="pane" id="repl-pane">
       <div class="repl-container">
@@ -721,6 +726,9 @@ console.log "Domain:", domain</textarea>
     if (['compiler', 'demo', 'repl'].includes(initialTab)) {
       switchToTab(initialTab);
     }
+
+    // Remove loading class to show content (prevents flash of wrong tab)
+    document.querySelector('.content').classList.remove('loading');
 
     // ========================================================================
     // Resizable Panes (Live Compiler)
