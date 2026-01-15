@@ -612,6 +612,125 @@ component TodoApp
 
 ---
 
+## Async Patterns
+
+### The `Await` Helper Component
+
+For handling promise states (pending/resolved/rejected) in templates, create a reusable `Await` component:
+
+```coffee
+component Await
+  @promise                    # The promise to track
+  @pending?                   # Content to show while pending
+  @resolved?                  # Function: (data) -> content
+  @rejected?                  # Function: (error) -> content
+
+  state = "pending"           # pending | resolved | rejected
+  data = null
+  error = null
+
+  mounted: ->
+    @promise
+      .then (d) ->
+        data = d
+        state = "resolved"
+      .catch (e) ->
+        error = e
+        state = "rejected"
+
+  render
+    if state == "pending"
+      @pending if @pending
+    else if state == "rejected" and @rejected
+      @rejected error
+    else if state == "resolved" and @resolved
+      @resolved data
+```
+
+**Usage:**
+
+```coffee
+component UserProfile
+  @userId
+
+  render
+    div.profile
+      Await
+        promise: fetchUser! @userId
+        pending:
+          div.skeleton "Loading..."
+        resolved: (user) ->
+          div.user
+            img src: user.avatar
+            h2 user.name
+            p user.bio
+        rejected: (err) ->
+          div.error "Failed to load: #{err.message}"
+```
+
+### Inline Async State
+
+For simpler cases, handle async state directly in the component:
+
+```coffee
+component DataView
+  @url
+  
+  state = "pending"
+  data = null
+  error = null
+
+  mounted: ->
+    try
+      data = fetch! @url
+      state = "resolved"
+    catch e
+      error = e
+      state = "rejected"
+
+  render
+    div
+      if state == "pending"
+        Spinner()
+      else if state == "rejected"
+        ErrorMessage message: error.message
+      else
+        DataDisplay data: data
+```
+
+### Delayed Loading Indicator
+
+Use an `after` helper to show loading states only after a delay (avoids flicker for fast responses):
+
+```coffee
+# Helper function (works anywhere)
+after = (ms) -> new Promise (r) -> setTimeout r, ms
+
+component SearchResults
+  @query
+  
+  results = null
+  showLoading = false
+
+  mounted: ->
+    # Show loading only if fetch takes > 200ms
+    after!(200)
+      showLoading = true
+
+    results = fetchResults! @query
+    showLoading = false
+
+  render
+    div
+      if showLoading
+        Spinner()
+      else if results
+        for result in results
+          ResultCard data: result
+```
+
+---
+
 ## Design Philosophy
 
 1. **Components are language constructs** — Not classes you extend, not functions you call
@@ -636,12 +755,145 @@ component TodoApp
 - [x] Component composition: `Button label: "Click"` in render
 - [x] Children/slots: `@children` prop with nested content
 - [x] Reactive re-rendering via `__effect` in `mount()`
+- [x] **Context API**: `setContext()`, `getContext()`, `hasContext()`
+- [x] **Error Handling Primitives**: `__catchErrors()`, `__handleError()` (manual use)
 
 **Pending:**
 - [ ] `style` block parsing with scoping
 - [ ] Named slots (`@header`, `@footer`)
-- [ ] Fine-grained DOM updates
-- [ ] Error boundaries
+
+---
+
+## Context API
+
+Pass data down through component trees without prop drilling.
+
+```coffee
+component App
+  # Set context in constructor (runs during component init)
+  mounted: ->
+    setContext "theme", { dark: true, primary: "#3b82f6" }
+  
+  render
+    div
+      Header()
+      Content()
+      Footer()
+
+component Header
+  # Get context from any ancestor
+  theme = getContext "theme"
+  
+  render
+    header.("bg-blue-500" if theme?.dark)
+      h1 "My App"
+
+component DeepNestedChild
+  # Works at any depth!
+  theme = getContext "theme"
+  
+  render
+    div style: "color: #{theme?.primary}"
+      "Themed content"
+```
+
+**API:**
+
+| Function | Description |
+|----------|-------------|
+| `setContext(key, value)` | Set a context value in current component |
+| `getContext(key)` | Get context from nearest ancestor (or undefined) |
+| `hasContext(key)` | Check if context exists in any ancestor |
+
+**Notes:**
+- Context is set during component initialization
+- Child components automatically have access to parent context
+- Context lookup walks up the component tree
+
+---
+
+## Error Boundaries
+
+Low-level primitives for error handling. These are building blocks for manual use - 
+automatic error catching in component trees is not yet implemented.
+
+```coffee
+# Manual usage example:
+safeClick = __catchErrors (e) ->
+  riskyOperation()
+
+# Set a handler to receive errors
+prevHandler = __setErrorHandler (err) ->
+  console.error "Caught:", err
+  showErrorUI err
+
+# Later, restore previous handler
+__setErrorHandler prevHandler
+```
+
+**Runtime API:**
+
+| Function | Description |
+|----------|-------------|
+| `__catchErrors(fn)` | Wrap function to route errors to handler |
+| `__handleError(error)` | Route error to current handler (or rethrow) |
+| `__setErrorHandler(fn)` | Set handler, returns previous for restoration |
+
+> **Note:** These are low-level primitives. Full automatic error boundaries 
+> (like React's `componentDidCatch`) would require:
+> - An `error:` lifecycle hook in component syntax
+> - Automatic try/catch wrapping of render and effects
+> - Parent-chain error propagation
+> 
+> For now, use `__catchErrors` to wrap risky callbacks manually.
+
+---
+
+## Future Considerations
+
+Features that other frameworks provide, which Rip could add later:
+
+### Actions (`use:` Directives)
+
+Reusable behaviors attached to DOM elements.
+
+```coffee
+# Possible future syntax:
+render
+  div use:clickOutside: handleClose
+  input use:autofocus
+  div use:tooltip: "Help text"
+```
+
+**Current workaround:** Use `ref:` and call methods in `mounted:`, or create wrapper components.
+
+### SSR/Hydration
+
+Server-Side Rendering with client-side hydration for SEO and performance.
+
+```coffee
+# Server renders static HTML
+# Client "hydrates" with interactivity
+
+# Would require:
+# - Serializable component state
+# - Hydration-aware mounting
+# - Build tooling integration
+```
+
+**Current status:** Rip is client-side only. SSR is a significant architectural addition.
+
+### Remaining Features
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| ~~Context API~~ | ✅ Done | `setContext`, `getContext`, `hasContext` |
+| Error Primitives | ✅ Done | Manual `__catchErrors`, `__handleError` |
+| Auto Error Boundaries | Future | Would need `error:` hook, auto-wrapping |
+| Actions (`use:`) | Future | Refs + mounted works well for now |
+| SSR/Hydration | Future | Required for production SEO |
+
+---
 
 See [REACTIVITY.md](REACTIVITY.md) for the reactive operators used within components.
 See [TEMPLATES.md](TEMPLATES.md) for the template DSL reference.

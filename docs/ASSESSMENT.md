@@ -9,9 +9,11 @@
 
 | Layer | Syntax | Runtime | Features | DX | Score |
 |-------|--------|---------|----------|-----|-------|
-| **Reactivity** | A+ | A+ | A | A+ | **A+** |
+| **Reactivity** | A+ | A+ | A+ | A+ | **A+** |
 | **Templates** | A+ | A | A | A+ | **A** |
-| **Components** | A | A | A | A | **A** |
+| **Components** | A | A | A- | A | **A-** |
+
+*Components A- due to missing SSR/Hydration. Context API and Error Primitives are implemented.*
 
 ---
 
@@ -34,7 +36,7 @@ effect -> console.log count   # Effect (auto-runs)
 
 **Competitive with:** SolidJS signals, Vue 3 refs, Preact signals
 
-**The reactivity is production-quality.** The runtime is small (~80 lines), efficient, and the semantics are correct. This layer stands alone as excellent.
+**The reactivity is production-quality.** The runtime is small (~100 lines), efficient, and the semantics are correct. This layer stands alone as excellent.
 
 ### Strengths
 - Clean, unique syntax
@@ -42,6 +44,7 @@ effect -> console.log count   # Effect (auto-runs)
 - Lazy evaluation for computed values
 - Small runtime footprint
 - `__batch()` for grouped updates
+- **Context API** for component data sharing
 
 ### No Major Issues
 - This layer is solid and production-ready
@@ -162,22 +165,38 @@ _setup() {
 **Result:** 30-40x faster for typical reactive updates!
 
 ### Room for Improvement
-- Error boundaries
+- Auto error boundaries (primitives exist, not automatic)
+- SSR/Hydration
 - DevTools integration
 
 ---
 
 ## Competitive Analysis
 
-| Framework | Reactivity | Templates | Components | Performance | Overall |
-|-----------|------------|-----------|------------|-------------|---------|
-| **Rip** | A+ | A | A | **A+** | **A** |
-| SolidJS | A | A | A | A+ | A |
-| Svelte | A | A | A | A+ | A |
-| Vue 3 | A- | A | A | B+ | A- |
-| React | B | B+ | A | B | B+ |
+| Framework | Reactivity | Templates | Components | Performance | DX | Overall |
+|-----------|------------|-----------|------------|-------------|-----|---------|
+| **Rip** | A+ | A | A- | A | A+ | **A-** |
+| SolidJS | A+ | A | A | A+ | A | A |
+| Svelte 5 | A | A+ | A | A+ | A+ | A |
+| Vue 3 | A- | A | A | B+ | A | A- |
+| React | B | B+ | A | B | A- | B+ |
 
-**Rip's position:** Now competitive with Svelte and SolidJS on performance. Fine-grained updates mean O(1) DOM operations instead of O(n). Missing ecosystem, but the core is production-quality.
+**Rip's Position (Honest Assessment):**
+
+| Strength | Why |
+|----------|-----|
+| **Reactivity A+** | Signals, computed, effects, batching, Context API |
+| **DX A+** | Cleanest syntax of all, `.("tailwind")`, no boilerplate |
+| **Performance A** | O(1) fine-grained updates, keyed reconciliation |
+| **Components A-** | Context API, error primitives, lifecycle hooks |
+
+| Gap | Why | Path to A |
+|-----|-----|-----------|
+| **Components A-** (not A) | Missing SSR/Hydration, auto error boundaries | SSR is complex (~500 lines) |
+| **Performance A** (not A+) | No compile-time optimizations like Svelte/SolidJS | Would need compiler rewrite |
+| **Overall A-** (not A) | No ecosystem (router, state lib, devtools) | Community growth over time |
+
+**Summary:** Production-quality core with best-in-class syntax. Context API and error primitives implemented. Excellent for client-side apps; SSR needed for SEO-critical production apps.
 
 ---
 
@@ -198,10 +217,13 @@ _setup() {
 - [x] **Keyed list reconciliation** (O(1) add/remove/reorder)
 - [x] **Per-item effects** (selection changes update individual items)
 - [x] **Effect cleanup** (no memory leaks on conditional/loop changes)
+- [x] **Context API** (`setContext`, `getContext`, `hasContext`)
+- [x] **Error primitives** (`__catchErrors`, `__handleError`)
+- [x] **Batching** (`__batch()` for grouped updates)
 
 ### Next Steps
 - [ ] Scoped styles (`style` block)
-- [ ] Error boundaries
+- [ ] Auto error boundaries (wrap render in try/catch)
 - [ ] SSR support
 - [ ] DevTools integration
 
@@ -219,7 +241,7 @@ _setup() {
 
 **Key Achievement:** Fine-grained reactivity at every level:
 - Text/attribute changes → O(1) single node update
-- List add/remove → O(1) with keyed reconciliation  
+- List add/remove → O(1) with keyed reconciliation
 - Selection in list → O(1) per-item effects
 
 This is architecturally equivalent to Svelte and SolidJS.
@@ -235,4 +257,5 @@ This is architecturally equivalent to Svelte and SolidJS.
 ---
 
 *Tests: 1033/1033 passing (100%)*
+*Runtime: ~330 lines (reactivity + context + error handling)*
 *Performance: ~30-40x faster than full re-render approach*

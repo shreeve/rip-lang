@@ -11,7 +11,7 @@
 <p align="center">
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-2.2.0-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
-  <a href="#status"><img src="https://img.shields.io/badge/tests-1017%2F1017-brightgreen.svg" alt="Tests"></a>
+  <a href="#status"><img src="https://img.shields.io/badge/tests-1033%2F1033-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
 </p>
 
@@ -26,7 +26,7 @@ A clean-room **CoffeeScript-inspired compiler** that produces modern JavaScript 
 - 🚀 **Self-hosting** - Rip compiles itself (`bun run parser` works!)
 - ⚡ **~50% smaller** than CoffeeScript (9,839 LOC vs 17,760 LOC)
 - 🎨 **Modern output** - ES2022 with classes, modules, optional chaining
-- ✅ **Production-ready** - 981/981 tests passing (100%)
+- ✅ **Production-ready** - 1033/1033 tests passing (100%)
 
 ---
 
@@ -35,7 +35,7 @@ A clean-room **CoffeeScript-inspired compiler** that produces modern JavaScript 
 **Version 2.2.0** - **PRODUCTION READY** 🚀
 
 **Quality metrics:**
-- ✅ **1017/1017 tests passing** (100% coverage)
+- ✅ **1033/1033 tests passing** (100% coverage)
 - ✅ **Self-hosting** - Rip compiles itself, including its own parser generator
 - ✅ **Zero dependencies** - Completely standalone, no npm packages required
 - ✅ **9,839 LOC** - Lean, maintainable codebase (~50% smaller than CoffeeScript)
@@ -98,6 +98,7 @@ Rip includes **all of CoffeeScript's beloved features** plus modern enhancements
 | **🆕 Reactive signals** | `count := 0` | Language-level reactivity |
 | **🆕 Derived values** | `doubled ∞= count * 2` | Auto-updating computed values |
 | **🆕 Effects** | `effect -> console.log count` | Automatic side effects |
+| **🆕 Context API** | `setContext "key", val` | Pass data without prop drilling |
 | **Dammit operator** | `fetchData!` → `await fetchData()` | Call and await in one |
 | **Otherwise operator** | `val !? default` | Undefined-only coalescing (null/false/0 are valid) |
 | **Void functions** | `def process!` | Suppress implicit returns |
@@ -147,7 +148,7 @@ Rip includes **all of CoffeeScript's beloved features** plus modern enhancements
 ### For Developers
 - ✅ **Simple architecture** - S-expressions beat complex AST classes
 - ✅ **Easy to extend** - Add a case, run tests, done!
-- ✅ **Well-tested** - 981/981 tests (100% coverage)
+- ✅ **Well-tested** - 1033/1033 tests (100% coverage)
 - ✅ **Well-documented** - Complete guides (AGENT.md is gold!)
 - ✅ **Self-hosting** - Rip compiles itself (including parser generator)
 
@@ -233,7 +234,7 @@ echo 'x = 42' | ./bin/rip -s               # Pipe from stdin
 # Build
 bun run parser                             # Rebuild parser (self-hosting!)
 bun run browser                            # Build browser bundle
-bun run test                               # Run all 981 tests
+bun run test                               # Run all 1033 tests
 ```
 
 ---
@@ -584,7 +585,7 @@ rip/
 │       ├── grammar.rip  # Grammar specification
 │       └── solar.rip    # Parser generator
 ├── docs/                # Complete documentation
-├── test/rip/            # 24 test files, 981 tests
+├── test/rip/            # 24 test files, 1033 tests
 ├── AGENT.md             # Complete developer guide
 └── README.md            # This file
 ```

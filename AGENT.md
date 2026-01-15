@@ -49,8 +49,8 @@ bun run parser  # Regenerates src/parser.js from grammar.rip
 ## 🎯 Current Status
 
 **Version:** 2.2.0
-**Tests:** 1017 passing (100%)
-**Status:** Production-ready, self-hosting fully operational, **Phases 1 & 2 COMPLETE**
+**Tests:** 1033 passing (100%)
+**Status:** Production-ready, self-hosting fully operational, **Phases 1-3 COMPLETE**
 
 **Recent accomplishments (January 2026):**
 - ✅ **TEMPLATES (Phase 2 COMPLETE)** - Full template DSL:
@@ -76,17 +76,20 @@ bun run parser  # Regenerates src/parser.js from grammar.rip
 - ✅ Massive cleanup - 5,246 clean LOC
 - ✅ Parser optimization - 28.7% faster, 24.5% smaller
 
-**Next (Phase 3 - Components):**
-- 🔜 `component` keyword (uses templates + reactivity)
-- 🔜 Props system (`@prop`)
-- 🔜 Lifecycle hooks
-- 🔜 Slots for composition
-- 🔜 See: `docs/COMPONENTS.md` for specification
+**Phase 3 - Components (COMPLETE!):**
+- ✅ `component` keyword with fine-grained rendering
+- ✅ Props system (`@prop`, `@prop?`, `@prop = default`, `@...rest`)
+- ✅ Lifecycle hooks (`mounted:`, `unmounted:`)
+- ✅ Children/slots (`@children`)
+- ✅ **Context API** (`setContext`, `getContext`, `hasContext`)
+- ✅ **Error primitives** (`__catchErrors`, `__handleError`)
+- ✅ **Batching** (`__batch()` for grouped updates)
+- See: `docs/COMPONENTS.md` for full documentation
 
 **Check current state:**
 ```bash
 git log --oneline -10            # Recent commits
-bun run test                     # Verify: 981/981 tests
+bun run test                     # Verify: 1033/1033 tests
 bun run parser                   # Test self-hosting ✅
 ./bin/rip                        # Test REPL with reactivity
 ```
@@ -159,13 +162,14 @@ render
 - Two-way binding: `[@bind.value]: var`
 - Implicit nesting via indentation
 
-### Next (Phase 3 - Components)
+### Phase 3 - Components (COMPLETE!)
 
-See `docs/COMPONENTS.md` - combines templates + reactivity:
-- `component` keyword
-- Props (`@prop`)
-- Lifecycle hooks
-- Slots for composition
+See `docs/COMPONENTS.md` - fully implemented:
+- `component` keyword with fine-grained DOM
+- Props (`@prop`, `@prop?`, `@prop = default`)
+- Lifecycle hooks (`mounted:`, `unmounted:`)
+- Context API (`setContext`, `getContext`)
+- Error primitives (`__catchErrors`, `__handleError`)
 
 ---
 
@@ -210,7 +214,7 @@ undefined → ERROR (syntax error)
 **Performance results:**
 - 28.7% faster parsing (3.27ms → 2.33ms average)
 - 24.5% smaller file size (291.9KB → 220.4KB)
-- All 981 tests passing
+- All 1033 tests passing
 
 **Why it's fast:** Direct integer comparison (`action > 0`, `action < 0`) instead of array unpacking, better cache locality, fewer allocations. The sign bit elegantly encodes the operation type.
 
@@ -261,7 +265,7 @@ test/rip/
 ├── functions.rip        (86 tests)
 ├── loops.rip            (34 tests)
 ... 18 more files
-Total: 981 tests (100% passing)
+Total: 1033 tests (100% passing)
 ```
 
 ### Test-Driven Development
@@ -449,7 +453,7 @@ git commit -m "Fix: ...
 
 Fixes #N  ← Auto-closes issue!
 
-All tests passing: 981/981 (100%)"
+All tests passing: 1033/1033 (100%)"
 
 # 10. PR and merge
 git push origin fix/issue-name
@@ -853,7 +857,7 @@ git commit -m "fix bug"  # WRONG - didn't run tests!
 
 ### ✅ Always Test First
 ```bash
-bun run test  # MUST be 981/981 passing
+bun run test  # MUST be 1033/1033 passing
 git commit
 ```
 
@@ -894,7 +898,7 @@ bun script.rip
 ### Testing
 
 ```bash
-# All tests (981 total)
+# All tests (1033 total)
 bun run test
 
 # Specific test file
@@ -1071,7 +1075,7 @@ git commit -m "Fix: Description
 
 Fixes #N
 
-All tests passing: 981/981 (100%)"
+All tests passing: 1033/1033 (100%)"
    ```
 
 ---
@@ -1155,7 +1159,7 @@ All tests passing: 981/981 (100%)"
 
 | Directory | Contents |
 |-----------|----------|
-| `test/rip/` | 24 test files, 981 tests total |
+| `test/rip/` | 24 test files, 1033 tests total |
 | `test/runner.js` | Test framework |
 
 **Test types:**
@@ -1225,7 +1229,7 @@ Rip has **zero runtime or build dependencies**. This is intentional and must be 
 > - Keep the IR simple (s-expressions)
 > - Keep the pipeline clear (lex → parse → generate)
 > - Keep the code minimal (pattern matching)
-> - Test everything (981/981 tests passing)
+> - Test everything (1033/1033 tests passing)
 
 **Core practices:**
 
@@ -1274,7 +1278,7 @@ Rip has **zero runtime or build dependencies**. This is intentional and must be 
 ## ✅ Success Criteria
 
 **Before committing:**
-- ✅ All tests pass (981/981 = 100%)
+- ✅ All tests pass (1033/1033 = 100%)
 - ✅ Code follows existing patterns
 - ✅ Documentation updated (if needed)
 - ✅ Browser bundle rebuilt (if codegen changed)
@@ -1311,7 +1315,7 @@ Rip has **zero runtime or build dependencies**. This is intentional and must be 
 - Total: ~9,000 LOC
 
 **Tests:**
-- 1017 tests across 24 files
+- 1033 tests across 24 files
 - 100% passing rate
 - Comprehensive coverage
 

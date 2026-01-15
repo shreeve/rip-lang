@@ -1,5 +1,7 @@
 
-Review the code to ensure it's correct, clear, consistent, concise, and efficient?
+Review the code to ensure it's correct, clear, consistent, concise, and efficient
+
+Does the code feel light and efficient? Would a GitHub user agree?
 
 ==
 

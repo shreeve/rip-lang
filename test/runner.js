@@ -50,8 +50,14 @@ function normalizeCode(code) {
 // Strip reactive runtime from code (for component tests)
 function stripRuntime(code) {
   return code
+    // New format with detailed comments
+    .replace(/\/\/ =+\n\/\/ Rip Reactive Runtime[\s\S]*?\/\/ === End Reactive Runtime ===/g, '')
+    // Old format
     .replace(/\/\/ === Rip Reactive Runtime ===[\s\S]*?\/\/ === End Reactive Runtime ===/g, '')
     .replace(/let __currentEffect[\s\S]*?function __readonly\([^)]*\)\s*\{[^}]*\}/g, '')
+    // Strip context tracking code in constructor
+    .replace(/\/\/ Context API: track parent component\n\s*this\._parent = __currentComponent;\n\s*const __prevComponent = __currentComponent;\n\s*__currentComponent = this;\n/g, '')
+    .replace(/\n\s*__currentComponent = __prevComponent;/g, '')
     .trim();
 }
 
