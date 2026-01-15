@@ -104,6 +104,7 @@ export class CodeGenerator {
     'signal': 'generateSignal',
     'derived': 'generateDerived',
     'readonly': 'generateReadonly',
+    'exposed': 'generateExposed',
     'effect': 'generateEffect',
 
     // Templates
@@ -1549,6 +1550,27 @@ export class CodeGenerator {
   }
 
   /**
+   * Generate exposed method (~>)
+   * Pattern: ["exposed", name, expression]
+   * Outside components: generates a function
+   * Inside components: handled by generateComponent
+   */
+  generateExposed(head, rest, context, sexpr) {
+    const [name, expr] = rest;
+    const varName = typeof name === 'string' ? name : name.valueOf();
+    
+    // Check if expr is already a function
+    if (Array.isArray(expr) && (expr[0] === '->' || expr[0] === '=>')) {
+      const funcCode = this.generate(expr, 'value');
+      return `const ${varName} = ${funcCode}`;
+    }
+    
+    // Wrap expression in arrow function
+    const exprCode = this.generate(expr, 'value');
+    return `const ${varName} = () => ${exprCode}`;
+  }
+
+  /**
    * Generate effect (reactive side effect)
    * Pattern: ["effect", block]
    * Output: __effect(() => { block })
@@ -1797,6 +1819,7 @@ export class CodeGenerator {
     const stateVars = [];      // Regular assignments (reactive state)
     const derivedVars = [];    // ~= (computed)
     const readonlyVars = [];   // =! (constants)
+    const exposedMethods = []; // ~> (exposed to parent)
     const methods = [];        // Method definitions
     const lifecycleHooks = []; // mounted:, unmounted:, updated:
     const effects = [];        // effect blocks
@@ -1841,6 +1864,10 @@ export class CodeGenerator {
         readonlyVars.push(stmt);
         memberNames.add(stmt[1]);
         // Readonly is NOT reactive - no .value needed
+      } else if (op === 'exposed') {
+        exposedMethods.push(stmt);
+        memberNames.add(stmt[1]);
+        // Exposed methods are NOT reactive - no .value needed
       } else if (op === 'effect') {
         effects.push(stmt);
       } else if (op === 'render') {
@@ -1954,6 +1981,27 @@ export class CodeGenerator {
           lines.push(`  ${methodName}(${paramStr}) { return ${bodyCode}; }`);
         }
       }
+    }
+    
+    // Exposed methods (~>) - methods exposed to parent components
+    for (const [, methodName, expr] of exposedMethods) {
+      // Check if expr is a function definition
+      if (Array.isArray(expr) && (expr[0] === '->' || expr[0] === '=>')) {
+        const [, params, body] = expr;
+        const paramStr = Array.isArray(params) ? params.map(p => this.formatParam(p)).join(', ') : '';
+        const bodyCode = this.generateInComponent(body, 'value');
+        lines.push(`  ${methodName}(${paramStr}) { return ${bodyCode}; }`);
+      } else {
+        // Expression - wrap in zero-arg method
+        const bodyCode = this.generateInComponent(expr, 'value');
+        lines.push(`  ${methodName}() { return ${bodyCode}; }`);
+      }
+    }
+    
+    // Add __exposed__ property if there are exposed methods
+    if (exposedMethods.length > 0) {
+      const exposedNames = exposedMethods.map(([, name]) => `'${name}'`).join(', ');
+      lines.push(`  static __exposed__ = new Set([${exposedNames}]);`);
     }
     
     // Lifecycle hooks
