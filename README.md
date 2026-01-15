@@ -318,8 +318,8 @@ render
     # Dynamic classes (clsx-compatible)
     div.card.('active', isSelected && 'selected')
     
-    # Two-way binding
-    input [@bind.value]: username
+    # Two-way binding with <=> operator
+    input value <=> username
     
     # Events with modifiers
     button @click.prevent: submit, "Submit"

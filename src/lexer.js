@@ -1137,6 +1137,8 @@ export var Lexer = class Lexer {
       tag = 'TERMINATOR';
     } else if (value === '*' && (prev != null ? prev[0] : void 0) === 'EXPORT') {
       tag = 'EXPORT_ALL';
+    } else if (value === '<=>') {
+      tag = 'BIND';
     } else if (value === '∞=' || value === '~=') {
       tag = 'DERIVED_ASSIGN';
     } else if (value === ':=') {
@@ -1858,7 +1860,7 @@ NUMBER = /^0b[01](?:_?[01])*n?|^0o[0-7](?:_?[0-7])*n?|^0x[\da-f](?:_?[\da-f])*n?
 // decimal without support for numeric literal separators for reference:
 // \d*\.?\d+ (?:e[+-]?\d+)?
 
-OPERATOR = /^(?:[-=∞~]>|∞=|~=|:=|=!|===|!==|!\?|\?\?|=~|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?(\.|::)|\.{2,3})/; // function
+OPERATOR = /^(?:<=>|[-=∞~]>|∞=|~=|:=|=!|===|!==|!\?|\?\?|=~|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?(\.|::)|\.{2,3})/; // function
 // ∞> and ~> are exposed method arrows (reactive)
 // := is reactive signal assignment
 // ∞= and ~= are derived assign (reactive computed values)
@@ -2995,6 +2997,20 @@ Rewriter = (function() {
     //   render
     //     div#main.card ->
     //       h1 "Title"
+    //
+    // REWRITER ↔ CODEGEN COMMUNICATION:
+    // This rewriter transforms template syntax into forms the codegen understands.
+    // The following conventions are used:
+    //
+    //   __bind_<prop>__   Two-way binding (value <=> var → __bind_value__: var)
+    //                     Codegen detects this prefix in parseBindingDirective()
+    //
+    //   __cx__            Dynamic classes (.('a', cond) → .__cx__('a', cond))
+    //                     Codegen detects this property name in generateTemplateElement()
+    //
+    //   @event.mod:       Event modifiers (@click.prevent: → [@click.prevent]:)
+    //                     Rewriter wraps in brackets; codegen parses computed property
+    //
     // =========================================================================
     processTemplateTokens() {
       // Track render block depth using indent levels
@@ -3060,34 +3076,70 @@ Rewriter = (function() {
         }
 
         // Only process if we're inside a render block
-        if (!inRender) {
-          return 1;
-        }
+        if (!inRender) return 1;
 
-        // --- PHASE 1: Combine #id selectors ---
-        // Look for IDENTIFIER/PROPERTY # PROPERTY pattern
+        // ─────────────────────────────────────────────────────────────────────
+        // PHASE 1: Combine #id selectors
+        // div # main → div#main (single IDENTIFIER token)
+        // ─────────────────────────────────────────────────────────────────────
         if (tag === 'IDENTIFIER' || tag === 'PROPERTY') {
           const next = tokens[i + 1];
           const nextNext = tokens[i + 2];
-
           if (next && next[0] === '#' && nextNext && nextNext[0] === 'PROPERTY') {
-            // Combine: div#main → single identifier "div#main"
             token[1] = token[1] + '#' + nextNext[1];
             if (nextNext.spaced) token.spaced = true;
             tokens.splice(i + 1, 2);
-            return 1;  // Re-check this position (might have more #ids)
+            return 1;  // Re-check (might have more #ids)
           }
         }
 
-        // --- PHASE 1.5: Transform .() dynamic class syntax ---
+        // ─────────────────────────────────────────────────────────────────────
+        // PHASE 2: Two-way binding
+        // value <=> username → __bind_value__: username
+        // ─────────────────────────────────────────────────────────────────────
+        if (tag === 'BIND') {
+          const prevToken = i > 0 ? tokens[i - 1] : null;
+          const nextBindToken = tokens[i + 1];
+          if (prevToken && (prevToken[0] === 'IDENTIFIER' || prevToken[0] === 'PROPERTY') &&
+              nextBindToken && nextBindToken[0] === 'IDENTIFIER') {
+            prevToken[1] = `__bind_${prevToken[1]}__`;
+            token[0] = ':';
+            token[1] = ':';
+            return 1;
+          }
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // PHASE 3: Event modifiers
+        // @click.prevent: handler → [@click.prevent]: handler
+        // ─────────────────────────────────────────────────────────────────────
+        if (tag === '@') {
+          let j = i + 1;
+          if (j < tokens.length && tokens[j][0] === 'PROPERTY') {
+            j++;
+            while (j + 1 < tokens.length && tokens[j][0] === '.' && tokens[j + 1][0] === 'PROPERTY') {
+              j += 2;
+            }
+            if (j > i + 2 && j < tokens.length && tokens[j][0] === ':') {
+              const openBracket = ['[', '[', token[2]];
+              openBracket.generated = true;
+              tokens.splice(i, 0, openBracket);
+              const closeBracket = [']', ']', tokens[j + 1][2]];
+              closeBracket.generated = true;
+              tokens.splice(j + 1, 0, closeBracket);
+              return 2;
+            }
+          }
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // PHASE 4: Dynamic classes
         // div.('card', x && 'active') → div.__cx__('card', x && 'active')
+        // ─────────────────────────────────────────────────────────────────────
         if (tag === '.' && nextToken && nextToken[0] === '(') {
-          // Insert __cx__ property between . and (
           const cxToken = ['PROPERTY', '__cx__', token[2]];
           cxToken.generated = true;
-          // Convert ( to CALL_START
           nextToken[0] = 'CALL_START';
-          // Find and convert matching ) to CALL_END
           let depth = 1;
           for (let j = i + 2; j < tokens.length && depth > 0; j++) {
             if (tokens[j][0] === '(' || tokens[j][0] === 'CALL_START') depth++;
@@ -3097,10 +3149,12 @@ Rewriter = (function() {
             } else if (tokens[j][0] === 'CALL_END') depth--;
           }
           tokens.splice(i + 1, 0, cxToken);
-          return 2;  // Skip past the inserted token
+          return 2;
         }
 
-        // --- PHASE 2: Inject -> for implicit nesting ---
+        // ─────────────────────────────────────────────────────────────────────
+        // PHASE 5: Implicit nesting (inject -> before INDENT)
+        // ─────────────────────────────────────────────────────────────────────
         if (nextToken && nextToken[0] === 'INDENT') {
           // Skip if already has -> or =>
           if (tag === '->' || tag === '=>' || tag === 'CALL_START' || tag === '(') {

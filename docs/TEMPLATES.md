@@ -24,7 +24,7 @@ Rip's template syntax is not a separate language—it's native Rip syntax. The `
 | `ref: var` | Element reference | `ref: inputEl` |
 | `key: val` | List item key | `key: item.id` |
 | `...props` | Spread attributes | `div ...props` |
-| `[@bind.X]:` | Two-way binding | `[@bind.value]: name` |
+| `X <=> var` | Two-way binding | `value <=> name` |
 | `if`/`else` | Conditional | `div if visible` |
 | `for...in` | Iteration | `for item in items` |
 
@@ -170,22 +170,24 @@ h('div.wrapper', { ...containerProps }, h('span', 0, "Content"))
 
 ## Two-Way Binding
 
-Two-way binding automatically syncs an element's value with a variable:
+Two-way binding automatically syncs an element's value with a variable using the `<=>` operator:
 
 ```coffee
 render
-  # Text input
-  input [@bind.value]: username
+  # Text input - value syncs with username
+  input value <=> username
 
-  # Checkbox
-  input type: "checkbox", [@bind.checked]: isActive
+  # Checkbox - checked syncs with isActive
+  input type: "checkbox", checked <=> isActive
 
   # Select dropdown
-  select [@bind.value]: selectedId
+  select value <=> selectedId
 
   # Textarea
-  textarea [@bind.value]: content
+  textarea value <=> content
 ```
+
+The `<=>` operator reads as "syncs with" — it's a visual representation of bidirectional data flow.
 
 **Generated output:**
 ```javascript
@@ -836,7 +838,7 @@ The template syntax is fully implemented in the Rip compiler.
 - [x] Explicit arrow syntax (`->`) for inline nesting
 - [x] Multiple root elements → DocumentFragment
 - [x] `...props` → Spread attributes
-- [x] `[@bind.prop]: var` → Two-way binding
+- [x] `prop <=> var` → Two-way binding (spaceship operator)
 - [x] `ref:` and `key:` special attributes
 - [x] SVG namespace handling
 

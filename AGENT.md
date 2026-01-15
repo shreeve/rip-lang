@@ -59,7 +59,7 @@ bun run parser  # Regenerates src/parser.js from grammar.rip
   - Dynamic classes: `div.('card', isActive && 'active')` with `cx()` (clsx-compatible)
   - Event handlers with modifiers: `@click.prevent.stop: handler`
   - Spread attributes: `div ...props`
-  - Two-way binding: `[@bind.value]: username`
+  - Two-way binding: `value <=> username` (spaceship operator)
   - Runtime helpers: `h()`, `txt()`, `frag()`, `cx()`
 - ✅ **REACTIVITY SYSTEM (v2.0.0)** - Full reactive primitives as language-level operators:
   - `:=` signal assignment (reactive state)
@@ -147,9 +147,8 @@ See `docs/TEMPLATES.md` for the complete template DSL:
 render
   div#main.card ...props
     h1.title "Hello, #{name}!"
-    input [@bind.value]: username, @keydown.enter: submit
-    button.('btn', isActive && 'active') @click.prevent: handleClick
-      "Submit"
+    input value <=> username, @keydown.enter: submit
+    button.('btn', isActive && 'active') @click.prevent: handleClick, "Submit"
 ```
 
 **Features:**

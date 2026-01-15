@@ -1642,24 +1642,43 @@ export class CodeGenerator {
     return `(e) => { ${body}; }`;
   }
 
+  // =========================================================================
+  // BINDING PREFIX: __bind_<prop>__
+  // The rewriter transforms "value <=> var" into "__bind_value__: var"
+  // This prefix signals two-way binding to the codegen.
+  // =========================================================================
+  static BIND_PREFIX = '__bind_';
+  static BIND_SUFFIX = '__';
+
   /**
-   * Parse binding directive: [@bind.prop]: variable
+   * Parse binding directive: prop <=> var (new) or [@bind.prop]: var (legacy)
    * Returns { prop, event, valueExpr, handler } or null
    */
   parseBindingDirective(key, value, tag) {
-    // Pattern: ["computed", [".", [".", "this", "bind"], "propName"]]
-    if (!Array.isArray(key) || key[0] !== 'computed') return null;
+    let prop;
     
-    const chain = key[1];
-    if (!Array.isArray(chain) || chain[0] !== '.') return null;
-    
-    const [, inner, propName] = chain;
-    if (!Array.isArray(inner) || inner[0] !== '.' || inner[1] !== 'this' || inner[2] !== 'bind') {
+    // Pattern 1 (new): __bind_propName__ (from: prop <=> var)
+    if (typeof key === 'string' && 
+        key.startsWith(CodeGenerator.BIND_PREFIX) && 
+        key.endsWith(CodeGenerator.BIND_SUFFIX)) {
+      prop = key.slice(CodeGenerator.BIND_PREFIX.length, -CodeGenerator.BIND_SUFFIX.length);
+    }
+    // Pattern 2 (legacy): ["computed", [".", [".", "this", "bind"], "propName"]]
+    else if (Array.isArray(key) && key[0] === 'computed') {
+      const chain = key[1];
+      if (!Array.isArray(chain) || chain[0] !== '.') return null;
+      
+      const [, inner, propName] = chain;
+      if (!Array.isArray(inner) || inner[0] !== '.' || inner[1] !== 'this' || inner[2] !== 'bind') {
+        return null;
+      }
+      prop = typeof propName === 'string' ? propName : String(propName);
+    }
+    else {
       return null;
     }
     
-    // Extract property name and variable
-    const prop = typeof propName === 'string' ? propName : String(propName);
+    // Generate variable expression
     const varName = this.generate(value, 'value');
     
     // Determine the right event and value accessor based on prop/tag
@@ -1797,8 +1816,8 @@ export class CodeGenerator {
           classes = [];
         }
         // Generate cx() call for dynamic classes
-        const cxArgs = rest.map(arg => this.generate(arg, 'value')).join(', ');
-        return this.generateHWithDynamicClass(tag, classes, cxArgs, []);
+        const cxArgsStr = rest.map(arg => this.generate(arg, 'value')).join(', ');
+        return this.generateH(tag, classes, [], cxArgsStr);
       }
       const { tag, classes } = this.collectTemplateClasses(head);
       return this.generateH(tag, classes, rest);
@@ -1823,7 +1842,7 @@ export class CodeGenerator {
       
       // Generate cx args and pass children through
       const cxArgsStr = cxArgs.map(arg => this.generate(arg, 'value')).join(', ');
-      return this.generateHWithDynamicClassAndChildren(tag, classes, cxArgsStr, rest);
+      return this.generateH(tag, classes, rest, cxArgsStr);
     }
 
     // Default: expression as text
@@ -1831,11 +1850,18 @@ export class CodeGenerator {
   }
 
   /**
-   * Generate h() call with tag, classes, and args
+   * Parse template arguments into props, spreads, children, and ref.
+   * 
+   * This is the shared logic for processing template element arguments,
+   * used by both generateH() and generateHWithDynamicClassAndChildren().
+   * 
+   * @param {Array} args - S-expression arguments
+   * @param {string} tag - Element tag name (for binding event selection)
+   * @returns {{ props: Object, spreads: string[], children: string[], refVar: string|null }}
    */
-  generateH(tag, classes, args) {
+  parseTemplateArgs(args, tag) {
     const props = {};
-    const spreads = [];  // Track spread props: ...props
+    const spreads = [];
     const children = [];
     let refVar = null;
 
@@ -1859,7 +1885,7 @@ export class CodeGenerator {
           if (Array.isArray(pair) && pair.length >= 2) {
             const [key, value] = pair;
             
-            // Check for binding directive: [@bind.prop]: var
+            // Check for binding directive (value <=> var)
             const bindInfo = this.parseBindingDirective(key, value, tag);
             if (bindInfo) {
               props[bindInfo.prop] = bindInfo.valueExpr;
@@ -1867,6 +1893,7 @@ export class CodeGenerator {
               continue;
             }
             
+            // Check for event handler (@click: fn)
             const eventInfo = this.parseEventHandler(key, value);
             if (eventInfo) {
               const handler = eventInfo.modifiers.length > 0
@@ -1874,6 +1901,7 @@ export class CodeGenerator {
                 : eventInfo.handler;
               props[`on${eventInfo.eventName}`] = handler;
             } else {
+              // Regular attribute
               const keyStr = typeof key === 'string' ? key : this.generate(key, 'value');
               if (keyStr === 'ref') {
                 refVar = typeof value === 'string' ? value : this.generate(value, 'value');
@@ -1902,95 +1930,74 @@ export class CodeGenerator {
       }
     }
 
-    // Build tag string with classes
-    const tagStr = classes.length > 0 ? `${tag}.${classes.join('.')}` : tag;
+    return { props, spreads, children, refVar };
+  }
 
-    // Build props string (with spread support)
-    let propsStr = '0';
+  /**
+   * Build props string from parsed template args.
+   * @param {Object} props - Property key-value pairs
+   * @param {string[]} spreads - Spread expressions
+   * @param {string} [classExpr] - Optional class expression (for dynamic classes)
+   * @returns {string} Props object literal or '0' if empty
+   */
+  buildPropsString(props, spreads, classExpr = null) {
     const hasProps = Object.keys(props).length > 0;
     const hasSpreads = spreads.length > 0;
+    const hasClass = classExpr !== null;
     
-    if (hasProps || hasSpreads) {
-      const parts = [];
-      // Add spreads first
-      for (const spread of spreads) {
-        parts.push(`...${spread}`);
-      }
-      // Add explicit props (override spreads)
-      for (const [k, v] of Object.entries(props)) {
-        parts.push(`${k}: ${v}`);
-      }
-      propsStr = `{ ${parts.join(', ')} }`;
+    if (!hasProps && !hasSpreads && !hasClass) {
+      return '0';
     }
-
-    // Build children
-    let childrenStr = '';
-    if (children.length === 1) {
-      childrenStr = `, ${children[0]}`;
-    } else if (children.length > 1) {
-      childrenStr = `, [${children.join(', ')}]`;
+    
+    const parts = [];
+    // Add class expression first if present
+    if (hasClass) {
+      parts.push(`class: ${classExpr}`);
     }
+    // Add spreads
+    for (const spread of spreads) {
+      parts.push(`...${spread}`);
+    }
+    // Add explicit props (override spreads)
+    for (const [k, v] of Object.entries(props)) {
+      parts.push(`${k}: ${v}`);
+    }
+    return `{ ${parts.join(', ')} }`;
+  }
 
-    // Generate h() call
+  /**
+   * Build children string from array of generated children.
+   * @param {string[]} children - Generated child expressions
+   * @returns {string} Children argument string (including leading comma) or ''
+   */
+  buildChildrenString(children) {
+    if (children.length === 0) return '';
+    if (children.length === 1) return `, ${children[0]}`;
+    return `, [${children.join(', ')}]`;
+  }
+
+  /**
+   * Generate h() call with tag, classes, args, and optional dynamic class expression.
+   * @param {string} tag - Element tag name
+   * @param {string[]} classes - Static class names
+   * @param {Array} args - S-expression arguments (attrs, children, etc.)
+   * @param {string|null} cxArgs - Dynamic class args for cx(), or null for static-only
+   */
+  generateH(tag, classes, args, cxArgs = null) {
+    this.usesTemplates = true;
+    
+    const { props, spreads, children, refVar } = this.parseTemplateArgs(args, tag);
+    const tagStr = classes.length > 0 ? `${tag}.${classes.join('.')}` : tag;
+    const classExpr = cxArgs ? `cx(${cxArgs})` : null;
+    const propsStr = this.buildPropsString(props, spreads, classExpr);
+    const childrenStr = this.buildChildrenString(children);
     let result = `h('${tagStr}', ${propsStr}${childrenStr})`;
 
-    // Handle ref: special case (assign after creation)
     if (refVar) {
       result = `(${refVar} = ${result})`;
     }
 
     return result;
-  }
-
-  /**
-   * Generate h() call with dynamic classes via cx()
-   */
-  generateHWithDynamicClass(tag, staticClasses, cxArgs) {
-    this.usesTemplates = true;
-    
-    // Build tag string with static classes
-    const tagStr = staticClasses.length > 0 ? `${tag}.${staticClasses.join('.')}` : tag;
-    
-    // Build props with cx() for class
-    const propsStr = `{ class: cx(${cxArgs}) }`;
-    
-    return `h('${tagStr}', ${propsStr})`;
-  }
-
-  /**
-   * Generate h() call with dynamic classes and children
-   */
-  generateHWithDynamicClassAndChildren(tag, staticClasses, cxArgs, args) {
-    this.usesTemplates = true;
-    
-    // Build tag string with static classes
-    const tagStr = staticClasses.length > 0 ? `${tag}.${staticClasses.join('.')}` : tag;
-    
-    // Process children from args (arrow functions)
-    const children = [];
-    for (const arg of args) {
-      if (Array.isArray(arg) && (arg[0] === '->' || arg[0] === '=>')) {
-        const block = arg[2];
-        if (Array.isArray(block) && block[0] === 'block') {
-          children.push(...block.slice(1).map(s => this.generateTemplateElement(s)));
-        } else {
-          children.push(this.generateTemplateElement(block));
-        }
-      }
-    }
-    
-    // Build props with cx() for class
-    const propsStr = `{ class: cx(${cxArgs}) }`;
-    
-    // Build children string
-    let childrenStr = '';
-    if (children.length === 1) {
-      childrenStr = `, ${children[0]}`;
-    } else if (children.length > 1) {
-      childrenStr = `, [${children.join(', ')}]`;
-    }
-    
-    return `h('${tagStr}', ${propsStr}${childrenStr})`;
   }
 
   /**

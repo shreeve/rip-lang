@@ -66,6 +66,10 @@ code "prevent and stop modifiers", 'render\n  button [@click.prevent.stop]: hand
 
 code "enter key modifier", 'render\n  input [@keydown.enter]: submit', "h('input', { onkeydown: (e) => { if (e.key !== 'Enter') return; (submit)(e); } })"
 
+code "modifier without brackets", 'render\n  button @click.prevent: handleClick', "h('button', { onclick: (e) => { e.preventDefault(); (handleClick)(e); } })"
+
+code "modifier with text inline", 'render\n  button @click.prevent: handleClick, \"Submit\"', "h('button', { onclick: (e) => { e.preventDefault(); (handleClick)(e); } }, \"Submit\")"
+
 code "escape key modifier", 'render\n  input [@keydown.escape]: cancel', "h('input', { onkeydown: (e) => { if (e.key !== 'Escape') return; (cancel)(e); } })"
 
 code "ctrl enter combo", 'render\n  input [@keydown.ctrl.enter]: handleCtrlEnter', "h('input', { onkeydown: (e) => { if (!e.ctrlKey) return; if (e.key !== 'Enter') return; (handleCtrlEnter)(e); } })"
@@ -151,13 +155,16 @@ code "spread with extra attrs", 'render\n  div ...props, class: "extra"', "h('di
 code "spread with children", 'render\n  div.card ...props\n    span "Hi"', "h('div.card', { ...props }, h('span', 0, \"Hi\"))"
 
 # ------------------------------------------------------------------------------
-# Two-way Binding ([@bind.prop]: var)
+# Two-way Binding (prop <=> var)
 # ------------------------------------------------------------------------------
 
-code "bind value on input", 'render\n  input [@bind.value]: username', "h('input', { value: username, oninput: (e) => username = e.target.value })"
+code "bind value on input", 'render\n  input value <=> username', "h('input', { value: username, oninput: (e) => username = e.target.value })"
 
-code "bind checked on checkbox", 'render\n  input type: "checkbox", [@bind.checked]: isActive', "h('input', { type: \"checkbox\", checked: isActive, onchange: (e) => isActive = e.target.checked })"
+code "bind checked on checkbox", 'render\n  input type: "checkbox", checked <=> isActive', "h('input', { type: \"checkbox\", checked: isActive, onchange: (e) => isActive = e.target.checked })"
 
-code "bind value on select", 'render\n  select [@bind.value]: selectedId', "h('select', { value: selectedId, onchange: (e) => selectedId = e.target.value })"
+code "bind value on select", 'render\n  select value <=> selectedId', "h('select', { value: selectedId, onchange: (e) => selectedId = e.target.value })"
 
-code "bind value on textarea", 'render\n  textarea [@bind.value]: content', "h('textarea', { value: content, oninput: (e) => content = e.target.value })"
+code "bind value on textarea", 'render\n  textarea value <=> content', "h('textarea', { value: content, oninput: (e) => content = e.target.value })"
+
+# Legacy syntax still works
+code "bind legacy syntax", 'render\n  input [@bind.value]: username', "h('input', { value: username, oninput: (e) => username = e.target.value })"
