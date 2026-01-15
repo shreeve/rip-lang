@@ -9276,8 +9276,8 @@ function compileToJS(source, options = {}) {
   return compiler.compileToJS(source);
 }
 // src/browser.js
-var VERSION = "2.2.1";
-var BUILD_DATE = "2026-01-15@18:48:11GMT";
+var VERSION = "2.2.2";
+var BUILD_DATE = "2026-01-15@18:49:23GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
