@@ -158,6 +158,8 @@ fn?(arg)                 # Safe call
 | **Context API** | `setContext`, `getContext` | Pass data down component tree |
 | **Fine-grained** | No virtual DOM | Surgical DOM updates via signals |
 
+**→ 26 major enhancements over CoffeeScript!**
+
 ---
 
 ## Reactivity
