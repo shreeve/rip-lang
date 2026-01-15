@@ -19,95 +19,227 @@
 
 ## What is Rip?
 
-A **CoffeeScript-inspired language** with built-in reactivity that compiles to clean ES2022. Zero dependencies. Self-hosting. 50% smaller than CoffeeScript.
+A **CoffeeScript-inspired language** with built-in reactivity that compiles to clean ES2022.
 
 ```coffee
-# Reactive state
+# Reactive state — updates propagate automatically
 count := 0
 doubled ∞= count * 2
 effect -> console.log "Count: #{count}, Doubled: #{doubled}"
 
 count = 5   # Logs: "Count: 5, Doubled: 10"
 
-# Async made easy
-user = fetchUser!(id)      # ! = call AND await
-
-# Smart defaults
-timeout = config.timeout !? 5000   # !? = only if undefined (null/0/false are valid!)
+# Async made simple
+user = fetchUser!(id)                  # ! = call AND await
+timeout = config.timeout !? 5000       # !? = default only if undefined
 ```
 
-**Try it now:** [https://shreeve.github.io/rip-lang/](https://shreeve.github.io/rip-lang/)
+**Try it live:** [https://shreeve.github.io/rip-lang/](https://shreeve.github.io/rip-lang/)
 
 ---
 
 ## Installation
 
+**Option 1: Install from npm**
 ```bash
-# Install Bun (if needed)
-curl -fsSL https://bun.sh/install | bash
-
-# Install Rip globally
+curl -fsSL https://bun.sh/install | bash   # Install Bun (if needed)
 bun add -g rip-lang
+```
 
-# Use it!
+**Option 2: Clone from source**
+```bash
+git clone https://github.com/shreeve/rip-lang.git
+cd rip-lang && bun link
+```
+
+**Then use it:**
+```bash
 rip                     # Interactive REPL
 rip file.rip            # Run a file
 rip -c file.rip         # Compile to JavaScript
+bun file.rip            # Direct execution with Bun loader
 ```
 
 ---
 
-## Why Rip?
+## Language Features
 
-| | Rip | CoffeeScript |
-|---|---|---|
-| **Output** | ES2022 (classes, modules, `?.`, `??`) | ES5 (var, prototypes) |
-| **Reactivity** | Built-in (`count := 0`) | None |
-| **Dependencies** | Zero | Multiple |
-| **Self-hosting** | Yes | No |
-| **Size** | 9,839 LOC | 17,760 LOC |
+### Functions & Classes
+```coffee
+# Three function styles
+def greet(name)           # Named function (hoisted)
+  "Hello, #{name}!"
 
-### Unique Features
+add = (a, b) -> a + b     # Arrow function
+handler = (e) => @process e   # Fat arrow (preserves this)
 
-| Feature | Example | What it does |
-|---------|---------|--------------|
-| **Dammit `!`** | `fetchData!` | Call AND await in one |
-| **Otherwise `!?`** | `val !? default` | Default only if undefined |
-| **Signals** | `count := 0` | Reactive state |
-| **Derived** | `doubled ∞= count * 2` | Auto-updating values |
-| **Effects** | `effect -> log count` | Run on changes |
-| **Ruby regex** | `str =~ /pat/` | Match with `_[1]` capture |
+# Classes with clean syntax
+class Animal
+  constructor: (@name) ->
+  speak: -> console.log "#{@name} makes a sound"
+
+class Dog extends Animal
+  speak: -> console.log "#{@name} barks"
+```
+
+### Destructuring & Comprehensions
+```coffee
+# Destructuring
+{name, age} = person
+[first, ...rest] = items
+
+# Comprehensions (context-aware!)
+squares = (x * x for x in [1..10])   # Returns array
+console.log x for x in items         # Just loops (no array created)
+```
+
+### Async & Optional Chaining
+```coffee
+# Auto-async detection
+def loadUser(id)
+  response = await fetch "/api/users/#{id}"
+  await response.json()
+
+# Optional chaining (both styles work)
+user?.profile?.name      # ES2020 native
+arr?[0]                  # CoffeeScript soak
+fn?(arg)                 # Safe call
+```
+
+---
+
+## Unique Operators
+
+| Operator | Example | What it does |
+|----------|---------|--------------|
+| **Dammit `!`** | `fetchData!` | Calls the function AND awaits it |
+| **Otherwise `!?`** | `val !? 5` | Defaults only if `undefined` (null/0/false are kept!) |
+| **Signal `:=`** | `count := 0` | Creates reactive state |
+| **Derived `∞=`** | `doubled ∞= count * 2` | Auto-updates when dependencies change |
+| **Effect** | `effect -> log x` | Runs whenever referenced signals change |
+| **Match `=~`** | `str =~ /(\w+)/` | Ruby-style regex, captures in `_[1]` |
+
+---
+
+## Reactivity
+
+Built into the language, not a library:
+
+```coffee
+# Signals hold reactive state
+count := 0
+name := "world"
+
+# Derived values auto-update
+doubled ∞= count * 2
+greeting ∞= "Hello, #{name}!"
+
+# Effects run when dependencies change
+effect -> console.log greeting
+
+name = "Rip"   # Effect runs → "Hello, Rip!"
+count = 5      # Nothing (greeting doesn't depend on count)
+```
+
+[Full reactivity guide →](docs/REACTIVITY.md)
 
 ---
 
 ## Components
 
-Build reactive UIs with fine-grained updates:
+Build reactive UIs with fine-grained DOM updates:
 
 ```coffee
 component Counter
-  @initial = 0
-  count = @initial
+  @label = "Count"
+  count = 0
 
   render
     div.counter
-      span count
+      h2 @label
+      span.value count
       button @click: (-> count += 1), "+"
+      button @click: (-> count -= 1), "-"
 ```
 
-Each binding updates independently — no virtual DOM diffing. [Learn more →](docs/COMPONENTS.md)
+**Features:**
+- Props: `@prop`, `@prop?` (optional), `@prop = default`
+- Lifecycle: `mounted:`, `unmounted:`
+- Context API: `setContext`, `getContext`
+- Fine-grained updates: only changed nodes update, no virtual DOM
+
+[Component guide →](docs/COMPONENTS.md)
+
+---
+
+## Templates
+
+Indentation-based HTML with CSS-style selectors:
+
+```coffee
+render
+  div#app.container
+    h1.title "Hello, #{name}!"
+    input value: username, @input: updateName
+    button.("btn", active && "primary") @click: submit
+      "Submit"
+    ul.items
+      for item in items
+        li key: item.id, item.name
+```
+
+- `div#id.class1.class2` — IDs and classes
+- `@click:`, `@input:` — Event handlers
+- `.("class1", cond && "class2")` — Dynamic classes (Tailwind-friendly)
+- `value <=> var` — Two-way binding
+
+[Template guide →](docs/TEMPLATES.md)
+
+---
+
+## Browser Support
+
+Run Rip directly in the browser (56KB compressed):
+
+```html
+<script src="https://shreeve.github.io/rip-lang/docs/dist/rip.browser.min.js"></script>
+<script type="text/rip">
+  def greet(name)
+    console.log "Hello, #{name}!"
+  greet "World"
+</script>
+```
+
+```bash
+bun run browser    # Build the bundle
+bun run serve      # Start dev server at localhost:3000
+```
+
+---
+
+## Why Rip over CoffeeScript?
+
+| | Rip | CoffeeScript |
+|---|---|---|
+| **Output** | ES2022 (classes, `?.`, `??`) | ES5 (var, prototypes) |
+| **Reactivity** | Built-in | None |
+| **Dependencies** | Zero | Multiple |
+| **Self-hosting** | Yes (compiles itself) | No |
+| **Codebase** | 9,839 LOC | 17,760 LOC |
 
 ---
 
 ## Quick Reference
 
 ```bash
-rip                    # REPL
-rip file.rip           # Run
-rip -c file.rip        # Compile
-rip -s file.rip        # Show S-expressions (debug)
-bun run test           # Run 1033 tests
-bun run browser        # Build 56KB browser bundle
+rip                    # Interactive REPL
+rip file.rip           # Run a file
+rip -c file.rip        # Compile to JavaScript
+rip -s file.rip        # Show S-expressions (debug parser)
+rip -t file.rip        # Show tokens (debug lexer)
+bun run test           # Run all 1033 tests
+bun run parser         # Rebuild parser (self-hosting!)
+bun run browser        # Build browser bundle
 ```
 
 ---
@@ -116,10 +248,11 @@ bun run browser        # Build 56KB browser bundle
 
 | Guide | Description |
 |-------|-------------|
-| [AGENT.md](AGENT.md) | Complete developer guide |
+| [AGENT.md](AGENT.md) | Complete developer/AI guide |
 | [docs/REACTIVITY.md](docs/REACTIVITY.md) | Signals, effects, derived values |
 | [docs/COMPONENTS.md](docs/COMPONENTS.md) | Component system |
 | [docs/TEMPLATES.md](docs/TEMPLATES.md) | Template DSL |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
 
 ---
@@ -130,7 +263,7 @@ bun run browser        # Build 56KB browser bundle
 { "dependencies": {} }
 ```
 
-Everything is included: compiler, parser generator, REPL, browser bundle, test framework. Rip compiles itself — run `bun run parser` to rebuild from source.
+Everything included: compiler, parser generator (solar.rip), REPL, browser bundle, test framework. Rip compiles itself — `bun run parser` rebuilds from source.
 
 ---
 
