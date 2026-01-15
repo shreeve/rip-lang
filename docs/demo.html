@@ -177,7 +177,7 @@
   <p>This is the Rip code powering this demo:</p>
   <pre><code id="source-code"></code></pre>
 
-  <script src="dist/rip.browser.min.js"></script>
+  <script type="module" src="dist/rip.browser.min.js"></script>
   <script type="text/rip" id="demo-source">
 # ============================================
 # Demo 1: Counter with derived values
@@ -195,8 +195,8 @@ effect ->
   document.getElementById("squared").textContent = squared
   document.getElementById("is-even").textContent = isEven
 
-document.getElementById("inc").onclick = -> count += 1
-document.getElementById("dec").onclick = -> count -= 1
+document.getElementById("inc").onclick = => count += 1
+document.getElementById("dec").onclick = => count -= 1
 
 # ============================================
 # Demo 2: Two-way binding
@@ -207,7 +207,7 @@ name := "World"
 effect ->
   document.getElementById("greeting-name").textContent = name
 
-document.getElementById("name-input").oninput = (e) ->
+document.getElementById("name-input").oninput = (e) =>
   name = e.target.value || "World"
 
 # ============================================
@@ -223,10 +223,10 @@ effect ->
   if logEntries.length > 10
     logEntries.shift()
   log = document.getElementById("effect-log")
-  log.innerHTML = logEntries.map((e) -> "<div class='log-entry'>#{e}</div>").join("")
+  log.innerHTML = logEntries.map((e) => "<div class='log-entry'>#{e}</div>").join("")
   log.scrollTop = log.scrollHeight
 
-document.getElementById("slider").oninput = (e) ->
+document.getElementById("slider").oninput = (e) =>
   slider = parseInt(e.target.value)
 
 # ============================================
@@ -237,12 +237,12 @@ todos := []
 nextId := 1
 
 totalCount ∞= todos.length
-doneCount ∞= todos.filter((t) -> t.done).length
+doneCount ∞= todos.filter((t) => t.done).length
 pendingCount ∞= totalCount - doneCount
 
-renderTodos = ->
+renderTodos = =>
   list = document.getElementById("todo-list")
-  list.innerHTML = todos.map((todo) ->
+  list.innerHTML = todos.map((todo) =>
     checked = if todo.done then "checked" else ""
     doneClass = if todo.done then "done" else ""
     """
@@ -255,7 +255,7 @@ renderTodos = ->
   
   # Add event listeners
   for checkbox in list.querySelectorAll("input[type=checkbox]")
-    checkbox.onchange = (e) ->
+    checkbox.onchange = (e) =>
       id = parseInt(e.target.dataset.id)
       for todo in todos
         if todo.id == id
@@ -267,7 +267,7 @@ effect ->
   document.getElementById("todo-stats").textContent = 
     "#{doneCount}/#{totalCount} done, #{pendingCount} pending"
 
-addTodo = ->
+addTodo = =>
   input = document.getElementById("todo-input")
   text = input.value.trim()
   if text
@@ -276,7 +276,7 @@ addTodo = ->
     input.value = ""
 
 document.getElementById("add-todo").onclick = addTodo
-document.getElementById("todo-input").onkeydown = (e) ->
+document.getElementById("todo-input").onkeydown = (e) =>
   if e.key == "Enter"
     addTodo()
 
