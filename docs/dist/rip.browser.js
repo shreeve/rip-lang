@@ -1702,6 +1702,9 @@ ${line}`;
   }
   unfinished() {
     var ref;
+    if (this.tag() === "RENDER") {
+      return false;
+    }
     return LINE_CONTINUER.test(this.chunk) || (ref = this.tag(), indexOf.call(UNFINISHED, ref) >= 0);
   }
   validateUnicodeCodePointEscapes(str, options) {
@@ -2701,6 +2704,18 @@ Rewriter = function() {
         }
         if (!inRender)
           return 1;
+        if (tag === ".") {
+          const prevToken = i > 0 ? tokens[i - 1] : null;
+          const prevTag = prevToken ? prevToken[0] : null;
+          if (prevTag === "INDENT" || prevTag === "TERMINATOR") {
+            if (nextToken && nextToken[0] === "PROPERTY") {
+              const divToken = ["IDENTIFIER", "div", token[2]];
+              divToken.generated = true;
+              tokens.splice(i, 0, divToken);
+              return 2;
+            }
+          }
+        }
         if (tag === "IDENTIFIER" || tag === "PROPERTY") {
           const next = tokens[i + 1];
           const nextNext = tokens[i + 2];
@@ -2741,6 +2756,9 @@ Rewriter = function() {
           }
         }
         if (tag === "." && nextToken && nextToken[0] === "(") {
+          const prevToken = i > 0 ? tokens[i - 1] : null;
+          const prevTag = prevToken ? prevToken[0] : null;
+          const atLineStart = prevTag === "INDENT" || prevTag === "TERMINATOR";
           const cxToken = ["PROPERTY", "__cx__", token[2]];
           cxToken.generated = true;
           nextToken[0] = "CALL_START";
@@ -2755,8 +2773,16 @@ Rewriter = function() {
             } else if (tokens[j][0] === "CALL_END")
               depth--;
           }
-          tokens.splice(i + 1, 0, cxToken);
-          return 2;
+          if (atLineStart) {
+            const divToken = ["IDENTIFIER", "div", token[2]];
+            divToken.generated = true;
+            tokens.splice(i, 0, divToken);
+            tokens.splice(i + 2, 0, cxToken);
+            return 3;
+          } else {
+            tokens.splice(i + 1, 0, cxToken);
+            return 2;
+          }
         }
         if (nextToken && nextToken[0] === "INDENT") {
           if (tag === "->" || tag === "=>" || tag === "CALL_START" || tag === "(") {
@@ -9248,7 +9274,7 @@ function compileToJS(source, options = {}) {
 }
 // src/browser.js
 var VERSION = "2.2.1";
-var BUILD_DATE = "2026-01-15@11:52:21GMT";
+var BUILD_DATE = "2026-01-15@12:09:29GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

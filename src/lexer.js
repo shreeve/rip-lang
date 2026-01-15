@@ -1713,6 +1713,10 @@ export var Lexer = class Lexer {
   // Are we in the midst of an unfinished expression?
   unfinished() {
     var ref;
+    // Don't treat line as continuation after RENDER (for template .class syntax)
+    if (this.tag() === 'RENDER') {
+      return false;
+    }
     return LINE_CONTINUER.test(this.chunk) || (ref = this.tag(), indexOf.call(UNFINISHED, ref) >= 0);
   }
 
@@ -3090,6 +3094,26 @@ Rewriter = (function() {
         if (!inRender) return 1;
 
         // ─────────────────────────────────────────────────────────────────────
+        // PHASE 0: Implicit div for class-only selectors
+        // .card → div.card (insert 'div' before leading dot)
+        // Only handles static classes (.PROPERTY), dynamic classes (.()) handled in PHASE 4
+        // ─────────────────────────────────────────────────────────────────────
+        if (tag === '.') {
+          const prevToken = i > 0 ? tokens[i - 1] : null;
+          const prevTag = prevToken ? prevToken[0] : null;
+          // Check if this is at line start (after INDENT or TERMINATOR)
+          if (prevTag === 'INDENT' || prevTag === 'TERMINATOR') {
+            // Only handle static class (.PROPERTY), not dynamic class (.())
+            if (nextToken && nextToken[0] === 'PROPERTY') {
+              const divToken = ['IDENTIFIER', 'div', token[2]];
+              divToken.generated = true;
+              tokens.splice(i, 0, divToken);
+              return 2;  // Skip past the inserted div and the dot
+            }
+          }
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
         // PHASE 1: Combine #id selectors
         // div # main → div#main (single IDENTIFIER token)
         // ─────────────────────────────────────────────────────────────────────
@@ -3146,8 +3170,15 @@ Rewriter = (function() {
         // ─────────────────────────────────────────────────────────────────────
         // PHASE 4: Dynamic classes
         // div.('card', x && 'active') → div.__cx__('card', x && 'active')
+        // .('card') → div.__cx__('card') (implicit div at line start)
         // ─────────────────────────────────────────────────────────────────────
         if (tag === '.' && nextToken && nextToken[0] === '(') {
+          const prevToken = i > 0 ? tokens[i - 1] : null;
+          const prevTag = prevToken ? prevToken[0] : null;
+          
+          // Check if at line start - need to insert 'div' first
+          const atLineStart = prevTag === 'INDENT' || prevTag === 'TERMINATOR';
+          
           const cxToken = ['PROPERTY', '__cx__', token[2]];
           cxToken.generated = true;
           nextToken[0] = 'CALL_START';
@@ -3159,8 +3190,18 @@ Rewriter = (function() {
               if (depth === 0) tokens[j][0] = 'CALL_END';
             } else if (tokens[j][0] === 'CALL_END') depth--;
           }
-          tokens.splice(i + 1, 0, cxToken);
-          return 2;
+          
+          if (atLineStart) {
+            // Insert div before . and __cx__ after .
+            const divToken = ['IDENTIFIER', 'div', token[2]];
+            divToken.generated = true;
+            tokens.splice(i, 0, divToken);
+            tokens.splice(i + 2, 0, cxToken);  // After div and .
+            return 3;
+          } else {
+            tokens.splice(i + 1, 0, cxToken);
+            return 2;
+          }
         }
 
         // ─────────────────────────────────────────────────────────────────────
