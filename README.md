@@ -106,11 +106,14 @@ fn?(arg)                 # Safe call
 | Feature | Example | What it does |
 |---------|---------|--------------|
 | **Dammit `!`** | `fetchData!` | Calls the function AND awaits it |
+| **Void `!`** | `def process!` | Suppresses implicit return (always returns undefined) |
 | **Otherwise `!?`** | `val !? 5` | Defaults only if `undefined` (null/0/false are kept!) |
 | **Signal `:=`** | `count := 0` | Creates reactive state |
 | **Derived `∞=`** | `doubled ∞= count * 2` | Auto-updates when dependencies change |
 | **Effect** | `effect -> log x` | Runs whenever referenced signals change |
 | **Match `=~`** | `str =~ /(\w+)/` | Ruby-style regex, captures in `_[1]` |
+| **Ternary `?:`** | `x > 0 ? 'yes' : 'no'` | JS-style ternary (plus CoffeeScript's if/then/else) |
+| **Dual optional** | `a?.b` and `a?[0]` | Both ES6 native and CoffeeScript soak styles |
 | **Heregex** | `///pat # comment///` | Extended regex with comments and whitespace |
 | **Heredoc** | `'''` closing column | Smart indentation — closing position sets left margin |
 | **`__DATA__`** | `__DATA__\nconfig...` | Ruby-style inline data section, accessible as `DATA` |
