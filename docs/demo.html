@@ -133,13 +133,13 @@
       font-size: 0.9rem;
       margin-top: 1rem;
     }
-    .miniCounter {
+    .mini-counter {
       display: flex;
       align-items: center;
       gap: 1rem;
       font-size: 1.5rem;
     }
-    .miniCounter button {
+    .mini-counter button {
       font-size: 1.5rem;
       width: 50px;
       height: 50px;
@@ -151,9 +151,9 @@
       font-weight: bold;
       transition: transform 0.1s, background 0.2s;
     }
-    .miniCounter button:hover { background: #ee5a5a; }
-    .miniCounter button:active { transform: scale(0.95); }
-    .miniCounter .count {
+    .mini-counter button:hover { background: #ee5a5a; }
+    .mini-counter button:active { transform: scale(0.95); }
+    .mini-counter .count {
       font-size: 3rem;
       font-weight: bold;
       min-width: 80px;
@@ -399,7 +399,7 @@ component MiniCounter
   inc: ->
     value += 1
   render
-    div.miniCounter
+    div.("mini-counter")
       button @click: this.dec, "-"
       span.count value
       button @click: this.inc, "+"
