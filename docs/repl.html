@@ -375,6 +375,41 @@
       font-weight: bold;
     }
 
+    /* Component-generated elements */
+    .demo-output .counter {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      justify-content: center;
+    }
+
+    .demo-output .greeter input {
+      margin-bottom: 0.5rem;
+      width: 200px;
+    }
+
+    .demo-output .greeter .name {
+      color: #4ec9b0;
+      font-weight: bold;
+    }
+
+    .demo-output .calculator .row {
+      margin: 0.5rem 0;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .demo-output .calculator input {
+      width: 80px;
+    }
+
+    .demo-output .calculator .result {
+      color: #ce9178;
+      font-weight: bold;
+      font-size: 1.2rem;
+    }
+
     .demo-error {
       background: #3c1618;
       color: #f48771;
@@ -487,38 +522,67 @@
             </div>
           </div>
           <textarea class="editor" id="demo-editor" spellcheck="false"># ============================================
-# Reactivity Demo - Edit me!
+# Rip Components & Templates Demo
 # ============================================
 
-# Signals hold reactive state
-count := 0
+# A counter component with Pug-style template syntax
+component Counter
+  count = 0
+  
+  inc: -> count += 1
+  dec: -> count -= 1
+  
+  render
+    .counter
+      button @click: this.dec, "−"
+      span.value count
+      button @click: this.inc, "+"
 
-# Derived values auto-update
-doubled ∞= count * 2
-squared ∞= count * count
-isEven ∞= if count % 2 == 0 then "Yes" else "No"
-
-# Effects run when dependencies change
-effect ->
-  document.getElementById("count-display").textContent = count
-  document.getElementById("doubled").textContent = doubled
-  document.getElementById("squared").textContent = squared
-  document.getElementById("is-even").textContent = isEven
-
-document.getElementById("inc").onclick = => count += 1
-document.getElementById("dec").onclick = => count -= 1
+# Mount the counter
+counter = new Counter()
+counter.mount document.getElementById("counter-mount")
 
 # ============================================
-# Two-way binding
+# Component with Two-Way Binding
 # ============================================
 
-name := "World"
+component Greeter
+  name = "World"
+  
+  render
+    .greeter
+      input @input: (e) => name = e.target.value, value: name, placeholder: "Your name..."
+      div.greeting
+        span "Hello, "
+        span.name name
+        span "!"
 
-effect ->
-  document.getElementById("greeting-name").textContent = name
+greeter = new Greeter()
+greeter.mount document.getElementById("greeter-mount")
 
-document.getElementById("name-input").oninput = (e) =>
-  name = e.target.value || "World"
+# ============================================
+# Derived Values Component
+# ============================================
+
+component Calculator
+  num = 5
+  doubled ∞= num * 2
+  squared ∞= num * num
+  
+  render
+    .calculator
+      .row
+        label "Number: "
+        input type: "number", @input: (e) => num = parseInt(e.target.value) || 0, value: num
+      .row
+        span "Doubled: "
+        span.result doubled
+      .row
+        span "Squared: "
+        span.result squared
+
+calc = new Calculator()
+calc.mount document.getElementById("calc-mount")
 </textarea>
         </div>
 
@@ -529,25 +593,14 @@ document.getElementById("name-input").oninput = (e) =>
             <span>Live Output</span>
           </div>
           <div class="demo-output" id="demo-output">
-            <h2>Counter with Derived Values</h2>
-            <div class="demo-section">
-              <div class="counter">
-                <button id="dec">−</button>
-                <span class="value" id="count-display">0</span>
-                <button id="inc">+</button>
-              </div>
-              <div class="derived">
-                Doubled: <span id="doubled">0</span> | 
-                Squared: <span id="squared">0</span> |
-                Even? <span id="is-even">Yes</span>
-              </div>
-            </div>
+            <h2>Counter Component</h2>
+            <div class="demo-section" id="counter-mount"></div>
 
-            <h2>Two-Way Binding</h2>
-            <div class="demo-section">
-              <input type="text" id="name-input" placeholder="Enter your name..." value="World">
-              <div class="greeting">Hello, <span id="greeting-name">World</span>!</div>
-            </div>
+            <h2>Greeter with Two-Way Binding</h2>
+            <div class="demo-section" id="greeter-mount"></div>
+
+            <h2>Calculator with Derived Values</h2>
+            <div class="demo-section" id="calc-mount"></div>
           </div>
         </div>
       </div>
