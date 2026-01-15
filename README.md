@@ -19,24 +19,14 @@
 
 ## What is Rip?
 
-A **CoffeeScript-inspired language** with built-in reactivity that compiles to clean ES2022.
+A **CoffeeScript-inspired language** with built-in reactivity that compiles to clean ES2022. If you loved CoffeeScript's elegance but wanted modern JavaScript output and reactive primitives baked into the language — Rip is for you.
 
-> **Philosophy:** *Simplicity scales.* Keep the IR simple (S-expressions), keep the pipeline clear (lex → parse → generate), keep the code minimal. Test everything.
-
-```coffee
-# Reactive state — updates propagate automatically
-count := 0
-doubled ∞= count * 2
-effect -> console.log "Count: #{count}, Doubled: #{doubled}"
-
-count = 5   # Logs: "Count: 5, Doubled: 10"
-
-# Async made simple
-user = fetchUser!(id)                  # ! = call AND await
-timeout = config.timeout !? 5000       # !? = default only if undefined
-```
-
-**Try it live:** [https://shreeve.github.io/rip-lang/](https://shreeve.github.io/rip-lang/)
+**Key highlights:**
+- **Zero dependencies** — completely standalone, includes its own parser generator
+- **Self-hosting** — Rip compiles itself (`bun run parser` rebuilds from source)
+- **Modern output** — ES2022 with classes, modules, optional chaining, nullish coalescing
+- **Built-in reactivity** — signals, derived values, and effects as language primitives
+- **50% smaller** — 9,839 LOC vs CoffeeScript's 17,760 LOC
 
 ---
 
@@ -201,7 +191,9 @@ render
 
 ## Browser Support
 
-Run Rip directly in the browser (56KB compressed):
+Run Rip directly in the browser (56KB compressed).
+
+**Try it live:** [https://shreeve.github.io/rip-lang/](https://shreeve.github.io/rip-lang/)
 
 ```html
 <script src="https://shreeve.github.io/rip-lang/docs/dist/rip.browser.min.js"></script>
@@ -219,7 +211,9 @@ bun run serve      # Start dev server at localhost:3000
 
 ---
 
-## Why Rip over CoffeeScript?
+## Modernizing What CoffeeScript Started
+
+CoffeeScript showed us beautiful syntax. Rip takes that vision further:
 
 | | Rip | CoffeeScript |
 |---|---|---|
@@ -307,6 +301,14 @@ bun run browser        # Build browser bundle
 ```
 
 Everything included: compiler, parser generator (solar.rip), REPL, browser bundle, test framework. Rip compiles itself — `bun run parser` rebuilds from source.
+
+---
+
+## Philosophy
+
+> *Simplicity scales.*
+
+Keep the IR simple (S-expressions), keep the pipeline clear (lex → parse → generate), keep the code minimal. Test everything.
 
 ---
 
