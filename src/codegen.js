@@ -641,6 +641,18 @@ export class CodeGenerator {
 
     // Also handle case where head is itself an expression (like property access)
     if (Array.isArray(head)) {
+      // Ruby-style constructor: XXX.new(args) → new XXX(args)
+      // Pattern: [['.', obj, 'new'], ...args] → new obj(args)
+      if (head[0] === '.' && (head[2] === 'new' || (head[2] instanceof String && head[2].valueOf() === 'new'))) {
+        const constructorExpr = head[1];
+        const constructorCode = this.generate(constructorExpr, 'value');
+        const args = rest.map(arg => this.unwrap(this.generate(arg, 'value'))).join(', ');
+        // Wrap complex expressions in parens: getClass().new() → new (getClass())()
+        const needsParens = Array.isArray(constructorExpr);
+        const wrappedConstructor = needsParens ? `(${constructorCode})` : constructorCode;
+        return `new ${wrappedConstructor}(${args})`;
+      }
+
       // Check if any argument has postfix unless/if (including nested)
       // Pattern: obj.method(val unless cond) → if (!cond) obj.method(val)
       // Pattern: obj.method(x + val unless cond) → if (!cond) obj.method(x + val)

@@ -4184,6 +4184,14 @@ class CodeGenerator {
       }
     }
     if (Array.isArray(head)) {
+      if (head[0] === "." && (head[2] === "new" || head[2] instanceof String && head[2].valueOf() === "new")) {
+        const constructorExpr = head[1];
+        const constructorCode = this.generate(constructorExpr, "value");
+        const args2 = rest.map((arg) => this.unwrap(this.generate(arg, "value"))).join(", ");
+        const needsParens = Array.isArray(constructorExpr);
+        const wrappedConstructor = needsParens ? `(${constructorCode})` : constructorCode;
+        return `new ${wrappedConstructor}(${args2})`;
+      }
       if (context === "statement" && rest.length === 1) {
         const conditional = this.findPostfixConditional(rest[0]);
         if (conditional) {
@@ -9293,7 +9301,7 @@ function compileToJS(source, options = {}) {
 }
 // src/browser.js
 var VERSION = "2.2.2";
-var BUILD_DATE = "2026-01-15@22:17:59GMT";
+var BUILD_DATE = "2026-01-15@22:41:44GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

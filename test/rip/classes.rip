@@ -136,6 +136,30 @@ test 'four-level inheritance', '''
   ''', 'a'
 
 # ============================================================================
+# Ruby-style Constructor: XXX.new()
+# ============================================================================
+
+# Ruby-style new
+test 'ruby-style new', '''
+  class Animal
+    constructor: (@name) ->
+  Animal.new('Dog').name
+  ''', 'Dog'
+
+# Ruby-style new with chaining
+test 'ruby-style new chained', '''
+  class Builder
+    constructor: (@val) ->
+    get: -> @val
+  Builder.new(42).get()
+  ''', 42
+
+# Code generation
+code "ruby-style new", "Counter.new()", "new Counter()"
+code "ruby-style new args", "Counter.new(1, 2)", "new Counter(1, 2)"
+code "ruby-style new expression", "getClass().new(x)", "new (getClass())(x)"
+
+# ============================================================================
 # Meta Properties
 # ============================================================================
 
@@ -146,6 +170,39 @@ test "new.target in constructor", '''
       @isNew = new.target?
   (new A()).isNew
   ''', true
+
+# ============================================================================
+# Ruby-style .new() Constructor Syntax
+# ============================================================================
+
+# Basic XXX.new() → new XXX()
+test 'ruby style new', '''
+  class Counter
+    constructor: -> @count = 0
+  Counter.new().count
+  ''', 0
+
+# With arguments
+test 'ruby style new with args', '''
+  class Person
+    constructor: (@name, @age) ->
+  p = Person.new('Alice', 30)
+  [p.name, p.age]
+  ''', ['Alice', 30]
+
+# Chained call after .new()
+test 'ruby style new chained', '''
+  class Builder
+    constructor: (val) -> @val = val or 0
+    add: (n) -> @val += n; this
+    get: -> @val
+  Builder.new(10).add(5).get()
+  ''', 15
+
+# Code generation
+code 'ruby style new simple', 'Counter.new()', 'new Counter()'
+code 'ruby style new args', 'Counter.new(1, 2)', 'new Counter(1, 2)'
+code 'ruby style new expression', 'getClass().new()', 'new (getClass())()'
 
 # ============================================================================
 # Stats for CODEGEN.md
