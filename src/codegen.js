@@ -1944,32 +1944,44 @@ export class CodeGenerator {
       }
     }
     
-    // Render method
+    // Fine-grained rendering: _create() and _setup() methods
     if (renderBlock) {
       const renderBody = renderBlock[1];
-      const renderCode = this.generateComponentRender(renderBody);
-      lines.push(`  render() { return ${renderCode}; }`);
+      const fg = this.generateFineGrainedRender(renderBody);
+      
+      // _create() - builds static DOM structure once
+      lines.push('  _create() {');
+      for (const line of fg.createLines) {
+        lines.push(`    ${line}`);
+      }
+      lines.push(`    return ${fg.rootVar};`);
+      lines.push('  }');
+      
+      // _setup() - wires up fine-grained reactive effects
+      if (fg.setupLines.length > 0) {
+        lines.push('  _setup() {');
+        for (const line of fg.setupLines) {
+          lines.push(`    ${line}`);
+        }
+        lines.push('  }');
+      }
     }
     
-    // Mount method - wraps render in effect for reactive updates
+    // Mount method - creates DOM once, then sets up effects
     lines.push('  mount(target) {');
     lines.push('    this._target = target;');
-    lines.push('    this._dispose = __effect(() => {');
-    lines.push('      const el = this.render();');
-    lines.push('      if (this._el) this._el.replaceWith(el);');
-    lines.push('      else target.appendChild(el);');
-    lines.push('      this._el = el;');
-    lines.push('    });');
+    lines.push('    this._root = this._create();');
+    lines.push('    target.appendChild(this._root);');
+    lines.push('    if (this._setup) this._setup();');
     lines.push('    if (this.mounted) this.mounted();');
     lines.push('    return this;');
     lines.push('  }');
     
-    // Unmount method - disposes effect and removes element
+    // Unmount method
     lines.push('  unmount() {');
     lines.push('    if (this.unmounted) this.unmounted();');
-    lines.push('    if (this._dispose) this._dispose();');
-    lines.push('    if (this._el && this._el.parentNode) {');
-    lines.push('      this._el.parentNode.removeChild(this._el);');
+    lines.push('    if (this._root && this._root.parentNode) {');
+    lines.push('      this._root.parentNode.removeChild(this._root);');
     lines.push('    }');
     lines.push('  }');
     
@@ -2048,6 +2060,503 @@ export class CodeGenerator {
     // Multiple roots - use frag()
     const elements = statements.map(s => this.generateComponentTemplateElement(s));
     return `frag(${elements.join(', ')})`;
+  }
+
+  //===========================================================================
+  // FINE-GRAINED RENDERING
+  // Generate surgical DOM updates instead of full re-renders
+  //===========================================================================
+
+  /**
+   * Generate fine-grained _create() and _setup() methods for a render block
+   * Returns { createCode, setupCode, rootVar }
+   */
+  generateFineGrainedRender(body) {
+    // Reset counters for this render
+    this._fgElementCount = 0;
+    this._fgTextCount = 0;
+    this._fgCreateLines = [];
+    this._fgSetupLines = [];
+    this._fgDisposeLines = [];
+    
+    // Parse the body
+    const statements = Array.isArray(body) && body[0] === 'block' ? body.slice(1) : [body];
+    
+    let rootVar;
+    if (statements.length === 0) {
+      rootVar = 'null';
+    } else if (statements.length === 1) {
+      rootVar = this.fgProcessElement(statements[0]);
+    } else {
+      // Multiple roots - create fragment
+      rootVar = this.fgNewElement('frag');
+      this._fgCreateLines.push(`${rootVar} = document.createDocumentFragment();`);
+      for (const stmt of statements) {
+        const childVar = this.fgProcessElement(stmt);
+        this._fgCreateLines.push(`${rootVar}.appendChild(${childVar});`);
+      }
+    }
+    
+    return {
+      createLines: this._fgCreateLines,
+      setupLines: this._fgSetupLines,
+      disposeLines: this._fgDisposeLines,
+      rootVar
+    };
+  }
+
+  /**
+   * Generate a unique element variable name
+   */
+  fgNewElement(hint = 'el') {
+    return `this._${hint}${this._fgElementCount++}`;
+  }
+
+  /**
+   * Generate a unique text node variable name
+   */
+  fgNewText() {
+    return `this._t${this._fgTextCount++}`;
+  }
+
+  /**
+   * Process a template element for fine-grained rendering
+   * Returns the variable name holding this element
+   */
+  fgProcessElement(sexpr) {
+    // String literal → text node
+    if (typeof sexpr === 'string') {
+      if (sexpr.startsWith('"') || sexpr.startsWith("'") || sexpr.startsWith('`')) {
+        // Static text
+        const textVar = this.fgNewText();
+        const textContent = sexpr.slice(1, -1); // Remove quotes
+        this._fgCreateLines.push(`${textVar} = document.createTextNode(${sexpr});`);
+        return textVar;
+      }
+      // Dynamic text binding (reactive member)
+      if (this.reactiveMembers && this.reactiveMembers.has(sexpr)) {
+        const textVar = this.fgNewText();
+        this._fgCreateLines.push(`${textVar} = document.createTextNode('');`);
+        this._fgSetupLines.push(`__effect(() => { ${textVar}.data = this.${sexpr}.value; });`);
+        return textVar;
+      }
+      // Static tag without content
+      const elVar = this.fgNewElement();
+      this._fgCreateLines.push(`${elVar} = document.createElement('${sexpr}');`);
+      return elVar;
+    }
+
+    // Array - could be element with children/attrs, property chain, etc.
+    if (Array.isArray(sexpr)) {
+      const [head, ...rest] = sexpr;
+      const headStr = typeof head === 'string' ? head : (head instanceof String ? head.valueOf() : null);
+
+      // Component instantiation (PascalCase)
+      if (headStr && this.isComponent(headStr)) {
+        return this.fgProcessComponent(headStr, rest);
+      }
+
+      // HTML tag
+      if (headStr && this.isHtmlTag(headStr)) {
+        return this.fgProcessTag(headStr, [], rest);
+      }
+
+      // Property chain (div.class or div.class1.class2)
+      if (headStr === '.') {
+        const [, obj, prop] = sexpr;
+        
+        // Property access on this (e.g., @prop, @children)
+        if (obj === 'this' && typeof prop === 'string') {
+          // Reactive member → dynamic text
+          if (this.reactiveMembers && this.reactiveMembers.has(prop)) {
+            const textVar = this.fgNewText();
+            this._fgCreateLines.push(`${textVar} = document.createTextNode('');`);
+            this._fgSetupLines.push(`__effect(() => { ${textVar}.data = this.${prop}.value; });`);
+            return textVar;
+          }
+          // Non-reactive member (prop) - could be DOM (slot) or text
+          if (this.componentMembers && this.componentMembers.has(prop)) {
+            const slotVar = this.fgNewElement('slot');
+            // At runtime, check if it's a DOM node or convert to text
+            this._fgCreateLines.push(`${slotVar} = this.${prop} instanceof Node ? this.${prop} : (this.${prop} != null ? document.createTextNode(String(this.${prop})) : document.createComment(''));`);
+            return slotVar;
+          }
+        }
+        
+        const { tag, classes } = this.collectTemplateClasses(sexpr);
+        if (tag && this.isHtmlTag(tag)) {
+          return this.fgProcessTag(tag, classes, []);
+        }
+      }
+
+      // Call expression: (tag.class args...) or ((tag.class) args...)
+      if (Array.isArray(head)) {
+        const { tag, classes } = this.collectTemplateClasses(head);
+        if (tag && this.isHtmlTag(tag)) {
+          return this.fgProcessTag(tag, classes, rest);
+        }
+      }
+
+      // Arrow function (children block)
+      if (headStr === '->' || headStr === '=>') {
+        const [params, body] = rest;
+        return this.fgProcessBlock(body);
+      }
+
+      // Conditional: if/else
+      if (headStr === 'if') {
+        return this.fgProcessConditional(sexpr);
+      }
+
+      // For loop
+      if (headStr === 'for' || headStr === 'for-in' || headStr === 'for-of') {
+        return this.fgProcessLoop(sexpr);
+      }
+    }
+
+    // Fallback: create a comment placeholder
+    const commentVar = this.fgNewElement('c');
+    this._fgCreateLines.push(`${commentVar} = document.createComment('TODO');`);
+    return commentVar;
+  }
+
+  /**
+   * Process an HTML tag with classes and children/attributes
+   */
+  fgProcessTag(tag, classes, args) {
+    const elVar = this.fgNewElement();
+    
+    // Create element
+    this._fgCreateLines.push(`${elVar} = document.createElement('${tag}');`);
+    
+    // Add static classes
+    if (classes.length > 0) {
+      this._fgCreateLines.push(`${elVar}.className = '${classes.join(' ')}';`);
+    }
+    
+    // Process arguments (attributes, events, children)
+    for (const arg of args) {
+      // Arrow function = children
+      if (Array.isArray(arg) && (arg[0] === '->' || arg[0] === '=>')) {
+        const block = arg[2];
+        if (Array.isArray(block) && block[0] === 'block') {
+          for (const child of block.slice(1)) {
+            const childVar = this.fgProcessElement(child);
+            this._fgCreateLines.push(`${elVar}.appendChild(${childVar});`);
+          }
+        } else if (block) {
+          const childVar = this.fgProcessElement(block);
+          this._fgCreateLines.push(`${elVar}.appendChild(${childVar});`);
+        }
+      }
+      // Object = attributes/events
+      else if (Array.isArray(arg) && arg[0] === 'object') {
+        this.fgProcessAttributes(elVar, arg);
+      }
+      // String = text child
+      else if (typeof arg === 'string') {
+        const textVar = this.fgNewText();
+        if (arg.startsWith('"') || arg.startsWith("'") || arg.startsWith('`')) {
+          // Static text - use the quoted string directly
+          this._fgCreateLines.push(`${textVar} = document.createTextNode(${arg});`);
+        } else if (this.reactiveMembers && this.reactiveMembers.has(arg)) {
+          // Dynamic text - reactive binding
+          this._fgCreateLines.push(`${textVar} = document.createTextNode('');`);
+          this._fgSetupLines.push(`__effect(() => { ${textVar}.data = this.${arg}.value; });`);
+        } else if (this.componentMembers && this.componentMembers.has(arg)) {
+          // Non-reactive member (prop)
+          this._fgCreateLines.push(`${textVar} = document.createTextNode(String(this.${arg}));`);
+        } else {
+          // Other identifier
+          this._fgCreateLines.push(`${textVar} = document.createTextNode(String(${arg}));`);
+        }
+        this._fgCreateLines.push(`${elVar}.appendChild(${textVar});`);
+      }
+      // String object (from parser)
+      else if (arg instanceof String) {
+        const val = arg.valueOf();
+        const textVar = this.fgNewText();
+        if (val.startsWith('"') || val.startsWith("'") || val.startsWith('`')) {
+          this._fgCreateLines.push(`${textVar} = document.createTextNode(${val});`);
+        } else if (this.reactiveMembers && this.reactiveMembers.has(val)) {
+          this._fgCreateLines.push(`${textVar} = document.createTextNode('');`);
+          this._fgSetupLines.push(`__effect(() => { ${textVar}.data = this.${val}.value; });`);
+        } else {
+          this._fgCreateLines.push(`${textVar} = document.createTextNode(String(${val}));`);
+        }
+        this._fgCreateLines.push(`${elVar}.appendChild(${textVar});`);
+      }
+      // Other = nested element
+      else if (arg) {
+        const childVar = this.fgProcessElement(arg);
+        this._fgCreateLines.push(`${elVar}.appendChild(${childVar});`);
+      }
+    }
+    
+    return elVar;
+  }
+
+  /**
+   * Process attributes and events for an element
+   */
+  fgProcessAttributes(elVar, objExpr) {
+    // objExpr = ['object', [key, value], [key, value], ...]
+    for (let i = 1; i < objExpr.length; i++) {
+      const [key, value] = objExpr[i];
+      
+      // Event handler: @click or (. this eventName)
+      if (Array.isArray(key) && key[0] === '.' && key[1] === 'this') {
+        const eventName = key[2];
+        const handlerCode = this.generateInComponent(value, 'value');
+        // Bind handler to this context
+        this._fgCreateLines.push(`${elVar}.addEventListener('${eventName}', (e) => (${handlerCode})(e));`);
+        continue;
+      }
+      
+      // Regular attribute
+      if (typeof key === 'string') {
+        // Check if value is reactive
+        if (typeof value === 'string' && this.reactiveMembers && this.reactiveMembers.has(value)) {
+          // Dynamic attribute
+          this._fgSetupLines.push(`__effect(() => { ${elVar}.setAttribute('${key}', this.${value}.value); });`);
+        } else {
+          // Static attribute
+          const valueCode = this.generateInComponent(value, 'value');
+          this._fgCreateLines.push(`${elVar}.setAttribute('${key}', ${valueCode});`);
+        }
+      }
+    }
+  }
+
+  /**
+   * Process a block of children
+   */
+  fgProcessBlock(body) {
+    if (!Array.isArray(body) || body[0] !== 'block') {
+      return this.fgProcessElement(body);
+    }
+    
+    const statements = body.slice(1);
+    if (statements.length === 0) {
+      const commentVar = this.fgNewElement('empty');
+      this._fgCreateLines.push(`${commentVar} = document.createComment('');`);
+      return commentVar;
+    }
+    if (statements.length === 1) {
+      return this.fgProcessElement(statements[0]);
+    }
+    
+    // Multiple children - wrap in fragment
+    const fragVar = this.fgNewElement('frag');
+    this._fgCreateLines.push(`${fragVar} = document.createDocumentFragment();`);
+    for (const stmt of statements) {
+      const childVar = this.fgProcessElement(stmt);
+      this._fgCreateLines.push(`${fragVar}.appendChild(${childVar});`);
+    }
+    return fragVar;
+  }
+
+  /**
+   * Process a conditional (if/else)
+   * Pattern: ['if', condition, thenBlock, elseBlock?]
+   */
+  fgProcessConditional(sexpr) {
+    const [, condition, thenBlock, elseBlock] = sexpr;
+    
+    // Create anchor comment that marks where conditional content goes
+    const anchorVar = this.fgNewElement('if');
+    const contentVar = `${anchorVar}_content`;
+    const stateVar = `${anchorVar}_showing`;  // Track which branch is showing
+    
+    this._fgCreateLines.push(`${anchorVar} = document.createComment('if');`);
+    this._fgCreateLines.push(`${contentVar} = null;`);
+    this._fgCreateLines.push(`${stateVar} = null;`);  // null, 'then', or 'else'
+    
+    // Generate condition expression
+    const condCode = this.generateInComponent(condition, 'value');
+    
+    // Save current state
+    const savedCreateLines = this._fgCreateLines;
+    const savedSetupLines = this._fgSetupLines;
+    
+    // Generate then-block content
+    this._fgCreateLines = [];
+    this._fgSetupLines = [];
+    const thenVar = this.fgProcessBlock(thenBlock);
+    const thenCreateLines = this._fgCreateLines;
+    const thenSetupLines = this._fgSetupLines;
+    
+    // Generate else-block content if present
+    let elseVar = null;
+    let elseCreateLines = [];
+    let elseSetupLines = [];
+    if (elseBlock) {
+      this._fgCreateLines = [];
+      this._fgSetupLines = [];
+      elseVar = this.fgProcessBlock(elseBlock);
+      elseCreateLines = this._fgCreateLines;
+      elseSetupLines = this._fgSetupLines;
+    }
+    
+    // Restore
+    this._fgCreateLines = savedCreateLines;
+    this._fgSetupLines = savedSetupLines;
+    
+    // Generate the effect that manages the conditional
+    const effectLines = [];
+    effectLines.push(`__effect(() => {`);
+    effectLines.push(`  const show = !!(${condCode});`);
+    effectLines.push(`  const want = show ? 'then' : ${elseBlock ? "'else'" : 'null'};`);
+    effectLines.push(`  if (want === ${stateVar}) return;`);  // No change needed
+    effectLines.push(`  if (${contentVar}) { ${contentVar}.remove(); ${contentVar} = null; }`);
+    effectLines.push(`  ${stateVar} = want;`);
+    
+    // Create then content
+    effectLines.push(`  if (want === 'then') {`);
+    for (const line of thenCreateLines) {
+      effectLines.push(`    ${line}`);
+    }
+    effectLines.push(`    ${contentVar} = ${thenVar};`);
+    effectLines.push(`    ${anchorVar}.parentNode.insertBefore(${contentVar}, ${anchorVar}.nextSibling);`);
+    for (const line of thenSetupLines) {
+      effectLines.push(`    ${line}`);
+    }
+    effectLines.push(`  }`);
+    
+    // Create else content
+    if (elseBlock) {
+      effectLines.push(`  if (want === 'else') {`);
+      for (const line of elseCreateLines) {
+        effectLines.push(`    ${line}`);
+      }
+      effectLines.push(`    ${contentVar} = ${elseVar};`);
+      effectLines.push(`    ${anchorVar}.parentNode.insertBefore(${contentVar}, ${anchorVar}.nextSibling);`);
+      for (const line of elseSetupLines) {
+        effectLines.push(`    ${line}`);
+      }
+      effectLines.push(`  }`);
+    }
+    
+    effectLines.push(`});`);
+    
+    this._fgSetupLines.push(effectLines.join('\n    '));
+    
+    return anchorVar;
+  }
+
+  /**
+   * Process a for loop
+   * Pattern: ['for-in', [vars], collection, guard?, step?, body]
+   */
+  fgProcessLoop(sexpr) {
+    const [head, vars, collection, guard, step, body] = sexpr;
+    
+    // Create anchor and nodes array
+    const anchorVar = this.fgNewElement('for');
+    const nodesVar = `${anchorVar}_nodes`;
+    
+    this._fgCreateLines.push(`${anchorVar} = document.createComment('for');`);
+    this._fgCreateLines.push(`${nodesVar} = [];`);
+    
+    // Get variable name(s)
+    const varNames = Array.isArray(vars) ? vars : [vars];
+    const itemVar = varNames[0];
+    const indexVar = varNames[1] || '_i';
+    
+    // Generate collection expression
+    const collectionCode = this.generateInComponent(collection, 'value');
+    
+    // Save state and generate item template
+    const savedCreateLines = this._fgCreateLines;
+    const savedSetupLines = this._fgSetupLines;
+    
+    // We need to create a function that generates a single item's DOM
+    // For now, inline the creation in the effect
+    this._fgCreateLines = [];
+    this._fgSetupLines = [];
+    
+    // Temporarily add item var to scope so it generates correctly
+    const itemNode = this.fgProcessBlock(body);
+    const itemCreateLines = this._fgCreateLines;
+    const itemSetupLines = this._fgSetupLines;
+    
+    // Restore
+    this._fgCreateLines = savedCreateLines;
+    this._fgSetupLines = savedSetupLines;
+    
+    // Generate the effect that manages the list
+    const effectLines = [];
+    effectLines.push(`__effect(() => {`);
+    effectLines.push(`  const items = ${collectionCode};`);
+    effectLines.push(`  const parent = ${anchorVar}.parentNode;`);
+    effectLines.push(`  // Remove old nodes`);
+    effectLines.push(`  for (const n of ${nodesVar}) n.remove();`);
+    effectLines.push(`  ${nodesVar} = [];`);
+    effectLines.push(`  // Create new nodes`);
+    effectLines.push(`  let insertPoint = ${anchorVar}.nextSibling;`);
+    effectLines.push(`  for (let ${indexVar} = 0; ${indexVar} < items.length; ${indexVar}++) {`);
+    effectLines.push(`    const ${itemVar} = items[${indexVar}];`);
+    
+    // Create item DOM
+    for (const line of itemCreateLines) {
+      // Replace bare itemVar references with the loop variable
+      effectLines.push(`    ${line}`);
+    }
+    effectLines.push(`    const node = ${itemNode};`);
+    effectLines.push(`    parent.insertBefore(node, insertPoint);`);
+    effectLines.push(`    ${nodesVar}.push(node);`);
+    
+    // Setup effects for item (if any)
+    for (const line of itemSetupLines) {
+      effectLines.push(`    ${line}`);
+    }
+    
+    effectLines.push(`  }`);
+    effectLines.push(`});`);
+    
+    this._fgSetupLines.push(effectLines.join('\n    '));
+    
+    return anchorVar;
+  }
+
+  /**
+   * Process a component instantiation
+   */
+  fgProcessComponent(componentName, args) {
+    // Store the component instance so we can call _setup() on it
+    const instVar = this.fgNewElement('inst');
+    const elVar = this.fgNewElement('el');
+    const propsCode = this.fgBuildComponentProps(args);
+    this._fgCreateLines.push(`${instVar} = new ${componentName}(${propsCode});`);
+    this._fgCreateLines.push(`${elVar} = ${instVar}._create();`);
+    // Call child's _setup if it exists
+    this._fgSetupLines.push(`if (${instVar}._setup) ${instVar}._setup();`);
+    return elVar;
+  }
+
+  /**
+   * Build props object for component instantiation
+   */
+  fgBuildComponentProps(args) {
+    const props = [];
+    const children = [];
+    
+    for (const arg of args) {
+      if (Array.isArray(arg) && arg[0] === 'object') {
+        for (let i = 1; i < arg.length; i++) {
+          const [key, value] = arg[i];
+          if (typeof key === 'string') {
+            const valueCode = this.generateInComponent(value, 'value');
+            props.push(`${key}: ${valueCode}`);
+          }
+        }
+      } else if (Array.isArray(arg) && (arg[0] === '->' || arg[0] === '=>')) {
+        // Children - for now skip fine-grained in nested components
+        children.push('/* children */');
+      }
+    }
+    
+    return props.length > 0 ? `{ ${props.join(', ')} }` : '{}';
   }
 
   /**

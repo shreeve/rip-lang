@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Rip Fine-Grained Performance Test</title>
+  <style>
+    body { font-family: system-ui; padding: 2rem; max-width: 800px; margin: 0 auto; }
+    .test { margin: 2rem 0; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; }
+    .result { font-family: monospace; background: #f5f5f5; padding: 0.5rem; margin: 0.5rem 0; }
+    button { padding: 0.5rem 1rem; margin: 0.25rem; cursor: pointer; }
+    h3 { margin-top: 0; }
+    .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .speedup { color: green; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>Rip Fine-Grained Reactivity Performance</h1>
+  
+  <div class="test">
+    <h3>Test: Update 1 value in component with 100 children</h3>
+    <p>This simulates updating a counter in a component with many sibling elements.</p>
+    
+    <div class="comparison">
+      <div>
+        <h4>❌ Old: Full Re-render</h4>
+        <div id="old-mount"></div>
+        <button onclick="runOldTest()">Run 10,000 updates</button>
+        <div class="result" id="old-result">-</div>
+      </div>
+      
+      <div>
+        <h4>✅ New: Fine-Grained</h4>
+        <div id="new-mount"></div>
+        <button onclick="runNewTest()">Run 10,000 updates</button>
+        <div class="result" id="new-result">-</div>
+      </div>
+    </div>
+    
+    <div class="result speedup" id="speedup">Run both tests to see speedup</div>
+  </div>
+
+  <script>
+    // === Rip Reactive Runtime ===
+    let __currentEffect = null, __pendingEffects = new Set();
+    function __signal(v) {
+      const subs = new Set();
+      let notifying = false;
+      return {
+        get value() { if (__currentEffect) subs.add(__currentEffect); return v; },
+        set value(n) {
+          if (n === v || notifying) return;
+          v = n;
+          notifying = true;
+          for (const sub of subs) __pendingEffects.add(sub);
+          const fx = [...__pendingEffects]; __pendingEffects.clear();
+          for (const e of fx) e.run();
+          notifying = false;
+        }
+      };
+    }
+    function __effect(fn) {
+      const e = {
+        dependencies: new Set(),
+        run() {
+          const prev = __currentEffect; __currentEffect = e;
+          try { fn(); } finally { __currentEffect = prev; }
+        }
+      };
+      e.run();
+      return () => {};
+    }
+    
+    // Helper to create elements
+    function h(tag, props, children) {
+      const el = document.createElement(tag);
+      if (children) {
+        for (const c of (Array.isArray(children) ? children : [children])) {
+          if (typeof c === 'string' || typeof c === 'number') {
+            el.appendChild(document.createTextNode(String(c)));
+          } else if (c) {
+            el.appendChild(c);
+          }
+        }
+      }
+      return el;
+    }
+
+    // ============================================================
+    // OLD APPROACH: Full re-render on every state change
+    // ============================================================
+    class OldCounter {
+      constructor() {
+        this.count = __signal(0);
+      }
+      
+      render() {
+        // Creates 100+ DOM nodes every single time!
+        const children = [h('span', {}, ['Count: ', this.count.value])];
+        for (let i = 0; i < 100; i++) {
+          children.push(h('div', {}, `Static item ${i}`));
+        }
+        return h('div', {}, children);
+      }
+      
+      mount(target) {
+        this._target = target;
+        __effect(() => {
+          const el = this.render();  // Rebuild entire tree!
+          if (this._el) this._el.replaceWith(el);
+          else target.appendChild(el);
+          this._el = el;
+        });
+        return this;
+      }
+    }
+
+    // ============================================================
+    // NEW APPROACH: Fine-grained updates
+    // ============================================================
+    class NewCounter {
+      constructor() {
+        this.count = __signal(0);
+      }
+      
+      _create() {
+        // Build static structure ONCE
+        this._root = document.createElement('div');
+        this._span = document.createElement('span');
+        this._span.appendChild(document.createTextNode('Count: '));
+        this._countText = document.createTextNode('');  // Dynamic part
+        this._span.appendChild(this._countText);
+        this._root.appendChild(this._span);
+        
+        // Add 100 static children
+        for (let i = 0; i < 100; i++) {
+          const div = document.createElement('div');
+          div.textContent = `Static item ${i}`;
+          this._root.appendChild(div);
+        }
+        
+        return this._root;
+      }
+      
+      _setup() {
+        // Just ONE tiny effect!
+        __effect(() => {
+          this._countText.data = this.count.value;  // Update ONE text node
+        });
+      }
+      
+      mount(target) {
+        target.appendChild(this._create());
+        this._setup();
+        return this;
+      }
+    }
+
+    // ============================================================
+    // Tests
+    // ============================================================
+    let oldCounter, newCounter;
+    let oldTime = null, newTime = null;
+    
+    // Mount components
+    oldCounter = new OldCounter().mount(document.getElementById('old-mount'));
+    newCounter = new NewCounter().mount(document.getElementById('new-mount'));
+    
+    function runOldTest() {
+      const start = performance.now();
+      for (let i = 0; i < 10000; i++) {
+        oldCounter.count.value = i;
+      }
+      const end = performance.now();
+      oldTime = end - start;
+      document.getElementById('old-result').textContent = `${oldTime.toFixed(2)}ms for 10,000 updates`;
+      updateSpeedup();
+    }
+    
+    function runNewTest() {
+      const start = performance.now();
+      for (let i = 0; i < 10000; i++) {
+        newCounter.count.value = i;
+      }
+      const end = performance.now();
+      newTime = end - start;
+      document.getElementById('new-result').textContent = `${newTime.toFixed(2)}ms for 10,000 updates`;
+      updateSpeedup();
+    }
+    
+    function updateSpeedup() {
+      if (oldTime !== null && newTime !== null) {
+        const speedup = (oldTime / newTime).toFixed(1);
+        document.getElementById('speedup').textContent = 
+          `🚀 Fine-grained is ${speedup}x faster! (${oldTime.toFixed(0)}ms vs ${newTime.toFixed(0)}ms)`;
+      }
+    }
+  </script>
+</body>
+</html>
