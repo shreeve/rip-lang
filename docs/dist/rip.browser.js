@@ -5037,7 +5037,7 @@ ${this.indent()}}`;
         const [methodName, funcDef] = methodStmt[i];
         if (Array.isArray(funcDef) && (funcDef[0] === "->" || funcDef[0] === "=>")) {
           const [, params, body2] = funcDef;
-          const paramStr = Array.isArray(params) ? params.map((p) => this.generateParam(p)).join(", ") : "";
+          const paramStr = Array.isArray(params) ? params.map((p) => this.formatParam(p)).join(", ") : "";
           const bodyCode = this.generateInComponent(body2, "value");
           lines.push(`  ${methodName}(${paramStr}) { return ${bodyCode}; }`);
         }
@@ -9277,7 +9277,7 @@ function compileToJS(source, options = {}) {
 }
 // src/browser.js
 var VERSION = "2.2.1";
-var BUILD_DATE = "2026-01-15@17:48:19GMT";
+var BUILD_DATE = "2026-01-15@18:48:11GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

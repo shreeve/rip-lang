@@ -528,17 +528,14 @@
 # A counter component with Pug-style template syntax
 component Counter
   count = 0
-  
   inc: -> count += 1
   dec: -> count -= 1
-  
   render
     .counter
       button @click: this.dec, "−"
       span.value count
       button @click: this.inc, "+"
 
-# Mount the counter
 counter = new Counter()
 counter.mount document.getElementById("counter-mount")
 
@@ -548,11 +545,11 @@ counter.mount document.getElementById("counter-mount")
 
 component Greeter
   name = "World"
-  
+  onInput: (e) -> name = e.target.value
   render
     .greeter
-      input @input: (e) => name = e.target.value, value: name, placeholder: "Your name..."
-      div.greeting
+      input @input: this.onInput, value: name
+      .greeting
         span "Hello, "
         span.name name
         span "!"
@@ -561,19 +558,19 @@ greeter = new Greeter()
 greeter.mount document.getElementById("greeter-mount")
 
 # ============================================
-# Derived Values Component
+# Derived Values (~= always equal)
 # ============================================
 
 component Calculator
   num = 5
   doubled ~= num * 2
   squared ~= num * num
-  
+  onInput: (e) -> num = parseInt(e.target.value) || 0
   render
     .calculator
       .row
         label "Number: "
-        input type: "number", @input: (e) => num = parseInt(e.target.value) || 0, value: num
+        input type: "number", @input: this.onInput, value: num
       .row
         span "Doubled: "
         span.result doubled

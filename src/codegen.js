@@ -1937,7 +1937,7 @@ export class CodeGenerator {
         const [methodName, funcDef] = methodStmt[i];
         if (Array.isArray(funcDef) && (funcDef[0] === '->' || funcDef[0] === '=>')) {
           const [, params, body] = funcDef;
-          const paramStr = Array.isArray(params) ? params.map(p => this.generateParam(p)).join(', ') : '';
+          const paramStr = Array.isArray(params) ? params.map(p => this.formatParam(p)).join(', ') : '';
           const bodyCode = this.generateInComponent(body, 'value');
           lines.push(`  ${methodName}(${paramStr}) { return ${bodyCode}; }`);
         }
