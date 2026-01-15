@@ -114,6 +114,52 @@
       cursor: pointer;
     }
     .stats { color: #888; margin-top: 1rem; }
+    .temp-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin: 0.5rem 0;
+    }
+    .temp-row label {
+      width: 100px;
+      color: #888;
+    }
+    .temp-row input {
+      width: 120px;
+      text-align: right;
+    }
+    .note {
+      color: #888;
+      font-size: 0.9rem;
+      margin-top: 1rem;
+    }
+    .miniCounter {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      font-size: 1.5rem;
+    }
+    .miniCounter button {
+      font-size: 1.5rem;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      border: none;
+      background: #ff6b6b;
+      color: white;
+      cursor: pointer;
+      font-weight: bold;
+      transition: transform 0.1s, background 0.2s;
+    }
+    .miniCounter button:hover { background: #ee5a5a; }
+    .miniCounter button:active { transform: scale(0.95); }
+    .miniCounter .count {
+      font-size: 3rem;
+      font-weight: bold;
+      min-width: 80px;
+      text-align: center;
+      color: #ff6b6b;
+    }
     code {
       background: #0f3460;
       padding: 0.2rem 0.5rem;
@@ -171,6 +217,26 @@
     </div>
     <div id="todo-list"></div>
     <div class="stats" id="todo-stats"></div>
+  </div>
+
+  <h2>5. Temperature Converter</h2>
+  <p>Two-way reactive binding — edit either field.</p>
+  <div class="demo-box">
+    <div class="temp-row">
+      <label>Celsius:</label>
+      <input type="number" id="celsius" value="0">
+    </div>
+    <div class="temp-row">
+      <label>Fahrenheit:</label>
+      <input type="number" id="fahrenheit" value="32">
+    </div>
+  </div>
+
+  <h2>6. Component</h2>
+  <p>Rip components are first-class language constructs with fine-grained reactivity.</p>
+  <div class="demo-box">
+    <div id="component-mount"></div>
+    <p class="note">State: <span id="component-state">0</span></p>
   </div>
 
   <h2>The Code</h2>
@@ -290,6 +356,61 @@ todos.push { id: nextId++, text: "Type your name", done: false }
 todos.push { id: nextId++, text: "Move the slider", done: false }
 todos.push { id: nextId++, text: "Check off this todo!", done: false }
 todoVersion += 1
+
+# ============================================
+# Demo 5: Temperature converter (two-way)
+# ============================================
+
+celsius := 0
+fahrenheit := 32
+
+# Update fahrenheit when celsius changes
+effect ->
+  f = celsius * 9 / 5 + 32
+  if Math.abs(f - fahrenheit) > 0.01
+    fahrenheit = Math.round(f * 100) / 100
+
+# Update celsius when fahrenheit changes  
+effect ->
+  c = (fahrenheit - 32) * 5 / 9
+  if Math.abs(c - celsius) > 0.01
+    celsius = Math.round(c * 100) / 100
+
+# Sync inputs with signals
+effect ->
+  document.getElementById("celsius").value = celsius
+  document.getElementById("fahrenheit").value = fahrenheit
+
+document.getElementById("celsius").oninput = (e) =>
+  celsius = parseFloat(e.target.value) || 0
+
+document.getElementById("fahrenheit").oninput = (e) =>
+  fahrenheit = parseFloat(e.target.value) || 32
+
+# ============================================
+# Demo 6: Component
+# ============================================
+
+# Define a counter component using Rip's component syntax
+component MiniCounter
+  value = 0
+  dec: ->
+    value -= 1
+  inc: ->
+    value += 1
+  render
+    div.miniCounter
+      button @click: this.dec, "-"
+      span.count value
+      button @click: this.inc, "+"
+
+# Mount the component
+miniCounter = new MiniCounter()
+miniCounter.mount document.getElementById("component-mount")
+
+# Show component state reactively
+effect ->
+  document.getElementById("component-state").textContent = miniCounter.value.value
   </script>
 
   <script>
