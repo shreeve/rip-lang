@@ -7493,7 +7493,7 @@ export default ${target}`;
       params.forEach(extractParamNames);
     }
     const bodyVars = this.collectFunctionVariables(body);
-    const newVars = new Set([...bodyVars].filter((v) => !this.programVars.has(v) && !paramNames.has(v)));
+    const newVars = new Set([...bodyVars].filter((v) => !this.programVars.has(v) && !this.reactiveVars?.has(v) && !paramNames.has(v)));
     const noReturnStatements = ["return", "throw", "break", "continue"];
     const loopStatements = ["for-in", "for-of", "for-from", "while", "until", "loop"];
     if (Array.isArray(body) && body[0] === "block") {
@@ -9248,7 +9248,7 @@ function compileToJS(source, options = {}) {
 }
 // src/browser.js
 var VERSION = "2.2.1";
-var BUILD_DATE = "2026-01-15@10:13:17GMT";
+var BUILD_DATE = "2026-01-15@11:41:33GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

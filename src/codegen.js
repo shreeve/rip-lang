@@ -5691,9 +5691,10 @@ export class CodeGenerator {
 
     // Remove variables that are:
     // 1. Already declared at program level (CoffeeScript semantics - access outer vars)
-    // 2. Function/method parameters (already declared in signature)
+    // 2. Reactive variables (signals/computed) - these must not be shadowed
+    // 3. Function/method parameters (already declared in signature)
     const newVars = new Set([...bodyVars].filter(v =>
-      !this.programVars.has(v) && !paramNames.has(v)
+      !this.programVars.has(v) && !this.reactiveVars?.has(v) && !paramNames.has(v)
     ));
 
     // Define statement type lists (used throughout)
