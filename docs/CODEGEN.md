@@ -204,6 +204,7 @@ Many grammar types are just organizational scaffolding - they route to other typ
 | `of` | 66 | operators.rip | Property check |
 | `typeof, delete` | 66 | operators.rip | Reflection operators |
 | `new` | 66 | operators.rip | Constructor call |
+| `.new()` | 32 | classes.rip | Ruby-style constructor → `new X()` |
 | `=~` | 44 | regex.rip | Regex match (Ruby-style) |
 
 ### Property Access (9 types) ✅

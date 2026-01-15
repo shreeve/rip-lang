@@ -39,6 +39,26 @@ component HelloWorld
 
 That's it. No imports, no boilerplate, no `export default`.
 
+### Creating & Mounting
+
+```coffee
+# Ruby-style constructor (Rip enhancement)
+app = HelloWorld.new()
+app.mount "#app"
+
+# Or chain it
+HelloWorld.new().mount "#app"
+
+# Traditional JS style also works
+app = new HelloWorld()
+app.mount "#app"
+
+# With props
+Counter.new(label: "Score", initial: 10).mount "#counter"
+```
+
+The `mount` method accepts either an element or a CSS selector string.
+
 ---
 
 ## Component Structure

@@ -11,7 +11,7 @@
 <p align="center">
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-2.2.2-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
-  <a href="#"><img src="https://img.shields.io/badge/tests-1033%2F1033-brightgreen.svg" alt="Tests"></a>
+  <a href="#"><img src="https://img.shields.io/badge/tests-1044%2F1044-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
 </p>
 
@@ -73,6 +73,10 @@ class Animal
 
 class Dog extends Animal
   speak: -> console.log "#{@name} barks"
+
+# Ruby-style constructors (both styles work)
+dog = Dog.new("Buddy")    # → new Dog("Buddy")
+dog = new Dog("Buddy")    # Traditional JS style
 ```
 
 ### Destructuring & Comprehensions
@@ -105,6 +109,7 @@ fn?(arg)                 # Safe call
 
 | Feature | Example | What it does |
 |---------|---------|--------------|
+| **Ruby `.new()`** | `Counter.new()` | Ruby-style constructor → `new Counter()` |
 | **Dammit `!`** | `fetchData!` | Calls the function AND awaits it |
 | **Void `!`** | `def process!` | Suppresses implicit return (always returns undefined) |
 | **Otherwise `!?`** | `val !? 5` | Defaults only if `undefined` (null/0/false are kept!) |
