@@ -11,7 +11,7 @@
 <p align="center">
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-2.0.0-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
-  <a href="#status"><img src="https://img.shields.io/badge/tests-968%2F968-brightgreen.svg" alt="Tests"></a>
+  <a href="#status"><img src="https://img.shields.io/badge/tests-1017%2F1017-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
 </p>
 
@@ -26,7 +26,7 @@ A clean-room **CoffeeScript-inspired compiler** that produces modern JavaScript 
 - 🚀 **Self-hosting** - Rip compiles itself (`bun run parser` works!)
 - ⚡ **~50% smaller** than CoffeeScript (9,839 LOC vs 17,760 LOC)
 - 🎨 **Modern output** - ES2022 with classes, modules, optional chaining
-- ✅ **Production-ready** - 968/968 tests passing (100%)
+- ✅ **Production-ready** - 981/981 tests passing (100%)
 
 ---
 
@@ -35,7 +35,7 @@ A clean-room **CoffeeScript-inspired compiler** that produces modern JavaScript 
 **Version 2.0.0** - **PRODUCTION READY** 🚀
 
 **Quality metrics:**
-- ✅ **968/968 tests passing** (100% coverage)
+- ✅ **1017/1017 tests passing** (100% coverage)
 - ✅ **Self-hosting** - Rip compiles itself, including its own parser generator
 - ✅ **Zero dependencies** - Completely standalone, no npm packages required
 - ✅ **9,839 LOC** - Lean, maintainable codebase (~50% smaller than CoffeeScript)
@@ -147,7 +147,7 @@ Rip includes **all of CoffeeScript's beloved features** plus modern enhancements
 ### For Developers
 - ✅ **Simple architecture** - S-expressions beat complex AST classes
 - ✅ **Easy to extend** - Add a case, run tests, done!
-- ✅ **Well-tested** - 968/968 tests (100% coverage)
+- ✅ **Well-tested** - 981/981 tests (100% coverage)
 - ✅ **Well-documented** - Complete guides (AGENT.md is gold!)
 - ✅ **Self-hosting** - Rip compiles itself (including parser generator)
 
@@ -233,7 +233,7 @@ echo 'x = 42' | ./bin/rip -s               # Pipe from stdin
 # Build
 bun run parser                             # Rebuild parser (self-hosting!)
 bun run browser                            # Build browser bundle
-bun run test                               # Run all 968 tests
+bun run test                               # Run all 981 tests
 ```
 
 ---
@@ -307,6 +307,38 @@ count.kill()   # Cleanup and return final value
 ```
 
 **See [docs/REACTIVITY.md](docs/REACTIVITY.md) for complete guide with FAQ.**
+
+### Templates (NEW in v2.0.0!)
+
+```coffee
+render
+  div#app.container
+    h1.title "Hello, #{name}!"
+    
+    # Dynamic classes (clsx-compatible)
+    div.card.('active', isSelected && 'selected')
+    
+    # Two-way binding
+    input [@bind.value]: username
+    
+    # Events with modifiers
+    button @click.prevent: submit, "Submit"
+    
+    # Spread attributes
+    div.wrapper ...props
+      span "Content"
+
+# Compiles to efficient h() calls:
+# h('div#app.container', 0, [
+#   h('h1.title', 0, `Hello, ${name}!`),
+#   h('div.card', { class: cx('active', isSelected && 'selected') }),
+#   h('input', { value: username, oninput: (e) => username = e.target.value }),
+#   h('button', { onclick: (e) => { e.preventDefault(); submit(e); } }, "Submit"),
+#   h('div.wrapper', { ...props }, h('span', 0, "Content"))
+# ])
+```
+
+**See [docs/TEMPLATES.md](docs/TEMPLATES.md) for complete guide.**
 
 ### Unique Features
 
@@ -493,6 +525,7 @@ See [docs/BROWSER.md](docs/BROWSER.md) for details.
 **For users:**
 - [README.md](README.md) - This file (overview and quick start)
 - [docs/REACTIVITY.md](docs/REACTIVITY.md) - **🆕 Reactive system guide** (signals, effects, FAQ)
+- [docs/TEMPLATES.md](docs/TEMPLATES.md) - **🆕 Template DSL guide** (render blocks, binding, events)
 - [docs/examples/](docs/examples/) - Example programs
 - [CHANGELOG.md](CHANGELOG.md) - Version history
 
@@ -506,7 +539,6 @@ See [docs/BROWSER.md](docs/BROWSER.md) for details.
 - [docs/BROWSER.md](docs/BROWSER.md) - Browser usage & REPLs
 
 **Future features (specifications):**
-- [docs/TEMPLATES.md](docs/TEMPLATES.md) - Template DSL (Phase 2 - next!)
 - [docs/COMPONENTS.md](docs/COMPONENTS.md) - Component system (Phase 3 - uses templates + reactivity)
 
 **For contributors:**
@@ -552,7 +584,7 @@ rip/
 │       ├── grammar.rip  # Grammar specification
 │       └── solar.rip    # Parser generator
 ├── docs/                # Complete documentation
-├── test/rip/            # 23 test files, 968 tests
+├── test/rip/            # 24 test files, 981 tests
 ├── AGENT.md             # Complete developer guide
 └── README.md            # This file
 ```

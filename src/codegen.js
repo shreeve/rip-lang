@@ -7,7 +7,11 @@
  * - CoffeeScript Lexer (3,146 LOC) → Tokens
  * - Solar Parser (340 LOC) → S-expressions
  * - This Codegen (5,221 LOC) → JavaScript
- *
+ */
+
+import { HTML_TAGS } from './tags.js';
+
+/*
  * Pattern Reference:
  * See CODEGEN.md for complete mapping of grammar → sexp → code
  *
@@ -101,6 +105,9 @@ export class CodeGenerator {
     'derived': 'generateDerived',
     'readonly': 'generateReadonly',
     'effect': 'generateEffect',
+
+    // Templates
+    'render': 'generateRender',
 
     // Control flow - Simple statements
     'break': 'generateBreak',
@@ -1546,6 +1553,523 @@ export class CodeGenerator {
     }
 
     return `__effect(() => ${bodyCode})`;
+  }
+
+  //-------------------------------------------------------------------------
+  // TEMPLATES - Runtime-based DOM generation using h(), frag(), txt()
+  //-------------------------------------------------------------------------
+
+  /**
+   * Check if identifier is an HTML tag (handles div#id syntax)
+   */
+  isHtmlTag(name) {
+    // Handle div#main syntax - extract just the tag part
+    const tagPart = name.split('#')[0];
+    return HTML_TAGS.has(tagPart.toLowerCase());
+  }
+
+  /**
+   * Parse event handler from object key
+   * Returns { eventName, modifiers, handler } or null
+   */
+  parseEventHandler(key, value) {
+    // Pattern 1: Simple @event → [".", "this", "eventName"]
+    if (Array.isArray(key) && key[0] === '.' && key[1] === 'this' && typeof key[2] === 'string') {
+      return { eventName: key[2], modifiers: [], handler: this.generate(value, 'value') };
+    }
+    // Pattern 2: [@event.modifier] → ["computed", propertyChain]
+    if (Array.isArray(key) && key[0] === 'computed') {
+      const { eventName, modifiers } = this.extractEventChain(key[1]);
+      if (eventName) {
+        return { eventName, modifiers, handler: this.generate(value, 'value') };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Extract event name and modifiers from property chain
+   */
+  extractEventChain(chain) {
+    const modifiers = [];
+    let current = chain;
+    while (Array.isArray(current) && current[0] === '.') {
+      const [, inner, prop] = current;
+      if (Array.isArray(inner) && inner[0] === '.' && inner[1] === 'this') {
+        modifiers.unshift(prop);
+        return { eventName: inner[2], modifiers };
+      }
+      if (typeof prop === 'string') modifiers.unshift(prop);
+      current = inner;
+    }
+    if (Array.isArray(current) && current[0] === '.' && current[1] === 'this') {
+      return { eventName: current[2], modifiers };
+    }
+    return { eventName: null, modifiers: [] };
+  }
+
+  /**
+   * Wrap event handler with modifier code
+   */
+  wrapEventHandler(handler, modifiers) {
+    if (modifiers.length === 0) return handler;
+
+    const checks = [];
+    const actions = [];
+
+    for (const mod of modifiers) {
+      switch (mod) {
+        case 'prevent': actions.push('e.preventDefault()'); break;
+        case 'stop': actions.push('e.stopPropagation()'); break;
+        case 'self': checks.push('if (e.target !== e.currentTarget) return'); break;
+        case 'enter': checks.push("if (e.key !== 'Enter') return"); break;
+        case 'escape': case 'esc': checks.push("if (e.key !== 'Escape') return"); break;
+        case 'tab': checks.push("if (e.key !== 'Tab') return"); break;
+        case 'space': checks.push("if (e.key !== ' ') return"); break;
+        case 'up': checks.push("if (e.key !== 'ArrowUp') return"); break;
+        case 'down': checks.push("if (e.key !== 'ArrowDown') return"); break;
+        case 'left': checks.push("if (e.key !== 'ArrowLeft') return"); break;
+        case 'right': checks.push("if (e.key !== 'ArrowRight') return"); break;
+        case 'ctrl': checks.push('if (!e.ctrlKey) return'); break;
+        case 'alt': checks.push('if (!e.altKey) return'); break;
+        case 'shift': checks.push('if (!e.shiftKey) return'); break;
+        case 'meta': checks.push('if (!e.metaKey) return'); break;
+        // once, capture, passive are handled via addEventListener options
+      }
+    }
+
+    const body = [...checks, ...actions, `(${handler})(e)`].join('; ');
+    return `(e) => { ${body}; }`;
+  }
+
+  /**
+   * Parse binding directive: [@bind.prop]: variable
+   * Returns { prop, event, valueExpr, handler } or null
+   */
+  parseBindingDirective(key, value, tag) {
+    // Pattern: ["computed", [".", [".", "this", "bind"], "propName"]]
+    if (!Array.isArray(key) || key[0] !== 'computed') return null;
+    
+    const chain = key[1];
+    if (!Array.isArray(chain) || chain[0] !== '.') return null;
+    
+    const [, inner, propName] = chain;
+    if (!Array.isArray(inner) || inner[0] !== '.' || inner[1] !== 'this' || inner[2] !== 'bind') {
+      return null;
+    }
+    
+    // Extract property name and variable
+    const prop = typeof propName === 'string' ? propName : String(propName);
+    const varName = this.generate(value, 'value');
+    
+    // Determine the right event and value accessor based on prop/tag
+    let event, valueAccessor;
+    
+    if (prop === 'checked') {
+      // Checkbox/radio: use 'change' event and 'checked' property
+      event = 'onchange';
+      valueAccessor = 'e.target.checked';
+    } else if (prop === 'value') {
+      // Text inputs/textareas: use 'input' event
+      // Selects: use 'change' event
+      if (tag === 'select') {
+        event = 'onchange';
+      } else {
+        event = 'oninput';
+      }
+      valueAccessor = 'e.target.value';
+    } else {
+      // Generic: use 'input' event
+      event = 'oninput';
+      valueAccessor = `e.target.${prop}`;
+    }
+    
+    return {
+      prop,
+      event,
+      valueExpr: varName,
+      handler: `(e) => ${varName} = ${valueAccessor}`
+    };
+  }
+
+  /**
+   * Generate render block using h() runtime helper
+   * Pattern: ["render", block]
+   */
+  generateRender(head, rest, context, sexpr) {
+    const [body] = rest;
+    this.usesTemplates = true;
+
+    if (!Array.isArray(body) || body[0] !== 'block') {
+      return this.generateTemplateElement(body);
+    }
+
+    const statements = body.slice(1);
+    if (statements.length === 0) return 'null';
+    if (statements.length === 1) return this.generateTemplateElement(statements[0]);
+
+    // Multiple roots - use frag()
+    const elements = statements.map(s => this.generateTemplateElement(s));
+    return `frag(${elements.join(', ')})`;
+  }
+
+  /**
+   * Generate a single template element as h() call
+   */
+  generateTemplateElement(sexpr) {
+    // String literal → text
+    if (typeof sexpr === 'string') {
+      if (sexpr.startsWith('"') || sexpr.startsWith("'") || sexpr.startsWith('`')) {
+        return sexpr; // h() will convert strings to text nodes
+      }
+      // Plain tag (runtime h() handles #id and .class parsing)
+      return `h('${sexpr}', 0)`;
+    }
+
+    // String object → text
+    if (sexpr instanceof String) {
+      return this.generate(sexpr, 'value');
+    }
+
+    // Not an array → expression text
+    if (!Array.isArray(sexpr)) {
+      return `txt(${this.generate(sexpr, 'value')})`;
+    }
+
+    const [head, ...rest] = sexpr;
+
+    // String interpolation → text
+    if (head === 'str') {
+      return this.generate(sexpr, 'value');
+    }
+
+    // Block → multiple children (frag)
+    if (head === 'block') {
+      if (rest.length === 0) return 'null';
+      if (rest.length === 1) return this.generateTemplateElement(rest[0]);
+      const elements = rest.map(s => this.generateTemplateElement(s));
+      return `frag(${elements.join(', ')})`;
+    }
+
+    // Control flow
+    if (head === 'if' || head === 'unless') {
+      return this.generateTemplateConditional(sexpr);
+    }
+    if (head === 'for-in' || head === 'for-of') {
+      return this.generateTemplateLoop(sexpr);
+    }
+
+    // Property chain: div.class or user.name
+    if (head === '.') {
+      const [obj, prop] = rest;
+      if (typeof obj === 'string' && typeof prop === 'string') {
+        if (this.isHtmlTag(obj)) {
+          return `h('${obj}.${prop}', 0)`;
+        }
+        return `txt(${this.generate(sexpr, 'value')})`;
+      }
+      if (Array.isArray(obj) && obj[0] === '.') {
+        const { tag, classes } = this.collectTemplateClasses(sexpr);
+        if (this.isHtmlTag(tag)) {
+          return `h('${tag}.${classes.join('.')}', 0)`;
+        }
+        return `txt(${this.generate(sexpr, 'value')})`;
+      }
+    }
+
+    // Tag with args: tag attr: val, "text", -> children
+    if (typeof head === 'string' && !CodeGenerator.GENERATORS[head]) {
+      return this.generateH(head, [], rest);
+    }
+
+    // Property chain with args: div.card -> children
+    if (Array.isArray(head) && head[0] === '.') {
+      // Check for dynamic class: div.__cx__('card', x && 'active')
+      // Note: head[2] may be a String object, so use == for coercion
+      if (head.length === 3 && head[2] == '__cx__') {
+        const baseTag = head[1];
+        // Collect tag and static classes if baseTag is a property chain
+        let tag, classes;
+        if (Array.isArray(baseTag) && baseTag[0] === '.') {
+          ({ tag, classes } = this.collectTemplateClasses(baseTag));
+        } else {
+          tag = baseTag;
+          classes = [];
+        }
+        // Generate cx() call for dynamic classes
+        const cxArgs = rest.map(arg => this.generate(arg, 'value')).join(', ');
+        return this.generateHWithDynamicClass(tag, classes, cxArgs, []);
+      }
+      const { tag, classes } = this.collectTemplateClasses(head);
+      return this.generateH(tag, classes, rest);
+    }
+
+    // Dynamic class call with children: div.card.(x && 'active') -> children
+    // head = [['.', [...], '__cx__'], ...cxArgs]  (the .__cx__ call)
+    // rest = [arrow with children]
+    if (Array.isArray(head) && Array.isArray(head[0]) && head[0][0] === '.' && head[0][2] == '__cx__') {
+      const propAccess = head[0];  // ['.', baseTag, '__cx__']
+      const cxArgs = head.slice(1);  // args to cx()
+      const baseTag = propAccess[1];
+      
+      // Collect tag and static classes
+      let tag, classes;
+      if (Array.isArray(baseTag) && baseTag[0] === '.') {
+        ({ tag, classes } = this.collectTemplateClasses(baseTag));
+      } else {
+        tag = baseTag;
+        classes = [];
+      }
+      
+      // Generate cx args and pass children through
+      const cxArgsStr = cxArgs.map(arg => this.generate(arg, 'value')).join(', ');
+      return this.generateHWithDynamicClassAndChildren(tag, classes, cxArgsStr, rest);
+    }
+
+    // Default: expression as text
+    return `txt(${this.generate(sexpr, 'value')})`;
+  }
+
+  /**
+   * Generate h() call with tag, classes, and args
+   */
+  generateH(tag, classes, args) {
+    const props = {};
+    const spreads = [];  // Track spread props: ...props
+    const children = [];
+    let refVar = null;
+
+    for (const arg of args) {
+      // Arrow function = children
+      if (Array.isArray(arg) && (arg[0] === '->' || arg[0] === '=>')) {
+        const block = arg[2];
+        if (Array.isArray(block) && block[0] === 'block') {
+          children.push(...block.slice(1).map(s => this.generateTemplateElement(s)));
+        } else {
+          children.push(this.generateTemplateElement(block));
+        }
+      }
+      // Spread = ...props
+      else if (Array.isArray(arg) && arg[0] === '...') {
+        spreads.push(this.generate(arg[1], 'value'));
+      }
+      // Object = attributes/events
+      else if (Array.isArray(arg) && arg[0] === 'object') {
+        for (const pair of arg.slice(1)) {
+          if (Array.isArray(pair) && pair.length >= 2) {
+            const [key, value] = pair;
+            
+            // Check for binding directive: [@bind.prop]: var
+            const bindInfo = this.parseBindingDirective(key, value, tag);
+            if (bindInfo) {
+              props[bindInfo.prop] = bindInfo.valueExpr;
+              props[bindInfo.event] = bindInfo.handler;
+              continue;
+            }
+            
+            const eventInfo = this.parseEventHandler(key, value);
+            if (eventInfo) {
+              const handler = eventInfo.modifiers.length > 0
+                ? this.wrapEventHandler(eventInfo.handler, eventInfo.modifiers)
+                : eventInfo.handler;
+              props[`on${eventInfo.eventName}`] = handler;
+            } else {
+              const keyStr = typeof key === 'string' ? key : this.generate(key, 'value');
+              if (keyStr === 'ref') {
+                refVar = typeof value === 'string' ? value : this.generate(value, 'value');
+              } else if (keyStr === 'key') {
+                props.key = this.generate(value, 'value');
+              } else if (keyStr === 'class') {
+                props.class = this.generate(value, 'value');
+              } else {
+                props[keyStr] = this.generate(value, 'value');
+              }
+            }
+          }
+        }
+      }
+      // String = text child
+      else if (typeof arg === 'string') {
+        if (arg.startsWith('"') || arg.startsWith("'") || arg.startsWith('`')) {
+          children.push(arg);
+        } else {
+          children.push(`String(${arg})`);
+        }
+      }
+      // Other = nested element
+      else {
+        children.push(this.generateTemplateElement(arg));
+      }
+    }
+
+    // Build tag string with classes
+    const tagStr = classes.length > 0 ? `${tag}.${classes.join('.')}` : tag;
+
+    // Build props string (with spread support)
+    let propsStr = '0';
+    const hasProps = Object.keys(props).length > 0;
+    const hasSpreads = spreads.length > 0;
+    
+    if (hasProps || hasSpreads) {
+      const parts = [];
+      // Add spreads first
+      for (const spread of spreads) {
+        parts.push(`...${spread}`);
+      }
+      // Add explicit props (override spreads)
+      for (const [k, v] of Object.entries(props)) {
+        parts.push(`${k}: ${v}`);
+      }
+      propsStr = `{ ${parts.join(', ')} }`;
+    }
+
+    // Build children
+    let childrenStr = '';
+    if (children.length === 1) {
+      childrenStr = `, ${children[0]}`;
+    } else if (children.length > 1) {
+      childrenStr = `, [${children.join(', ')}]`;
+    }
+
+    // Generate h() call
+    let result = `h('${tagStr}', ${propsStr}${childrenStr})`;
+
+    // Handle ref: special case (assign after creation)
+    if (refVar) {
+      result = `(${refVar} = ${result})`;
+    }
+
+    return result;
+  }
+
+  /**
+   * Generate h() call with dynamic classes via cx()
+   */
+  generateHWithDynamicClass(tag, staticClasses, cxArgs) {
+    this.usesTemplates = true;
+    
+    // Build tag string with static classes
+    const tagStr = staticClasses.length > 0 ? `${tag}.${staticClasses.join('.')}` : tag;
+    
+    // Build props with cx() for class
+    const propsStr = `{ class: cx(${cxArgs}) }`;
+    
+    return `h('${tagStr}', ${propsStr})`;
+  }
+
+  /**
+   * Generate h() call with dynamic classes and children
+   */
+  generateHWithDynamicClassAndChildren(tag, staticClasses, cxArgs, args) {
+    this.usesTemplates = true;
+    
+    // Build tag string with static classes
+    const tagStr = staticClasses.length > 0 ? `${tag}.${staticClasses.join('.')}` : tag;
+    
+    // Process children from args (arrow functions)
+    const children = [];
+    for (const arg of args) {
+      if (Array.isArray(arg) && (arg[0] === '->' || arg[0] === '=>')) {
+        const block = arg[2];
+        if (Array.isArray(block) && block[0] === 'block') {
+          children.push(...block.slice(1).map(s => this.generateTemplateElement(s)));
+        } else {
+          children.push(this.generateTemplateElement(block));
+        }
+      }
+    }
+    
+    // Build props with cx() for class
+    const propsStr = `{ class: cx(${cxArgs}) }`;
+    
+    // Build children string
+    let childrenStr = '';
+    if (children.length === 1) {
+      childrenStr = `, ${children[0]}`;
+    } else if (children.length > 1) {
+      childrenStr = `, [${children.join(', ')}]`;
+    }
+    
+    return `h('${tagStr}', ${propsStr}${childrenStr})`;
+  }
+
+  /**
+   * Collect classes from property chain: (. (. div card) active) → {tag: "div", classes: ["card", "active"]}
+   */
+  collectTemplateClasses(sexpr) {
+    const classes = [];
+    let current = sexpr;
+    while (Array.isArray(current) && current[0] === '.') {
+      if (typeof current[2] === 'string') classes.unshift(current[2]);
+      current = current[1];
+    }
+    return { tag: typeof current === 'string' ? current : 'div', classes };
+  }
+
+  /**
+   * Generate conditional in template
+   */
+  generateTemplateConditional(sexpr) {
+    const [head, condition, thenBlock, elseBlock] = sexpr;
+    const cond = this.generate(condition, 'value');
+    const condExpr = head === 'unless' ? `!(${cond})` : cond;
+
+    // Unwrap single-element arrays (postfix if)
+    let actualThen = thenBlock;
+    if (Array.isArray(thenBlock) && thenBlock.length === 1 && Array.isArray(thenBlock[0]) && thenBlock[0][0] !== 'block') {
+      actualThen = thenBlock[0];
+    }
+    const thenCode = this.generateTemplateElement(actualThen);
+
+    if (elseBlock) {
+      let actualElse = elseBlock;
+      if (Array.isArray(elseBlock) && elseBlock.length === 1 && Array.isArray(elseBlock[0]) && elseBlock[0][0] !== 'block') {
+        actualElse = elseBlock[0];
+      }
+      return `(${condExpr} ? ${thenCode} : ${this.generateTemplateElement(actualElse)})`;
+    }
+    return `(${condExpr} ? ${thenCode} : null)`;
+  }
+
+  /**
+   * Generate loop in template
+   */
+  generateTemplateLoop(sexpr) {
+    const [head] = sexpr;
+    if (head === 'for-in') return this.generateTemplateForIn(sexpr);
+    if (head === 'for-of') return this.generateTemplateForOf(sexpr);
+    return 'null';
+  }
+
+  /**
+   * Generate for-in loop: for item in items
+   */
+  generateTemplateForIn(sexpr) {
+    const [, vars, iterable, , guard, body] = sexpr;
+    const itemVar = Array.isArray(vars) && vars[0] ? (typeof vars[0] === 'string' ? vars[0] : this.generate(vars[0], 'value')) : '__item';
+    const indexVar = Array.isArray(vars) && vars[1] ? (typeof vars[1] === 'string' ? vars[1] : '__i') : '__i';
+    const iterCode = this.generate(iterable, 'value');
+    const bodyCode = this.generateTemplateElement(body);
+    const guardCode = guard ? `if (!(${this.generate(guard, 'value')})) continue; ` : '';
+
+    return `frag(...${iterCode}.map((${itemVar}, ${indexVar}) => ${guardCode ? `{ ${guardCode}return ${bodyCode}; }` : bodyCode}))`;
+  }
+
+  /**
+   * Generate for-of loop: for key, val of obj
+   */
+  generateTemplateForOf(sexpr) {
+    const [, vars, object, own, guard, body] = sexpr;
+    const keyVar = Array.isArray(vars) && vars[0] ? (typeof vars[0] === 'string' ? vars[0] : '__k') : '__k';
+    const valVar = Array.isArray(vars) && vars[1] ? (typeof vars[1] === 'string' ? vars[1] : null) : null;
+    const objCode = this.generate(object, 'value');
+    const bodyCode = this.generateTemplateElement(body);
+
+    const entries = own ? `Object.entries(${objCode})` : `Object.entries(${objCode})`;
+    const destructure = valVar ? `[${keyVar}, ${valVar}]` : `[${keyVar}]`;
+    const guardCode = guard ? `if (!(${this.generate(guard, 'value')})) continue; ` : '';
+
+    return `frag(...${entries}.map((${destructure}) => ${guardCode ? `{ ${guardCode}return ${bodyCode}; }` : bodyCode}))`;
   }
 
   //-------------------------------------------------------------------------

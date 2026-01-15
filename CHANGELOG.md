@@ -1,3 +1,5 @@
+<p><img src="docs/rip.svg" alt="Rip Logo" width="100"></p>
+
 # Changelog
 
 All notable changes to Rip will be documented in this file.

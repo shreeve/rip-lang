@@ -1,3 +1,5 @@
+<p><img src="docs/rip.svg" alt="Rip Logo" width="100"></p>
+
 # Contributing to Rip
 
 Thanks for your interest in contributing to Rip! This guide shows the complete workflow with a real example.

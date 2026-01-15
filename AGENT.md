@@ -49,10 +49,18 @@ bun run parser  # Regenerates src/parser.js from grammar.rip
 ## 🎯 Current Status
 
 **Version:** 2.0.0
-**Tests:** 968 passing (100%)
-**Status:** Production-ready, self-hosting fully operational, **Reactivity Phase 1 COMPLETE**
+**Tests:** 1017 passing (100%)
+**Status:** Production-ready, self-hosting fully operational, **Phases 1 & 2 COMPLETE**
 
 **Recent accomplishments (January 2026):**
+- ✅ **TEMPLATES (Phase 2 COMPLETE)** - Full template DSL:
+  - `render` blocks with implicit indentation-based nesting
+  - CSS selectors: `div#id.class1.class2`
+  - Dynamic classes: `div.('card', isActive && 'active')` with `cx()` (clsx-compatible)
+  - Event handlers with modifiers: `@click.prevent.stop: handler`
+  - Spread attributes: `div ...props`
+  - Two-way binding: `[@bind.value]: username`
+  - Runtime helpers: `h()`, `txt()`, `frag()`, `cx()`
 - ✅ **REACTIVITY SYSTEM (v2.0.0)** - Full reactive primitives as language-level operators:
   - `:=` signal assignment (reactive state)
   - `∞=` / `~=` derived values (computed)
@@ -61,30 +69,24 @@ bun run parser  # Regenerates src/parser.js from grammar.rip
   - Auto-unwrapping (no `.value` needed in most cases)
   - Lifecycle methods: `read()`, `lock()`, `free()`, `kill()`
   - Zero overhead for non-reactive code (runtime only injected when needed)
-- ✅ **Comprehensive documentation** - `docs/REACTIVITY.md` with FAQ, examples, tracking table
-- ✅ Runtime implemented in `src/codegen.js` (inlined) and `src/repl.js`
+- ✅ **Comprehensive documentation** - `docs/REACTIVITY.md` and `docs/TEMPLATES.md`
 
 **Previous accomplishments (November 2025):**
 - ✅ Dispatch table architecture - All 110 cases (O(1) lookup)
 - ✅ Massive cleanup - 5,246 clean LOC
 - ✅ Parser optimization - 28.7% faster, 24.5% smaller
 
-**Next up (Phase 2 - Templates):**
-- 🔜 Template syntax lexing (`div.class#id`, `@event:`)
-- 🔜 Template grammar for HTML generation
-- 🔜 Event handlers, conditionals, loops in templates
-- 🔜 See: `docs/TEMPLATES.md` for specification
-
-**Then (Phase 3 - Components):**
+**Next (Phase 3 - Components):**
 - 🔜 `component` keyword (uses templates + reactivity)
 - 🔜 Props system (`@prop`)
 - 🔜 Lifecycle hooks
+- 🔜 Slots for composition
 - 🔜 See: `docs/COMPONENTS.md` for specification
 
 **Check current state:**
 ```bash
 git log --oneline -10            # Recent commits
-bun run test                     # Verify: 968/968 tests
+bun run test                     # Verify: 981/981 tests
 bun run parser                   # Test self-hosting ✅
 ./bin/rip                        # Test REPL with reactivity
 ```
@@ -136,21 +138,35 @@ count = 20  # Effect fires automatically!
 echo 'count := 10' | ./bin/rip -c
 ```
 
-### What's Next (Phase 2 - Templates)
+### Phase 2 - Templates (COMPLETE!)
 
-See `docs/TEMPLATES.md` for the template DSL specification:
-- `div.class#id` syntax
-- `@event: handler` event binding
-- `for`/`if` in templates
-- Attribute handling
+See `docs/TEMPLATES.md` for the complete template DSL:
 
-### Then (Phase 3 - Components)
+**Syntax:**
+```coffee
+render
+  div#main.card ...props
+    h1.title "Hello, #{name}!"
+    input [@bind.value]: username, @keydown.enter: submit
+    button.('btn', isActive && 'active') @click.prevent: handleClick
+      "Submit"
+```
+
+**Features:**
+- CSS selectors: `div#id.class1.class2`
+- Dynamic classes: `div.('card', condition && 'extra')`
+- Event modifiers: `@click.prevent.stop: handler`
+- Spread attributes: `div ...props`
+- Two-way binding: `[@bind.value]: var`
+- Implicit nesting via indentation
+
+### Next (Phase 3 - Components)
 
 See `docs/COMPONENTS.md` - combines templates + reactivity:
 - `component` keyword
-- `render` block (uses templates!)
 - Props (`@prop`)
 - Lifecycle hooks
+- Slots for composition
 
 ---
 
@@ -195,7 +211,7 @@ undefined → ERROR (syntax error)
 **Performance results:**
 - 28.7% faster parsing (3.27ms → 2.33ms average)
 - 24.5% smaller file size (291.9KB → 220.4KB)
-- All 968 tests passing
+- All 981 tests passing
 
 **Why it's fast:** Direct integer comparison (`action > 0`, `action < 0`) instead of array unpacking, better cache locality, fewer allocations. The sign bit elegantly encodes the operation type.
 
@@ -246,7 +262,7 @@ test/rip/
 ├── functions.rip        (86 tests)
 ├── loops.rip            (34 tests)
 ... 18 more files
-Total: 968 tests (100% passing)
+Total: 981 tests (100% passing)
 ```
 
 ### Test-Driven Development
@@ -434,7 +450,7 @@ git commit -m "Fix: ...
 
 Fixes #N  ← Auto-closes issue!
 
-All tests passing: 968/968 (100%)"
+All tests passing: 981/981 (100%)"
 
 # 10. PR and merge
 git push origin fix/issue-name
@@ -838,7 +854,7 @@ git commit -m "fix bug"  # WRONG - didn't run tests!
 
 ### ✅ Always Test First
 ```bash
-bun run test  # MUST be 968/968 passing
+bun run test  # MUST be 981/981 passing
 git commit
 ```
 
@@ -879,7 +895,7 @@ bun script.rip
 ### Testing
 
 ```bash
-# All tests (968 total)
+# All tests (981 total)
 bun run test
 
 # Specific test file
@@ -1056,7 +1072,7 @@ git commit -m "Fix: Description
 
 Fixes #N
 
-All tests passing: 968/968 (100%)"
+All tests passing: 981/981 (100%)"
    ```
 
 ---
@@ -1140,7 +1156,7 @@ All tests passing: 968/968 (100%)"
 
 | Directory | Contents |
 |-----------|----------|
-| `test/rip/` | 23 test files, 968 tests total |
+| `test/rip/` | 24 test files, 981 tests total |
 | `test/runner.js` | Test framework |
 
 **Test types:**
@@ -1210,7 +1226,7 @@ Rip has **zero runtime or build dependencies**. This is intentional and must be 
 > - Keep the IR simple (s-expressions)
 > - Keep the pipeline clear (lex → parse → generate)
 > - Keep the code minimal (pattern matching)
-> - Test everything (968/968 tests passing)
+> - Test everything (981/981 tests passing)
 
 **Core practices:**
 
@@ -1259,7 +1275,7 @@ Rip has **zero runtime or build dependencies**. This is intentional and must be 
 ## ✅ Success Criteria
 
 **Before committing:**
-- ✅ All tests pass (968/968 = 100%)
+- ✅ All tests pass (981/981 = 100%)
 - ✅ Code follows existing patterns
 - ✅ Documentation updated (if needed)
 - ✅ Browser bundle rebuilt (if codegen changed)
@@ -1296,7 +1312,7 @@ Rip has **zero runtime or build dependencies**. This is intentional and must be 
 - Total: ~9,000 LOC
 
 **Tests:**
-- 968 tests across 23 files
+- 1017 tests across 24 files
 - 100% passing rate
 - Comprehensive coverage
 

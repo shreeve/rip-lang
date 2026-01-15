@@ -183,3 +183,194 @@ export function batch(fn) {
 export function readonly(value) {
   return Object.freeze({ value });
 }
+
+// ============================================================================
+// Template Runtime - DOM creation helper
+// ============================================================================
+
+// SVG namespace
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+// SVG tags that need createElementNS
+const SVG_TAGS = new Set([
+  'svg', 'animate', 'animateMotion', 'animateTransform', 'circle', 'clipPath',
+  'defs', 'desc', 'ellipse', 'feBlend', 'feColorMatrix', 'feComponentTransfer',
+  'feComposite', 'feConvolveMatrix', 'feDiffuseLighting', 'feDisplacementMap',
+  'feDistantLight', 'feDropShadow', 'feFlood', 'feFuncA', 'feFuncB', 'feFuncG',
+  'feFuncR', 'feGaussianBlur', 'feImage', 'feMerge', 'feMergeNode', 'feMorphology',
+  'feOffset', 'fePointLight', 'feSpecularLighting', 'feSpotLight', 'feTile',
+  'feTurbulence', 'filter', 'foreignObject', 'g', 'image', 'line', 'linearGradient',
+  'marker', 'mask', 'metadata', 'mpath', 'path', 'pattern', 'polygon', 'polyline',
+  'radialGradient', 'rect', 'set', 'stop', 'switch', 'symbol', 'text', 'textPath',
+  'title', 'tspan', 'use', 'view'
+]);
+
+/**
+ * Create a DOM element with props and children
+ * @param {string} tag - Tag name (can include classes: "div.card.active")
+ * @param {object|null|0} props - Attributes, events, and special props
+ * @param {any} children - Child elements, text, or array
+ * @returns {Element}
+ *
+ * Props:
+ * - class: "card" or ["card", "active"] → className
+ * - on*: onclick, onkeydown → addEventListener
+ * - ref: variable → assigns element to variable (handled in generated code)
+ * - key: value → data-key attribute
+ * - others: setAttribute
+ *
+ * Children:
+ * - string → text node
+ * - Element → appendChild
+ * - array → each child appended
+ * - null/undefined → ignored
+ */
+export function h(tag, props, children) {
+  // Parse tag for ID and classes: "div#main.card.active" → tag="div", id="main", classes=["card", "active"]
+  let tagName = tag;
+  let tagId = null;
+  let tagClasses = null;
+
+  // Handle #id and .class in any order
+  const hashIndex = tag.indexOf('#');
+  const dotIndex = tag.indexOf('.');
+
+  if (hashIndex !== -1 || dotIndex !== -1) {
+    // Find where the selectors start
+    const selectorStart = hashIndex === -1 ? dotIndex : dotIndex === -1 ? hashIndex : Math.min(hashIndex, dotIndex);
+    tagName = tag.slice(0, selectorStart);
+    
+    // Parse the rest for #id and .classes
+    const rest = tag.slice(selectorStart);
+    const parts = rest.split(/(?=[#.])/);  // Split keeping delimiters
+    
+    for (const part of parts) {
+      if (part.startsWith('#')) {
+        tagId = part.slice(1);
+      } else if (part.startsWith('.')) {
+        if (!tagClasses) tagClasses = [];
+        tagClasses.push(part.slice(1));
+      }
+    }
+  }
+
+  // Create element (SVG needs namespace)
+  const el = SVG_TAGS.has(tagName)
+    ? document.createElementNS(SVG_NS, tagName)
+    : document.createElement(tagName);
+
+  // Apply ID from tag selector
+  if (tagId) {
+    el.id = tagId;
+  }
+
+  // Apply classes from tag selector
+  if (tagClasses) {
+    if (SVG_TAGS.has(tagName)) {
+      el.setAttribute('class', tagClasses.join(' '));
+    } else {
+      el.className = tagClasses.join(' ');
+    }
+  }
+
+  // Process props
+  if (props) {
+    for (const k in props) {
+      const v = props[k];
+      if (k === 'class') {
+        // Process with cx() for clsx-style handling (arrays, objects, conditionals)
+        const cls = typeof v === 'string' ? v : cx(v);
+        if (cls) {
+          if (SVG_TAGS.has(tagName)) {
+            const existing = el.getAttribute('class');
+            el.setAttribute('class', existing ? existing + ' ' + cls : cls);
+          } else {
+            el.className = el.className ? el.className + ' ' + cls : cls;
+          }
+        }
+      } else if (k === 'key') {
+        // Special: data-key for list reconciliation
+        el.dataset.key = v;
+      } else if (k.startsWith('on')) {
+        // Event handler: onclick → click
+        const event = k.slice(2).toLowerCase();
+        el.addEventListener(event, v);
+      } else {
+        // Regular attribute
+        el.setAttribute(k, v);
+      }
+    }
+  }
+
+  // Append children
+  if (children != null) {
+    if (Array.isArray(children)) {
+      for (const c of children) {
+        if (c != null) {
+          el.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+        }
+      }
+    } else if (typeof children === 'string') {
+      el.appendChild(document.createTextNode(children));
+    } else {
+      el.appendChild(children);
+    }
+  }
+
+  return el;
+}
+
+/**
+ * Create a document fragment from multiple elements
+ * @param  {...Element} children - Elements to wrap
+ * @returns {DocumentFragment}
+ */
+export function frag(...children) {
+  const f = document.createDocumentFragment();
+  for (const c of children) {
+    if (c != null) {
+      f.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+    }
+  }
+  return f;
+}
+
+/**
+ * Create a text node
+ * @param {any} value - Value to convert to text
+ * @returns {Text}
+ */
+export function txt(value) {
+  return document.createTextNode(String(value));
+}
+
+/**
+ * clsx-style class name builder
+ * @param {...any} args - Strings, arrays, objects, or falsy values
+ * @returns {string} - Space-separated class names
+ *
+ * Examples:
+ *   cx('foo', 'bar')                    → 'foo bar'
+ *   cx('foo', false && 'bar')           → 'foo'
+ *   cx('foo', isActive && 'active')     → 'foo active' (if isActive)
+ *   cx({ foo: true, bar: false })       → 'foo'
+ *   cx(['foo', 'bar'])                  → 'foo bar'
+ *   cx('a', ['b', { c: true }], 'd')    → 'a b c d'
+ */
+export function cx(...args) {
+  let result = '';
+  for (const arg of args) {
+    if (!arg) continue;
+    if (typeof arg === 'string') {
+      result += (result && ' ') + arg;
+    } else if (Array.isArray(arg)) {
+      const nested = cx(...arg);
+      if (nested) result += (result && ' ') + nested;
+    } else if (typeof arg === 'object') {
+      for (const k in arg) {
+        if (arg[k]) result += (result && ' ') + k;
+      }
+    }
+  }
+  return result;
+}

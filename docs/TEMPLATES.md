@@ -15,6 +15,7 @@ Rip's template syntax is not a separate language—it's native Rip syntax. The `
 | `tag` | Element | `div`, `span`, `button` |
 | `.class` | CSS class | `div.card`, `button.btn.primary` |
 | `#id` | Element ID | `div#main`, `section#hero` |
+| `.()` | Dynamic classes | `div.('active', isOn && 'on')` |
 | `attr: val` | Attribute | `type: "text"`, `disabled: true` |
 | `@event: fn` | Event handler | `@click: handleClick` |
 | `@event.mod:` | Event modifier | `@click.prevent: submit` |
@@ -22,6 +23,8 @@ Rip's template syntax is not a separate language—it's native Rip syntax. The `
 | `#{expr}` | Interpolation | `"Count: #{count}"` |
 | `ref: var` | Element reference | `ref: inputEl` |
 | `key: val` | List item key | `key: item.id` |
+| `...props` | Spread attributes | `div ...props` |
+| `[@bind.X]:` | Two-way binding | `[@bind.value]: name` |
 | `if`/`else` | Conditional | `div if visible` |
 | `for...in` | Iteration | `for item in items` |
 
@@ -108,38 +111,94 @@ option selected: isDefault
 details open: expanded
 ```
 
-### Dynamic Classes (Object Syntax)
+### Dynamic Classes with `cx()` (clsx-compatible)
+
+Rip includes a `clsx`-compatible `cx()` helper for dynamic class composition. Use the `.()` syntax on elements:
 
 ```coffee
-div class: { active: isActive, disabled: isDisabled }
-li class: { completed: todo.done, editing: isEditing }
-button class: { loading: isLoading, success: hasSucceeded }
+# Basic: conditions in parens
+div.('card', isActive && 'active', size)
+
+# With static classes too
+div.card.('highlighted', isNew && 'new')
+
+# Object syntax (like clsx)
+div.({ active: isActive, disabled: isDisabled })
+
+# Mixed - strings, conditions, objects
+div.base.('extra', { selected: isSelected })
 ```
 
-### Mixed Static + Dynamic Classes
-
-```coffee
-div.card class: { highlighted: isNew }
-button.btn class: { primary: isPrimary, large: isLarge }
+**Generated output:**
+```javascript
+h('div', { class: cx('card', isActive && 'active', size) })
+h('div.card', { class: cx('highlighted', isNew && 'new') })
+h('div', { class: cx({ active: isActive, disabled: isDisabled }) })
 ```
+
+The `cx()` function filters falsy values and flattens arrays, exactly like `clsx()`.
 
 ### Spreading Props
 
+Spread an object as attributes:
+
 ```coffee
-# Spread an object as attributes
-input ...inputProps
-div.wrapper ...@rest
+render
+  # Basic spread
+  div ...props
 
-# Common pattern: forward props
-component FancyInput
-  @label
-  @...inputProps
+  # With static classes
+  div.card ...props
 
-  render
-    div.field
-      label @label
-      input ...@inputProps
+  # With explicit attrs (override spreads)
+  input ...inputProps, class: "extra", disabled: true
+
+  # With children
+  div.wrapper ...containerProps
+    span "Content"
 ```
+
+**Generated output:**
+```javascript
+h('div', { ...props })
+h('div.card', { ...props })
+h('input', { ...inputProps, class: "extra", disabled: true })
+h('div.wrapper', { ...containerProps }, h('span', 0, "Content"))
+```
+
+---
+
+## Two-Way Binding
+
+Two-way binding automatically syncs an element's value with a variable:
+
+```coffee
+render
+  # Text input
+  input [@bind.value]: username
+
+  # Checkbox
+  input type: "checkbox", [@bind.checked]: isActive
+
+  # Select dropdown
+  select [@bind.value]: selectedId
+
+  # Textarea
+  textarea [@bind.value]: content
+```
+
+**Generated output:**
+```javascript
+h('input', { value: username, oninput: (e) => username = e.target.value })
+h('input', { type: "checkbox", checked: isActive, onchange: (e) => isActive = e.target.checked })
+h('select', { value: selectedId, onchange: (e) => selectedId = e.target.value })
+h('textarea', { value: content, oninput: (e) => content = e.target.value })
+```
+
+**Smart event selection:**
+- `value` on `input`/`textarea` → `oninput` event
+- `value` on `select` → `onchange` event
+- `checked` → `onchange` event
 
 ---
 
@@ -255,6 +314,8 @@ p """
 
 ## Children & Nesting
 
+Rip uses implicit nesting based on indentation:
+
 ```coffee
 div.card
   header.card-header
@@ -272,6 +333,12 @@ div.card
   footer.card-footer
     button.secondary "Cancel"
     button.primary "Buy Now"
+```
+
+You can also use explicit arrow syntax for inline nesting:
+
+```coffee
+div.card -> h1 "Title"
 ```
 
 ---
@@ -493,6 +560,8 @@ component Form
 
 ## Slots / Named Content
 
+> **Note:** Full slot support requires the component system (Phase 3). See [COMPONENTS.md](COMPONENTS.md).
+
 ### Default Slot
 
 ```coffee
@@ -707,108 +776,75 @@ component ProductCard
           disabled: @product.stock is 0
           Icon name: "cart"
           " Add to Cart"
+```
 
-  style
-    .card
-      border-radius $radius-lg
-      overflow hidden
-      background $surface
-      box-shadow $shadow-md
-      transition transform 0.2s, box-shadow 0.2s
+---
 
-      &.hovered
-        transform translateY(-4px)
-        box-shadow $shadow-lg
+## Runtime API
 
-      &.out-of-stock
-        opacity 0.7
+Templates compile to calls to runtime helpers in `src/runtime.js`:
 
-    .card-image
-      position relative
+| Function | Purpose |
+|----------|---------|
+| `h(tag, props, children)` | Create element |
+| `txt(value)` | Create text node |
+| `frag(...nodes)` | Create DocumentFragment |
+| `cx(...args)` | Build class string (clsx-compatible) |
 
-      img
-        width 100%
-        aspect-ratio 4/3
-        object-fit cover
+### The `h()` Helper
 
-    .badge
-      position absolute
-      top $space-2
-      right $space-2
-      background $color-danger
-      color white
-      padding $space-1 $space-2
-      border-radius $radius-sm
-      font-weight 600
+```javascript
+// h(tag, props, children)
+h('div.card#main', { onclick: fn }, [child1, child2])
 
-    .price
-      display flex
-      gap $space-2
-      align-items baseline
+// Parses tag string: "div#id.class1.class2"
+// Applies props (0 = no props)
+// Handles children (single, array, or none)
+```
 
-      .current
-        font-size 1.5rem
-        font-weight 700
-        color $text-primary
+### The `cx()` Helper
 
-      .original
-        text-decoration line-through
-        color $text-secondary
+```javascript
+// clsx-compatible dynamic class builder
+cx('foo', isActive && 'active', { bar: true, baz: false })
+// → "foo active bar"
 
-    .quantity
-      display flex
-      align-items center
-      gap $space-2
-
-      button
-        width 2rem
-        height 2rem
-        border-radius $radius-full
-        border none
-        background $surface-hover
-        cursor pointer
-
-        &:disabled
-          opacity 0.5
-          cursor not-allowed
-
-    .add-to-cart
-      width 100%
-      padding $space-3
-      background $color-primary
-      color white
-      border none
-      border-radius $radius-md
-      font-weight 600
-      cursor pointer
-      display flex
-      align-items center
-      justify-content center
-      gap $space-2
-
-      &:hover
-        background $color-primary-hover
-
-      &:disabled
-        background $text-secondary
-        cursor not-allowed
+cx(['a', 'b'], { c: true })
+// → "a b c"
 ```
 
 ---
 
 ## Implementation Status
 
-> **Note:** The template syntax is specified but not yet implemented in the Rip compiler. This document serves as the specification for the upcoming implementation.
+> **Phase 2: COMPLETE** ✅
 
-**Roadmap:**
-- [ ] Add indented markup parsing to Rip grammar
-- [ ] `tag.class#id attr: val` → DOM creation
-- [ ] `@event:` handler → event binding
-- [ ] Event modifiers (`.prevent`, `.stop`, etc.)
-- [ ] `for`/`if` in template context
-- [ ] `key:` and `ref:` special attributes
-- [ ] SVG support
-- [ ] Fragment syntax
+The template syntax is fully implemented in the Rip compiler.
+
+**Implemented:**
+- [x] `render` block → DOM creation
+- [x] `tag` → `document.createElement('tag')`
+- [x] `tag.class1.class2` → Element with CSS classes
+- [x] `tag#id` → Element with ID
+- [x] `tag#id.class1.class2` → Combined selectors
+- [x] `.()` → Dynamic classes via `cx()` (clsx-compatible)
+- [x] `attr: value` → `setAttribute()`
+- [x] `@event: handler` → `addEventListener()`
+- [x] `@event.modifier:` → Event modifiers (prevent, stop, key modifiers, etc.)
+- [x] `"text"` → Text nodes
+- [x] Implicit indentation-based nesting
+- [x] Explicit arrow syntax (`->`) for inline nesting
+- [x] Multiple root elements → DocumentFragment
+- [x] `...props` → Spread attributes
+- [x] `[@bind.prop]: var` → Two-way binding
+- [x] `ref:` and `key:` special attributes
+- [x] SVG namespace handling
+
+**Next Phase (Components):**
+- [ ] `component` keyword
+- [ ] Props system (`@prop`)
+- [ ] Lifecycle hooks
+- [ ] Slots for composition
 
 See [COMPONENTS.md](COMPONENTS.md) for the component model.
 See [REACTIVITY.md](REACTIVITY.md) for reactive state management.

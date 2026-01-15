@@ -51,6 +51,7 @@ grammar =
     o 'DerivedAssign'
     o 'ReadonlyAssign'
     o 'EffectBlock'
+    o 'RenderBlock'
     o 'If'
     o 'Try'
     o 'While'
@@ -93,6 +94,11 @@ grammar =
   EffectBlock: [
     o 'EFFECT FuncGlyph Block', '["effect", 3]'
     o 'EFFECT Block'          , '["effect", 2]'
+  ]
+
+  # Template: Render block - UI templates that compile to DOM operations
+  RenderBlock: [
+    o 'RENDER Block', '["render", 2]'
   ]
 
   # Expressions which are written in single line and would otherwise require being
