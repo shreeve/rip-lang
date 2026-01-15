@@ -101,16 +101,19 @@ fn?(arg)                 # Safe call
 
 ---
 
-## Unique Operators
+## Unique Features
 
-| Operator | Example | What it does |
-|----------|---------|--------------|
+| Feature | Example | What it does |
+|---------|---------|--------------|
 | **Dammit `!`** | `fetchData!` | Calls the function AND awaits it |
 | **Otherwise `!?`** | `val !? 5` | Defaults only if `undefined` (null/0/false are kept!) |
 | **Signal `:=`** | `count := 0` | Creates reactive state |
 | **Derived `∞=`** | `doubled ∞= count * 2` | Auto-updates when dependencies change |
 | **Effect** | `effect -> log x` | Runs whenever referenced signals change |
 | **Match `=~`** | `str =~ /(\w+)/` | Ruby-style regex, captures in `_[1]` |
+| **Heregex** | `///pat # comment///` | Extended regex with comments and whitespace |
+| **Heredoc** | `'''` closing column | Smart indentation — closing position sets left margin |
+| **`__DATA__`** | `__DATA__\nconfig...` | Ruby-style inline data section, accessible as `DATA` |
 
 ---
 
