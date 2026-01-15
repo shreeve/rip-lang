@@ -233,15 +233,17 @@ document.getElementById("slider").oninput = (e) =>
 # Demo 4: Todo list
 # ============================================
 
-todos := []
-nextId := 1
+# Use a trigger signal to force re-render when todos change
+todoVersion := 0
+todos = []
+nextId = 1
 
-totalCount ∞= todos.length
-doneCount ∞= todos.filter((t) => t.done).length
-pendingCount ∞= totalCount - doneCount
-
-renderTodos = =>
+renderTodos = ->
   list = document.getElementById("todo-list")
+  doneCount = todos.filter((t) => t.done).length
+  totalCount = todos.length
+  pendingCount = totalCount - doneCount
+  
   list.innerHTML = todos.map((todo) =>
     checked = if todo.done then "checked" else ""
     doneClass = if todo.done then "done" else ""
@@ -253,40 +255,41 @@ renderTodos = =>
     """
   ).join("")
   
-  # Add event listeners
+  document.getElementById("todo-stats").textContent = 
+    "#{doneCount}/#{totalCount} done, #{pendingCount} pending"
+  
+  # Add checkbox listeners
   for checkbox in list.querySelectorAll("input[type=checkbox]")
     checkbox.onchange = (e) =>
       id = parseInt(e.target.dataset.id)
       for todo in todos
         if todo.id == id
           todo.done = e.target.checked
-      todos = [...todos]  # Trigger reactivity
+      todoVersion += 1  # Trigger re-render
 
+# Effect tracks todoVersion signal
 effect ->
+  v = todoVersion  # Read signal to create dependency
   renderTodos()
-  document.getElementById("todo-stats").textContent = 
-    "#{doneCount}/#{totalCount} done, #{pendingCount} pending"
 
-addTodo = =>
+document.getElementById("add-todo").onclick = =>
   input = document.getElementById("todo-input")
   text = input.value.trim()
   if text
-    todos = [...todos, { id: nextId, text: text, done: false }]
-    nextId += 1
+    todos.push { id: nextId++, text: text, done: false }
     input.value = ""
+    todoVersion += 1  # Trigger re-render
 
-document.getElementById("add-todo").onclick = addTodo
 document.getElementById("todo-input").onkeydown = (e) =>
   if e.key == "Enter"
-    addTodo()
+    document.getElementById("add-todo").click()
 
-# Add some initial todos
-todos = [
-  { id: nextId++, text: "Try the counter above", done: false }
-  { id: nextId++, text: "Type your name", done: false }
-  { id: nextId++, text: "Move the slider", done: false }
-  { id: nextId++, text: "Check off this todo!", done: false }
-]
+# Add initial todos
+todos.push { id: nextId++, text: "Try the counter above", done: false }
+todos.push { id: nextId++, text: "Type your name", done: false }
+todos.push { id: nextId++, text: "Move the slider", done: false }
+todos.push { id: nextId++, text: "Check off this todo!", done: false }
+todoVersion += 1
   </script>
 
   <script>
