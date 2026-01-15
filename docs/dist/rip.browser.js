@@ -4946,8 +4946,14 @@ ${this.indent()}}`;
     this.componentMembers = memberNames;
     this.reactiveMembers = reactiveMembers;
     const lines = [];
+    let blockFactoriesCode = "";
     lines.push(`class ${componentName} {`);
     lines.push("  constructor(props = {}) {");
+    lines.push("    // Context API: track parent component");
+    lines.push("    this._parent = __currentComponent;");
+    lines.push("    const __prevComponent = __currentComponent;");
+    lines.push("    __currentComponent = this;");
+    lines.push("");
     if (props.length > 0) {
       for (const prop of props) {
         if (prop[0] === "prop") {
@@ -4994,6 +5000,8 @@ ${this.indent()}}`;
       const effectCode = this.generateInComponent(body2, "value");
       lines.push(`    __effect(${effectCode});`);
     }
+    lines.push("");
+    lines.push("    __currentComponent = __prevComponent;");
     lines.push("  }");
     for (const methodStmt of methods) {
       for (let i = 1;i < methodStmt.length; i++) {
@@ -5016,6 +5024,13 @@ ${this.indent()}}`;
     if (renderBlock) {
       const renderBody = renderBlock[1];
       const fg = this.generateFineGrainedRender(renderBody);
+      if (fg.blockFactories.length > 0) {
+        blockFactoriesCode = fg.blockFactories.join(`
+
+`) + `
+
+`;
+      }
       lines.push("  _create() {");
       for (const line of fg.createLines) {
         lines.push(`    ${line}`);
@@ -5047,7 +5062,7 @@ ${this.indent()}}`;
     lines.push("}");
     this.componentMembers = prevComponentMembers;
     this.reactiveMembers = prevReactiveMembers;
-    return lines.join(`
+    return blockFactoriesCode + lines.join(`
 `);
   }
   generateInComponent(sexpr, context) {
@@ -5091,8 +5106,10 @@ ${this.indent()}}`;
   generateFineGrainedRender(body) {
     this._fgElementCount = 0;
     this._fgTextCount = 0;
+    this._fgBlockCount = 0;
     this._fgCreateLines = [];
     this._fgSetupLines = [];
+    this._fgBlockFactories = [];
     const statements = Array.isArray(body) && body[0] === "block" ? body.slice(1) : [body];
     let rootVar;
     if (statements.length === 0) {
@@ -5110,8 +5127,12 @@ ${this.indent()}}`;
     return {
       createLines: this._fgCreateLines,
       setupLines: this._fgSetupLines,
+      blockFactories: this._fgBlockFactories,
       rootVar
     };
+  }
+  fgNewBlock() {
+    return `create_block_${this._fgBlockCount++}`;
   }
   fgNewElement(hint = "el") {
     return `this._${hint}${this._fgElementCount++}`;
@@ -5120,20 +5141,21 @@ ${this.indent()}}`;
     return `this._t${this._fgTextCount++}`;
   }
   fgProcessElement(sexpr) {
-    if (typeof sexpr === "string") {
-      if (sexpr.startsWith('"') || sexpr.startsWith("'") || sexpr.startsWith("`")) {
+    if (typeof sexpr === "string" || sexpr instanceof String) {
+      const str = sexpr.valueOf();
+      if (str.startsWith('"') || str.startsWith("'") || str.startsWith("`")) {
         const textVar = this.fgNewText();
-        this._fgCreateLines.push(`${textVar} = document.createTextNode(${sexpr});`);
+        this._fgCreateLines.push(`${textVar} = document.createTextNode(${str});`);
         return textVar;
       }
-      if (this.reactiveMembers && this.reactiveMembers.has(sexpr)) {
+      if (this.reactiveMembers && this.reactiveMembers.has(str)) {
         const textVar = this.fgNewText();
         this._fgCreateLines.push(`${textVar} = document.createTextNode('');`);
-        this._fgSetupLines.push(`__effect(() => { ${textVar}.data = this.${sexpr}.value; });`);
+        this._fgSetupLines.push(`__effect(() => { ${textVar}.data = this.${str}.value; });`);
         return textVar;
       }
       const elVar = this.fgNewElement();
-      this._fgCreateLines.push(`${elVar} = document.createElement('${sexpr}');`);
+      this._fgCreateLines.push(`${elVar} = document.createElement('${str}');`);
       return elVar;
     }
     if (Array.isArray(sexpr)) {
@@ -5149,10 +5171,10 @@ ${this.indent()}}`;
         const [, obj, prop] = sexpr;
         if (obj === "this" && typeof prop === "string") {
           if (this.reactiveMembers && this.reactiveMembers.has(prop)) {
-            const textVar = this.fgNewText();
-            this._fgCreateLines.push(`${textVar} = document.createTextNode('');`);
-            this._fgSetupLines.push(`__effect(() => { ${textVar}.data = this.${prop}.value; });`);
-            return textVar;
+            const textVar3 = this.fgNewText();
+            this._fgCreateLines.push(`${textVar3} = document.createTextNode('');`);
+            this._fgSetupLines.push(`__effect(() => { ${textVar3}.data = this.${prop}.value; });`);
+            return textVar3;
           }
           if (this.componentMembers && this.componentMembers.has(prop)) {
             const slotVar = this.fgNewElement("slot");
@@ -5164,10 +5186,22 @@ ${this.indent()}}`;
         if (tag && this.isHtmlTag(tag)) {
           return this.fgProcessTag(tag, classes, []);
         }
+        const textVar2 = this.fgNewText();
+        const exprCode2 = this.generateInComponent(sexpr, "value");
+        this._fgCreateLines.push(`${textVar2} = document.createTextNode(String(${exprCode2}));`);
+        return textVar2;
       }
       if (Array.isArray(head)) {
+        if (Array.isArray(head[0]) && head[0][0] === "." && (head[0][2] === "__cx__" || head[0][2] instanceof String && head[0][2].valueOf() === "__cx__")) {
+          const tag2 = typeof head[0][1] === "string" ? head[0][1] : head[0][1].valueOf();
+          const classExprs = head.slice(1);
+          return this.fgProcessTagWithDynamicClass(tag2, classExprs, rest);
+        }
         const { tag, classes } = this.collectTemplateClasses(head);
         if (tag && this.isHtmlTag(tag)) {
+          if (classes.length === 1 && classes[0] === "__cx__") {
+            return this.fgProcessTagWithDynamicClass(tag, rest, []);
+          }
           return this.fgProcessTag(tag, classes, rest);
         }
       }
@@ -5181,10 +5215,66 @@ ${this.indent()}}`;
       if (headStr === "for" || headStr === "for-in" || headStr === "for-of") {
         return this.fgProcessLoop(sexpr);
       }
+      const textVar = this.fgNewText();
+      const exprCode = this.generateInComponent(sexpr, "value");
+      if (this.fgHasReactiveDeps(sexpr)) {
+        this._fgCreateLines.push(`${textVar} = document.createTextNode('');`);
+        this._fgSetupLines.push(`__effect(() => { ${textVar}.data = ${exprCode}; });`);
+      } else {
+        this._fgCreateLines.push(`${textVar} = document.createTextNode(String(${exprCode}));`);
+      }
+      return textVar;
     }
     const commentVar = this.fgNewElement("c");
-    this._fgCreateLines.push(`${commentVar} = document.createComment('TODO');`);
+    this._fgCreateLines.push(`${commentVar} = document.createComment('unknown');`);
     return commentVar;
+  }
+  fgProcessTagWithDynamicClass(tag, classExprs, children) {
+    const elVar = this.fgNewElement();
+    this._fgCreateLines.push(`${elVar} = document.createElement('${tag}');`);
+    if (classExprs.length > 0) {
+      const classCode = classExprs.map((e) => this.generateInComponent(e, "value")).join(' + " " + ');
+      const hasReactiveDeps = classExprs.some((e) => this.fgHasReactiveDeps(e));
+      if (hasReactiveDeps) {
+        this._fgSetupLines.push(`__effect(() => { ${elVar}.className = ${classCode}; });`);
+      } else {
+        this._fgCreateLines.push(`${elVar}.className = ${classCode};`);
+      }
+    }
+    for (const arg of children) {
+      const argHead = Array.isArray(arg) ? arg[0] instanceof String ? arg[0].valueOf() : arg[0] : null;
+      if (argHead === "->" || argHead === "=>") {
+        const block = arg[2];
+        const blockHead = Array.isArray(block) ? block[0] instanceof String ? block[0].valueOf() : block[0] : null;
+        if (blockHead === "block") {
+          for (const child of block.slice(1)) {
+            const childVar = this.fgProcessElement(child);
+            this._fgCreateLines.push(`${elVar}.appendChild(${childVar});`);
+          }
+        } else if (block) {
+          const childVar = this.fgProcessElement(block);
+          this._fgCreateLines.push(`${elVar}.appendChild(${childVar});`);
+        }
+      } else if (Array.isArray(arg) && arg[0] === "object") {
+        this.fgProcessAttributes(elVar, arg);
+      } else if (typeof arg === "string" || arg instanceof String) {
+        const textVar = this.fgNewText();
+        const argStr = arg.valueOf();
+        if (argStr.startsWith('"') || argStr.startsWith("'") || argStr.startsWith("`")) {
+          this._fgCreateLines.push(`${textVar} = document.createTextNode(${argStr});`);
+        } else if (this.reactiveMembers && this.reactiveMembers.has(argStr)) {
+          this._fgCreateLines.push(`${textVar} = document.createTextNode('');`);
+          this._fgSetupLines.push(`__effect(() => { ${textVar}.data = this.${argStr}.value; });`);
+        } else {
+          this._fgCreateLines.push(`${textVar} = document.createTextNode(${this.generateInComponent(arg, "value")});`);
+        }
+        this._fgCreateLines.push(`${elVar}.appendChild(${textVar});`);
+      } else {
+        const childVar = this.fgProcessElement(arg);
+        this._fgCreateLines.push(`${elVar}.appendChild(${childVar});`);
+      }
+    }
+    return elVar;
   }
   fgProcessTag(tag, classes, args) {
     const elVar = this.fgNewElement();
@@ -5299,87 +5389,125 @@ ${this.indent()}}`;
   }
   fgProcessConditional(sexpr) {
     const [, condition, thenBlock, elseBlock] = sexpr;
-    const anchorVar = this.fgNewElement("if");
-    const contentVar = `${anchorVar}_content`;
-    const stateVar = `${anchorVar}_showing`;
-    const disposersVar = `${anchorVar}_dispose`;
+    const anchorVar = this.fgNewElement("anchor");
     this._fgCreateLines.push(`${anchorVar} = document.createComment('if');`);
-    this._fgCreateLines.push(`${contentVar} = null;`);
-    this._fgCreateLines.push(`${stateVar} = null;`);
-    this._fgCreateLines.push(`${disposersVar} = [];`);
     const condCode = this.generateInComponent(condition, "value");
+    const thenBlockName = this.fgNewBlock();
+    this.fgGenerateConditionBlock(thenBlockName, thenBlock);
+    let elseBlockName = null;
+    if (elseBlock) {
+      elseBlockName = this.fgNewBlock();
+      this.fgGenerateConditionBlock(elseBlockName, elseBlock);
+    }
+    const setupLines = [];
+    setupLines.push(`// Conditional: ${thenBlockName}${elseBlockName ? " / " + elseBlockName : ""}`);
+    setupLines.push(`{`);
+    setupLines.push(`  const anchor = ${anchorVar};`);
+    setupLines.push(`  let currentBlock = null;`);
+    setupLines.push(`  let showing = null;  // 'then', 'else', or null`);
+    setupLines.push(`  __effect(() => {`);
+    setupLines.push(`    const show = !!(${condCode});`);
+    setupLines.push(`    const want = show ? 'then' : ${elseBlock ? "'else'" : "null"};`);
+    setupLines.push(`    if (want === showing) return;`);
+    setupLines.push(``);
+    setupLines.push(`    // Destroy old block`);
+    setupLines.push(`    if (currentBlock) {`);
+    setupLines.push(`      currentBlock.d(true);`);
+    setupLines.push(`      currentBlock = null;`);
+    setupLines.push(`    }`);
+    setupLines.push(`    showing = want;`);
+    setupLines.push(``);
+    setupLines.push(`    // Create new block`);
+    setupLines.push(`    if (want === 'then') {`);
+    setupLines.push(`      currentBlock = ${thenBlockName}(this);`);
+    setupLines.push(`      currentBlock.c();`);
+    setupLines.push(`      currentBlock.m(anchor.parentNode, anchor.nextSibling);`);
+    setupLines.push(`      currentBlock.p(this);`);
+    setupLines.push(`    }`);
+    if (elseBlock) {
+      setupLines.push(`    if (want === 'else') {`);
+      setupLines.push(`      currentBlock = ${elseBlockName}(this);`);
+      setupLines.push(`      currentBlock.c();`);
+      setupLines.push(`      currentBlock.m(anchor.parentNode, anchor.nextSibling);`);
+      setupLines.push(`      currentBlock.p(this);`);
+      setupLines.push(`    }`);
+    }
+    setupLines.push(`  });`);
+    setupLines.push(`}`);
+    this._fgSetupLines.push(setupLines.join(`
+    `));
+    return anchorVar;
+  }
+  fgGenerateConditionBlock(blockName, block) {
     const savedCreateLines = this._fgCreateLines;
     const savedSetupLines = this._fgSetupLines;
     this._fgCreateLines = [];
     this._fgSetupLines = [];
-    const thenVar = this.fgProcessBlock(thenBlock);
-    const thenCreateLines = this._fgCreateLines;
-    const thenSetupLines = this._fgSetupLines;
-    let elseVar = null;
-    let elseCreateLines = [];
-    let elseSetupLines = [];
-    if (elseBlock) {
-      this._fgCreateLines = [];
-      this._fgSetupLines = [];
-      elseVar = this.fgProcessBlock(elseBlock);
-      elseCreateLines = this._fgCreateLines;
-      elseSetupLines = this._fgSetupLines;
-    }
+    const rootVar = this.fgProcessBlock(block);
+    const createLines = this._fgCreateLines;
+    const setupLines = this._fgSetupLines;
     this._fgCreateLines = savedCreateLines;
     this._fgSetupLines = savedSetupLines;
-    const effectLines = [];
-    effectLines.push(`__effect(() => {`);
-    effectLines.push(`  const show = !!(${condCode});`);
-    effectLines.push(`  const want = show ? 'then' : ${elseBlock ? "'else'" : "null"};`);
-    effectLines.push(`  if (want === ${stateVar}) return;`);
-    effectLines.push(`  // Cleanup old content and effects`);
-    effectLines.push(`  ${disposersVar}.forEach(d => d());`);
-    effectLines.push(`  ${disposersVar} = [];`);
-    effectLines.push(`  if (${contentVar}) { ${contentVar}.remove(); ${contentVar} = null; }`);
-    effectLines.push(`  ${stateVar} = want;`);
-    const wrapEffects = (lines) => {
-      return lines.map((line) => line.replace(/__effect\(\(\)/g, `${disposersVar}.push(__effect(()`).replace(/\}\);$/, "}));"));
+    const localizeVar = (line) => {
+      return line.replace(/this\.(_el\d+|_t\d+|_anchor\d+|_frag\d+|_slot\d+|_c\d+|_inst\d+)/g, "$1");
     };
-    effectLines.push(`  if (want === 'then') {`);
-    for (const line of thenCreateLines) {
-      effectLines.push(`    ${line}`);
+    const factoryLines = [];
+    factoryLines.push(`function ${blockName}(ctx) {`);
+    factoryLines.push(`  // Local DOM references`);
+    const localVars = new Set;
+    for (const line of createLines) {
+      const match = line.match(/^this\.(_(?:el|t|anchor|frag|slot|c|inst)\d+)\s*=/);
+      if (match)
+        localVars.add(match[1]);
     }
-    effectLines.push(`    ${contentVar} = ${thenVar};`);
-    effectLines.push(`    ${anchorVar}.parentNode.insertBefore(${contentVar}, ${anchorVar}.nextSibling);`);
-    for (const line of wrapEffects(thenSetupLines)) {
-      effectLines.push(`    ${line}`);
+    if (localVars.size > 0) {
+      factoryLines.push(`  let ${[...localVars].join(", ")};`);
     }
-    effectLines.push(`  }`);
-    if (elseBlock) {
-      effectLines.push(`  if (want === 'else') {`);
-      for (const line of elseCreateLines) {
-        effectLines.push(`    ${line}`);
+    const hasEffects = setupLines.length > 0;
+    if (hasEffects) {
+      factoryLines.push(`  let disposers = [];`);
+    }
+    factoryLines.push(`  return {`);
+    factoryLines.push(`    c() {`);
+    for (const line of createLines) {
+      factoryLines.push(`      ${localizeVar(line)}`);
+    }
+    factoryLines.push(`    },`);
+    factoryLines.push(`    m(target, anchor) {`);
+    factoryLines.push(`      target.insertBefore(${localizeVar(rootVar)}, anchor);`);
+    factoryLines.push(`    },`);
+    factoryLines.push(`    p(ctx) {`);
+    if (hasEffects) {
+      factoryLines.push(`      disposers.forEach(d => d());`);
+      factoryLines.push(`      disposers = [];`);
+      for (const line of setupLines) {
+        const localizedLine = localizeVar(line);
+        const wrappedLine = localizedLine.replace(/__effect\(\(\) => \{/g, "disposers.push(__effect(() => {").replace(/\}\);$/g, "}));");
+        factoryLines.push(`      ${wrappedLine}`);
       }
-      effectLines.push(`    ${contentVar} = ${elseVar};`);
-      effectLines.push(`    ${anchorVar}.parentNode.insertBefore(${contentVar}, ${anchorVar}.nextSibling);`);
-      for (const line of wrapEffects(elseSetupLines)) {
-        effectLines.push(`    ${line}`);
-      }
-      effectLines.push(`  }`);
     }
-    effectLines.push(`});`);
-    this._fgSetupLines.push(effectLines.join(`
-    `));
-    return anchorVar;
+    factoryLines.push(`    },`);
+    factoryLines.push(`    d(detaching) {`);
+    if (hasEffects) {
+      factoryLines.push(`      disposers.forEach(d => d());`);
+    }
+    factoryLines.push(`      if (detaching) ${localizeVar(rootVar)}.remove();`);
+    factoryLines.push(`    }`);
+    factoryLines.push(`  };`);
+    factoryLines.push(`}`);
+    this._fgBlockFactories.push(factoryLines.join(`
+`));
   }
   fgProcessLoop(sexpr) {
     const [head, vars, collection, guard, step, body] = sexpr;
-    const anchorVar = this.fgNewElement("for");
-    const mapVar = `${anchorVar}_map`;
-    const keysVar = `${anchorVar}_keys`;
+    const blockName = this.fgNewBlock();
+    const anchorVar = this.fgNewElement("anchor");
     this._fgCreateLines.push(`${anchorVar} = document.createComment('for');`);
-    this._fgCreateLines.push(`${mapVar} = new Map();`);
-    this._fgCreateLines.push(`${keysVar} = [];`);
     const varNames = Array.isArray(vars) ? vars : [vars];
     const itemVar = varNames[0];
-    const indexVar = varNames[1] || "_i";
+    const indexVar = varNames[1] || "i";
     const collectionCode = this.generateInComponent(collection, "value");
-    let keyExpr = null;
+    let keyExpr = itemVar;
     if (Array.isArray(body) && body[0] === "block" && body.length > 1) {
       const firstChild = body[1];
       if (Array.isArray(firstChild)) {
@@ -5393,16 +5521,14 @@ ${this.indent()}}`;
               }
             }
           }
-          if (keyExpr)
+          if (keyExpr !== itemVar)
             break;
         }
       }
     }
-    if (!keyExpr) {
-      keyExpr = itemVar;
-    }
     const savedCreateLines = this._fgCreateLines;
     const savedSetupLines = this._fgSetupLines;
+    const savedBlockFactories = this._fgBlockFactories;
     this._fgCreateLines = [];
     this._fgSetupLines = [];
     const itemNode = this.fgProcessBlock(body);
@@ -5410,82 +5536,118 @@ ${this.indent()}}`;
     const itemSetupLines = this._fgSetupLines;
     this._fgCreateLines = savedCreateLines;
     this._fgSetupLines = savedSetupLines;
-    const hasItemEffects = itemSetupLines.length > 0;
-    const effectLines = [];
-    effectLines.push(`__effect(() => {`);
-    effectLines.push(`  const items = ${collectionCode};`);
-    effectLines.push(`  const parent = ${anchorVar}.parentNode;`);
-    effectLines.push(`  const newKeys = [];`);
-    effectLines.push(`  const newMap = new Map();`);
-    effectLines.push(``);
-    effectLines.push(`  // Build new keys and reuse/create nodes`);
-    effectLines.push(`  for (let ${indexVar} = 0; ${indexVar} < items.length; ${indexVar}++) {`);
-    effectLines.push(`    const ${itemVar} = items[${indexVar}];`);
-    effectLines.push(`    const key = ${keyExpr};`);
-    effectLines.push(`    newKeys.push(key);`);
-    effectLines.push(``);
-    effectLines.push(`    // Check if we can reuse existing node`);
-    effectLines.push(`    let entry = ${mapVar}.get(key);`);
-    effectLines.push(`    if (entry) {`);
-    effectLines.push(`      // Reuse node but dispose old effects (index may have changed)`);
-    effectLines.push(`      entry.disposers.forEach(d => d());`);
-    effectLines.push(`      entry.disposers = [];`);
-    effectLines.push(`    } else {`);
-    effectLines.push(`      // Create new node`);
+    const localizeVar = (line) => {
+      return line.replace(/this\.(_el\d+|_t\d+|_anchor\d+|_frag\d+|_slot\d+|_c\d+|_inst\d+)/g, "$1");
+    };
+    const factoryLines = [];
+    factoryLines.push(`function ${blockName}(ctx, ${itemVar}, ${indexVar}) {`);
+    factoryLines.push(`  // Local DOM references (not on this)`);
+    const localVars = new Set;
     for (const line of itemCreateLines) {
-      effectLines.push(`      ${line}`);
+      const match = line.match(/^this\.(_(?:el|t|anchor|frag|slot|c|inst)\d+)\s*=/);
+      if (match)
+        localVars.add(match[1]);
     }
-    effectLines.push(`      entry = { node: ${itemNode}, item: ${itemVar}, disposers: [] };`);
-    effectLines.push(`    }`);
-    if (hasItemEffects) {
-      for (let line of itemSetupLines) {
-        line = line.replace(new RegExp(itemNode.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), "entry.node");
-        const wrappedLine = line.replace(/__effect\(\(\) => \{/g, "entry.disposers.push(__effect(() => {").replace(/\}\);$/g, "}));");
-        effectLines.push(`    ${wrappedLine}`);
+    if (localVars.size > 0) {
+      factoryLines.push(`  let ${[...localVars].join(", ")};`);
+    }
+    const hasEffects = itemSetupLines.length > 0;
+    if (hasEffects) {
+      factoryLines.push(`  let disposers = [];`);
+    }
+    factoryLines.push(`  return {`);
+    factoryLines.push(`    c() {`);
+    for (const line of itemCreateLines) {
+      factoryLines.push(`      ${localizeVar(line)}`);
+    }
+    factoryLines.push(`    },`);
+    factoryLines.push(`    m(target, anchor) {`);
+    factoryLines.push(`      target.insertBefore(${localizeVar(itemNode)}, anchor);`);
+    factoryLines.push(`    },`);
+    factoryLines.push(`    p(ctx, ${itemVar}, ${indexVar}) {`);
+    if (hasEffects) {
+      factoryLines.push(`      // Dispose old effects and create new ones with updated values`);
+      factoryLines.push(`      disposers.forEach(d => d());`);
+      factoryLines.push(`      disposers = [];`);
+      for (const line of itemSetupLines) {
+        const localizedLine = localizeVar(line);
+        const wrappedLine = localizedLine.replace(/__effect\(\(\) => \{/g, "disposers.push(__effect(() => {").replace(/\}\);$/g, "}));");
+        factoryLines.push(`      ${wrappedLine}`);
       }
     }
-    effectLines.push(`    newMap.set(key, entry);`);
-    effectLines.push(`  }`);
-    effectLines.push(``);
-    effectLines.push(`  // Remove nodes and dispose their effects`);
-    effectLines.push(`  for (const [key, entry] of ${mapVar}) {`);
-    effectLines.push(`    if (!newMap.has(key)) {`);
-    effectLines.push(`      entry.disposers.forEach(d => d());`);
-    effectLines.push(`      entry.node.remove();`);
-    effectLines.push(`    }`);
-    effectLines.push(`  }`);
-    effectLines.push(``);
-    effectLines.push(`  // Reorder/insert nodes to match new order`);
-    effectLines.push(`  let prevNode = ${anchorVar};`);
-    effectLines.push(`  for (const key of newKeys) {`);
-    effectLines.push(`    const entry = newMap.get(key);`);
-    effectLines.push(`    const node = entry.node;`);
-    effectLines.push(`    if (node.previousSibling !== prevNode) {`);
-    effectLines.push(`      parent.insertBefore(node, prevNode.nextSibling);`);
-    effectLines.push(`    }`);
-    effectLines.push(`    prevNode = node;`);
-    effectLines.push(`  }`);
-    effectLines.push(``);
-    effectLines.push(`  // Update tracking`);
-    effectLines.push(`  ${mapVar} = newMap;`);
-    effectLines.push(`  ${keysVar} = newKeys;`);
-    effectLines.push(`});`);
-    this._fgSetupLines.push(effectLines.join(`
+    factoryLines.push(`    },`);
+    factoryLines.push(`    d(detaching) {`);
+    if (hasEffects) {
+      factoryLines.push(`      disposers.forEach(d => d());`);
+    }
+    factoryLines.push(`      if (detaching) ${localizeVar(itemNode)}.remove();`);
+    factoryLines.push(`    }`);
+    factoryLines.push(`  };`);
+    factoryLines.push(`}`);
+    this._fgBlockFactories.push(factoryLines.join(`
+`));
+    const setupLines = [];
+    setupLines.push(`// Loop: ${blockName}`);
+    setupLines.push(`{`);
+    setupLines.push(`  const anchor = ${anchorVar};`);
+    setupLines.push(`  const map = new Map();  // key -> block`);
+    setupLines.push(`  let keys = [];`);
+    setupLines.push(`  __effect(() => {`);
+    setupLines.push(`    const items = ${collectionCode};`);
+    setupLines.push(`    const parent = anchor.parentNode;`);
+    setupLines.push(`    const newKeys = [];`);
+    setupLines.push(`    const newMap = new Map();`);
+    setupLines.push(``);
+    setupLines.push(`    // Create/update blocks`);
+    setupLines.push(`    for (let ${indexVar} = 0; ${indexVar} < items.length; ${indexVar}++) {`);
+    setupLines.push(`      const ${itemVar} = items[${indexVar}];`);
+    setupLines.push(`      const key = ${keyExpr};`);
+    setupLines.push(`      newKeys.push(key);`);
+    setupLines.push(`      let block = map.get(key);`);
+    setupLines.push(`      if (block) {`);
+    setupLines.push(`        // Update existing block`);
+    setupLines.push(`        block.p(this, ${itemVar}, ${indexVar});`);
+    setupLines.push(`      } else {`);
+    setupLines.push(`        // Create new block`);
+    setupLines.push(`        block = ${blockName}(this, ${itemVar}, ${indexVar});`);
+    setupLines.push(`        block.c();`);
+    setupLines.push(`        block.m(parent, anchor);`);
+    setupLines.push(`        block.p(this, ${itemVar}, ${indexVar});  // Wire up effects`);
+    setupLines.push(`      }`);
+    setupLines.push(`      newMap.set(key, block);`);
+    setupLines.push(`    }`);
+    setupLines.push(``);
+    setupLines.push(`    // Remove deleted blocks`);
+    setupLines.push(`    for (const [key, block] of map) {`);
+    setupLines.push(`      if (!newMap.has(key)) block.d(true);`);
+    setupLines.push(`    }`);
+    setupLines.push(``);
+    setupLines.push(`    // Update tracking (simple swap)`);
+    setupLines.push(`    map.clear();`);
+    setupLines.push(`    for (const [k, v] of newMap) map.set(k, v);`);
+    setupLines.push(`    keys = newKeys;`);
+    setupLines.push(`  });`);
+    setupLines.push(`}`);
+    this._fgSetupLines.push(setupLines.join(`
     `));
     return anchorVar;
   }
   fgProcessComponent(componentName, args) {
     const instVar = this.fgNewElement("inst");
     const elVar = this.fgNewElement("el");
-    const propsCode = this.fgBuildComponentProps(args);
+    const { propsCode, childrenVar, childrenSetupLines } = this.fgBuildComponentProps(args);
     this._fgCreateLines.push(`${instVar} = new ${componentName}(${propsCode});`);
     this._fgCreateLines.push(`${elVar} = ${instVar}._create();`);
     this._fgSetupLines.push(`if (${instVar}._setup) ${instVar}._setup();`);
+    for (const line of childrenSetupLines) {
+      this._fgSetupLines.push(line);
+    }
     return elVar;
   }
   fgBuildComponentProps(args) {
     const props = [];
-    const children = [];
+    let childrenVar = null;
+    const childrenSetupLines = [];
     for (const arg of args) {
       if (Array.isArray(arg) && arg[0] === "object") {
         for (let i = 1;i < arg.length; i++) {
@@ -5496,10 +5658,27 @@ ${this.indent()}}`;
           }
         }
       } else if (Array.isArray(arg) && (arg[0] === "->" || arg[0] === "=>")) {
-        children.push("/* children */");
+        const block = arg[2];
+        if (block) {
+          const savedCreateLines = this._fgCreateLines;
+          const savedSetupLines = this._fgSetupLines;
+          this._fgCreateLines = [];
+          this._fgSetupLines = [];
+          childrenVar = this.fgProcessBlock(block);
+          const childCreateLines = this._fgCreateLines;
+          const childSetupLinesCopy = this._fgSetupLines;
+          this._fgCreateLines = savedCreateLines;
+          this._fgSetupLines = savedSetupLines;
+          for (const line of childCreateLines) {
+            this._fgCreateLines.push(line);
+          }
+          childrenSetupLines.push(...childSetupLinesCopy);
+          props.push(`children: ${childrenVar}`);
+        }
       }
     }
-    return props.length > 0 ? `{ ${props.join(", ")} }` : "{}";
+    const propsCode = props.length > 0 ? `{ ${props.join(", ")} }` : "{}";
+    return { propsCode, childrenVar, childrenSetupLines };
   }
   generateComponentTemplateElement(sexpr) {
     if (typeof sexpr === "string") {
@@ -5835,11 +6014,14 @@ ${this.indent()}}`;
     const classes = [];
     let current = sexpr;
     while (Array.isArray(current) && current[0] === ".") {
-      if (typeof current[2] === "string")
-        classes.unshift(current[2]);
+      const prop = current[2];
+      if (typeof prop === "string" || prop instanceof String) {
+        classes.unshift(prop.valueOf());
+      }
       current = current[1];
     }
-    return { tag: typeof current === "string" ? current : "div", classes };
+    const tag = typeof current === "string" ? current : current instanceof String ? current.valueOf() : "div";
+    return { tag, classes };
   }
   generateTemplateConditional(sexpr) {
     const [head, condition, thenBlock, elseBlock] = sexpr;
@@ -8494,80 +8676,338 @@ ${this.indent()}}`;
     return code;
   }
   getReactiveRuntime() {
-    return `// === Rip Reactive Runtime ===
-let __currentEffect = null, __pendingEffects = new Set();
-function __signal(v) {
-  const subs = new Set();
-  let notifying = false, locked = false, dead = false;
-  const s = {
-    get value() { if (dead) return v; if (__currentEffect) { subs.add(__currentEffect); __currentEffect.dependencies.add(subs); } return v; },
-    set value(n) {
-      if (dead || locked || n === v || notifying) return;
-      v = n;
+    return `// ============================================================================
+// Rip Reactive Runtime
+// A minimal, fine-grained reactivity system
+//
+// Reactivity:
+//   __signal(value)    - Reactive state container
+//   __computed(fn)     - Derived value (lazy, cached)
+//   __effect(fn)       - Side effect that re-runs when dependencies change
+//   __batch(fn)        - Group multiple updates into one flush
+//   __readonly(value)  - Immutable value wrapper
+//
+// Context API:
+//   setContext(key, value)  - Set context in current component
+//   getContext(key)         - Get context from nearest ancestor
+//   hasContext(key)         - Check if context exists
+//
+// Error Handling:
+//   __catchErrors(fn)       - Wrap function to route errors to boundary
+//   __handleError(error)    - Route error to nearest boundary
+//
+// How reactivity works:
+//   - Reading a signal/computed inside an effect tracks it as a dependency
+//   - Writing to a signal notifies all subscribers
+//   - Batching defers effect execution until the batch completes
+// ============================================================================
+
+// Global state for dependency tracking
+let __currentEffect = null;   // The effect/computed currently being evaluated
+let __pendingEffects = new Set();  // Effects queued to run
+let __batching = false;       // Are we inside a batch()?
+
+// Flush all pending effects (called after signal updates, or at end of batch)
+function __flushEffects() {
+  const effects = [...__pendingEffects];
+  __pendingEffects.clear();
+  for (const effect of effects) effect.run();
+}
+
+// Shared primitive coercion (used by signal and computed)
+const __primitiveCoercion = {
+  valueOf() { return this.value; },
+  toString() { return String(this.value); },
+  [Symbol.toPrimitive](hint) { return hint === 'string' ? this.toString() : this.valueOf(); }
+};
+
+/**
+ * Create a reactive signal (state container)
+ * @param {*} initialValue - The initial value
+ * @returns {object} Signal with .value getter/setter
+ */
+function __signal(initialValue) {
+  let value = initialValue;
+  const subscribers = new Set();  // Effects/computeds that depend on this signal
+  
+  // State flags
+  let notifying = false;  // Prevents re-entry during notification
+  let locked = false;     // Prevents writes (used during SSR/hydration)
+  let dead = false;       // Signal has been killed (cleanup)
+
+  const signal = {
+    get value() {
+      if (dead) return value;
+      // Track this signal as a dependency of the current effect/computed
+      if (__currentEffect) {
+        subscribers.add(__currentEffect);
+        __currentEffect.dependencies.add(subscribers);
+      }
+      return value;
+    },
+    
+    set value(newValue) {
+      // Skip if: dead, locked, same value, or already notifying
+      if (dead || locked || newValue === value || notifying) return;
+      value = newValue;
       notifying = true;
-      for (const sub of subs) if (sub.markDirty) sub.markDirty();
-      for (const sub of subs) if (!sub.markDirty) __pendingEffects.add(sub);
-      const fx = [...__pendingEffects]; __pendingEffects.clear();
-      for (const e of fx) e.run();
+      
+      // Notify subscribers: computeds mark dirty, effects get queued
+      for (const sub of subscribers) {
+        if (sub.markDirty) sub.markDirty();  // Computed
+        else __pendingEffects.add(sub);      // Effect
+      }
+      
+      // Flush immediately unless we're batching
+      if (!__batching) __flushEffects();
       notifying = false;
     },
-    read() { return v; },
-    lock() { locked = true; return s; },
-    free() { subs.clear(); return s; },
-    kill() { dead = true; subs.clear(); return v; },
-    valueOf() { return this.value; },
-    toString() { return String(this.value); },
-    [Symbol.toPrimitive](hint) { return hint === 'string' ? this.toString() : this.valueOf(); }
+    
+    read() { return value; },                    // Read without tracking
+    lock() { locked = true; return signal; },    // Prevent further writes
+    free() { subscribers.clear(); return signal; },  // Clear all subscribers
+    kill() { dead = true; subscribers.clear(); return value; },  // Cleanup
+    
+    ...__primitiveCoercion
   };
-  return s;
+  return signal;
 }
+
+/**
+ * Create a computed value (derived state, lazy & cached)
+ * @param {function} fn - Function that computes the value
+ * @returns {object} Computed with .value getter
+ */
 function __computed(fn) {
-  let v, dirty = true, locked = false, dead = false;
-  const subs = new Set();
-  const c = {
-    dependencies: new Set(),
+  let value;
+  let dirty = true;           // Needs recomputation?
+  const subscribers = new Set();  // Things that depend on this computed
+  
+  // State flags
+  let locked = false;  // Prevents recomputation
+  let dead = false;    // Computed has been killed
+
+  const computed = {
+    dependencies: new Set(),  // Signals/computeds this depends on
+    
+    // Called by dependencies when they change
     markDirty() {
-      if (dead || locked || !dirty) { if (!dead && !locked && !dirty) { dirty = true; for (const s of subs) if (s.markDirty) s.markDirty(); for (const s of subs) if (!s.markDirty) __pendingEffects.add(s); } }
+      if (dead || locked || dirty) return;
+      dirty = true;
+      // Propagate dirty status to our subscribers
+      for (const sub of subscribers) {
+        if (sub.markDirty) sub.markDirty();
+        else __pendingEffects.add(sub);
+      }
     },
+    
     get value() {
-      if (dead) return v;
-      if (__currentEffect) { subs.add(__currentEffect); __currentEffect.dependencies.add(subs); }
+      if (dead) return value;
+      // Track this computed as a dependency
+      if (__currentEffect) {
+        subscribers.add(__currentEffect);
+        __currentEffect.dependencies.add(subscribers);
+      }
+      // Recompute if dirty (lazy evaluation)
       if (dirty && !locked) {
-        for (const d of c.dependencies) d.delete(c); c.dependencies.clear();
-        const prev = __currentEffect; __currentEffect = c;
-        try { v = fn(); } finally { __currentEffect = prev; }
+        // Clear old dependencies
+        for (const dep of computed.dependencies) dep.delete(computed);
+        computed.dependencies.clear();
+        // Evaluate with this computed as the current effect (to track deps)
+        const prev = __currentEffect;
+        __currentEffect = computed;
+        try { value = fn(); } finally { __currentEffect = prev; }
         dirty = false;
       }
-      return v;
+      return value;
     },
-    read() { return dead ? v : c.value; },
-    lock() { locked = true; c.value; return c; },
-    free() { for (const d of c.dependencies) d.delete(c); c.dependencies.clear(); subs.clear(); return c; },
-    kill() { dead = true; const result = v; c.free(); return result; },
-    valueOf() { return this.value; },
-    toString() { return String(this.value); },
-    [Symbol.toPrimitive](hint) { return hint === 'string' ? this.toString() : this.valueOf(); }
+    
+    read() { return value; },  // Return cached value without tracking or recomputing
+    lock() { locked = true; computed.value; return computed; },  // Lock after computing
+    free() {
+      for (const dep of computed.dependencies) dep.delete(computed);
+      computed.dependencies.clear();
+      subscribers.clear();
+      return computed;
+    },
+    kill() {
+      dead = true;
+      const result = value;
+      computed.free();
+      return result;
+    },
+    
+    ...__primitiveCoercion
   };
-  return c;
+  return computed;
 }
+
+/**
+ * Create a reactive effect (side effect that re-runs on dependency changes)
+ * @param {function} fn - The effect function
+ * @returns {function} Dispose function to stop the effect
+ */
 function __effect(fn) {
-  const e = {
-    dependencies: new Set(),
+  const effect = {
+    dependencies: new Set(),  // Signals/computeds this effect depends on
+    
     run() {
-      for (const d of e.dependencies) d.delete(e); e.dependencies.clear();
-      const prev = __currentEffect; __currentEffect = e;
+      // Clear old dependencies before re-running
+      for (const dep of effect.dependencies) dep.delete(effect);
+      effect.dependencies.clear();
+      // Run with this effect as current (to track deps)
+      const prev = __currentEffect;
+      __currentEffect = effect;
       try { fn(); } finally { __currentEffect = prev; }
     },
-    dispose() { for (const d of e.dependencies) d.delete(e); e.dependencies.clear(); }
+    
+    dispose() {
+      for (const dep of effect.dependencies) dep.delete(effect);
+      effect.dependencies.clear();
+    }
   };
-  e.run();
-  return () => e.dispose();
+  
+  effect.run();  // Run immediately to establish dependencies
+  return () => effect.dispose();
 }
+
+/**
+ * Batch multiple state updates into a single effect flush
+ * @param {function} fn - Function containing multiple state updates
+ * @returns {*} The return value of fn
+ */
 function __batch(fn) {
-  // Simple batch - just run the function, signals handle their own notifications
-  fn();
+  if (__batching) return fn();  // Already batching, just run
+  __batching = true;
+  try {
+    return fn();
+  } finally {
+    __batching = false;
+    __flushEffects();  // Flush all effects once at the end
+  }
 }
-function __readonly(v) { return Object.freeze({ value: v }); }
+
+/**
+ * Create a readonly value (immutable, no reactivity)
+ * @param {*} value - The value to wrap
+ * @returns {object} Frozen object with .value property
+ */
+function __readonly(value) {
+  return Object.freeze({ value });
+}
+
+// ============================================================================
+// Context API
+// Pass data down the component tree without prop drilling
+//
+// Usage:
+//   // In parent component constructor or methods:
+//   setContext('theme', { dark: true })
+//   
+//   // In any descendant component:
+//   theme = getContext('theme')
+// ============================================================================
+
+let __currentComponent = null;  // The component currently being initialized
+
+/**
+ * Set a context value in the current component
+ * @param {*} key - The context key (usually a string or symbol)
+ * @param {*} value - The value to store
+ */
+function setContext(key, value) {
+  if (!__currentComponent) {
+    throw new Error('setContext must be called during component initialization');
+  }
+  if (!__currentComponent._context) {
+    __currentComponent._context = new Map();
+  }
+  __currentComponent._context.set(key, value);
+}
+
+/**
+ * Get a context value from the nearest ancestor that set it
+ * @param {*} key - The context key to look up
+ * @returns {*} The context value, or undefined if not found
+ */
+function getContext(key) {
+  let component = __currentComponent;
+  while (component) {
+    if (component._context && component._context.has(key)) {
+      return component._context.get(key);
+    }
+    component = component._parent;
+  }
+  return undefined;
+}
+
+/**
+ * Check if a context key exists in any ancestor
+ * @param {*} key - The context key to check
+ * @returns {boolean} True if the key exists
+ */
+function hasContext(key) {
+  let component = __currentComponent;
+  while (component) {
+    if (component._context && component._context.has(key)) return true;
+    component = component._parent;
+  }
+  return false;
+}
+
+// ============================================================================
+// Error Boundaries
+// Catch and handle errors in component trees gracefully
+//
+// Usage in component:
+//   error: (err) -> console.error "Caught:", err
+// ============================================================================
+
+let __errorHandler = null;  // Current error handler (set by nearest error boundary)
+
+/**
+ * Set the current error handler (called by components with error: handler)
+ * @param {function} handler - Error handler function
+ * @returns {function} Previous handler (for restoration)
+ */
+function __setErrorHandler(handler) {
+  const prev = __errorHandler;
+  __errorHandler = handler;
+  return prev;
+}
+
+/**
+ * Handle an error - calls nearest error boundary or rethrows
+ * @param {Error} error - The error to handle
+ */
+function __handleError(error) {
+  if (__errorHandler) {
+    try {
+      __errorHandler(error);
+    } catch (handlerError) {
+      console.error('Error in error handler:', handlerError);
+      console.error('Original error:', error);
+    }
+  } else {
+    throw error;
+  }
+}
+
+/**
+ * Wrap a function to catch errors and route to error boundary
+ * @param {function} fn - Function to wrap
+ * @returns {function} Wrapped function
+ */
+function __catchErrors(fn) {
+  return function(...args) {
+    try {
+      return fn.apply(this, args);
+    } catch (error) {
+      __handleError(error);
+    }
+  };
+}
+
 // === End Reactive Runtime ===
 `;
   }
@@ -8807,8 +9247,8 @@ function compileToJS(source, options = {}) {
   return compiler.compileToJS(source);
 }
 // src/browser.js
-var VERSION = "2.2.0";
-var BUILD_DATE = "2026-01-15@07:55:59GMT";
+var VERSION = "2.2.1";
+var BUILD_DATE = "2026-01-15@10:13:17GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

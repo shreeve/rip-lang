@@ -7,6 +7,37 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.1] - 2026-01-15
+
+### Added - Context API & Error Primitives
+
+**Context API** - Pass data through component trees without prop drilling:
+- `setContext(key, value)` - Set context in current component
+- `getContext(key)` - Get context from nearest ancestor
+- `hasContext(key)` - Check if context exists
+
+**Error Primitives** - Low-level building blocks for error handling:
+- `__catchErrors(fn)` - Wrap function to route errors to handler
+- `__handleError(error)` - Route error to handler or rethrow
+- `__setErrorHandler(fn)` - Set current error handler
+
+**Dynamic Class Syntax** - Cleaner Tailwind support:
+```coffee
+div.("bg-white rounded-lg shadow-md")  # Static classes
+button.(active && "bg-blue-500")       # Conditional classes
+```
+
+**Other Improvements**:
+- Components now track parent via `_parent` pointer
+- Batching optimization with `__batch()` for grouped updates
+- Improved reactive runtime documentation (~330 lines total)
+
+**Updated Scores**:
+- Components: B+ → A- (Context API implemented)
+- Tests: 1017 → 1033
+
+---
+
 ## [2.2.0] - 2026-01-15
 
 ### Added - Keyed Reconciliation & Per-Item Effects
