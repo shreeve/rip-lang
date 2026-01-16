@@ -2,7 +2,21 @@
 
 # Contributing to Rip
 
-Thanks for your interest in contributing to Rip! This guide shows the complete workflow with a real example.
+Thanks for your interest in contributing to Rip! This guide shows the complete workflow with real examples.
+
+---
+
+## Table of Contents
+
+1. [Complete GitHub Workflow](#complete-github-workflow-real-example)
+2. [Quick Reference](#quick-reference)
+3. [Project Structure](#project-structure)
+4. [Testing](#testing)
+5. [Key Concepts](#key-concepts)
+6. [Important Rules](#important-rules)
+7. [Workflow Quick Reference](#workflow-quick-reference)
+
+---
 
 ## Complete GitHub Workflow (Real Example)
 
@@ -181,7 +195,9 @@ bun run serve          # Dev server (localhost:3000)
 git checkout -b fix/issue-name
 # Make changes...
 git add <files>
-git commit -m "Fix: description\n\nFixes #N"
+git commit -m "Fix: description
+
+Fixes #N"
 git push origin fix/issue-name
 
 # Create PR
@@ -204,23 +220,26 @@ gh issue view <number>
 gh issue close <number>
 ```
 
+---
+
 ## Project Structure
 
 ```
 src/
 ├── lexer.js         # CoffeeScript 2.7 lexer (⚠️ rewriter only)
 ├── parser.js        # Generated parser (❌ don't edit directly)
-├── compiler.js       # Code generator (✅ main work here)
-├── compiler.js      # Pipeline orchestration
+├── compiler.js      # Code generator (✅ main work here)
 ├── repl.js          # Terminal REPL
 ├── browser.js       # Browser integration
 └── grammar/
     ├── grammar.rip  # Grammar specification (⚠️ expert only)
     └── solar.rip    # Parser generator (❌ given)
 
-test/rip/            # 20 test files, 846 tests
+test/rip/            # 20 test files, 1046+ tests
 docs/                # Comprehensive documentation
 ```
+
+---
 
 ## Testing
 
@@ -242,6 +261,8 @@ bun run test                              # All tests
 bun test/runner.js test/rip/functions.rip # Specific file
 bun --no-cache test/runner.js test/rip    # Clear Bun cache
 ```
+
+---
 
 ## Key Concepts
 
@@ -276,6 +297,8 @@ if (Array.isArray(body) && body[0] === 'block') {
 }
 ```
 
+---
+
 ## Important Rules
 
 ### Zero Dependencies
@@ -299,7 +322,112 @@ Output modern JavaScript (ES2022). Don't downgrade syntax.
 - ❌ `src/grammar/solar.rip` - Given (parser generator)
 - ⚠️ `src/lexer.js` - Only modify Rewriter section
 
-## Commit Message Format
+---
+
+## Workflow Quick Reference
+
+### The 10-Step Workflow
+
+```bash
+# 1. Find/identify bug or feature need
+echo 'failing code' | ./bin/rip -s  # Debug with -s, -t, -c flags
+
+# 2. Create GitHub issue
+gh issue create --title "..." --label "bug" --body "..."
+
+# 3. Create feature branch
+git checkout -b fix/issue-name
+
+# 4. Write failing tests FIRST
+# Edit test/rip/RELEVANT_FILE.rip
+bun test/runner.js test/rip/RELEVANT_FILE.rip  # Verify they fail
+
+# 5. Implement the fix
+# - Grammar change? Edit src/grammar/grammar.rip then: bun run parser
+# - Codegen change? Edit src/compiler.js
+# - Solar change? Edit src/grammar/solar.rip then: bun run parser
+
+# 6. Verify tests pass
+bun run test  # All tests must pass
+
+# 7. Build browser bundle (if code changes)
+bun run browser  # Updates web REPL
+
+# 8. Update documentation
+# - README.md (if user-facing change)
+# - docs/INTERNALS.md (if new node types)
+# - Test count updates
+
+# 9. Commit with issue reference
+git add <files>
+git commit -m "Fix: Description
+
+Fixes #N  ← This auto-closes the issue when PR merges!
+
+- Bullet points of changes
+- Test results
+
+All tests passing: X/Y (100%)"
+
+# 10. Push, create PR, merge
+git push origin fix/issue-name
+gh pr create --title "..." --base main --body "Fixes #N ..."
+gh pr merge <number> --squash --delete-branch
+```
+
+### When to Use Workflow vs Direct Commit
+
+**Use Full Workflow When:**
+- 🐛 **Bug fixes** - Track issue → resolution
+- ✨ **New features** - Document design decisions
+- 🔧 **Breaking changes** - Need review/discussion
+- 📚 **Complex changes** - Multiple files/systems
+
+**Direct Commit to Main When:**
+- 📝 **Documentation only** - No code changes
+- 🧪 **Test additions** - Documenting existing behavior
+- 🎨 **Formatting/style** - Trivial changes
+- 🔖 **Version bumps** - Routine maintenance
+
+**When in doubt, use the workflow!** It creates a paper trail.
+
+### Common Pitfalls
+
+**❌ Forget to reference issue**
+```
+git commit -m "Fix bug"  # ← Issue won't auto-close!
+```
+
+**✅ Always reference**
+```
+git commit -m "Fix: Description
+
+Fixes #N  ← This is the magic!
+..."
+```
+
+**❌ Edit generated files**
+```
+vim src/parser.js  # ← Changes lost on next bun run parser!
+```
+
+**✅ Edit source files**
+```
+vim src/grammar/grammar.rip
+bun run parser  # Regenerates parser.js
+```
+
+**❌ Skip tests**
+```
+# Make fix, commit immediately  # ← Might break things!
+```
+
+**✅ Always test**
+```
+bun run test  # MUST pass before committing
+```
+
+### Commit Message Format
 
 ```
 Fix: Short description (50 chars or less)
@@ -314,6 +442,8 @@ All tests passing: X/Y (100%)
 ```
 
 **Important:** Include `Fixes #N` to auto-close issues when PR merges.
+
+---
 
 ## Getting Help
 

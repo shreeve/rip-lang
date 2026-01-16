@@ -6,7 +6,7 @@
 
 That "Why Not" document makes strong arguments, but here's the **counter-argument**—a working, tested, **production-ready** language that offers a different path.
 
-**Rip isn't vaporware. It's real. Version 2.2.2. 968/968 tests passing. Self-hosting. Zero dependencies. Available now.**
+**Rip isn't vaporware. It's real. Version 2.3.0. 1046/1046 tests passing. Self-hosting. Zero dependencies. Available now.**
 
 ### The Philosophical Divide: Freedom vs Fear
 
@@ -23,6 +23,193 @@ This document appeals to **freedom**:
 - Freedom to actually write code
 
 **This isn't a debate about old vs. new. It's about simple vs. complex. It's about craftsmanship vs. compliance. It's about whether programming should be a creative act or a bureaucratic process.**
+
+## The Language IS the Framework (Revolutionary)
+
+**This is the killer feature that changes everything.** While React, Vue, and Svelte are libraries you import, Rip provides reactivity, templates, and components as **language-level constructs**.
+
+### Reactivity: Built Into the Syntax
+
+```rip
+# Rip's reactive primitives - language operators, not library imports!
+
+count := 0                    # Signal - reactive state (:= operator)
+doubled ~= count * 2          # Derived/Destiny - auto-updates (~= operator)
+message =! "Hello"            # Readonly - cannot be reassigned (=! operator)
+
+effect ->                     # Effect - runs when dependencies change
+  console.log "Count: #{count}, Doubled: #{doubled}"
+
+count = 5                     # Change signal → derived updates → effect runs!
+# Console: "Count: 5, Doubled: 10"
+```
+
+**Compare to React:**
+```javascript
+// React - library imports, hooks, ceremony
+import { useState, useMemo, useEffect } from 'react';
+
+const [count, setCount] = useState(0);
+const doubled = useMemo(() => count * 2, [count]);
+useEffect(() => {
+  console.log(`Count: ${count}, Doubled: ${doubled}`);
+}, [count, doubled]);
+```
+
+**Rip: 4 lines. React: 8 lines + imports + dependency arrays + hook rules. And Rip's version is fine-grained (no re-renders)!**
+
+### Templates: S-Expression Syntax for UI
+
+```rip
+# Rip templates - Pug-like shorthand built into the language
+render
+  .container
+    h1 "Welcome, #{name}"
+    button @click: increment, "Count: #{count}"
+    ul
+      for item in items
+        li.item item.name
+
+# Generates efficient DOM operations, not virtual DOM diffing
+```
+
+**Compare to JSX:**
+```jsx
+// React - external DSL that needs transpilation
+return (
+  <div className="container">
+    <h1>Welcome, {name}</h1>
+    <button onClick={increment}>Count: {count}</button>
+    <ul>
+      {items.map(item => <li className="item">{item.name}</li>)}
+    </ul>
+  </div>
+);
+```
+
+**Rip templates are cleaner, shorter, and produce fine-grained DOM updates (no virtual DOM overhead).**
+
+### Components: First-Class Language Construct
+
+```rip
+# Rip component - declared with 'component' keyword
+component Counter
+  @name = "Counter"           # Prop with default
+  @initial = 0                # Prop with default
+
+  count := @initial           # Reactive state
+  doubled ~= count * 2        # Derived value
+
+  inc: -> count += 1          # Method (auto-bound)
+  dec: -> count -= 1
+
+  render
+    .counter
+      span "#{@name}: "
+      button @click: @dec, "−"
+      span.value count
+      button @click: @inc, "+"
+      i " (doubled: #{doubled})"
+
+# Instantiate and mount - Ruby-style constructor!
+Counter.new(name: "Items", initial: 5).mount "#app"
+```
+
+**Compare to React:**
+```jsx
+// React - 30+ lines, hooks everywhere, manual optimization
+import { useState, useMemo, memo } from 'react';
+
+const Counter = memo(({ name = "Counter", initial = 0 }) => {
+  const [count, setCount] = useState(initial);
+  const doubled = useMemo(() => count * 2, [count]);
+
+  return (
+    <div className="counter">
+      <span>{name}: </span>
+      <button onClick={() => setCount(c => c - 1)}>−</button>
+      <span className="value">{count}</span>
+      <button onClick={() => setCount(c => c + 1)}>+</button>
+      <i> (doubled: {doubled})</i>
+    </div>
+  );
+});
+
+// Mount requires more ceremony
+ReactDOM.createRoot(document.getElementById('app')).render(
+  <Counter name="Items" initial={5} />
+);
+```
+
+### Two-Way Binding: The `<=>` Operator
+
+```rip
+# Rip - two-way binding is a language operator!
+component Calculator
+  num := 5
+  squared ~= num * num
+
+  render
+    .calculator
+      input type: "number", value <=> num    # <=> binds both ways!
+      span "Squared: #{squared}"
+
+# No onChange handlers, no controlled components, no ceremony
+# The <=> operator handles input/output automatically
+```
+
+**Compare to React:**
+```jsx
+// React - controlled components require manual wiring
+const Calculator = () => {
+  const [num, setNum] = useState(5);
+  const squared = useMemo(() => num * num, [num]);
+
+  return (
+    <div className="calculator">
+      <input
+        type="number"
+        value={num}
+        onChange={e => setNum(parseInt(e.target.value) || 0)}
+      />
+      <span>Squared: {squared}</span>
+    </div>
+  );
+};
+```
+
+**Rip: One operator. React: Manual onChange + parseInt + fallback. Rip even auto-uses `valueAsNumber` for numeric inputs!**
+
+### Ruby-Style Constructor: `ClassName.new()`
+
+```rip
+# Both syntaxes work - use what you prefer!
+counter = new Counter(initial: 10)     # JavaScript style
+counter = Counter.new(initial: 10)     # Ruby style
+
+# Chain with mount for elegant one-liners
+Counter.new(name: "Score", initial: 0).mount "#game"
+
+# Works with ANY class, not just components
+point = Point.new(x: 10, y: 20)
+user = User.new(name: "Alice", role: "admin")
+```
+
+### The Framework Comparison
+
+| Feature | Rip | React | Vue | Svelte |
+|---------|-----|-------|-----|--------|
+| Reactivity | `:=` `~=` (language) | useState/useMemo (library) | ref/computed (library) | $: (compiler magic) |
+| Templates | Built-in S-expr | JSX (external) | Templates (separate) | Templates (separate) |
+| Components | `component` keyword | Functions/Classes | SFC files | SFC files |
+| Two-way binding | `<=>` operator | Manual wiring | v-model (directive) | bind: (syntax) |
+| Bundle size | 0 KB (language) | 45+ KB | 33+ KB | ~2 KB |
+| Virtual DOM | No (fine-grained) | Yes | Yes | No |
+| Dependencies | 0 | Many | Many | Many |
+
+**Rip's reactive features have ZERO bundle cost because they're language constructs, not library imports.**
+
+---
 
 ## Rip: The Features That Matter (All Working Today)
 
@@ -150,8 +337,10 @@ Not "minimal." Not "few." **ZERO.** This is **real**, **running**, **today**.
 - ✅ **Full compiler** (lexer + parser + codegen)
 - ✅ **SLR(1) parser generator** (solar.rip - 928 lines, built-in!)
 - ✅ **Self-hosting** (Rip compiles itself, including the parser generator)
+- ✅ **Reactive framework** (signals, derived, effects - language-level!)
+- ✅ **Component system** (templates, props, lifecycle - language-level!)
 - ✅ **Triple REPL** (terminal, browser, console)
-- ✅ **Test framework** (runner + 968 tests)
+- ✅ **Test framework** (runner + 1046 tests)
 - ✅ **Browser bundler** (43KB brotli-compressed)
 
 Compare to a "modern" TypeScript project:
@@ -240,7 +429,7 @@ $ node script.js
 The JavaScript "ecosystem" isn't evolution—it's **cancer**. Every project metastasizes into:
 
 ```bash
-# A "simple" React app in 2025
+# A "simple" React app in 2026
 $ npx create-next-app@latest
 $ du -sh node_modules
 412M node_modules
@@ -298,7 +487,7 @@ doSomething(user)  # Test it, ship it
 - **Dependencies: 0 (Rip) vs 1,400+ (TS)** - That's ∞% fewer attack vectors
 - **Time to Hello World: 5 seconds (Rip) vs 5 minutes (TS)** - 60x faster to start
 - **Code size: 9,450 LOC (Rip) vs 17,760 LOC (CoffeeScript)** - 50% smaller implementation
-- **Test coverage: 968/968 (100%)** - Perfect score
+- **Test coverage: 1046/1046 (100%)** - Perfect score
 - **Self-hosting: YES** - Rip compiles itself, including its own parser generator
 - **Browser bundle: 43KB** - Brotli-compressed (560KB → 43KB, 92% reduction)
 
@@ -469,9 +658,9 @@ $ echo "console.log 'Hello World'" > app.rip
 $ bun app.rip  # Just works
 Hello World
 
-# Testing (WORKS TODAY - 968 tests passing)
+# Testing (WORKS TODAY - 1046 tests passing)
 $ bun test/runner.js test/rip
-✓ 968/968 tests passing (100%)
+✓ 1046/1046 tests passing (100%)
 
 # Import modules
 $ echo 'import { add } from "./utils.rip"
@@ -520,14 +709,22 @@ While JavaScript adds features nobody wanted:
 - Pipeline operator (bikeshedding since 2015)
 - Pattern matching (reinventing what we already have)
 
-**Rip innovates by refusing to innovate unnecessarily:**
+**Rip innovates where it matters:**
 - The `!` operator: Async that doesn't suck ✓
 - Void functions: Side-effect clarity ✓
 - Ruby regexes + heregex: Pattern matching that works ✓
 - Dual optional syntax: 10 operators, not 4 ✓
 - __DATA__ marker: Inline data sections ✓
 - Smart comprehensions: Context-aware optimization ✓
-- **That's it.** The language is complete. **And it's all working today.**
+- **Reactivity as syntax:** `:=` signals, `~=` derived, `effect` blocks ✓
+- **Templates as syntax:** S-expression UI in `render` blocks ✓
+- **Components as syntax:** `component` keyword, `@props`, lifecycle ✓
+- **Two-way binding:** `<=>` operator (no manual wiring) ✓
+- **Ruby constructors:** `ClassName.new()` syntax ✓
+- **Floor division:** `//` operator (not comments!) ✓
+- **True modulo:** `%%` operator (mathematically correct) ✓
+- **Otherwise:** `!?` operator for default values ✓
+- **And it's all working today.** 1046/1046 tests passing.
 
 ## Who This Is Really For
 
@@ -574,7 +771,7 @@ Those who value working code over perfect abstractions.
 
 This is why the debate is so heated. It's not really about Rip vs TypeScript. It's about two fundamentally different worldviews of what programming should be. One sees it as industrial process requiring maximum tooling and process. The other sees it as creative craft requiring minimal friction between thought and implementation.
 
-**And Rip is shipping. It's not a thought experiment—it's a working, tested, self-hosting compiler with 968/968 tests passing.**
+**And Rip is shipping. It's not a thought experiment—it's a working, tested, self-hosting compiler with 1046/1046 tests passing.**
 
 ## The Challenge to the Complexity Apologists
 
@@ -591,8 +788,9 @@ My Rip setup:
 - 0 configuration (just bunfig.toml)
 - Instant execution (< 50ms with Bun)
 - I shipped 3 features while you updated packages
-- **100% test coverage (968/968)**
+- **100% test coverage (1046/1046)**
 - **Self-hosting (compiles itself)**
+- **Reactive UI framework built-in**
 
 **Who's really living in the future?**
 
@@ -644,7 +842,7 @@ Rip isn't about going backward. It's about recognizing that **we took a wrong tu
 
 **The future isn't more dependencies. It's zero dependencies.**
 
-**The future is Rip. Version 1.0. Available today.**
+**The future is Rip. Version 2.3.0. Available today.**
 
 ---
 
@@ -678,7 +876,7 @@ $ echo 'console.log "Hello, Rip!"' > test.rip && bun test.rip
 
 ## Not a Dream. Not Vaporware. Ready.
 
-- ✅ **968/968 tests passing** (100% coverage)
+- ✅ **1046/1046 tests passing** (100% coverage)
 - ✅ **Self-hosting** (Rip compiles itself + its parser generator)
 - ✅ **Zero dependencies** (package.json dependencies: {})
 - ✅ **Bun loader** (bunfig.toml + rip-loader.js - works globally)
@@ -686,7 +884,12 @@ $ echo 'console.log "Hello, Rip!"' > test.rip && bun test.rip
 - ✅ **50% smaller** than CoffeeScript (9,450 vs 17,760 LOC)
 - ✅ **ES2022 output** (works in Bun, Deno, Node 12+, browsers)
 - ✅ **Triple REPL** (terminal, browser, console)
+- ✅ **Reactive primitives** (`:=` signals, `~=` derived, `effect` - language-level!)
+- ✅ **Component system** (`component` keyword, `@props`, lifecycle hooks)
+- ✅ **Template syntax** (S-expressions in `render` blocks, Pug-style shorthand)
+- ✅ **Two-way binding** (`<=>` operator - automatic for inputs)
+- ✅ **Ruby constructors** (`ClassName.new()` - elegant instantiation)
 
-**Version 1.0. Available now. Clone and go.**
+**Version 2.3.0. Available now. Clone and go.**
 
 This approach is ready. Give it a try.

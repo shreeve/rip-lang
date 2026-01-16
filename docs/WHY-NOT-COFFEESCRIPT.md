@@ -4,7 +4,7 @@
 
 ## Executive Summary
 
-CoffeeScript 2 already achieved the goal of modern JavaScript output in 2017. Any effort toward further CoffeeScript development in 2025 represents a misallocation of resources toward a language that has been definitively superseded by the JavaScript ecosystem's evolution. This document presents the compelling case for why CoffeeScript should remain a respected historical artifact rather than receive continued development.
+CoffeeScript 2 already achieved the goal of modern JavaScript output in 2017. Any effort toward further CoffeeScript development in 2026 represents a misallocation of resources toward a language that has been definitively superseded by the JavaScript ecosystem's evolution. This document presents the compelling case for why CoffeeScript should remain a respected historical artifact rather than receive continued development.
 
 **TL;DR:** The ecosystem has moved on. The tooling has rotted. The community has dispersed. TypeScript won the type safety war. Modern JavaScript absorbed the best ideas. What's left isn't worth the cost.
 
@@ -25,7 +25,7 @@ The output is already modern. The problem isn't technical—it's existential.
 ## 1. Ecosystem Abandonment: The Network Effect in Reverse
 
 ### The Developer Desert
-- **Hiring Crisis**: Try posting a "CoffeeScript Developer" position in 2025. You'll get tumbleweeds or developers who haven't touched it since 2015.
+- **Hiring Crisis**: Try posting a "CoffeeScript Developer" position in 2026. You'll get tumbleweeds or developers who haven't touched it since 2015.
 - **Knowledge Decay**: Senior developers who knew CoffeeScript have moved on. Junior developers have never heard of it.
 - **AI Blindness**: GitHub Copilot, ChatGPT, and other AI assistants are trained on modern codebases. Their CoffeeScript suggestions are often outdated or incorrect.
 - **Dead Community**: The CoffeeScript forum has ~5 posts per month. The TypeScript forum has ~500. The network effect that once benefited CoffeeScript now strangles it.
@@ -43,7 +43,7 @@ The output is already modern. The problem isn't technical—it's existential.
 - **Compile-Time Catches**: TypeScript catches errors before runtime. CoffeeScript catches them... in production.
 - **IntelliSense**: Modern developers expect autocomplete that actually works. CoffeeScript's IDE support is "here's a list of every word in your file."
 
-### The Cost of Being Typeless in 2025
+### The Cost of Being Typeless in 2026
 - **Integration Nightmare**: Every third-party library requires manual type annotations or living without IDE support
 - **Team Scaling Breaks**: CoffeeScript works for 1-2 developers who hold the entire codebase in their heads. At 10+ developers, the lack of types becomes a coordination disaster.
 - **No Migration Path**: You can gradually adopt TypeScript in a JavaScript codebase. CoffeeScript requires a full rewrite.
@@ -169,7 +169,7 @@ Every hour spent on CoffeeScript 3 could be spent on:
 
 ## The Verdict: Let It Rest
 
-CoffeeScript served its purpose. It showed JavaScript could be better and influenced ES6+. That's a tremendous legacy. But continuing to develop CoffeeScript in 2025 is like maintaining a telegraph network in the age of 5G.
+CoffeeScript served its purpose. It showed JavaScript could be better and influenced ES6+. That's a tremendous legacy. But continuing to develop CoffeeScript in 2026 is like maintaining a telegraph network in the age of 5G.
 
 The language works—CoffeeScript 2 outputs modern JavaScript that runs everywhere. But "works" isn't enough when the entire ecosystem has moved on. Development is a team sport, and CoffeeScript has no team left.
 
@@ -179,7 +179,7 @@ CoffeeScript 3 would be a technical achievement that nobody asked for, solving p
 
 The kindest thing for CoffeeScript is to recognize it as a successful historical artifact that accomplished its mission: pushing JavaScript to become better. That mission is complete. CoffeeScript won by losing—its ideas live on in modern JavaScript while the language itself can finally rest.
 
-**Building CoffeeScript 3 isn't just unnecessary—it's actively harmful to the developers who would be trapped maintaining codebases in a dead language, cut off from the vibrant, innovative JavaScript ecosystem of 2025 and beyond.**
+**Building CoffeeScript 3 isn't just unnecessary—it's actively harmful to the developers who would be trapped maintaining codebases in a dead language, cut off from the vibrant, innovative JavaScript ecosystem of 2026 and beyond.**
 
 ---
 
