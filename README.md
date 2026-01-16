@@ -21,7 +21,7 @@
 
 Rip is a modern reactive language that compiles to JavaScript. It takes the elegant, readable syntax that made CoffeeScript beloved and brings it into the modern era — with ES2022 output, built-in reactivity, and a clean component system for building UIs.
 
-The compiler is completely standalone with zero dependencies, and it's self-hosting: Rip compiles itself. At ~10,000 lines of code, it's half the size of CoffeeScript while producing cleaner, more modern output.
+The compiler is completely standalone with zero dependencies, and it's self-hosting: Rip compiles itself. At ~12,000 lines of code, it's half the size of CoffeeScript while producing cleaner, more modern output.
 
 **What makes Rip different:**
 - **Reactive primitives** — signals, derived values, and effects built into the language

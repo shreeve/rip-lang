@@ -1776,10 +1776,27 @@ export class CodeGenerator {
   // =========================================================================
   // BINDING PREFIX: __bind_<prop>__
   // The rewriter transforms "value <=> var" into "__bind_value__: var"
-  // This prefix signals two-way binding to the codegen.
+  // This prefix signals two-way binding to the compiler.
   // =========================================================================
   static BIND_PREFIX = '__bind_';
   static BIND_SUFFIX = '__';
+
+  /**
+   * Extract input type from attribute pairs for smart binding (valueAsNumber for number/range)
+   * @param {Array} pairs - Array of [key, value] pairs from object expression
+   * @returns {string|null} - The input type value or null
+   */
+  static extractInputType(pairs) {
+    for (const pair of pairs) {
+      if (!Array.isArray(pair)) continue;
+      const key = pair[0] instanceof String ? pair[0].valueOf() : pair[0];
+      const val = pair[1] instanceof String ? pair[1].valueOf() : pair[1];
+      if (key === 'type' && typeof val === 'string') {
+        return val.replace(/^["']|["']$/g, ''); // Remove quotes
+      }
+    }
+    return null;
+  }
 
   /**
    * Parse binding directive: prop <=> var (new) or [@bind.prop]: var (legacy)
@@ -2582,18 +2599,9 @@ export class CodeGenerator {
   fgProcessAttributes(elVar, objExpr) {
     // objExpr = ['object', [key, value], [key, value], ...]
     
-    // Pre-scan for input type to enable smart binding (e.g., valueAsNumber for type="number")
-    let inputType = null;
-    for (let i = 1; i < objExpr.length; i++) {
-      const [key, value] = objExpr[i];
-      const keyStr = key instanceof String ? key.valueOf() : key;
-      const valueStr = value instanceof String ? value.valueOf() : value;
-      if (keyStr === 'type' && typeof valueStr === 'string') {
-        inputType = valueStr.replace(/^["']|["']$/g, ''); // Remove quotes
-        break;
-      }
-    }
-    
+    // Pre-scan for input type to enable smart binding (valueAsNumber for number/range)
+    const inputType = CodeGenerator.extractInputType(objExpr.slice(1));
+
     for (let i = 1; i < objExpr.length; i++) {
       const [key, value] = objExpr[i];
 
@@ -3212,18 +3220,7 @@ export class CodeGenerator {
       }
       // Object = attributes/events
       else if (Array.isArray(arg) && arg[0] === 'object') {
-        // Pre-scan for input type to enable smart binding (e.g., valueAsNumber for type="number")
-        let inputType = null;
-        for (const pair of arg.slice(1)) {
-          if (Array.isArray(pair)) {
-            const pairKey = pair[0] instanceof String ? pair[0].valueOf() : pair[0];
-            const pairVal = pair[1] instanceof String ? pair[1].valueOf() : pair[1];
-            if (pairKey === 'type' && typeof pairVal === 'string') {
-              inputType = pairVal.replace(/^["']|["']$/g, ''); // Remove quotes
-              break;
-            }
-          }
-        }
+        const inputType = CodeGenerator.extractInputType(arg.slice(1));
         
         for (const pair of arg.slice(1)) {
           if (Array.isArray(pair) && pair.length >= 2) {
@@ -3496,19 +3493,8 @@ export class CodeGenerator {
       }
       // Object = attributes/events
       else if (Array.isArray(arg) && arg[0] === 'object') {
-        // Pre-scan for input type to enable smart binding (e.g., valueAsNumber for type="number")
-        let inputType = null;
-        for (const pair of arg.slice(1)) {
-          if (Array.isArray(pair)) {
-            const pairKey = pair[0] instanceof String ? pair[0].valueOf() : pair[0];
-            const pairVal = pair[1] instanceof String ? pair[1].valueOf() : pair[1];
-            if (pairKey === 'type' && typeof pairVal === 'string') {
-              inputType = pairVal.replace(/^["']|["']$/g, ''); // Remove quotes
-              break;
-            }
-          }
-        }
-        
+        const inputType = CodeGenerator.extractInputType(arg.slice(1));
+
         for (const pair of arg.slice(1)) {
           if (Array.isArray(pair) && pair.length >= 2) {
             const [key, value] = pair;

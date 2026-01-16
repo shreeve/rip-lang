@@ -144,7 +144,7 @@ Many grammar types are just organizational scaffolding - they route to other typ
 - ✅ **Self-hosting** (Rip compiles itself)
 
 **Code Size:**
-- **4,738 LOC** in compiler.js
+- **7,964 LOC** in compiler.js
 - **Complete implementation** of all CoffeeScript 2.7 features
 - **Plus Rip innovations** (heregex, regex+, dammit, void functions, etc.)
 
@@ -913,22 +913,6 @@ for (const k in obj) {
 ```
 
 **Bug avoided:** Never check guard before value is defined!
-
----
-
-## Reference Implementation
-
-When stuck, consult `src/codegen-ORIG.js`:
-
-```bash
-# Find how a pattern was handled
-grep -A 20 "case 'pattern-name':" src/codegen-ORIG.js
-
-# See full implementation
-less src/codegen-ORIG.js
-```
-
-**But:** Don't cargo-cult! Understand WHY, then implement cleanly.
 
 ---
 

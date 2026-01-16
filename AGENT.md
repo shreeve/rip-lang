@@ -22,7 +22,7 @@
 
 ```
 Rip Source → Lexer → Parser → S-Expressions → Codegen → JavaScript
-            (3,146)  (340)    (arrays!)      (5,246)    (ES2022)
+            (3,537)  (340)    (arrays!)      (7,964)    (ES2022)
 ```
 
 **Key insight:** S-expressions (simple arrays like `["=", "x", 42]`) are the IR, not complex AST nodes. This makes the compiler ~50% smaller than CoffeeScript.
@@ -73,7 +73,7 @@ bun run parser  # Regenerates src/parser.js from grammar.rip
 
 **Previous accomplishments (November 2025):**
 - ✅ Dispatch table architecture - All 110 cases (O(1) lookup)
-- ✅ Massive cleanup - 5,246 clean LOC
+- ✅ Massive cleanup - 7,964 clean LOC
 - ✅ Parser optimization - 28.7% faster, 24.5% smaller
 
 **Phase 3 - Components (COMPLETE!):**
@@ -182,7 +182,7 @@ See `docs/COMPONENTS.md` - fully implemented:
 │ Source │───>│   Lexer    │───>│  Parser  │───>│ Codegen │
 │  Code  │    │  (Coffee)  │    │  (Solar) │    │  (Rip)  │
 └────────┘    └────────────┘    └──────────┘    └─────────┘
-                 3,145 LOC          340 LOC       5,246 LOC
+                 3,537 LOC          340 LOC       7,964 LOC
                15 yrs tested     Generated!   S-expr w/Dispatch!
 ```
 
@@ -1108,7 +1108,7 @@ All tests passing: 1033/1033 (100%)"
 - Dead switch cases (error-throwing, forwarding) - 381 lines
 - **ALL Phase 2 duplicate cases** - 1,614 lines! (never removed after extraction)
 - Pointless switch wrapper with only default case
-- **Result:** 7,263 → 5,246 LOC (27.8% reduction!)
+- **Result:** Clean, unified 7,964 LOC compiler
 
 ### Critical Fixes & Refactoring
 
@@ -1133,9 +1133,9 @@ All tests passing: 1033/1033 (100%)"
 
 | File | Purpose | Can Modify? | Notes |
 |------|---------|-------------|-------|
-| `src/lexer.js` | Tokenization + rewriter | ⚠️ Rewriter only | 3,145 LOC |
+| `src/lexer.js` | Tokenization + rewriter | ⚠️ Rewriter only | 3,537 LOC |
 | `src/parser.js` | S-expression parser | ❌ Generated (don't edit) | 340 LOC |
-| `src/compiler.js` | JavaScript generator | ✅ Main work happens here | 5,246 LOC |
+| `src/compiler.js` | JavaScript generator | ✅ Main work happens here | 7,964 LOC |
 | `src/compiler.js` | Pipeline orchestration | ✅ Yes | 250 LOC |
 | `src/repl.js` | Terminal REPL | ✅ Yes | |
 | `src/browser.js` | Browser integration | ✅ Yes | |
@@ -1180,7 +1180,7 @@ fail "name", "code"                  # Expect compilation failure
 | Approach | Lines of Code | Complexity | Extensibility |
 |----------|---------------|------------|---------------|
 | Traditional AST (CoffeeScript) | 10,346 LOC | High (OOP hierarchy) | Hard |
-| S-Expressions (Rip) | 5,246 LOC | Low (pattern matching) | Easy |
+| S-Expressions (Rip) | 7,964 LOC | Low (pattern matching) | Easy |
 
 **Result: ~50% smaller implementation**
 
@@ -1308,11 +1308,11 @@ Rip has **zero runtime or build dependencies**. This is intentional and must be 
 ## 📊 Project Metrics (v1.4.6)
 
 **Codebase:**
-- Lexer+Rewriter: 3,145 LOC
+- Lexer+Rewriter: 3,537 LOC
 - Parser (generated): 340 LOC
-- Codegen: 5,246 LOC (dispatch table + s-expression approach)
+- Codegen: 7,964 LOC (dispatch table + s-expression approach)
 - Compiler: 250 LOC
-- Total: ~9,000 LOC
+- Total: ~12,000 LOC
 
 **Tests:**
 - 1033 tests across 24 files

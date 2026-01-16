@@ -24,7 +24,7 @@ Solar is an SLR(1) parser generator (similar to Yacc/Bison) that generates parse
 
 ```
 Source Code → CoffeeScript Lexer → Solar Parser → S-Expressions → Codegen → JavaScript
-             (3,146 LOC)         (340 LOC)       (arrays!)      (4,824 LOC)
+             (3,537 LOC)         (340 LOC)       (arrays!)      (4,824 LOC)
              15 years tested     Generated!      Clean IR!       Complete!
 ```
 
@@ -815,8 +815,8 @@ o 'FOR ForVariables IN Expression Block', '["for-in", 2, 4, null, null, 5]'
 | `src/grammar/grammar.rip` | Grammar spec | 795 LOC | ✅ Yes |
 | `src/grammar/solar.rip` | Parser generator | 928 LOC | ❌ No |
 | `src/parser.js` | Generated parser | 340 LOC | ❌ No (auto-gen) |
-| `src/lexer.js` | Lexer + Rewriter | 3,145 LOC | ⚠️ Rewriter only |
-| `src/compiler.js` | Code generator | 4,738 LOC | ✅ Yes |
+| `src/lexer.js` | Lexer + Rewriter | 3,537 LOC | ⚠️ Rewriter only |
+| `src/compiler.js` | Code generator | 7,964 LOC | ✅ Yes |
 
 ---
 
