@@ -1638,15 +1638,17 @@ export class CodeGenerator {
   /**
    * Generate readonly value (=!)
    * Pattern: ["readonly", name, expression]
-   * Output: const name = __readonly(expression)
+   * Output: const name = expression
+   *
+   * Note: This is just syntactic sugar for const - no reactive runtime needed.
+   * JavaScript's const already prevents reassignment.
    */
   generateReadonly(head, rest, context, sexpr) {
     const [name, expr] = rest;
-    this.usesReactivity = true;
     // Use raw variable name (don't auto-unwrap)
     const varName = Array.isArray(name) ? name[1] : name;
     const exprCode = this.generate(expr, 'value');
-    return `const ${varName} = __readonly(${exprCode})`;
+    return `const ${varName} = ${exprCode}`;
   }
 
   /**
