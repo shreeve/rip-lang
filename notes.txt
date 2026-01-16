@@ -1,4 +1,3 @@
-
 Review the code to ensure it's correct, clear, consistent, concise, and efficient
 
 Does the code feel light and efficient? Would a GitHub user agree?
@@ -54,13 +53,13 @@ use for that purpose.
 
 ==
 
-Can you DEEPLY analyze codegen.js to see if there are areas that we can
+Can you DEEPLY analyze compiler.js to see if there are areas that we can
 optimize? Is there dead code? Functions that are never called? Are there
 functions that do things the regex/string processing way, when they could
 also be doing s-expression work? Are there ways to reduce the number of
-lines of code in codegen.js to make it snappier and more succinct? Are
+lines of code in compiler.js to make it snappier and more succinct? Are
 there major or minor refactorings that we could do? Should the code be
-organized differently? What would you do to make codegen.js be a
+organized differently? What would you do to make compiler.js be a
 MODEL FOR BEAUTIFUL AND EFFICIENT SOFTWARE?
 
 Do one DEEP DIVE PASS on the whole file to see if there are areas where
@@ -73,13 +72,13 @@ Does it seem high quality and clean?
 
 ==
 
-Rip's heredocs (''' non-interpolating, """ interpolating) support visual margin control: when the closing delimiter is preceded only by whitespace, its column position becomes the "left margin" for all content lines. Text indented to the right of this baseline retains its relative indentation, while text at or left of the baseline is stripped to match it. This makes code generation elegant—just position the closing ''' or """ where you want the baseline, and the output aligns perfectly without manual indentation management.
+Rip's heredocs (''' non-interpolating, """ interpolating) support visual margin control: when the closing delimiter is preceded only by whitespace, its column position becomes the "left margin" for all content lines. Text indented to the right of this baseline retains its relative indentation, while text at or left of the baseline is stripped to match it. This makes compiling elegant—just position the closing ''' or """ where you want the baseline, and the output aligns perfectly without manual indentation management.
 
 • Two heredoc types: ''' (literal) and """ (interpolating)
 • Visual margin control: Closing delimiter's column = left margin baseline
 • Smart stripping: Only when closing delimiter has only whitespace before it
 • Relative indentation preserved: Text right of baseline keeps its indent offset
-• Perfect for codegen: Position closing delimiter → instant clean alignment
+• Perfect for compiler: Position closing delimiter → instant clean alignment
 • Example: Closing at column 2 strips 2 spaces from all lines, closing at column 0 preserves all indentation
 
 --
@@ -144,8 +143,7 @@ Lexer+Rewriter (1 file):
     3145   14810  123696 src/lexer.js
 
 Compiler (2 files):
-     149     575    4768 src/compiler.js
-    4808   21188  191464 src/codegen.js
+    4808   21188  191464 src/compiler.js
 
 Tools (2 files):
       97     347    2821 src/browser.js
@@ -219,7 +217,7 @@ Language-Specific Components:
   src/lang/rip/lexer.js     # Tokenization rules (3,145 LOC)
   src/lang/rip/grammar.rip  # Grammar definition (source)
   src/lang/rip/syntax.js    # Parse tables (GENERATED, 268KB)
-  src/lang/rip/codegen.js   # Code generation (5,265 LOC)
+  src/lang/rip/compiler.js   # Compiler (5,265 LOC)
 
 Benefits:
   • Pluggable languages (CoffeeScript, TypeScript-lite, etc.)
