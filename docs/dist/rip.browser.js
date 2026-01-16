@@ -4860,7 +4860,7 @@ ${this.indent()}}`;
   }
   static BIND_PREFIX = "__bind_";
   static BIND_SUFFIX = "__";
-  parseBindingDirective(key2, value, tag) {
+  parseBindingDirective(key2, value, tag, inputType) {
     let prop;
     if (typeof key2 === "string" && key2.startsWith(CodeGenerator.BIND_PREFIX) && key2.endsWith(CodeGenerator.BIND_SUFFIX)) {
       prop = key2.slice(CodeGenerator.BIND_PREFIX.length, -CodeGenerator.BIND_SUFFIX.length);
@@ -4887,7 +4887,11 @@ ${this.indent()}}`;
       } else {
         event = "oninput";
       }
-      valueAccessor = "e.target.value";
+      if (inputType === "number" || inputType === "range") {
+        valueAccessor = "e.target.valueAsNumber";
+      } else {
+        valueAccessor = "e.target.value";
+      }
     } else {
       event = "oninput";
       valueAccessor = `e.target.${prop}`;
@@ -5382,6 +5386,16 @@ ${this.indent()}}`;
     return false;
   }
   fgProcessAttributes(elVar, objExpr) {
+    let inputType = null;
+    for (let i = 1;i < objExpr.length; i++) {
+      const [key2, value] = objExpr[i];
+      const keyStr = key2 instanceof String ? key2.valueOf() : key2;
+      const valueStr = value instanceof String ? value.valueOf() : value;
+      if (keyStr === "type" && typeof valueStr === "string") {
+        inputType = valueStr.replace(/^["']|["']$/g, "");
+        break;
+      }
+    }
     for (let i = 1;i < objExpr.length; i++) {
       const [key2, value] = objExpr[i];
       if (Array.isArray(key2) && key2[0] === "." && key2[1] === "this") {
@@ -5400,7 +5414,11 @@ ${this.indent()}}`;
             valueAccessor = "e.target.checked";
           } else {
             event = "input";
-            valueAccessor = "e.target.value";
+            if (inputType === "number" || inputType === "range") {
+              valueAccessor = "e.target.valueAsNumber";
+            } else {
+              valueAccessor = "e.target.value";
+            }
           }
           this._fgSetupLines.push(`__effect(() => { ${elVar}.${prop} = ${valueCode}; });`);
           this._fgCreateLines.push(`${elVar}.addEventListener('${event}', (e) => ${valueCode} = ${valueAccessor});`);
@@ -5797,10 +5815,21 @@ ${this.indent()}}`;
       } else if (Array.isArray(arg) && arg[0] === "...") {
         spreads.push(this.generateInComponent(arg[1], "value"));
       } else if (Array.isArray(arg) && arg[0] === "object") {
+        let inputType = null;
+        for (const pair of arg.slice(1)) {
+          if (Array.isArray(pair)) {
+            const pairKey = pair[0] instanceof String ? pair[0].valueOf() : pair[0];
+            const pairVal = pair[1] instanceof String ? pair[1].valueOf() : pair[1];
+            if (pairKey === "type" && typeof pairVal === "string") {
+              inputType = pairVal.replace(/^["']|["']$/g, "");
+              break;
+            }
+          }
+        }
         for (const pair of arg.slice(1)) {
           if (Array.isArray(pair) && pair.length >= 2) {
             const [key2, value] = pair;
-            const bindInfo = this.parseBindingDirective(key2, value, tag);
+            const bindInfo = this.parseBindingDirective(key2, value, tag, inputType);
             if (bindInfo) {
               props[bindInfo.prop] = bindInfo.valueExpr;
               props[bindInfo.event] = bindInfo.handler;
@@ -5983,10 +6012,21 @@ ${this.indent()}}`;
       } else if (Array.isArray(arg) && arg[0] === "...") {
         spreads.push(this.generate(arg[1], "value"));
       } else if (Array.isArray(arg) && arg[0] === "object") {
+        let inputType = null;
+        for (const pair of arg.slice(1)) {
+          if (Array.isArray(pair)) {
+            const pairKey = pair[0] instanceof String ? pair[0].valueOf() : pair[0];
+            const pairVal = pair[1] instanceof String ? pair[1].valueOf() : pair[1];
+            if (pairKey === "type" && typeof pairVal === "string") {
+              inputType = pairVal.replace(/^["']|["']$/g, "");
+              break;
+            }
+          }
+        }
         for (const pair of arg.slice(1)) {
           if (Array.isArray(pair) && pair.length >= 2) {
             const [key2, value] = pair;
-            const bindInfo = this.parseBindingDirective(key2, value, tag);
+            const bindInfo = this.parseBindingDirective(key2, value, tag, inputType);
             if (bindInfo) {
               props[bindInfo.prop] = bindInfo.valueExpr;
               props[bindInfo.event] = bindInfo.handler;
@@ -9299,7 +9339,7 @@ function compileToJS(source, options = {}) {
 }
 // src/browser.js
 var VERSION = "2.2.2";
-var BUILD_DATE = "2026-01-15@23:03:48GMT";
+var BUILD_DATE = "2026-01-16@00:52:19GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

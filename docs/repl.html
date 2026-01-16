@@ -601,15 +601,14 @@ Greeter.new().mount "#greeter-mount"
 # ============================================
 
 component Calculator
-  num = 5
+  num := 5
   doubled ~= num * 2
   squared ~= num * num
-  onInput: (e) -> num = parseInt(e.target.value) || 0
   render
     .calculator
       .row
         label "Number: "
-        input type: "number", @input: this.onInput, value: num
+        input type: "number", value <=> num
       .row
         span "Doubled: "
         span.result doubled

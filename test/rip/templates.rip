@@ -160,6 +160,10 @@ code "spread with children", 'render\n  div.card ...props\n    span "Hi"', "h('d
 
 code "bind value on input", 'render\n  input value <=> username', "h('input', { value: username, oninput: (e) => username = e.target.value })"
 
+code "bind value on number input", 'render\n  input type: "number", value <=> count', "h('input', { type: \"number\", value: count, oninput: (e) => count = e.target.valueAsNumber })"
+
+code "bind value on range input", 'render\n  input type: "range", value <=> volume', "h('input', { type: \"range\", value: volume, oninput: (e) => volume = e.target.valueAsNumber })"
+
 code "bind checked on checkbox", 'render\n  input type: "checkbox", checked <=> isActive', "h('input', { type: \"checkbox\", checked: isActive, onchange: (e) => isActive = e.target.checked })"
 
 code "bind value on select", 'render\n  select value <=> selectedId', "h('select', { value: selectedId, onchange: (e) => selectedId = e.target.value })"

@@ -1683,13 +1683,17 @@ export class CodeGenerator {
   /**
    * Parse binding directive: prop <=> var (new) or [@bind.prop]: var (legacy)
    * Returns { prop, event, valueExpr, handler } or null
+   * @param {string|Array} key - The attribute key
+   * @param {*} value - The attribute value
+   * @param {string} tag - The element tag name
+   * @param {string} [inputType] - The input type attribute value (e.g., 'number', 'text')
    */
-  parseBindingDirective(key, value, tag) {
+  parseBindingDirective(key, value, tag, inputType) {
     let prop;
-    
+
     // Pattern 1 (new): __bind_propName__ (from: prop <=> var)
-    if (typeof key === 'string' && 
-        key.startsWith(CodeGenerator.BIND_PREFIX) && 
+    if (typeof key === 'string' &&
+        key.startsWith(CodeGenerator.BIND_PREFIX) &&
         key.endsWith(CodeGenerator.BIND_SUFFIX)) {
       prop = key.slice(CodeGenerator.BIND_PREFIX.length, -CodeGenerator.BIND_SUFFIX.length);
     }
@@ -1713,7 +1717,7 @@ export class CodeGenerator {
     
     // Determine the right event and value accessor based on prop/tag
     let event, valueAccessor;
-    
+
     if (prop === 'checked') {
       // Checkbox/radio: use 'change' event and 'checked' property
       event = 'onchange';
@@ -1726,7 +1730,12 @@ export class CodeGenerator {
       } else {
         event = 'oninput';
       }
-      valueAccessor = 'e.target.value';
+      // Use valueAsNumber for number/range inputs to get proper numeric binding
+      if (inputType === 'number' || inputType === 'range') {
+        valueAccessor = 'e.target.valueAsNumber';
+      } else {
+        valueAccessor = 'e.target.value';
+      }
     } else {
       // Generic: use 'input' event
       event = 'oninput';
@@ -2471,6 +2480,19 @@ export class CodeGenerator {
    */
   fgProcessAttributes(elVar, objExpr) {
     // objExpr = ['object', [key, value], [key, value], ...]
+    
+    // Pre-scan for input type to enable smart binding (e.g., valueAsNumber for type="number")
+    let inputType = null;
+    for (let i = 1; i < objExpr.length; i++) {
+      const [key, value] = objExpr[i];
+      const keyStr = key instanceof String ? key.valueOf() : key;
+      const valueStr = value instanceof String ? value.valueOf() : value;
+      if (keyStr === 'type' && typeof valueStr === 'string') {
+        inputType = valueStr.replace(/^["']|["']$/g, ''); // Remove quotes
+        break;
+      }
+    }
+    
     for (let i = 1; i < objExpr.length; i++) {
       const [key, value] = objExpr[i];
 
@@ -2497,7 +2519,12 @@ export class CodeGenerator {
             valueAccessor = 'e.target.checked';
           } else {
             event = 'input';
-            valueAccessor = 'e.target.value';
+            // Use valueAsNumber for number/range inputs to get proper numeric binding
+            if (inputType === 'number' || inputType === 'range') {
+              valueAccessor = 'e.target.valueAsNumber';
+            } else {
+              valueAccessor = 'e.target.value';
+            }
           }
           
           // Set up two-way binding: value → element and element → value
@@ -3084,12 +3111,25 @@ export class CodeGenerator {
       }
       // Object = attributes/events
       else if (Array.isArray(arg) && arg[0] === 'object') {
+        // Pre-scan for input type to enable smart binding (e.g., valueAsNumber for type="number")
+        let inputType = null;
+        for (const pair of arg.slice(1)) {
+          if (Array.isArray(pair)) {
+            const pairKey = pair[0] instanceof String ? pair[0].valueOf() : pair[0];
+            const pairVal = pair[1] instanceof String ? pair[1].valueOf() : pair[1];
+            if (pairKey === 'type' && typeof pairVal === 'string') {
+              inputType = pairVal.replace(/^["']|["']$/g, ''); // Remove quotes
+              break;
+            }
+          }
+        }
+        
         for (const pair of arg.slice(1)) {
           if (Array.isArray(pair) && pair.length >= 2) {
             const [key, value] = pair;
             
             // Check for binding directive
-            const bindInfo = this.parseBindingDirective(key, value, tag);
+            const bindInfo = this.parseBindingDirective(key, value, tag, inputType);
             if (bindInfo) {
               props[bindInfo.prop] = bindInfo.valueExpr;
               props[bindInfo.event] = bindInfo.handler;
@@ -3355,18 +3395,31 @@ export class CodeGenerator {
       }
       // Object = attributes/events
       else if (Array.isArray(arg) && arg[0] === 'object') {
+        // Pre-scan for input type to enable smart binding (e.g., valueAsNumber for type="number")
+        let inputType = null;
+        for (const pair of arg.slice(1)) {
+          if (Array.isArray(pair)) {
+            const pairKey = pair[0] instanceof String ? pair[0].valueOf() : pair[0];
+            const pairVal = pair[1] instanceof String ? pair[1].valueOf() : pair[1];
+            if (pairKey === 'type' && typeof pairVal === 'string') {
+              inputType = pairVal.replace(/^["']|["']$/g, ''); // Remove quotes
+              break;
+            }
+          }
+        }
+        
         for (const pair of arg.slice(1)) {
           if (Array.isArray(pair) && pair.length >= 2) {
             const [key, value] = pair;
-            
+
             // Check for binding directive (value <=> var)
-            const bindInfo = this.parseBindingDirective(key, value, tag);
+            const bindInfo = this.parseBindingDirective(key, value, tag, inputType);
             if (bindInfo) {
               props[bindInfo.prop] = bindInfo.valueExpr;
               props[bindInfo.event] = bindInfo.handler;
               continue;
             }
-            
+
             // Check for event handler (@click: fn)
             const eventInfo = this.parseEventHandler(key, value);
             if (eventInfo) {
