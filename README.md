@@ -218,10 +218,10 @@ Components are a **language construct**, not a pattern. Define with the `compone
 component Counter
   @label = "Count"          # Prop with default
   @initial = 0              # Another prop
-  
+
   count := @initial         # Reactive state (signal)
   doubled ~= count * 2      # Derived value (auto-updates)
-  
+
   inc: -> count += 1        # Methods
   dec: -> count -= 1
 
@@ -256,15 +256,15 @@ Indentation-based HTML with Pug-style selectors. Templates compile to **fine-gra
 render
   div#app.container
     h1.title "Hello, #{name}!"
-    
+
     # Two-way binding with <=> operator
     input type: "text", value <=> username
     input type: "number", value <=> count    # Auto-uses valueAsNumber!
-    
+
     # Dynamic classes (Tailwind-friendly)
     button.btn.("primary" if active) @click: submit
       "Submit"
-    
+
     # Loops with keys for efficient updates
     ul.items
       for item in items, key: item.id
@@ -289,7 +289,7 @@ render
 input type: "number", value <=> count
 
 # ...replaces all this React ceremony:
-# <input type="number" value={count} 
+# <input type="number" value={count}
 #   onChange={e => setCount(parseInt(e.target.value) || 0)} />
 ```
 
