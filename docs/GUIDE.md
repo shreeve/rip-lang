@@ -28,8 +28,8 @@ Rip provides reactive primitives as **language-level operators**, not library im
 |----------|------|---------|
 | `:=` | Signal | Reactive state variable |
 | `~=` | Derived | Computed value (auto-updates when dependencies change) |
-| `=!` | Readonly | Constant that cannot be reassigned |
 | `effect` | Effect | Side effect that runs when dependencies change |
+| `=!` | Equal, dammit! | Constant (`const`) - not reactive, just immutable |
 
 ## Reactive State (`:=`)
 
@@ -54,16 +54,23 @@ count = 5               # doubled automatically becomes 10
 count = 10              # doubled automatically becomes 20
 ```
 
-## Readonly Values (`=!`)
+## Constant Values (`=!`) - "Equal, Dammit!"
 
-The readonly operator creates a constant that cannot be reassigned:
+In Rip, regular assignment (`=`) compiles to `let` for maximum flexibility. When you want an immutable constant, use the "equal, dammit!" operator (`=!`), which compiles to `const`:
 
 ```coffee
+# Regular assignment → let (can reassign)
+host = "localhost"
+host = "example.com"    # OK - variables are flexible by default
+
+# Equal, dammit! → const (can't reassign)
 API_URL =! "https://api.example.com"
 MAX_RETRIES =! 3
 
-API_URL = "other"       # Silently ignored - value stays unchanged
+API_URL = "other"       # Error! const cannot be reassigned
 ```
+
+This gives you opt-in immutability when you need it, while keeping the default flexible for scripting.
 
 ## Side Effects (`effect`)
 

@@ -4880,7 +4880,7 @@ function _setDataSection() {
   }
   generateReadonly(head, rest, context, sexpr) {
     const [name, expr] = rest;
-    const varName = Array.isArray(name) ? name[1] : name;
+    const varName = typeof name === "string" ? name : name.valueOf();
     const exprCode = this.generate(expr, "value");
     return `const ${varName} = ${exprCode}`;
   }
@@ -9300,8 +9300,8 @@ function compileToJS(source, options = {}) {
   return new Compiler(options).compileToJS(source);
 }
 // src/browser.js
-var VERSION = "2.3.0";
-var BUILD_DATE = "2026-01-16@03:56:45GMT";
+var VERSION = "2.3.1";
+var BUILD_DATE = "2026-01-16@04:07:54GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

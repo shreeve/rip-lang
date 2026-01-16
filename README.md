@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-2.3.0-blue.svg" alt="Version"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-2.3.1-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
   <a href="#"><img src="https://img.shields.io/badge/tests-1046%2F1046-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
@@ -117,7 +117,7 @@ fn?(arg)                 # Safe call
 | **Otherwise `!?`** | `val !? 5` | Defaults only if `undefined` (null/0/false are kept!) |
 | **Floor div `//`** | `7 // 2` | Floor division → `Math.floor(7 / 2)` = 3 |
 | **True mod `%%`** | `-1 %% 3` | True modulo (not remainder) → 2, not -1 |
-| **Readonly `=!`** | `MAX =! 100` | Immutable constant (can't reassign) |
+| **Equal, dammit! `=!`** | `MAX =! 100` | Forces `const` declaration (can't reassign) |
 | **Ternary `?:`** | `x > 0 ? 'yes' : 'no'` | JS-style ternary (plus CoffeeScript's if/then/else) |
 | **Dual optional** | `a?.b` and `a?[0]` | Both ES6 native and CoffeeScript soak styles |
 
