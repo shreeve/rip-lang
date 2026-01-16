@@ -193,14 +193,26 @@ Build reactive UIs with fine-grained DOM updates:
 ```coffee
 component Counter
   @label = "Count"
-  count = 0
+  count := 0
+  inc: -> count += 1
+  dec: -> count -= 1
 
   render
     div.counter
       h2 @label
       span.value count
-      button @click: (-> count += 1), "+"
-      button @click: (-> count -= 1), "-"
+      button @click: @inc, "+"
+      button @click: @dec, "−"
+```
+
+**Event handlers** — two patterns:
+```coffee
+# Normal: define methods, reference with @
+inc: -> count += 1
+button @click: @inc, "+"
+
+# Compact: inline with fat arrow (parens required)
+button (@click: => @count++), "+"
 ```
 
 **Features:**
@@ -230,7 +242,8 @@ render
 ```
 
 - `div#id.class1.class2` — IDs and classes
-- `@click:`, `@input:` — Event handlers
+- `@click: @handler` — Event handlers (method reference)
+- `(@click: => @count++)` — Inline handlers (fat arrow, parens required)
 - `.("class1", cond && "class2")` — Dynamic classes (Tailwind-friendly)
 - `value <=> var` — Two-way binding
 
