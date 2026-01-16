@@ -21,10 +21,22 @@
 
 Rip is a modern reactive language that compiles to JavaScript. It takes the elegant, readable syntax that made CoffeeScript beloved and brings it into the modern era — with ES2022 output, built-in reactivity, and a clean component system for building UIs.
 
-The compiler is completely standalone with zero dependencies, and it's self-hosting: Rip compiles itself. At ~14,000 lines of code, it's smaller than CoffeeScript (17,760 LOC) while including a complete reactive framework with signals, templates, and components.
+**The language IS the framework.** Unlike React, Vue, or Svelte where reactivity comes from libraries or compiler magic, Rip's reactive features are **language-level operators**:
+
+```coffee
+count := 0              # Signal (reactive state)
+doubled ~= count * 2    # Derived (auto-updates)
+effect -> log doubled   # Effect (side effects)
+```
+
+No imports. No hooks. No dependency arrays. Just write code.
+
+The compiler is completely standalone with **zero dependencies**, and it's self-hosting: Rip compiles itself. At ~14,000 lines of code, it's smaller than CoffeeScript while including a complete reactive framework.
 
 **What makes Rip different:**
-- **Reactive primitives** — signals, derived values, and effects built into the language
+- **Reactive primitives** — `:=` signals, `~=` derived values, `effect` blocks as syntax
+- **Components as syntax** — `component Counter` with props, lifecycle, fine-grained DOM updates
+- **Templates** — Pug-style HTML in `render` blocks, two-way binding with `<=>`
 - **Modern output** — ES2022 with native classes, `?.`, `??`, modules
 - **Zero dependencies** — everything included, even the parser generator
 - **Self-hosting** — `bun run parser` rebuilds the compiler from source
@@ -164,23 +176,35 @@ fn?(arg)                 # Safe call
 
 ## Reactivity
 
-Built into the language, not a library:
+**The language IS the framework.** Reactivity is built into Rip's syntax—not a library you import, not hooks you call. Just operators.
 
 ```coffee
-# Signals hold reactive state
-count := 0
-name := "world"
+count := 0                    # Signal — reactive state
+doubled ~= count * 2          # Derived — auto-updates when count changes
+effect -> console.log doubled # Effect — runs when dependencies change
 
-# Derived values auto-update
-doubled ~= count * 2
-greeting ~= "Hello, #{name}!"
-
-# Effects run when dependencies change
-effect -> console.log greeting
-
-name = "Rip"   # Effect runs → "Hello, Rip!"
-count = 5      # Nothing (greeting doesn't depend on count)
+count = 5   # doubled becomes 10, effect logs "10"
+count = 10  # doubled becomes 20, effect logs "20"
 ```
+
+**Compare to React:**
+```javascript
+// React: imports, hooks, dependency arrays, rules...
+import { useState, useMemo, useEffect } from 'react';
+const [count, setCount] = useState(0);
+const doubled = useMemo(() => count * 2, [count]);
+useEffect(() => console.log(doubled), [doubled]);
+```
+
+**Rip: 3 lines. React: 5 lines + imports + dependency arrays + hook rules.**
+
+| Concept | React | Vue | Solid | Rip |
+|---------|-------|-----|-------|-----|
+| State | `useState()` | `ref()` | `createSignal()` | `x := 0` |
+| Derived | `useMemo()` | `computed()` | `createMemo()` | `x ~= y * 2` |
+| Effect | `useEffect()` | `watch()` | `createEffect()` | `effect ->` |
+
+No imports. No hooks. No dependency arrays. Just operators that do what they say.
 
 [Full reactivity guide →](docs/GUIDE.md#reactivity)
 
@@ -188,38 +212,37 @@ count = 5      # Nothing (greeting doesn't depend on count)
 
 ## Components
 
-Build reactive UIs with fine-grained DOM updates:
+Components are a **language construct**, not a pattern. Define with the `component` keyword, get props, state, lifecycle, and fine-grained DOM updates—all without a virtual DOM.
 
 ```coffee
 component Counter
-  @label = "Count"
-  count := 0
-  inc: -> count += 1
+  @label = "Count"          # Prop with default
+  @initial = 0              # Another prop
+  
+  count := @initial         # Reactive state (signal)
+  doubled ~= count * 2      # Derived value (auto-updates)
+  
+  inc: -> count += 1        # Methods
   dec: -> count -= 1
 
   render
     div.counter
       h2 @label
       span.value count
-      button @click: @inc, "+"
+      span.derived " (×2 = #{doubled})"
       button @click: @dec, "−"
+      button @click: @inc, "+"
+
+# Mount with Ruby-style constructor
+Counter.new(label: "Score", initial: 10).mount "#app"
 ```
 
-**Event handlers** — two patterns:
-```coffee
-# Normal: define methods, reference with @
-inc: -> count += 1
-button @click: @inc, "+"
-
-# Compact: inline with fat arrow (parens required)
-button (@click: => @count++), "+"
-```
-
-**Features:**
-- Props: `@prop`, `@prop?` (optional), `@prop = default`
-- Lifecycle: `mounted:`, `unmounted:`
-- Context API: `setContext`, `getContext`
-- Fine-grained updates: only changed nodes update, no virtual DOM
+**What you get:**
+- **Props:** `@prop` (required), `@prop?` (optional), `@prop = default`
+- **State:** Signals (`:=`) and derived values (`~=`) just work
+- **Lifecycle:** `mounted:`, `unmounted:`, `updated:`
+- **Context:** `setContext`/`getContext` for deep prop passing
+- **Fine-grained updates:** Only changed DOM nodes update—no virtual DOM diffing
 
 [Component guide →](docs/GUIDE.md#components)
 
@@ -227,25 +250,48 @@ button (@click: => @count++), "+"
 
 ## Templates
 
-Indentation-based HTML with CSS-style selectors:
+Indentation-based HTML with Pug-style selectors. Templates compile to **fine-grained DOM operations**—when a signal changes, only the affected text node or attribute updates. No virtual DOM, no diffing, no wasted work.
 
 ```coffee
 render
   div#app.container
     h1.title "Hello, #{name}!"
-    input value: username, @input: updateName
-    button.("btn", active && "primary") @click: submit
+    
+    # Two-way binding with <=> operator
+    input type: "text", value <=> username
+    input type: "number", value <=> count    # Auto-uses valueAsNumber!
+    
+    # Dynamic classes (Tailwind-friendly)
+    button.btn.("primary" if active) @click: submit
       "Submit"
+    
+    # Loops with keys for efficient updates
     ul.items
-      for item in items
-        li key: item.id, item.name
+      for item in items, key: item.id
+        li.item item.name
 ```
 
-- `div#id.class1.class2` — IDs and classes
-- `@click: @handler` — Event handlers (method reference)
-- `(@click: => @count++)` — Inline handlers (fat arrow, parens required)
-- `.("class1", cond && "class2")` — Dynamic classes (Tailwind-friendly)
-- `value <=> var` — Two-way binding
+**Template features:**
+| Syntax | What it does |
+|--------|--------------|
+| `div#id.class1.class2` | IDs and classes (CSS selector style) |
+| `@click: handler` | Event binding |
+| `@click.prevent.stop:` | Event modifiers |
+| `@keydown.enter:` | Key modifiers |
+| `value <=> var` | Two-way binding (auto-syncs input ↔ variable) |
+| `.("class", cond && "other")` | Dynamic classes |
+| `for x in arr, key: x.id` | Keyed iteration |
+| `span if condition` | Conditional rendering |
+
+**The `<=>` operator** handles two-way binding automatically:
+```coffee
+# This one line...
+input type: "number", value <=> count
+
+# ...replaces all this React ceremony:
+# <input type="number" value={count} 
+#   onChange={e => setCount(parseInt(e.target.value) || 0)} />
+```
 
 [Template guide →](docs/GUIDE.md#templates)
 
