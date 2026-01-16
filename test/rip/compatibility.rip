@@ -331,7 +331,7 @@ test 'all compatibility features together', '''
   ''', 2
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Compatibility features: Postfix spread/rest (x...), Legacy existential (x ? y)
 # Tests: 45 total (45 passing, 0 failing)

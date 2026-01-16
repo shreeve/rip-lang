@@ -178,7 +178,7 @@ test "nested for-in", '''
   ''', 180
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Node types: for-in, for-of, while, until, loop, break, continue, break-if, continue-if
 # Tests: 34 total (34 passing, 0 failing)

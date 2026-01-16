@@ -816,7 +816,7 @@ o 'FOR ForVariables IN Expression Block', '["for-in", 2, 4, null, null, 5]'
 | `src/grammar/solar.rip` | Parser generator | 928 LOC | ❌ No |
 | `src/parser.js` | Generated parser | 340 LOC | ❌ No (auto-gen) |
 | `src/lexer.js` | Lexer + Rewriter | 3,145 LOC | ⚠️ Rewriter only |
-| `src/codegen.js` | Code generator | 4,738 LOC | ✅ Yes |
+| `src/compiler.js` | Code generator | 4,738 LOC | ✅ Yes |
 
 ---
 
@@ -910,5 +910,5 @@ Solar's s-expression mode is the **secret sauce** that makes Rip practical:
 
 **For more details:**
 - Grammar file: `src/grammar/grammar.rip`
-- Code generator: `src/codegen.js`
+- Code generator: `src/compiler.js`
 - Test examples: `test/rip/`

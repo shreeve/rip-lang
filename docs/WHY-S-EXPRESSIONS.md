@@ -808,7 +808,7 @@ Rip chose #2, and that's why it's 50% smaller and infinitely more maintainable!
 
 ## Further Reading
 
-- **CODEGEN.md** - Complete s-expression pattern reference
+- **COMPILER.md** - Complete s-expression pattern reference
 - **CODEGEN-ANALYSIS.md** - Deep dive into optimization opportunities
 - **AGENT.md** - Architecture and development guide
 - **Issue #46** - Flattening logical chains (the breakthrough)

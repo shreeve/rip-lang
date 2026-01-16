@@ -87,7 +87,7 @@ test "optional index null", "arr = null\narr?.[0]", undefined
 code "optional index", "arr?.[i]", "arr?.[i]"
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Node types: ., [], ::, ?., ?.[, ?::
 # Tests: 29 total (29 passing, 0 failing)

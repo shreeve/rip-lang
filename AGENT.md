@@ -122,7 +122,7 @@ bun run parser                   # Test self-hosting ✅
 
 | File | What's There |
 |------|--------------|
-| `src/codegen.js` | Runtime code (lines ~5389-5465), generators for signal/derived/effect |
+| `src/compiler.js` | Runtime code (lines ~5389-5465), generators for signal/derived/effect |
 | `src/repl.js` | REPL runtime (persists across lines) |
 | `src/lexer.js` | Tokens: `:=`, `~=`, `=!`, `effect` |
 | `src/grammar/grammar.rip` | Grammar rules for reactive assignments |
@@ -190,7 +190,7 @@ See `docs/COMPONENTS.md` - fully implemented:
 
 | File | Purpose | Can Edit? | Rebuild? |
 |------|---------|-----------|----------|
-| `src/codegen.js` | Code generator | ✅ YES | No |
+| `src/compiler.js` | Code generator | ✅ YES | No |
 | `src/grammar/grammar.rip` | Grammar rules | ⚠️ Expert | `bun run parser` |
 | `src/grammar/solar.rip` | Parser generator | ❌ Given (runtime fixes only) | `bun run parser` |
 | `src/compiler.js` | Pipeline | ✅ YES | No |
@@ -234,7 +234,7 @@ undefined → ERROR (syntax error)
 ["for-in", vars, iterable, step, guard, body]  // For loop
 ```
 
-See `docs/CODEGEN.md` for complete catalog (110+ node types).
+See `docs/COMPILER.md` for complete catalog (110+ node types).
 
 ---
 
@@ -294,7 +294,7 @@ echo 'failing code' | ./bin/rip -s  # See s-expression
 # Example: 'if' → 'generateIf' method
 
 # 3. Fix the generation logic
-vim src/codegen.js
+vim src/compiler.js
 
 # 4. Test immediately
 bun test/runner.js test/rip/RELEVANT.rip
@@ -313,7 +313,7 @@ vim src/grammar/grammar.rip
 bun run parser  # ~200ms, instant feedback!
 
 # 3. Add codegen case if needed
-vim src/codegen.js
+vim src/compiler.js
 
 # 4. Test
 bun run test
@@ -344,7 +344,7 @@ bun run test
 **O(1) lookup for all 110 node types:**
 
 ```javascript
-// src/codegen.js lines 32-141
+// src/compiler.js lines 32-141
 static GENERATORS = {
   'if': 'generateIf',
   'class': 'generateClass',
@@ -531,7 +531,7 @@ coffee -c file.coffee  # CoffeeScript output
 - `ISSUE-*.md` - Complex issue handoffs (if they exist)
 
 **Technical Reference:**
-- `docs/CODEGEN.md` - All 110+ node types
+- `docs/COMPILER.md` - All 110+ node types
 - `docs/COMPREHENSIONS.md` - Context rules
 - `docs/SOLAR.md` - Parser generator guide
 - `docs/STRING.md` - String metadata
@@ -725,7 +725,7 @@ The lexer automatically converts:
 **Solution:**
 ```bash
 echo 'your code' | ./bin/rip -s  # See what parser emits
-grep "'X':" src/codegen.js  # Check if in dispatch table
+grep "'X':" src/compiler.js  # Check if in dispatch table
 # Add the missing generator method if needed
 ```
 
@@ -801,14 +801,14 @@ case '+': return this.buildBinaryExpression(rest[0], rest[1], '+', {precedence: 
 ```bash
 # Don't guess - inspect!
 echo 'code' | ./bin/rip -s  # See what parser emits
-grep "'pattern'" src/codegen.js  # Check dispatch table
+grep "'pattern'" src/compiler.js  # Check dispatch table
 ```
 
 ### 2. Use Existing Patterns
 
 ```bash
 # Find similar generators
-grep "similar pattern" src/codegen.js
+grep "similar pattern" src/compiler.js
 # Copy and adapt, don't reinvent
 ```
 
@@ -986,7 +986,7 @@ bun run serve    # Start dev server (REPL at localhost:3000)
 ["return", expr?]
 ```
 
-See `docs/CODEGEN.md` for complete catalog (110+ node types).
+See `docs/COMPILER.md` for complete catalog (110+ node types).
 
 ---
 
@@ -999,9 +999,9 @@ See `docs/CODEGEN.md` for complete catalog (110+ node types).
 - Regenerate: `bun run parser`
 
 **Code Generation Issues:**
-- Check: `src/codegen.js`
+- Check: `src/compiler.js`
 - Check dispatch table: lines 32-141
-- Search: `grep "generateXXX" src/codegen.js`
+- Search: `grep "generateXXX" src/compiler.js`
 
 **Parser Runtime Issues:**
 - Check: `src/grammar/solar.rip`
@@ -1038,7 +1038,7 @@ bun run parser
 
 ## 🎯 Most Common Task: Modify Codegen
 
-**90% of work happens in `src/codegen.js`**
+**90% of work happens in `src/compiler.js`**
 
 ### Step-by-step:
 
@@ -1053,7 +1053,7 @@ bun run parser
 
 3. **Locate the method:**
    ```bash
-   grep "generateIf(" src/codegen.js
+   grep "generateIf(" src/compiler.js
    # Jump to that line
    ```
 
@@ -1135,7 +1135,7 @@ All tests passing: 1033/1033 (100%)"
 |------|---------|-------------|-------|
 | `src/lexer.js` | Tokenization + rewriter | ⚠️ Rewriter only | 3,145 LOC |
 | `src/parser.js` | S-expression parser | ❌ Generated (don't edit) | 340 LOC |
-| `src/codegen.js` | JavaScript generator | ✅ Main work happens here | 5,246 LOC |
+| `src/compiler.js` | JavaScript generator | ✅ Main work happens here | 5,246 LOC |
 | `src/compiler.js` | Pipeline orchestration | ✅ Yes | 250 LOC |
 | `src/repl.js` | Terminal REPL | ✅ Yes | |
 | `src/browser.js` | Browser integration | ✅ Yes | |
@@ -1247,7 +1247,7 @@ Rip has **zero runtime or build dependencies**. This is intentional and must be 
 ### For Comprehension Work
 1. `docs/COMPREHENSIONS.md` - Complete context rules
 2. `test/rip/comprehensions.rip` - All test cases
-3. Search `src/codegen.js` for `generateComprehension` method
+3. Search `src/compiler.js` for `generateComprehension` method
 
 ### For Grammar Work
 1. `docs/SOLAR.md` - Parser generator guide
@@ -1255,7 +1255,7 @@ Rip has **zero runtime or build dependencies**. This is intentional and must be 
 3. `src/grammar/solar.rip` - Parser generator source
 
 ### For General Development
-1. `docs/CODEGEN.md` - All 110+ node types
+1. `docs/COMPILER.md` - All 110+ node types
 2. `docs/STRING.md` - String metadata
 3. `docs/REGEX-PLUS.md` - Ruby-style regex
 

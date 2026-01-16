@@ -22,7 +22,7 @@ test "regex exec", '/world/.exec("hello world")[0]', "world"
 test "string match", '"test123".match(/\\d+/)[0]', "123"
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Regex implemented: 0/1 (0%)
 # Tests passing: 0/8 (0%)
@@ -294,7 +294,7 @@ test "heregex $ anchor", '''
   ''', true
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Node types: regex (literals, heregex)
 # Tests: 46 total (46 passing, 0 failing)

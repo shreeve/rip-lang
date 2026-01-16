@@ -816,7 +816,7 @@ code 'if-else in value context uses ternary not IIFE for simple branches', '''
 '''
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Advanced patterns: switch returns, break/continue, postfix unless, ternaries, comprehensions, dynamic import, switch-with-code-after, if-else-early-returns, unwrap-parens, if-else-if-chains, postfix-returns, variable-declarations, range-optimization, reverse-iteration, typeof-checks, multi-statement-else
 # Tests: 59 total (51 execution + 8 code generation) [+13 bootstrap bug tests]

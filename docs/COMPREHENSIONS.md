@@ -563,11 +563,11 @@ Comprehension encountered
 
 | Resource | Location | Description |
 |----------|----------|-------------|
-| **Comprehension case** | `src/codegen.js:2136-2299` | Main comprehension handler |
-| **Loop generator** | `src/codegen.js:4210-4346` | `generateComprehensionAsLoop()` |
+| **Comprehension case** | `src/compiler.js:2136-2299` | Main comprehension handler |
+| **Loop generator** | `src/compiler.js:4210-4346` | `generateComprehensionAsLoop()` |
 | **Tests** | `test/rip/comprehensions.rip` | 19 comprehensive tests |
 | **Guard tests** | `test/rip/guards.rip` | 27 tests with when clauses |
-| **Context propagation** | Throughout `src/codegen.js` | See table above |
+| **Context propagation** | Throughout `src/compiler.js` | See table above |
 
 ---
 

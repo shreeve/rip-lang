@@ -320,7 +320,7 @@ if (id.length > 1 && id.endsWith('!')) {
 
 No changes needed! Grammar preserves String objects with metadata.
 
-### Codegen (src/codegen.js)
+### Codegen (src/compiler.js)
 
 **Lines 267-277:** Bare identifier with `!`
 ```javascript
@@ -433,7 +433,7 @@ fetchData!    # → await fetchData() (dammit forces)
 **Parser:**
 - No changes (String objects flow through)
 
-**Codegen (`src/codegen.js`):**
+**Codegen (`src/compiler.js`):**
 - Detects `.await` property on String objects
 - Converts `identifier!` → `await identifier()`
 - Handles bare identifiers, calls with args, method calls, prototype access

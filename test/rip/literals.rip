@@ -70,7 +70,7 @@ code "this keyword", "this", "this"
 code "@ shorthand", "@", "this"
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Literal types implemented: 0/6 (0%)
 # Tests passing: 0/20 (0%)
@@ -124,7 +124,7 @@ test 'multiple JS variables', '''
   ''', 60
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Node types: NUMBER, undefined, null, BOOL, this, JS (backticks)
 # Tests: 30 total (30 passing, 0 failing)

@@ -81,7 +81,7 @@ test "computed property expression", "x = {[1 + 1]: \"two\"}\nx[2]", "two"
 code "computed property code", "{[key]: value}", "({[key]: value})"
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Basic data structures implemented: 0/3 (0%)
 # Tests passing: 0/30 (0%)
@@ -168,7 +168,7 @@ test 'string from index', '"abcdef"[3..]', 'def'
 test 'string to index', '"abcdef"[...3]', 'abc'
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Node types: array, object, computed, .. (range inclusive), ... (range exclusive)
 # Tests: 52 total (52 passing, 0 failing)

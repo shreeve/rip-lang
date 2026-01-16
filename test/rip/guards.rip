@@ -239,7 +239,7 @@ console.log(k);
 '''
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Node types: for-in/for-of guards (when clause), own keyword (for-of only)
 # Tests: 27 total (24 execution + 3 code generation, 27 passing, 0 failing)

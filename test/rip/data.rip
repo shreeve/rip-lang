@@ -102,7 +102,7 @@ test 'data marker template', '''
 # ============================================================================
 
 # Verify DATA at bottom
-code 'data marker codegen', '''
+code 'data marker compiler', '''
   x = 42
   console.log DATA
   __DATA__
@@ -208,7 +208,7 @@ test 'data marker env parsing', '''
   ''', '3000'
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Node types: __DATA__ marker (Ruby-inspired)
 # Tests: 20 total (20 passing, 0 failing)

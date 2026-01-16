@@ -32,7 +32,7 @@ test "recursive factorial", "def factorial(n)\n  if n <= 1\n    1\n  else\n    n
 test "async function", "def fetchData\n  await Promise.resolve(42)\nfetchData()", 42
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Function definitions implemented: 0/1 (0%)
 # Tests passing: 0/10 (0%)
@@ -89,7 +89,7 @@ test "arrow in array", "fns = [(x) -> x + 1, (x) -> x * 2]\nfns[0](5)", 6
 test "arrow in object", "obj = {fn: (x) -> x * 2}\nobj.fn(5)", 10
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Arrow functions implemented: 0/2 (0%)
 # Tests passing: 0/16 (0%)
@@ -127,7 +127,7 @@ test "spread args", "add = (a, b, c) -> a + b + c\nargs = [1, 2, 3]\nadd(...args
 test "spread with other args", "fn = (a, b, c) -> a + b + c\nfn(1, ...[2, 3])", 6
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Function calls implemented: 0/1 (0%)
 # Tests passing: 0/10 (0%)
@@ -186,7 +186,7 @@ test "partial defaults", "fn = (a = 1, b = 2) -> a + b\nfn(5)", 7
 test "expansion marker", "fn = (a, ..., b) -> a + b\nfn(1, 2, 3, 4)", 5
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Parameter types implemented: 0/3 (0%)
 # Tests passing: 0/15 (0%)
@@ -322,7 +322,7 @@ test "void function with comprehension", '''
   result
   ''', undefined
 
-code "void function no implicit return in codegen", '''
+code "void function no implicit return in compiler", '''
   def process!
     x = 42
     x * 2
@@ -405,7 +405,7 @@ test "void fat arrow with comprehension", '''
   result
   ''', undefined
 
-code "void thin arrow codegen", '''
+code "void thin arrow compiler", '''
   c! = ->
     return "hello world"
   ''', '''
@@ -415,7 +415,7 @@ code "void thin arrow codegen", '''
   };
 '''
 
-code "void fat arrow codegen", '''
+code "void fat arrow compiler", '''
   process! = (x) =>
     x * 2
   ''', '''
@@ -436,7 +436,7 @@ code "void fat arrow codegen", '''
 #   ''', undefined
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Node types: def, ->, =>, function calls, rest, ..., default, return, void functions (!)
 # Tests: 81 total (81 passing, 0 failing)

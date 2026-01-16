@@ -72,7 +72,7 @@ o 'Expression FOR ForVariables FORIN Expression BY Expression WHEN Expression', 
 bun run parser  # Rebuilds src/parser.js from grammar
 ```
 
-**c) Updated codegen** (`src/codegen.js`):
+**c) Updated codegen** (`src/compiler.js`):
 - Fixed comprehension value context (IIFE generation)
 - Fixed comprehension statement context (plain loop)
 - Fixed regular for-in loops with step
@@ -104,7 +104,7 @@ git checkout -b fix/postfix-comprehension-by-step
 ### 7. ✅ Committed Changes
 
 ```bash
-git add README.md src/codegen.js src/grammar/grammar.rip src/parser.js test/rip/comprehensions.rip
+git add README.md src/compiler.js src/grammar/grammar.rip src/parser.js test/rip/comprehensions.rip
 
 git commit -m "Fix: Add support for postfix comprehensions with 'by' step
 
@@ -210,7 +210,7 @@ gh issue close <number>
 src/
 ├── lexer.js         # CoffeeScript 2.7 lexer (⚠️ rewriter only)
 ├── parser.js        # Generated parser (❌ don't edit directly)
-├── codegen.js       # Code generator (✅ main work here)
+├── compiler.js       # Code generator (✅ main work here)
 ├── compiler.js      # Pipeline orchestration
 ├── repl.js          # Terminal REPL
 ├── browser.js       # Browser integration

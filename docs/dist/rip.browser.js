@@ -3742,7 +3742,150 @@ var createParser = (yyInit = {}) => {
 };
 var parser = /* @__PURE__ */ createParser();
 var parse = parser.parse.bind(parser);
-// src/codegen.js
+// src/compiler.js
+var INLINE_FORMS = new Set([
+  "+",
+  "-",
+  "*",
+  "/",
+  "%",
+  "//",
+  "%%",
+  "**",
+  "==",
+  "!=",
+  "<",
+  ">",
+  "<=",
+  ">=",
+  "===",
+  "!==",
+  "&&",
+  "||",
+  "??",
+  "!?",
+  "not",
+  "&",
+  "|",
+  "^",
+  "<<",
+  ">>",
+  ">>>",
+  "=",
+  ".",
+  "?.",
+  "[]",
+  "?[]",
+  "::",
+  "?::",
+  "!",
+  "typeof",
+  "void",
+  "delete",
+  "new",
+  "...",
+  "rest",
+  "expansion",
+  "optindex",
+  "optcall"
+]);
+function isInline(arr) {
+  if (!Array.isArray(arr) || arr.length === 0)
+    return false;
+  const head = arr[0]?.valueOf?.() ?? arr[0];
+  if (INLINE_FORMS.has(head))
+    return true;
+  return arr.length <= 4 && !arr.some(Array.isArray);
+}
+function formatAtom(elem) {
+  if (Array.isArray(elem))
+    return "(???)";
+  if (typeof elem === "number")
+    return String(elem);
+  if (elem === null)
+    return "null";
+  if (elem === "")
+    return '""';
+  const str = String(elem);
+  if (str[0] === "/" && str.indexOf(`
+`) >= 0) {
+    const match = str.match(/\/([gimsuvy]*)$/);
+    const flags = match ? match[1] : "";
+    let content = str.slice(1);
+    if (flags)
+      content = content.slice(0, -flags.length - 1);
+    else
+      content = content.slice(0, -1);
+    const lines = content.split(`
+`);
+    const cleaned = lines.map((line) => line.replace(/#.*$/, "").trim());
+    return `"/${cleaned.join("")}/${flags}"`;
+  }
+  return str;
+}
+function formatSExpr(arr, indent = 0, isTopLevel = false) {
+  if (!Array.isArray(arr))
+    return formatAtom(arr);
+  if (isTopLevel && arr[0] === "program") {
+    const secondElem = arr[1];
+    const header = Array.isArray(secondElem) ? "(program" : "(program " + formatAtom(secondElem);
+    const lines2 = [header];
+    const startIndex = Array.isArray(secondElem) ? 1 : 2;
+    for (let i = startIndex;i < arr.length; i++) {
+      const child = formatSExpr(arr[i], 2, false);
+      lines2.push(child[0] === "(" ? "  " + child : child);
+    }
+    lines2.push(")");
+    return lines2.join(`
+`);
+  }
+  const head = arr[0];
+  const canBeInline = isInline(arr) && arr.slice(1).every((elem) => !Array.isArray(elem) || isInline(elem));
+  if (canBeInline) {
+    const parts = arr.map((elem) => Array.isArray(elem) ? formatSExpr(elem, 0, false) : formatAtom(elem));
+    const inline = `(${parts.join(" ")})`;
+    if (!inline.includes(`
+`))
+      return " ".repeat(indent) + inline;
+  }
+  const spaces = " ".repeat(indent);
+  let formattedHead;
+  if (Array.isArray(head)) {
+    formattedHead = formatSExpr(head, 0, false);
+    if (formattedHead.includes(`
+`)) {
+      const headLines = formattedHead.split(`
+`);
+      formattedHead = headLines.map((line, i) => i === 0 ? line : " ".repeat(indent + 2) + line).join(`
+`);
+    }
+  } else {
+    formattedHead = formatAtom(head);
+  }
+  const lines = [`${spaces}(${formattedHead}`];
+  const forceChildrenOnNewLines = head === "block";
+  for (let i = 1;i < arr.length; i++) {
+    const elem = arr[i];
+    if (!Array.isArray(elem)) {
+      lines[lines.length - 1] += " " + formatAtom(elem);
+    } else {
+      const childInline = isInline(elem) && elem.every((e) => !Array.isArray(e) || isInline(e));
+      if (!forceChildrenOnNewLines && childInline) {
+        const formatted = formatSExpr(elem, 0, false);
+        if (!formatted.includes(`
+`)) {
+          lines[lines.length - 1] += " " + formatted;
+          continue;
+        }
+      }
+      lines.push(formatSExpr(elem, indent + 2, false));
+    }
+  }
+  lines[lines.length - 1] += ")";
+  return lines.join(`
+`);
+}
+
 class CodeGenerator {
   static ASSIGNMENT_OPS = new Set([
     "=",
@@ -9103,161 +9246,10 @@ function __catchErrors(fn) {
 `;
   }
 }
-// src/compiler.js
-var INLINE_FORMS = new Set([
-  "+",
-  "-",
-  "*",
-  "/",
-  "%",
-  "//",
-  "%%",
-  "**",
-  "==",
-  "!=",
-  "<",
-  ">",
-  "<=",
-  ">=",
-  "===",
-  "!==",
-  "&&",
-  "||",
-  "??",
-  "!?",
-  "not",
-  "&",
-  "|",
-  "^",
-  "<<",
-  ">>",
-  ">>>",
-  "=",
-  ".",
-  "?.",
-  "[]",
-  "?[]",
-  "::",
-  "?::",
-  "!",
-  "typeof",
-  "void",
-  "delete",
-  "new",
-  "...",
-  "rest",
-  "expansion",
-  "optindex",
-  "optcall"
-]);
-function isInline(arr) {
-  if (!Array.isArray(arr) || arr.length === 0)
-    return false;
-  const head = arr[0]?.valueOf?.() ?? arr[0];
-  if (INLINE_FORMS.has(head))
-    return true;
-  return arr.length <= 4 && !arr.some(Array.isArray);
-}
-function formatAtom(elem) {
-  if (Array.isArray(elem))
-    return "(???)";
-  if (typeof elem === "number")
-    return String(elem);
-  if (elem === null)
-    return "null";
-  if (elem === "")
-    return '""';
-  const str = String(elem);
-  if (str[0] === "/" && str.indexOf(`
-`) >= 0) {
-    const match = str.match(/\/([gimsuvy]*)$/);
-    const flags = match ? match[1] : "";
-    let content = str.slice(1);
-    if (flags) {
-      content = content.slice(0, -flags.length - 1);
-    } else {
-      content = content.slice(0, -1);
-    }
-    const lines = content.split(`
-`);
-    const cleaned = lines.map((line) => line.replace(/#.*$/, "").trim());
-    const processed = cleaned.join("");
-    return `"/${processed}/${flags}"`;
-  }
-  return str;
-}
-function formatSExpr(arr, indent = 0, isTopLevel = false) {
-  if (!Array.isArray(arr))
-    return formatAtom(arr);
-  if (isTopLevel && arr[0] === "program") {
-    const secondElem = arr[1];
-    const header = Array.isArray(secondElem) ? "(program" : "(program " + formatAtom(secondElem);
-    const lines2 = [header];
-    const startIndex = Array.isArray(secondElem) ? 1 : 2;
-    for (let i = startIndex;i < arr.length; i++) {
-      const child = formatSExpr(arr[i], 2, false);
-      lines2.push(child[0] === "(" ? "  " + child : child);
-    }
-    lines2.push(")");
-    return lines2.join(`
-`);
-  }
-  const head = arr[0];
-  const canBeInline = isInline(arr) && arr.slice(1).every((elem) => !Array.isArray(elem) || isInline(elem));
-  if (canBeInline) {
-    const parts = arr.map((elem) => Array.isArray(elem) ? formatSExpr(elem, 0, false) : formatAtom(elem));
-    const inline = `(${parts.join(" ")})`;
-    if (!inline.includes(`
-`)) {
-      return " ".repeat(indent) + inline;
-    }
-  }
-  const spaces = " ".repeat(indent);
-  let formattedHead;
-  if (Array.isArray(head)) {
-    formattedHead = formatSExpr(head, 0, false);
-    if (formattedHead.includes(`
-`)) {
-      const headLines = formattedHead.split(`
-`);
-      formattedHead = headLines.map((line, i) => i === 0 ? line : " ".repeat(indent + 2) + line).join(`
-`);
-    }
-  } else {
-    formattedHead = formatAtom(head);
-  }
-  const lines = [`${spaces}(${formattedHead}`];
-  const forceChildrenOnNewLines = head === "block";
-  for (let i = 1;i < arr.length; i++) {
-    const elem = arr[i];
-    if (!Array.isArray(elem)) {
-      lines[lines.length - 1] += " " + formatAtom(elem);
-    } else {
-      const childInline = isInline(elem) && elem.every((e) => !Array.isArray(e) || isInline(e));
-      if (!forceChildrenOnNewLines && childInline) {
-        const formatted2 = formatSExpr(elem, 0, false);
-        if (!formatted2.includes(`
-`)) {
-          lines[lines.length - 1] += " " + formatted2;
-          continue;
-        }
-      }
-      const formatted = formatSExpr(elem, indent + 2, false);
-      lines.push(formatted);
-    }
-  }
-  lines[lines.length - 1] += ")";
-  return lines.join(`
-`);
-}
 
 class Compiler {
   constructor(options = {}) {
-    this.options = {
-      showTokens: false,
-      showSExpr: false,
-      ...options
-    };
+    this.options = { showTokens: false, showSExpr: false, ...options };
   }
   compile(source) {
     let dataSection = null;
@@ -9275,15 +9267,13 @@ class Compiler {
     const lexer = new Lexer;
     const tokens = lexer.tokenize(source);
     if (this.options.showTokens) {
-      tokens.forEach((t) => {
-        console.log(`${t[0].padEnd(12)} ${JSON.stringify(t[1])}`);
-      });
+      tokens.forEach((t) => console.log(`${t[0].padEnd(12)} ${JSON.stringify(t[1])}`));
       console.log();
     }
     parser.lexer = {
       tokens,
       pos: 0,
-      setInput: function(input, yy) {},
+      setInput: function() {},
       lex: function() {
         if (this.pos >= this.tokens.length)
           return 1;
@@ -9298,9 +9288,7 @@ class Compiler {
       sexpr = parser.parse(source);
     } catch (parseError) {
       if (/\?\s*\([^)]*\?[^)]*:[^)]*\)\s*:/.test(source) || /\?\s+\w+\s+\?\s+/.test(source)) {
-        throw new Error(`Nested ternary operators are not supported. Use if/else statements instead:
-` + `  Instead of: x ? (y ? a : b) : c
-` + "  Use: if x then (if y then a else b) else c");
+        throw new Error("Nested ternary operators are not supported. Use if/else statements instead.");
       }
       throw parseError;
     }
@@ -9313,14 +9301,8 @@ class Compiler {
       skipReactiveRuntime: this.options.skipReactiveRuntime,
       reactiveVars: this.options.reactiveVars
     });
-    let code = generator.compile(sexpr);
-    return {
-      tokens,
-      sexpr,
-      code,
-      data: dataSection,
-      reactiveVars: generator.reactiveVars
-    };
+    const code = generator.compile(sexpr);
+    return { tokens, sexpr, code, data: dataSection, reactiveVars: generator.reactiveVars };
   }
   compileToJS(source) {
     return this.compile(source).code;
@@ -9330,16 +9312,14 @@ class Compiler {
   }
 }
 function compile(source, options = {}) {
-  const compiler = new Compiler(options);
-  return compiler.compile(source);
+  return new Compiler(options).compile(source);
 }
 function compileToJS(source, options = {}) {
-  const compiler = new Compiler(options);
-  return compiler.compileToJS(source);
+  return new Compiler(options).compileToJS(source);
 }
 // src/browser.js
 var VERSION = "2.2.5";
-var BUILD_DATE = "2026-01-16@02:23:56GMT";
+var BUILD_DATE = "2026-01-16@02:33:37GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

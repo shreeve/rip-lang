@@ -13,7 +13,7 @@ Complete mapping of CoffeeScript grammar patterns → S-expressions → JavaScri
 
 ## Overview
 
-The code generator (`src/codegen.js`) is a pattern matcher that transforms s-expressions into JavaScript. It's **simple by design** - just switch cases that match array patterns.
+The compiler (`src/compiler.js`) transforms Rip source code into JavaScript. The CodeGenerator class within is a pattern matcher that transforms s-expressions into JavaScript — just switch cases that match array patterns.
 
 ### The Process
 
@@ -123,7 +123,7 @@ Operation: [
 - **91 grammar types** organize the grammar for readability and correctness
 - **406 rules** define all the syntactic variations
 - **110+ node types** are what actually gets emitted
-- **You implement 110+ cases** in codegen.js (one per node type)
+- **You implement 110+ cases** in compiler.js (one per node type)
 
 **The grammar is the MEANS (how to parse)**
 **The node types are the END (what to generate)**
@@ -144,7 +144,7 @@ Many grammar types are just organizational scaffolding - they route to other typ
 - ✅ **Self-hosting** (Rip compiles itself)
 
 **Code Size:**
-- **4,738 LOC** in codegen.js
+- **4,738 LOC** in compiler.js
 - **Complete implementation** of all CoffeeScript 2.7 features
 - **Plus Rip innovations** (heregex, regex+, dammit, void functions, etc.)
 
@@ -968,7 +968,7 @@ echo 'your code' | ./bin/rip -s
 
 **2. Check Existing Implementation**
 ```bash
-grep -A 30 "case 'pattern':" src/codegen.js
+grep -A 30 "case 'pattern':" src/compiler.js
 ```
 
 **3. Run Tests**
@@ -977,7 +977,7 @@ bun test/runner.js test/rip/RELEVANT_FILE.rip
 ```
 
 **4. Fix or Enhance**
-- Update switch case in src/codegen.js
+- Update switch case in src/compiler.js
 - Run tests immediately
 - Commit with test count
 

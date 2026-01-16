@@ -150,7 +150,7 @@ test "no iife with guard", '''
   ''', [3, 4, 5]
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Node types: comprehension, object-comprehension
 # Tests: 29 total (29 passing, 0 failing)

@@ -69,7 +69,7 @@ code "throw", "throw e", "throw e"
 code "throw in || wraps IIFE", 'x = (fn() || throw "err")', 'let x;\n\nx = fn() || (() => { throw "err"; })()'
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Exception handling implemented: 2/2 (100%)
 # Tests passing: 33/33 (100%)
@@ -122,7 +122,7 @@ fail 'multiple splats in array', '[...a, ...b]'
 fail 'multiple splats in params', '(...a, ...b) ->'
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Node types: try, catch, throw, fail (test type)
 # Tests: 30 total (14 execution tests, 16 fail tests)

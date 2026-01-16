@@ -80,7 +80,7 @@ code "export from", 'export { add, multiply } from "./math"', "export { add, mul
 code "import.meta.url", 'x = import.meta.url', 'let x;\nx = import.meta.url'
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Node types: import, export, export-default, export-all, export-from, import.meta
 # Tests: 23 total (23 code generation tests, can't execute due to import keyword)

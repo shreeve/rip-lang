@@ -52,7 +52,7 @@ test "tagged template", 'tag = (strings, ...values) -> strings[0]\ntag"hello"', 
 test "tagged template with interpolation", 'tag = (strings, ...values) -> values[0]\nx = 42\ntag"value: #{x}"', 42
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # String types implemented: 0/2 (0%)
 # Tests passing: 0/15 (0%)
@@ -150,7 +150,7 @@ test 'heredoc empty with closing indent', '''
   ''', ''
 
 # Code generation use case - preserve base indent
-test 'heredoc codegen preserve indent', '''
+test 'heredoc compiler preserve indent', '''
   generateCode = ->
     \'\'\'
       if (x) {
@@ -161,7 +161,7 @@ test 'heredoc codegen preserve indent', '''
   ''', '  if (x) {\n    return y;\n  }'
 
 # Code generation use case - strip to flush left (closing at content level)
-test 'heredoc codegen strip indent', '''
+test 'heredoc compiler strip indent', '''
   generateCode = ->
     \'\'\'
       if (x) {
@@ -498,7 +498,7 @@ test 'long string length', '''
 # ============================================================================
 
 # Heregex generates regex literal with whitespace removed
-code 'heregex codegen', '''
+code 'heregex compiler', '''
   pattern = ///
     \d+
     ///
@@ -509,7 +509,7 @@ code 'heregex codegen', '''
 '''
 
 # Heregex with flags in output
-code 'heregex flags codegen', '''
+code 'heregex flags compiler', '''
   pattern = ///
     test
     ///gi
@@ -531,7 +531,7 @@ code 'heregex comment removal', '''
 '''
 
 # Heregex character class preserved
-code 'heregex char class codegen', '''
+code 'heregex char class compiler', '''
   pattern = ///
     [ \t]+
     ///
@@ -542,10 +542,10 @@ code 'heregex char class codegen', '''
 '''
 
 # Interpolation generates template literal
-code 'interpolation codegen', '"Hello #{name}"', '`Hello ${name}`'
+code 'interpolation compiler', '"Hello #{name}"', '`Hello ${name}`'
 
 # Heredoc generates template literal
-code 'heredoc codegen', """
+code 'heredoc compiler', """
   x = '''
     line1
     line2
@@ -568,7 +568,7 @@ test 'dollar sign with function call', '''
   ''', 'name: ALICE'
 test 'mixed hash and dollar', 'x = 1; y = 2; "hash #{x} dollar ${y}"', 'hash 1 dollar 2'
 
-code 'dollar interpolation codegen', '"Value: ${x}"', '`Value: ${x}`'
+code 'dollar interpolation compiler', '"Value: ${x}"', '`Value: ${x}`'
 
 # Quote preservation - single quotes
 code 'single quote preserved', "'hello'", "'hello'"
@@ -577,7 +577,7 @@ code 'single quote preserved', "'hello'", "'hello'"
 code 'double quote preserved', '"hello"', '"hello"'
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Node types: STRING, str (interpolation)
 # Tests: 74 total (74 passing, 0 failing)

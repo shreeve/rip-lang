@@ -54,7 +54,7 @@ test "unless vs if not", "a = unless true then 1 else 2; b = if !true then 1 els
 code "unless", "unless cond then a", "if (!cond) { a; }"
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Conditionals implemented: 0/2 (0%)
 # Tests passing: 0/23 (0%)
@@ -85,7 +85,7 @@ code "simple ternary", "true ? 1 : 2", "(true ? 1 : 2)"
 code "nested ternary", "true ? 1 : false ? 2 : 3", "(true ? 1 : (false ? 2 : 3))"
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Ternary implemented: 0/1 (0%)
 # Tests passing: 0/8 (0%)
@@ -129,7 +129,7 @@ test "switch in loop for side effects", '''
 code "switch", "switch x\n  when 1 then 'one'\n  else 'other'", "switch (x) {\n  case 1:\n    'one';\n    break;\n  default:\n    'other';\n    break;\n}"
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Switch types implemented: 0/2 (0%)
 # Tests passing: 0/10 (0%)
@@ -156,7 +156,7 @@ test "empty block", "fn = ->\nfn()", undefined
 test "nested blocks", "fn = ->\n  if true\n    x = 5\n    y = 10\n    x + y\nfn()", 15
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Blocks implemented: 0/1 (0%)
 # Tests passing: 0/5 (0%)
@@ -184,7 +184,7 @@ code "do expression", "do -> 42", "(function() { return 42; })()"
 code "do block", "do ->\n  x = 5\n  x * 2", "(function() {\n  let x;\n  x = 5;\n  return (x * 2);\n})();"
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Node types: if, unless, ?:, switch, block, do-iife
 # Tests: 44 total (44 passing, 0 failing)

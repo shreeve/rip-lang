@@ -115,7 +115,7 @@ code "existence gen", "x?", "(x != null)"
 # - ?. operators: Native ES6 optional chaining (modern browsers)
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Optional operators implemented: ?[], ?., ?, ?::
 # Soak semantics: Existence-based (CoffeeScript)
@@ -141,7 +141,7 @@ test "if not exists", "x = null; if x? then 'exists' else 'missing'", "missing"
 code "existence check", "x?", "(x != null)"
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Existence check implemented: 0/1 (0%)
 # Tests passing: 0/5 (0%)
@@ -177,7 +177,7 @@ test "trailing if with nullish default", '''
 ''', []
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Node types: ?, ?[], ?(), ?::, ?., ?.[, ?.(, ??, ??=
 # Tests: 54 total (54 passing, 0 failing)

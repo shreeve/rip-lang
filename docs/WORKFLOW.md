@@ -26,7 +26,7 @@ bun test/runner.js test/rip/RELEVANT_FILE.rip  # Verify they fail
 
 # 5. Implement the fix
 # - Grammar change? Edit src/grammar/grammar.rip then: bun run parser
-# - Codegen change? Edit src/codegen.js
+# - Codegen change? Edit src/compiler.js
 # - Solar change? Edit src/grammar/solar.rip then: bun run parser
 
 # 6. Verify tests pass
@@ -37,7 +37,7 @@ bun run browser  # Updates web REPL
 
 # 8. Update documentation
 # - README.md (if user-facing change)
-# - docs/CODEGEN.md (if new node types)
+# - docs/COMPILER.md (if new node types)
 # - Test count updates
 
 # 9. Commit with issue reference
@@ -164,7 +164,7 @@ git checkout -b fix/postfix-comprehension-by-step
 # Fixed grammar + codegen
 # Edited src/grammar/grammar.rip (added 3 rules)
 bun run parser
-# Edited src/codegen.js (handle step parameter)
+# Edited src/compiler.js (handle step parameter)
 
 # Verified fix
 bun run test  # 846/846 passing (+3)
@@ -173,7 +173,7 @@ bun run test  # 846/846 passing (+3)
 # Changed 843 → 846
 
 # Committed
-git add README.md src/codegen.js src/grammar/grammar.rip src/parser.js test/rip/comprehensions.rip
+git add README.md src/compiler.js src/grammar/grammar.rip src/parser.js test/rip/comprehensions.rip
 git commit -m "Fix: Add support for postfix comprehensions with 'by' step
 
 Fixes #1

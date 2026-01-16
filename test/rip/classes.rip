@@ -205,7 +205,7 @@ code 'ruby style new args', 'Counter.new(1, 2)', 'new Counter(1, 2)'
 code 'ruby style new expression', 'getClass().new()', 'new (getClass())()'
 
 # ============================================================================
-# Stats for CODEGEN.md
+# Stats for COMPILER.md
 # ============================================================================
 # Node types: class, super, new.target
 # Tests: 22 total (22 passing, 0 failing)
