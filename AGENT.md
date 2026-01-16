@@ -51,7 +51,7 @@ rip-lang/
 │   ├── tags.js          # HTML/SVG tag definitions
 │   └── grammar/
 │       ├── grammar.rip  # Grammar specification (872 LOC)
-│       └── solar.rip    # Parser generator (997 LOC) ❌ Don't edit!
+│       └── solar.rip    # Parser generator (~1,000 LOC) ❌ Don't edit!
 ├── docs/
 │   ├── GUIDE.md         # Complete language guide
 │   ├── INTERNALS.md     # Compiler/parser technical details

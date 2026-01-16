@@ -182,7 +182,7 @@ name = "Rip"   # Effect runs → "Hello, Rip!"
 count = 5      # Nothing (greeting doesn't depend on count)
 ```
 
-[Full reactivity guide →](docs/REACTIVITY.md)
+[Full reactivity guide →](docs/GUIDE.md#reactivity)
 
 ---
 
@@ -221,7 +221,7 @@ button (@click: => @count++), "+"
 - Context API: `setContext`, `getContext`
 - Fine-grained updates: only changed nodes update, no virtual DOM
 
-[Component guide →](docs/COMPONENTS.md)
+[Component guide →](docs/GUIDE.md#components)
 
 ---
 
@@ -247,7 +247,7 @@ render
 - `.("class1", cond && "class2")` — Dynamic classes (Tailwind-friendly)
 - `value <=> var` — Two-way binding
 
-[Template guide →](docs/TEMPLATES.md)
+[Template guide →](docs/GUIDE.md#templates)
 
 ---
 
@@ -336,7 +336,7 @@ rip file.rip           # Run a file
 rip -c file.rip        # Compile to JavaScript
 rip -s file.rip        # Show S-expressions (debug parser)
 rip -t file.rip        # Show tokens (debug lexer)
-bun run test           # Run all 1033 tests
+bun run test           # Run all 1046 tests
 bun run parser         # Rebuild parser (self-hosting!)
 bun run browser        # Build browser bundle
 ```
@@ -348,9 +348,9 @@ bun run browser        # Build browser bundle
 | Guide | Description |
 |-------|-------------|
 | [AGENT.md](AGENT.md) | Complete developer/AI guide |
-| [docs/REACTIVITY.md](docs/REACTIVITY.md) | Signals, effects, derived values |
-| [docs/COMPONENTS.md](docs/COMPONENTS.md) | Component system |
-| [docs/TEMPLATES.md](docs/TEMPLATES.md) | Template DSL |
+| [docs/GUIDE.md](docs/GUIDE.md) | Language guide (reactivity, templates, components) |
+| [docs/INTERNALS.md](docs/INTERNALS.md) | Compiler architecture, S-expressions |
+| [docs/BROWSER.md](docs/BROWSER.md) | Browser usage, REPL |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
 
