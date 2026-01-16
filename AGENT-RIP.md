@@ -2467,4 +2467,4 @@ rip hello.rip
 
 ---
 
-*Version 2.5.0 — 1046/1046 tests passing — Zero dependencies — Self-hosting*
+*Version 2.5.1 — 1046/1046 tests passing — Zero dependencies — Self-hosting*

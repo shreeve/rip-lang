@@ -4,7 +4,7 @@
 
 > Technical reference for the Rip compiler architecture, code generation, and parsing.
 
-**Version:** 2.5.0
+**Version:** 2.5.1
 **Test Coverage:** 1046/1046 rip tests (100%) ✅
 **Status:** Stable & Production Ready - Self-Hosting Complete
 

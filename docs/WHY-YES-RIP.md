@@ -6,7 +6,7 @@
 
 That "Why Not" document makes strong arguments, but here's the **counter-argument**—a working, tested, **production-ready** language that offers a different path.
 
-**Rip isn't vaporware. It's real. Version 2.5.0. 1046/1046 tests passing. Self-hosting. Zero dependencies. Available now.**
+**Rip isn't vaporware. It's real. Version 2.5.1. 1046/1046 tests passing. Self-hosting. Zero dependencies. Available now.**
 
 ### The Philosophical Divide: Freedom vs Fear
 
@@ -842,7 +842,7 @@ Rip isn't about going backward. It's about recognizing that **we took a wrong tu
 
 **The future isn't more dependencies. It's zero dependencies.**
 
-**The future is Rip. Version 2.5.0. Available today.**
+**The future is Rip. Version 2.5.1. Available today.**
 
 ---
 
@@ -890,6 +890,6 @@ $ echo 'console.log "Hello, Rip!"' > test.rip && bun test.rip
 - ✅ **Two-way binding** (`<=>` operator - automatic for inputs)
 - ✅ **Ruby constructors** (`ClassName.new()` - elegant instantiation)
 
-**Version 2.5.0. Available now. Clone and go.**
+**Version 2.5.1. Available now. Clone and go.**
 
 This approach is ready. Give it a try.

@@ -468,7 +468,7 @@ counter = ->
 
 # 3. Current Assessment
 
-> **v2.5.0 - Production-Ready with Fine-Grained Reactivity**
+> **v2.5.1 - Production-Ready with Fine-Grained Reactivity**
 
 ## Summary Matrix
 

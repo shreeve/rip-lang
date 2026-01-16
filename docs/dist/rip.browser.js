@@ -2705,6 +2705,28 @@ Rewriter = function() {
         }
         if (!inRender)
           return 1;
+        if (tag === "IDENTIFIER" && !token.spaced) {
+          let parts = [token[1]];
+          let j = i + 1;
+          while (j + 1 < tokens.length) {
+            const hyphen = tokens[j];
+            const nextPart = tokens[j + 1];
+            if (hyphen[0] === "-" && !hyphen.spaced && (nextPart[0] === "IDENTIFIER" || nextPart[0] === "PROPERTY")) {
+              parts.push(nextPart[1]);
+              j += 2;
+              if (nextPart[0] === "PROPERTY")
+                break;
+            } else {
+              break;
+            }
+          }
+          if (parts.length > 1 && j > i + 1 && tokens[j - 1][0] === "PROPERTY") {
+            token[0] = "STRING";
+            token[1] = `"${parts.join("-")}"`;
+            tokens.splice(i + 1, j - i - 1);
+            return 1;
+          }
+        }
         if (tag === ".") {
           const prevToken = i > 0 ? tokens[i - 1] : null;
           const prevTag = prevToken ? prevToken[0] : null;
@@ -9314,8 +9336,8 @@ function compileToJS(source, options = {}) {
   return new Compiler(options).compileToJS(source);
 }
 // src/browser.js
-var VERSION = "2.5.0";
-var BUILD_DATE = "2026-01-16@05:08:49GMT";
+var VERSION = "2.5.1";
+var BUILD_DATE = "2026-01-16@07:47:41GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
