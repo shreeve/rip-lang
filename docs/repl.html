@@ -578,8 +578,7 @@ component Counter
       button @click: @inc, "+"
       i "dozen is #{dozen} items?"
 
-counter = new Counter()
-counter.mount "#counter-mount"
+Counter.new().mount "#counter-mount"
 
 # ============================================
 # Component with Two-Way Binding
@@ -595,8 +594,7 @@ component Greeter
         span.name name
         span "!"
 
-greeter = new Greeter()
-greeter.mount "#greeter-mount"
+Greeter.new().mount "#greeter-mount"
 
 # ============================================
 # Derived Values (~= always equal)
@@ -619,8 +617,7 @@ component Calculator
         span "Squared: "
         span.result squared
 
-calc = new Calculator()
-calc.mount "#calc-mount"
+Calculator.new().mount "#calc-mount"
 </textarea>
         </div>
 
