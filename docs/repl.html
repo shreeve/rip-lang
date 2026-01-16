@@ -566,19 +566,21 @@
 
 # A counter component with Pug-style template syntax
 component Counter
-  count = 0
+  @label = "Count"      # prop with default
+  @initial = 0          # prop with default
+  count := @initial
   dozen ~= count * 12
   inc: -> count += 1
   dec: -> count -= 1
   render
     .counter
-      i "Did you know that"
+      i "Did you know that #{@label}"
       button @click: @dec, "−"
       span.value count
       button @click: @inc, "+"
       i "dozen is #{dozen} items?"
 
-Counter.new().mount "#counter-mount"
+Counter.new(label: "widgets", initial: 5).mount "#counter-mount"
 
 # ============================================
 # Component with Two-Way Binding
