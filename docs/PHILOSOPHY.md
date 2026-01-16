@@ -40,7 +40,7 @@ class BinaryOp {
 ["+", left, right]  // That's it!
 ```
 
-**Result:** CoffeeScript's compiler is 17,760 LOC. Rip's is ~12,000 LOC. **~35% smaller.**
+**Result:** CoffeeScript's compiler is 17,760 LOC. Rip's is ~14,000 LOC—smaller, yet includes a complete reactive framework with signals, templates, and components.
 
 ## The Fundamental Rule
 
@@ -157,7 +157,7 @@ class Op extends Base
 // Complex inheritance hierarchies
 ```
 
-### Why Rip is ~12,000 LOC
+### Why Rip is ~14,000 LOC (with a complete framework)
 
 **Rip's approach:**
 ```javascript
@@ -257,7 +257,7 @@ return code.replace(/old/g, 'new');
 | **Unique Features** | 0 | 10+ innovations |
 | **Dependencies** | Multiple | **ZERO** |
 | **Self-Hosting** | No | **YES** |
-| **Total LOC** | 17,760 | ~12,000 |
+| **Total LOC** | 17,760 | ~14,000 |
 
 ## Rip's Killer Features (Not in CoffeeScript)
 
@@ -291,7 +291,7 @@ obj?.arr?[0]  # ES6 + CoffeeScript together!
 
 **What's included:**
 - ✅ Full compiler (lexer, parser, codegen)
-- ✅ **SLR(1) parser generator** (solar.rip - 928 lines)
+- ✅ **SLR(1) parser generator** (solar.rip - ~1,000 lines)
 - ✅ Self-hosting capability (Rip compiles itself)
 - ✅ Triple REPL (terminal, browser, console)
 - ✅ Test framework
@@ -420,9 +420,9 @@ counter = ->
 | Component | CoffeeScript 2.7 | Rip | Difference |
 |-----------|------------------|-----|------------|
 | **Lexer+Rewriter** | 3,558 LOC | 3,537 LOC | Expanded syntax |
-| **Parser Generator** | 2,285 LOC (Jison) | 928 LOC (Solar) | Built-in, ~156× faster! |
-| **Compiler** | 10,346 LOC (AST Nodes) | 7,964 LOC (S-expressions) | Powerful capabilities |
-| **Total** | **17,760 LOC** | **~12,000 LOC** | **~35% smaller** |
+| **Parser Generator** | 2,285 LOC (Jison) | ~1,000 LOC (Solar) | Built-in, ~250× faster! |
+| **Compiler** | 10,346 LOC (AST Nodes) | 7,965 LOC (S-expressions) | +Reactive framework! |
+| **Total** | **17,760 LOC** | **~14,000 LOC** | **Smaller + full framework** |
 
 ## Feature Comparison Table
 
@@ -468,7 +468,7 @@ counter = ->
 
 # 3. Current Assessment
 
-> **v2.3.1 - Production-Ready with Fine-Grained Reactivity**
+> **v2.5.0 - Production-Ready with Fine-Grained Reactivity**
 
 ## Summary Matrix
 

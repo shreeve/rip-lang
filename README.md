@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-2.3.1-blue.svg" alt="Version"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-2.5.0-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
   <a href="#"><img src="https://img.shields.io/badge/tests-1046%2F1046-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
@@ -21,7 +21,7 @@
 
 Rip is a modern reactive language that compiles to JavaScript. It takes the elegant, readable syntax that made CoffeeScript beloved and brings it into the modern era — with ES2022 output, built-in reactivity, and a clean component system for building UIs.
 
-The compiler is completely standalone with zero dependencies, and it's self-hosting: Rip compiles itself. At ~12,000 lines of code, it's half the size of CoffeeScript while producing cleaner, more modern output.
+The compiler is completely standalone with zero dependencies, and it's self-hosting: Rip compiles itself. At ~14,000 lines of code, it's smaller than CoffeeScript (17,760 LOC) while including a complete reactive framework with signals, templates, and components.
 
 **What makes Rip different:**
 - **Reactive primitives** — signals, derived values, and effects built into the language
@@ -253,7 +253,7 @@ render
 
 ## Browser Support
 
-Run Rip directly in the browser (56KB compressed).
+Run Rip directly in the browser (51KB compressed—complete language + reactive framework).
 
 **Try it live:** [https://shreeve.github.io/rip-lang/](https://shreeve.github.io/rip-lang/)
 
@@ -280,10 +280,10 @@ CoffeeScript showed us beautiful syntax. Rip takes that vision further:
 | | Rip | CoffeeScript |
 |---|---|---|
 | **Output** | ES2022 (classes, `?.`, `??`) | ES5 (var, prototypes) |
-| **Reactivity** | Built-in | None |
+| **Reactivity** | Built-in (signals, effects, templates) | None |
 | **Dependencies** | Zero | Multiple |
 | **Self-hosting** | Yes (compiles itself) | No |
-| **Codebase** | 9,839 LOC | 17,760 LOC |
+| **Codebase** | ~14,000 LOC | 17,760 LOC |
 
 ---
 
@@ -311,12 +311,12 @@ case '+': return `(${gen(left)} + ${gen(right)})`;
 
 | Component | CoffeeScript | Rip |
 |-----------|--------------|-----|
-| Lexer | 3,558 LOC | 3,145 LOC |
-| Parser Generator | 2,285 LOC (Jison) | 928 LOC (Solar) |
-| Compiler | 10,346 LOC | 5,246 LOC |
-| **Total** | **17,760 LOC** | **9,839 LOC** |
+| Lexer | 3,558 LOC | 3,537 LOC |
+| Parser Generator | 2,285 LOC (Jison) | ~1,000 LOC (Solar) |
+| Compiler | 10,346 LOC | 7,965 LOC |
+| **Total** | **17,760 LOC** | **~14,000 LOC** |
 
-Result: **45% smaller**, easier to maintain, faster to extend.
+Result: Smaller than CoffeeScript, yet includes a complete **reactive framework** with signals, derived values, effects, templates, and components.
 
 ---
 

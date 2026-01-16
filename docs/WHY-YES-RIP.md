@@ -6,7 +6,7 @@
 
 That "Why Not" document makes strong arguments, but here's the **counter-argument**—a working, tested, **production-ready** language that offers a different path.
 
-**Rip isn't vaporware. It's real. Version 2.3.1. 1046/1046 tests passing. Self-hosting. Zero dependencies. Available now.**
+**Rip isn't vaporware. It's real. Version 2.5.0. 1046/1046 tests passing. Self-hosting. Zero dependencies. Available now.**
 
 ### The Philosophical Divide: Freedom vs Fear
 
@@ -335,13 +335,13 @@ Not "minimal." Not "few." **ZERO.** This is **real**, **running**, **today**.
 
 **What's included with zero external dependencies:**
 - ✅ **Full compiler** (lexer + parser + codegen)
-- ✅ **SLR(1) parser generator** (solar.rip - 928 lines, built-in!)
+- ✅ **SLR(1) parser generator** (solar.rip - ~1,000 lines, built-in!)
 - ✅ **Self-hosting** (Rip compiles itself, including the parser generator)
 - ✅ **Reactive framework** (signals, derived, effects - language-level!)
 - ✅ **Component system** (templates, props, lifecycle - language-level!)
 - ✅ **Triple REPL** (terminal, browser, console)
 - ✅ **Test framework** (runner + 1046 tests)
-- ✅ **Browser bundler** (43KB brotli-compressed)
+- ✅ **Browser bundle** (51KB brotli-compressed - full compiler + reactive framework!)
 
 Compare to a "modern" TypeScript project:
 ```bash
@@ -411,7 +411,7 @@ $ deno run script.js
 $ ./bin/rip -o script.js script.rip
 $ node script.js
 
-# Browser - 43KB bundle with inline script support
+# Browser - 51KB bundle with reactive framework + inline script support
 <script src="rip.browser.min.js"></script>
 <script type="text/rip">
   def greet(name)
@@ -486,10 +486,10 @@ doSomething(user)  # Test it, ship it
 - **Build time: 0.043s (Rip) vs 2m34s (TS)** - That's **3,500x faster**
 - **Dependencies: 0 (Rip) vs 1,400+ (TS)** - That's ∞% fewer attack vectors
 - **Time to Hello World: 5 seconds (Rip) vs 5 minutes (TS)** - 60x faster to start
-- **Code size: 9,450 LOC (Rip) vs 17,760 LOC (CoffeeScript)** - 50% smaller implementation
+- **Code size: ~14,000 LOC (Rip) vs 17,760 LOC (CoffeeScript)** - 20% smaller, yet far more capable
 - **Test coverage: 1046/1046 (100%)** - Perfect score
 - **Self-hosting: YES** - Rip compiles itself, including its own parser generator
-- **Browser bundle: 43KB** - Brotli-compressed (560KB → 43KB, 92% reduction)
+- **Browser bundle: 51KB** - Complete compiler + reactive runtime (587KB → 51KB, 91% reduction)
 
 ## Against "Modern JavaScript Caught Up": The Frankenstein's Monster
 
@@ -541,7 +541,7 @@ Rip with Bun loader support:
 - **ZERO transpilation** - Runs directly with Bun
 - **ZERO bundling** - Ships as written for development
 - **Instant startup** - On-the-fly compilation (< 50ms)
-- **43KB browser bundle** - Smaller than most favicons
+- **51KB browser bundle** - Complete framework smaller than most utility libraries
 
 ## The Business Case: Building Beats Configuring
 
@@ -668,7 +668,7 @@ console.log add(5, 3)' > main.rip
 $ bun main.rip
 8
 
-# Browser (WORKS TODAY - 43KB bundle)
+# Browser (WORKS TODAY - 51KB bundle)
 <script src="rip.browser.min.js"></script>
 <script type="text/rip">
   class App
@@ -842,7 +842,7 @@ Rip isn't about going backward. It's about recognizing that **we took a wrong tu
 
 **The future isn't more dependencies. It's zero dependencies.**
 
-**The future is Rip. Version 2.3.1. Available today.**
+**The future is Rip. Version 2.5.0. Available today.**
 
 ---
 
@@ -880,8 +880,8 @@ $ echo 'console.log "Hello, Rip!"' > test.rip && bun test.rip
 - ✅ **Self-hosting** (Rip compiles itself + its parser generator)
 - ✅ **Zero dependencies** (package.json dependencies: {})
 - ✅ **Bun loader** (bunfig.toml + rip-loader.js - works globally)
-- ✅ **43KB browser bundle** (brotli-compressed, with inline scripts)
-- ✅ **50% smaller** than CoffeeScript (9,450 vs 17,760 LOC)
+- ✅ **51KB browser bundle** (compiler + reactive runtime + templates + components!)
+- ✅ **Smaller than CoffeeScript** (~14,000 vs 17,760 LOC) yet includes full reactive framework
 - ✅ **ES2022 output** (works in Bun, Deno, Node 12+, browsers)
 - ✅ **Triple REPL** (terminal, browser, console)
 - ✅ **Reactive primitives** (`:=` signals, `~=` derived, `effect` - language-level!)
@@ -890,6 +890,6 @@ $ echo 'console.log "Hello, Rip!"' > test.rip && bun test.rip
 - ✅ **Two-way binding** (`<=>` operator - automatic for inputs)
 - ✅ **Ruby constructors** (`ClassName.new()` - elegant instantiation)
 
-**Version 2.3.1. Available now. Clone and go.**
+**Version 2.5.0. Available now. Clone and go.**
 
 This approach is ready. Give it a try.

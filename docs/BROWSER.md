@@ -2,25 +2,32 @@
 
 # Rip in the Browser
 
-**Complete Compiler in Just 43KB + Triple REPL Support**
+**Complete Language + Reactive Framework in 51KB**
 
-Rip compiles to modern JavaScript and runs beautifully in the browser. With brotli compression, the entire compiler fits in just **43KB** - smaller than most JavaScript libraries! Plus, Rip provides **three distinct interactive environments** for maximum flexibility.
+Rip compiles to modern JavaScript and runs beautifully in the browser. With brotli compression, the entire package—compiler, reactive runtime, template engine, and component system—fits in just **51KB**. That's a complete framework in less space than most utility libraries!
 
 ---
 
 ## 📦 Build Sizes
 
 ```
-rip.browser.js         560 KB  (readable, for debugging)
-rip.browser.min.js     369 KB  (minified, 34% smaller)
-rip.browser.min.js.br   43 KB  (brotli, 92% smaller!)
+rip.browser.js         587 KB  (readable, for debugging)
+rip.browser.min.js     367 KB  (minified, 37% smaller)
+rip.browser.min.js.br   51 KB  (brotli, 91% smaller!)
 ```
 
+**What's in that 51KB?**
+- Complete compiler (lexer, parser, code generator)
+- Reactive runtime (signals, derived values, effects)
+- Template engine (S-expression syntax, dynamic classes)
+- Component system (props, lifecycle, fine-grained updates)
+- Zero dependencies
+
 **For comparison:**
-- React (min+gzip): ~42KB (just the library)
-- Vue (min+gzip): ~34KB (just the library)
-- Babel standalone: ~500KB+ (just the transpiler)
-- **Rip: 43KB (complete compiler!)**
+- React (min+gzip): ~42KB (just the library, no compiler)
+- Vue (min+gzip): ~34KB (just the library, no compiler)
+- Svelte: ~2KB runtime (but requires build step + compiler)
+- **Rip: 51KB (complete language + framework, runs anywhere!)**
 
 ---
 
@@ -445,7 +452,7 @@ location ~ \.js$ {
 
 **4. Use in HTML:**
 ```html
-<!-- Browsers with brotli support get 40KB version automatically -->
+<!-- Browsers with brotli support get 51KB version automatically -->
 <script type="module" src="https://cdn.example.com/rip.browser.min.js"></script>
 ```
 
@@ -457,9 +464,9 @@ location ~ \.js$ {
 
 | Version | Size | Reduction | Use Case |
 |---------|------|-----------|----------|
-| **rip.browser.js** | 560 KB | - | Development, debugging |
-| **rip.browser.min.js** | 369 KB | 34% | Production without brotli |
-| **rip.browser.min.js.br** | 43 KB | **92%** | Production with brotli ✨ |
+| **rip.browser.js** | 587 KB | - | Development, debugging |
+| **rip.browser.min.js** | 367 KB | 37% | Production without brotli |
+| **rip.browser.min.js.br** | 51 KB | **91%** | Production with brotli ✨ |
 
 ### Load Times
 
@@ -850,7 +857,7 @@ Cache-Control: public, max-age=31536000, immutable
 
 For best performance, precompile to JavaScript during build:
 ```bash
-# Development: inline Rip (43KB compiler overhead)
+# Development: inline Rip (51KB framework overhead)
 <script type="text/rip">...</script>
 
 # Production: precompiled JavaScript (no compiler needed)
@@ -888,15 +895,16 @@ See the `docs/examples/` directory for working demos:
 
 ## 🌟 Why Rip in the Browser?
 
-**1. Tiny Size**
-- 43KB with brotli (smaller than most libraries!)
+**1. Incredible Value**
+- 51KB delivers compiler + reactive runtime + templates + components
+- More features than most frameworks, smaller than most libraries
 - Fast loading even on mobile
-- Minimal bandwidth usage
 
-**2. Complete Language**
-- Full CoffeeScript elegance
+**2. Complete Framework**
+- Reactive primitives (signals, derived, effects)
+- S-expression templates with fine-grained updates
+- Component system with props and lifecycle
 - Modern ES6+ output
-- Unique features (heregex, regex+, dammit operator)
 
 **3. Zero Build Step**
 - Write Rip directly in HTML
@@ -904,13 +912,13 @@ See the `docs/examples/` directory for working demos:
 - Perfect for prototyping
 
 **4. Developer Experience**
-- Clean syntax
+- Clean, expressive syntax
 - Readable code
 - Interactive debugging
 - Three REPL modes!
 
 **5. Production Ready**
-- Well-tested (843/843 tests passing)
+- Well-tested (1046/1046 tests passing)
 - ES6+ output
 - Reliable compilation
 - Self-hosting compiler
@@ -956,26 +964,26 @@ Then serve `node_modules/rip-lang/dist/rip.browser.min.js`
 
 **Rip in the browser gives you:**
 
-✅ **43KB** - Complete compiler (brotli)
+✅ **51KB** - Complete language + reactive framework (brotli)
+✅ **Reactivity** - Signals, derived values, effects
+✅ **Templates** - S-expression syntax, fine-grained DOM updates
+✅ **Components** - Props, lifecycle, zero virtual DOM
 ✅ **Triple REPL** - Terminal, Browser, Console
 ✅ **Modern ES6+** - Output works everywhere
-✅ **Unique features** - Heregex, regex+, dual optional, dammit operator
 ✅ **Zero build** - Write Rip directly in HTML
 ✅ **Auto-execution** - `<script type="text/rip">` just works
-✅ **Full API** - compile(), compileToJS(), rip()
-✅ **Developer-friendly** - Clean syntax, great errors
 
 **Perfect for:**
 - 🎓 Learning and education
 - 🔬 Experimentation and prototyping
-- 🛠️ Building interactive tools
+- 🛠️ Building reactive applications
 - 📊 Dynamic dashboards
 - ✅ Client-side validation
 - 🎨 Creative coding
 
 ---
 
-**Building elegant experiences with 43KB of pure language innovation.** ✨
+**A complete language and reactive framework in 51KB.** ✨
 
 ---
 

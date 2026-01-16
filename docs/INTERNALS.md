@@ -4,7 +4,7 @@
 
 > Technical reference for the Rip compiler architecture, code generation, and parsing.
 
-**Version:** 2.3.1
+**Version:** 2.5.0
 **Test Coverage:** 1046/1046 rip tests (100%) ✅
 **Status:** Stable & Production Ready - Self-Hosting Complete
 
@@ -27,7 +27,7 @@
 
 ```
 Source Code → CoffeeScript Lexer → Solar Parser → S-Expressions → Codegen → JavaScript
-             (3,537 LOC)         (340 LOC)       (arrays!)      (7,964 LOC)
+             (3,537 LOC)         (363 LOC)       (arrays!)      (7,965 LOC)
              15 years tested     Generated!      Clean IR!       Complete!
 ```
 
@@ -35,11 +35,11 @@ Source Code → CoffeeScript Lexer → Solar Parser → S-Expressions → Codege
 
 | File | Purpose | Size | Modify? |
 |------|---------|------|---------|
-| `src/grammar/grammar.rip` | Grammar spec | 795 LOC | ✅ Yes |
-| `src/grammar/solar.rip` | Parser generator | 928 LOC | ❌ No |
-| `src/parser.js` | Generated parser | 340 LOC | ❌ No (auto-gen) |
+| `src/grammar/grammar.rip` | Grammar spec | 872 LOC | ✅ Yes |
+| `src/grammar/solar.rip` | Parser generator | 1,001 LOC | ❌ No |
+| `src/parser.js` | Generated parser | 363 LOC | ❌ No (auto-gen) |
 | `src/lexer.js` | Lexer + Rewriter | 3,537 LOC | ⚠️ Rewriter only |
-| `src/compiler.js` | Code generator | 7,964 LOC | ✅ Yes |
+| `src/compiler.js` | Code generator | 7,965 LOC | ✅ Yes |
 
 ## Example Flow
 
@@ -76,7 +76,7 @@ class BinaryOp {
 ["+", left, right]  // That's it!
 ```
 
-**Result:** CoffeeScript's compiler is 17,760 LOC. Rip's is ~12,000 LOC. **~35% smaller.**
+**Result:** CoffeeScript's compiler is 17,760 LOC. Rip's is ~14,000 LOC—**smaller, yet includes a full reactive framework, template engine, and component system.**
 
 ## S-Expression Structure
 
@@ -673,7 +673,7 @@ token.data = {
 
 **Solar** is a complete SLR(1) parser generator **included with Rip** - written in Rip, compiled by Rip, zero external dependencies!
 
-**Location:** `src/grammar/solar.rip` (928 lines)
+**Location:** `src/grammar/solar.rip` (~1,000 lines)
 **Dependencies:** ZERO - Self-hosting, standalone
 **Type:** SLR(1) parser generator (similar to Yacc/Bison/Jison)
 
@@ -763,12 +763,12 @@ Body: [
 
 ### Parser Generation Speed
 
-**Solar generates Rip's parser in ~80ms!**
+**Solar generates Rip's parser in ~50ms!**
 
 **Real-world benchmark (Rip grammar):**
 - **Grammar size:** 91 types, 406 production rules
 - **Generated parser:** 250 states, SLR(1) parse table
-- **Solar:** ~80ms total
+- **Solar:** ~50ms total
 - **Jison:** ~12,500ms (12.5 seconds)
 - **Speedup:** **156× faster!**
 
@@ -789,10 +789,10 @@ Body: [
 
 | Metric | Jison | Solar | Winner |
 |--------|-------|-------|--------|
-| **Parse time** | 12,500ms | 80ms | **Solar 156×** |
+| **Parse time** | 12,500ms | ~50ms | **Solar 250×** |
 | **Dependencies** | Many | Zero | **Solar** |
 | **Self-hosting** | No | Yes | **Solar** |
-| **Code size** | 2,285 LOC | 928 LOC | **Solar 59% smaller** |
+| **Code size** | 2,285 LOC | ~1,000 LOC | **Solar 56% smaller** |
 
 ## Working with the Grammar
 
@@ -804,7 +804,7 @@ After modifying the grammar:
 bun run parser
 ```
 
-This regenerates `src/parser.js` (338 LOC, auto-generated).
+This regenerates `src/parser.js` (363 LOC, auto-generated).
 
 ### Example Rule
 
@@ -847,7 +847,7 @@ Solar's s-expression mode is the **secret sauce** that makes Rip practical:
 4. **Maintainable:** ~35% less code than CoffeeScript
 5. **Extensible:** Add features by adding switch cases
 
-**Result:** A production-ready compiler in ~12,000 LOC instead of CoffeeScript's 17,760 LOC!
+**Result:** A production-ready compiler with reactive framework in ~14,000 LOC—smaller than CoffeeScript's 17,760 LOC while delivering far more!
 
 ---
 
