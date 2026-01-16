@@ -3211,10 +3211,10 @@ Rewriter = (function() {
         if (tag === '.' && nextToken && nextToken[0] === '(') {
           const prevToken = i > 0 ? tokens[i - 1] : null;
           const prevTag = prevToken ? prevToken[0] : null;
-          
+
           // Check if at line start - need to insert 'div' first
           const atLineStart = prevTag === 'INDENT' || prevTag === 'TERMINATOR';
-          
+
           const cxToken = ['PROPERTY', '__cx__', token[2]];
           cxToken.generated = true;
           nextToken[0] = 'CALL_START';
@@ -3226,7 +3226,7 @@ Rewriter = (function() {
               if (depth === 0) tokens[j][0] = 'CALL_END';
             } else if (tokens[j][0] === 'CALL_END') depth--;
           }
-          
+
           if (atLineStart) {
             // Insert div before . and __cx__ after .
             const divToken = ['IDENTIFIER', 'div', token[2]];
