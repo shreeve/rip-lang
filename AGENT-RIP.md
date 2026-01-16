@@ -750,11 +750,14 @@ render
   # Boolean attributes
   button disabled: isLoading
 
-  # Hyphenated attributes (data-*, aria-*) use spread
-  i ...{"data-lucide": "search", "aria-hidden": "true"}
-  div ...{"data-testid": "container"}
+  # Hyphenated attributes (data-*, aria-*) need quoted keys
+  i {"data-lucide": "search", "aria-hidden": "true"}
+  div {"data-testid": "container"}
 
-  # Spread attributes
+  # Mix regular and hyphenated
+  i class: "icon", {"data-lucide": "search"}
+
+  # Spread attributes from variable
   div ...props
   input ...inputProps, class: "extra"
 ```
@@ -1952,22 +1955,18 @@ div.({ active: isActive, disabled: isDisabled })
 ### Basic Attribute Syntax
 
 ```coffee
-# Attributes use key: value syntax (like object properties)
+# Attributes use key: value syntax
 input type: "text", placeholder: "Enter name"
 img src: "/logo.png", alt: "Logo", width: 200
 a href: "/home", target: "_blank", "Go Home"
 
-# Camel case attributes work directly
-div dataId: item.id        # becomes data-id in HTML
-input autoComplete: "email"
+# HYPHENATED attributes (data-*, aria-*) need quoted keys in object:
+i {"data-lucide": "search", "data-size": "16"}
+div {"data-testid": "container", "aria-label": "Menu"}
 
-# HYPHENATED attributes (data-*, aria-*, etc.) need spread syntax:
-i ...{"data-lucide": "search", "data-size": "16"}
-div ...{"data-testid": "container", "aria-label": "Menu"}
-
-# Or use a variable
-iconAttrs = {"data-lucide": "search"}
-i ...iconAttrs
+# Mix regular and quoted keys:
+i class: "icon", {"data-lucide": "search"}
+div id: "main", {"data-testid": "container"}
 
 # Any non-hyphenated attribute works directly
 svg viewBox: "0 0 24 24", width: 16, height: 16
