@@ -750,6 +750,10 @@ render
   # Boolean attributes
   button disabled: isLoading
 
+  # Hyphenated attributes (data-*, aria-*) use spread
+  i ...{"data-lucide": "search", "aria-hidden": "true"}
+  div ...{"data-testid": "container"}
+
   # Spread attributes
   div ...props
   input ...inputProps, class: "extra"
@@ -1907,7 +1911,7 @@ div.card.active
 span.badge             # <span class="badge">
 ```
 
-### Dynamic Classes with `.()` 
+### Dynamic Classes with `.()`
 
 ```coffee
 # The .() syntax is for dynamic/conditional classes
@@ -1953,13 +1957,21 @@ input type: "text", placeholder: "Enter name"
 img src: "/logo.png", alt: "Logo", width: 200
 a href: "/home", target: "_blank", "Go Home"
 
-# Data attributes - just use the full name
-div data-id: item.id, data-testid: "container"
-i data-lucide: "search"
+# Camel case attributes work directly
+div dataId: item.id        # becomes data-id in HTML
+input autoComplete: "email"
 
-# Any attribute works
+# HYPHENATED attributes (data-*, aria-*, etc.) need spread syntax:
+i ...{"data-lucide": "search", "data-size": "16"}
+div ...{"data-testid": "container", "aria-label": "Menu"}
+
+# Or use a variable
+iconAttrs = {"data-lucide": "search"}
+i ...iconAttrs
+
+# Any non-hyphenated attribute works directly
 svg viewBox: "0 0 24 24", width: 16, height: 16
-input type: "email", required: true, autocomplete: "email"
+input type: "email", required: true
 ```
 
 ### Dynamic Attribute Values
@@ -2214,7 +2226,7 @@ Layout
     nav ...
   footer:
     p "© 2024"
-  
+
   # Default content → @children
   p "Main content here"
 ```
