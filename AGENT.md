@@ -167,9 +167,9 @@ component Counter
   @initial = 0           # Prop with default
   count := @initial      # Reactive state
   doubled ~= count * 2   # Derived value
-  
+
   inc: -> count += 1     # Method
-  
+
   render
     .counter
       button @click: @inc, "+"
