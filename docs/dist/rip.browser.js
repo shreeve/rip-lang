@@ -9302,7 +9302,7 @@ function compileToJS(source, options = {}) {
 }
 // src/browser.js
 var VERSION = "2.3.0";
-var BUILD_DATE = "2026-01-16@03:45:24GMT";
+var BUILD_DATE = "2026-01-16@03:50:49GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

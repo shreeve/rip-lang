@@ -527,8 +527,8 @@
   </div>
 
   <div class="tabs">
-    <button class="tab active" data-tab="compiler">Live Compiler</button>
-    <button class="tab" data-tab="demo">Live Demo</button>
+    <button class="tab active" data-tab="demo">Live Demo</button>
+    <button class="tab" data-tab="compiler">Live Compiler</button>
     <button class="tab" data-tab="repl">REPL Console</button>
   </div>
 
@@ -550,7 +550,7 @@
     </div>
 
     <!-- Demo Pane -->
-    <div class="pane" id="demo-pane">
+    <div class="pane active" id="demo-pane">
       <div class="compiler-container">
         <div class="editor-pane" id="demo-editor-left">
           <div class="pane-header">
@@ -644,7 +644,7 @@ Calculator.new().mount "#calc-mount"
     </div>
 
     <!-- Compiler Pane -->
-    <div class="pane active" id="compiler-pane">
+    <div class="pane" id="compiler-pane">
       <div class="compiler-container">
         <div class="editor-pane" id="editor-left">
           <div class="pane-header">
@@ -749,15 +749,18 @@ console.log "Domain:", domain</textarea>
     // Handle browser back/forward
     window.addEventListener('hashchange', () => {
       const hash = window.location.hash.slice(1);
-      if (['compiler', 'demo', 'repl'].includes(hash)) {
+      if (['demo', 'compiler', 'repl'].includes(hash)) {
         switchToTab(hash);
       }
     });
 
-    // Initialize from URL hash on page load
+    // Initialize from URL hash on page load (default to demo)
     const initialTab = window.location.hash.slice(1);
-    if (['compiler', 'demo', 'repl'].includes(initialTab)) {
+    if (['demo', 'compiler', 'repl'].includes(initialTab)) {
       switchToTab(initialTab);
+    } else {
+      // No hash - demo is default, run it
+      setTimeout(() => runDemo(), 50);
     }
 
     // Show page now that everything is initialized (prevents render flicker)
