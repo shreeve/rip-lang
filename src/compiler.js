@@ -1645,8 +1645,7 @@ export class CodeGenerator {
    */
   generateReadonly(head, rest, context, sexpr) {
     const [name, expr] = rest;
-    // Use raw variable name (don't auto-unwrap)
-    const varName = Array.isArray(name) ? name[1] : name;
+    const varName = typeof name === 'string' ? name : name.valueOf();
     const exprCode = this.generate(expr, 'value');
     return `const ${varName} = ${exprCode}`;
   }

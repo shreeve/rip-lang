@@ -3,8 +3,8 @@ Review the code to ensure it's correct, clear, consistent, concise, and efficien
 
 Does the code feel light and efficient? Would a GitHub user agree?
 
-bump the patch, build the browser, commit, and push
-bump the minor, set the patch to 0, build the browser, commit, and push
+bump the patch (including all source and documentation), build the browser, commit, and push
+bump the minor and set the patch to 0 (including all source and documentation), build the browser, commit, and push
 
 ==
 
