@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.5.1] - 2026-01-16
 
+### Template Enhancement
+
+**Hyphenated Attributes Work Directly**:
+```coffee
+render
+  # Before: needed quoted keys or spread syntax
+  i {"data-lucide": "search"}
+
+  # Now: just works!
+  i data-lucide: "search", aria-hidden: "true"
+  div data-testid: "container", aria-label: "Menu"
+  span data-foo-bar-baz: "multiple-hyphens-work"
+```
+
+The lexer now automatically converts hyphenated attribute names (like `data-*`, `aria-*`) into quoted strings, making HTML-style data attributes intuitive and clean.
+
+---
+
+## [2.5.0] - 2026-01-16
+
 ### Major Release - Parser Optimization + Complete Framework
 
 This release consolidates all improvements since 2.2.1 into a polished, well-documented package. Rip is now a complete language AND reactive framework in just 51KB (Brotli compressed).
