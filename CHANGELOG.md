@@ -7,6 +7,178 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-01-16
+
+### Major Release - Parser Optimization + Complete Framework
+
+This release consolidates all improvements since 2.2.1 into a polished, well-documented package. Rip is now a complete language AND reactive framework in just 51KB (Brotli compressed).
+
+---
+
+### 🚀 Parser Optimization
+
+**Interleaved Delta-Encoded Parse Table** - Major size reduction for the generated parser:
+- New format in `solar.rip`: `[count, Δkey₁, Δkey₂..., val₁, val₂...]` per state
+- **31% smaller Brotli** for parser alone (19.2KB → 13.2KB)
+- **17% faster module load** time
+- Identical runtime performance (same data structure after decode)
+- Solar parser generator now **250× faster** than Jison
+
+---
+
+### ✨ New Language Features
+
+**Ruby-Style Constructor Syntax**:
+```coffee
+# Both are equivalent
+counter = new Counter()
+counter = Counter.new()     # Ruby-style - elegant!
+
+# Works with arguments
+user = User.new("Alice", 30)
+
+# Chainable
+Counter.new().mount("#app")
+```
+
+**"Equal, Dammit!" Operator (`=!`)**:
+```coffee
+# Regular assignment → let (can reassign)
+host = "localhost"
+host = "example.com"    # OK
+
+# Equal, dammit! → const (can't reassign)
+API_URL =! "https://api.example.com"
+API_URL = "other"       # Error! const cannot be reassigned
+```
+Note: `=!` compiles to plain `const` - does NOT pull in the reactive runtime.
+
+**Smart Two-Way Binding**:
+```coffee
+# Automatically uses valueAsNumber for number/range inputs
+input type: "number", value <=> count    # No .valueAsNumber needed!
+input type: "range", value <=> volume    # Just works!
+```
+
+---
+
+### 🎨 Template & Component Improvements
+
+**Pug-Style Shorthand**:
+```coffee
+# Implicit div for class-only selectors
+.card             # → <div class="card">
+.btn.primary      # → <div class="btn primary">
+
+# Nested shorthand works correctly
+.container
+  .row
+    .col "Content"
+```
+
+**Dynamic Class Syntax**:
+```coffee
+div.("bg-white rounded-lg shadow-md")     # Static Tailwind classes
+button.(active && "bg-blue-500")          # Conditional classes
+```
+
+**Component Mount with Selectors**:
+```coffee
+# Both work
+Counter.new().mount(document.body)
+Counter.new().mount("#app")               # Selector string support
+```
+
+---
+
+### 🖥️ Browser REPL Enhancements
+
+**Live Demo Tab** (now default):
+- Interactive component demos
+- Temperature converter, counter examples
+- Real-time reactive updates
+
+**UI Improvements**:
+- Tab state persists in URL hash
+- No flash of wrong tab on page load
+- Consistent pane header heights
+- GitHub icon link in header
+
+**Demo Improvements**:
+- Shows `@prop` syntax for component props
+- Uses Ruby-style `.new()` syntax
+- Fat arrows for proper `this` binding
+
+---
+
+### 📚 Documentation Overhaul
+
+**Consolidated Documentation** - 13 files merged into 4 main docs:
+- `docs/GUIDE.md` - Language features, reactivity, templates, components
+- `docs/INTERNALS.md` - Compiler architecture, S-expressions, Solar
+- `docs/PHILOSOPHY.md` - Design principles, CoffeeScript comparison
+- `docs/BROWSER.md` - Browser usage, REPL, deployment
+
+**Kept Separate** (referenced from PHILOSOPHY.md):
+- `docs/WHY-NOT-COFFEESCRIPT.md` - The case against CoffeeScript
+- `docs/WHY-YES-RIP.md` - The case for Rip
+
+**Updated Statistics**:
+- ~14,000 LOC total (smaller than CoffeeScript's 17,760, yet includes full reactive framework)
+- 51KB browser bundle (compiler + reactive runtime + templates + components)
+- 1046 tests passing
+- Solar: ~1,000 LOC, 250× faster than Jison
+
+---
+
+### 🔧 Internal Improvements
+
+**Compiler Consolidation**:
+- Merged `codegen.js` into `compiler.js` (single file for all code generation)
+- Renamed `docs/CODEGEN.md` to `docs/COMPILER.md`
+
+**Project Cleanup**:
+- Deleted unused `src/runtime.js` (runtime now embedded in compiler output)
+- Deleted redundant `docs/demo.html`
+- Overhauled `AGENT.md` for accuracy
+- Added `notes.txt` to `.gitignore`
+
+**Bug Fixes**:
+- Fixed `<=>` two-way binding in components
+- Fixed reactive variable shadowing in function bodies
+- Fixed nested Pug-style shorthand in render blocks
+- Fixed `generateParam` bug
+- Consistent name handling in `generateReadonly`
+
+---
+
+### 📊 Updated Scores
+
+| Category | Score | Notes |
+|----------|-------|-------|
+| **Reactivity** | A+ | Fine-grained, signals, effects |
+| **Templates** | A | S-expressions, Pug shorthand |
+| **Components** | A | Props, lifecycle, context API |
+| **Performance** | A | 250× faster parser gen, 51KB bundle |
+
+---
+
+### Summary
+
+**What's in 51KB?**
+- Complete compiler (lexer, parser, code generator)
+- Reactive runtime (signals, derived values, effects)
+- Template engine (S-expression syntax, dynamic classes)
+- Component system (props, lifecycle, fine-grained updates)
+- Zero dependencies
+
+**Comparison**:
+- React (min+gzip): ~42KB (just the library, no compiler)
+- Vue (min+gzip): ~34KB (just the library, no compiler)
+- **Rip: 51KB (complete language + framework, runs anywhere!)**
+
+---
+
 ## [2.2.1] - 2026-01-15
 
 ### Added - Context API & Error Primitives
