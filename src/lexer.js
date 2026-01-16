@@ -3095,6 +3095,41 @@ Rewriter = (function() {
         if (!inRender) return 1;
 
         // ─────────────────────────────────────────────────────────────────────
+        // PHASE: Hyphenated attributes
+        // data-lucide: "search" → "data-lucide": "search"
+        // data-foo-bar: "x" → "data-foo-bar": "x"
+        // Combines IDENTIFIER - ... - PROPERTY chain into single STRING
+        // ─────────────────────────────────────────────────────────────────────
+        if (tag === 'IDENTIFIER' && !token.spaced) {
+          // Look ahead for pattern: IDENTIFIER -IDENTIFIER -IDENTIFIER... -PROPERTY
+          // All hyphens must be unspaced
+          let parts = [token[1]];
+          let j = i + 1;
+          while (j + 1 < tokens.length) {
+            const hyphen = tokens[j];
+            const nextPart = tokens[j + 1];
+            if (hyphen[0] === '-' && !hyphen.spaced &&
+                (nextPart[0] === 'IDENTIFIER' || nextPart[0] === 'PROPERTY')) {
+              parts.push(nextPart[1]);
+              j += 2;
+              // Stop if we found a PROPERTY (it's the last part before :)
+              if (nextPart[0] === 'PROPERTY') break;
+            } else {
+              break;
+            }
+          }
+          // Only transform if we found at least one hyphen AND ended with PROPERTY
+          if (parts.length > 1 && j > i + 1 && tokens[j - 1][0] === 'PROPERTY') {
+            // Combine into single STRING for quoted key
+            token[0] = 'STRING';
+            token[1] = `"${parts.join('-')}"`;
+            // Remove all the collected tokens (hyphens and identifiers)
+            tokens.splice(i + 1, j - i - 1);
+            return 1;
+          }
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
         // PHASE 0: Implicit div for class-only selectors
         // .card → div.card (insert 'div' before leading dot)
         // Only handles static classes (.PROPERTY), dynamic classes (.()) handled in PHASE 4

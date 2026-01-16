@@ -750,12 +750,12 @@ render
   # Boolean attributes
   button disabled: isLoading
 
-  # Hyphenated attributes (data-*, aria-*) need quoted keys
-  i {"data-lucide": "search", "aria-hidden": "true"}
-  div {"data-testid": "container"}
+  # Hyphenated attributes work directly!
+  i data-lucide: "search", aria-hidden: "true"
+  div data-testid: "container", aria-label: "Menu"
 
   # Mix regular and hyphenated
-  i class: "icon", {"data-lucide": "search"}
+  i class: "icon", data-lucide: "search"
 
   # Spread attributes from variable
   div ...props
@@ -1960,15 +1960,16 @@ input type: "text", placeholder: "Enter name"
 img src: "/logo.png", alt: "Logo", width: 200
 a href: "/home", target: "_blank", "Go Home"
 
-# HYPHENATED attributes (data-*, aria-*) need quoted keys in object:
-i {"data-lucide": "search", "data-size": "16"}
-div {"data-testid": "container", "aria-label": "Menu"}
+# Hyphenated attributes work directly in templates!
+i data-lucide: "search", data-size: "16"
+div data-testid: "container", aria-label: "Menu"
+span data-foo-bar-baz: "multiple-hyphens-work"
 
-# Mix regular and quoted keys:
-i class: "icon", {"data-lucide": "search"}
-div id: "main", {"data-testid": "container"}
+# Mix with regular attributes
+i class: "icon", data-lucide: "search"
+div id: "main", data-testid: "container", aria-hidden: "true"
 
-# Any non-hyphenated attribute works directly
+# All attributes work
 svg viewBox: "0 0 24 24", width: 16, height: 16
 input type: "email", required: true
 ```
