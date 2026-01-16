@@ -25,6 +25,27 @@
 15. [JavaScript Interop](#15-javascript-interop)
 16. [Common Patterns](#16-common-patterns)
 17. [Quick Reference](#17-quick-reference)
+18. [Common Mistakes & Clarifications](#18-common-mistakes--clarifications)
+
+---
+
+# CRITICAL: Template Syntax Rules
+
+**Before reading further, understand these rules:**
+
+```coffee
+# ✅ CORRECT - CSS selector style, NO SPACES
+div.card.active
+.sidebar.collapsed        # Implicit div
+button.btn.primary
+span.badge.("highlight" if new)
+
+# ❌ WRONG - Spaces break the selector chain
+div .card .active         # WRONG! This is nested elements
+.sidebar .collapsed       # WRONG! This creates TWO divs
+```
+
+**Templates use CSS selector syntax. No spaces between tag/classes/id.**
 
 ---
 
@@ -1851,6 +1872,559 @@ rip
 
 # Install
 bun add -g rip-lang
+```
+
+---
+
+# 18. Common Mistakes & Clarifications
+
+This section addresses frequently asked questions and common mistakes.
+
+## Template Syntax Mistakes
+
+### ❌ WRONG: Spaces in Selectors
+
+```coffee
+# ❌ WRONG - spaces create NESTED elements!
+div .card .active
+  # This creates: <div><div class="card"><div class="active">
+
+# ✅ CORRECT - CSS selector style, NO spaces
+div.card.active
+  # This creates: <div class="card active">
+```
+
+### Implicit Div
+
+```coffee
+# When you start with . or #, div is implicit
+.card.active           # <div class="card active">
+#main.container        # <div id="main" class="container">
+.sidebar               # <div class="sidebar">
+
+# It's ALWAYS a div. Context doesn't change it.
+# If you want a span, say span:
+span.badge             # <span class="badge">
+```
+
+### Dynamic Classes with `.()` 
+
+```coffee
+# The .() syntax is for dynamic/conditional classes
+# It works on ANY element, not just div
+
+div.card.("active" if isActive)
+span.badge.("new" if isNew)
+button.btn.("primary", "large")
+
+# You CAN mix static and dynamic:
+div.card.static-class.("dynamic" if condition)
+button.btn.primary.("loading" if loading, size)
+
+# Multiple conditions:
+div.("active" if a, "hidden" if b, "large" if c)
+
+# With variables:
+div.(className, extraClass, "fixed")
+```
+
+### ❌ WRONG: Conditional Class Syntax
+
+```coffee
+# ❌ WRONG - this is NOT valid
+div(.selected: isSelected)
+div.card(.active: isActive)
+
+# ✅ CORRECT - use string + if
+div.("selected" if isSelected)
+div.card.("active" if isActive)
+
+# ✅ CORRECT - object syntax for multiple
+div.({ active: isActive, disabled: isDisabled })
+```
+
+## Attributes
+
+### Basic Attribute Syntax
+
+```coffee
+# Attributes use key: value syntax (like object properties)
+input type: "text", placeholder: "Enter name"
+img src: "/logo.png", alt: "Logo", width: 200
+a href: "/home", target: "_blank", "Go Home"
+
+# Data attributes - just use the full name
+div data-id: item.id, data-testid: "container"
+i data-lucide: "search"
+
+# Any attribute works
+svg viewBox: "0 0 24 24", width: 16, height: 16
+input type: "email", required: true, autocomplete: "email"
+```
+
+### Dynamic Attribute Values
+
+```coffee
+# Variables work directly
+img src: user.avatar, alt: user.name
+a href: "/users/#{user.id}", "View Profile"
+div title: tooltip, data-count: items.length
+
+# Expressions work
+input disabled: isLoading or !isValid
+div class: getClassName()
+```
+
+### Boolean Attributes
+
+```coffee
+# true = attribute present, false = attribute absent
+button disabled: true       # <button disabled>
+button disabled: false      # <button>
+input required: isRequired  # present if truthy
+option selected: isDefault
+details open: expanded
+```
+
+### Multiple Attributes (Indented)
+
+```coffee
+input
+  type: "email"
+  placeholder: "you@example.com"
+  required: true
+  autocomplete: "email"
+  @input: handleInput
+  @keydown.enter: submit
+```
+
+## Text and Interpolation
+
+### ❌ WRONG: Using `{}`
+
+```coffee
+# ❌ WRONG - JSX-style braces don't work
+span {count}
+div {user.name}
+
+# ✅ CORRECT - use #{} for interpolation
+span "Count: #{count}"
+div "Hello, #{user.name}!"
+
+# ✅ CORRECT - bare variable for just the value
+span count
+div user.name
+```
+
+### Text Content Options
+
+```coffee
+# String literal (with interpolation)
+span "Hello, #{name}!"
+h1 "Welcome to #{app.name}"
+
+# Bare variable (just the value)
+span count
+td item.price
+li todo.text
+
+# Expression
+span items.length
+td formatCurrency(price)
+
+# Multi-part text (use multiple children)
+p
+  "Hello, "
+  strong name
+  "! Welcome back."
+```
+
+## Reactivity Clarifications
+
+### When to Use `:=` vs `~=` vs `=`
+
+```coffee
+# := (Signal) - state that changes and triggers updates
+count := 0              # User can change this
+items := []             # Array that grows/shrinks
+isOpen := false         # Toggle state
+
+# ~= (Derived) - computed FROM other signals
+doubled ~= count * 2              # Always count * 2
+total ~= items.reduce(sum, 0)     # Always sum of items
+isEmpty ~= items.length is 0      # Always tracks length
+
+# = (Regular) - doesn't trigger updates
+temp = calculate()      # One-time calculation
+config = loadConfig()   # Static value
+i = 0                   # Loop variable
+
+# =! (Const) - immutable, never changes
+API_URL =! "https://..."
+MAX_SIZE =! 100
+```
+
+### Can Derived Depend on Derived?
+
+```coffee
+# YES! Derived values can depend on other derived values
+count := 0
+doubled ~= count * 2
+quadrupled ~= doubled * 2    # Depends on doubled
+message ~= "#{count} × 4 = #{quadrupled}"
+
+count = 5
+# doubled = 10, quadrupled = 20, message = "5 × 4 = 20"
+```
+
+### What Triggers Re-render?
+
+```coffee
+# Writing to a SIGNAL triggers updates
+count := 0
+count = 5      # ← This triggers dependent derived/effects/UI
+
+# Derived values update automatically (don't write to them)
+doubled ~= count * 2    # Auto-updates when count changes
+
+# Regular variables do NOT trigger updates
+temp = 5
+temp = 10      # ← Nothing happens, no reactivity
+```
+
+## Component Clarifications
+
+### All Lifecycle Hooks
+
+```coffee
+component MyComponent
+  # Called after first render, DOM is available
+  mounted: ->
+    console.log "Mounted!"
+    inputEl.focus()
+    fetchData()
+
+  # Called before component is removed
+  unmounted: ->
+    console.log "Unmounting!"
+    cleanup()
+
+  # Called after any reactive update
+  updated: ->
+    console.log "Updated!"
+
+  # Note: There is NO beforeMount hook
+```
+
+### Props Syntax
+
+```coffee
+component Button
+  @label               # Required prop (error if missing)
+  @icon?               # Optional prop (undefined if missing)
+  @variant = "default" # Optional with default value
+  @size = "md"
+  @onClick             # Callback prop
+  @children            # Children/slot content
+  @...rest             # Capture all other props
+
+  render
+    button.btn.(variant).(size) @click: @onClick, ...@rest
+      @icon if @icon
+      @label
+      @children
+```
+
+### Passing Props to Components
+
+```coffee
+# In parent's render block:
+render
+  # Named props
+  Button label: "Save", variant: "primary", onClick: @handleSave
+
+  # With children
+  Card title: "My Card"
+    p "This becomes @children"
+    p "Multiple elements work"
+
+  # Spread props
+  Input ...@inputProps, class: "extra"
+```
+
+### The `mount` Method
+
+```coffee
+# mount is a METHOD on component instances, not a global function
+
+# Create instance, then call mount
+counter = Counter.new(initial: 5)
+counter.mount "#app"                    # CSS selector
+counter.mount document.body             # DOM element
+counter.mount document.getElementById("app")
+
+# Or chain it
+Counter.new(initial: 5).mount "#app"
+
+# ❌ WRONG - mount is not a standalone function
+mount Counter, "#app"
+mount(Counter, "#app")
+```
+
+### Children and Slots
+
+```coffee
+component Card
+  @title
+  @children      # Declare to receive children
+
+  render
+    div.card
+      h2 @title
+      div.card-body
+        @children    # Render children here
+
+# Usage - indented content becomes @children
+Card title: "Info"
+  p "First paragraph"
+  p "Second paragraph"
+  ul
+    li "Item 1"
+    li "Item 2"
+```
+
+### Named Slots
+
+```coffee
+component Layout
+  @header?       # Optional named slot
+  @footer?       # Optional named slot
+  @children      # Default slot
+
+  render
+    div.layout
+      header @header if @header
+      main @children
+      footer @footer if @footer
+
+# Usage
+Layout
+  header:
+    h1 "Site Title"
+    nav ...
+  footer:
+    p "© 2024"
+  
+  # Default content → @children
+  p "Main content here"
+```
+
+## Template Control Flow
+
+### Loops with Index
+
+```coffee
+render
+  # Basic loop
+  ul
+    for item in items
+      li item.name
+
+  # With index
+  ol
+    for item, index in items
+      li "#{index + 1}. #{item.name}"
+
+  # With key (ALWAYS use for lists that change!)
+  ul
+    for item in items, key: item.id
+      li item.name
+
+  # Index AND key
+  ul
+    for item, i in items, key: item.id
+      li class: ("even" if i % 2 is 0)
+        item.name
+```
+
+### Conditionals
+
+```coffee
+render
+  # Simple if
+  if loading
+    Spinner()
+
+  # If/else
+  if error
+    ErrorMessage message: error
+  else
+    Content()
+
+  # If/else if/else
+  if loading
+    Spinner()
+  else if error
+    ErrorMessage message: error
+  else if items.length is 0
+    EmptyState()
+  else
+    ItemList items: items
+
+  # Inline conditional
+  span.badge "Admin" if user.admin
+  span.badge "New" if item.isNew
+  div.warning "Unsaved" unless saved
+```
+
+## Imports Between .rip Files
+
+```coffee
+# YES, imports work between .rip files!
+
+# utils.rip
+export def formatDate(date)
+  date.toISOString().split("T")[0]
+
+export config = { timeout: 5000 }
+
+export default { formatDate, config }
+
+# app.rip
+import { formatDate, config } from "./utils.rip"
+import utils from "./utils.rip"
+
+console.log formatDate(new Date())
+console.log utils.config.timeout
+```
+
+### Browser vs Server
+
+```coffee
+# Server (Bun/Node): imports work directly
+import { helper } from "./utils.rip"
+
+# Browser: Rip compiles to JS, so imports become JS imports
+# The .rip extension is kept in the import statement
+# Your bundler/server needs to handle .rip → .js mapping
+```
+
+## Async Components
+
+### Async in Lifecycle
+
+```coffee
+component UserProfile
+  @userId
+  user := null
+  loading := true
+  error := null
+
+  # mounted can be async (use ! for await)
+  mounted: ->
+    try
+      user = Api.getUser!(@userId)
+    catch e
+      error = e.message
+    finally
+      loading = false
+
+  render
+    div
+      if loading
+        div.spinner "Loading..."
+      else if error
+        div.error error
+      else
+        div.profile
+          h1 user.name
+          p user.email
+```
+
+### Loading States Pattern
+
+```coffee
+component DataLoader
+  @url
+  data := null
+  loading := true
+  error := null
+
+  mounted: ->
+    try
+      response = fetch!(@url)
+      data = response.json!
+    catch e
+      error = e.message
+    finally
+      loading = false
+
+  render
+    div
+      if loading
+        slot name: "loading"
+          div "Loading..."    # Default loading
+      else if error
+        slot name: "error"
+          div.error error     # Default error
+      else
+        @children             # Render children with data
+```
+
+## Raw HTML (Escape Hatch)
+
+```coffee
+# For injecting raw HTML (use carefully - XSS risk!)
+# Use the innerHTML attribute
+
+div innerHTML: "<strong>Bold</strong> and <em>italic</em>"
+
+# For icons/SVG from strings
+div.icon innerHTML: iconSvgString
+
+# ⚠️ NEVER use with user input without sanitization!
+div innerHTML: sanitize(userContent)
+```
+
+## Quick Syntax Reference
+
+```coffee
+# SELECTORS (no spaces!)
+div.class1.class2           # <div class="class1 class2">
+.class1.class2              # <div class="class1 class2"> (implicit div)
+#id.class                   # <div id="id" class="class">
+span.badge                  # <span class="badge">
+
+# DYNAMIC CLASSES
+div.("active" if x)         # Conditional
+div.(className)             # Variable
+div.static.("dynamic" if x) # Mixed
+div.({ a: boolA, b: boolB }) # Object syntax
+
+# ATTRIBUTES
+tag key: value              # Any attribute
+tag data-foo: "bar"         # Data attributes
+tag disabled: bool          # Boolean attributes
+
+# TEXT
+tag "static text"           # String
+tag "hello #{name}"         # Interpolation (NOT {name}!)
+tag variable                # Bare variable
+tag expression              # Expression result
+
+# EVENTS
+tag @click: handler         # Event handler
+tag @click: @method         # Component method
+tag @click.prevent: fn      # With modifier
+tag @keydown.enter: fn      # Key modifier
+
+# BINDING
+input value <=> variable    # Two-way binding
+
+# CHILDREN (indentation)
+parent
+  child1
+  child2
 ```
 
 ---
