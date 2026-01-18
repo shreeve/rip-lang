@@ -97,8 +97,8 @@ Rip Source → Lexer → Parser → S-Expressions → Codegen → JavaScript
 ["def", "name", params, body]  // Function definition
 ["->", params, body]           // Arrow function
 ["if", condition, then, else]  // Conditional
-["signal", name, expr]         // Reactive signal (:=)
-["derived", name, expr]        // Derived value (~=)
+["state", name, expr]          // Reactive state (:=)
+["computed", name, expr]       // Computed value (~=)
 ["component", name, body]      // Component definition
 ```
 
@@ -122,7 +122,7 @@ static GENERATORS = {
   'if': 'generateIf',
   'class': 'generateClass',
   '+': 'generateBinaryOp',
-  'signal': 'generateSignal',
+  'state': 'generateState',
   // ... all node types
 };
 ```
@@ -149,12 +149,13 @@ if (Array.isArray(body) && body[0] === 'block') {
 
 Rip provides reactivity as **language-level operators**, not library imports:
 
-| Operator | Name | Output |
-|----------|------|--------|
-| `:=` | Signal | `const x = __signal(value)` |
-| `~=` | Derived | `const x = __computed(() => expr)` |
-| `=!` | Equal, dammit! | `const x = value` (just const) |
-| `effect` | Effect | `__effect(() => { ... })` |
+| Operator | Name | Mnemonic | Output |
+|----------|------|----------|--------|
+| `=` | Assign | "gets value" | `let x; x = value` |
+| `:=` | State | "holds state" | `const x = __state(value)` |
+| `~=` | Computed | "always equals" | `const x = __computed(() => expr)` |
+| `=!` | Readonly | "equals, dammit!" | `const x = value` (just const) |
+| `effect` | Effect | — | `__effect(() => { ... })` |
 
 The reactive runtime is embedded in compiler.js and only included when needed.
 
@@ -166,7 +167,7 @@ The reactive runtime is embedded in compiler.js and only included when needed.
 component Counter
   @initial = 0           # Prop with default
   count := @initial      # Reactive state
-  doubled ~= count * 2   # Derived value
+  doubled ~= count * 2   # Computed value
 
   inc: -> count += 1     # Method
 
@@ -306,12 +307,12 @@ bun --no-cache test/runner.js test/rip
 |----------|------|---------|
 | `!` | Dammit | `fetchData!` → calls AND awaits |
 | `!` | Void | `def process!` → suppresses return |
-| `=!` | Equal, dammit! | `MAX =! 100` → const declaration |
+| `=!` | Readonly | `MAX =! 100` → const declaration ("equals, dammit!") |
 | `!?` | Otherwise | `val !? 5` → default if undefined |
 | `//` | Floor div | `7 // 2` → 3 |
 | `%%` | True mod | `-1 %% 3` → 2 |
-| `:=` | Signal | `count := 0` → reactive state |
-| `~=` | Derived | `doubled ~= count * 2` → computed |
+| `:=` | State | `count := 0` → reactive state |
+| `~=` | Computed | `doubled ~= count * 2` → computed |
 | `<=>` | Bind | `value <=> num` → two-way binding |
 | `=~` | Match | `str =~ /pat/` → Ruby-style regex |
 | `.new()` | Constructor | `Counter.new()` → Ruby-style new |

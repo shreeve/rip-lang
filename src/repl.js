@@ -101,7 +101,7 @@ export class RipREPL {
     // This ensures all reactive code shares the same __currentEffect, etc.
     const runtimeCode = `
 let __currentEffect = null, __pendingEffects = new Set();
-function __signal(v) {
+function __state(v) {
   const subs = new Set();
   let notifying = false, locked = false, dead = false;
   const s = {

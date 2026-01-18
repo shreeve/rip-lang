@@ -24,8 +24,8 @@ Rip is a modern reactive language that compiles to JavaScript. It takes the eleg
 **The language IS the framework.** Unlike React, Vue, or Svelte where reactivity comes from libraries or compiler magic, Rip's reactive features are **language-level operators**:
 
 ```coffee
-count := 0              # Signal (reactive state)
-doubled ~= count * 2    # Derived (auto-updates)
+count := 0              # State (reactive value)
+doubled ~= count * 2    # Computed (auto-updates)
 effect -> log doubled   # Effect (side effects)
 ```
 
@@ -34,7 +34,7 @@ No imports. No hooks. No dependency arrays. Just write code.
 The compiler is completely standalone with **zero dependencies**, and it's self-hosting: Rip compiles itself. At ~14,000 lines of code, it's smaller than CoffeeScript while including a complete reactive framework.
 
 **What makes Rip different:**
-- **Reactive primitives** — `:=` signals, `~=` derived values, `effect` blocks as syntax
+- **Reactive primitives** — `:=` state, `~=` computed values, `effect` blocks as syntax
 - **Components as syntax** — `component Counter` with props, lifecycle, fine-grained DOM updates
 - **Templates** — Pug-style HTML in `render` blocks, two-way binding with `<=>`
 - **Modern output** — ES2022 with native classes, `?.`, `??`, modules
@@ -150,11 +150,13 @@ fn?(arg)                 # Safe call
 
 ### Reactivity (Built-in)
 
-| Feature | Example | What it does |
-|---------|---------|--------------|
-| **Signal `:=`** | `count := 0` | Creates reactive state container |
-| **Derived `~=`** | `doubled ~= count * 2` | Auto-updates when dependencies change |
-| **Effect** | `effect -> log x` | Runs whenever referenced signals change |
+| Operator | Mnemonic | Example | What it does |
+|----------|----------|---------|--------------|
+| `=` | "gets value" | `x = 5` | Regular assignment |
+| `:=` | "holds state" | `count := 0` | Creates reactive state container |
+| `~=` | "always equals" | `doubled ~= count * 2` | Auto-updates when dependencies change |
+| `=!` | "equals, dammit!" | `MAX =! 100` | Readonly constant |
+| `effect` | — | `effect -> log x` | Runs whenever referenced state changes |
 
 ### Components & Templates
 
@@ -168,7 +170,7 @@ fn?(arg)                 # Safe call
 | **Event handlers** | `@click: handler` | DOM event binding |
 | **Lifecycle** | `mounted:`, `unmounted:` | Component lifecycle hooks |
 | **Context API** | `setContext`, `getContext` | Pass data down component tree |
-| **Fine-grained** | No virtual DOM | Surgical DOM updates via signals |
+| **Fine-grained** | No virtual DOM | Surgical DOM updates via reactivity |
 
 **→ 26 major enhancements over CoffeeScript!**
 
@@ -179,8 +181,8 @@ fn?(arg)                 # Safe call
 **The language IS the framework.** Reactivity is built into Rip's syntax—not a library you import, not hooks you call. Just operators.
 
 ```coffee
-count := 0                    # Signal — reactive state
-doubled ~= count * 2          # Derived — auto-updates when count changes
+count := 0                    # State — reactive value
+doubled ~= count * 2          # Computed — auto-updates when count changes
 effect -> console.log doubled # Effect — runs when dependencies change
 
 count = 5   # doubled becomes 10, effect logs "10"
@@ -201,10 +203,12 @@ useEffect(() => console.log(doubled), [doubled]);
 | Concept | React | Vue | Solid | Rip |
 |---------|-------|-----|-------|-----|
 | State | `useState()` | `ref()` | `createSignal()` | `x := 0` |
-| Derived | `useMemo()` | `computed()` | `createMemo()` | `x ~= y * 2` |
+| Computed | `useMemo()` | `computed()` | `createMemo()` | `x ~= y * 2` |
 | Effect | `useEffect()` | `watch()` | `createEffect()` | `effect ->` |
 
 No imports. No hooks. No dependency arrays. Just operators that do what they say.
+
+**Under the hood:** Rip's reactivity system rivals Vue and Solid — auto-tracking, lazy computed values, fine-grained updates — in just ~200 lines of runtime code. [Deep dive →](docs/REACTIVITY.md)
 
 [Full reactivity guide →](docs/GUIDE.md#reactivity)
 
@@ -219,8 +223,8 @@ component Counter
   @label = "Count"          # Prop with default
   @initial = 0              # Another prop
 
-  count := @initial         # Reactive state (signal)
-  doubled ~= count * 2      # Derived value (auto-updates)
+  count := @initial         # Reactive state
+  doubled ~= count * 2      # Computed value (auto-updates)
 
   inc: -> count += 1        # Methods
   dec: -> count -= 1
@@ -229,7 +233,7 @@ component Counter
     div.counter
       h2 @label
       span.value count
-      span.derived " (×2 = #{doubled})"
+      span.computed " (×2 = #{doubled})"
       button @click: @dec, "−"
       button @click: @inc, "+"
 
@@ -239,7 +243,7 @@ Counter.new(label: "Score", initial: 10).mount "#app"
 
 **What you get:**
 - **Props:** `@prop` (required), `@prop?` (optional), `@prop = default`
-- **State:** Signals (`:=`) and derived values (`~=`) just work
+- **State:** State (`:=`) and computed values (`~=`) just work
 - **Lifecycle:** `mounted:`, `unmounted:`, `updated:`
 - **Context:** `setContext`/`getContext` for deep prop passing
 - **Fine-grained updates:** Only changed DOM nodes update—no virtual DOM diffing
@@ -250,7 +254,7 @@ Counter.new(label: "Score", initial: 10).mount "#app"
 
 ## Templates
 
-Indentation-based HTML with Pug-style selectors. Templates compile to **fine-grained DOM operations**—when a signal changes, only the affected text node or attribute updates. No virtual DOM, no diffing, no wasted work.
+Indentation-based HTML with Pug-style selectors. Templates compile to **fine-grained DOM operations**—when state changes, only the affected text node or attribute updates. No virtual DOM, no diffing, no wasted work.
 
 ```coffee
 render
@@ -326,7 +330,7 @@ CoffeeScript showed us beautiful syntax. Rip takes that vision further:
 | | Rip | CoffeeScript |
 |---|---|---|
 | **Output** | ES2022 (classes, `?.`, `??`) | ES5 (var, prototypes) |
-| **Reactivity** | Built-in (signals, effects, templates) | None |
+| **Reactivity** | Built-in (state, computed, effects) | None |
 | **Dependencies** | Zero | Multiple |
 | **Self-hosting** | Yes (compiles itself) | No |
 | **Codebase** | ~14,000 LOC | 17,760 LOC |
@@ -362,7 +366,7 @@ case '+': return `(${gen(left)} + ${gen(right)})`;
 | Compiler | 10,346 LOC | 7,965 LOC |
 | **Total** | **17,760 LOC** | **~14,000 LOC** |
 
-Result: Smaller than CoffeeScript, yet includes a complete **reactive framework** with signals, derived values, effects, templates, and components.
+Result: Smaller than CoffeeScript, yet includes a complete **reactive framework** with state, computed values, effects, templates, and components.
 
 ---
 
@@ -395,6 +399,7 @@ bun run browser        # Build browser bundle
 |-------|-------------|
 | [AGENT.md](AGENT.md) | Complete developer/AI guide |
 | [docs/GUIDE.md](docs/GUIDE.md) | Language guide (reactivity, templates, components) |
+| [docs/REACTIVITY.md](docs/REACTIVITY.md) | Reactivity deep dive & framework comparison |
 | [docs/INTERNALS.md](docs/INTERNALS.md) | Compiler architecture, S-expressions |
 | [docs/BROWSER.md](docs/BROWSER.md) | Browser usage, REPL |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |

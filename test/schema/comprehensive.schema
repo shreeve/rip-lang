@@ -1,0 +1,190 @@
+# Comprehensive Schema Test
+# Tests all major features of the schema language
+
+@import "./common.schema"
+
+# ============================================================================
+# Enums
+# ============================================================================
+
+@enum Role: admin, user, guest
+
+@enum Status
+  pending: 0
+  active: 1
+  suspended: 2
+  deleted: 3
+
+@enum Priority
+  low: "low"
+  medium: "medium"
+  high: "high"
+
+# ============================================================================
+# Mixins (reusable field groups)
+# ============================================================================
+
+@mixin Timestamps
+  createdAt!: datetime
+  updatedAt!: datetime
+
+@mixin Auditable
+  @include Timestamps
+  createdBy?: integer
+  updatedBy?: integer
+
+# ============================================================================
+# Types (no database backing)
+# ============================================================================
+
+@type Address
+  street!: string, [1, 200]
+  city!: string, [1, 100]
+  state!: string, [2, 2]
+  zip!: string, [5, 10]
+  country: string, ["US"]
+
+@type ContactInfo
+  email?: email
+  phone?: string
+  fax?: string
+
+@type PersonName
+  first!: string, [1, 50]
+  middle?: string, [0, 50]
+  last!: string, [1, 50]
+
+# ============================================================================
+# Models (database-backed)
+# ============================================================================
+
+@model User
+  # Basic fields with modifiers
+  name!: string, [1, 100]
+  email!#: email
+  password!: string, [8, 100], { writeOnly: true }
+
+  # Enum with default
+  role: Role, [user]
+  status: Status, [active]
+
+  # Optional fields
+  avatar?: string
+  bio?: text, [0, 1000]
+
+  # Nested types
+  address?: Address
+  contact?: ContactInfo
+
+  # JSON and arrays
+  settings: json, [{}]
+  tags: string[]
+
+  # Booleans with defaults
+  active: boolean, [true]
+  verified: boolean, [false]
+
+  # Directives
+  @timestamps
+  @softDelete
+
+  # Indexes
+  @index email#
+  @index [role, status]
+  @index [createdAt]
+
+  # Relationships
+  @belongs_to Organization, { optional: true }
+  @has_many Post
+  @has_many Comment
+
+  # Computed fields
+  @computed
+    displayName: -> @name
+    isAdmin: -> @admin
+    fullAddress: -> @street
+
+  # Validations
+  @validate
+    password: -> @valid
+    email: -> @valid
+
+@model Post
+  title!: string, [1, 200]
+  slug!#: string, [1, 200]
+  content!: text
+  excerpt?: text, [0, 500]
+  published: boolean, [false]
+  publishedAt?: datetime
+  viewCount: integer, [0]
+
+  @belongs_to User
+  @has_many Comment
+
+  @timestamps
+  @softDelete
+
+  @index [userId, published]
+  @index slug#
+
+@model Comment
+  content!: text, [1, 5000]
+  approved: boolean, [false]
+
+  @belongs_to Post
+  @belongs_to User
+
+  @timestamps
+  @softDelete
+
+# ============================================================================
+# Widgets (UI components)
+# ============================================================================
+
+@widget Table
+  selectionMode: string, ["single"]
+  sortable: boolean, [true]
+  filterable: boolean, [false]
+  pageSize: integer, [25]
+
+  @events onSelect, onSort, onFilter, onPageChange
+
+@widget Form
+  layout: string, ["vertical"]
+  labelWidth: string, ["120px"]
+
+  @events onSubmit, onReset, onValidate
+
+# ============================================================================
+# Forms (model + layout)
+# ============================================================================
+
+@form UserForm: User
+  name { x: 0, y: 0, span: 2 }
+  email { x: 0, y: 1 }
+  role { x: 1, y: 1, widget: "select" }
+  bio { x: 0, y: 2, span: 2, widget: "textarea" }
+
+  @actions
+    save { label: "Save", primary: true }
+    cancel { label: "Cancel" }
+
+  @events onSubmit, onCancel
+
+# ============================================================================
+# State (reactive state management)
+# ============================================================================
+
+@state AppState
+  currentUser?: User
+  theme: string, ["light"]
+  sidebarOpen: boolean, [true]
+
+  @computed
+    isLoggedIn: -> @loggedIn
+    userCount: -> @count
+
+  @actions
+    login { async: true }
+    logout {}
+    toggleSidebar {}

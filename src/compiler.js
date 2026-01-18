@@ -5,7 +5,7 @@
  *
  * Architecture:
  * - Lexer (tokenize) → Tokens
- * - Parser (parse) → S-expressions  
+ * - Parser (parse) → S-expressions
  * - CodeGenerator (compile) → JavaScript
  *
  * See docs/COMPILER.md for complete mapping of grammar → sexp → code
@@ -202,8 +202,8 @@ export class CodeGenerator {
     'return': 'generateReturn',
 
     // Reactive primitives
-    'signal': 'generateSignal',
-    'derived': 'generateDerived',
+    'state': 'generateState',
+    'computed': 'generateComputed',
     'readonly': 'generateReadonly',
     'effect': 'generateEffect',
 
@@ -323,7 +323,7 @@ export class CodeGenerator {
     }
 
     // Reactive assignments declare their own const - track them but don't add to programVars
-    if (head === 'signal' || head === 'derived' || head === 'readonly') {
+    if (head === 'state' || head === 'computed' || head === 'readonly') {
       const [target] = rest;
       const varName = typeof target === 'string' ? target : target.valueOf();
       if (!this.reactiveVars) this.reactiveVars = new Set();
@@ -621,7 +621,7 @@ export class CodeGenerator {
       // The ! is only meaningful at CALL sites, not identifier references
       // e.g., `x = fetchData` assigns the function, `x = fetchData!` calls it
 
-      // Auto-unwrap reactive variables (signals/computed) by adding .value
+      // Auto-unwrap reactive variables (state/computed) by adding .value
       if (this.reactiveVars?.has(sexpr) && !this.suppressReactiveUnwrap) {
         return `${sexpr}.value`;
       }
@@ -1603,11 +1603,11 @@ export class CodeGenerator {
   //-------------------------------------------------------------------------
 
   /**
-   * Generate reactive signal (:=)
-   * Pattern: ["signal", name, expression]
-   * Output: const name = __signal(expression)
+   * Generate reactive state (:=)
+   * Pattern: ["state", name, expression]
+   * Output: const name = __state(expression)
    */
-  generateSignal(head, rest, context, sexpr) {
+  generateState(head, rest, context, sexpr) {
     const [name, expr] = rest;
     this.usesReactivity = true;
     // Use raw name (don't auto-unwrap for declaration)
@@ -1616,15 +1616,15 @@ export class CodeGenerator {
     // Track this variable as reactive for auto-unwrapping (already done in collectProgramVariables)
     if (!this.reactiveVars) this.reactiveVars = new Set();
     this.reactiveVars.add(varName);
-    return `const ${varName} = __signal(${exprCode})`;
+    return `const ${varName} = __state(${exprCode})`;
   }
 
   /**
-   * Generate derived value (~=)
-   * Pattern: ["derived", name, expression]
+   * Generate computed value (~=)
+   * Pattern: ["computed", name, expression]
    * Output: const name = __computed(() => expression)
    */
-  generateDerived(head, rest, context, sexpr) {
+  generateComputed(head, rest, context, sexpr) {
     const [name, expr] = rest;
     this.usesReactivity = true;
     // Track this variable as reactive for auto-unwrapping
@@ -1709,8 +1709,8 @@ export class CodeGenerator {
     if (Array.isArray(key) && key[0] === '.' && key[1] === 'this' && typeof key[2] === 'string') {
       return { eventName: key[2], modifiers: [], handler: this.generate(value, 'value') };
     }
-    // Pattern 2: [@event.modifier] → ["computed", propertyChain]
-    if (Array.isArray(key) && key[0] === 'computed') {
+    // Pattern 2: [@event.modifier] → ["dynamicKey", propertyChain]
+    if (Array.isArray(key) && key[0] === 'dynamicKey') {
       const { eventName, modifiers } = this.extractEventChain(key[1]);
       if (eventName) {
         return { eventName, modifiers, handler: this.generate(value, 'value') };
@@ -1816,11 +1816,11 @@ export class CodeGenerator {
         key.endsWith(CodeGenerator.BIND_SUFFIX)) {
       prop = key.slice(CodeGenerator.BIND_PREFIX.length, -CodeGenerator.BIND_SUFFIX.length);
     }
-    // Pattern 2 (legacy): ["computed", [".", [".", "this", "bind"], "propName"]]
-    else if (Array.isArray(key) && key[0] === 'computed') {
+    // Pattern 2 (legacy): ["dynamicKey", [".", [".", "this", "bind"], "propName"]]
+    else if (Array.isArray(key) && key[0] === 'dynamicKey') {
       const chain = key[1];
       if (!Array.isArray(chain) || chain[0] !== '.') return null;
-      
+
       const [, inner, propName] = chain;
       if (!Array.isArray(inner) || inner[0] !== '.' || inner[1] !== 'this' || inner[2] !== 'bind') {
         return null;
@@ -1830,10 +1830,10 @@ export class CodeGenerator {
     else {
       return null;
     }
-    
+
     // Generate variable expression
     const varName = this.generate(value, 'value');
-    
+
     // Determine the right event and value accessor based on prop/tag
     let event, valueAccessor;
 
@@ -1860,7 +1860,7 @@ export class CodeGenerator {
       event = 'oninput';
       valueAccessor = `e.target.${prop}`;
     }
-    
+
     return {
       prop,
       event,
@@ -1893,53 +1893,134 @@ export class CodeGenerator {
   /**
    * Generate style block (scoped CSS)
    * Pattern: ["style", block] or ["style", "global", block]
-   * Note: Style blocks are currently a stub - CSS processing TBD
+   * Note: Outside of components, style blocks are standalone
    */
   generateStyle(head, rest, context, sexpr) {
-    // For now, style blocks are ignored (CSS would need separate handling)
-    // TODO: Implement CSS extraction and scoping
+    // For now, standalone style blocks are ignored
+    // Component style blocks are handled in generateComponent
     return '/* style block placeholder */';
+  }
+
+  /**
+   * Extract style mappings from a style block AST
+   * Pattern: ["style", ["block", ["object", [key, value, ":"], ...]]]
+   * Returns: { className: "tailwind classes", ... }
+   */
+  extractStyleMappings(styleBlock) {
+    const mappings = {};
+    if (!Array.isArray(styleBlock) || styleBlock[0] !== 'style') return mappings;
+
+    const body = styleBlock[1];
+    if (!Array.isArray(body) || body[0] !== 'block') return mappings;
+
+    // Process each statement in the block
+    for (let i = 1; i < body.length; i++) {
+      const stmt = body[i];
+      if (!Array.isArray(stmt)) continue;
+
+      // Handle object syntax: ["object", [key, value, ":"], ...]
+      if (stmt[0] === 'object') {
+        for (let j = 1; j < stmt.length; j++) {
+          const pair = stmt[j];
+          if (Array.isArray(pair) && pair.length >= 2) {
+            let key = pair[0];
+            let value = pair[1];
+            // Handle both primitive strings and String objects
+            if (key instanceof String) key = key.valueOf();
+            if (value instanceof String) value = value.valueOf();
+            if (typeof key === 'string' && typeof value === 'string') {
+              // Remove quotes and leading dot from key (supports ".card" → "card")
+              let cleanKey = key.replace(/^["']|["']$/g, '').replace(/^\./, '');
+              // Remove quotes from string value
+              const cleanValue = value.replace(/^["']|["']$/g, '');
+              mappings[cleanKey] = cleanValue;
+            }
+          }
+        }
+      }
+
+      // Handle simple key: value assignments
+      if (stmt[0] === '=' && (typeof stmt[1] === 'string' || stmt[1] instanceof String)) {
+        let key = stmt[1];
+        let value = stmt[2];
+        if (key instanceof String) key = key.valueOf();
+        if (value instanceof String) value = value.valueOf();
+        if (typeof value === 'string') {
+          // Remove quotes and leading dot from key
+          let cleanKey = key.replace(/^["']|["']$/g, '').replace(/^\./, '');
+          const cleanValue = value.replace(/^["']|["']$/g, '');
+          mappings[cleanKey] = cleanValue;
+        }
+      }
+    }
+
+    return mappings;
+  }
+
+  /**
+   * Expand class names using style mappings
+   * If a class name exists in styleMappings, replace it with the mapped classes
+   * Otherwise keep the original class name
+   * @param {string[]} classes - Array of class names from template
+   * @returns {string[]} - Expanded array of class names
+   */
+  expandStyleClasses(classes) {
+    if (!this.styleMappings || Object.keys(this.styleMappings).length === 0) {
+      return classes;
+    }
+
+    const expanded = [];
+    for (const cls of classes) {
+      if (this.styleMappings[cls]) {
+        // Expand mapped class into its Tailwind classes
+        expanded.push(...this.styleMappings[cls].split(/\s+/));
+      } else {
+        // Keep original class name
+        expanded.push(cls);
+      }
+    }
+    return expanded;
   }
 
   /**
    * Generate a component definition
    * Pattern: ["component", name, block]
-   * 
+   *
    * Components compile to ES6 classes with:
-   * - State as reactive signals
-   * - Derived as computed values  
+   * - State as reactive values
+   * - Computed values from other static and reactive values
    * - render() method returning DOM
    * - Lifecycle methods (mounted, unmounted, updated)
    */
   generateComponent(head, rest, context, sexpr) {
     const [name, body] = rest;
     const componentName = typeof name === 'string' ? name : this.generate(name, 'value');
-    
+
     this.usesTemplates = true;
-    
+
     // Extract component body statements
     const statements = Array.isArray(body) && body[0] === 'block' ? body.slice(1) : [];
-    
+
     // Categorize statements
     const props = [];          // @prop declarations
     const stateVars = [];      // Regular assignments (reactive state)
-    const derivedVars = [];    // ~= (computed)
+    const computedVars = [];   // ~= (computed)
     const readonlyVars = [];   // =! (constants)
     const methods = [];        // Method definitions
     const lifecycleHooks = []; // mounted:, unmounted:, updated:
     const effects = [];        // effect blocks
     let renderBlock = null;    // render block
     let styleBlock = null;     // style block
-    
+
     // Track component member names for this.X transformation
     const memberNames = new Set();      // All members (for identifier → this.X)
-    const reactiveMembers = new Set();  // State/derived only (need .value)
-    
+    const reactiveMembers = new Set();  // State/computed only (need .value)
+
     for (const stmt of statements) {
       if (!Array.isArray(stmt)) continue;
-      
+
       const [op] = stmt;
-      
+
       if (op === 'prop') {
         props.push(stmt);
         memberNames.add(stmt[1]);
@@ -1957,14 +2038,14 @@ export class CodeGenerator {
           memberNames.add(varName);
           reactiveMembers.add(varName);  // State needs .value
         }
-      } else if (op === 'signal') {
+      } else if (op === 'state') {
         stateVars.push(stmt);
         memberNames.add(stmt[1]);
-        reactiveMembers.add(stmt[1]);  // Signal needs .value
-      } else if (op === 'derived') {
-        derivedVars.push(stmt);
+        reactiveMembers.add(stmt[1]);  // State needs .value
+      } else if (op === 'computed') {
+        computedVars.push(stmt);
         memberNames.add(stmt[1]);
-        reactiveMembers.add(stmt[1]);  // Derived needs .value
+        reactiveMembers.add(stmt[1]);  // Computed needs .value
       } else if (op === 'readonly') {
         readonlyVars.push(stmt);
         memberNames.add(stmt[1]);
@@ -1984,18 +2065,30 @@ export class CodeGenerator {
         }
       }
     }
-    
+
     // Save current component context
     const prevComponentMembers = this.componentMembers;
     const prevReactiveMembers = this.reactiveMembers;
+    const prevStyleMappings = this.styleMappings;
     this.componentMembers = memberNames;
     this.reactiveMembers = reactiveMembers;
-    
+    this.styleMappings = styleBlock ? this.extractStyleMappings(styleBlock) : null;
+
     // Generate class
     const lines = [];
     let blockFactoriesCode = '';  // Will be populated if render block has loops/conditionals
     lines.push(`class ${componentName} {`);
-    
+
+    // Static styles property (if style block exists)
+    let hasStyles = false;
+    if (this.styleMappings && Object.keys(this.styleMappings).length > 0) {
+      hasStyles = true;
+      const stylesJson = JSON.stringify(this.styleMappings);
+      lines.push(`  static __styles__ = ${stylesJson};`);
+      lines.push(`  static __stylesInjected__ = false;`);
+      lines.push('');
+    }
+
     // Constructor
     lines.push('  constructor(props = {}) {');
     lines.push('    // Context API: track parent component');
@@ -2003,7 +2096,7 @@ export class CodeGenerator {
     lines.push('    const __prevComponent = __currentComponent;');
     lines.push('    __currentComponent = this;');
     lines.push('');
-    
+
     // Props handling
     if (props.length > 0) {
       for (const prop of props) {
@@ -2029,47 +2122,47 @@ export class CodeGenerator {
         }
       }
     }
-    
+
     // Constants
     for (const [, varName, value] of readonlyVars) {
       const val = this.generateInComponent(value, 'value');
       lines.push(`    this.${varName} = ${val};`);
     }
-    
+
     // Components always use reactivity (mount uses __effect for reactive re-rendering)
     this.usesReactivity = true;
-    
+
     for (const stmt of stateVars) {
-      if (stmt[0] === 'signal') {
+      if (stmt[0] === 'state') {
         const [, varName, value] = stmt;
         const val = this.generateInComponent(value, 'value');
-        lines.push(`    this.${varName} = __signal(${val});`);
+        lines.push(`    this.${varName} = __state(${val});`);
       } else {
-        // Regular assignment becomes signal
+        // Regular assignment becomes state
         const [, varName, value] = stmt;
         const val = this.generateInComponent(value, 'value');
-        lines.push(`    this.${varName} = __signal(${val});`);
+        lines.push(`    this.${varName} = __state(${val});`);
       }
     }
-    
-    // Derived (computed)
-    for (const [, varName, expr] of derivedVars) {
+
+    // Computed values
+    for (const [, varName, expr] of computedVars) {
       const val = this.generateInComponent(expr, 'value');
       lines.push(`    this.${varName} = __computed(() => ${val});`);
     }
-    
+
     // Effects
     for (const effect of effects) {
       const body = effect[1];
       const effectCode = this.generateInComponent(body, 'value');
       lines.push(`    __effect(${effectCode});`);
     }
-    
+
     // Restore previous component context
     lines.push('');
     lines.push('    __currentComponent = __prevComponent;');
     lines.push('  }');
-    
+
     // Methods
     for (const methodStmt of methods) {
       // methodStmt is ['object', [methodName, funcDef], ...]
@@ -2083,7 +2176,7 @@ export class CodeGenerator {
         }
       }
     }
-    
+
     // Lifecycle hooks
     for (const [, hookName, hookValue] of lifecycleHooks) {
       if (Array.isArray(hookValue) && (hookValue[0] === '->' || hookValue[0] === '=>')) {
@@ -2092,17 +2185,17 @@ export class CodeGenerator {
         lines.push(`  ${hookName}() { return ${bodyCode}; }`);
       }
     }
-    
+
     // Fine-grained rendering: _create() and _setup() methods
     if (renderBlock) {
       const renderBody = renderBlock[1];
       const fg = this.generateFineGrainedRender(renderBody);
-      
+
       // Block factories go BEFORE the class (Svelte-style)
       if (fg.blockFactories.length > 0) {
         blockFactoriesCode = fg.blockFactories.join('\n\n') + '\n\n';
       }
-      
+
       // _create() - builds static DOM structure once
       lines.push('  _create() {');
       for (const line of fg.createLines) {
@@ -2110,7 +2203,7 @@ export class CodeGenerator {
       }
       lines.push(`    return ${fg.rootVar};`);
       lines.push('  }');
-      
+
       // _setup() - wires up fine-grained reactive effects
       if (fg.setupLines.length > 0) {
         lines.push('  _setup() {');
@@ -2120,19 +2213,23 @@ export class CodeGenerator {
         lines.push('  }');
       }
     }
-    
+
     // Mount method - creates DOM once, then sets up effects
     // Accepts element or selector string (e.g., "#app" or ".container")
     lines.push('  mount(target) {');
     lines.push('    if (typeof target === "string") target = document.querySelector(target);');
     lines.push('    this._target = target;');
+    // Inject scoped styles on first mount of this component type
+    if (hasStyles) {
+      lines.push(`    __injectStyles('${componentName}', ${componentName}.__styles__);`);
+    }
     lines.push('    this._root = this._create();');
     lines.push('    target.appendChild(this._root);');
     lines.push('    if (this._setup) this._setup();');
     lines.push('    if (this.mounted) this.mounted();');
     lines.push('    return this;');
     lines.push('  }');
-    
+
     // Unmount method
     lines.push('  unmount() {');
     lines.push('    if (this.unmounted) this.unmounted();');
@@ -2140,12 +2237,13 @@ export class CodeGenerator {
     lines.push('      this._root.parentNode.removeChild(this._root);');
     lines.push('    }');
     lines.push('  }');
-    
+
     lines.push('}');
-    
+
     // Restore previous context
     this.componentMembers = prevComponentMembers;
     this.reactiveMembers = prevReactiveMembers;
+    this.styleMappings = prevStyleMappings;
 
     // Block factories go before the class
     return blockFactoriesCode + lines.join('\n');
@@ -2155,26 +2253,26 @@ export class CodeGenerator {
    * Generate code inside component context (transforms member access to this.X.value)
    */
   generateInComponent(sexpr, context) {
-    // Simple identifier that's a reactive member (state/derived) → this.X.value
+    // Simple identifier that's a reactive member (state/computed) → this.X.value
     if (typeof sexpr === 'string' && this.reactiveMembers && this.reactiveMembers.has(sexpr)) {
       return `this.${sexpr}.value`;
     }
-    
+
     // For arrays, we need to transform member references recursively
     // Transform the s-expression before generating
     if (Array.isArray(sexpr) && this.reactiveMembers) {
       const transformed = this.transformComponentMembers(sexpr);
       return this.generate(transformed, context);
     }
-    
+
     // Otherwise use regular generation
     return this.generate(sexpr, context);
   }
 
   /**
    * Recursively transform s-expression to replace member identifiers with this.X.value
-   * For component context where state variables are signals
-   * 
+   * For component context where state variables are reactive
+   *
    * Handles:
    * - Simple identifiers: count → this.count.value (only if reactive)
    * - Property access @X: (. this X) → (. (. this X) value) (only if X is reactive)
@@ -2187,7 +2285,7 @@ export class CodeGenerator {
       }
       return sexpr;
     }
-    
+
     // Special case: (. this memberName) for @member syntax
     // Transform to (. (. this memberName) value) only if member is reactive
     if (sexpr[0] === '.' && sexpr[1] === 'this' && typeof sexpr[2] === 'string') {
@@ -2197,7 +2295,7 @@ export class CodeGenerator {
       }
       return sexpr;  // Props/readonly/methods stay as this.X
     }
-    
+
     // Recursively transform array elements
     return sexpr.map(item => this.transformComponentMembers(item));
   }
@@ -2236,10 +2334,10 @@ export class CodeGenerator {
     this._fgCreateLines = [];
     this._fgSetupLines = [];
     this._fgBlockFactories = [];  // Block factory functions (Svelte-style)
-    
+
     // Parse the body
     const statements = Array.isArray(body) && body[0] === 'block' ? body.slice(1) : [body];
-    
+
     let rootVar;
     if (statements.length === 0) {
       rootVar = 'null';
@@ -2254,7 +2352,7 @@ export class CodeGenerator {
         this._fgCreateLines.push(`${rootVar}.appendChild(${childVar});`);
       }
     }
-    
+
     return {
       createLines: this._fgCreateLines,
       setupLines: this._fgSetupLines,
@@ -2262,7 +2360,7 @@ export class CodeGenerator {
       rootVar
     };
   }
-  
+
   /**
    * Generate a unique block factory name
    */
@@ -2329,7 +2427,7 @@ export class CodeGenerator {
       // Property chain (div.class or div.class1.class2 or item.name)
       if (headStr === '.') {
         const [, obj, prop] = sexpr;
-        
+
         // Property access on this (e.g., @prop, @children)
         if (obj === 'this' && typeof prop === 'string') {
           // Reactive member → dynamic text
@@ -2347,13 +2445,13 @@ export class CodeGenerator {
             return slotVar;
           }
         }
-        
+
         // Check if it's an HTML tag with classes (div.class)
         const { tag, classes } = this.collectTemplateClasses(sexpr);
         if (tag && this.isHtmlTag(tag)) {
           return this.fgProcessTag(tag, classes, []);
         }
-        
+
         // General property access (e.g., item.name in a loop)
         // Generate the expression - it will be in scope when embedded in loops
         const textVar = this.fgNewText();
@@ -2365,16 +2463,27 @@ export class CodeGenerator {
       // Call expression: (tag.class args...) or ((tag.class) args...)
       if (Array.isArray(head)) {
         // Check for nested dynamic class call with children/text:
-        // (((. div __cx__) "classes") "text" or (-> children)) 
-        // head = [(. div __cx__), "classes"], rest = ["text"] or [(-> children)]
-        if (Array.isArray(head[0]) && head[0][0] === '.' && 
+        // (((. div __cx__) "classes") "text" or (-> children))
+        // (((. (. span base) __cx__) expr) "text") - with static classes
+        // head = [(. ... __cx__), classExpr...], rest = ["text"] or [(-> children)]
+        if (Array.isArray(head[0]) && head[0][0] === '.' &&
             (head[0][2] === '__cx__' || (head[0][2] instanceof String && head[0][2].valueOf() === '__cx__'))) {
-          const tag = typeof head[0][1] === 'string' ? head[0][1] : head[0][1].valueOf();
-          const classExprs = head.slice(1);  // Class expressions from the __cx__ call only
+          // Extract tag and static classes from the base (head[0][1])
+          const base = head[0][1];
+          let tag, staticClasses;
+          if (Array.isArray(base) && base[0] === '.') {
+            // Has static classes: (. span base) -> {tag: 'span', classes: ['base']}
+            ({ tag, classes: staticClasses } = this.collectTemplateClasses(base));
+          } else {
+            // Just a tag: 'div'
+            tag = typeof base === 'string' ? base : base.valueOf();
+            staticClasses = [];
+          }
+          const classExprs = head.slice(1);  // Dynamic class expressions from the __cx__ call
           // rest contains children/text, NOT more class expressions
-          return this.fgProcessTagWithDynamicClass(tag, classExprs, rest);
+          return this.fgProcessTagWithDynamicClass(tag, classExprs, rest, staticClasses);
         }
-        
+
         const { tag, classes } = this.collectTemplateClasses(head);
         if (tag && this.isHtmlTag(tag)) {
           // Check for dynamic class syntax: div.("classes") → (. div __cx__) "classes"
@@ -2429,16 +2538,24 @@ export class CodeGenerator {
    * @param {string} tag - HTML tag name
    * @param {Array} classExprs - Class expression arguments from .(...)
    * @param {Array} children - Children/text following the .() call
+   * @param {Array} staticClasses - Optional static classes from tag.class1.class2.(expr)
    */
-  fgProcessTagWithDynamicClass(tag, classExprs, children) {
+  fgProcessTagWithDynamicClass(tag, classExprs, children, staticClasses = []) {
     const elVar = this.fgNewElement();
-    
+
     // Create element
     this._fgCreateLines.push(`${elVar} = document.createElement('${tag}');`);
-    
-    // Generate class expression
-    if (classExprs.length > 0) {
-      const classCode = classExprs.map(e => this.generateInComponent(e, 'value')).join(' + " " + ');
+
+    // Expand static classes using style mappings
+    const expandedStatic = this.expandStyleClasses(staticClasses);
+    const staticPart = expandedStatic.length > 0 ? `"${expandedStatic.join(' ')}"` : null;
+
+    // Generate class expression (combining static + dynamic)
+    if (classExprs.length > 0 || staticPart) {
+      const dynamicParts = classExprs.map(e => this.generateInComponent(e, 'value'));
+      const allParts = staticPart ? [staticPart, ...dynamicParts] : dynamicParts;
+      const classCode = allParts.join(' + " " + ');
+
       // Check if any class expr has reactive deps
       const hasReactiveDeps = classExprs.some(e => this.fgHasReactiveDeps(e));
       if (hasReactiveDeps) {
@@ -2447,7 +2564,7 @@ export class CodeGenerator {
         this._fgCreateLines.push(`${elVar}.className = ${classCode};`);
       }
     }
-    
+
     // Process children
     for (const arg of children) {
       // Arrow function = children block (handle String objects too)
@@ -2489,7 +2606,7 @@ export class CodeGenerator {
         this._fgCreateLines.push(`${elVar}.appendChild(${childVar});`);
       }
     }
-    
+
     return elVar;
   }
 
@@ -2498,15 +2615,16 @@ export class CodeGenerator {
    */
   fgProcessTag(tag, classes, args) {
     const elVar = this.fgNewElement();
-    
+
     // Create element
     this._fgCreateLines.push(`${elVar} = document.createElement('${tag}');`);
-    
-    // Add static classes
+
+    // Add static classes (expanding style mappings if present)
     if (classes.length > 0) {
-      this._fgCreateLines.push(`${elVar}.className = '${classes.join(' ')}';`);
+      const expandedClasses = this.expandStyleClasses(classes);
+      this._fgCreateLines.push(`${elVar}.className = '${expandedClasses.join(' ')}';`);
     }
-    
+
     // Process arguments (attributes, events, children)
     for (const arg of args) {
       // Arrow function = children
@@ -2565,7 +2683,7 @@ export class CodeGenerator {
         this._fgCreateLines.push(`${elVar}.appendChild(${childVar});`);
       }
     }
-    
+
     return elVar;
   }
 
@@ -2574,23 +2692,23 @@ export class CodeGenerator {
    */
   fgHasReactiveDeps(sexpr) {
     if (!this.reactiveMembers || this.reactiveMembers.size === 0) return false;
-    
+
     if (typeof sexpr === 'string') {
       return this.reactiveMembers.has(sexpr);
     }
-    
+
     if (!Array.isArray(sexpr)) return false;
-    
+
     // Check for (. this reactiveMember) pattern
     if (sexpr[0] === '.' && sexpr[1] === 'this' && typeof sexpr[2] === 'string') {
       return this.reactiveMembers.has(sexpr[2]);
     }
-    
+
     // Recursively check children
     for (const child of sexpr) {
       if (this.fgHasReactiveDeps(child)) return true;
     }
-    
+
     return false;
   }
 
@@ -2599,7 +2717,7 @@ export class CodeGenerator {
    */
   fgProcessAttributes(elVar, objExpr) {
     // objExpr = ['object', [key, value], [key, value], ...]
-    
+
     // Pre-scan for input type to enable smart binding (valueAsNumber for number/range)
     const inputType = CodeGenerator.extractInputType(objExpr.slice(1));
 
@@ -2621,7 +2739,7 @@ export class CodeGenerator {
         if (key.startsWith('__bind_') && key.endsWith('__')) {
           const prop = key.slice(7, -2);  // Extract property name
           const valueCode = this.generateInComponent(value, 'value');
-          
+
           // Determine event and value accessor based on property
           let event, valueAccessor;
           if (prop === 'checked') {
@@ -2636,16 +2754,16 @@ export class CodeGenerator {
               valueAccessor = 'e.target.value';
             }
           }
-          
+
           // Set up two-way binding: value → element and element → value
           this._fgSetupLines.push(`__effect(() => { ${elVar}.${prop} = ${valueCode}; });`);
           this._fgCreateLines.push(`${elVar}.addEventListener('${event}', (e) => ${valueCode} = ${valueAccessor});`);
           continue;
         }
-        
+
         // Check if value contains any reactive dependencies
         const hasReactiveDeps = this.fgHasReactiveDeps(value);
-        
+
         if (hasReactiveDeps) {
           // Dynamic attribute - wrap in effect
           const valueCode = this.generateInComponent(value, 'value');
@@ -2666,7 +2784,7 @@ export class CodeGenerator {
     if (!Array.isArray(body) || body[0] !== 'block') {
       return this.fgProcessElement(body);
     }
-    
+
     const statements = body.slice(1);
     if (statements.length === 0) {
       const commentVar = this.fgNewElement('empty');
@@ -2676,7 +2794,7 @@ export class CodeGenerator {
     if (statements.length === 1) {
       return this.fgProcessElement(statements[0]);
     }
-    
+
     // Multiple children - wrap in fragment
     const fragVar = this.fgNewElement('frag');
     this._fgCreateLines.push(`${fragVar} = document.createDocumentFragment();`);
@@ -2690,7 +2808,7 @@ export class CodeGenerator {
   /**
    * Process a conditional (if/else) using Svelte-style block factories
    * Pattern: ['if', condition, thenBlock, elseBlock?]
-   * 
+   *
    * Generates:
    * 1. Block factory for then-branch with c(), m(), p(), d()
    * 2. Block factory for else-branch (if present)
@@ -2698,25 +2816,25 @@ export class CodeGenerator {
    */
   fgProcessConditional(sexpr) {
     const [, condition, thenBlock, elseBlock] = sexpr;
-    
+
     // Create anchor comment (only this goes on this._)
     const anchorVar = this.fgNewElement('anchor');
     this._fgCreateLines.push(`${anchorVar} = document.createComment('if');`);
-    
+
     // Generate condition expression
     const condCode = this.generateInComponent(condition, 'value');
-    
+
     // Generate block factory for then-branch
     const thenBlockName = this.fgNewBlock();
     this.fgGenerateConditionBlock(thenBlockName, thenBlock);
-    
+
     // Generate block factory for else-branch if present
     let elseBlockName = null;
     if (elseBlock) {
       elseBlockName = this.fgNewBlock();
       this.fgGenerateConditionBlock(elseBlockName, elseBlock);
     }
-    
+
     // Generate setup code with LOCAL state management
     const setupLines = [];
     setupLines.push(`// Conditional: ${thenBlockName}${elseBlockName ? ' / ' + elseBlockName : ''}`);
@@ -2753,12 +2871,12 @@ export class CodeGenerator {
     }
     setupLines.push(`  });`);
     setupLines.push(`}`);
-    
+
     this._fgSetupLines.push(setupLines.join('\n    '));
-    
+
     return anchorVar;
   }
-  
+
   /**
    * Generate a block factory for a conditional branch
    */
@@ -2766,28 +2884,28 @@ export class CodeGenerator {
     // Save state
     const savedCreateLines = this._fgCreateLines;
     const savedSetupLines = this._fgSetupLines;
-    
+
     this._fgCreateLines = [];
     this._fgSetupLines = [];
-    
+
     const rootVar = this.fgProcessBlock(block);
     const createLines = this._fgCreateLines;
     const setupLines = this._fgSetupLines;
-    
+
     // Restore
     this._fgCreateLines = savedCreateLines;
     this._fgSetupLines = savedSetupLines;
-    
+
     // Convert this._ references to local variables
     const localizeVar = (line) => {
       return line.replace(/this\.(_el\d+|_t\d+|_anchor\d+|_frag\d+|_slot\d+|_c\d+|_inst\d+)/g, '$1');
     };
-    
+
     // Generate block factory
     const factoryLines = [];
     factoryLines.push(`function ${blockName}(ctx) {`);
     factoryLines.push(`  // Local DOM references`);
-    
+
     // Declare local variables
     const localVars = new Set();
     for (const line of createLines) {
@@ -2797,26 +2915,26 @@ export class CodeGenerator {
     if (localVars.size > 0) {
       factoryLines.push(`  let ${[...localVars].join(', ')};`);
     }
-    
+
     const hasEffects = setupLines.length > 0;
     if (hasEffects) {
       factoryLines.push(`  let disposers = [];`);
     }
-    
+
     factoryLines.push(`  return {`);
-    
+
     // c() - create
     factoryLines.push(`    c() {`);
     for (const line of createLines) {
       factoryLines.push(`      ${localizeVar(line)}`);
     }
     factoryLines.push(`    },`);
-    
+
     // m() - mount
     factoryLines.push(`    m(target, anchor) {`);
     factoryLines.push(`      target.insertBefore(${localizeVar(rootVar)}, anchor);`);
     factoryLines.push(`    },`);
-    
+
     // p() - update/patch (wire up effects)
     factoryLines.push(`    p(ctx) {`);
     if (hasEffects) {
@@ -2835,7 +2953,7 @@ export class CodeGenerator {
       }
     }
     factoryLines.push(`    },`);
-    
+
     // d() - destroy
     factoryLines.push(`    d(detaching) {`);
     if (hasEffects) {
@@ -2843,39 +2961,39 @@ export class CodeGenerator {
     }
     factoryLines.push(`      if (detaching) ${localizeVar(rootVar)}.remove();`);
     factoryLines.push(`    }`);
-    
+
     factoryLines.push(`  };`);
     factoryLines.push(`}`);
-    
+
     this._fgBlockFactories.push(factoryLines.join('\n'));
   }
 
   /**
    * Process a for loop using Svelte-style block factories
    * Pattern: ['for-in', [vars], collection, guard?, step?, body]
-   * 
+   *
    * Generates:
    * 1. A block factory function with c(), m(), p(), d() methods
    * 2. Local reconciliation state in _setup() (no this._ pollution)
    */
   fgProcessLoop(sexpr) {
     const [head, vars, collection, guard, step, body] = sexpr;
-    
+
     // Generate unique block factory name
     const blockName = this.fgNewBlock();
-    
+
     // Create anchor comment (only this goes on this._)
     const anchorVar = this.fgNewElement('anchor');
     this._fgCreateLines.push(`${anchorVar} = document.createComment('for');`);
-    
+
     // Get variable names
     const varNames = Array.isArray(vars) ? vars : [vars];
     const itemVar = varNames[0];
     const indexVar = varNames[1] || 'i';
-    
+
     // Generate collection expression
     const collectionCode = this.generateInComponent(collection, 'value');
-    
+
     // Extract key expression from body if present
     let keyExpr = itemVar;  // Default: use item itself as key
     if (Array.isArray(body) && body[0] === 'block' && body.length > 1) {
@@ -2895,36 +3013,36 @@ export class CodeGenerator {
         }
       }
     }
-    
+
     // Save state and generate item template in isolation
     const savedCreateLines = this._fgCreateLines;
     const savedSetupLines = this._fgSetupLines;
     const savedBlockFactories = this._fgBlockFactories;
-    
+
     this._fgCreateLines = [];
     this._fgSetupLines = [];
     // Keep block factories shared so nested loops add to same array
-    
+
     const itemNode = this.fgProcessBlock(body);
     const itemCreateLines = this._fgCreateLines;
     const itemSetupLines = this._fgSetupLines;
-    
+
     // Restore
     this._fgCreateLines = savedCreateLines;
     this._fgSetupLines = savedSetupLines;
-    
+
     // Convert this._ references to local variables for the block factory
     // In block factories, we use local vars, not this._
     const localizeVar = (line) => {
       // Replace this._elX, this._tX with local el, t variables
       return line.replace(/this\.(_el\d+|_t\d+|_anchor\d+|_frag\d+|_slot\d+|_c\d+|_inst\d+)/g, '$1');
     };
-    
+
     // Generate block factory function
     const factoryLines = [];
     factoryLines.push(`function ${blockName}(ctx, ${itemVar}, ${indexVar}) {`);
     factoryLines.push(`  // Local DOM references (not on this)`);
-    
+
     // Declare local variables for DOM elements
     const localVars = new Set();
     for (const line of itemCreateLines) {
@@ -2934,27 +3052,27 @@ export class CodeGenerator {
     if (localVars.size > 0) {
       factoryLines.push(`  let ${[...localVars].join(', ')};`);
     }
-    
+
     // Add any nested block's disposers tracking
     const hasEffects = itemSetupLines.length > 0;
     if (hasEffects) {
       factoryLines.push(`  let disposers = [];`);
     }
-    
+
     factoryLines.push(`  return {`);
-    
+
     // c() - create
     factoryLines.push(`    c() {`);
     for (const line of itemCreateLines) {
       factoryLines.push(`      ${localizeVar(line)}`);
     }
     factoryLines.push(`    },`);
-    
+
     // m() - mount
     factoryLines.push(`    m(target, anchor) {`);
     factoryLines.push(`      target.insertBefore(${localizeVar(itemNode)}, anchor);`);
     factoryLines.push(`    },`);
-    
+
     // p() - update (patch)
     factoryLines.push(`    p(ctx, ${itemVar}, ${indexVar}) {`);
     if (hasEffects) {
@@ -2965,7 +3083,7 @@ export class CodeGenerator {
         // Wrap effects to collect disposers, and localize references
         const localizedLine = localizeVar(line);
         const wrappedLine = localizedLine.replace(
-          /__effect\(\(\) => \{/g, 
+          /__effect\(\(\) => \{/g,
           'disposers.push(__effect(() => {'
         ).replace(
           /\}\);$/g,
@@ -2975,7 +3093,7 @@ export class CodeGenerator {
       }
     }
     factoryLines.push(`    },`);
-    
+
     // d() - destroy
     factoryLines.push(`    d(detaching) {`);
     if (hasEffects) {
@@ -2983,13 +3101,13 @@ export class CodeGenerator {
     }
     factoryLines.push(`      if (detaching) ${localizeVar(itemNode)}.remove();`);
     factoryLines.push(`    }`);
-    
+
     factoryLines.push(`  };`);
     factoryLines.push(`}`);
-    
+
     // Add factory to the list
     this._fgBlockFactories.push(factoryLines.join('\n'));
-    
+
     // Generate reconciliation code in _setup() using LOCAL variables
     const setupLines = [];
     setupLines.push(`// Loop: ${blockName}`);
@@ -3033,9 +3151,9 @@ export class CodeGenerator {
     setupLines.push(`    keys = newKeys;`);
     setupLines.push(`  });`);
     setupLines.push(`}`);
-    
+
     this._fgSetupLines.push(setupLines.join('\n    '));
-    
+
     return anchorVar;
   }
 
@@ -3047,18 +3165,18 @@ export class CodeGenerator {
     const instVar = this.fgNewElement('inst');
     const elVar = this.fgNewElement('el');
     const { propsCode, childrenVar, childrenSetupLines } = this.fgBuildComponentProps(args);
-    
+
     this._fgCreateLines.push(`${instVar} = new ${componentName}(${propsCode});`);
     this._fgCreateLines.push(`${elVar} = ${instVar}._create();`);
-    
+
     // Wire up child component's effects
     this._fgSetupLines.push(`if (${instVar}._setup) ${instVar}._setup();`);
-    
+
     // Add any setup lines from children processing
     for (const line of childrenSetupLines) {
       this._fgSetupLines.push(line);
     }
-    
+
     return elVar;
   }
 
@@ -3070,7 +3188,7 @@ export class CodeGenerator {
     const props = [];
     let childrenVar = null;
     const childrenSetupLines = [];
-    
+
     for (const arg of args) {
       if (Array.isArray(arg) && arg[0] === 'object') {
         for (let i = 1; i < arg.length; i++) {
@@ -3089,32 +3207,32 @@ export class CodeGenerator {
           const savedSetupLines = this._fgSetupLines;
           this._fgCreateLines = [];
           this._fgSetupLines = [];
-          
+
           // Process children block
           childrenVar = this.fgProcessBlock(block);
-          
+
           // Collect the create and setup lines
           const childCreateLines = this._fgCreateLines;
           const childSetupLinesCopy = this._fgSetupLines;
-          
+
           // Restore
           this._fgCreateLines = savedCreateLines;
           this._fgSetupLines = savedSetupLines;
-          
+
           // Add child create lines to parent
           for (const line of childCreateLines) {
             this._fgCreateLines.push(line);
           }
-          
+
           // Save setup lines for later
           childrenSetupLines.push(...childSetupLinesCopy);
-          
+
           // Add children to props
           props.push(`children: ${childrenVar}`);
         }
       }
     }
-    
+
     const propsCode = props.length > 0 ? `{ ${props.join(', ')} }` : '{}';
     return { propsCode, childrenVar, childrenSetupLines };
   }
@@ -3135,7 +3253,7 @@ export class CodeGenerator {
       // Plain tag
       return `h('${sexpr}', 0)`;
     }
-    
+
     // String object → same handling
     if (sexpr instanceof String) {
       const val = sexpr.valueOf();
@@ -3148,17 +3266,17 @@ export class CodeGenerator {
     if (Array.isArray(sexpr)) {
       const [head, ...rest] = sexpr;
       const headStr = typeof head === 'string' ? head : (head instanceof String ? head.valueOf() : null);
-      
+
       // Component instantiation (PascalCase names) - check BEFORE HTML tags
       if (headStr && this.isComponent(headStr)) {
         return this.generateComponentInstance(headStr, rest);
       }
-      
+
       // HTML tags - use h() with component-aware children
       if (headStr && this.isHtmlTag && this.isHtmlTag(headStr)) {
         return this.generateComponentH(headStr, [], rest);
       }
-      
+
       // Property access (div.class or this.member)
       if (headStr === '.') {
         const [, obj, prop] = sexpr;
@@ -3171,7 +3289,7 @@ export class CodeGenerator {
           return this.generateComponentH(tag, classes, []);
         }
       }
-      
+
       // Call (div args...)
       if (Array.isArray(head)) {
         const { tag, classes } = this.collectTemplateClasses(head);
@@ -3179,18 +3297,18 @@ export class CodeGenerator {
           return this.generateComponentH(tag, classes, rest);
         }
       }
-      
+
       // Arrow function for children
       if (headStr === '->' || headStr === '=>') {
         const [params, body] = rest;
         return this.generateComponentRender(body);
       }
-      
+
       // For other s-expressions, use regular template generation
       // but wrap identifiers appropriately
       return this.generateTemplateElement(sexpr);
     }
-    
+
     return this.generateTemplateElement(sexpr);
   }
 
@@ -3199,7 +3317,7 @@ export class CodeGenerator {
    */
   generateComponentH(tag, classes, args) {
     this.usesTemplates = true;
-    
+
     const props = {};
     const spreads = [];
     const children = [];
@@ -3222,11 +3340,11 @@ export class CodeGenerator {
       // Object = attributes/events
       else if (Array.isArray(arg) && arg[0] === 'object') {
         const inputType = CodeGenerator.extractInputType(arg.slice(1));
-        
+
         for (const pair of arg.slice(1)) {
           if (Array.isArray(pair) && pair.length >= 2) {
             const [key, value] = pair;
-            
+
             // Check for binding directive
             const bindInfo = this.parseBindingDirective(key, value, tag, inputType);
             if (bindInfo) {
@@ -3234,7 +3352,7 @@ export class CodeGenerator {
               props[bindInfo.event] = bindInfo.handler;
               continue;
             }
-            
+
             // Check for event handler
             const eventInfo = this.parseEventHandler(key, value);
             if (eventInfo) {
@@ -3255,7 +3373,7 @@ export class CodeGenerator {
           }
         }
       }
-      // String = text child  
+      // String = text child
       else if (typeof arg === 'string') {
         if (this.componentMembers && this.componentMembers.has(arg)) {
           children.push(`this.${arg}.value`);
@@ -3271,9 +3389,10 @@ export class CodeGenerator {
       }
     }
 
-    // Build tag string with classes
-    const tagStr = classes.length > 0 ? `${tag}.${classes.join('.')}` : tag;
-    
+    // Build tag string with classes (expanding style mappings if present)
+    const expandedClasses = this.expandStyleClasses(classes);
+    const tagStr = expandedClasses.length > 0 ? `${tag}.${expandedClasses.join('.')}` : tag;
+
     // Build props string
     const propsStr = this.buildPropsString(props, spreads);
     const childrenStr = this.buildChildrenString(children);
@@ -3293,7 +3412,7 @@ export class CodeGenerator {
   generateComponentInstance(componentName, args) {
     const props = {};
     const children = [];
-    
+
     for (const arg of args) {
       // Object = props
       if (Array.isArray(arg) && arg[0] === 'object') {
@@ -3328,7 +3447,7 @@ export class CodeGenerator {
         children.push(this.generateComponentTemplateElement(arg));
       }
     }
-    
+
     // Build props object
     const propsEntries = Object.entries(props);
     let propsStr = '{}';
@@ -3341,7 +3460,7 @@ export class CodeGenerator {
       }
       propsStr = entries.length > 0 ? `{ ${entries.join(', ')} }` : '{}';
     }
-    
+
     return `new ${componentName}(${propsStr}).render()`;
   }
 
@@ -3443,7 +3562,7 @@ export class CodeGenerator {
       const propAccess = head[0];  // ['.', baseTag, '__cx__']
       const cxArgs = head.slice(1);  // args to cx()
       const baseTag = propAccess[1];
-      
+
       // Collect tag and static classes
       let tag, classes;
       if (Array.isArray(baseTag) && baseTag[0] === '.') {
@@ -3452,7 +3571,7 @@ export class CodeGenerator {
         tag = baseTag;
         classes = [];
       }
-      
+
       // Generate cx args and pass children through
       const cxArgsStr = cxArgs.map(arg => this.generate(arg, 'value')).join(', ');
       return this.generateH(tag, classes, rest, cxArgsStr);
@@ -3464,10 +3583,10 @@ export class CodeGenerator {
 
   /**
    * Parse template arguments into props, spreads, children, and ref.
-   * 
+   *
    * This is the shared logic for processing template element arguments,
    * used by both generateH() and generateHWithDynamicClassAndChildren().
-   * 
+   *
    * @param {Array} args - S-expression arguments
    * @param {string} tag - Element tag name (for binding event selection)
    * @returns {{ props: Object, spreads: string[], children: string[], refVar: string|null }}
@@ -3559,11 +3678,11 @@ export class CodeGenerator {
     const hasProps = Object.keys(props).length > 0;
     const hasSpreads = spreads.length > 0;
     const hasClass = classExpr !== null;
-    
+
     if (!hasProps && !hasSpreads && !hasClass) {
       return '0';
     }
-    
+
     const parts = [];
     // Add class expression first if present
     if (hasClass) {
@@ -3600,7 +3719,7 @@ export class CodeGenerator {
    */
   generateH(tag, classes, args, cxArgs = null) {
     this.usesTemplates = true;
-    
+
     const { props, spreads, children, refVar } = this.parseTemplateArgs(args, tag);
     const tagStr = classes.length > 0 ? `${tag}.${classes.join('.')}` : tag;
     const classExpr = cxArgs ? `cx(${cxArgs})` : null;
@@ -4559,10 +4678,10 @@ export class CodeGenerator {
       // All regular pairs now have format: [key, value, operator]
       const [key, value, operator] = pair;
 
-      // Check if key is computed: ["computed", expression]
+      // Check if key is dynamic: ["dynamicKey", expression]
       let keyCode;
-      if (Array.isArray(key) && key[0] === 'computed') {
-        // Computed property: [expr] syntax
+      if (Array.isArray(key) && key[0] === 'dynamicKey') {
+        // Dynamic property key: [expr] syntax
         const expr = key[1];
         keyCode = `[${this.generate(expr, 'value')}]`;
       } else {
@@ -5867,7 +5986,7 @@ export class CodeGenerator {
 
     // Remove variables that are:
     // 1. Already declared at program level (CoffeeScript semantics - access outer vars)
-    // 2. Reactive variables (signals/computed) - these must not be shadowed
+    // 2. Reactive variables (state/computed) - these must not be shadowed
     // 3. Function/method parameters (already declared in signature)
     const newVars = new Set([...bodyVars].filter(v =>
       !this.programVars.has(v) && !this.reactiveVars?.has(v) && !paramNames.has(v)
@@ -7535,7 +7654,7 @@ export class CodeGenerator {
 
   /**
    * Get the reactive runtime code to inject
-   * Returns minified inline runtime for signal/computed/effect/batch
+   * Returns minified inline runtime for state/computed/effect/batch
    */
   getReactiveRuntime() {
     return `// ============================================================================
@@ -7543,8 +7662,8 @@ export class CodeGenerator {
 // A minimal, fine-grained reactivity system
 //
 // Reactivity:
-//   __signal(value)    - Reactive state container
-//   __computed(fn)     - Derived value (lazy, cached)
+//   __state(value)    - Reactive state container
+//   __computed(fn)     - Computed value (lazy, cached)
 //   __effect(fn)       - Side effect that re-runs when dependencies change
 //   __batch(fn)        - Group multiple updates into one flush
 //   __readonly(value)  - Immutable value wrapper
@@ -7559,8 +7678,8 @@ export class CodeGenerator {
 //   __handleError(error)    - Route error to nearest boundary
 //
 // How reactivity works:
-//   - Reading a signal/computed inside an effect tracks it as a dependency
-//   - Writing to a signal notifies all subscribers
+//   - Reading a state/computed inside an effect tracks it as a dependency
+//   - Writing to a state notifies all subscribers
 //   - Batching defers effect execution until the batch completes
 // ============================================================================
 
@@ -7569,14 +7688,14 @@ let __currentEffect = null;   // The effect/computed currently being evaluated
 let __pendingEffects = new Set();  // Effects queued to run
 let __batching = false;       // Are we inside a batch()?
 
-// Flush all pending effects (called after signal updates, or at end of batch)
+// Flush all pending effects (called after state updates, or at end of batch)
 function __flushEffects() {
   const effects = [...__pendingEffects];
   __pendingEffects.clear();
   for (const effect of effects) effect.run();
 }
 
-// Shared primitive coercion (used by signal and computed)
+// Shared primitive coercion (used by state and computed)
 const __primitiveCoercion = {
   valueOf() { return this.value; },
   toString() { return String(this.value); },
@@ -7584,59 +7703,59 @@ const __primitiveCoercion = {
 };
 
 /**
- * Create a reactive signal (state container)
+ * Create a reactive state container
  * @param {*} initialValue - The initial value
- * @returns {object} Signal with .value getter/setter
+ * @returns {object} State with .value getter/setter
  */
-function __signal(initialValue) {
+function __state(initialValue) {
   let value = initialValue;
-  const subscribers = new Set();  // Effects/computeds that depend on this signal
-  
+  const subscribers = new Set();  // Effects/computeds that depend on this state
+
   // State flags
   let notifying = false;  // Prevents re-entry during notification
   let locked = false;     // Prevents writes (used during SSR/hydration)
-  let dead = false;       // Signal has been killed (cleanup)
+  let dead = false;       // State has been killed (cleanup)
 
-  const signal = {
+  const state = {
     get value() {
       if (dead) return value;
-      // Track this signal as a dependency of the current effect/computed
+      // Track this state as a dependency of the current effect/computed
       if (__currentEffect) {
         subscribers.add(__currentEffect);
         __currentEffect.dependencies.add(subscribers);
       }
       return value;
     },
-    
+
     set value(newValue) {
       // Skip if: dead, locked, same value, or already notifying
       if (dead || locked || newValue === value || notifying) return;
       value = newValue;
       notifying = true;
-      
+
       // Notify subscribers: computeds mark dirty, effects get queued
       for (const sub of subscribers) {
         if (sub.markDirty) sub.markDirty();  // Computed
         else __pendingEffects.add(sub);      // Effect
       }
-      
+
       // Flush immediately unless we're batching
       if (!__batching) __flushEffects();
       notifying = false;
     },
-    
+
     read() { return value; },                    // Read without tracking
-    lock() { locked = true; return signal; },    // Prevent further writes
-    free() { subscribers.clear(); return signal; },  // Clear all subscribers
+    lock() { locked = true; return state; },    // Prevent further writes
+    free() { subscribers.clear(); return state; },  // Clear all subscribers
     kill() { dead = true; subscribers.clear(); return value; },  // Cleanup
-    
+
     ...__primitiveCoercion
   };
-  return signal;
+  return state;
 }
 
 /**
- * Create a computed value (derived state, lazy & cached)
+ * Create a computed value (lazy & cached)
  * @param {function} fn - Function that computes the value
  * @returns {object} Computed with .value getter
  */
@@ -7644,14 +7763,14 @@ function __computed(fn) {
   let value;
   let dirty = true;           // Needs recomputation?
   const subscribers = new Set();  // Things that depend on this computed
-  
+
   // State flags
   let locked = false;  // Prevents recomputation
   let dead = false;    // Computed has been killed
 
   const computed = {
-    dependencies: new Set(),  // Signals/computeds this depends on
-    
+    dependencies: new Set(),  // States/computeds this depends on
+
     // Called by dependencies when they change
     markDirty() {
       if (dead || locked || dirty) return;
@@ -7662,7 +7781,7 @@ function __computed(fn) {
         else __pendingEffects.add(sub);
       }
     },
-    
+
     get value() {
       if (dead) return value;
       // Track this computed as a dependency
@@ -7683,7 +7802,7 @@ function __computed(fn) {
       }
       return value;
     },
-    
+
     read() { return value; },  // Return cached value without tracking or recomputing
     lock() { locked = true; computed.value; return computed; },  // Lock after computing
     free() {
@@ -7698,7 +7817,7 @@ function __computed(fn) {
       computed.free();
       return result;
     },
-    
+
     ...__primitiveCoercion
   };
   return computed;
@@ -7711,8 +7830,8 @@ function __computed(fn) {
  */
 function __effect(fn) {
   const effect = {
-    dependencies: new Set(),  // Signals/computeds this effect depends on
-    
+    dependencies: new Set(),  // States/computeds this effect depends on
+
     run() {
       // Clear old dependencies before re-running
       for (const dep of effect.dependencies) dep.delete(effect);
@@ -7722,13 +7841,13 @@ function __effect(fn) {
       __currentEffect = effect;
       try { fn(); } finally { __currentEffect = prev; }
     },
-    
+
     dispose() {
       for (const dep of effect.dependencies) dep.delete(effect);
       effect.dependencies.clear();
     }
   };
-  
+
   effect.run();  // Run immediately to establish dependencies
   return () => effect.dispose();
 }
@@ -7765,7 +7884,7 @@ function __readonly(value) {
 // Usage:
 //   // In parent component constructor or methods:
 //   setContext('theme', { dark: true })
-//   
+//
 //   // In any descendant component:
 //   theme = getContext('theme')
 // ============================================================================
@@ -7868,6 +7987,46 @@ function __catchErrors(fn) {
       __handleError(error);
     }
   };
+}
+
+// ============================================================================
+// Scoped Styles
+// Inject component styles into <head>, deduped by component name
+//
+// Usage (generated by compiler):
+//   __injectStyles('MyComponent', { card: 'rounded shadow', header: 'flex' })
+// ============================================================================
+
+const __injectedStyles = new Set();  // Track which components have injected styles
+
+/**
+ * Inject scoped styles for a component (only once per component type)
+ * @param {string} componentName - The component class name
+ * @param {object} styleMap - Map of class names to Tailwind/CSS classes
+ */
+function __injectStyles(componentName, styleMap) {
+  // Skip if already injected
+  if (__injectedStyles.has(componentName)) return;
+  __injectedStyles.add(componentName);
+
+  // Generate CSS rules: .ComponentName .className { @apply tailwind-classes }
+  // For now, we inject as data attributes for runtime class application
+  // The styleMap is stored on the component class for template rendering
+
+  // Create a <style> tag with scoped selectors
+  const rules = [];
+  for (const [className, classes] of Object.entries(styleMap)) {
+    // Store mapping for runtime lookup (templates will use this)
+    // CSS custom property approach: --ComponentName-className: "classes"
+    rules.push(\`  --\${componentName}-\${className}: "\${classes}";\`);
+  }
+
+  if (rules.length > 0) {
+    const style = document.createElement('style');
+    style.dataset.component = componentName;
+    style.textContent = \`:root {\\n\${rules.join('\\n')}\\n}\`;
+    document.head.appendChild(style);
+  }
 }
 
 // === End Reactive Runtime ===

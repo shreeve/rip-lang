@@ -273,25 +273,26 @@ Multiple lines
 
 ## Rip-Specific Operators
 
-| Operator | Name | Example | Compiles To |
-|----------|------|---------|-------------|
-| `//` | Floor division | `7 // 2` → `3` | `Math.floor(7 / 2)` |
-| `%%` | True modulo | `-1 %% 3` → `2` | Always positive result |
-| `!` | Dammit (call+await) | `fetchData!` | `await fetchData()` |
-| `!?` | Otherwise | `val !? 5` | Default if undefined only |
-| `=!` | Equal, dammit! | `MAX =! 100` | `const MAX = 100` |
-| `:=` | Signal | `count := 0` | Reactive state |
-| `~=` | Derived | `doubled ~= count * 2` | Computed value |
-| `<=>` | Two-way bind | `value <=> name` | Bidirectional binding |
-| `=~` | Match | `str =~ /pat/` | Ruby-style regex match |
+| Operator | Name | Mnemonic | Example | Compiles To |
+|----------|------|----------|---------|-------------|
+| `=` | Assign | "gets value" | `x = 5` | `let x; x = 5` |
+| `:=` | State | "holds state" | `count := 0` | Reactive state |
+| `~=` | Computed | "always equals" | `doubled ~= count * 2` | Computed value |
+| `=!` | Readonly | "equals, dammit!" | `MAX =! 100` | `const MAX = 100` |
+| `//` | Floor division | — | `7 // 2` → `3` | `Math.floor(7 / 2)` |
+| `%%` | True modulo | — | `-1 %% 3` → `2` | Always positive result |
+| `!` | Dammit (call+await) | — | `fetchData!` | `await fetchData()` |
+| `!?` | Otherwise | — | `val !? 5` | Default if undefined only |
+| `<=>` | Two-way bind | — | `value <=> name` | Bidirectional binding |
+| `=~` | Match | — | `str =~ /pat/` | Ruby-style regex match |
 
 ## Assignment Operators
 
 ```coffee
-x = 5        # let x = 5
-x =! 5       # const x = 5 (cannot reassign)
-x := 5       # Reactive signal
-x ~= y * 2   # Derived (auto-updates)
+x = 5        # "gets value" — let x = 5
+x := 5       # "holds state" — reactive state
+x ~= y * 2   # "always equals" — computed (auto-updates)
+x =! 5       # "equals, dammit!" — const x = 5 (cannot reassign)
 x += 1       # x = x + 1
 x -= 1       # x = x - 1
 x *= 2       # x = x * 2
@@ -469,7 +470,7 @@ user = User.new(name: "Alice", role: "admin")
 
 Rip's reactive features are **language-level operators**, not library imports.
 
-## Signals (`:=`)
+## State (`:=`)
 
 ```coffee
 # Create reactive state
@@ -487,7 +488,7 @@ name = "Rip"
 items = [...items, newItem]
 ```
 
-## Derived Values (`~=`)
+## Computed Values (`~=`)
 
 ```coffee
 # Auto-updates when dependencies change
@@ -499,7 +500,7 @@ count = 5
 # doubled is now 10
 # message is now "Count is 5"
 
-# Complex derived
+# Complex computed
 items := [{price: 10}, {price: 20}]
 total ~= items.reduce ((sum, i) -> sum + i.price), 0
 ```
@@ -522,7 +523,7 @@ effect ->
   -> clearInterval interval  # Cleanup function
 ```
 
-## Signal Methods
+## State Methods
 
 ```coffee
 count := 10
@@ -547,7 +548,7 @@ finalValue = count.kill()  # Returns value, cleans up
 | Need | Use | Example |
 |------|-----|---------|
 | Mutable state that triggers UI updates | `:=` | `count := 0` |
-| Computed value from other signals | `~=` | `total ~= price * qty` |
+| Computed value from other state | `~=` | `total ~= price * qty` |
 | Side effect on change | `effect` | `effect -> save(data)` |
 | Immutable constant | `=!` | `API_URL =! "..."` |
 | Regular variable | `=` | `temp = calculate()` |
@@ -579,7 +580,7 @@ component Counter
   # Reactive state
   count := @initial
 
-  # Derived values
+  # Computed values
   doubled ~= count * 2
   isEven ~= count % 2 is 0
 
@@ -1134,7 +1135,7 @@ component TodoApp
   newTodo := ""
   filter := "all"
 
-  # Derived
+  # Computed
   filtered ~= switch filter
     when "active" then todos.filter (t) -> not t.done
     when "completed" then todos.filter (t) -> t.done
@@ -1814,8 +1815,8 @@ export def sleep(ms)
 # Variables
 x = 5           # let
 x =! 5          # const
-x := 5          # signal (reactive)
-x ~= y * 2      # derived (reactive)
+x := 5          # state (reactive)
+x ~= y * 2      # computed (reactive)
 
 # Functions
 def fn(a, b)    # named function
@@ -1847,7 +1848,7 @@ X.new(a: 1)
 component X
   @prop = default
   state := initial
-  derived ~= state * 2
+  computed ~= state * 2
   render
     div state
 
@@ -2056,12 +2057,12 @@ p
 ### When to Use `:=` vs `~=` vs `=`
 
 ```coffee
-# := (Signal) - state that changes and triggers updates
+# := (State) - state that changes and triggers updates
 count := 0              # User can change this
 items := []             # Array that grows/shrinks
 isOpen := false         # Toggle state
 
-# ~= (Derived) - computed FROM other signals
+# ~= (Computed) - computed FROM other state
 doubled ~= count * 2              # Always count * 2
 total ~= items.reduce(sum, 0)     # Always sum of items
 isEmpty ~= items.length is 0      # Always tracks length
@@ -2076,10 +2077,10 @@ API_URL =! "https://..."
 MAX_SIZE =! 100
 ```
 
-### Can Derived Depend on Derived?
+### Can Computed Depend on Computed?
 
 ```coffee
-# YES! Derived values can depend on other derived values
+# YES! Computed values can depend on other computed values
 count := 0
 doubled ~= count * 2
 quadrupled ~= doubled * 2    # Depends on doubled
@@ -2092,11 +2093,11 @@ count = 5
 ### What Triggers Re-render?
 
 ```coffee
-# Writing to a SIGNAL triggers updates
+# Writing to a STATE triggers updates
 count := 0
-count = 5      # ← This triggers dependent derived/effects/UI
+count = 5      # ← This triggers dependent computed/effects/UI
 
-# Derived values update automatically (don't write to them)
+# Computed values update automatically (don't write to them)
 doubled ~= count * 2    # Auto-updates when count changes
 
 # Regular variables do NOT trigger updates
@@ -2446,7 +2447,7 @@ parent
 **Rip is a complete language for modern JavaScript development:**
 
 - **Clean syntax** — CoffeeScript-inspired, readable, minimal noise
-- **Built-in reactivity** — `:=` signals, `~=` derived, `effect` blocks
+- **Built-in reactivity** — `:=` state, `~=` computed, `effect` blocks
 - **Component system** — `component` keyword, props, lifecycle, templates
 - **Modern output** — ES2022, classes, optional chaining, nullish coalescing
 - **JavaScript interop** — Full access to npm ecosystem

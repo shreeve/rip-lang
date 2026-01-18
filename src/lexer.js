@@ -206,6 +206,8 @@ export var Lexer = class Lexer {
     this.exportSpecifierList = false; // Used to identify when in an `EXPORT {...} FROM? ...`.
     this.inRender = false; // Used to recognize #id syntax in templates.
     this.renderIndent = 0; // Track render block indentation depth.
+    this.inStyle = false; // Used for style block special parsing.
+    this.styleIndent = 0; // Track style block indentation depth.
     this.chunkLine = opts.line || 0; // The start line for the current @chunk.
     this.chunkColumn = opts.column || 0; // The start column of the current @chunk.
     this.chunkOffset = opts.offset || 0; // The start offset for the current @chunk.
@@ -217,7 +219,7 @@ export var Lexer = class Lexer {
     // `@literalToken` is the fallback catch-all.
     i = 0;
     while (this.chunk = code.slice(i)) {
-      consumed = this.identifierToken() || this.commentToken() || this.whitespaceToken() || this.lineToken() || this.stringToken() || this.numberToken() || this.regexToken() || this.jsToken() || this.literalToken();
+      consumed = this.identifierToken() || this.commentToken() || this.whitespaceToken() || this.lineToken() || this.styleLineToken() || this.stringToken() || this.numberToken() || this.regexToken() || this.jsToken() || this.literalToken();
       // Update position.
       [this.chunkLine, this.chunkColumn, this.chunkOffset] = this.getLineAndColumnFromChunk(consumed);
       i += consumed;
@@ -264,6 +266,34 @@ export var Lexer = class Lexer {
 
   // Tokenizers
   // ----------
+
+  // Style block line tokenizer - handles CSS-like style definitions
+  // Pattern: .selector: classes (unquoted Tailwind classes)
+  // Example: .card: rounded-lg shadow-md bg-white hover:shadow-lg
+  styleLineToken() {
+    if (!this.inStyle) return 0;
+
+    // Match: .selectorName: classes (single-line form, no newline)
+    const match = this.chunk.match(/^\.([a-zA-Z_][a-zA-Z0-9_-]*):[ \t]*([^\n]*)/);
+    if (!match) return 0;
+
+    const [full, selector, classesRaw] = match;
+    const classes = classesRaw.trim();
+
+    // Emit the selector as a string (quoted for the parser)
+    const selectorToken = this.makeToken('STRING', `".${selector}"`, 0, selector.length + 1);
+    this.tokens.push(selectorToken);
+
+    // Emit the colon
+    const colonToken = this.makeToken(':', ':', selector.length + 1, 1);
+    this.tokens.push(colonToken);
+
+    // Emit the classes as a string
+    const classToken = this.makeToken('STRING', `"${classes}"`, selector.length + 2, classesRaw.length);
+    this.tokens.push(classToken);
+
+    return full.length;
+  }
 
     // Matches identifying literals: variables, keywords, method names, etc.
   // Check to ensure that JavaScript reserved words aren't being used as
@@ -355,6 +385,9 @@ export var Lexer = class Lexer {
       } else if (tag === 'RENDER') {
         this.inRender = true;
         this.renderIndent = this.indent;
+      } else if (tag === 'STYLE') {
+        this.inStyle = true;
+        this.styleIndent = this.indent;
       } else if (indexOf.call(UNARY, tag) >= 0) {
         tag = 'UNARY';
       } else if (indexOf.call(RELATION, tag) >= 0) {
@@ -1140,7 +1173,7 @@ export var Lexer = class Lexer {
     } else if (value === '<=>') {
       tag = 'BIND';
     } else if (value === '~=') {
-      tag = 'DERIVED_ASSIGN';
+      tag = 'COMPUTED_ASSIGN';
     } else if (value === ':=') {
       tag = 'REACTIVE_ASSIGN';
     } else if (value === '=!') {
@@ -1243,6 +1276,10 @@ export var Lexer = class Lexer {
     }
     this.indent = decreasedIndent;
     this.indentLiteral = this.indentLiteral.slice(0, decreasedIndent);
+    // Exit style mode when we outdent past the style block
+    if (this.inStyle && decreasedIndent <= this.styleIndent) {
+      this.inStyle = false;
+    }
     return this;
   }
 
@@ -1715,8 +1752,16 @@ export var Lexer = class Lexer {
     if (this.tag() === 'RENDER') {
       return false;
     }
+    // Don't treat line as continuation after STYLE (for style block .selector syntax)
+    if (this.tag() === 'STYLE') {
+      return false;
+    }
     // In render blocks, don't treat .class as continuation - it's a nested element
     if (this.inRender && /^\s*\./.test(this.chunk)) {
+      return false;
+    }
+    // In style blocks, don't treat .selector as continuation
+    if (this.inStyle && /^\s*\./.test(this.chunk)) {
       return false;
     }
     return LINE_CONTINUER.test(this.chunk) || (ref = this.tag(), indexOf.call(UNFINISHED, ref) >= 0);
@@ -1867,8 +1912,8 @@ NUMBER = /^0b[01](?:_?[01])*n?|^0o[0-7](?:_?[0-7])*n?|^0x[\da-f](?:_?[\da-f])*n?
 // \d*\.?\d+ (?:e[+-]?\d+)?
 
 OPERATOR = /^(?:<=>|[-=]>|~=|:=|=!|===|!==|!\?|\?\?|=~|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?(\.|::)|\.{2,3})/; // function
-// := is reactive signal assignment
-// ~= is derived assign (reactive computed values)
+// := is reactive state assignment
+// ~= is computed assign (reactive computed values)
 // =! is readonly assign (reactive constant)
 // Added === and !== for explicit strict equality (compiles same as == and !=)
 // !? (otherwise operator) must come before ?? and before !=

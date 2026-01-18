@@ -24,25 +24,26 @@ Rip provides reactive primitives as **language-level operators**, not library im
 
 ## Reactive Operators
 
-| Operator | Name | Purpose |
-|----------|------|---------|
-| `:=` | Signal | Reactive state variable |
-| `~=` | Derived | Computed value (auto-updates when dependencies change) |
-| `effect` | Effect | Side effect that runs when dependencies change |
-| `=!` | Equal, dammit! | Constant (`const`) - not reactive, just immutable |
+| Operator | Name | Mnemonic | Purpose |
+|----------|------|----------|---------|
+| `=` | Assign | "gets value" | Regular assignment |
+| `:=` | State | "holds state" | Reactive state variable |
+| `~=` | Computed | "always equals" | Computed value (auto-updates when dependencies change) |
+| `=!` | Readonly | "equals, dammit!" | Constant (`const`) - not reactive, just immutable |
+| `effect` | Effect | — | Side effect that runs when dependencies change |
 
 ## Reactive State (`:=`)
 
-The signal operator creates reactive state:
+The state operator creates reactive state:
 
 ```coffee
-count := 0              # Reactive signal
-name := "world"         # Another reactive signal
+count := 0              # Reactive state
+name := "world"         # Another reactive state
 ```
 
-State changes automatically trigger updates in any derived values or effects that depend on them.
+State changes automatically trigger updates in any computed values or effects that depend on them.
 
-## Derived Values (`~=`)
+## Computed Values (`~=`)
 
 The "always equals" operator creates a value that automatically recomputes when its dependencies change:
 
@@ -116,7 +117,7 @@ count.read()             # Get value without tracking dependencies
 | `x.value` | Direct access to the underlying value |
 | `+x` | Shorthand for `x.value` (triggers tracking in effects) |
 | `x.lock()` | Make value readonly (can read but can't change) |
-| `x.free()` | Unsubscribe from all dependencies (signal still works) |
+| `x.free()` | Unsubscribe from all dependencies (state still works) |
 | `x.kill()` | Clean up everything and return final value |
 
 ## Dependency Tracking
@@ -133,7 +134,7 @@ Understanding when dependencies are tracked is key to effective reactive program
 | `+count` | ✅ Yes | Unary plus triggers `.valueOf()` |
 | `count.value` | ✅ Yes | Direct `.value` access |
 | `count.read()` | ❌ No | Explicit non-tracking read |
-| `y = count` | ❌ No | Assigns signal object, not value |
+| `y = count` | ❌ No | Assigns state object, not value |
 
 ### Example: Tracking vs Non-Tracking
 
@@ -169,9 +170,9 @@ effect ->
 
 ## Lifecycle & Cleanup
 
-### Locking a Signal
+### Locking a State
 
-Make a signal readonly (subscriptions stay active):
+Make a state readonly (subscriptions stay active):
 
 ```coffee
 config := { theme: "dark" }
@@ -193,15 +194,15 @@ doubled.free()  # No longer updates when count changes
 count = 10      # doubled stays at its last value
 ```
 
-### Killing a Signal
+### Killing a State
 
 Clean up completely and get the final value:
 
 ```coffee
 count := 10
-finalValue = count.kill()  # Returns 10, signal is now dead
+finalValue = count.kill()  # Returns 10, state is now dead
 
-count = 20  # Error or no-op (signal is dead)
+count = 20  # Error or no-op (state is dead)
 ```
 
 ### Effect Cleanup
@@ -222,7 +223,7 @@ A complete reactive counter with persistence:
 # Reactive state
 count := parseInt(localStorage.getItem("count")) or 0
 
-# Derived values
+# Computed values
 doubled ~= count * 2
 isEven ~= count % 2 == 0
 message ~= "Count is #{count} (#{isEven ? 'even' : 'odd'})"
@@ -258,7 +259,7 @@ effect -> console.log doubled
 
 ```javascript
 // Compiled output (conceptual)
-const count = __signal(0);
+const count = __state(0);
 const doubled = __computed(() => count.value * 2);
 __effect(() => console.log(doubled.value));
 ```
@@ -289,7 +290,7 @@ console.log(y);
 | Concept | React | Vue | Solid | Rip |
 |---------|-------|-----|-------|-----|
 | State | `useState()` | `ref()` | `createSignal()` | `x := 0` |
-| Derived | `useMemo()` | `computed()` | `createMemo()` | `x ~= y * 2` |
+| Computed | `useMemo()` | `computed()` | `createMemo()` | `x ~= y * 2` |
 | Effect | `useEffect()` | `watch()` | `createEffect()` | `effect ->` |
 | Constant | `const` | `const` | `const` | `x =! 0` |
 
@@ -796,7 +797,7 @@ component Name
   searchTerm = ""
 
   # ═══════════════════════════════════════════
-  # Derived (always equals)
+  # Computed (always equals)
   # ═══════════════════════════════════════════
   filtered ~= items.filter (i) -> i.active
   total ~= items.reduce ((sum, i) -> sum + i.price), 0
@@ -1071,7 +1072,7 @@ component TodoApp
   newTodo = ""
   filter = "all"
 
-  # Derived
+  # Computed
   filtered ~= switch filter
     when "active" then todos.filter (t) -> not t.done
     when "completed" then todos.filter (t) -> t.done
@@ -1435,7 +1436,7 @@ text =~ /line2/m        # Works! (/m flag allows newlines)
 5. **Zero dependencies** — Runtime is inlined, no external packages needed
 6. **Components are language constructs** — Not classes you extend, not functions you call
 7. **Templates are code** — The `render` block is Rip syntax, not a separate template language
-8. **Everything is reactive** — State, derived values, and effects just work
+8. **Everything is reactive** — State, computed values, and effects just work
 
 ---
 

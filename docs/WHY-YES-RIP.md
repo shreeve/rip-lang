@@ -33,14 +33,14 @@ This document appeals to **freedom**:
 ```rip
 # Rip's reactive primitives - language operators, not library imports!
 
-count := 0                    # Signal - reactive state (:= operator)
-doubled ~= count * 2          # Derived/Destiny - auto-updates (~= operator)
-message =! "Hello"            # "Equal, dammit!" - const, cannot be reassigned
+count := 0                    # "holds state" — reactive state
+doubled ~= count * 2          # "always equals" — computed, auto-updates
+message =! "Hello"            # "equals, dammit!" — const, cannot be reassigned
 
 effect ->                     # Effect - runs when dependencies change
   console.log "Count: #{count}, Doubled: #{doubled}"
 
-count = 5                     # Change signal → derived updates → effect runs!
+count = 5                     # Change state → computed updates → effect runs!
 # Console: "Count: 5, Doubled: 10"
 ```
 
@@ -98,7 +98,7 @@ component Counter
   @initial = 0                # Prop with default
 
   count := @initial           # Reactive state
-  doubled ~= count * 2        # Derived value
+  doubled ~= count * 2        # Computed value
 
   inc: -> count += 1          # Method (auto-bound)
   dec: -> count -= 1
@@ -337,7 +337,7 @@ Not "minimal." Not "few." **ZERO.** This is **real**, **running**, **today**.
 - ✅ **Full compiler** (lexer + parser + codegen)
 - ✅ **SLR(1) parser generator** (solar.rip - ~1,000 lines, built-in!)
 - ✅ **Self-hosting** (Rip compiles itself, including the parser generator)
-- ✅ **Reactive framework** (signals, derived, effects - language-level!)
+- ✅ **Reactive framework** (state, computed, effects - language-level!)
 - ✅ **Component system** (templates, props, lifecycle - language-level!)
 - ✅ **Triple REPL** (terminal, browser, console)
 - ✅ **Test framework** (runner + 1046 tests)
@@ -716,7 +716,7 @@ While JavaScript adds features nobody wanted:
 - Dual optional syntax: 10 operators, not 4 ✓
 - __DATA__ marker: Inline data sections ✓
 - Smart comprehensions: Context-aware optimization ✓
-- **Reactivity as syntax:** `:=` signals, `~=` derived, `effect` blocks ✓
+- **Reactivity as syntax:** `:=` state, `~=` computed, `effect` blocks ✓
 - **Templates as syntax:** S-expression UI in `render` blocks ✓
 - **Components as syntax:** `component` keyword, `@props`, lifecycle ✓
 - **Two-way binding:** `<=>` operator (no manual wiring) ✓
@@ -884,7 +884,7 @@ $ echo 'console.log "Hello, Rip!"' > test.rip && bun test.rip
 - ✅ **Smaller than CoffeeScript** (~14,000 vs 17,760 LOC) yet includes full reactive framework
 - ✅ **ES2022 output** (works in Bun, Deno, Node 12+, browsers)
 - ✅ **Triple REPL** (terminal, browser, console)
-- ✅ **Reactive primitives** (`:=` signals, `~=` derived, `effect` - language-level!)
+- ✅ **Reactive primitives** (`:=` state, `~=` computed, `effect` - language-level!)
 - ✅ **Component system** (`component` keyword, `@props`, lifecycle hooks)
 - ✅ **Template syntax** (S-expressions in `render` blocks, Pug-style shorthand)
 - ✅ **Two-way binding** (`<=>` operator - automatic for inputs)

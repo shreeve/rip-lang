@@ -176,7 +176,7 @@ Counter.new().mount("#app")               # Selector string support
 
 | Category | Score | Notes |
 |----------|-------|-------|
-| **Reactivity** | A+ | Fine-grained, signals, effects |
+| **Reactivity** | A+ | Fine-grained, state, effects |
 | **Templates** | A | S-expressions, Pug shorthand |
 | **Components** | A | Props, lifecycle, context API |
 | **Performance** | A | 250× faster parser gen, 51KB bundle |
@@ -187,7 +187,7 @@ Counter.new().mount("#app")               # Selector string support
 
 **What's in 51KB?**
 - Complete compiler (lexer, parser, code generator)
-- Reactive runtime (signals, derived values, effects)
+- Reactive runtime (state, computed values, effects)
 - Template engine (S-expression syntax, dynamic classes)
 - Component system (props, lifecycle, fine-grained updates)
 - Zero dependencies
@@ -292,10 +292,10 @@ Each item gets its own effect. Changing `selected` updates ONLY the affected cla
 ### Added - Reactive UI Framework
 
 **Phase 1: Reactivity** (previously released)
-- Signal-based reactivity: `count = 0` creates reactive state
-- Derived values: `doubled ~= count * 2` auto-tracks dependencies
+- State-based reactivity: `count := 0` creates reactive state
+- Computed values: `doubled ~= count * 2` auto-tracks dependencies
 - Effects: `effect -> console.log count` runs on changes
-- Runtime: `__signal()`, `__computed()`, `__effect()`, `__batch()`, `__readonly()`
+- Runtime: `__state()`, `__computed()`, `__effect()`, `__batch()`, `__readonly()`
 
 **Phase 2: Templates**
 - Indentation-based template syntax in `render` blocks
@@ -317,8 +317,8 @@ Each item gets its own effect. Changing `selected` updates ONLY the affected cla
   - Optional: `@label?`
   - Default: `@label = "default"`
   - Rest: `@...rest`
-- Reactive state within components (auto-signals)
-- Derived values within components (auto-computed)
+- Reactive state within components (auto-state)
+- Computed values within components (auto-computed)
 - Component composition: `Button label: "Click"` inside render
 - Children/slots: `@children` prop for nested content
 - Lifecycle hooks: `mounted:`, `unmounted:`
@@ -332,8 +332,8 @@ Each item gets its own effect. Changing `selected` updates ONLY the affected cla
 ### Technical Details
 - Components compile to ES6 classes with constructor, render, mount, unmount
 - Props validated at construction (required props throw if missing)
-- State variables become `__signal()` calls
-- Derived values become `__computed()` calls
+- State variables become `__state()` calls
+- Computed values become `__computed()` calls
 - `mount()` wraps render in `__effect()` for reactive updates
 - PascalCase names in templates trigger component instantiation
 

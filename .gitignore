@@ -31,3 +31,6 @@ coverage/
 .env.local
 notes.txt
 .tool-versions
+
+# Demos (experimental)
+demos/

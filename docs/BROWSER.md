@@ -18,7 +18,7 @@ rip.browser.min.js.br   51 KB  (brotli, 91% smaller!)
 
 **What's in that 51KB?**
 - Complete compiler (lexer, parser, code generator)
-- Reactive runtime (signals, derived values, effects)
+- Reactive runtime (state, computed values, effects)
 - Template engine (S-expression syntax, dynamic classes)
 - Component system (props, lifecycle, fine-grained updates)
 - Zero dependencies
@@ -901,7 +901,7 @@ See the `docs/examples/` directory for working demos:
 - Fast loading even on mobile
 
 **2. Complete Framework**
-- Reactive primitives (signals, derived, effects)
+- Reactive primitives (state, computed, effects)
 - S-expression templates with fine-grained updates
 - Component system with props and lifecycle
 - Modern ES6+ output
@@ -965,7 +965,7 @@ Then serve `node_modules/rip-lang/dist/rip.browser.min.js`
 **Rip in the browser gives you:**
 
 ✅ **51KB** - Complete language + reactive framework (brotli)
-✅ **Reactivity** - Signals, derived values, effects
+✅ **Reactivity** - State, computed values, effects
 ✅ **Templates** - S-expression syntax, fine-grained DOM updates
 ✅ **Components** - Props, lifecycle, zero virtual DOM
 ✅ **Triple REPL** - Terminal, Browser, Console

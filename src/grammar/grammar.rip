@@ -48,7 +48,7 @@ grammar =
     o 'Operation'
     o 'Assign'
     o 'ReactiveAssign'
-    o 'DerivedAssign'
+    o 'ComputedAssign'
     o 'ReadonlyAssign'
     o 'EffectBlock'
     o 'RenderBlock'
@@ -71,18 +71,18 @@ grammar =
     o 'DEF Identifier Block'                              , '["def", 2, [], 3]'  # No params
   ]
 
-  # Reactive: Signal assignment (:=) - mutable reactive values
+  # Reactive: State assignment (:=) - mutable reactive values
   ReactiveAssign: [
-    o 'Assignable REACTIVE_ASSIGN Expression'               , '["signal", 1, 3]'
-    o 'Assignable REACTIVE_ASSIGN TERMINATOR Expression'    , '["signal", 1, 4]'
-    o 'Assignable REACTIVE_ASSIGN INDENT Expression OUTDENT', '["signal", 1, 4]'
+    o 'Assignable REACTIVE_ASSIGN Expression'               , '["state", 1, 3]'
+    o 'Assignable REACTIVE_ASSIGN TERMINATOR Expression'    , '["state", 1, 4]'
+    o 'Assignable REACTIVE_ASSIGN INDENT Expression OUTDENT', '["state", 1, 4]'
   ]
 
-  # Reactive: Derived assignment (~=) - computed values that auto-update
-  DerivedAssign: [
-    o 'Assignable DERIVED_ASSIGN Expression'               , '["derived", 1, 3]'
-    o 'Assignable DERIVED_ASSIGN TERMINATOR Expression'    , '["derived", 1, 4]'
-    o 'Assignable DERIVED_ASSIGN INDENT Expression OUTDENT', '["derived", 1, 4]'
+  # Reactive: Computed assignment (~=) - computed values that auto-update
+  ComputedAssign: [
+    o 'Assignable COMPUTED_ASSIGN Expression'               , '["computed", 1, 3]'
+    o 'Assignable COMPUTED_ASSIGN TERMINATOR Expression'    , '["computed", 1, 4]'
+    o 'Assignable COMPUTED_ASSIGN INDENT Expression OUTDENT', '["computed", 1, 4]'
   ]
 
   # Reactive: Readonly assignment (=!) - constants that cannot be reassigned
@@ -247,7 +247,7 @@ grammar =
 
   ObjAssignable: [
     o 'SimpleObjAssignable'
-    o '[ Expression ]'  , '["computed", 2]'  # Computed property name
+    o '[ Expression ]'  , '["dynamicKey", 2]'  # Dynamic property key
     o '@ [ Expression ]', '["[]", "this", 3]'
     o 'AlphaNumeric'
   ]

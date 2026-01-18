@@ -40,7 +40,7 @@ class BinaryOp {
 ["+", left, right]  // That's it!
 ```
 
-**Result:** CoffeeScript's compiler is 17,760 LOC. Rip's is ~14,000 LOC—smaller, yet includes a complete reactive framework with signals, templates, and components.
+**Result:** CoffeeScript's compiler is 17,760 LOC. Rip's is ~14,000 LOC—smaller, yet includes a complete reactive framework with state, templates, and components.
 
 ## The Fundamental Rule
 
@@ -485,8 +485,8 @@ counter = ->
 **This is genuinely excellent.**
 
 ```coffee
-count := 0                     # Signal (state)
-doubled ~= count * 2          # Derived (auto-tracks)
+count := 0                     # State
+doubled ~= count * 2          # Computed (auto-tracks)
 effect -> console.log count   # Effect (auto-runs)
 ```
 
@@ -553,7 +553,7 @@ render
 
 | Strength | Why |
 |----------|-----|
-| **Reactivity A+** | Signals, computed, effects, batching, Context API |
+| **Reactivity A+** | State, computed, effects, batching, Context API |
 | **DX A+** | Cleanest syntax of all, no boilerplate |
 | **Performance A** | O(1) fine-grained updates, keyed reconciliation |
 
@@ -564,7 +564,7 @@ render
 
 ## Completed Features ✅
 
-- [x] Reactivity primitives (signals, computed, effects)
+- [x] Reactivity primitives (state, computed, effects)
 - [x] Template syntax and features
 - [x] Props system (`@prop`, `@prop?`, `@prop = default`, `@...rest`)
 - [x] Component composition
