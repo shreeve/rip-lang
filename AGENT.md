@@ -2,7 +2,7 @@
 
 **Purpose:** This document helps AI assistants understand and work with the Rip language compiler.
 
-**What is Rip:** An elegant reactive language that compiles to modern JavaScript (ES2022), featuring zero dependencies, self-hosting capability, built-in reactivity, and components as language constructs.
+**What is Rip:** An elegant reactive language that compiles to modern JavaScript (ES2022), featuring zero dependencies, self-hosting capability, and built-in reactivity primitives.
 
 ---
 
@@ -17,7 +17,7 @@ echo 'your code' | ./bin/rip -s  # S-expressions (parser)
 echo 'your code' | ./bin/rip -c  # JavaScript (codegen)
 
 # Run tests
-bun run test                              # All tests (1046)
+bun run test                              # All tests (979)
 bun test/runner.js test/rip/FILE.rip     # Specific file
 
 # Rebuild parser (after grammar changes)
@@ -32,7 +32,7 @@ bun run browser
 | Metric | Value |
 |--------|-------|
 | Version | 2.5.1 |
-| Tests | 1046/1046 (100%) |
+| Tests | 979/979 (100%) |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
 
@@ -48,7 +48,6 @@ rip-lang/
 │   ├── parser.js        # Generated parser (363 LOC) ❌ Don't edit!
 │   ├── repl.js          # Terminal REPL
 │   ├── browser.js       # Browser integration
-│   ├── tags.js          # HTML/SVG tag definitions
 │   └── grammar/
 │       ├── grammar.rip  # Grammar specification (872 LOC)
 │       └── solar.rip    # Parser generator (~1,000 LOC) ❌ Don't edit!
@@ -99,7 +98,6 @@ Rip Source → Lexer → Parser → S-Expressions → Codegen → JavaScript
 ["if", condition, then, else]  // Conditional
 ["state", name, expr]          // Reactive state (:=)
 ["computed", name, expr]       // Computed value (~=)
-["component", name, body]      // Component definition
 ```
 
 ### 2. Context-Aware Generation
@@ -161,26 +159,6 @@ The reactive runtime is embedded in compiler.js and only included when needed.
 
 ---
 
-## Components & Templates
-
-```rip
-component Counter
-  @initial = 0           # Prop with default
-  count := @initial      # Reactive state
-  doubled ~= count * 2   # Computed value
-
-  inc: -> count += 1     # Method
-
-  render
-    .counter
-      button @click: @inc, "+"
-      span.value count
-
-Counter.new(initial: 5).mount "#app"
-```
-
----
-
 ## Common Tasks
 
 ### Fix a Bug in Codegen
@@ -232,7 +210,7 @@ code "name", "x + y", "(x + y)"
 fail "name", "invalid syntax"
 ```
 
-### Test Files (25 files, 1046 tests)
+### Test Files (23 files, 979 tests)
 
 ```
 test/rip/
@@ -241,12 +219,11 @@ test/rip/
 ├── basic.rip         ├── operators.rip
 ├── classes.rip       ├── optional.rip
 ├── compatibility.rip ├── parens.rip
-├── components.rip    ├── properties.rip
-├── comprehensions.rip├── regex.rip
-├── control.rip       ├── semicolons.rip
-├── data.rip          ├── stabilization.rip
-├── errors.rip        ├── strings.rip
-├── functions.rip     ├── templates.rip
+├── comprehensions.rip├── properties.rip
+├── control.rip       ├── regex.rip
+├── data.rip          ├── semicolons.rip
+├── errors.rip        ├── stabilization.rip
+├── functions.rip     ├── strings.rip
 ├── guards.rip
 └── literals.rip
 ```
@@ -259,7 +236,7 @@ test/rip/
 |------|---------|
 | **README.md** | User guide, features, installation |
 | **CONTRIBUTING.md** | GitHub workflow, development process |
-| **docs/GUIDE.md** | Complete language guide (reactivity, templates, components, operators) |
+| **docs/GUIDE.md** | Complete language guide (reactivity, operators, patterns) |
 | **docs/INTERNALS.md** | Compiler architecture, S-expressions, code generation |
 | **docs/PHILOSOPHY.md** | Design rationale, comparison with CoffeeScript |
 | **docs/BROWSER.md** | Browser usage, REPL, inline scripts |
@@ -313,9 +290,8 @@ bun --no-cache test/runner.js test/rip
 | `%%` | True mod | `-1 %% 3` → 2 |
 | `:=` | State | `count := 0` → reactive state |
 | `~=` | Computed | `doubled ~= count * 2` → computed |
-| `<=>` | Bind | `value <=> num` → two-way binding |
 | `=~` | Match | `str =~ /pat/` → Ruby-style regex |
-| `.new()` | Constructor | `Counter.new()` → Ruby-style new |
+| `.new()` | Constructor | `User.new()` → Ruby-style new |
 
 ### Build Commands
 

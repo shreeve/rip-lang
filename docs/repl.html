@@ -108,10 +108,6 @@
       background: #1e1e1e;
     }
 
-    .tab[data-tab="demo"].active {
-      border-bottom-color: #e94560;
-    }
-
     .content {
       flex: 1;
       display: flex;
@@ -328,139 +324,6 @@
     }
 
 
-    /* Demo Pane Styles */
-    .demo-output {
-      flex: 1;
-      min-height: 0;
-      padding: 20px;
-      background: #1a1a2e;
-      overflow: auto;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    }
-
-    .demo-output h2 {
-      color: #00d4ff;
-      font-size: 1.2rem;
-      margin-bottom: 1rem;
-      padding-bottom: 0.5rem;
-      border-bottom: 1px solid #3e3e42;
-    }
-
-    .demo-output .demo-section {
-      margin-bottom: 1.5rem;
-      padding: 1rem;
-      background: #0f3460;
-      border-radius: 8px;
-    }
-
-    .demo-output .counter {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      justify-content: center;
-    }
-
-    .demo-output button {
-      background: #e94560;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      font-size: 1.2rem;
-      border-radius: 5px;
-      cursor: pointer;
-      min-width: 50px;
-    }
-
-    .demo-output button:hover {
-      background: #ff6b6b;
-    }
-
-    .demo-output .value {
-      font-size: 2rem;
-      font-weight: bold;
-      color: #ff6b6b;
-      min-width: 60px;
-      text-align: center;
-    }
-
-    .demo-output input[type="text"],
-    .demo-output input[type="number"] {
-      background: #16213e;
-      border: 1px solid #3e3e42;
-      color: #d4d4d4;
-      padding: 8px 12px;
-      border-radius: 4px;
-      font-size: 14px;
-    }
-
-    .demo-output .greeting {
-      font-size: 1.5rem;
-      color: #4ec9b0;
-      margin-top: 0.5rem;
-    }
-
-    .demo-output .computed {
-      margin-top: 1rem;
-      color: #858585;
-    }
-
-    .demo-output .computed span {
-      color: #ce9178;
-      font-weight: bold;
-    }
-
-    /* Component-generated elements */
-    .demo-output .counter {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      justify-content: center;
-    }
-
-    .demo-output .greeter input {
-      margin-bottom: 0.5rem;
-      width: 200px;
-    }
-
-    .demo-output .greeter .name {
-      color: #4ec9b0;
-      font-weight: bold;
-    }
-
-    .demo-output .calculator .row {
-      margin: 0.5rem 0;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .demo-output .calculator input {
-      width: 80px;
-    }
-
-    .demo-output .calculator .result {
-      color: #ce9178;
-      font-weight: bold;
-      font-size: 1.2rem;
-    }
-
-    .demo-error {
-      background: #3c1618;
-      color: #f48771;
-      padding: 1rem;
-      border-radius: 4px;
-      font-family: monospace;
-      white-space: pre-wrap;
-    }
-
-    .run-btn-primary {
-      background: #e94560 !important;
-    }
-
-    .run-btn-primary:hover {
-      background: #ff6b6b !important;
-    }
-
     /* Scrollbar styling */
     ::-webkit-scrollbar {
       width: 10px;
@@ -527,8 +390,7 @@
   </div>
 
   <div class="tabs">
-    <button class="tab active" data-tab="demo">Live Demo</button>
-    <button class="tab" data-tab="compiler">Live Compiler</button>
+    <button class="tab active" data-tab="compiler">Live Compiler</button>
     <button class="tab" data-tab="repl">REPL Console</button>
   </div>
 
@@ -549,102 +411,8 @@
       </div>
     </div>
 
-    <!-- Demo Pane -->
-    <div class="pane active" id="demo-pane">
-      <div class="compiler-container">
-        <div class="editor-pane" id="demo-editor-left">
-          <div class="pane-header">
-            <span>Rip Source</span>
-            <div class="pane-header-buttons">
-              <button id="demo-reset-btn" title="Reset to default demo">Reset</button>
-              <button class="run-btn-primary" id="demo-run-btn" title="Run the demo (Cmd+Enter)">Run</button>
-            </div>
-          </div>
-          <textarea class="editor" id="demo-editor" spellcheck="false"># ============================================
-# Rip Components & Templates Demo
-# ============================================
-
-# A counter component with Pug-style template syntax
-# A counter component with Pug-style template syntax
-component Counter
-  @name = "Hello"      # prop with default
-  @initial = 0       # prop with default
-  count := @initial
-  dozen ~= count * 12
-  inc: -> count += 1
-  dec: -> count -= 1
-  render
-    .counter
-      i "#{@name}, did you know that"
-      button @click: @dec, "−"
-      span.value count
-      button @click: @inc, "+"
-      i "dozen is #{dozen} items?"
-
-Counter.new(name: "Señor", initial: 5).mount "#counter-mount"
-
-# ============================================
-# Component with Two-Way Binding
-# ============================================
-
-component Greeter
-  name = "World"
-  render
-    .greeter
-      input value <=> name
-      .greeting
-        span "Hello, "
-        span.name name
-        span "!"
-
-Greeter.new().mount "#greeter-mount"
-
-# ============================================
-# Computed Values (~= always equal)
-# ============================================
-
-component Calculator
-  num := 5
-  doubled ~= num * 2
-  squared ~= num * num
-  render
-    .calculator
-      .row
-        label "Number: "
-        input type: "number", value <=> num
-      .row
-        span "Doubled: "
-        span.result doubled
-      .row
-        span "Squared: "
-        span.result squared
-
-Calculator.new().mount "#calc-mount"
-</textarea>
-        </div>
-
-        <div class="resizer" id="demo-resizer"></div>
-
-        <div class="editor-pane" id="demo-editor-right">
-          <div class="pane-header">
-            <span>Live Output</span>
-          </div>
-          <div class="demo-output" id="demo-output">
-            <h2>Counter Component</h2>
-            <div class="demo-section" id="counter-mount"></div>
-
-            <h2>Greeter with Two-Way Binding</h2>
-            <div class="demo-section" id="greeter-mount"></div>
-
-            <h2>Calculator with Computed Values</h2>
-            <div class="demo-section" id="calc-mount"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- Compiler Pane -->
-    <div class="pane" id="compiler-pane">
+    <div class="pane active" id="compiler-pane">
       <div class="compiler-container">
         <div class="editor-pane" id="editor-left">
           <div class="pane-header">
@@ -734,9 +502,6 @@ console.log "Domain:", domain</textarea>
       // Focus appropriate input and run setup
       if (tabName === 'repl') {
         document.getElementById('repl-input').focus();
-      } else if (tabName === 'demo') {
-        // Auto-run demo when switching to demo tab
-        setTimeout(() => runDemo(), 50);
       } else if (tabName === 'compiler') {
         compileCode();  // Update compiler output
       }
@@ -749,21 +514,21 @@ console.log "Domain:", domain</textarea>
     // Handle browser back/forward
     window.addEventListener('hashchange', () => {
       const hash = window.location.hash.slice(1);
-      if (['demo', 'compiler', 'repl'].includes(hash)) {
+      if (['compiler', 'repl'].includes(hash)) {
         switchToTab(hash);
       }
     });
 
-    // Initialize from URL hash on page load (default to demo)
+    // Initialize from URL hash on page load (default to compiler)
     const initialTab = window.location.hash.slice(1);
-    if (['demo', 'compiler', 'repl'].includes(initialTab)) {
+    if (['compiler', 'repl'].includes(initialTab)) {
       switchToTab(initialTab);
     } else {
-      // No hash - demo is default, run it
-      setTimeout(() => runDemo(), 50);
+      // No hash - compiler is default
+      compileCode();
     }
 
-    // Show page now that everything is initialized (prevents render flicker)
+    // Show page now that everything is initialized (prevents flicker)
     document.body.classList.add('ready');
 
     // ========================================================================
@@ -1153,121 +918,6 @@ console.log "Domain:", domain</textarea>
 
     // Initial compile
     compileCode();
-
-    // ========================================================================
-    // Live Demo Implementation
-    // ========================================================================
-
-    const demoEditor = document.getElementById('demo-editor');
-    const demoOutput = document.getElementById('demo-output');
-    const demoRunBtn = document.getElementById('demo-run-btn');
-    const demoResetBtn = document.getElementById('demo-reset-btn');
-    const demoResizer = document.getElementById('demo-resizer');
-    const demoLeftPane = document.getElementById('demo-editor-left');
-    const demoRightPane = document.getElementById('demo-editor-right');
-
-    // Store default demo code
-    const defaultDemoCode = demoEditor.value;
-
-    // Store default demo HTML
-    const defaultDemoHTML = demoOutput.innerHTML;
-
-    // Demo resizer
-    if (demoResizer && demoLeftPane && demoRightPane) {
-      let isDemoResizing = false;
-
-      demoResizer.addEventListener('mousedown', (e) => {
-        isDemoResizing = true;
-        document.body.style.cursor = 'col-resize';
-        e.preventDefault();
-      });
-
-      document.addEventListener('mousemove', (e) => {
-        if (!isDemoResizing) return;
-
-        const container = demoResizer.parentElement;
-        const containerRect = container.getBoundingClientRect();
-        const offsetX = e.clientX - containerRect.left;
-        const containerWidth = containerRect.width;
-
-        let leftPercent = (offsetX / containerWidth) * 100;
-        leftPercent = Math.max(20, Math.min(80, leftPercent));
-
-        demoLeftPane.style.flexBasis = `${leftPercent}%`;
-        demoRightPane.style.flexBasis = `${100 - leftPercent}%`;
-      });
-
-      document.addEventListener('mouseup', () => {
-        if (isDemoResizing) {
-          isDemoResizing = false;
-          document.body.style.cursor = 'default';
-        }
-      });
-    }
-
-    // Create isolated iframe for demo execution
-    let demoFrame = null;
-
-    function runDemo() {
-      try {
-        const source = demoEditor.value;
-        const result = compile(source);
-        let js = result.code;
-
-        // Reset the demo output HTML
-        demoOutput.innerHTML = defaultDemoHTML;
-
-        // Remove any existing demo iframe
-        if (demoFrame) {
-          demoFrame.remove();
-        }
-
-        // Create fresh iframe for isolated execution
-        demoFrame = document.createElement('iframe');
-        demoFrame.style.display = 'none';
-        document.body.appendChild(demoFrame);
-        const demoContext = demoFrame.contentWindow;
-
-        // Create a proxy document that redirects to demoOutput
-        const proxyDocument = {
-          getElementById: (id) => demoOutput.querySelector(`#${id}`),
-          querySelector: (sel) => demoOutput.querySelector(sel),
-          querySelectorAll: (sel) => demoOutput.querySelectorAll(sel),
-          createElement: (tag) => document.createElement(tag),
-          createTextNode: (text) => document.createTextNode(text)
-        };
-
-        // Wrap the code to use our proxy document
-        const wrappedJs = `
-          const document = arguments[0];
-          const console = arguments[1];
-          ${js}
-        `;
-
-        // Execute with injected document proxy
-        new Function(wrappedJs).call(demoContext, proxyDocument, console);
-
-      } catch (error) {
-        demoOutput.innerHTML = `<div class="demo-error">Error: ${error.message}</div>`;
-      }
-    }
-
-    // Run button
-    demoRunBtn.addEventListener('click', runDemo);
-
-    // Reset button
-    demoResetBtn.addEventListener('click', () => {
-      demoEditor.value = defaultDemoCode;
-      runDemo();
-    });
-
-    // Keyboard shortcut for demo (Cmd/Ctrl+Enter when demo tab is active)
-    demoEditor.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        runDemo();
-      }
-    });
   </script>
 </body>
 </html>

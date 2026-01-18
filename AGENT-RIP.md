@@ -1,8 +1,8 @@
 # Rip Language Guide for AI Agents
 
-**Purpose:** This document teaches AI assistants everything needed to write production Rip code. After reading this, you should be fully proficient in Rip for web applications, CLI tools, server-side development, and utilities.
+**Purpose:** This document teaches AI assistants everything needed to write production Rip code. After reading this, you should be fully proficient in Rip for CLI tools, server-side development, utilities, and reactive applications.
 
-**What is Rip:** A modern reactive language that compiles to ES2022 JavaScript. It combines CoffeeScript's elegant syntax with built-in reactivity, components, and templates. Zero dependencies, self-hosting, ~14,000 LOC.
+**What is Rip:** A modern reactive language that compiles to ES2022 JavaScript. It combines CoffeeScript's elegant syntax with built-in reactivity primitives. Zero dependencies, self-hosting, ~11,000 LOC.
 
 ---
 
@@ -14,38 +14,14 @@
 4. [Functions](#4-functions)
 5. [Classes](#5-classes)
 6. [Reactivity](#6-reactivity)
-7. [Components](#7-components)
-8. [Templates](#8-templates)
-9. [Async Patterns](#9-async-patterns)
-10. [Modules & Imports](#10-modules--imports)
-11. [Regex Features](#11-regex-features)
-12. [Web Applications](#12-web-applications)
-13. [Server-Side Development](#13-server-side-development)
-14. [CLI Tools & Scripts](#14-cli-tools--scripts)
-15. [JavaScript Interop](#15-javascript-interop)
-16. [Common Patterns](#16-common-patterns)
-17. [Quick Reference](#17-quick-reference)
-18. [Common Mistakes & Clarifications](#18-common-mistakes--clarifications)
-
----
-
-# CRITICAL: Template Syntax Rules
-
-**Before reading further, understand these rules:**
-
-```coffee
-# ✅ CORRECT - CSS selector style, NO SPACES
-div.card.active
-.sidebar.collapsed        # Implicit div
-button.btn.primary
-span.badge.("highlight" if new)
-
-# ❌ WRONG - Spaces break the selector chain
-div .card .active         # WRONG! This is nested elements
-.sidebar .collapsed       # WRONG! This creates TWO divs
-```
-
-**Templates use CSS selector syntax. No spaces between tag/classes/id.**
+7. [Async Patterns](#7-async-patterns)
+8. [Modules & Imports](#8-modules--imports)
+9. [Regex Features](#9-regex-features)
+10. [Server-Side Development](#10-server-side-development)
+11. [CLI Tools & Scripts](#11-cli-tools--scripts)
+12. [JavaScript Interop](#12-javascript-interop)
+13. [Common Patterns](#13-common-patterns)
+14. [Quick Reference](#14-quick-reference)
 
 ---
 
@@ -283,7 +259,6 @@ Multiple lines
 | `%%` | True modulo | — | `-1 %% 3` → `2` | Always positive result |
 | `!` | Dammit (call+await) | — | `fetchData!` | `await fetchData()` |
 | `!?` | Otherwise | — | `val !? 5` | Default if undefined only |
-| `<=>` | Two-way bind | — | `value <=> name` | Bidirectional binding |
 | `=~` | Match | — | `str =~ /pat/` | Ruby-style regex match |
 
 ## Assignment Operators
@@ -547,7 +522,7 @@ finalValue = count.kill()  # Returns value, cleans up
 
 | Need | Use | Example |
 |------|-----|---------|
-| Mutable state that triggers UI updates | `:=` | `count := 0` |
+| Mutable state that triggers updates | `:=` | `count := 0` |
 | Computed value from other state | `~=` | `total ~= price * qty` |
 | Side effect on change | `effect` | `effect -> save(data)` |
 | Immutable constant | `=!` | `API_URL =! "..."` |
@@ -555,337 +530,7 @@ finalValue = count.kill()  # Returns value, cleans up
 
 ---
 
-# 7. Components
-
-Components are a **language construct** in Rip.
-
-## Basic Component
-
-```coffee
-component HelloWorld
-  render
-    div "Hello, World!"
-```
-
-## Full Component Structure
-
-```coffee
-component Counter
-  # Props (from parent)
-  @label = "Count"      # With default
-  @initial = 0          # With default
-  @onChange            # Callback prop (required)
-  @extra?              # Optional prop
-
-  # Reactive state
-  count := @initial
-
-  # Computed values
-  doubled ~= count * 2
-  isEven ~= count % 2 is 0
-
-  # Methods
-  inc: -> count += 1
-  dec: -> count -= 1
-
-  reset: ->
-    count = @initial
-    @onChange?(count)
-
-  # Lifecycle
-  mounted: ->
-    console.log "Counter mounted"
-
-  unmounted: ->
-    console.log "Counter unmounted"
-
-  # Effects
-  effect ->
-    localStorage.setItem "count", count
-
-  # Render
-  render
-    div.counter
-      h2 @label
-      span.value count
-      span.info " (doubled: #{doubled})"
-      button @click: @dec, "−"
-      button @click: @inc, "+"
-      button @click: @reset, "Reset"
-```
-
-## Props
-
-```coffee
-component Button
-  @label               # Required
-  @variant = "default" # Optional with default
-  @disabled = false
-  @onClick            # Callback
-  @...rest            # Rest props
-
-  render
-    button.btn.(variant) disabled: @disabled, @click: @onClick, ...@rest
-      @label
-```
-
-## Mounting
-
-```coffee
-# Create and mount
-Counter.new(label: "Score", initial: 10).mount "#app"
-
-# Or separately
-counter = Counter.new(initial: 5)
-counter.mount document.getElementById("app")
-
-# Traditional style also works
-counter = new Counter({initial: 5})
-counter.mount "#app"
-```
-
-## Children / Slots
-
-```coffee
-component Card
-  @title
-  @children
-
-  render
-    div.card
-      h2.card-title @title
-      div.card-body
-        @children
-
-# Usage
-Card title: "My Card"
-  p "This is the content"
-  p "Multiple children work"
-```
-
-## Context API
-
-```coffee
-component App
-  mounted: ->
-    setContext "theme", {dark: true, primary: "#3b82f6"}
-    setContext "user", currentUser
-
-  render
-    div
-      Header()
-      Content()
-
-component Header
-  theme = getContext "theme"
-  user = getContext "user"
-
-  render
-    header.("dark" if theme?.dark)
-      span "Welcome, #{user?.name}"
-```
-
----
-
-# 8. Templates
-
-Templates use indentation-based HTML with CSS selector syntax.
-
-## Basic Syntax
-
-```coffee
-render
-  # Tag with classes and ID
-  div#main.container.active
-
-  # Attributes
-  input type: "text", placeholder: "Enter name"
-
-  # Text content (last argument)
-  span "Hello, World!"
-  button "Click me"
-
-  # Dynamic content
-  span count
-  span "Count: #{count}"
-```
-
-## Selectors
-
-```coffee
-render
-  div                    # <div>
-  div.card               # <div class="card">
-  div.card.active        # <div class="card active">
-  div#main               # <div id="main">
-  div#main.container     # <div id="main" class="container">
-```
-
-## Dynamic Classes
-
-```coffee
-render
-  # Conditional class
-  div.btn.("active" if isActive)
-
-  # Multiple dynamic classes
-  div.base.("highlight", size, type)
-
-  # Object syntax
-  div.({ active: isActive, disabled: isDisabled })
-
-  # Mixed
-  div.card.("featured" if featured, size)
-```
-
-## Attributes
-
-```coffee
-render
-  # Static attributes
-  input type: "email", required: true
-
-  # Dynamic attributes
-  img src: user.avatar, alt: user.name
-
-  # Boolean attributes
-  button disabled: isLoading
-
-  # Hyphenated attributes work directly!
-  i data-lucide: "search", aria-hidden: "true"
-  div data-testid: "container", aria-label: "Menu"
-
-  # Mix regular and hyphenated
-  i class: "icon", data-lucide: "search"
-
-  # Spread attributes from variable
-  div ...props
-  input ...inputProps, class: "extra"
-```
-
-## Event Handlers
-
-```coffee
-render
-  # Method reference
-  button @click: @handleClick, "Click"
-
-  # Inline handler
-  button @click: (-> count += 1), "+"
-
-  # With event object
-  input @input: ((e) -> value = e.target.value)
-
-  # Fat arrow for this binding
-  button (@click: => @process()), "Process"
-```
-
-## Event Modifiers
-
-```coffee
-render
-  # Prevent default
-  form @submit.prevent: @handleSubmit
-
-  # Stop propagation
-  button @click.stop: @handle
-
-  # Combined
-  a @click.prevent.stop: @navigate
-
-  # Once (auto-removes)
-  button @click.once: @initialize
-
-  # Key modifiers
-  input @keydown.enter: @submit
-  input @keydown.escape: @cancel
-  input @keydown.ctrl.s: @save
-```
-
-## Two-Way Binding
-
-```coffee
-render
-  # Text input
-  input value <=> username
-
-  # Number input (auto-uses valueAsNumber)
-  input type: "number", value <=> count
-
-  # Checkbox
-  input type: "checkbox", checked <=> isActive
-
-  # Select
-  select value <=> selectedId
-    option value: "1", "Option 1"
-    option value: "2", "Option 2"
-```
-
-## Conditionals
-
-```coffee
-render
-  # Block conditional
-  if loading
-    Spinner()
-  else if error
-    ErrorMessage message: error
-  else
-    Content data: data
-
-  # Inline conditional
-  span.badge "Admin" if user.admin
-  div.warning "Unsaved" unless saved
-```
-
-## Loops
-
-```coffee
-render
-  # Array iteration (always use key!)
-  ul
-    for item in items, key: item.id
-      li item.name
-
-  # With index
-  ol
-    for item, i in items, key: item.id
-      li "#{i + 1}. #{item.name}"
-
-  # Object iteration
-  dl
-    for key, value of data
-      dt key
-      dd value
-```
-
-## Refs
-
-```coffee
-component SearchBox
-  inputEl = null
-
-  mounted: ->
-    inputEl.focus()
-
-  render
-    input ref: inputEl, type: "text"
-```
-
-## Fragments
-
-```coffee
-render
-  <>
-    Header()
-    main
-      @children
-    Footer()
-```
-
----
-
-# 9. Async Patterns
+# 7. Async Patterns
 
 ## The Dammit Operator (`!`)
 
@@ -945,36 +590,9 @@ def safeFetch(url)
     null
 ```
 
-## Async in Components
-
-```coffee
-component UserProfile
-  @userId
-  user := null
-  loading := true
-  error := null
-
-  mounted: ->
-    try
-      user = Api.getUser!(@userId)
-    catch e
-      error = e.message
-    finally
-      loading = false
-
-  render
-    div
-      if loading
-        Spinner()
-      else if error
-        ErrorMessage message: error
-      else
-        UserCard user: user
-```
-
 ---
 
-# 10. Modules & Imports
+# 8. Modules & Imports
 
 ## Importing
 
@@ -1041,7 +659,7 @@ console.log formatCurrency(19.99)
 
 ---
 
-# 11. Regex Features
+# 9. Regex Features
 
 ## Match Operator (`=~`)
 
@@ -1123,106 +741,7 @@ else
 
 ---
 
-# 12. Web Applications
-
-## Client-Side Component App
-
-```coffee
-# app.rip - A complete reactive app
-
-component TodoApp
-  todos := []
-  newTodo := ""
-  filter := "all"
-
-  # Computed
-  filtered ~= switch filter
-    when "active" then todos.filter (t) -> not t.done
-    when "completed" then todos.filter (t) -> t.done
-    else todos
-
-  remaining ~= todos.filter((t) -> not t.done).length
-
-  # Methods
-  addTodo: ->
-    return unless newTodo.trim()
-    todos = [...todos, {id: Date.now(), text: newTodo.trim(), done: false}]
-    newTodo = ""
-
-  toggleTodo: (todo) ->
-    todo.done = not todo.done
-    todos = [...todos]
-
-  removeTodo: (todo) ->
-    todos = todos.filter (t) -> t isnt todo
-
-  # Persistence
-  mounted: ->
-    saved = localStorage.getItem "todos"
-    todos = JSON.parse(saved) if saved
-
-  effect ->
-    localStorage.setItem "todos", JSON.stringify(todos)
-
-  render
-    section.todoapp
-      header
-        h1 "Todos"
-        input.new-todo
-          placeholder: "What needs to be done?"
-          value <=> newTodo
-          @keydown.enter: @addTodo
-
-      section.main if todos.length
-        ul.todo-list
-          for todo in filtered, key: todo.id
-            li.("completed" if todo.done)
-              input.toggle type: "checkbox", checked: todo.done
-                @change: -> @toggleTodo(todo)
-              label todo.text
-              button.destroy @click: -> @removeTodo(todo)
-
-      footer.footer if todos.length
-        span.todo-count
-          strong remaining
-          " items left"
-        ul.filters
-          li
-            a.("selected" if filter is "all") @click: -> filter = "all"
-              "All"
-          li
-            a.("selected" if filter is "active") @click: -> filter = "active"
-              "Active"
-          li
-            a.("selected" if filter is "completed") @click: -> filter = "completed"
-              "Completed"
-
-# Mount the app
-TodoApp.new().mount "#app"
-```
-
-## Browser HTML
-
-```html
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Todo App</title>
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
-  <div id="app"></div>
-  <script type="text/rip">
-    # Inline Rip code here, or...
-  </script>
-  <script src="https://shreeve.github.io/rip-lang/docs/dist/rip.browser.min.js"></script>
-</body>
-</html>
-```
-
----
-
-# 13. Server-Side Development
+# 10. Server-Side Development
 
 ## HTTP Server with Bun
 
@@ -1392,7 +911,7 @@ console.log "WebSocket server running on ws://localhost:3000"
 
 ---
 
-# 14. CLI Tools & Scripts
+# 11. CLI Tools & Scripts
 
 ## Basic CLI Tool
 
@@ -1522,7 +1041,7 @@ console.log "Transformed #{transformed.length} items"
 
 ---
 
-# 15. JavaScript Interop
+# 12. JavaScript Interop
 
 ## Using npm Packages
 
@@ -1591,7 +1110,7 @@ eval(code);
 
 ---
 
-# 16. Common Patterns
+# 13. Common Patterns
 
 ## Error Handling
 
@@ -1755,21 +1274,9 @@ machine.transition("pause")  # running -> paused
 
 ---
 
-# 17. Quick Reference
+# 14. Quick Reference
 
 ## File Templates
-
-### Web App Entry Point
-
-```coffee
-# app.rip
-component App
-  render
-    div#app
-      h1 "My App"
-
-App.new().mount "#app"
-```
 
 ### API Server
 
@@ -1809,6 +1316,20 @@ export def sleep(ms)
   new Promise (resolve) -> setTimeout(resolve, ms)
 ```
 
+### Reactive State Example
+
+```coffee
+# reactive.rip
+count := 0
+doubled ~= count * 2
+
+effect ->
+  console.log "Count: #{count}, Doubled: #{doubled}"
+
+count = 5   # Logs: "Count: 5, Doubled: 10"
+count = 10  # Logs: "Count: 10, Doubled: 20"
+```
+
 ## Syntax Cheat Sheet
 
 ```coffee
@@ -1844,14 +1365,6 @@ class X extends Y
   method: -> @a
 X.new(a: 1)
 
-# Components
-component X
-  @prop = default
-  state := initial
-  computed ~= state * 2
-  render
-    div state
-
 # Operators
 a!             # await a()
 a !? b         # a if defined, else b
@@ -1884,580 +1397,20 @@ bun add -g rip-lang
 
 ---
 
-# 18. Common Mistakes & Clarifications
-
-This section addresses frequently asked questions and common mistakes.
-
-## Template Syntax Mistakes
-
-### ❌ WRONG: Spaces in Selectors
-
-```coffee
-# ❌ WRONG - spaces create NESTED elements!
-div .card .active
-  # This creates: <div><div class="card"><div class="active">
-
-# ✅ CORRECT - CSS selector style, NO spaces
-div.card.active
-  # This creates: <div class="card active">
-```
-
-### Implicit Div
-
-```coffee
-# When you start with . or #, div is implicit
-.card.active           # <div class="card active">
-#main.container        # <div id="main" class="container">
-.sidebar               # <div class="sidebar">
-
-# It's ALWAYS a div. Context doesn't change it.
-# If you want a span, say span:
-span.badge             # <span class="badge">
-```
-
-### Dynamic Classes with `.()`
-
-```coffee
-# The .() syntax is for dynamic/conditional classes
-# It works on ANY element, not just div
-
-div.card.("active" if isActive)
-span.badge.("new" if isNew)
-button.btn.("primary", "large")
-
-# You CAN mix static and dynamic:
-div.card.static-class.("dynamic" if condition)
-button.btn.primary.("loading" if loading, size)
-
-# Multiple conditions:
-div.("active" if a, "hidden" if b, "large" if c)
-
-# With variables:
-div.(className, extraClass, "fixed")
-```
-
-### ❌ WRONG: Conditional Class Syntax
-
-```coffee
-# ❌ WRONG - this is NOT valid
-div(.selected: isSelected)
-div.card(.active: isActive)
-
-# ✅ CORRECT - use string + if
-div.("selected" if isSelected)
-div.card.("active" if isActive)
-
-# ✅ CORRECT - object syntax for multiple
-div.({ active: isActive, disabled: isDisabled })
-```
-
-## Attributes
-
-### Basic Attribute Syntax
-
-```coffee
-# Attributes use key: value syntax
-input type: "text", placeholder: "Enter name"
-img src: "/logo.png", alt: "Logo", width: 200
-a href: "/home", target: "_blank", "Go Home"
-
-# Hyphenated attributes work directly in templates!
-i data-lucide: "search", data-size: "16"
-div data-testid: "container", aria-label: "Menu"
-span data-foo-bar-baz: "multiple-hyphens-work"
-
-# Mix with regular attributes
-i class: "icon", data-lucide: "search"
-div id: "main", data-testid: "container", aria-hidden: "true"
-
-# All attributes work
-svg viewBox: "0 0 24 24", width: 16, height: 16
-input type: "email", required: true
-```
-
-### Dynamic Attribute Values
-
-```coffee
-# Variables work directly
-img src: user.avatar, alt: user.name
-a href: "/users/#{user.id}", "View Profile"
-div title: tooltip, data-count: items.length
-
-# Expressions work
-input disabled: isLoading or !isValid
-div class: getClassName()
-```
-
-### Boolean Attributes
-
-```coffee
-# true = attribute present, false = attribute absent
-button disabled: true       # <button disabled>
-button disabled: false      # <button>
-input required: isRequired  # present if truthy
-option selected: isDefault
-details open: expanded
-```
-
-### Multiple Attributes (Indented)
-
-```coffee
-input
-  type: "email"
-  placeholder: "you@example.com"
-  required: true
-  autocomplete: "email"
-  @input: handleInput
-  @keydown.enter: submit
-```
-
-## Text and Interpolation
-
-### ❌ WRONG: Using `{}`
-
-```coffee
-# ❌ WRONG - JSX-style braces don't work
-span {count}
-div {user.name}
-
-# ✅ CORRECT - use #{} for interpolation
-span "Count: #{count}"
-div "Hello, #{user.name}!"
-
-# ✅ CORRECT - bare variable for just the value
-span count
-div user.name
-```
-
-### Text Content Options
-
-```coffee
-# String literal (with interpolation)
-span "Hello, #{name}!"
-h1 "Welcome to #{app.name}"
-
-# Bare variable (just the value)
-span count
-td item.price
-li todo.text
-
-# Expression
-span items.length
-td formatCurrency(price)
-
-# Multi-part text (use multiple children)
-p
-  "Hello, "
-  strong name
-  "! Welcome back."
-```
-
-## Reactivity Clarifications
-
-### When to Use `:=` vs `~=` vs `=`
-
-```coffee
-# := (State) - state that changes and triggers updates
-count := 0              # User can change this
-items := []             # Array that grows/shrinks
-isOpen := false         # Toggle state
-
-# ~= (Computed) - computed FROM other state
-doubled ~= count * 2              # Always count * 2
-total ~= items.reduce(sum, 0)     # Always sum of items
-isEmpty ~= items.length is 0      # Always tracks length
-
-# = (Regular) - doesn't trigger updates
-temp = calculate()      # One-time calculation
-config = loadConfig()   # Static value
-i = 0                   # Loop variable
-
-# =! (Const) - immutable, never changes
-API_URL =! "https://..."
-MAX_SIZE =! 100
-```
-
-### Can Computed Depend on Computed?
-
-```coffee
-# YES! Computed values can depend on other computed values
-count := 0
-doubled ~= count * 2
-quadrupled ~= doubled * 2    # Depends on doubled
-message ~= "#{count} × 4 = #{quadrupled}"
-
-count = 5
-# doubled = 10, quadrupled = 20, message = "5 × 4 = 20"
-```
-
-### What Triggers Re-render?
-
-```coffee
-# Writing to a STATE triggers updates
-count := 0
-count = 5      # ← This triggers dependent computed/effects/UI
-
-# Computed values update automatically (don't write to them)
-doubled ~= count * 2    # Auto-updates when count changes
-
-# Regular variables do NOT trigger updates
-temp = 5
-temp = 10      # ← Nothing happens, no reactivity
-```
-
-## Component Clarifications
-
-### All Lifecycle Hooks
-
-```coffee
-component MyComponent
-  # Called after first render, DOM is available
-  mounted: ->
-    console.log "Mounted!"
-    inputEl.focus()
-    fetchData()
-
-  # Called before component is removed
-  unmounted: ->
-    console.log "Unmounting!"
-    cleanup()
-
-  # Called after any reactive update
-  updated: ->
-    console.log "Updated!"
-
-  # Note: There is NO beforeMount hook
-```
-
-### Props Syntax
-
-```coffee
-component Button
-  @label               # Required prop (error if missing)
-  @icon?               # Optional prop (undefined if missing)
-  @variant = "default" # Optional with default value
-  @size = "md"
-  @onClick             # Callback prop
-  @children            # Children/slot content
-  @...rest             # Capture all other props
-
-  render
-    button.btn.(variant).(size) @click: @onClick, ...@rest
-      @icon if @icon
-      @label
-      @children
-```
-
-### Passing Props to Components
-
-```coffee
-# In parent's render block:
-render
-  # Named props
-  Button label: "Save", variant: "primary", onClick: @handleSave
-
-  # With children
-  Card title: "My Card"
-    p "This becomes @children"
-    p "Multiple elements work"
-
-  # Spread props
-  Input ...@inputProps, class: "extra"
-```
-
-### The `mount` Method
-
-```coffee
-# mount is a METHOD on component instances, not a global function
-
-# Create instance, then call mount
-counter = Counter.new(initial: 5)
-counter.mount "#app"                    # CSS selector
-counter.mount document.body             # DOM element
-counter.mount document.getElementById("app")
-
-# Or chain it
-Counter.new(initial: 5).mount "#app"
-
-# ❌ WRONG - mount is not a standalone function
-mount Counter, "#app"
-mount(Counter, "#app")
-```
-
-### Children and Slots
-
-```coffee
-component Card
-  @title
-  @children      # Declare to receive children
-
-  render
-    div.card
-      h2 @title
-      div.card-body
-        @children    # Render children here
-
-# Usage - indented content becomes @children
-Card title: "Info"
-  p "First paragraph"
-  p "Second paragraph"
-  ul
-    li "Item 1"
-    li "Item 2"
-```
-
-### Named Slots
-
-```coffee
-component Layout
-  @header?       # Optional named slot
-  @footer?       # Optional named slot
-  @children      # Default slot
-
-  render
-    div.layout
-      header @header if @header
-      main @children
-      footer @footer if @footer
-
-# Usage
-Layout
-  header:
-    h1 "Site Title"
-    nav ...
-  footer:
-    p "© 2024"
-
-  # Default content → @children
-  p "Main content here"
-```
-
-## Template Control Flow
-
-### Loops with Index
-
-```coffee
-render
-  # Basic loop
-  ul
-    for item in items
-      li item.name
-
-  # With index
-  ol
-    for item, index in items
-      li "#{index + 1}. #{item.name}"
-
-  # With key (ALWAYS use for lists that change!)
-  ul
-    for item in items, key: item.id
-      li item.name
-
-  # Index AND key
-  ul
-    for item, i in items, key: item.id
-      li class: ("even" if i % 2 is 0)
-        item.name
-```
-
-### Conditionals
-
-```coffee
-render
-  # Simple if
-  if loading
-    Spinner()
-
-  # If/else
-  if error
-    ErrorMessage message: error
-  else
-    Content()
-
-  # If/else if/else
-  if loading
-    Spinner()
-  else if error
-    ErrorMessage message: error
-  else if items.length is 0
-    EmptyState()
-  else
-    ItemList items: items
-
-  # Inline conditional
-  span.badge "Admin" if user.admin
-  span.badge "New" if item.isNew
-  div.warning "Unsaved" unless saved
-```
-
-## Imports Between .rip Files
-
-```coffee
-# YES, imports work between .rip files!
-
-# utils.rip
-export def formatDate(date)
-  date.toISOString().split("T")[0]
-
-export config = { timeout: 5000 }
-
-export default { formatDate, config }
-
-# app.rip
-import { formatDate, config } from "./utils.rip"
-import utils from "./utils.rip"
-
-console.log formatDate(new Date())
-console.log utils.config.timeout
-```
-
-### Browser vs Server
-
-```coffee
-# Server (Bun/Node): imports work directly
-import { helper } from "./utils.rip"
-
-# Browser: Rip compiles to JS, so imports become JS imports
-# The .rip extension is kept in the import statement
-# Your bundler/server needs to handle .rip → .js mapping
-```
-
-## Async Components
-
-### Async in Lifecycle
-
-```coffee
-component UserProfile
-  @userId
-  user := null
-  loading := true
-  error := null
-
-  # mounted can be async (use ! for await)
-  mounted: ->
-    try
-      user = Api.getUser!(@userId)
-    catch e
-      error = e.message
-    finally
-      loading = false
-
-  render
-    div
-      if loading
-        div.spinner "Loading..."
-      else if error
-        div.error error
-      else
-        div.profile
-          h1 user.name
-          p user.email
-```
-
-### Loading States Pattern
-
-```coffee
-component DataLoader
-  @url
-  data := null
-  loading := true
-  error := null
-
-  mounted: ->
-    try
-      response = fetch!(@url)
-      data = response.json!
-    catch e
-      error = e.message
-    finally
-      loading = false
-
-  render
-    div
-      if loading
-        slot name: "loading"
-          div "Loading..."    # Default loading
-      else if error
-        slot name: "error"
-          div.error error     # Default error
-      else
-        @children             # Render children with data
-```
-
-## Raw HTML (Escape Hatch)
-
-```coffee
-# For injecting raw HTML (use carefully - XSS risk!)
-# Use the innerHTML attribute
-
-div innerHTML: "<strong>Bold</strong> and <em>italic</em>"
-
-# For icons/SVG from strings
-div.icon innerHTML: iconSvgString
-
-# ⚠️ NEVER use with user input without sanitization!
-div innerHTML: sanitize(userContent)
-```
-
-## Quick Syntax Reference
-
-```coffee
-# SELECTORS (no spaces!)
-div.class1.class2           # <div class="class1 class2">
-.class1.class2              # <div class="class1 class2"> (implicit div)
-#id.class                   # <div id="id" class="class">
-span.badge                  # <span class="badge">
-
-# DYNAMIC CLASSES
-div.("active" if x)         # Conditional
-div.(className)             # Variable
-div.static.("dynamic" if x) # Mixed
-div.({ a: boolA, b: boolB }) # Object syntax
-
-# ATTRIBUTES
-tag key: value              # Any attribute
-tag data-foo: "bar"         # Data attributes
-tag disabled: bool          # Boolean attributes
-
-# TEXT
-tag "static text"           # String
-tag "hello #{name}"         # Interpolation (NOT {name}!)
-tag variable                # Bare variable
-tag expression              # Expression result
-
-# EVENTS
-tag @click: handler         # Event handler
-tag @click: @method         # Component method
-tag @click.prevent: fn      # With modifier
-tag @keydown.enter: fn      # Key modifier
-
-# BINDING
-input value <=> variable    # Two-way binding
-
-# CHILDREN (indentation)
-parent
-  child1
-  child2
-```
-
----
-
 ## Summary
 
 **Rip is a complete language for modern JavaScript development:**
 
 - **Clean syntax** — CoffeeScript-inspired, readable, minimal noise
 - **Built-in reactivity** — `:=` state, `~=` computed, `effect` blocks
-- **Component system** — `component` keyword, props, lifecycle, templates
 - **Modern output** — ES2022, classes, optional chaining, nullish coalescing
 - **JavaScript interop** — Full access to npm ecosystem
 - **Multi-platform** — Bun, Node.js, Deno, browsers
 
 **Key differentiators:**
 - Reactive primitives are operators, not library imports
-- Templates are language syntax, not strings or JSX
-- Components are first-class language constructs
 - Zero dependencies, self-hosting compiler
+- Framework-agnostic — use with any UI library
 
 **Start with:**
 ```bash
@@ -2468,4 +1421,4 @@ rip hello.rip
 
 ---
 
-*Version 2.5.1 — 1046/1046 tests passing — Zero dependencies — Self-hosting*
+*Version 2.5.1 — 979/979 tests passing — Zero dependencies — Self-hosting*

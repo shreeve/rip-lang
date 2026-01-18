@@ -2,39 +2,34 @@
 
 Rip implements a **fine-grained reactive system** that rivals and often exceeds the capabilities of major frameworks like Vue, Svelte, Solid, and React — in just ~200 lines of runtime code.
 
-## The Four Primitives
+## The Three Primitives
 
-Rip's entire reactivity model is built on four foundational concepts:
+Rip's entire reactivity model is built on three foundational concepts:
 
 | Primitive | Syntax | Mnemonic | Purpose |
 |-----------|--------|----------|---------|
 | **state** | `x := 0` | "holds state" | Mutable reactive value |
 | **computed** | `y ~= x * 2` | "always equals" | Computed value (auto-updates) |
 | **effect** | `effect -> ...` | — | Side effect (runs on changes) |
-| **props** | `@label = "default"` | — | Component inputs |
 
-These four primitives provide **complete reactive power** — everything React, Vue, Svelte, and Solid can do, Rip can do too.
+These three primitives provide **complete reactive power** — everything React, Vue, Svelte, and Solid can do with state management, Rip can do too.
 
 ---
 
 ## Quick Example
 
 ```rip
-component Counter
-  count := 0                      # state
-  doubled ~= count * 2            # computed
+count := 0                      # state
+doubled ~= count * 2            # computed
 
-  effect ->                       # effect
-    console.log "Count: #{count}"
+effect ->                       # effect
+  console.log "Count: #{count}, Doubled: #{doubled}"
 
-  increment: ->
-    count += 1
+increment: ->
+  count += 1
 
-  render
-    div
-      p "Count: #{count}"
-      p "Doubled: #{doubled}"
-      button @click: increment, "+"
+increment()  # Logs: "Count: 1, Doubled: 2"
+increment()  # Logs: "Count: 2, Doubled: 4"
 ```
 
 ---
@@ -88,16 +83,6 @@ effect ->
 - **Auto-tracking** — no manual dependency arrays (unlike React!)
 - **Immediate** — runs once immediately to establish dependencies
 - **Disposable** — returns cleanup function
-
-### Props
-
-Props are component inputs with optional defaults.
-
-```rip
-component Button
-  @label = "Click me"    # optional prop with default
-  @onClick               # required prop (no default)
-```
 
 ---
 
@@ -160,7 +145,7 @@ effect ->
 |-----------|-------------|
 | React | ~40 KB (minified) |
 | Vue | ~34 KB |
-| Svelte | ~2 KB (but grows with components) |
+| Svelte | ~2 KB (but grows with app size) |
 | **Rip** | **~4 KB** (full runtime) |
 
 ---
@@ -189,7 +174,7 @@ const currentValue = count.read();  // No tracking
 
 ### Locking (SSR/Hydration)
 
-Prevent writes during server-side rendering:
+Prevent writes during server-side rendering or freeze values:
 
 ```javascript
 count.lock();  // Now immutable
@@ -217,7 +202,7 @@ const finalValue = count.kill();  // Returns value, clears subscribers
        ▼                             │
 ┌─────────────┐     reads      ┌─────┴───────┐
 │  COMPUTED   │◄──────────────│   EFFECT    │
-│  doubled    │               │   (DOM)     │
+│  doubled    │               │   (logger)  │
 └─────────────┘               └─────────────┘
 ```
 
@@ -234,12 +219,12 @@ Rip uses **fine-grained reactivity** (like Vue/Solid), not Virtual DOM diffing (
 
 | Approach | How it works | Pros | Cons |
 |----------|--------------|------|------|
-| **VDOM** (React) | Re-render component, diff, patch | Simple mental model | Overhead, requires optimization |
+| **VDOM** (React) | Re-render tree, diff, patch | Simple mental model | Overhead, requires optimization |
 | **Fine-grained** (Rip) | Track dependencies, update directly | Surgical updates, fast | More complex internally |
 
 ### Result
 
-- **No VDOM overhead** — changes go directly to DOM nodes
+- **No VDOM overhead** — changes propagate directly to subscribers
 - **Surgical updates** — only the exact things that changed update
 - **No `useMemo`/`useCallback` dance** — caching is automatic
 - **Smaller bundles** — no diffing algorithm needed
@@ -250,10 +235,10 @@ Rip uses **fine-grained reactivity** (like Vue/Solid), not Virtual DOM diffing (
 
 Rip's reactivity system:
 
-✅ **Four simple primitives** — state, computed, effect, props
+✅ **Three simple primitives** — state, computed, effect
 ✅ **Auto-tracking** — no manual dependency arrays
 ✅ **Lazy computed** — only calculates when needed
-✅ **Fine-grained** — surgical DOM updates
+✅ **Fine-grained** — surgical updates to subscribers
 ✅ **Tiny runtime** — ~200 lines, ~4 KB
 ✅ **Extra utilities** — `.lock()`, `.read()`, `.kill()` that others lack
 

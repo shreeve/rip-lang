@@ -76,7 +76,7 @@ class BinaryOp {
 ["+", left, right]  // That's it!
 ```
 
-**Result:** CoffeeScript's compiler is 17,760 LOC. Rip's is ~14,000 LOC—**smaller, yet includes a full reactive framework, template engine, and component system.**
+**Result:** CoffeeScript's compiler is 17,760 LOC. Rip's is ~11,000 LOC—**smaller, yet includes a full reactive runtime.**
 
 ## S-Expression Structure
 

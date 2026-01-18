@@ -2,9 +2,9 @@
 
 # Rip in the Browser
 
-**Complete Language + Reactive Framework in 51KB**
+**Complete Language + Reactive Runtime in 51KB**
 
-Rip compiles to modern JavaScript and runs beautifully in the browser. With brotli compression, the entire package—compiler, reactive runtime, template engine, and component system—fits in just **51KB**. That's a complete framework in less space than most utility libraries!
+Rip compiles to modern JavaScript and runs beautifully in the browser. With brotli compression, the entire package—compiler and reactive runtime—fits in just **51KB**. That's a complete language in less space than most utility libraries!
 
 ---
 
@@ -19,15 +19,13 @@ rip.browser.min.js.br   51 KB  (brotli, 91% smaller!)
 **What's in that 51KB?**
 - Complete compiler (lexer, parser, code generator)
 - Reactive runtime (state, computed values, effects)
-- Template engine (S-expression syntax, dynamic classes)
-- Component system (props, lifecycle, fine-grained updates)
 - Zero dependencies
 
 **For comparison:**
 - React (min+gzip): ~42KB (just the library, no compiler)
 - Vue (min+gzip): ~34KB (just the library, no compiler)
 - Svelte: ~2KB runtime (but requires build step + compiler)
-- **Rip: 51KB (complete language + framework, runs anywhere!)**
+- **Rip: 51KB (complete language + reactive runtime, runs anywhere!)**
 
 ---
 
@@ -900,11 +898,10 @@ See the `docs/examples/` directory for working demos:
 - More features than most frameworks, smaller than most libraries
 - Fast loading even on mobile
 
-**2. Complete Framework**
+**2. Complete Language**
 - Reactive primitives (state, computed, effects)
-- S-expression templates with fine-grained updates
-- Component system with props and lifecycle
 - Modern ES6+ output
+- Framework-agnostic — use with any UI library
 
 **3. Zero Build Step**
 - Write Rip directly in HTML

@@ -1,5 +1,3 @@
-import { TEMPLATE_TAGS } from './tags.js';
-
 var BALANCED_PAIRS, BOM, BOOL, CALLABLE, CALL_CLOSERS, CODE, COMMENT, COMPARABLE_LEFT_SIDE, COMPARE, COMPOUND_ASSIGN, CONTROL_IN_IMPLICIT, DISCARDED, EXPRESSION_CLOSE, EXPRESSION_END, EXPRESSION_START, HERECOMMENT_ILLEGAL, HEREDOC_DOUBLE, HEREDOC_INDENT, HEREDOC_SINGLE, HEREGEX, HEREGEX_COMMENT, HERE_JSTOKEN, IDENTIFIER, IMPLICIT_CALL, IMPLICIT_END, IMPLICIT_FUNC, IMPLICIT_UNSPACED_CALL, INDENTABLE_CLOSERS, INDEXABLE, INVERSES, JSTOKEN, JS_KEYWORDS, LINEBREAKS, LINE_BREAK, LINE_CONTINUER, MATH, MULTI_DENT, NOT_REGEX, NUMBER, OPERATOR, POSSIBLY_DIVISION, REGEX, REGEX_FLAGS, REGEX_ILLEGAL, REGEX_INVALID_ESCAPE, RELATION, RESERVED, RIP_ALIASES, RIP_ALIAS_MAP, RIP_KEYWORDS, Rewriter, SHIFT, SINGLE_CLOSERS, SINGLE_LINERS, STRICT_PROSCRIBED, STRING_DOUBLE, STRING_INVALID_ESCAPE, STRING_SINGLE, STRING_START, TRAILING_SPACES, UNARY, UNARY_MATH, UNFINISHED, VALID_FLAGS, WHITESPACE, addTokenData, generate, isForFrom, k, key, left, len, moveComments, right, indexOf = [].indexOf, slice = [].slice, hasProp = {}.hasOwnProperty;
 
 // The Rip Lexer. Uses a series of token-matching regexes to attempt
@@ -204,10 +202,6 @@ export var Lexer = class Lexer {
     this.seenExport = false; // Used to recognize `EXPORT FROM? AS?` tokens.
     this.importSpecifierList = false; // Used to identify when in an `IMPORT {...} FROM? ...`.
     this.exportSpecifierList = false; // Used to identify when in an `EXPORT {...} FROM? ...`.
-    this.inRender = false; // Used to recognize #id syntax in templates.
-    this.renderIndent = 0; // Track render block indentation depth.
-    this.inStyle = false; // Used for style block special parsing.
-    this.styleIndent = 0; // Track style block indentation depth.
     this.chunkLine = opts.line || 0; // The start line for the current @chunk.
     this.chunkColumn = opts.column || 0; // The start column of the current @chunk.
     this.chunkOffset = opts.offset || 0; // The start offset for the current @chunk.
@@ -219,7 +213,7 @@ export var Lexer = class Lexer {
     // `@literalToken` is the fallback catch-all.
     i = 0;
     while (this.chunk = code.slice(i)) {
-      consumed = this.identifierToken() || this.commentToken() || this.whitespaceToken() || this.lineToken() || this.styleLineToken() || this.stringToken() || this.numberToken() || this.regexToken() || this.jsToken() || this.literalToken();
+      consumed = this.identifierToken() || this.commentToken() || this.whitespaceToken() || this.lineToken() || this.stringToken() || this.numberToken() || this.regexToken() || this.jsToken() || this.literalToken();
       // Update position.
       [this.chunkLine, this.chunkColumn, this.chunkOffset] = this.getLineAndColumnFromChunk(consumed);
       i += consumed;
@@ -267,35 +261,7 @@ export var Lexer = class Lexer {
   // Tokenizers
   // ----------
 
-  // Style block line tokenizer - handles CSS-like style definitions
-  // Pattern: .selector: classes (unquoted Tailwind classes)
-  // Example: .card: rounded-lg shadow-md bg-white hover:shadow-lg
-  styleLineToken() {
-    if (!this.inStyle) return 0;
-
-    // Match: .selectorName: classes (single-line form, no newline)
-    const match = this.chunk.match(/^\.([a-zA-Z_][a-zA-Z0-9_-]*):[ \t]*([^\n]*)/);
-    if (!match) return 0;
-
-    const [full, selector, classesRaw] = match;
-    const classes = classesRaw.trim();
-
-    // Emit the selector as a string (quoted for the parser)
-    const selectorToken = this.makeToken('STRING', `".${selector}"`, 0, selector.length + 1);
-    this.tokens.push(selectorToken);
-
-    // Emit the colon
-    const colonToken = this.makeToken(':', ':', selector.length + 1, 1);
-    this.tokens.push(colonToken);
-
-    // Emit the classes as a string
-    const classToken = this.makeToken('STRING', `"${classes}"`, selector.length + 2, classesRaw.length);
-    this.tokens.push(classToken);
-
-    return full.length;
-  }
-
-    // Matches identifying literals: variables, keywords, method names, etc.
+  // Matches identifying literals: variables, keywords, method names, etc.
   // Check to ensure that JavaScript reserved words aren't being used as
   // identifiers. Because Rip reserves a handful of keywords that are
   // allowed in JavaScript, we're careful not to tag them as keywords when
@@ -362,9 +328,7 @@ export var Lexer = class Lexer {
       return sup.length + 3;
     }
     prev = this.prev();
-    // In render blocks, # also creates property (for ID selectors like div#main)
-    const isHashProperty = this.inRender && (prev != null) && prev[0] === '#' && !prev.spaced;
-    tag = colon || (prev != null) && (((ref5 = prev[0]) === '.' || ref5 === '?.' || ref5 === '::' || ref5 === '?::') || !prev.spaced && prev[0] === '@') || isHashProperty ? 'PROPERTY' : 'IDENTIFIER';
+    tag = colon || (prev != null) && (((ref5 = prev[0]) === '.' || ref5 === '?.' || ref5 === '::' || ref5 === '?::') || !prev.spaced && prev[0] === '@') ? 'PROPERTY' : 'IDENTIFIER';
     tokenData = {};
     if (tag === 'IDENTIFIER' && (indexOf.call(JS_KEYWORDS, id) >= 0 || indexOf.call(RIP_KEYWORDS, id) >= 0) && !(this.exportSpecifierList && indexOf.call(RIP_KEYWORDS, id) >= 0)) {
       tag = id.toUpperCase();
@@ -382,12 +346,6 @@ export var Lexer = class Lexer {
         this.seenImport = true;
       } else if (tag === 'EXPORT') {
         this.seenExport = true;
-      } else if (tag === 'RENDER') {
-        this.inRender = true;
-        this.renderIndent = this.indent;
-      } else if (tag === 'STYLE') {
-        this.inStyle = true;
-        this.styleIndent = this.indent;
       } else if (indexOf.call(UNARY, tag) >= 0) {
         tag = 'UNARY';
       } else if (indexOf.call(RELATION, tag) >= 0) {
@@ -514,11 +472,6 @@ export var Lexer = class Lexer {
   // everything has been parsed and the JavaScript code generated.
   commentToken(chunk = this.chunk, {heregex, returnCommentTokens = false, offsetInChunk = 0} = {}) {
     var commentAttachment, commentAttachments, commentWithSurroundingWhitespace, content, contents, getIndentSize, hasSeenFirstCommentLine, hereComment, hereLeadingWhitespace, hereTrailingWhitespace, i, indentSize, leadingNewline, leadingNewlineOffset, leadingNewlines, leadingWhitespace, length, lineComment, match, matchIllegal, noIndent, nonInitial, placeholderToken, precededByBlankLine, precedingNonCommentLines, prev;
-    // In render blocks, # immediately followed by identifier (no space) is an ID selector
-    // e.g., div#main is an ID, but div # comment is a comment
-    if (this.inRender && chunk[0] === '#' && /^#[a-zA-Z_$]/.test(chunk)) {
-      return 0;  // Not a comment - let literalToken handle the #
-    }
     if (!(match = chunk.match(COMMENT))) {
       return 0;
     }
@@ -1276,10 +1229,6 @@ export var Lexer = class Lexer {
     }
     this.indent = decreasedIndent;
     this.indentLiteral = this.indentLiteral.slice(0, decreasedIndent);
-    // Exit style mode when we outdent past the style block
-    if (this.inStyle && decreasedIndent <= this.styleIndent) {
-      this.inStyle = false;
-    }
     return this;
   }
 
@@ -1748,22 +1697,6 @@ export var Lexer = class Lexer {
   // Are we in the midst of an unfinished expression?
   unfinished() {
     var ref;
-    // Don't treat line as continuation after RENDER (for template .class syntax)
-    if (this.tag() === 'RENDER') {
-      return false;
-    }
-    // Don't treat line as continuation after STYLE (for style block .selector syntax)
-    if (this.tag() === 'STYLE') {
-      return false;
-    }
-    // In render blocks, don't treat .class as continuation - it's a nested element
-    if (this.inRender && /^\s*\./.test(this.chunk)) {
-      return false;
-    }
-    // In style blocks, don't treat .selector as continuation
-    if (this.inStyle && /^\s*\./.test(this.chunk)) {
-      return false;
-    }
     return LINE_CONTINUER.test(this.chunk) || (ref = this.tag(), indexOf.call(UNFINISHED, ref) >= 0);
   }
 
@@ -1860,7 +1793,7 @@ addTokenData = function(token, data) {
 JS_KEYWORDS = ['true', 'false', 'null', 'this', 'new', 'delete', 'typeof', 'in', 'instanceof', 'return', 'throw', 'break', 'continue', 'debugger', 'yield', 'await', 'if', 'else', 'switch', 'for', 'while', 'do', 'try', 'catch', 'finally', 'class', 'extends', 'super', 'import', 'export', 'default'];
 
 // Rip-only keywords.
-RIP_KEYWORDS = ['undefined', 'Infinity', 'NaN', 'then', 'unless', 'until', 'loop', 'of', 'by', 'when', 'def', 'effect', 'component', 'render', 'style', 'mounted', 'unmounted', 'updated'];
+RIP_KEYWORDS = ['undefined', 'Infinity', 'NaN', 'then', 'unless', 'until', 'loop', 'of', 'by', 'when', 'def', 'effect'];
 
 RIP_ALIAS_MAP = {
   and: '&&',
@@ -2122,7 +2055,6 @@ Rewriter = (function() {
       this.closeOpenCalls();
       this.closeOpenIndexes();
       this.normalizeLines();
-      this.processTemplateTokens();  // Combine #id selectors and inject -> for nesting
       this.convertLegacyExistential();
       this.convertPostfixSpreadRest();
       this.tagPostfixConditionals();
@@ -2519,7 +2451,7 @@ Rewriter = (function() {
         // which is probably always unintended.
         // Furthermore don't allow this in the first line of a literal array
         // or explicit object, as that creates grammatical ambiguities (#5368).
-        if (indexOf.call(IMPLICIT_FUNC, tag) >= 0 && this.indexOfTag(i + 1, 'INDENT') > -1 && this.looksObjectish(i + 2) && !this.findTagsBackwards(i, ['CLASS', 'COMPONENT', 'EXTENDS', 'IF', 'CATCH', 'SWITCH', 'LEADING_WHEN', 'FOR', 'WHILE', 'UNTIL']) && !(((ref1 = (s = (ref2 = stackTop()) != null ? ref2[0] : void 0)) === '{' || ref1 === '[') && !isImplicit(stackTop()) && this.findTagsBackwards(i, s))) {
+        if (indexOf.call(IMPLICIT_FUNC, tag) >= 0 && this.indexOfTag(i + 1, 'INDENT') > -1 && this.looksObjectish(i + 2) && !this.findTagsBackwards(i, ['CLASS', 'EXTENDS', 'IF', 'CATCH', 'SWITCH', 'LEADING_WHEN', 'FOR', 'WHILE', 'UNTIL']) && !(((ref1 = (s = (ref2 = stackTop()) != null ? ref2[0] : void 0)) === '{' || ref1 === '[') && !isImplicit(stackTop()) && this.findTagsBackwards(i, s))) {
           startImplicitCall(i + 1);
           stack.push(['INDENT', i + 2]);
           return forward(3);
@@ -3033,307 +2965,6 @@ Rewriter = (function() {
     }
 
     // =========================================================================
-    // TEMPLATE TOKEN PROCESSING
-    // =========================================================================
-    // Combined pass for template-related token transformations:
-    // 1. Combine #id selectors: div # main → div#main
-    // 2. Inject -> for implicit nesting: div INDENT → div CALL_START -> INDENT
-    //
-    // This allows writing:
-    //   render
-    //     div#main.card
-    //       h1 "Title"
-    // Instead of:
-    //   render
-    //     div#main.card ->
-    //       h1 "Title"
-    //
-    // REWRITER ↔ CODEGEN COMMUNICATION:
-    // This rewriter transforms template syntax into forms the codegen understands.
-    // The following conventions are used:
-    //
-    //   __bind_<prop>__   Two-way binding (value <=> var → __bind_value__: var)
-    //                     Codegen detects this prefix in parseBindingDirective()
-    //
-    //   __cx__            Dynamic classes (.('a', cond) → .__cx__('a', cond))
-    //                     Codegen detects this property name in generateTemplateElement()
-    //
-    //   @event.mod:       Event modifiers (@click.prevent: → [@click.prevent]:)
-    //                     Rewriter wraps in brackets; codegen parses computed property
-    //
-    // =========================================================================
-    processTemplateTokens() {
-      // Track render block depth using indent levels
-      let inRender = false;
-      let renderIndentLevel = 0;
-      let currentIndent = 0;
-      let pendingCallEnds = [];  // Stack of indent levels where CALL_END should be inserted
-
-      // Helper to check if tag name (possibly with #id) is an HTML/SVG tag
-      const isHtmlTag = (name) => {
-        const tagPart = name.split('#')[0];  // Handle div#main
-        return TEMPLATE_TAGS.has(tagPart);
-      };
-
-      // Helper to check if name is a component (PascalCase)
-      const isComponent = (name) => {
-        if (!name || typeof name !== 'string') return false;
-        return /^[A-Z]/.test(name);
-      };
-
-      // Helper to check if name is a template element (HTML tag or component)
-      const isTemplateTag = (name) => {
-        return isHtmlTag(name) || isComponent(name);
-      };
-
-      // Helper to check if an expression ending at position i starts with an HTML tag
-      const startsWithHtmlTag = (tokens, i) => {
-        let j = i;
-        while (j > 0) {
-          const pt = tokens[j - 1][0];
-          if (pt === 'INDENT' || pt === 'OUTDENT' || pt === 'TERMINATOR' || pt === 'RENDER' || pt === 'CALL_END' || pt === ')') {
-            break;
-          }
-          j--;
-        }
-        return tokens[j] && tokens[j][0] === 'IDENTIFIER' && isHtmlTag(tokens[j][1]);
-      };
-
-      return this.scanTokens(function(token, i, tokens) {
-        const tag = token[0];
-        const nextToken = i < tokens.length - 1 ? tokens[i + 1] : null;
-
-        // Track entering render blocks
-        if (tag === 'RENDER') {
-          inRender = true;
-          renderIndentLevel = currentIndent + 1;
-          return 1;
-        }
-
-        // Track indentation
-        if (tag === 'INDENT') {
-          currentIndent++;
-          return 1;
-        }
-
-        if (tag === 'OUTDENT') {
-          currentIndent--;
-
-          // Insert pending CALL_END(s) after this OUTDENT
-          let inserted = 0;
-          while (pendingCallEnds.length > 0 && pendingCallEnds[pendingCallEnds.length - 1] > currentIndent) {
-            const callEndToken = ['CALL_END', ')', token[2]];
-            callEndToken.generated = true;
-            tokens.splice(i + 1 + inserted, 0, callEndToken);
-            pendingCallEnds.pop();
-            inserted++;
-          }
-
-          // Exit render block when we outdent past where it started
-          if (inRender && currentIndent < renderIndentLevel) {
-            inRender = false;
-          }
-          return 1 + inserted;
-        }
-
-        // Only process if we're inside a render block
-        if (!inRender) return 1;
-
-        // ─────────────────────────────────────────────────────────────────────
-        // PHASE: Hyphenated attributes
-        // data-lucide: "search" → "data-lucide": "search"
-        // data-foo-bar: "x" → "data-foo-bar": "x"
-        // Combines IDENTIFIER - ... - PROPERTY chain into single STRING
-        // ─────────────────────────────────────────────────────────────────────
-        if (tag === 'IDENTIFIER' && !token.spaced) {
-          // Look ahead for pattern: IDENTIFIER -IDENTIFIER -IDENTIFIER... -PROPERTY
-          // All hyphens must be unspaced
-          let parts = [token[1]];
-          let j = i + 1;
-          while (j + 1 < tokens.length) {
-            const hyphen = tokens[j];
-            const nextPart = tokens[j + 1];
-            if (hyphen[0] === '-' && !hyphen.spaced &&
-                (nextPart[0] === 'IDENTIFIER' || nextPart[0] === 'PROPERTY')) {
-              parts.push(nextPart[1]);
-              j += 2;
-              // Stop if we found a PROPERTY (it's the last part before :)
-              if (nextPart[0] === 'PROPERTY') break;
-            } else {
-              break;
-            }
-          }
-          // Only transform if we found at least one hyphen AND ended with PROPERTY
-          if (parts.length > 1 && j > i + 1 && tokens[j - 1][0] === 'PROPERTY') {
-            // Combine into single STRING for quoted key
-            token[0] = 'STRING';
-            token[1] = `"${parts.join('-')}"`;
-            // Remove all the collected tokens (hyphens and identifiers)
-            tokens.splice(i + 1, j - i - 1);
-            return 1;
-          }
-        }
-
-        // ─────────────────────────────────────────────────────────────────────
-        // PHASE 0: Implicit div for class-only selectors
-        // .card → div.card (insert 'div' before leading dot)
-        // Only handles static classes (.PROPERTY), dynamic classes (.()) handled in PHASE 4
-        // ─────────────────────────────────────────────────────────────────────
-        if (tag === '.') {
-          const prevToken = i > 0 ? tokens[i - 1] : null;
-          const prevTag = prevToken ? prevToken[0] : null;
-          // Check if this is at line start (after INDENT or TERMINATOR)
-          if (prevTag === 'INDENT' || prevTag === 'TERMINATOR') {
-            // Only handle static class (.PROPERTY), not dynamic class (.())
-            if (nextToken && nextToken[0] === 'PROPERTY') {
-              const divToken = ['IDENTIFIER', 'div', token[2]];
-              divToken.generated = true;
-              tokens.splice(i, 0, divToken);
-              return 2;  // Skip past the inserted div and the dot
-            }
-          }
-        }
-
-        // ─────────────────────────────────────────────────────────────────────
-        // PHASE 1: Combine #id selectors
-        // div # main → div#main (single IDENTIFIER token)
-        // ─────────────────────────────────────────────────────────────────────
-        if (tag === 'IDENTIFIER' || tag === 'PROPERTY') {
-          const next = tokens[i + 1];
-          const nextNext = tokens[i + 2];
-          if (next && next[0] === '#' && nextNext && nextNext[0] === 'PROPERTY') {
-            token[1] = token[1] + '#' + nextNext[1];
-            if (nextNext.spaced) token.spaced = true;
-            tokens.splice(i + 1, 2);
-            return 1;  // Re-check (might have more #ids)
-          }
-        }
-
-        // ─────────────────────────────────────────────────────────────────────
-        // PHASE 2: Two-way binding
-        // value <=> username → __bind_value__: username
-        // ─────────────────────────────────────────────────────────────────────
-        if (tag === 'BIND') {
-          const prevToken = i > 0 ? tokens[i - 1] : null;
-          const nextBindToken = tokens[i + 1];
-          if (prevToken && (prevToken[0] === 'IDENTIFIER' || prevToken[0] === 'PROPERTY') &&
-              nextBindToken && nextBindToken[0] === 'IDENTIFIER') {
-            prevToken[1] = `__bind_${prevToken[1]}__`;
-            token[0] = ':';
-            token[1] = ':';
-            return 1;
-          }
-        }
-
-        // ─────────────────────────────────────────────────────────────────────
-        // PHASE 3: Event modifiers
-        // @click.prevent: handler → [@click.prevent]: handler
-        // ─────────────────────────────────────────────────────────────────────
-        if (tag === '@') {
-          let j = i + 1;
-          if (j < tokens.length && tokens[j][0] === 'PROPERTY') {
-            j++;
-            while (j + 1 < tokens.length && tokens[j][0] === '.' && tokens[j + 1][0] === 'PROPERTY') {
-              j += 2;
-            }
-            if (j > i + 2 && j < tokens.length && tokens[j][0] === ':') {
-              const openBracket = ['[', '[', token[2]];
-              openBracket.generated = true;
-              tokens.splice(i, 0, openBracket);
-              const closeBracket = [']', ']', tokens[j + 1][2]];
-              closeBracket.generated = true;
-              tokens.splice(j + 1, 0, closeBracket);
-              return 2;
-            }
-          }
-        }
-
-        // ─────────────────────────────────────────────────────────────────────
-        // PHASE 4: Dynamic classes
-        // div.('card', x && 'active') → div.__cx__('card', x && 'active')
-        // .('card') → div.__cx__('card') (implicit div at line start)
-        // ─────────────────────────────────────────────────────────────────────
-        if (tag === '.' && nextToken && nextToken[0] === '(') {
-          const prevToken = i > 0 ? tokens[i - 1] : null;
-          const prevTag = prevToken ? prevToken[0] : null;
-
-          // Check if at line start - need to insert 'div' first
-          const atLineStart = prevTag === 'INDENT' || prevTag === 'TERMINATOR';
-
-          const cxToken = ['PROPERTY', '__cx__', token[2]];
-          cxToken.generated = true;
-          nextToken[0] = 'CALL_START';
-          let depth = 1;
-          for (let j = i + 2; j < tokens.length && depth > 0; j++) {
-            if (tokens[j][0] === '(' || tokens[j][0] === 'CALL_START') depth++;
-            else if (tokens[j][0] === ')') {
-              depth--;
-              if (depth === 0) tokens[j][0] = 'CALL_END';
-            } else if (tokens[j][0] === 'CALL_END') depth--;
-          }
-
-          if (atLineStart) {
-            // Insert div before . and __cx__ after .
-            const divToken = ['IDENTIFIER', 'div', token[2]];
-            divToken.generated = true;
-            tokens.splice(i, 0, divToken);
-            tokens.splice(i + 2, 0, cxToken);  // After div and .
-            return 3;
-          } else {
-            tokens.splice(i + 1, 0, cxToken);
-            return 2;
-          }
-        }
-
-        // ─────────────────────────────────────────────────────────────────────
-        // PHASE 5: Implicit nesting (inject -> before INDENT)
-        // ─────────────────────────────────────────────────────────────────────
-        if (nextToken && nextToken[0] === 'INDENT') {
-          // Skip if already has -> or =>
-          if (tag === '->' || tag === '=>' || tag === 'CALL_START' || tag === '(') {
-            return 1;
-          }
-
-          // Check if this looks like a template element
-          let isTemplateElement = false;
-
-          if (tag === 'IDENTIFIER' && isTemplateTag(token[1])) {
-            isTemplateElement = true;
-          } else if (tag === 'PROPERTY' || tag === 'STRING' || tag === 'CALL_END' || tag === ')') {
-            isTemplateElement = startsWithHtmlTag(tokens, i);
-          }
-          // Check for spread: ...props followed by INDENT
-          // Need special handling: div.card ...props INDENT -> div.card(...props, -> children)
-          else if (tag === 'IDENTIFIER' && i > 1 && tokens[i - 1][0] === '...') {
-            if (startsWithHtmlTag(tokens, i)) {
-              // Insert comma and arrow only - implicit call mechanism will add CALL_START/END
-              const commaToken = [',', ',', token[2]];
-              commaToken.generated = true;
-              const arrowToken = ['->', '->', token[2]];
-              arrowToken.newLine = true;
-              tokens.splice(i + 1, 0, commaToken, arrowToken);
-              // Don't add to pendingCallEnds - addImplicitBracesAndParens will handle CALL_END
-              return 3;
-            }
-          }
-
-          if (isTemplateElement) {
-            const callStartToken = ['CALL_START', '(', token[2]];
-            callStartToken.generated = true;
-            const arrowToken = ['->', '->', token[2]];
-            arrowToken.newLine = true;
-
-            tokens.splice(i + 1, 0, callStartToken, arrowToken);
-            pendingCallEnds.push(currentIndent + 1);
-            return 3;
-          }
-        }
-
-        return 1;
-      });
-    }
-
-    // =========================================================================
     // BACKWARDS COMPATIBILITY / TRANSITION SUPPORT
     // =========================================================================
     // Convert legacy CoffeeScript existential operator syntax to Rip's nullish
@@ -3603,7 +3234,7 @@ LINEBREAKS = ['TERMINATOR', 'INDENT', 'OUTDENT'];
 CALL_CLOSERS = ['.', '?.', '::', '?::'];
 
 // Tokens that prevent a subsequent indent from ending implicit calls/objects
-CONTROL_IN_IMPLICIT = ['IF', 'TRY', 'FINALLY', 'CATCH', 'CLASS', 'COMPONENT', 'SWITCH'];
+CONTROL_IN_IMPLICIT = ['IF', 'TRY', 'FINALLY', 'CATCH', 'CLASS', 'SWITCH'];
 
 // Tokens that are swallowed up by the parser, never leading to code generation.
 // You can spot these in `grammar.rip` because the `o` function second

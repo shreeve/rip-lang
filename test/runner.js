@@ -47,7 +47,7 @@ function normalizeCode(code) {
     .trim();
 }
 
-// Strip reactive runtime from code (for component tests)
+// Strip reactive runtime from code (for code comparison tests)
 function stripRuntime(code) {
   return code
     // New format with detailed comments
@@ -55,9 +55,6 @@ function stripRuntime(code) {
     // Old format
     .replace(/\/\/ === Rip Reactive Runtime ===[\s\S]*?\/\/ === End Reactive Runtime ===/g, '')
     .replace(/let __currentEffect[\s\S]*?function __readonly\([^)]*\)\s*\{[^}]*\}/g, '')
-    // Strip context tracking code in constructor
-    .replace(/\/\/ Context API: track parent component\n\s*this\._parent = __currentComponent;\n\s*const __prevComponent = __currentComponent;\n\s*__currentComponent = this;\n/g, '')
-    .replace(/\n\s*__currentComponent = __prevComponent;/g, '')
     .trim();
 }
 
@@ -158,7 +155,7 @@ function code(name, sourceCode, expectedCode) {
 }
 
 // Test helper: Compile and compare generated code (strips reactive runtime)
-// Use for component tests where we only want to compare the class output
+// Use for tests where we only want to compare the class/function output
 function codeBody(name, sourceCode, expectedCode) {
   try {
     const result = compile(sourceCode);

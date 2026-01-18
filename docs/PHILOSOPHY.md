@@ -40,7 +40,7 @@ class BinaryOp {
 ["+", left, right]  // That's it!
 ```
 
-**Result:** CoffeeScript's compiler is 17,760 LOC. Rip's is ~14,000 LOC—smaller, yet includes a complete reactive framework with state, templates, and components.
+**Result:** CoffeeScript's compiler is 17,760 LOC. Rip's is ~11,000 LOC—smaller, yet includes a complete reactive runtime with state, computed values, and effects.
 
 ## The Fundamental Rule
 
@@ -421,8 +421,8 @@ counter = ->
 |-----------|------------------|-----|------------|
 | **Lexer+Rewriter** | 3,558 LOC | 3,537 LOC | Expanded syntax |
 | **Parser Generator** | 2,285 LOC (Jison) | ~1,000 LOC (Solar) | Built-in, ~250× faster! |
-| **Compiler** | 10,346 LOC (AST Nodes) | 7,965 LOC (S-expressions) | +Reactive framework! |
-| **Total** | **17,760 LOC** | **~14,000 LOC** | **Smaller + full framework** |
+| **Compiler** | 10,346 LOC (AST Nodes) | 5,500 LOC (S-expressions) | +Reactive runtime! |
+| **Total** | **17,760 LOC** | **~11,000 LOC** | **Smaller + reactive runtime** |
 
 ## Feature Comparison Table
 
@@ -470,15 +470,11 @@ counter = ->
 
 > **v2.5.1 - Production-Ready with Fine-Grained Reactivity**
 
-## Summary Matrix
+## Summary
 
 | Layer | Syntax | Runtime | Features | DX | Score |
 |-------|--------|---------|----------|-----|-------|
 | **Reactivity** | A+ | A+ | A+ | A+ | **A+** |
-| **Templates** | A+ | A | A | A+ | **A** |
-| **Components** | A | A | A- | A | **A-** |
-
-*Components A- due to missing SSR/Hydration. Context API and Error Primitives are implemented.*
 
 ## Reactivity ⭐⭐⭐⭐⭐ (Production-Ready)
 
@@ -499,83 +495,32 @@ effect -> console.log count   # Effect (auto-runs)
 
 **Competitive with:** SolidJS signals, Vue 3 refs, Preact signals
 
-## Templates ⭐⭐⭐⭐⭐ (Great DX, Fast Runtime)
+## Framework-Agnostic Design
 
-**Innovative syntax with fine-grained performance.**
-
-```coffee
-render
-  div#main.card ...props
-    h1.title "Hello, #{name}!"
-    input value <=> username, @keydown.enter: submit
-    button.('btn', isActive && 'active') @click.prevent: handleClick, "Submit"
-```
-
-| Aspect | Rating | Notes |
-|--------|--------|-------|
-| Syntax | A+ | Indentation-based, clean, intuitive |
-| Features | A | Classes, IDs, events, modifiers, spread, two-way binding |
-| Runtime | A | Fine-grained: only dynamic parts get effects |
-| Innovation | A | Dynamic classes `div.('a', x && 'b')`, `<=>` binding |
-
-## Components ⭐⭐⭐⭐⭐ (Fine-Grained, Production-Ready)
-
-**Clean syntax with Svelte-class performance.**
-
-| Aspect | Rating | Notes |
-|--------|--------|-------|
-| Syntax | A | Clean, obvious structure |
-| Props | A | Required, optional, defaults, rest props |
-| **Performance** | **A+** | **Fine-grained O(1) updates!** |
-
-### Performance Comparison
-
-| Operation | Old Approach | New Approach |
-|-----------|--------------|--------------|
-| Update 1 text | O(n) rebuild | **O(1)** single node |
-| Update 1 attr | O(n) rebuild | **O(1)** single attr |
-| Add list item | O(n) rebuild | **O(1)** create 1 node |
-| Remove list item | O(n) rebuild | **O(1)** remove 1 node |
-
-**Result:** 30-40x faster for typical reactive updates!
+Rip's reactivity system is **framework-agnostic** — use it with React, Vue, Svelte, or vanilla JavaScript. The reactive primitives (state, computed, effects) work independently of any UI layer.
 
 ## Competitive Analysis
 
-| Framework | Reactivity | Templates | Components | Performance | DX | Overall |
-|-----------|------------|-----------|------------|-------------|-----|---------|
-| **Rip** | A+ | A | A- | A | A+ | **A-** |
-| SolidJS | A+ | A | A | A+ | A | A |
-| Svelte 5 | A | A+ | A | A+ | A+ | A |
-| Vue 3 | A- | A | A | B+ | A | A- |
-| React | B | B+ | A | B | A- | B+ |
+| Framework | Reactivity | DX | Performance | Overall |
+|-----------|------------|-----|-------------|---------|
+| **Rip** | A+ | A+ | A | **A** |
+| SolidJS | A+ | A | A+ | A |
+| Vue 3 | A- | A | B+ | A- |
+| React | B | A- | B | B+ |
 
 **Rip's Position:**
 
 | Strength | Why |
 |----------|-----|
-| **Reactivity A+** | State, computed, effects, batching, Context API |
+| **Reactivity A+** | State, computed, effects, batching |
 | **DX A+** | Cleanest syntax of all, no boilerplate |
-| **Performance A** | O(1) fine-grained updates, keyed reconciliation |
+| **Framework-agnostic** | Use with any UI framework |
 
-| Gap | Path to A |
-|-----|-----------|
-| **Components A-** (not A) | Missing SSR/Hydration |
-| **Overall A-** (not A) | No ecosystem (router, state lib, devtools) |
-
-## Completed Features ✅
+## Completed Features
 
 - [x] Reactivity primitives (state, computed, effects)
-- [x] Template syntax and features
-- [x] Props system (`@prop`, `@prop?`, `@prop = default`, `@...rest`)
-- [x] Component composition
-- [x] Children/slots
-- [x] Lifecycle hooks
-- [x] Fine-grained DOM updates
-- [x] Fine-grained conditionals (if/else) with effect cleanup
-- [x] Fine-grained loops (for) with keyed reconciliation
-- [x] **Context API** (`setContext`, `getContext`, `hasContext`)
-- [x] **Error primitives** (`__catchErrors`, `__handleError`)
 - [x] **Batching** (`__batch()` for grouped updates)
+- [x] **Error primitives** (`__catchErrors`, `__handleError`)
 
 ## Best Current Uses
 

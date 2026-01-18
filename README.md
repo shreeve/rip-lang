@@ -9,9 +9,9 @@
 </p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-2.5.1-blue.svg" alt="Version"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-2.6.0-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
-  <a href="#"><img src="https://img.shields.io/badge/tests-1046%2F1046-brightgreen.svg" alt="Tests"></a>
+  <a href="#"><img src="https://img.shields.io/badge/tests-979%2F979-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
 </p>
 
@@ -19,9 +19,9 @@
 
 ## What is Rip?
 
-Rip is a modern reactive language that compiles to JavaScript. It takes the elegant, readable syntax that made CoffeeScript beloved and brings it into the modern era — with ES2022 output, built-in reactivity, and a clean component system for building UIs.
+Rip is a modern reactive language that compiles to JavaScript. It takes the elegant, readable syntax that made CoffeeScript beloved and brings it into the modern era — with ES2022 output and built-in reactivity primitives.
 
-**The language IS the framework.** Unlike React, Vue, or Svelte where reactivity comes from libraries or compiler magic, Rip's reactive features are **language-level operators**:
+**Reactivity is built into the language.** Unlike React, Vue, or Svelte where reactivity comes from libraries or compiler magic, Rip's reactive features are **language-level operators**:
 
 ```coffee
 count := 0              # State (reactive value)
@@ -31,12 +31,11 @@ effect -> log doubled   # Effect (side effects)
 
 No imports. No hooks. No dependency arrays. Just write code.
 
-The compiler is completely standalone with **zero dependencies**, and it's self-hosting: Rip compiles itself. At ~14,000 lines of code, it's smaller than CoffeeScript while including a complete reactive framework.
+The compiler is completely standalone with **zero dependencies**, and it's self-hosting: Rip compiles itself. At ~11,000 lines of code, it's smaller than CoffeeScript while including a complete reactive runtime.
 
 **What makes Rip different:**
 - **Reactive primitives** — `:=` state, `~=` computed values, `effect` blocks as syntax
-- **Components as syntax** — `component Counter` with props, lifecycle, fine-grained DOM updates
-- **Templates** — Pug-style HTML in `render` blocks, two-way binding with `<=>`
+- **Framework-agnostic** — Use Rip's reactivity with React, Vue, Svelte, or vanilla JS
 - **Modern output** — ES2022 with native classes, `?.`, `??`, modules
 - **Zero dependencies** — everything included, even the parser generator
 - **Self-hosting** — `bun run parser` rebuilds the compiler from source
@@ -158,27 +157,11 @@ fn?(arg)                 # Safe call
 | `=!` | "equals, dammit!" | `MAX =! 100` | Readonly constant |
 | `effect` | — | `effect -> log x` | Runs whenever referenced state changes |
 
-### Components & Templates
-
-| Feature | Example | What it does |
-|---------|---------|--------------|
-| **Component** | `component Counter` | Define reactive UI component |
-| **Render** | `render` block | Indentation-based HTML templates |
-| **Props** | `@prop`, `@prop?`, `@prop = default` | Component input from parent |
-| **Rest props** | `@...rest` | Capture remaining props |
-| **Two-way bind** | `input value <=> name` | Bidirectional data binding |
-| **Event handlers** | `@click: handler` | DOM event binding |
-| **Lifecycle** | `mounted:`, `unmounted:` | Component lifecycle hooks |
-| **Context API** | `setContext`, `getContext` | Pass data down component tree |
-| **Fine-grained** | No virtual DOM | Surgical DOM updates via reactivity |
-
-**→ 26 major enhancements over CoffeeScript!**
-
 ---
 
 ## Reactivity
 
-**The language IS the framework.** Reactivity is built into Rip's syntax—not a library you import, not hooks you call. Just operators.
+**Reactivity is built into Rip's syntax**—not a library you import, not hooks you call. Just operators.
 
 ```coffee
 count := 0                    # State — reactive value
@@ -214,96 +197,9 @@ No imports. No hooks. No dependency arrays. Just operators that do what they say
 
 ---
 
-## Components
-
-Components are a **language construct**, not a pattern. Define with the `component` keyword, get props, state, lifecycle, and fine-grained DOM updates—all without a virtual DOM.
-
-```coffee
-component Counter
-  @label = "Count"          # Prop with default
-  @initial = 0              # Another prop
-
-  count := @initial         # Reactive state
-  doubled ~= count * 2      # Computed value (auto-updates)
-
-  inc: -> count += 1        # Methods
-  dec: -> count -= 1
-
-  render
-    div.counter
-      h2 @label
-      span.value count
-      span.computed " (×2 = #{doubled})"
-      button @click: @dec, "−"
-      button @click: @inc, "+"
-
-# Mount with Ruby-style constructor
-Counter.new(label: "Score", initial: 10).mount "#app"
-```
-
-**What you get:**
-- **Props:** `@prop` (required), `@prop?` (optional), `@prop = default`
-- **State:** State (`:=`) and computed values (`~=`) just work
-- **Lifecycle:** `mounted:`, `unmounted:`, `updated:`
-- **Context:** `setContext`/`getContext` for deep prop passing
-- **Fine-grained updates:** Only changed DOM nodes update—no virtual DOM diffing
-
-[Component guide →](docs/GUIDE.md#components)
-
----
-
-## Templates
-
-Indentation-based HTML with Pug-style selectors. Templates compile to **fine-grained DOM operations**—when state changes, only the affected text node or attribute updates. No virtual DOM, no diffing, no wasted work.
-
-```coffee
-render
-  div#app.container
-    h1.title "Hello, #{name}!"
-
-    # Two-way binding with <=> operator
-    input type: "text", value <=> username
-    input type: "number", value <=> count    # Auto-uses valueAsNumber!
-
-    # Dynamic classes (Tailwind-friendly)
-    button.btn.("primary" if active) @click: submit
-      "Submit"
-
-    # Loops with keys for efficient updates
-    ul.items
-      for item in items, key: item.id
-        li.item item.name
-```
-
-**Template features:**
-| Syntax | What it does |
-|--------|--------------|
-| `div#id.class1.class2` | IDs and classes (CSS selector style) |
-| `@click: handler` | Event binding |
-| `@click.prevent.stop:` | Event modifiers |
-| `@keydown.enter:` | Key modifiers |
-| `value <=> var` | Two-way binding (auto-syncs input ↔ variable) |
-| `.("class", cond && "other")` | Dynamic classes |
-| `for x in arr, key: x.id` | Keyed iteration |
-| `span if condition` | Conditional rendering |
-
-**The `<=>` operator** handles two-way binding automatically:
-```coffee
-# This one line...
-input type: "number", value <=> count
-
-# ...replaces all this React ceremony:
-# <input type="number" value={count}
-#   onChange={e => setCount(parseInt(e.target.value) || 0)} />
-```
-
-[Template guide →](docs/GUIDE.md#templates)
-
----
-
 ## Browser Support
 
-Run Rip directly in the browser (51KB compressed—complete language + reactive framework).
+Run Rip directly in the browser (51KB compressed—complete language + reactive runtime).
 
 **Try it live:** [https://shreeve.github.io/rip-lang/](https://shreeve.github.io/rip-lang/)
 
@@ -333,7 +229,7 @@ CoffeeScript showed us beautiful syntax. Rip takes that vision further:
 | **Reactivity** | Built-in (state, computed, effects) | None |
 | **Dependencies** | Zero | Multiple |
 | **Self-hosting** | Yes (compiles itself) | No |
-| **Codebase** | ~14,000 LOC | 17,760 LOC |
+| **Codebase** | ~11,000 LOC | 17,760 LOC |
 
 ---
 
@@ -363,10 +259,10 @@ case '+': return `(${gen(left)} + ${gen(right)})`;
 |-----------|--------------|-----|
 | Lexer | 3,558 LOC | 3,537 LOC |
 | Parser Generator | 2,285 LOC (Jison) | ~1,000 LOC (Solar) |
-| Compiler | 10,346 LOC | 7,965 LOC |
-| **Total** | **17,760 LOC** | **~14,000 LOC** |
+| Compiler | 10,346 LOC | 5,500 LOC |
+| **Total** | **17,760 LOC** | **~11,000 LOC** |
 
-Result: Smaller than CoffeeScript, yet includes a complete **reactive framework** with state, computed values, effects, templates, and components.
+Result: Smaller than CoffeeScript, yet includes a complete **reactive runtime** with state, computed values, and effects.
 
 ---
 
@@ -386,7 +282,7 @@ rip file.rip           # Run a file
 rip -c file.rip        # Compile to JavaScript
 rip -s file.rip        # Show S-expressions (debug parser)
 rip -t file.rip        # Show tokens (debug lexer)
-bun run test           # Run all 1046 tests
+bun run test           # Run all 979 tests
 bun run parser         # Rebuild parser (self-hosting!)
 bun run browser        # Build browser bundle
 ```
@@ -398,7 +294,7 @@ bun run browser        # Build browser bundle
 | Guide | Description |
 |-------|-------------|
 | [AGENT.md](AGENT.md) | Complete developer/AI guide |
-| [docs/GUIDE.md](docs/GUIDE.md) | Language guide (reactivity, templates, components) |
+| [docs/GUIDE.md](docs/GUIDE.md) | Language guide (reactivity, operators, regex) |
 | [docs/REACTIVITY.md](docs/REACTIVITY.md) | Reactivity deep dive & framework comparison |
 | [docs/INTERNALS.md](docs/INTERNALS.md) | Compiler architecture, S-expressions |
 | [docs/BROWSER.md](docs/BROWSER.md) | Browser usage, REPL |
@@ -440,5 +336,5 @@ MIT
 ---
 
 <p align="center">
-  <strong>Start simple. Build incrementally. Ship elegantly.</strong> ✨
+  <strong>Start simple. Build incrementally. Ship elegantly.</strong>
 </p>
