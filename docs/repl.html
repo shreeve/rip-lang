@@ -484,6 +484,90 @@ console.log "Domain:", domain</textarea>
       `Interactive environment • Version ${VERSION} • Built ${localBuildDate}`;
 
     // ========================================================================
+    // DOM Element References (must be before functions that use them)
+    // ========================================================================
+
+    const editor = document.getElementById('editor');
+    const output = document.getElementById('output');
+    const showSexpBtn = document.getElementById('show-sexp');
+    const showTokensBtn = document.getElementById('show-tokens');
+    const replOutput = document.getElementById('repl-output');
+    const replInput = document.getElementById('repl-input');
+    const promptSpan = document.getElementById('prompt');
+    const resizer = document.getElementById('resizer');
+    const leftPane = document.getElementById('editor-left');
+    const rightPane = document.getElementById('editor-right');
+
+    // ========================================================================
+    // Compiler Implementation (must be before tab switching)
+    // ========================================================================
+
+    // Track toggle state
+    let showSexp = false;
+    let showTokens = false;
+
+    // Strip utility helper functions for cleaner display
+    function stripHelpers(code) {
+      // Remove helper function definitions (slice, modulo, toSearchable)
+      code = code.replace(/^const slice = \[\]\.slice;\n/m, '');
+      code = code.replace(/^const modulo = \(n, d\) => \{[^}]+\};\n/m, '');
+      code = code.replace(/^const toSearchable = \(v, allowNewlines\) => \{[\s\S]+?\n\};\n/m, '');
+
+      // Remove empty lines at the start
+      code = code.replace(/^\n+/, '');
+
+      return code;
+    }
+
+    // Simple syntax highlighter for JavaScript
+    function highlightJS(code) {
+      return code
+        // Keywords
+        .replace(/\\b(def|function|async|const|let|var|if|else|return|while|for|class|extends|super|new|this|try|catch|finally|throw|switch|case|default|break|continue)\\b/g,
+          '<span class="hl-keyword">$1</span>')
+        // Strings
+        .replace(/("(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*'|`(?:[^`\\\\]|\\\\.)*`)/g,
+          '<span class="hl-string">$1</span>')
+        // Numbers
+        .replace(/\\b(\\d+\\.?\\d*|0x[0-9a-fA-F]+|0b[01]+|0o[0-7]+)\\b/g,
+          '<span class="hl-number">$1</span>')
+        // Comments
+        .replace(/(\/\/.*$|\/\*[\s\S]*?\*\/)/gm,
+          '<span class="hl-comment">$1</span>')
+        // Function names (simple: word before parenthesis)
+        .replace(/\b([a-zA-Z_$][a-zA-Z0-9_$]*)(?=\s*\()/g,
+          '<span class="hl-function">$1</span>');
+    }
+
+    function compileCode() {
+      try {
+        const source = editor.value;
+        const result = compile(source);
+
+        let outputText = '';
+
+        if (showTokens) {
+          result.tokens.forEach(t => {
+            outputText += `${t[0].padEnd(12)} ${JSON.stringify(t[1])}\n`;
+          });
+          outputText += '\n';
+        }
+
+        if (showSexp) {
+          outputText += window.toSexpr ? window.toSexpr(result.sexpr, 0, true) : JSON.stringify(result.sexpr, null, 1);
+          outputText += '\n\n';
+        }
+
+        // JavaScript output with syntax highlighting (strip helpers for cleaner display)
+        const cleanCode = stripHelpers(result.code);
+        const highlightedCode = highlightJS(cleanCode);
+        output.innerHTML = outputText.replace(/</g, '&lt;').replace(/>/g, '&gt;') + highlightedCode;
+      } catch (error) {
+        output.textContent = `Error: ${error.message}`;
+      }
+    }
+
+    // ========================================================================
     // Tab Switching
     // ========================================================================
 
@@ -501,7 +585,7 @@ console.log "Domain:", domain</textarea>
 
       // Focus appropriate input and run setup
       if (tabName === 'repl') {
-        document.getElementById('repl-input').focus();
+        replInput.focus();
       } else if (tabName === 'compiler') {
         compileCode();  // Update compiler output
       }
@@ -534,10 +618,6 @@ console.log "Domain:", domain</textarea>
     // ========================================================================
     // Resizable Panes (Live Compiler)
     // ========================================================================
-
-    const resizer = document.getElementById('resizer');
-    const leftPane = document.getElementById('editor-left');
-    const rightPane = document.getElementById('editor-right');
 
     if (resizer && leftPane && rightPane) {
       let isResizing = false;
@@ -579,9 +659,6 @@ console.log "Domain:", domain</textarea>
     let replHistory = [];
     let historyIndex = -1;
     let replBuffer = '';
-    const replOutput = document.getElementById('repl-output');
-    const replInput = document.getElementById('repl-input');
-    const promptSpan = document.getElementById('prompt');
 
     // Create isolated iframe context for REPL (like vm.createContext in Node)
     const iframe = document.createElement('iframe');
@@ -783,78 +860,8 @@ console.log "Domain:", domain</textarea>
     });
 
     // ========================================================================
-    // Compiler Implementation
+    // Compiler Event Handlers
     // ========================================================================
-
-    const editor = document.getElementById('editor');
-    const output = document.getElementById('output');
-    const showSexpBtn = document.getElementById('show-sexp');
-    const showTokensBtn = document.getElementById('show-tokens');
-
-    // Track toggle state
-    let showSexp = false;
-    let showTokens = false;
-
-    // Strip utility helper functions for cleaner display
-    function stripHelpers(code) {
-      // Remove helper function definitions (slice, modulo, toSearchable)
-      code = code.replace(/^const slice = \[\]\.slice;\n/m, '');
-      code = code.replace(/^const modulo = \(n, d\) => \{[^}]+\};\n/m, '');
-      code = code.replace(/^const toSearchable = \(v, allowNewlines\) => \{[\s\S]+?\n\};\n/m, '');
-
-      // Remove empty lines at the start
-      code = code.replace(/^\n+/, '');
-
-      return code;
-    }
-
-    // Simple syntax highlighter for JavaScript
-    function highlightJS(code) {
-      return code
-        // Keywords
-        .replace(/\\b(def|function|async|const|let|var|if|else|return|while|for|class|extends|super|new|this|try|catch|finally|throw|switch|case|default|break|continue)\\b/g,
-          '<span class="hl-keyword">$1</span>')
-        // Strings
-        .replace(/("(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*'|`(?:[^`\\\\]|\\\\.)*`)/g,
-          '<span class="hl-string">$1</span>')
-        // Numbers
-        .replace(/\\b(\\d+\\.?\\d*|0x[0-9a-fA-F]+|0b[01]+|0o[0-7]+)\\b/g,
-          '<span class="hl-number">$1</span>')
-        // Comments
-        .replace(/(\/\/.*$|\/\*[\s\S]*?\*\/)/gm,
-          '<span class="hl-comment">$1</span>')
-        // Function names (simple: word before parenthesis)
-        .replace(/\b([a-zA-Z_$][a-zA-Z0-9_$]*)(?=\s*\()/g,
-          '<span class="hl-function">$1</span>');
-    }
-
-    function compileCode() {
-      try {
-        const source = editor.value;
-        const result = compile(source);
-
-        let outputText = '';
-
-        if (showTokens) {
-          result.tokens.forEach(t => {
-            outputText += `${t[0].padEnd(12)} ${JSON.stringify(t[1])}\n`;
-          });
-          outputText += '\n';
-        }
-
-        if (showSexp) {
-          outputText += window.toSexpr ? window.toSexpr(result.sexpr, 0, true) : JSON.stringify(result.sexpr, null, 1);
-          outputText += '\n\n';
-        }
-
-        // JavaScript output with syntax highlighting (strip helpers for cleaner display)
-        const cleanCode = stripHelpers(result.code);
-        const highlightedCode = highlightJS(cleanCode);
-        output.innerHTML = outputText.replace(/</g, '&lt;').replace(/>/g, '&gt;') + highlightedCode;
-      } catch (error) {
-        output.textContent = `Error: ${error.message}`;
-      }
-    }
 
     // Auto-compile on changes
     editor.addEventListener('input', compileCode);
