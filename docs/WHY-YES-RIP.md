@@ -6,7 +6,7 @@
 
 That "Why Not" document makes strong arguments, but here's the **counter-argument**—a working, tested, **production-ready** language that offers a different path.
 
-**Rip isn't vaporware. It's real. Version 2.6.0. 979/979 tests passing. Self-hosting. Zero dependencies. Available now.**
+**Rip isn't vaporware. It's real. Version 2.6.1. 979/979 tests passing. Self-hosting. Zero dependencies. Available now.**
 
 ### The Philosophical Divide: Freedom vs Fear
 
@@ -33,12 +33,11 @@ This document appeals to **freedom**:
 ```rip
 # Rip's reactive primitives - language operators, not library imports!
 
-count := 0                    # "holds state" — reactive state
+count := 0                    # "has state" — reactive state
 doubled ~= count * 2          # "always equals" — computed, auto-updates
 message =! "Hello"            # "equals, dammit!" — const, cannot be reassigned
 
-effect ->                     # Effect - runs when dependencies change
-  console.log "Count: #{count}, Doubled: #{doubled}"
+log ~> console.log "Count: #{count}, Doubled: #{doubled}"  # "reacts to" — runs when deps change
 
 count = 5                     # Change state → computed updates → effect runs!
 # Console: "Count: 5, Doubled: 10"
@@ -208,7 +207,7 @@ Not "minimal." Not "few." **ZERO.** This is **real**, **running**, **today**.
 - ✅ **Full compiler** (lexer + parser + codegen)
 - ✅ **SLR(1) parser generator** (solar.rip - ~1,000 lines, built-in!)
 - ✅ **Self-hosting** (Rip compiles itself, including the parser generator)
-- ✅ **Reactive primitives** (state, computed, effects - language-level!)
+- ✅ **Reactive primitives** (state, computed, effect - language-level!)
 - ✅ **Triple REPL** (terminal, browser, console)
 - ✅ **Test framework** (runner + 979 tests)
 - ✅ **Browser bundle** (51KB brotli-compressed - full compiler + reactive runtime!)
@@ -585,7 +584,7 @@ While JavaScript adds features nobody wanted:
 - Dual optional syntax: 10 operators, not 4 ✓
 - __DATA__ marker: Inline data sections ✓
 - Smart comprehensions: Context-aware optimization ✓
-- **Reactivity as syntax:** `:=` state, `~=` computed, `effect` blocks ✓
+- **Reactivity as syntax:** `:=` state, `~=` computed, and `~>` effect ✓
 - **Ruby constructors:** `ClassName.new()` syntax ✓
 - **Floor division:** `//` operator (not comments!) ✓
 - **True modulo:** `%%` operator (mathematically correct) ✓
@@ -707,7 +706,7 @@ Rip isn't about going backward. It's about recognizing that **we took a wrong tu
 
 **The future isn't more dependencies. It's zero dependencies.**
 
-**The future is Rip. Version 2.6.0. Available today.**
+**The future is Rip. Version 2.6.1. Available today.**
 
 ---
 
@@ -753,6 +752,6 @@ $ echo 'console.log "Hello, Rip!"' > test.rip && bun test.rip
 - ✅ **Ruby constructors** (`ClassName.new()` - elegant instantiation)
 - ✅ **Framework-agnostic** (use with React, Vue, Svelte, or vanilla JS!)
 
-**Version 2.6.0. Available now. Clone and go.**
+**Version 2.6.1. Available now. Clone and go.**
 
 This approach is ready. Give it a try.

@@ -22,38 +22,75 @@ Rip provides reactive primitives as **language-level operators**, not library im
 
 ## Reactive Operators
 
-| Operator | Name | Mnemonic | Purpose |
-|----------|------|----------|---------|
+| Operator | Name | Read as | Purpose |
+|----------|------|---------|---------|
 | `=` | Assign | "gets value" | Regular assignment |
-| `:=` | State | "holds state" | Reactive state variable |
-| `~=` | Computed | "always equals" | Computed value (auto-updates when dependencies change) |
+| `:=` | State | "**has state**" | Reactive state variable |
+| `~=` | Computed | "**always equals**" | Computed value (auto-updates when dependencies change) |
+| `~>` | Effect | "**reacts to**" | Side effect that runs when dependencies change |
 | `=!` | Readonly | "equals, dammit!" | Constant (`const`) - not reactive, just immutable |
-| `effect` | Effect | — | Side effect that runs when dependencies change |
 
-## Reactive State (`:=`)
+## Reactive State (`:=`) — "has state"
 
 The state operator creates reactive state:
 
 ```coffee
-count := 0              # Reactive state
-name := "world"         # Another reactive state
+count := 0              # count has state 0
+name := "world"         # name has state "world"
 ```
 
 State changes automatically trigger updates in any computed values or effects that depend on them.
 
-## Computed Values (`~=`)
+## Computed Values (`~=`) — "always equals"
 
-The "always equals" operator creates a value that automatically recomputes when its dependencies change:
+The computed operator creates a value that automatically recomputes when its dependencies change:
 
 ```coffee
 count := 0
-doubled ~= count * 2    # Always equals count * 2
+doubled ~= count * 2    # doubled always equals count * 2
 
 count = 5               # doubled automatically becomes 10
 count = 10              # doubled automatically becomes 20
 ```
 
-## Constant Values (`=!`) - "Equal, Dammit!"
+## Side Effects (`~>`) — "reacts to"
+
+The effect operator defines a side effect that runs when its dependencies change. Dependencies are auto-tracked from reactive values read in the body:
+
+```coffee
+count := 0
+
+~> console.log "Count changed to:", count
+
+count = 5    # Logs: "Count changed to: 5"
+count = 10   # Logs: "Count changed to: 10"
+```
+
+Effects are useful for:
+- Logging and debugging
+- Syncing with external systems
+- Analytics tracking
+- Local storage persistence
+
+### Controllable Effects
+
+Assign the effect to a variable to control it:
+
+```coffee
+count := 0
+
+# Fire and forget (no assignment)
+~> console.log count
+
+# Controllable (assign to variable)
+logger ~> console.log count
+
+logger.stop!     # Pause reactions
+logger.run!      # Resume reactions  
+logger.cancel!   # Permanent disposal
+```
+
+## Constant Values (`=!`) — "equals, dammit!"
 
 In Rip, regular assignment (`=`) compiles to `let` for maximum flexibility. When you want an immutable constant, use the "equal, dammit!" operator (`=!`), which compiles to `const`:
 
@@ -70,25 +107,6 @@ API_URL = "other"       # Error! const cannot be reassigned
 ```
 
 This gives you opt-in immutability when you need it, while keeping the default flexible for scripting.
-
-## Side Effects (`effect`)
-
-The `effect` keyword defines a side effect block that runs when its dependencies change:
-
-```coffee
-count := 0
-
-effect -> console.log "Count changed to:", count
-
-count = 5    # Logs: "Count changed to: 5"
-count = 10   # Logs: "Count changed to: 10"
-```
-
-Effects are useful for:
-- Logging and debugging
-- Syncing with external systems
-- Analytics tracking
-- Local storage persistence
 
 ## Auto-Unwrapping
 
@@ -113,10 +131,21 @@ count.read()             # Get value without tracking dependencies
 |--------|---------|
 | `x.read()` | Get value without tracking (for effects that shouldn't re-run) |
 | `x.value` | Direct access to the underlying value |
-| `+x` | Shorthand for `x.value` (triggers tracking in effects) |
+| `+x` | Shorthand for `x.value` (triggers tracking in computed/effects) |
 | `x.lock()` | Make value readonly (can read but can't change) |
 | `x.free()` | Unsubscribe from all dependencies (state still works) |
 | `x.kill()` | Clean up everything and return final value |
+
+## Effect Controller Methods
+
+When you assign an effect to a variable, you get a controller object:
+
+| Method | Purpose |
+|--------|---------|
+| `e.stop!` | Pause reactions (can resume later) |
+| `e.run!` | Resume reactions |
+| `e.cancel!` | Permanent disposal (cannot resume) |
+| `e.active` | Boolean — is the effect running? |
 
 ## Dependency Tracking
 
@@ -140,30 +169,10 @@ Understanding when dependencies are tracked is key to effective reactive program
 count := 10
 
 # Effect A: Subscribes to count (will re-run when count changes)
-effect -> console.log "A: #{count}"
+~> console.log "A: #{count}"
 
-# Effect B: Does NOT subscribe (won't re-run)
-effect -> console.log "B: #{count.read()}"
-
-count = 20
-# Output:
-#   A: 20    ← Effect A re-ran
-#            ← Effect B did NOT re-run
-```
-
-### When to Use `.read()`
-
-Use `.read()` when you need the current value but don't want to create a dependency:
-
-```coffee
-count := 0
-lastSaved := 0
-
-effect ->
-  # We want to log count changes, but compare against lastSaved
-  # without re-running when lastSaved changes
-  if count != lastSaved.read()
-    console.log "Unsaved changes: #{count}"
+# Reading without tracking (for comparisons, etc.)
+currentValue = count.read()  # Does not create dependency
 ```
 
 ## Lifecycle & Cleanup
@@ -205,12 +214,16 @@ count = 20  # Error or no-op (state is dead)
 
 ### Effect Cleanup
 
-Effects can return a cleanup function:
+Use the effect controller to manage lifecycle:
 
 ```coffee
-effect ->
+# Assign to a variable for control
+ticker ~>
   interval = setInterval (-> tick()), 1000
-  -> clearInterval interval  # Cleanup when effect re-runs or disposes
+  -> clearInterval interval  # Cleanup function returned
+
+# Later, when done:
+ticker.cancel!  # Stops the effect and runs cleanup
 ```
 
 ## Real-World Example
@@ -218,21 +231,17 @@ effect ->
 A complete reactive counter with persistence:
 
 ```coffee
-# Reactive state
+# Reactive state — count has state (loaded from localStorage)
 count := parseInt(localStorage.getItem("count")) or 0
 
-# Computed values
+# Computed values — always equal to their expressions
 doubled ~= count * 2
 isEven ~= count % 2 == 0
 message ~= "Count is #{count} (#{isEven ? 'even' : 'odd'})"
 
-# Side effect: persist to localStorage
-effect ->
-  localStorage.setItem "count", count
-
-# Side effect: log changes
-effect ->
-  console.log message
+# Side effects — react to dependencies (auto-tracked)
+~> localStorage.setItem "count", count  # Persist
+~> console.log message                  # Log
 
 # Usage
 count = 5
@@ -250,16 +259,16 @@ The Rip compiler transforms reactive operators into efficient JavaScript:
 
 ```coffee
 # Rip source
-count := 0
-doubled ~= count * 2
-effect -> console.log doubled
+count := 0                    # count has state 0
+doubled ~= count * 2          # doubled always equals count * 2
+~> console.log count          # reacts to count changes
 ```
 
 ```javascript
 // Compiled output (conceptual)
 const count = __state(0);
 const doubled = __computed(() => count.value * 2);
-__effect(() => console.log(doubled.value));
+__effect(() => { console.log(count.value); });
 ```
 
 The runtime is **automatically inlined** - no external dependencies required.
@@ -289,7 +298,7 @@ console.log(y);
 |---------|-------|-----|-------|-----|
 | State | `useState()` | `ref()` | `createSignal()` | `x := 0` |
 | Computed | `useMemo()` | `computed()` | `createMemo()` | `x ~= y * 2` |
-| Effect | `useEffect()` | `watch()` | `createEffect()` | `effect ->` |
+| Effect | `useEffect()` | `watch()` | `createEffect()` | `~> body` or `x ~> body` |
 | Constant | `const` | `const` | `const` | `x =! 0` |
 
 Rip's approach: **No imports, no hooks, no special functions. Just operators.**

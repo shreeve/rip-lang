@@ -150,10 +150,10 @@ Rip provides reactivity as **language-level operators**, not library imports:
 | Operator | Name | Mnemonic | Output |
 |----------|------|----------|--------|
 | `=` | Assign | "gets value" | `let x; x = value` |
-| `:=` | State | "holds state" | `const x = __state(value)` |
+| `:=` | State | "has state" | `const x = __state(value)` |
 | `~=` | Computed | "always equals" | `const x = __computed(() => expr)` |
+| `~>` | Effect | "reacts to" | `__effect(() => { ... })` or `const x = __effect(...)` |
 | `=!` | Readonly | "equals, dammit!" | `const x = value` (just const) |
-| `effect` | Effect | — | `__effect(() => { ... })` |
 
 The reactive runtime is embedded in compiler.js and only included when needed.
 

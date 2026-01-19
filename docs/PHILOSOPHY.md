@@ -481,9 +481,9 @@ counter = ->
 **This is genuinely excellent.**
 
 ```coffee
-count := 0                     # State
+count := 0                    # State
 doubled ~= count * 2          # Computed (auto-tracks)
-effect -> console.log count   # Effect (auto-runs)
+log ~> console.log count      # Effect (auto-runs)
 ```
 
 | Aspect | Rating | Notes |

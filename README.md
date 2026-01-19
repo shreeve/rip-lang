@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-2.6.0-blue.svg" alt="Version"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-2.6.1-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
   <a href="#"><img src="https://img.shields.io/badge/tests-979%2F979-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
@@ -26,7 +26,7 @@ Rip is a modern reactive language that compiles to JavaScript. It takes the eleg
 ```coffee
 count := 0              # State (reactive value)
 doubled ~= count * 2    # Computed (auto-updates)
-effect -> log doubled   # Effect (side effects)
+~> log doubled          # Effect (side effects)
 ```
 
 No imports. No hooks. No dependency arrays. Just write code.
@@ -34,7 +34,7 @@ No imports. No hooks. No dependency arrays. Just write code.
 The compiler is completely standalone with **zero dependencies**, and it's self-hosting: Rip compiles itself. At ~11,000 lines of code, it's smaller than CoffeeScript while including a complete reactive runtime.
 
 **What makes Rip different:**
-- **Reactive primitives** — `:=` state, `~=` computed values, `effect` blocks as syntax
+- **Reactive primitives** — `:=` state, `~=` computed, `~>` effects as syntax
 - **Framework-agnostic** — Use Rip's reactivity with React, Vue, Svelte, or vanilla JS
 - **Modern output** — ES2022 with native classes, `?.`, `??`, modules
 - **Zero dependencies** — everything included, even the parser generator
@@ -152,10 +152,10 @@ fn?(arg)                 # Safe call
 | Operator | Mnemonic | Example | What it does |
 |----------|----------|---------|--------------|
 | `=` | "gets value" | `x = 5` | Regular assignment |
-| `:=` | "holds state" | `count := 0` | Creates reactive state container |
+| `:=` | "has state" | `count := 0` | Creates reactive state container |
 | `~=` | "always equals" | `doubled ~= count * 2` | Auto-updates when dependencies change |
+| `~>` | "reacts to" | `~> log x` | Runs whenever referenced state changes |
 | `=!` | "equals, dammit!" | `MAX =! 100` | Readonly constant |
-| `effect` | — | `effect -> log x` | Runs whenever referenced state changes |
 
 ---
 
@@ -164,9 +164,9 @@ fn?(arg)                 # Safe call
 **Reactivity is built into Rip's syntax**—not a library you import, not hooks you call. Just operators.
 
 ```coffee
-count := 0                    # State — reactive value
-doubled ~= count * 2          # Computed — auto-updates when count changes
-effect -> console.log doubled # Effect — runs when dependencies change
+count := 0                 # State — reactive value
+doubled ~= count * 2       # Computed — auto-updates when count changes
+log ~> console.log doubled # Effect — runs when dependencies change
 
 count = 5   # doubled becomes 10, effect logs "10"
 count = 10  # doubled becomes 20, effect logs "20"
@@ -187,7 +187,7 @@ useEffect(() => console.log(doubled), [doubled]);
 |---------|-------|-----|-------|-----|
 | State | `useState()` | `ref()` | `createSignal()` | `x := 0` |
 | Computed | `useMemo()` | `computed()` | `createMemo()` | `x ~= y * 2` |
-| Effect | `useEffect()` | `watch()` | `createEffect()` | `effect ->` |
+| Effect | `useEffect()` | `watch()` | `createEffect()` | `~> body` |
 
 No imports. No hooks. No dependency arrays. Just operators that do what they say.
 

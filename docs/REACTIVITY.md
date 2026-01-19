@@ -6,11 +6,11 @@ Rip implements a **fine-grained reactive system** that rivals and often exceeds 
 
 Rip's entire reactivity model is built on three foundational concepts:
 
-| Primitive | Syntax | Mnemonic | Purpose |
-|-----------|--------|----------|---------|
-| **state** | `x := 0` | "holds state" | Mutable reactive value |
-| **computed** | `y ~= x * 2` | "always equals" | Computed value (auto-updates) |
-| **effect** | `effect -> ...` | — | Side effect (runs on changes) |
+| Primitive | Syntax | Read as | Purpose |
+|-----------|--------|---------|---------|
+| **state** | `x := 0` | "x **has state** 0" | Mutable reactive value |
+| **computed** | `y ~= x * 2` | "y **always equals** x * 2" | Computed value (auto-updates) |
+| **effect** | `e ~> body` | "e **reacts to** (dependencies in body)" | Side effect (runs on changes) |
 
 These three primitives provide **complete reactive power** — everything React, Vue, Svelte, and Solid can do with state management, Rip can do too.
 
@@ -19,29 +19,27 @@ These three primitives provide **complete reactive power** — everything React,
 ## Quick Example
 
 ```rip
-count := 0                      # state
-doubled ~= count * 2            # computed
-
-effect ->                       # effect
-  console.log "Count: #{count}, Doubled: #{doubled}"
+count := 0                      # count has state 0
+doubled ~= count * 2            # doubled always equals count * 2
+~> console.log count            # (fire and forget) reacts to count changes
 
 increment: ->
   count += 1
 
-increment()  # Logs: "Count: 1, Doubled: 2"
-increment()  # Logs: "Count: 2, Doubled: 4"
+increment()  # Logs: 1
+increment()  # Logs: 2
 ```
 
 ---
 
 ## How It Works
 
-### State (`:=`)
+### State (`:=`) — "has state"
 
 State creates a **reactive container** that tracks its readers and notifies them on change.
 
 ```rip
-count := 0        # Create reactive state
+count := 0        # count has state 0
 count += 1        # Update triggers dependents
 ```
 
@@ -56,13 +54,13 @@ count.value += 1;
 2. Writing to `count.value` **notifies** all subscribers
 3. Effects re-run, computeds mark dirty
 
-### Computed (`~=`)
+### Computed (`~=`) — "always equals"
 
 Computed creates a **computed value** that automatically updates when dependencies change.
 
 ```rip
 count := 0
-doubled ~= count * 2    # "doubled is always count * 2"
+doubled ~= count * 2    # doubled always equals count * 2
 ```
 
 **Key features:**
@@ -70,19 +68,30 @@ doubled ~= count * 2    # "doubled is always count * 2"
 - **Cached** — won't recompute unless dependencies change
 - **Chainable** — computeds can depend on other computeds
 
-### Effect
+### Effect (`~>`) — "reacts to"
 
-Effects run **side effects** that automatically re-run when dependencies change.
+The effect operator runs **side effects** when dependencies change. Dependencies are auto-tracked from reactive values read in the body.
 
 ```rip
-effect ->
-  document.title = "Count: #{count}"
+~> document.title = "Count: #{count}"
 ```
 
 **Key features:**
-- **Auto-tracking** — no manual dependency arrays (unlike React!)
+- **Auto-tracking** — dependencies detected automatically from body
 - **Immediate** — runs once immediately to establish dependencies
-- **Disposable** — returns cleanup function
+- **Controllable** — optionally assign to a variable to control the effect
+
+**Syntax:**
+```rip
+# Fire and forget (no assignment)
+~> console.log count
+
+# Controllable (assign to variable)
+logger ~> console.log count
+logger.stop!     # Pause reactions
+logger.run!      # Resume reactions
+logger.cancel!   # Permanent disposal
+```
 
 ---
 
@@ -116,17 +125,17 @@ effect ->
 
 **Rip advantage:** `.read()` for untracked access, `.lock()` to freeze.
 
-### Effect
+### Effect (`~>`)
 
 | Feature | Rip | Vue | Svelte | React |
 |---------|:---:|:---:|:------:|:-----:|
 | Auto-tracking | ✅ | ✅ | ✅ | ❌ |
 | No manual deps array | ✅ | ✅ | ✅ | ❌ |
 | Runs immediately | ✅ | ✅ | ✅ | ✅ |
-| Returns cleanup | ✅ | ✅ | ✅ | ✅ |
+| Controllable (stop/run) | ✅ | ✅ | ✅ | ❌ |
 | Re-runs on change | ✅ | ✅ | ✅ | ✅ |
 
-**Rip advantage over React:** No manual dependency arrays! React's `useEffect` requires you to list dependencies — Rip tracks them automatically.
+**Rip advantage over React:** No manual dependency arrays!
 
 ```javascript
 // React - manual, error-prone
@@ -135,8 +144,7 @@ useEffect(() => {
 }, [count]);  // 😩 Must list deps manually
 
 // Rip - automatic
-effect ->
-  document.title = "Count: #{count}"  // 🎉 Deps tracked automatically
+~> document.title = "Count: #{count}"  // 🎉 Deps tracked automatically
 ```
 
 ### Bundle Size
@@ -235,10 +243,11 @@ Rip uses **fine-grained reactivity** (like Vue/Solid), not Virtual DOM diffing (
 
 Rip's reactivity system:
 
-✅ **Three simple primitives** — state, computed, effect
-✅ **Auto-tracking** — no manual dependency arrays
+✅ **Three simple primitives** — state (`:=`), computed (`~=`), effect (`~>`)
+✅ **Natural reading** — "has state", "always equals", "reacts to"
 ✅ **Lazy computed** — only calculates when needed
 ✅ **Fine-grained** — surgical updates to subscribers
+✅ **Controllable effects** — `.stop!`, `.run!`, `.cancel!` when needed
 ✅ **Tiny runtime** — ~200 lines, ~4 KB
 ✅ **Extra utilities** — `.lock()`, `.read()`, `.kill()` that others lack
 

@@ -294,7 +294,7 @@ Each item gets its own effect. Changing `selected` updates ONLY the affected cla
 **Phase 1: Reactivity** (previously released)
 - State-based reactivity: `count := 0` creates reactive state
 - Computed values: `doubled ~= count * 2` auto-tracks dependencies
-- Effects: `effect -> console.log count` runs on changes
+- Effects: `~> console.log count` runs on changes
 - Runtime: `__state()`, `__computed()`, `__effect()`, `__batch()`, `__readonly()`
 
 **Phase 2: Templates**

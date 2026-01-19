@@ -480,20 +480,25 @@ items := [{price: 10}, {price: 20}]
 total ~= items.reduce ((sum, i) -> sum + i.price), 0
 ```
 
-## Effects
+## Effects (`~>`)
 
 ```coffee
 count := 0
 
-# Runs when dependencies change
-effect ->
-  console.log "Count changed to #{count}"
+# Fire and forget (no assignment needed)
+~> console.log "Count changed to #{count}"
 
 count = 5  # Logs: "Count changed to 5"
 count = 10 # Logs: "Count changed to 10"
 
+# Controllable (assign to variable)
+logger ~> console.log count
+logger.stop!     # Pause reactions
+logger.run!      # Resume reactions
+logger.cancel!   # Permanent disposal
+
 # With cleanup
-effect ->
+ticker ~>
   interval = setInterval (-> tick()), 1000
   -> clearInterval interval  # Cleanup function
 ```
@@ -524,7 +529,8 @@ finalValue = count.kill()  # Returns value, cleans up
 |------|-----|---------|
 | Mutable state that triggers updates | `:=` | `count := 0` |
 | Computed value from other state | `~=` | `total ~= price * qty` |
-| Side effect on change | `effect` | `effect -> save(data)` |
+| Side effect on change | `~>` | `~> save(data)` |
+| Controllable side effect | `x ~>` | `saver ~> save(data)` |
 | Immutable constant | `=!` | `API_URL =! "..."` |
 | Regular variable | `=` | `temp = calculate()` |
 
@@ -1323,8 +1329,7 @@ export def sleep(ms)
 count := 0
 doubled ~= count * 2
 
-effect ->
-  console.log "Count: #{count}, Doubled: #{doubled}"
+~> console.log "Count: #{count}, Doubled: #{doubled}"
 
 count = 5   # Logs: "Count: 5, Doubled: 10"
 count = 10  # Logs: "Count: 10, Doubled: 20"
@@ -1402,7 +1407,7 @@ bun add -g rip-lang
 **Rip is a complete language for modern JavaScript development:**
 
 - **Clean syntax** — CoffeeScript-inspired, readable, minimal noise
-- **Built-in reactivity** — `:=` state, `~=` computed, `effect` blocks
+- **Built-in reactivity** — `:=` state, `~=` computed, `~>` effects
 - **Modern output** — ES2022, classes, optional chaining, nullish coalescing
 - **JavaScript interop** — Full access to npm ecosystem
 - **Multi-platform** — Bun, Node.js, Deno, browsers

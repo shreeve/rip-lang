@@ -1129,6 +1129,8 @@ export var Lexer = class Lexer {
       tag = 'COMPUTED_ASSIGN';
     } else if (value === ':=') {
       tag = 'REACTIVE_ASSIGN';
+    } else if (value === '~>') {
+      tag = 'REACT_ASSIGN';
     } else if (value === '=!') {
       tag = 'READONLY_ASSIGN';
     } else if (indexOf.call(MATH, value) >= 0) {
@@ -1793,7 +1795,7 @@ addTokenData = function(token, data) {
 JS_KEYWORDS = ['true', 'false', 'null', 'this', 'new', 'delete', 'typeof', 'in', 'instanceof', 'return', 'throw', 'break', 'continue', 'debugger', 'yield', 'await', 'if', 'else', 'switch', 'for', 'while', 'do', 'try', 'catch', 'finally', 'class', 'extends', 'super', 'import', 'export', 'default'];
 
 // Rip-only keywords.
-RIP_KEYWORDS = ['undefined', 'Infinity', 'NaN', 'then', 'unless', 'until', 'loop', 'of', 'by', 'when', 'def', 'effect'];
+RIP_KEYWORDS = ['undefined', 'Infinity', 'NaN', 'then', 'unless', 'until', 'loop', 'of', 'by', 'when', 'def'];
 
 RIP_ALIAS_MAP = {
   and: '&&',
@@ -1844,7 +1846,7 @@ NUMBER = /^0b[01](?:_?[01])*n?|^0o[0-7](?:_?[0-7])*n?|^0x[\da-f](?:_?[\da-f])*n?
 // decimal without support for numeric literal separators for reference:
 // \d*\.?\d+ (?:e[+-]?\d+)?
 
-OPERATOR = /^(?:<=>|[-=]>|~=|:=|=!|===|!==|!\?|\?\?|=~|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?(\.|::)|\.{2,3})/; // function
+OPERATOR = /^(?:<=>|[-=]>|~>|~=|:=|=!|===|!==|!\?|\?\?|=~|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?(\.|::)|\.{2,3})/; // function
 // := is reactive state assignment
 // ~= is computed assign (reactive computed values)
 // =! is readonly assign (reactive constant)

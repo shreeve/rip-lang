@@ -1640,11 +1640,15 @@ export class CodeGenerator {
 
   /**
    * Generate effect (reactive side effect)
-   * Pattern: ["effect", block]
-   * Output: __effect(() => { block })
+   * Pattern: ["effect", target, body]
+   *   target: assignable (gets the effect controller) or null (fire and forget)
+   *   body: the effect expression/block
+   * Output:
+   *   With target:    const target = __effect(() => { body })
+   *   Without target: __effect(() => { body })
    */
   generateEffect(head, rest, context, sexpr) {
-    const [body] = rest;
+    const [target, body] = rest;
     this.usesReactivity = true;
 
     // Generate the body
@@ -1656,12 +1660,23 @@ export class CodeGenerator {
     } else if (Array.isArray(body) && (body[0] === '->' || body[0] === '=>')) {
       // It's already a function, just generate it
       const fnCode = this.generate(body, 'value');
+      if (target) {
+        const varName = typeof target === 'string' ? target : this.generate(target, 'value');
+        return `const ${varName} = __effect(${fnCode})`;
+      }
       return `__effect(${fnCode})`;
     } else {
       bodyCode = `{ ${this.generate(body, 'value')}; }`;
     }
 
-    return `__effect(() => ${bodyCode})`;
+    const effectCode = `__effect(() => ${bodyCode})`;
+
+    if (target) {
+      const varName = typeof target === 'string' ? target : this.generate(target, 'value');
+      return `const ${varName} = ${effectCode}`;
+    }
+
+    return effectCode;
   }
 
   //-------------------------------------------------------------------------

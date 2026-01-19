@@ -50,7 +50,7 @@ grammar =
     o 'ReactiveAssign'
     o 'ComputedAssign'
     o 'ReadonlyAssign'
-    o 'EffectBlock'
+    o 'ReactAssign'
     o 'If'
     o 'Try'
     o 'While'
@@ -89,10 +89,16 @@ grammar =
     o 'Assignable READONLY_ASSIGN INDENT Expression OUTDENT', '["readonly", 1, 4]'
   ]
 
-  # Reactive: Effect block - side effects that run when dependencies change
-  EffectBlock: [
-    o 'EFFECT FuncGlyph Block', '["effect", 3]'
-    o 'EFFECT Block'          , '["effect", 2]'
+  # Reactive: Effect assignment (~>) - side effects that run when dependencies change
+  # x ~> body  -> ["effect", x, body] (controllable - x gets the effect controller)
+  # ~> body    -> ["effect", null, body] (fire and forget)
+  ReactAssign: [
+    o 'Assignable REACT_ASSIGN Expression'               , '["effect", 1, 3]'
+    o 'Assignable REACT_ASSIGN TERMINATOR Expression'    , '["effect", 1, 4]'
+    o 'Assignable REACT_ASSIGN INDENT Expression OUTDENT', '["effect", 1, 4]'
+    o 'REACT_ASSIGN Expression'                          , '["effect", null, 2]'
+    o 'REACT_ASSIGN TERMINATOR Expression'               , '["effect", null, 3]'
+    o 'REACT_ASSIGN INDENT Expression OUTDENT'           , '["effect", null, 3]'
   ]
 
   # Expressions which are written in single line and would otherwise require being
