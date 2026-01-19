@@ -2,17 +2,50 @@
 
 Rip implements a **fine-grained reactive system** that rivals and often exceeds the capabilities of major frameworks like Vue, Svelte, Solid, and React — in just ~200 lines of runtime code.
 
-## The Three Primitives
+## The Reactive Triad
 
 Rip's entire reactivity model is built on three foundational concepts:
 
-| Primitive | Syntax | Read as | Purpose |
-|-----------|--------|---------|---------|
-| **state** | `x := 0` | "x **has state** 0" | Mutable reactive value |
-| **computed** | `y ~= x * 2` | "y **always equals** x * 2" | Computed value (auto-updates) |
-| **effect** | `e ~> body` | "e **reacts to** (dependencies in body)" | Side effect (runs on changes) |
+| Primitive | Description | Read As | Role | Purpose |
+|-----------|-------------|---------|------|---------|
+| `:=` | state | "has state" | **Source** | Where reactive data originates |
+| `~=` | computed | "always equals" | **Derivation** | Computed values (lazy, cached) |
+| `~>` | effect | "reacts to" | **Reaction** | Side effects when data changes |
 
-These three primitives provide **complete reactive power** — everything React, Vue, Svelte, and Solid can do with state management, Rip can do too.
+These three primitives are the **minimal complete set** for reactive programming — everything React, Vue, Svelte, and Solid can do with state management, Rip can do too.
+
+---
+
+## Why These Three Are Complete
+
+Every reactive system reduces to these three concepts:
+
+| Framework | Source | Derivation | Reaction |
+|-----------|--------|------------|----------|
+| **Rip** | `:=` | `~=` | `~>` |
+| Angular | `signal()` | `computed()` | `effect()` |
+| Imba | `@property` | implicit | implicit |
+| MobX | `observable` | `computed` | `autorun` |
+| Next.js | `useState` | `useMemo` | `useEffect` |
+| React | `useState` | `useMemo` | `useEffect` |
+| Solid | `createSignal` | `createMemo` | `createEffect` |
+| Svelte 4 | `let x` | `$: x` | `$: {}` |
+| Svelte 5 | `$state` | `$derived` | `$effect` |
+| Vue | `ref()` | `computed()` | `watch()` |
+
+### What You Can Build From These Three
+
+- **Stores** → objects with state properties
+- **Two-way binding** → state + effect that syncs
+- **Async resources** → state + effect that fetches
+- **Event handling** → update state → triggers reactions
+- **Derived stores** → computed from other state
+
+### What's Missing Without Any One
+
+- **Without `:=`** → No source of truth
+- **Without `~=`** → Manual tracking or inefficient effects
+- **Without `~>`** → Can't react to changes (no side effects)
 
 ---
 
@@ -21,10 +54,10 @@ These three primitives provide **complete reactive power** — everything React,
 ```rip
 count := 0                      # count has state 0
 doubled ~= count * 2            # doubled always equals count * 2
-~> console.log count            # (fire and forget) reacts to count changes
+logger ~> console.log count     # reacts to count changes
+~> console.log count            # same thing, but the "fire and forget" version
 
-increment: ->
-  count += 1
+increment: -> count += 1
 
 increment()  # Logs: 1
 increment()  # Logs: 2
@@ -201,14 +234,14 @@ const finalValue = count.kill();  // Returns value, clears subscribers
 ## The Architecture
 
 ```
-┌─────────────┐     reads      ┌─────────────┐
+┌─────────────┐     reads     ┌─────────────┐
 │   STATE     │◄──────────────│   EFFECT    │
 │   count     │               │   (side fx) │
 └──────┬──────┘               └─────────────┘
        │                             ▲
        │ notifies                    │ triggers
        ▼                             │
-┌─────────────┐     reads      ┌─────┴───────┐
+┌─────────────┐     reads     ┌──────┴──────┐
 │  COMPUTED   │◄──────────────│   EFFECT    │
 │  doubled    │               │   (logger)  │
 └─────────────┘               └─────────────┘
@@ -243,12 +276,13 @@ Rip uses **fine-grained reactivity** (like Vue/Solid), not Virtual DOM diffing (
 
 Rip's reactivity system:
 
-✅ **Three simple primitives** — state (`:=`), computed (`~=`), effect (`~>`)
-✅ **Natural reading** — "has state", "always equals", "reacts to"
-✅ **Lazy computed** — only calculates when needed
-✅ **Fine-grained** — surgical updates to subscribers
-✅ **Controllable effects** — `.stop!`, `.run!`, `.cancel!` when needed
-✅ **Tiny runtime** — ~200 lines, ~4 KB
-✅ **Extra utilities** — `.lock()`, `.read()`, `.kill()` that others lack
+✅ **The Reactive Triad** — state (`:=`), computed (`~=`), effect (`~>`) <br>
+✅ **Natural reading** — "has state", "always equals", "reacts to" <br>
+✅ **Minimal complete set** — same model as Vue, Solid, MobX <br>
+✅ **Lazy computed** — only calculates when needed <br>
+✅ **Fine-grained** — surgical updates to subscribers <br>
+✅ **Controllable effects** — `.stop!`, `.run!`, `.cancel!` when needed <br>
+✅ **Tiny runtime** — ~200 lines, ~4 KB <br>
+✅ **Extra utilities** — `.lock()`, `.read()`, `.kill()` that others lack <br>
 
 **On par with Vue/Solid. Better than React. A fraction of the size.**
