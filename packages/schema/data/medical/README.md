@@ -17,18 +17,19 @@ The Medical Demo is a patient-centric clinical application featuring:
 
 ```
 medical/
-├── application.sdf          # Main application configuration (238 lines)
-├── menu.sdf                 # Menu bar definition
-├── infobar.sdf              # Patient demographics header
-├── template.sdf             # Reusable widget templates
-├── summary.sdf              # Patient summary/cover sheet
-├── problems.sdf             # Problems list view
-├── orders.sdf               # Orders TreeTable view
-├── labs.sdf                 # Lab results with charting
-├── documents.sdf            # Document management
-├── reports.sdf              # Chart examples
-├── expenses.sdf             # Financial data TreeTable
-├── patient_lookup_window.sdf # Patient search dialog
+├── sdf/                     # SDF UI definitions (12 files)
+│   ├── application.sdf      # Main application configuration (238 lines)
+│   ├── menu.sdf             # Menu bar definition
+│   ├── infobar.sdf          # Patient demographics header
+│   ├── template.sdf         # Reusable widget templates
+│   ├── summary.sdf          # Patient summary/cover sheet
+│   ├── problems.sdf         # Problems list view
+│   ├── orders.sdf           # Orders TreeTable view
+│   ├── labs.sdf             # Lab results with charting
+│   ├── documents.sdf        # Document management
+│   ├── reports.sdf          # Chart examples
+│   ├── expenses.sdf         # Financial data TreeTable
+│   └── patient_lookup_window.sdf # Patient search dialog
 ├── documents/               # Document viewer components
 │   ├── reader.sdf           # Document reader/editor (413 lines)
 │   ├── compose.sdf          # Note composition
@@ -52,23 +53,23 @@ The root `Application` object configures the entire application:
 ```sdf
 Application {
   name: "Medical Demo"
-  
+
   # Inline look-and-feel properties with OS-specific variants
   lookAndFeelPropertiesURL: << ... >> [inline="true"]
-  
+
   # Application-wide icons
   resourceIconsURL: << ... >> [inline="true"]
-  
+
   # Reusable action definitions
   actionItemsURL: << Set { ... } >> [inline="true"]
-  
+
   # Main window configuration
   mainWindow {
     templateURL: "template.sdf" [cache="true"]
     title: "Sage - Medical App Demo"
     menuBar { dataURL: "menu.sdf" }
     statusBar { bgColor: "infobarColor" }
-    
+
     viewer {
       GridPane {
         regions {
@@ -88,7 +89,7 @@ Application {
 SDF supports inline data and scripts using `<<` heredoc syntax:
 
 ```sdf
-scriptURL: << 
+scriptURL: <<
   function showGraph(table) {
     var row = table.getSelectedItem()
     var chart = labChart
