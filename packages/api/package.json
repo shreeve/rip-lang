@@ -1,0 +1,45 @@
+{
+  "name": "@rip-lang/api",
+  "version": "0.1.0",
+  "description": "Elegant API Development Toolkit for Rip - Transform complex validation into pure poetry",
+  "type": "module",
+  "main": "rip-api.rip",
+  "exports": {
+    ".": "./rip-api.rip",
+    "./rip-api": "./rip-api.rip"
+  },
+  "scripts": {
+    "build": "rip rip-api.rip",
+    "test": "echo \"Tests coming soon\" && exit 0"
+  },
+  "keywords": [
+    "rip",
+    "api",
+    "validation",
+    "helpers",
+    "web-development",
+    "hono",
+    "request-parsing",
+    "regex-validation"
+  ],
+  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
+  "license": "MIT",
+  "peerDependencies": {
+    "rip-lang": "^1.5.0",
+    "hono": "^4.0.0"
+  },
+  "files": [
+    "rip-api.rip",
+    "context.ts",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreeve/rip-lang.git",
+    "directory": "packages/api"
+  },
+  "homepage": "https://github.com/shreeve/rip-lang/tree/main/packages/api#readme",
+  "bugs": {
+    "url": "https://github.com/shreeve/rip-lang/issues"
+  }
+}

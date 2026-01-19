@@ -4,6 +4,9 @@
   "description": "A modern language that compiles to JavaScript",
   "type": "module",
   "main": "src/compiler.js",
+  "workspaces": [
+    "packages/*"
+  ],
   "browser": "docs/dist/rip.browser.js",
   "exports": {
     ".": {

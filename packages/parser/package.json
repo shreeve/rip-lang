@@ -1,0 +1,36 @@
+{
+  "name": "@rip-lang/parser",
+  "version": "0.1.0",
+  "description": "Rip Parser - An SLR(1) parser generator written in Rip",
+  "type": "module",
+  "main": "rip-parser.rip",
+  "exports": {
+    ".": {
+      "rip": "./rip-parser.rip",
+      "default": "./rip-parser.rip"
+    }
+  },
+  "bin": {
+    "rip-parser": "bin/rip-parser"
+  },
+  "scripts": {
+    "test": "echo \"Tests coming soon\" && exit 0"
+  },
+  "keywords": [
+    "parser",
+    "parser-generator",
+    "slr",
+    "compiler",
+    "rip"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreeve/rip-lang.git",
+    "directory": "packages/parser"
+  },
+  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
+  "license": "MIT",
+  "peerDependencies": {
+    "rip-lang": "^1.5.0"
+  }
+}

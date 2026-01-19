@@ -1,0 +1,445 @@
+# @rip-lang/api — cohesive single-file core (DSL + read + validators + reloader)
+# -----------------------------------------------------------------------------
+# Public exports:
+#   DSL: get, post, put, patch, del, any, use, prefix, group, startHandler, start
+#   API: withHelpers, read, registerValidator, getValidator, validators
+#   Dev: createReloader, resetGlobals
+#
+# Design notes:
+# - DSL is module-scoped per worker: no global leakage across workers.
+# - read() is synchronous when used with withHelpers (Sinatra vibe).
+# - Validators rely on Rip's =~ coercion (no local String(...) needed).
+# - Smart wrapper lets handlers "just return" strings/objects/Response.
+
+import { Hono } from 'hono'
+import { requestContext } from './context'
+import { statSync, watch } from 'node:fs'
+
+# -----------------------------------------------------------------------------
+# Module-scoped state (per worker / per module instance)
+# -----------------------------------------------------------------------------
+
+_          = null # match capture holder for Rip's =~
+_app       = null # real Hono app (built on demand)
+_routes    = []   # queued routes & middleware (preserve declaration order)
+_prefix    = ''   # current group/prefix
+
+# -----------------------------------------------------------------------------
+# withHelpers middleware (attaches per-request context for read())
+# -----------------------------------------------------------------------------
+export withHelpers = (c, next) ->
+  data = {}
+  try
+    ct = c.req.header('content-type') or ''
+    if c.req.method in ['POST','PUT','PATCH']
+      if ct =~ /json/i
+        data = c.req.json!
+      else if ct =~ /x-www-form-urlencoded|form-data/i
+        data = c.req.parseBody!
+  catch
+    data = {}
+
+  # Merge query last for simple overrides via ?a=1
+  q = Object.fromEntries(new URL(c.req.url).searchParams.entries())
+  merged = { ...data, ...q }
+
+  # Run the rest of the pipeline inside this request's ALS scope
+  await new Promise (resolve, reject) ->
+    requestContext.run { hono: c, data: merged }, ->
+      Promise.resolve(next()).then(resolve, reject)
+
+# helper (Unicode-safe: JS's toUpperCase/toLowerCase handle Unicode)
+capitalize = (str) -> str.charAt(0).toUpperCase() + str.slice(1).toLowerCase()
+
+# Ruby-like blank? function
+export isBlank = (obj) ->
+  return true unless obj?                                   # nil / undefined
+  return true if typeof obj is 'boolean' and obj is false   # false is blank
+  return true if typeof obj is 'string' and /^\s*$/.test obj  # "" or whitespace-only
+  return true if Array.isArray(obj) and obj.length is 0     # []
+  return true if typeof obj is 'object' and Object.keys(obj).length is 0  # {}
+  false
+
+# Advanced name (or address) formatting
+export toName = (str, type...) ->
+  s = String(str)
+
+  # general case: normalize to lower-case, collapse spaces, trim, and capitalize each word (Unicode word starts)
+  s = s.toLowerCase().replace(/\s+/g, ' ').trim().replace /(^|(?<=\P{L}))(\p{L})/gu, (m, pre, ch) -> pre + ch.toUpperCase()
+
+  # dumb down smart quotes
+  s = s.replace(/[`‘’]/g, "'").replace(/[“”]/g, '"')
+
+  # initials: collapse patterns like "j. d." → "JD" (ASCII-focused on purpose)
+  s = s.replace /\b([a-z])\. ?([bcdfghjklmnpqrstvwxyz])\.?(?=\W|$)/gi, (match, p1, p2) -> (p1 + p2).toUpperCase()
+
+  # uppercase apparent acronyms (mostly consonant clusters up to 5 letters) (ASCII heuristic)
+  s = s.replace /(?<=^|\P{L})([A-Za-z](?:(?![AEIOUYaeiouy])[A-Za-z]){1,4})(?=$|\P{L})/gu, (m) -> m.toUpperCase()
+
+  # force camel-case on known abbreviations (Dr, Us, Esq, Inc, etc.)
+  s = s.replace /\b([djs]r|us|acct|[ai]nn?|apps|ed|erb|elk|esq|grp|in[cj]|of[cf]|st|up)\.?(?=\W|$)/gi, (match) -> capitalize(match)
+
+  # articles, conjunctions, and prepositions: capitalize at start/after digit, else lower
+  s = s.replace /(^|(?<=\d ))?\b(and|at|as|of|then?|in|on|or|for|to|by|de l[ao]s?|del?|(el-)|el|las)($)?\b/ig, (m, p1, p2, p3, p4, offset) ->
+    if offset is 0 or p1? or p3? or p4? then capitalize(p2) else p2.toLowerCase()
+
+  # mixed case (Irish): Mc, Mac, D’, O’, L’
+  s = s.replace /\b(mc|mac(?=d[ao][a-k,m-z][a-z]|[fgmpw])|[dol]')([a-z])/gi, (m, p1, p2) -> capitalize(p1) + capitalize(p2)
+
+  # capitalize selected tokens when type is 'name'
+  if type.includes 'name'
+    s = s.replace /\b(ahn|an[gh]|al|art[sz]?|ash|e[dnv]|echt|elms|emms|eng|epps|essl|i[mp]|mrs?|ms|ng|ock|o[hm]|ohrt|ong|orr|ohrt|ost|ott|oz|sng|tsz|u[br]|ung)\b/gi, (match) -> capitalize(match)
+
+  # road features (addresses only): Unicode punctuation boundary on the left; Unicode non-word on the right
+  if type.includes 'address'
+    s = s.replace /(?<=^| |\p{P})(apt?s?|arch|ave?|bldg|blvd|cr?t|co?mn|drv?|elm|end|f[lt]|hts?|ln|old|pkw?y|plc?|prk|pt|r[dm]|spc|s[qt]r?|srt|street|[nesw])\.?(?=$|[^\p{L}\p{N}_])/giu, (matched) -> capitalize(matched)
+
+  # ordinal numbers and some Spanish: normalize to lower
+  s = s.replace /(1st|2nd|3rd|[\d]th|\bde l[ao]s)\b/gi, (match) -> match.toLowerCase()
+
+  # force uppercase on known acronyms (and partial Roman numeral support)
+  s = s.replace /\b(ca|dba|fbo|ihop|mri|ucla|usa|vru|[ns][ew]|i{1,3}v?)\b/gi, (match) => match.toUpperCase()
+
+  # domain names, email → lower
+  s = s.replace /\b([-@.\w]+\.(?:com|net|io|org))\b/gi, (match) -> match.toLowerCase()
+
+  # ensure "Lee's Ferry" is not "Lee'S Ferry" (Unicode letter before the apostrophe)
+  s = s.replace /(?<=\p{L}')S\b/gu, 's'
+
+  # collapse spaces following a number sign
+  s = s.replace /# /g, '#'
+
+  # remove trailing period, comma, or hash signs
+  s = s.replace /\s*[.,#]+$/, ''
+
+  # normalize PO Boxes
+  s = s.replace /\bP\.? ?O\.? ?Box/i, 'PO Box'
+
+  s
+
+# Advanced phone formatting
+export toPhone = (str) ->
+  return "" if isBlank(str)
+
+  # prepare to parse - squeeze spaces and strip
+  num = str.toString().replace(/\s+/g, ' ').trim()
+
+  # pluck off extension, tries several variants
+  [num, ext] = num.split(/\s*(?:, ?)?(?:ext?\.?|x|#|:|,)\s*/i, 2)
+  ext = ext.replace(/\D+/g, "") if ext
+
+  # allow international numbers (without formatting)
+  if num =~ /^\+([-+#*.,\d ]+)$/
+    etc = _[1].replace(/[^#*,\d]+/g, "")
+    if etc.replace(/\D+/g, "").length >= 6 # minimum digits
+      if etc =~ /^1(\d{10})$/
+        [num, ext] = [_[1], ""]
+      else
+        return "+#{etc}"
+
+  # adjust base number, allow only domestic phones
+  num = num.replace(/^[^2-9]*/, "").replace(/\D+/g, "")
+
+  # assemble final number
+  if num =~ /^([2-9][0-8][0-9])([2-9]\d\d)(\d{4})$/
+    num = "(#{_[1]}) #{_[2]}-#{_[3]}"
+    num += ", ext. #{ext}" if ext
+  else
+    num = null
+
+  num
+
+# -----------------------------------------------------------------------------
+# Validator registry (uses =~; assumes runtime sets '_' captures)
+# -----------------------------------------------------------------------------
+export validators =
+  # Numbers & money
+  id:        (v) -> v[/^([1-9]\d{0,19})$/]            and parseInt(_[1])
+  whole:     (v) -> v[/^(0|[1-9]\d{0,19})$/]          and parseInt(_[1])
+  decimal:   (v) -> v[/^([-+]?\d+(?:\.\d*)?|\.\d+)$/] and parseFloat(_[1])
+  money:     (v) -> v[/^([-+]?\d+(?:\.\d*)?|\.\d+)$/] and Math.round(parseFloat(_[1]) * 100)
+
+  # Strings & formatting
+  string:    (v) -> v.replace(/\s\s+/g, ' ')
+  text:      (v) -> v.replace(/  +/g, ' ')
+
+  # Name/address (plug your own formatters here)
+  name:      (v) -> v.replace(/\s+/g, ' ').trim()
+  address:   (v) -> v.replace(/\s+/g, ' ').trim()
+
+  # Time & date (stubs; replace with your real parsers)
+  time:      (v) -> v[/^([01]?\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/] and _[0]
+  date:      (v) -> v[/^\d{4}-\d{2}-\d{2}$/]                   and _[0]
+  dateutc:   (v) -> v[/^\d{4}-\d{2}-\d{2}Z?$/]                 and _[0]
+
+  # Booleans
+  truthy:    (v) -> (v =~ /^(true|t|1|yes|y|on)$/i)  and true
+  falsy:     (v) -> (v =~ /^(false|f|0|no|n|off)$/i) and true
+  bool:      (v) -> (v =~ /^(true|t|1|yes|y|on|false|f|0|no|n|off)$/i) and (v =~ /^(true|t|1|yes|y|on)$/i)
+
+  # Contact, geo, identity
+  email:     (v) -> v[/^([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})$/] and _[0]
+  state:     (v) -> v[/^([a-z][a-z])$/i]              and _[1].toUpperCase()
+  zip:       (v) -> v[/^(\d{5})/]                     and _[1]
+  zipplus4:  (v) -> v[/^(\d{5})-?(\d{4})$/]           and "#{_[1]}-#{_[2]}"
+  ssn:       (v) -> v[/^(\d{3})-?(\d{2})-?(\d{4})$/]  and "#{_[1]}#{_[2]}#{_[3]}"
+  sex:       (v) -> v[/^(m|male|f|female|o|other)$/i] and _[1][0].toLowerCase()
+
+  # Phone (US simple; replace with your formatter)
+  phone:     (v) -> toPhone(v)
+
+  # Web & technical
+  username:  (v) -> v[/^([a-zA-Z0-9_-]{3,20})$/]        and _[1].toLowerCase()
+  ip:        (v) -> v[/^(?:\d{1,3}\.){3}\d{1,3}$/]      and _[0]
+  mac:       (v) -> v[/^([0-9a-fA-F]{2})(?:[:-]?)([0-9a-fA-F]{2})(?:[:-]?)([0-9a-fA-F]{2})(?:[:-]?)([0-9a-fA-F]{2})(?:[:-]?)([0-9a-fA-F]{2})(?:[:-]?)([0-9a-fA-F]{2})$/] and "#{_[1]}:#{_[2]}:#{_[3]}:#{_[4]}:#{_[5]}:#{_[6]}".toLowerCase()
+  url:       (v) -> v[/^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w\.-]*)*\/?$/] and _[0]
+  color:     (v) -> v[/^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/] and "##{_[1].toLowerCase()}"
+  uuid:      (v) -> v[/^([0-9a-f]{8})-?([0-9a-f]{4})-?([0-9a-f]{4})-?([0-9a-f]{4})-?([0-9a-f]{12})$/i] and "#{_[1]}-#{_[2]}-#{_[3]}-#{_[4]}-#{_[5]}".toLowerCase()
+  semver:    (v) -> v[/^(\d+)\.(\d+)\.(\d+)(?:-([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*))?(?:\+([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*))?$/] and _[0]
+
+  # Time formats & currency (alt)
+  time24:    (v) -> v[/^([01]?[0-9]|2[0-3]):([0-5][0-9])(?::([0-5][0-9]))?$/] and _[0]
+  time12:    (v) -> v[/^(1[0-2]|0?[1-9]):([0-5][0-9])\s?(am|pm)$/i]            and _[0].toLowerCase()
+  currency:  (v) -> v[/^\$?(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)$/]                 and parseFloat(_[1].replace(/,/g,''))
+
+  # Collections & structured
+  array:     (v) -> (Array.isArray(v) and v) or null
+  hash:      (v) -> ((v? and typeof v == 'object') and v) or null
+  json:      (v) ->
+    if typeof v == 'string'
+      try JSON.parse(v) catch then null
+    else if typeof v == 'object' then v else null
+
+  # Slugs & ids list
+  slug:      (v) -> v[/^([a-z0-9]+(?:-[a-z0-9]+)*)$/] and _[1]
+  ids:       (v) ->
+    cleaned = v.replace(/[, ]+/g, ' ').trim()
+    return null unless cleaned
+    try
+      nums = []
+      for part in cleaned.split(' ')
+        return null unless part[/^([1-9]\d{0,19})$/]
+        nums.push parseInt(_[1])
+      Array.from(new Set(nums)).sort((a,b) -> a-b)
+    catch then null
+
+export registerValidator = (name, fn) -> validators[name] = fn
+export getValidator      = (name)     -> validators[name]
+
+# -----------------------------------------------------------------------------
+# read() — registry-driven, Sinatra-style ergonomics
+# -----------------------------------------------------------------------------
+export read = (keyOrTag = null, tagOrMiss = null, missOrNil = null) ->
+  store = requestContext.getStore()
+  throw new Error 'read() called outside request context — did you add withHelpers?' unless store?
+
+  data = store.data or {}
+
+  # resolve params
+  key  = null
+  tag  = null
+  miss = null
+
+  if keyOrTag? and tagOrMiss? or missOrNil? isnt null
+    key  = keyOrTag
+    tag  = tagOrMiss
+    miss = missOrNil
+  else
+    # read() -> whole payload
+    key  = null
+    tag  = keyOrTag
+    miss = tagOrMiss
+
+  raw = if key? then data[key] else data
+
+  # No tag? return as-is (useful for echo endpoints)
+  return raw unless tag?
+
+  # Required suffix "!"
+  required = false
+  if typeof tag is 'string' and tag.endsWith('!')
+    required = true
+    tag = tag.slice(0, -1)
+
+  v = raw
+
+  # 1) Named validator
+  if typeof tag is 'string'
+    fn = getValidator(tag)
+    v = if fn then fn(v) else null
+
+  # 2) Enumerations
+  else if Array.isArray(tag)
+    v = if tag.includes(String(v)) then String(v) else null
+
+  # 3) Regex
+  else if tag instanceof RegExp
+    v = v[tag] or null
+
+  # 4) Range / constraints
+  else if typeof tag is 'object' and (tag?.start? or tag?.end?)
+    n = parseInt(v)
+    v = if not isNaN(n) and (not tag.start? or n >= tag.start) and (not tag.end? or n <= tag.end) then n else null
+  else if typeof tag is 'object' and (tag?.min? or tag?.max?)
+    # number or string length
+    if typeof v is 'number' or (v =~ /^[-+]?\d+$/)
+      n = (typeof v is 'number') and v or parseInt(String(v))
+      ok = not isNaN(n)
+      ok = false if tag.min? and n < tag.min
+      ok = false if tag.max? and n > tag.max
+      v = ok and n or null
+    else
+      s = String(v or '')
+      ok = true
+      ok = false if tag.min? and s.length < tag.min
+      ok = false if tag.max? and s.length > tag.max
+      v = ok and s or null
+
+  # Required / optional behavior
+  isBlank = (x) -> x is null or x is undefined or (typeof x is 'string' and x.trim() is '')
+  if isBlank(v)
+    if required
+      return miss?() if typeof miss is 'function'
+      throw new Error "Missing required field: #{key}"
+    else
+      return (miss?() if typeof miss is 'function') or miss or null
+
+  v
+
+# -----------------------------------------------------------------------------
+# Smart wrapper: handlers can "just return" string/object/Response
+# -----------------------------------------------------------------------------
+smart = (fn) ->
+  (c) ->
+    try
+      result = fn!
+      if typeof result is 'string'
+        first = result.split('\n')[0]
+        type = if first =~ /html/i then 'html' else 'plain'
+        return new Response(result, { headers: { 'Content-Type': "text/#{type}; charset=UTF-8" } })
+      else if result? and typeof result is 'object'
+        if result instanceof Response then return result
+        return c.json(result)
+      else if typeof result in ['number','boolean']
+        return new Response(String(result), { headers: { 'Content-Type': 'text/plain; charset=UTF-8' } })
+      return result
+    catch err
+      return new Response(err?.message or 'Internal Server Error',
+        { status: 500, headers: { 'Content-Type': 'text/plain; charset=UTF-8' } })
+
+# -----------------------------------------------------------------------------
+# DSL: get/post/... , use, prefix/group, startHandler, start
+# -----------------------------------------------------------------------------
+ensureApp = ->
+  return _app if _app?
+  _app = new Hono()
+  _app.use(withHelpers)
+  _app
+
+addRoute = (method, path, handler) ->
+  full = "#{_prefix}#{path}"
+  _routes.push { method, path: full, handler: smart(handler) }
+
+export get    = (path, fn) -> addRoute 'get',    path, fn
+export post   = (path, fn) -> addRoute 'post',   path, fn
+export put    = (path, fn) -> addRoute 'put',    path, fn
+export patch  = (path, fn) -> addRoute 'patch',  path, fn
+export del    = (path, fn) -> addRoute 'delete', path, fn
+export any    = (path, fn) -> for m in ['get','post','put','patch','delete','options'] then addRoute m, path, fn
+
+export use    = (mw) -> _routes.push { use: true, mw }
+
+export prefix = (base, fn) ->
+  old = _prefix
+  try
+    _prefix = "#{_prefix}#{base}"
+    fn?()
+  finally
+    _prefix = old
+
+export group = prefix
+
+# Build app & return fetch handler (no listener)
+export startHandler = ->
+  app = ensureApp()
+  # apply middlewares first
+  for r in _routes when r.use then app.use(r.mw)
+  # then routes in order
+  for r in _routes when not r.use then app[r.method](r.path, r.handler)
+  app.fetch.bind(app)
+
+# Convenience wrapper: define routes in a block and get a handler
+export App = (fn) ->
+  resetGlobals()
+  fn?()
+  startHandler()
+
+# Start a listener (dev/simple mode). In prod, your Manager/Server would wrap this.
+export start = (opts = {}) ->
+  fetch = startHandler()
+  host  = opts.host or '0.0.0.0'
+  port  = opts.port or 8080
+  server = Bun.serve
+    hostname: host
+    port: port
+    fetch: fetch
+  console.log "rip listening on http://#{host}:#{port}"
+  server
+
+# -----------------------------------------------------------------------------
+# Dev hot-reloader (module) — for --hot-reload=module
+# -----------------------------------------------------------------------------
+export resetGlobals = ->
+  _app = null
+  _routes = []
+  _prefix = ''
+  return
+
+export createReloader = (opts) ->
+  entry = (opts?.entryPath) or opts
+  debounceMs = opts?.debounceMs or 100
+  maxReloadsBeforeHint = opts?.maxReloadsBeforeHint or 200
+
+  currentHandler = null
+  currentMtime   = 0
+  loading        = null
+  lastCheck      = 0
+  reloads        = 0
+
+  load = (mt = null) ->
+    loading or= do ->
+      try
+        mt  = mt or (try statSync(entry).mtimeMs catch then 0)
+        mod = await import("#{entry}?v=#{mt}")
+        fresh = mod.default or mod
+
+        # Normalize to a single callable handler
+        if fresh?.fetch?
+          # Explicit app export: bind fetch and clear any queued DSL routes
+          resetGlobals()
+          currentHandler = fresh.fetch.bind(fresh)
+        else
+          # Implicit assembly: build from queued DSL routes
+          currentHandler = startHandler()
+        currentMtime = mt
+      finally
+        loading = null
+      currentHandler
+
+
+  getHandler = ->
+    now = Date.now()
+    if not currentHandler
+      await load()
+    else if now - lastCheck >= debounceMs
+      lastCheck = now
+      mt = try statSync(entry).mtimeMs catch then 0
+      if mt > currentMtime
+        await load(mt)
+    currentHandler
+
+  if opts?.watchDir?
+    watch opts.watchDir, { recursive: true }, (evt, file) ->
+      lastCheck = 0  # force check soon
+
+  { getHandler }

@@ -1,0 +1,222 @@
+# Migration system for Rip Schema
+# NOTE: This is a concept/prototype - not yet implemented
+# See README.md for the roadmap
+
+import { schema } from './builder'
+
+# Migration DSL
+export class Migration
+  constructor: (@version, @name) ->
+    @up_changes = []
+    @down_changes = []
+
+  up: (builder) ->
+    builder.call(this)
+    this
+
+  down: (builder) ->
+    builder.call(this)
+    this
+
+  # Migration operations
+  create_table: (name, options = {}, builder) ->
+    if typeof options is 'function'
+      builder = options
+      options = {}
+
+    @up_changes.push
+      type: 'create_table'
+      name: name
+      options: options
+      builder: builder
+
+    # Auto-generate down
+    @down_changes.unshift
+      type: 'drop_table'
+      name: name
+
+  drop_table: (name) ->
+    @up_changes.push
+      type: 'drop_table'
+      name: name
+
+  add_column: (table, column, type, options = {}) ->
+    @up_changes.push
+      type: 'add_column'
+      table: table
+      column: column
+      columnType: type
+      options: options
+
+    @down_changes.unshift
+      type: 'remove_column'
+      table: table
+      column: column
+
+  remove_column: (table, column) ->
+    @up_changes.push
+      type: 'remove_column'
+      table: table
+      column: column
+
+  add_index: (table, columns, options = {}) ->
+    @up_changes.push
+      type: 'add_index'
+      table: table
+      columns: columns
+      options: options
+
+    @down_changes.unshift
+      type: 'remove_index'
+      table: table
+      columns: columns
+
+  rename_table: (old_name, new_name) ->
+    @up_changes.push
+      type: 'rename_table'
+      old_name: old_name
+      new_name: new_name
+
+    @down_changes.unshift
+      type: 'rename_table'
+      old_name: new_name
+      new_name: old_name
+
+  rename_column: (table, old_name, new_name) ->
+    @up_changes.push
+      type: 'rename_column'
+      table: table
+      old_name: old_name
+      new_name: new_name
+
+    @down_changes.unshift
+      type: 'rename_column'
+      table: table
+      old_name: new_name
+      new_name: old_name
+
+# Helper to create migrations
+export migrate = (version, name, definition) ->
+  m = new Migration(version, name)
+  definition.call(m)
+  m
+
+# Example migrations
+export default [
+
+  migrate '20240101000000', 'create_users_table', ->
+    @up ->
+      @create_table 'users', ->
+        @string   'name!', 100
+        @email    'email!'
+        @string   'password_digest!'
+        @boolean  'active', true
+        @timestamps()
+
+        @index 'email', unique: true
+
+    @down ->
+      @drop_table 'users'
+
+  migrate '20240102000000', 'add_avatar_to_users', ->
+    @up ->
+      @add_column 'users', 'avatar_url', 'string'
+      @add_column 'users', 'bio', 'text'
+
+    @down ->
+      @remove_column 'users', 'avatar_url'
+      @remove_column 'users', 'bio'
+
+  migrate '20240103000000', 'create_posts_and_comments', ->
+    @up ->
+      @create_table 'posts', ->
+        @belongs_to 'user'
+        @string     'title!', 200
+        @string     'slug!', 200
+        @text       'content!'
+        @boolean    'published', false
+        @timestamps()
+
+        @index 'slug', unique: true
+        @index ['user_id', 'published']
+
+      @create_table 'comments', ->
+        @belongs_to 'post'
+        @belongs_to 'user'
+        @text       'content!'
+        @boolean    'approved', false
+        @timestamps()
+        @soft_delete()
+
+        @index ['post_id', 'approved']
+
+  migrate '20240104000000', 'add_view_count_to_posts', ->
+    @up ->
+      @add_column 'posts', 'view_count', 'integer', default: 0
+      @add_index 'posts', 'view_count'
+]
+
+# Migration runner (conceptual)
+export class MigrationRunner
+  constructor: (@db, @migrations) ->
+    @ensure_migrations_table()
+
+  ensure_migrations_table: ->
+    # Create migrations table if not exists
+    @db.run '''
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        version VARCHAR(14) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        executed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    '''
+
+  pending: ->
+    executed = @db.prepare('SELECT version FROM schema_migrations').all()
+    executed_versions = executed.map (row) -> row.version
+
+    @migrations.filter (m) -> m.version not in executed_versions
+
+  run: ->
+    pending = @pending()
+
+    for migration in pending
+      console.log "Running migration: #{migration.version} - #{migration.name}"
+
+      # Execute up changes
+      for change in migration.up_changes
+        @execute_change(change)
+
+      # Record migration
+      @db.prepare('INSERT INTO schema_migrations (version, name) VALUES (?, ?)').run(
+        migration.version,
+        migration.name
+      )
+
+    console.log "#{pending.length} migrations completed"
+
+  rollback: (steps = 1) ->
+    # Get last N executed migrations
+    executed = @db.prepare('''
+      SELECT version FROM schema_migrations
+      ORDER BY version DESC
+      LIMIT ?
+    ''').all(steps)
+
+    for row in executed
+      migration = @migrations.find (m) -> m.version == row.version
+      continue unless migration
+
+      console.log "Rolling back: #{migration.version} - #{migration.name}"
+
+      # Execute down changes
+      for change in migration.down_changes
+        @execute_change(change)
+
+      # Remove migration record
+      @db.prepare('DELETE FROM schema_migrations WHERE version = ?').run(migration.version)
+
+  execute_change: (change) ->
+    # This would generate and execute the actual SQL
+    # based on the change type and parameters
+    console.log "Executing:", change

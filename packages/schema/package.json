@@ -1,0 +1,48 @@
+{
+  "name": "@rip-lang/schema",
+  "version": "0.1.0",
+  "description": "ActiveRecord-inspired schema DSL for Drizzle ORM and Bun",
+  "type": "module",
+  "main": "index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./schema": "./builder.ts",
+    "./migrations": "./migrations.rip"
+  },
+  "bin": {
+    "rip-schema": "./rip-schema.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "lint": "bun x biome check .",
+    "format": "bun x biome format . --write"
+  },
+  "keywords": [
+    "orm",
+    "database",
+    "schema",
+    "drizzle",
+    "sqlite",
+    "activerecord",
+    "dsl",
+    "rip",
+    "bun"
+  ],
+  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreeve/rip-lang.git",
+    "directory": "packages/schema"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.29.1",
+    "mysql2": "^3.14.3"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

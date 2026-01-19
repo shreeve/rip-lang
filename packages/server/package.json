@@ -1,0 +1,33 @@
+{
+  "name": "@rip-lang/server",
+  "version": "0.1.0",
+  "description": "Fast, resilient app server for Rip applications - from dev to prod",
+  "type": "module",
+  "main": "rip-server.ts",
+  "bin": {
+    "rip-server": "./rip-server.ts"
+  },
+  "scripts": {
+    "start": "bun rip-server.ts",
+    "test": "echo \"Tests coming soon\" && exit 0"
+  },
+  "keywords": [
+    "server",
+    "app-server",
+    "rip",
+    "bun",
+    "hot-reload",
+    "https",
+    "mdns"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreeve/rip-lang.git",
+    "directory": "packages/server"
+  },
+  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
+  "license": "MIT",
+  "peerDependencies": {
+    "rip-lang": "^1.5.0"
+  }
+}
