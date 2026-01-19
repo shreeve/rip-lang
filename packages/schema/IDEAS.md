@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/shreeve/rip-lang/main/docs/rip.svg" style="width:50px" /> <br>
+
 # Schema Notation Ideas
 
 Exploring syntax options for Rip Schema, ranging from the original SPOT/ASN.1 style to compact sigil-based alternatives.
