@@ -7488,8 +7488,8 @@ function compileToJS(source, options = {}) {
   return new Compiler(options).compileToJS(source);
 }
 // src/browser.js
-var VERSION = "2.6.1";
-var BUILD_DATE = "2026-01-19@01:40:00GMT";
+var VERSION = "2.7.0";
+var BUILD_DATE = "2026-01-19@02:30:49GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
