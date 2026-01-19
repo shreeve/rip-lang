@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // Test Schema Runtime
 
-import { parse, Schema } from '../../src/schema/index.js'
+import { parse, Schema } from '../../packages/schema/index.js'
 
 // =============================================================================
 // Test Schema

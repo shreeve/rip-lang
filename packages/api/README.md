@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/shreeve/rip-lang/main/docs/rip.svg" style="width:50px" /> <br>
+
 # @rip-lang/api - Elegant API Development Toolkit
 
 > **Make complex API development clear and concise with Rip's validation patterns**

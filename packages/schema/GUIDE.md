@@ -5,7 +5,7 @@ Practical examples of what you can build with the schema runtime.
 ## Quick Start
 
 ```javascript
-import { parse, Schema } from './src/schema'
+import { parse, Schema } from '@rip-lang/schema'
 
 // Define your schema
 const ast = parse(`

@@ -1,14 +1,11 @@
 {
   "name": "@rip-lang/parser",
   "version": "0.1.0",
-  "description": "Rip Parser - An SLR(1) parser generator written in Rip",
+  "description": "SLR(1) parser generator written in Rip",
   "type": "module",
   "main": "rip-parser.rip",
   "exports": {
-    ".": {
-      "rip": "./rip-parser.rip",
-      "default": "./rip-parser.rip"
-    }
+    ".": "./rip-parser.rip"
   },
   "bin": {
     "rip-parser": "bin/rip-parser"
@@ -28,9 +25,19 @@
     "url": "git+https://github.com/shreeve/rip-lang.git",
     "directory": "packages/parser"
   },
+  "homepage": "https://github.com/shreeve/rip-lang/tree/main/packages/parser#readme",
+  "bugs": {
+    "url": "https://github.com/shreeve/rip-lang/issues"
+  },
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "peerDependencies": {
-    "rip-lang": "^1.5.0"
-  }
+    "rip-lang": "^2.0.0"
+  },
+  "files": [
+    "bin/",
+    "rip-parser.rip",
+    "README.md",
+    "NEXUS.md"
+  ]
 }

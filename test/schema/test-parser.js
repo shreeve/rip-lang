@@ -4,7 +4,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { parse, SchemaLexer } from '../../src/schema/index.js';
+import { parse, SchemaLexer } from '../../packages/schema/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

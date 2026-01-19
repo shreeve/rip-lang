@@ -1,48 +1,52 @@
 {
   "name": "@rip-lang/schema",
-  "version": "0.1.0",
-  "description": "ActiveRecord-inspired schema DSL for Drizzle ORM and Bun",
+  "version": "0.3.0",
+  "description": "Unified schema language for types, validation, database models, UI widgets, and reactive state",
   "type": "module",
-  "main": "index.ts",
+  "main": "index.js",
   "exports": {
-    ".": "./index.ts",
-    "./schema": "./builder.ts",
-    "./migrations": "./migrations.rip"
-  },
-  "bin": {
-    "rip-schema": "./rip-schema.ts"
+    ".": "./index.js",
+    "./runtime": "./runtime.js",
+    "./lexer": "./lexer.js",
+    "./parser": "./parser.js"
   },
   "scripts": {
-    "test": "bun test",
-    "lint": "bun x biome check .",
-    "format": "bun x biome format . --write"
+    "parser": "bun ../../src/grammar/solar.rip -o parser.js grammar.rip",
+    "test": "echo \"Tests coming soon\" && exit 0"
   },
   "keywords": [
-    "orm",
-    "database",
     "schema",
-    "drizzle",
-    "sqlite",
-    "activerecord",
-    "dsl",
-    "rip",
-    "bun"
+    "validation",
+    "types",
+    "database",
+    "orm",
+    "forms",
+    "ui",
+    "state",
+    "rip"
   ],
-  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
-  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/shreeve/rip-lang.git",
     "directory": "packages/schema"
   },
-  "dependencies": {
-    "drizzle-orm": "^0.29.1",
-    "mysql2": "^3.14.3"
+  "homepage": "https://github.com/shreeve/rip-lang/tree/main/packages/schema#readme",
+  "bugs": {
+    "url": "https://github.com/shreeve/rip-lang/issues"
   },
-  "devDependencies": {
-    "@types/bun": "latest"
-  },
+  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
+  "license": "MIT",
   "peerDependencies": {
-    "typescript": "^5.0.0"
-  }
+    "rip-lang": "^2.0.0"
+  },
+  "files": [
+    "index.js",
+    "runtime.js",
+    "lexer.js",
+    "parser.js",
+    "grammar.rip",
+    "README.md",
+    "GUIDE.md",
+    "SCHEMA.md"
+  ]
 }

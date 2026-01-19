@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/shreeve/rip-lang/main/docs/rip.svg" style="width:50px" /> <br>
+
 # @rip-lang/ui
 
 **Pre-built Component Library for Rip**
