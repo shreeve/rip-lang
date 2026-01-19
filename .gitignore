@@ -34,6 +34,6 @@ notes.txt
 
 # Demos (experimental)
 demos/
+/packages/schema/data/bellavista
 /packages/schema/data/rare
-/packages/schema/data/ccp-bellavista
 /packages/schema/data/rave
