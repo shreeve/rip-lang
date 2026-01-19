@@ -33,145 +33,141 @@ Element ::= Sequence [intrinsic] {
 }
 
 /**
- * Represents a boolean value: "true" or "false".
+ * Boolean: Logical true/false value.
  * Type code: 13
  */
 Boolean ::= Extends Element [intrinsic] {
-  value         Boolean Optional,  // Current value
-  defaultValue  Boolean Optional,  // Default if not set
+  value         Boolean Optional,
+  defaultValue  Boolean Optional,
 }
 
 /**
- * Represents integer values with optional range constraints.
+ * Integer: Whole numbers with optional range constraints.
  * Uses arbitrary precision (SNumber) internally.
  * Type code: 10
  */
 Integer ::= Extends Element [intrinsic] {
-  value         Integer Optional,  // Current value
-  defaultValue  Integer Optional,  // Default if not set
-  rangeMin      Integer Optional,  // Minimum allowed value (inclusive)
-  rangeMax      Integer Optional,  // Maximum allowed value (inclusive)
+  value         Integer Optional,
+  defaultValue  Integer Optional,
+  rangeMin      Integer Optional,  // Minimum value (inclusive)
+  rangeMax      Integer Optional,  // Maximum value (inclusive)
 }
 
 /**
- * Represents decimal/floating-point values with optional range constraints.
+ * Real: Floating-point numbers with optional range constraints.
  * Uses arbitrary precision (SNumber) internally.
  * Type code: 11
  */
 Real ::= Extends Element [intrinsic] {
-  value         Real Optional,  // Current value
-  defaultValue  Real Optional,  // Default if not set
-  rangeMin      Real Optional,  // Minimum allowed value (inclusive)
-  rangeMax      Real Optional,  // Maximum allowed value (inclusive)
+  value         Real Optional,
+  defaultValue  Real Optional,
+  rangeMin      Real Optional,  // Minimum value (inclusive)
+  rangeMax      Real Optional,  // Maximum value (inclusive)
 }
 
 /**
- * Represents text strings with optional length constraints and allowed values.
+ * PrintableString: Text strings with optional length constraints.
  * Type code: 1
  */
 PrintableString ::= Extends Element [intrinsic] {
-  value         PrintableString       Optional,  // Current value
-  defaultValue  PrintableString       Optional,  // Default if not set
+  value         PrintableString       Optional,
+  defaultValue  PrintableString       Optional,
   rangeMin      Integer               Optional,  // Minimum length
   rangeMax      Integer               Optional,  // Maximum length
-  choices       Set<PrintableString>  Optional,  // Allowed values/patterns
+  choices       Set<PrintableString>  Optional,  // Allowed values
 }
 
 /**
- * Represents arbitrary binary data, stored as Base64-encoded strings.
- * Provides transparent encoding/decoding between raw bytes and Base64.
+ * OctetString: Binary data stored as Base64-encoded strings.
  * Type code: 2
  */
 OctetString ::= Extends Element [intrinsic] {
-  value         OctetString Optional,  // Base64-encoded binary data
-  defaultValue  OctetString Optional,  // Default if not set
+  value         OctetString Optional,
+  defaultValue  OctetString Optional,
   rangeMin      Integer     Optional,  // Minimum byte length
   rangeMax      Integer     Optional,  // Maximum byte length
 }
 
 /**
- * Represents raw byte arrays directly (not Base64-encoded).
- * Supports character set helpers for string conversion.
+ * ByteString: Raw byte arrays (not Base64-encoded).
  * Type code: 14
  */
 ByteString ::= Extends Element [intrinsic] {
-  value         ByteString Optional,  // Raw byte array
-  defaultValue  ByteString Optional,  // Default if not set
+  value         ByteString Optional,
+  defaultValue  ByteString Optional,
   rangeMin      Integer    Optional,  // Minimum byte length
   rangeMax      Integer    Optional,  // Maximum byte length
 }
 
 /**
- * Represents a combined date and time value (ISO 8601 format).
+ * DateTime: Combined date and time (ISO 8601 format).
  * Base type for Date and Time specializations.
  * Type code: 7
  */
 DateTime ::= Extends Element [intrinsic] {
-  value         DateTime Optional,  // Current value
-  defaultValue  DateTime Optional,  // Default if not set
-  rangeMin      DateTime Optional,  // Minimum allowed date/time
-  rangeMax      DateTime Optional,  // Maximum allowed date/time
+  value         DateTime Optional,
+  defaultValue  DateTime Optional,
+  rangeMin      DateTime Optional,  // Minimum date/time
+  rangeMax      DateTime Optional,  // Maximum date/time
 }
 
 /**
- * Represents a date value without time component (ISO 8601 date format).
+ * Date: Date value without time component (ISO 8601).
  * Type code: 8
  */
 Date ::= Extends DateTime [intrinsic] {
-  value         Date Optional,  // Current value (date only)
-  defaultValue  Date Optional,  // Default if not set
-  rangeMin      Date Optional,  // Minimum allowed date
-  rangeMax      Date Optional,  // Maximum allowed date
+  value         Date Optional,
+  defaultValue  Date Optional,
+  rangeMin      Date Optional,
+  rangeMax      Date Optional,
 }
 
 /**
- * Represents a time value without date component (ISO 8601 time format).
+ * Time: Time value without date component (ISO 8601).
  * Type code: 9
  */
 Time ::= Extends DateTime [intrinsic] {
-  value         Time Optional,  // Current value (time only)
-  defaultValue  Time Optional,  // Default if not set
-  rangeMin      Time Optional,  // Minimum allowed time
-  rangeMax      Time Optional,  // Maximum allowed time
+  value         Time Optional,
+  defaultValue  Time Optional,
+  rangeMin      Time Optional,
+  rangeMax      Time Optional,
 }
 
 /**
- * Represents a single choice within an Enumerated type.
- * Each choice has both a string name and integer value.
+ * Helper type representing a single enumeration choice.
+ * Models the _sChoices/_nChoices arrays in SPOTEnumerated.
  */
-EnumeratedChoice ::= Sequence [intrinsic] {
-  name   PrintableString,  // The choice name
-  value  Integer,  // The choice integer value
+EnumeratedChoice ::= Sequence {
+  name   PrintableString,  // Choice name
+  value  Integer,  // Choice integer value
 }
 
 /**
- * Represents a fixed set of named integer values.
- * Each choice has both a string name and integer value.
+ * Enumerated: Fixed set of named integer values.
  * Type code: 12
  */
 Enumerated ::= Extends Element [intrinsic] {
-  value         Integer                 Optional,  // Current selection (integer)
+  value         Integer                 Optional,  // Current selection (int)
   stringValue   PrintableString         Optional,  // Current selection (name)
-  defaultValue  Integer                 Optional,  // Default if not set
-  choices       Set<EnumeratedChoice>,  // The allowed name/value pairs
+  defaultValue  Integer                 Optional,
+  choices       Set<EnumeratedChoice>,  // Allowed name/value pairs
 }
 
 /**
- * Represents an unordered collection (array/list) of elements of a single type.
- * Supports cardinality constraints via range.
+ * Set: Unordered collection of elements of a single type.
  * Type code: 3
  */
 Set ::= Extends Element [intrinsic] {
-  elementType   PrintableString  Optional,  // Type name of contained elements
-  definedBy     PrintableString  Optional,  // Class name for element instances
-  rangeMin      Integer          Optional,  // Minimum element count
-  rangeMax      Integer          Optional,  // Maximum element count (-1 = unlimited)
+  elementType   PrintableString  Optional,  // Type name of elements
+  definedBy     PrintableString  Optional,  // Class for element instances
+  rangeMin      Integer          Optional,  // Minimum count
+  rangeMax      Integer          Optional,  // Maximum count (-1 = unlimited)
   elements      Set<Any>         Optional,  // The actual elements
 }
 
 /**
- * Represents an ordered collection of named, heterogeneous fields.
- * Analogous to a struct, record, or object in other languages.
+ * Sequence: Ordered collection of named, heterogeneous fields.
+ * Analogous to struct, record, or object.
  * Type code: 4
  */
 Sequence ::= Extends Element [intrinsic] {
@@ -180,86 +176,45 @@ Sequence ::= Extends Element [intrinsic] {
 }
 
 /**
- * Represents a container that can hold any SPOT element type.
- * Optionally constrained to a specific base type via definedBy.
+ * Any: Polymorphic container holding any SPOT type.
  * Type code: 5
  */
 Any ::= Extends Element [intrinsic] {
-  definedBy  PrintableString  Optional,  // Constraining base type name
+  definedBy  PrintableString  Optional,  // Constraining base type
   value      Any              Optional,  // The wrapped element
 }
 
 /**
- * TYPE MODIFIERS
+ * SYNTAX REFERENCE
  *
- * These are meta-types used in schema definitions:
+ * Type Definition:
+ *   TypeName ::= Sequence { fields }           // New type
+ *   TypeName ::= Extends ParentType { fields } // Inheritance (code 15)
+ *   TypeName ::= Refine BaseType { fields }    // Refinement (code 16)
  *
- *   Extends: Indicates inheritance from a parent type (type code: 15)
- *   Usage: NewType ::= Extends ParentType { ... }
+ * Field Definition:
+ *   fieldName Type                             // Required field
+ *   fieldName Type Optional                    // Optional field
+ *   fieldName Type Default value               // With default
+ *   fieldName Type Range(min..max)             // With constraints
+ *   fieldName Type [attr="val"]                // With attributes
+ *   fieldName Type, // comment                 // With documentation
  *
- *   Refine: Indicates refinement/restriction of a type (type code: 16)
- *   Usage: RefinedType ::= Refine BaseType { ... }
- */
-
-/**
- * RANGE CONSTRAINT SYNTAX
+ * Range Constraints:
+ *   Range(0..100)    // Both bounds
+ *   Range(0..)       // Minimum only
+ *   Range(..100)     // Maximum only
  *
- * Range constraints are expressed inline using Range(min..max) syntax:
+ * Collection Syntax:
+ *   Set<ElementType>         // Homogeneous collection
+ *   Set<ElementType> Range(1..10)  // With cardinality
  *
- *   field  Integer          Range(0..100)   // Integer between 0 and 100
- *   field  Real             Range(0.0..1.0) // Real between 0.0 and 1.0
- *   field  PrintableString  Range(1..255)   // String length between 1 and 255
- *   field  Set<Item>        Range(1..10)    // Collection with 1 to 10 elements
- *
- * Range bounds:
- *   - Use ".." to separate min and max
- *   - Omit min for no lower bound: Range(..100)
- *   - Omit max for no upper bound: Range(0..)
- *   - Use -1 for unlimited in collections
- */
-
-/**
- * ATTRIBUTE SYNTAX
- *
- * Attributes provide metadata and hints, attached via square brackets:
- *
- *   field  Integer  [displayName="Count"]
- *   field  Boolean  [intrinsic]
- *   field  String   [hint="tooltip text", required]
- *
- * Common built-in attributes:
- *   [intrinsic]           - Type is built into the runtime
- *   [required]            - Field must have a value
- *   [displayName="..."]   - Human-readable name for UI
- *   [hint="..."]          - Tooltip or help text
- *   [format="..."]        - Display format pattern
- *   [validate="..."]      - Validation expression
- */
-
-/**
- * DEFAULT VALUE SYNTAX
- *
- * Default values are specified inline using Default keyword:
- *
- *   field  Boolean  Default true
- *   field  Integer  Default 0
- *   field  String   Default "unknown"
- *   field  Date     Default "2024-01-01"
- */
-
-/**
- * OPTIONALITY
- *
- * Fields are required by default. Mark optional fields explicitly:
- *
- *   requiredField  Integer,            // Must have a value
- *   optionalField  Integer  Optional,  // May be null/undefined
+ * Enumeration Syntax:
+ *   Status ::= Enumerated { pending(0), active(1), done(2) }
  */
 
 /**
  * EXAMPLE USAGE
- *
- * Here's how user types build on these primitives:
  *
  * Person ::= Sequence {
  *   id         Integer          Range(1..),
