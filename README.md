@@ -298,6 +298,7 @@ bun run browser        # Build browser bundle
 | [docs/REACTIVITY.md](docs/REACTIVITY.md) | Reactivity deep dive & framework comparison |
 | [docs/INTERNALS.md](docs/INTERNALS.md) | Compiler architecture, S-expressions |
 | [docs/BROWSER.md](docs/BROWSER.md) | Browser usage, REPL |
+| [packages/](packages/) | Optional ecosystem packages (schema, server, UI, etc.) |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |
 | [CHANGELOG.md](CHANGELOG.md) | Version history |
 
