@@ -1,0 +1,334 @@
+Form {
+  name: "infobar"
+  title: "Patient Information"
+  titleLocation: not_displayed
+  bounds {
+    x: "0"
+    y: "0"
+  }
+  /**
+   * Specify the title to display when the form is collapsed.
+   * Use embedded functions and field references to automatically generate
+   * the title
+   */
+  collapsedTitle: "<html><b>Patient:</b> {$ucase(name)} - <b>SSN#</b> {ssn} - <b>Age:</b> {age} - <b>Provider:</b> {provider}</html>"
+  layout: forms
+  rows: "4dlu,d,2dlu,d,2dlu,d,2dlu,2dlu"
+  columns: "d,100px,d,d,4dlu,d,4dlu,d,4dlu,d,4dlu,d,4dlu,d,10px,170px,16px"
+  widgets {
+    {
+      TextField {
+        name: "name"
+        templateName: "infobar.field"
+        bounds {
+          x: "5"
+          y: "1"
+        }
+        visibleCharacters: 12
+        value: "Banks, Tyra"
+      }
+    }
+    {
+      TextField {
+        name: "provider"
+        templateName: "infobar.field"
+        bounds {
+          x: "5"
+          y: "3"
+        }
+        visibleCharacters: 12
+        value: "DeCoteau, Don"
+        editable: false
+      }
+    }
+    {
+      Label {
+        bounds {
+          x: "7"
+          y: "1"
+        }
+        value: "Gender:"
+        textHAlignment: trailing
+      }
+    }
+    {
+      Label {
+        bounds {
+          x: "7"
+          y: "3"
+        }
+        value: "SSN#:"
+        textHAlignment: trailing
+      }
+    }
+    {
+      Label {
+        bounds {
+          x: "11"
+          y: "1"
+        }
+        value: "Age:"
+        textHAlignment: trailing
+      }
+    }
+    {
+      Label {
+        bounds {
+          x: "11"
+          y: "3"
+        }
+        value: "Date of Birth:"
+        textHAlignment: trailing
+      }
+    }
+    {
+      TextField {
+        name: "gender"
+        templateName: "infobar.field"
+        bounds {
+          x: "9"
+          y: "1"
+        }
+        visibleCharacters: 10
+        value: "Female"
+      }
+    }
+    {
+      TextField {
+        name: "ssn"
+        templateName: "infobar.field"
+        bounds {
+          x: "9"
+          y: "3"
+        }
+        visibleCharacters: 10
+        value: "123-45-6789"
+      }
+    }
+    {
+      TextField {
+        name: "age"
+        templateName: "infobar.field"
+        horizontalAlign: left
+        bounds {
+          x: "13"
+          y: "1"
+        }
+        visibleCharacters: 3
+        value: "{$$sage.intValue(sage.createDate('T').year-73)}"
+      }
+    }
+    {
+      TextField {
+        name: "dob"
+        templateName: "infobar.field"
+        bounds {
+          x: "13"
+          y: "3"
+        }
+        visibleCharacters: 12
+        value: "December 4, 1973"
+      }
+    }
+    {
+      CheckBox {
+        name: "blind"
+        font {
+          style: bold
+        }
+        bounds {
+          x: "5"
+          y: "5"
+        }
+        enabled: false
+        value: "Blind Patient"
+      }
+    }
+    {
+      CheckBox {
+        name: "mute"
+        font {
+          style: bold
+        }
+        bounds {
+          x: "9"
+          y: "5"
+        }
+        enabled: false
+        value: "Mute Patient"
+      }
+    }
+    {
+      CheckBox {
+        name: "deaf"
+        font {
+          style: bold
+        }
+        bounds {
+          x: "13"
+          y: "5"
+        }
+        enabled: false
+        value: "Deaf Patient"
+      }
+    }
+    {
+      ListBox {
+        name: "allergies"
+        title: "Allergies"
+        titleLocation: top_left
+        borders {
+          shadow [ thickness="7" ]
+          focus
+        }
+        rowSpan: 6
+        font {
+          size: "-1"
+        }
+        fgColor: "#800000"
+        bounds {
+          x: "15"
+          y: "1"
+        }
+        dataURL: "data/allergies_info.txt"
+        selectionMode: none
+      }
+    }
+    {
+      Label {
+        bounds {
+          x: "3"
+          y: "3"
+        }
+        value: "Provider:"
+        textHAlignment: trailing
+      }
+    }
+    {
+      PushButton {
+        name: "nameButton"
+        bounds {
+          x: "3"
+          y: "1"
+        }
+        focusable: false
+        value: "Name:"
+        icon: "lib:images/index.png"
+        textHAlignment: trailing
+        actionType: popup_widget
+        buttonStyle: toolbar
+        popupWidget {
+          Form {
+            title: "Most Recent"
+            borders {
+              group_box
+            }
+            contentPadding {
+              top: "4"
+              right: "4"
+              bottom: "4"
+              left: "4"
+            }
+            columns: "2"
+            widgets {
+              {
+                ListBox {
+                  name: "patientPopupList"
+                  titleLocation: top_left
+                  horizontalAlign: full
+                  bounds {
+                    y: "0"
+                    width: "45ch"
+                    height: "10ln"
+                  }
+                  dataURL:<< 
+                  Clinton, Bill
+                  Reagan, Ronald
+                  Washington, George
+                  Adams, John
+                  Lincoln, Abraham
+                  Jefferson, Thomas
+                  
+>> [ inline="true" ]
+                  selectionMode: single
+                  itemDescription {
+                    icon: "resource:icon_patient"
+                  }
+                  changeSelColorOnLostFocus: false
+                  singleClickActionEnabled: true
+                }
+              }
+              {
+                ToolBar {
+                  bounds {
+                    x: "2"
+                  }
+                  horizontal: false
+                  borderPainted: false
+                  widgets {
+                    {
+                      PushButton {
+                        value: "Most Recent"
+                        icon: "resource:icon_history"
+                        showText: false
+                      }
+                    }
+                    {
+                      PushButton {
+                        value: "Today's Appointments"
+                        icon: "resource:icon_calendar_day"
+                        showText: false
+                      }
+                    }
+                    {
+                      PushButton {
+                        value: "Next Seven Days Appointments"
+                        icon: "resource:icon_calendar_week"
+                        showText: false
+                      }
+                    }
+                    {
+                      PushButton {
+                        value: "Bookmarked Patients"
+                        icon: "resource:icon_bookmark"
+                        showText: false
+                      }
+                    }
+                    {
+                      PushButton {
+                        value: "My Patients"
+                        icon: "resource:icon_patients"
+                        showText: false
+                      }
+                    }
+                    {
+                      PushButton {
+                        name: "action_find_patient" //predefined action
+                        showText: false
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } 
+      }
+    }
+    {
+      Label {
+        name: "picture"
+        borders {
+          frame_raised
+        }
+        rowSpan: 6
+        bounds {
+          x: "1"
+          y: "1"
+        }
+        iconScaling: item_size
+        icon: "lib:images/img123456789.png"
+      }
+    }
+  }
+}[onLoad="if(sage.isMac()){window.addWindowDragger(widget.collapsiblePane.titleLabelComponent)}"]

@@ -1,0 +1,38 @@
+DataCollection {
+  name: "nutrition_orders"
+  title: "Nutrition Orders"
+  dataURL: "svc:///orders/nutrition/list" [columnSeparator="^", ldSeparator="|"]
+  processingFilterURL: ".healthcare.Orders" [mimeType="application/java"]
+  parsingFilterURL: ".healthcare.MedicationCategorizer" [mimeType="application/java"]
+  processingFilterURL: ".healthcare.Orders" [mimeType="application/java"]
+  columns {
+    {
+      name: "type"
+      columnType: linked_id
+    }
+    {
+      name: "orderedItem"
+      title: "Ordered Item"
+      columnType: name
+    }
+    {
+      name: "status"
+      title: "Status"
+    }
+    {
+      name: "directions"
+      title: "Instructions"
+    }
+    {
+      name: "provider"
+    }
+    {
+      name: "signed"
+      valueType: boolean_type
+    }
+    {
+      name: "flagged"
+      valueType: boolean_type
+    }
+  }
+}

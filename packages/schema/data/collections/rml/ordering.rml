@@ -1,0 +1,5 @@
+DataCollection {
+  name: "ordering"
+  title: "Ordering"
+  description: "Collection used for new orders"
+} [data_extends="name_value"]

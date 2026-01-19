@@ -1,0 +1,6 @@
+DataCollection {
+  name: "ivs"
+  title: "IV Solutions"
+  description: "IV Solutions"
+  dataURL: "svc:///orders/ivs/list" [columnSeparator="^", ldSeparator="|"]
+} [data_extends="orders"]

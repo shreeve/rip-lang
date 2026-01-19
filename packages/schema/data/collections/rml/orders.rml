@@ -1,0 +1,80 @@
+DataCollection {
+  name: "orders"
+  title: "Orders"
+  description: "Clinical Orders
+  dataURL: "svc:///orders" [columnSeparator="^", ldSeparator="|"]
+
+  columns {
+    {
+      name: "type"
+      title: "Type"
+      columnType: linked_id
+    }
+    {
+      name: "ordered_item"
+      title: "Ordered Item"
+      columnType: name
+    }
+    {
+      name: "start_date"
+      title: "Start Date"
+      valueType: date_time_type
+    }
+    {
+      name: "stop_date"
+      title: "Stop Date"
+      valueType: date_time_type
+    }
+    {
+      name: "refills"
+      title: "Refills"
+    }
+    {
+      name: "quantity"
+      title: "Quantity"
+    }
+    {
+      name: "unit_per_dose"
+      title: "Unit Per Dose"
+    }
+    {
+      name: "status"
+      title: "Status"
+    }
+    {
+      name: "lastfill"
+      title: "Lastfill"
+    }
+    {
+      name: "directions"
+      title: "Directions"
+    }
+    {
+      name: "prn"
+      title: "Prn"
+      valueType: boolean_type
+    }
+    {
+      name: "category"
+      title: "Category"
+    }
+    {
+      name: "clinical_category"
+      title: "Clinical Category"
+    }
+    {
+      name: "provider"
+      title: "Provider"
+    }
+    {
+      name: "signed"
+      title: "Signed"
+      valueType: boolean_type
+    }
+    {
+      name: "flagged"
+      title: "Flagged"
+      valueType: boolean_type
+    }
+  }
+}

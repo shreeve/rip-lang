@@ -1,0 +1,23 @@
+DataCollection {
+  name: "careteam"
+  dataURL: "svc:///patient/careteam" [columnSeparator="^", ldSeparator="|"]
+  columns {
+    {
+      name: "id"
+      columnType: id
+    }
+    {
+      name: "name"
+      title:"Name"
+      columnType: name
+    }
+    {
+      name: "role"
+      title:"Role"
+    }
+    {
+      name: "is_physician"
+      valueType: boolean_type
+    }
+  }
+}

@@ -1,0 +1,7 @@
+CHLORIDE|106|103|{fgColor: abnormal}99 L|101|{fgColor: abnormal}99 L|106|103|102|104|104|100-112|meq/L
+POTASSIUM|3.7|3.5|{fgColor: abnormal}3.3 L|{fgColor: abnormal}3.4 L|3.7|3.5|4.2|3.7|3.5|3.4|3.5-5.3|meq/L
+CO2|28.9|29.4 H|{fgColor: abnormal}32.4 H|{fgColor: abnormal}30.7 H|29.4 H|{fgColor: abnormal}32.4 H|27.6|24|25|23|23-29|meq/L
+CREATININE|1.2|1.2|1.4|{fgColor: abnormal}1.6 H|1.5|1.2|1.4|1.3|1.1|1.3|.9-1.5|mg/dL
+GLUCOSE|{fgColor: abnormal}121 H|{fgColor: abnormal}126 H|103|101|103|101|103|{fgColor: abnormal}107 H|103|105|70-105|mg/dL
+SODIUM|139|141|142|140|140|142||142|140|143|135-148|meq/L
+PROTHROMBIN TIME|12.7|{fgColor: abnormal}15 H|{fgColor: abnormal}23.4 H|{fgColor: abnormal}21.8 H|{fgColor: abnormal}24.1 H|12.7|{fgColor: abnormal}15 H|12.7|{fgColor: abnormal}15 H|13|10-14|secs

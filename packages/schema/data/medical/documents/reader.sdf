@@ -1,0 +1,412 @@
+GridPane {
+  borders: "shadow"
+  rows: "3"
+  contentPadding { top: "3"; left: "3"; bottom: "3"; right: "3" }
+  regions {
+    {
+      verticalFill: "preferred"
+      viewer {
+        Form {
+          columns: "3"
+          layout: "table"
+          widgets {
+            {
+              Label {
+                name: "noteDetail"
+                bounds { x: "0"; y: "0" }
+                textHAlignment: "center"
+                horizontalAlign: "full"
+                font-style: "bold"
+                fgColor: "blue+10"
+                value: "NOTE DETAIL"
+              }
+            }
+            {
+              PushButton {
+                name: "makeAddendum"
+                bounds { x: "1"; y: "0" }
+                fgColor: "blue"
+                value: "Make Addendum"
+                buttonStyle: "hyperlink_always_underline"
+              }
+            }
+            {
+              PushButton {
+                name: "editNote"
+                bounds { x: "2"; y: "0" }
+                fgColor: "blue"
+                value: "Edit"
+                buttonStyle: "hyperlink_always_underline"
+              }
+            }
+          }
+        }
+      }
+    }
+    {
+      verticalFill: "preferred"
+      viewer {
+        Form {
+          columns: "4"
+          layout: "table"
+          widgets {
+            {
+              Label {
+                bounds { x: "0"; y: "0" }
+                name: "visitField"
+                columnSpan: "4"
+                textHAlignment: "left"
+                horizontalAlign: "full"
+                value: "<html><b>Visit: {$dateTime('T-1')} ADVANCE DIRECTIVE</b> 20 MINUTE, Don DeCoteau ( {$dateTime('T-1')} )</html>"
+              }
+            }
+            {
+              PushButton {
+                bounds { x: "0"; y: "1" }
+                fgColor: "blue"
+                name: "showAddendums"
+                enabled: "false"
+                value: "Addendums (0)"
+                buttonStyle: "hyperlink_always_underline"
+                actionType: "popup_widget"
+                popupWidget {
+                  ListBox { borders: "none" }
+                }
+              }
+            }
+            {
+              PushButton {
+                bounds { x: "1"; y: "1" }
+                fgColor: "blue"
+                name: "showAttachments"
+                value: "Attachments (3)"
+                buttonStyle: "hyperlink_always_underline"
+                actionType: "popup_widget"
+                popupWidget {
+                  Table {
+                    name: "notes_tabTableAttachments"
+                    borders: "none"
+                    truncateLastColumnBorder: "false"
+                    bounds { height: "7ln" }
+                    gridLineType: "none"
+                    bgColor: "defaultBackground+10|defaultBackground"
+                    autoSizeColumnsToFit: true
+                    actionLink {
+                      url: "{$resolve(%selectionData[0])}"
+                      target: "_new_window" [ title="{@patient.name} - {%selectionValue[2]} - {%selectionValue[1]}" ]
+                      statusMessage: "Loading {%selectionValue[2]}..."
+                    }
+                    dataURL: "../data/documents_attachments.txt"
+                    selectionMode: "single"
+                    columns {
+                      {
+                        width: "20!"
+                        headerIcon: "resource:Sage.icon.paperclip"
+                      }
+                      {
+                        title: "Date"
+                        valueType: "date_time_type"
+                        valueContext: "MMM dd, yyyy HH:mm|MMM dd, yyyy"
+                      }
+                      {title: "Description" }
+                    }
+                  }
+                }
+              }
+            }
+            {
+              PushButton {
+                bounds { x: "2"; y: "1" }
+                name: "showSignature"
+                icon: "resource:icon_pen"
+                buttonStyle: "toolbar"
+                actionType: "popup_widget"
+                popupWidget {
+                  Label {
+                    contentPadding { left: "4"; bottom: "2"; right: "4" }
+                    value: "<html><p>/es/ Don DeCoteau<p>PRIMARY HCP<p>Siged: {$dateTime('T-1')}</html>"
+                  }
+                }
+              }
+            }
+            {
+              ToolBar {
+                bounds { x: "3"; y: "1" }
+                borders: "line" [ cornerArc="5" ]
+                widgets {
+                  {
+                    PushButton {
+                      name: "Sage.action.text.bold"
+                      showText: "false"
+                    }
+                  }
+                  {
+                    PushButton {
+                      name: "Sage.action.text.italic"
+                      showText: "false"
+                    }
+                  }
+                  {
+                    PushButton {
+                      name: "Sage.action.text.underline"
+                      showText: "false"
+                    }
+                  }
+                  {
+                    PushButton {
+                      name: "Sage.action.text.strikeThrough"
+                      showText: "false"
+                    }
+                  }
+                  {
+                    Label {}
+                  }
+                  {
+                    PushButton {
+                      name: "Sage.action.text.alignLeft"
+                      showText: "false"
+                    }
+                  }
+                  {
+                    PushButton {
+                      name: "Sage.action.text.center"
+                      showText: "false"
+                    }
+                  }
+                  {
+                    PushButton {
+                      name: "Sage.action.text.alignRight"
+                      showText: "false"
+                    }
+                  }
+                  {
+                    Label {}
+                  }
+                  {
+                    PushButton {
+                      name: "Sage.action.text.increaseIndent"
+                      showText: "false"
+                    }
+                  }
+                  {
+                    PushButton {
+                      name: "Sage.action.text.decreaseIndent"
+                      showText: "false"
+                    }
+                  }
+                  {
+                    Label {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    {
+      verticalFill: "maximum"
+      viewer {
+        GridPane {
+          borders: "shadow"
+          rows: "2"
+          contentPadding { top: "3"; left: "3"; bottom: "3"; right: "3" }
+          scrollPane {
+            horizontalScrollbar :hidden
+          }
+          regions {
+            {
+              viewer {
+                Form {
+                  name: "documentReader"
+                  rows: "4"
+                  contentPadding { top: "5"; left: "5"; bottom: "5"; right: "5" }
+                  layout: "table"
+                  borders: "none"
+                  widgets {
+                    {
+                      DocumentPane {
+                        name: "noteField"
+                        borders {
+                          "shadow" [ thickness="7" ]
+                          "focus"
+                        }
+                        cursorShown: "always"
+                        verticalAlign: "full"
+                        horizontalAlign: "full"
+                        editable: "true"
+                        bounds { x: "0"; y: "0"; height: "8ln" }
+                        styleActions: "true"
+                        dataURL: "../data/documents_note.html"
+                      }
+                    }
+                    {
+                      GroupBox {
+                        rows: "4"
+                        columns: "2"
+                        widgets {
+                          {
+                            ComboBox {
+                              name: "title"
+                              bounds { x: "2"; y: "0" }
+                              title: "Title"
+                              selectedIndex: "0"
+                              dataURL:<< 
+                              PRIMARY CARE
+                              EMERGENCY ROOM
+                            >> [ inline="true" ]
+                            }
+                          }
+                          {
+                            TextField {
+                              name: "author"
+                              title: "&Author"
+                              bounds { x: "2"; y: "1" }
+                              borders { line_3d [cornerArc=6 ,padForArc=false] }
+                              value: "DeCoteau, Don"
+                            }
+                          }
+                          {
+                            DateChooser {
+                              name: "noteDate"
+                              format: "MMM dd, yyyy"
+                              title: "&Note Date"
+                              bounds { x: "2"; y: "2";}
+                            }
+                          }
+                          {
+                            TextField {
+                              title: "&Subject"
+                              bounds { x: "2"; y: "3"}
+                              borders { line_3d [cornerArc=6 ,padForArc=false] }
+                              emptyFieldText: "<enter subject text>"
+                              emptyFieldTextFont { style: "italic" }
+                              emptyFieldTextColor: "gray"
+                              visibleCharacters: 15
+                            }
+                          }
+                        }
+                        bounds { x: "0"; y: "1" }
+                        contentPadding { top: "5"; bottom: "5" }
+                        borders: "none"
+                      }
+                    }
+                    {
+                      TextArea {
+                        bounds { height: "10ln" }
+                        name: "orderField"
+                        borders {
+                          "line" [ color="gray", cornerArc="10", thickness="2" ]
+                          "focus" [ cornerArc="10" ]
+                        }
+                        horizontalAlign: "full"
+                        editable: "false"
+                        wordWrap: "false"
+                        bounds { x: "0"; y: "2" }
+                        font { style: "bold"; monospaced: "true" }
+                        value:<<
+FUROSIMIDE 20MG TAB
+20MG PO BID
+
+Activity:
+New Order  entered
+
+     Order Text: FUROSIMIDE 20MG TAB PO BID
+Nature of Order: ELECTRONICALLY ENTERED
+ Elec Signature: DeCoteau, Don>>
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            {
+              verticalFill: "preferred"
+              collapsibleInfo {
+                title: "ENCOUNTER"
+                initiallyCollapsed: "true"
+                opaqueTitleBar: "false"
+              }
+              bgColor: "defaultBackground+10|defaultBackground"
+              borders: "line" [ cornerArc="6" ]
+              viewer {
+                Form {
+                  rows: "4"
+                  columns: "2"
+                  contentPadding-left: "10"
+                  borders: "focus"
+                  widgets {
+                    {
+                      Label {
+                        value: "Diagnoses:"
+                        bounds { x: "0"; y: "0"; width: "13ch" }
+                        textHAlignment: "right"
+                        fgColor: "gray"
+                      }
+                    }
+                    {
+                      Label {
+                        name: "diagnoses"
+                        value: "DMMI WO CMP NT ST UNCNTR"
+                        bounds { x: "1"; y: "0" }
+                        textHAlignment: "left"
+                      }
+                    }
+                    {
+                      Label {
+                        value: "Procedures:"
+                        bounds { x: "0"; y: "1"; width: "13ch" }
+                        textHAlignment: "right"
+                        fgColor: "gray"
+                      }
+                    }
+                    {
+                      Label {
+                        name: "procedures"
+                        value: "OFFICE OUTPATIENT VISTS, EST"
+                        bounds { x: "1"; y: "1" }
+                        textHAlignment: "left"
+                      }
+                    }
+                    {
+                      Line {
+                        bounds { x: "0"; y: "2" }
+                        columnSpan: "2"
+                      }
+                    }
+                    {
+                      Table {
+                        bounds { x: "0"; y: "3"; height: "8ln" }
+                        name: "vitalsTable"
+                        dataURL: "../data/documents_vitals.txt"
+                        columnSpan: "2"
+                        gridLineType: "none"
+                        bgColor: "transparent"
+                        borders: "none"
+                        showStandardColumnHeader: "false"
+                        selectionMode: "none"
+                        columns {
+                          {title: "Type" }
+                          {title: "Result" }
+                          {
+                            title: "Date/Time"
+                            valueType: "date_time_type"
+                            valueContext: "MMM dd, yyyy HH:mm"
+                            width: "18ch"
+                          }
+                          {title: "Metric" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+

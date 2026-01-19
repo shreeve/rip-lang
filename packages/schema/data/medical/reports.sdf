@@ -1,0 +1,95 @@
+GridPane {
+  rows: "2"
+  columns: "2"
+  regions {
+    {
+      bounds { x: "0"; y: "0" }
+      viewer {
+        Chart {
+          chartTitle { value: "Line Chart" }
+          borders: "shadow"
+          domainAxis {
+            valueType: "date_type"
+            value: "Date"
+          } [ timeUnit="day" ]
+          rangeAxis { valueType: "integer_type"; value: "Result" }
+          dataURL:<< 
+          First|t-6,1|t-5,4|t-4,15|t-3,17|t-2,15|t-1,13|t,16
+          Second|t-6,2|t-5,6|t-4,11|t-3,12|t-2,17|t-1,10|t,13
+          >> [ inline="true", aggregate="true" ]
+        }
+      }
+    }
+    {
+      bounds { x: "1"; y: "0" }
+      viewer {
+        Chart {
+          chartTitle { value: "Bar Chart" }
+          chartType: "bar"
+          borders: "shadow"
+          domainAxis {
+            valueType: "date_type"
+            value: "Category"
+          } [ timeUnit="day" ]
+          rangeAxis { valueType: "integer_type"; value: "Result" }
+          plot {
+            bgColor: "white"
+            gridLine: "auto" [ color="gray" ]
+            labels: "values"
+          }
+          dataURL:<< 
+          First|t-6,1|t-5,4|t-4,15|t-3,17|t-2,15|t-1,13|t,16
+          Second|t-6,2|t-5,6|t-4,11|t-3,12|t-2,17|t-1,10|t,13
+          >> [ inline="true", aggregate="true" ]
+        }
+      }
+    }
+    {
+      bounds { x: "0"; y: "1" }
+      viewer {
+        Chart {
+          chartTitle { value: "Pie Chart" }
+          borders: "shadow"
+          chartType: "pie"
+          plot {
+            bgColor: "white"
+            gridLine: "auto" [ color="gray" ]
+            labels: "values"
+          }
+          dataURL:<< 
+          First,10
+          Second,20
+          Third,30
+          Fourth,25{verticalAlign: top}
+          Fifth,15
+          >> [ inline="true" ]
+        } [ onAction="window.alert(widget.getSelection().getDomainValue())" ]
+      }
+    }
+    {
+      bounds { x: "1"; y: "1" }
+      viewer {
+        Chart {
+          chartTitle { value: "Area Chart"; fgColor: "blue" }
+          borders: "shadow"
+          chartType: "area"
+          domainAxis {
+            valueType: "date_type"
+            value: "Date"
+          } [ timeUnit="hour" ]
+          rangeAxis { valueType: "integer_type"; value: "Result" }
+          plot {
+            bgColor: "white"
+            gridLine: "auto" [ color="gray" ]
+          }
+          dataURL:<< 
+          First|t-6,1|t-5,4|t-4,15|t-3,17|t-2,15|t-1,13|t,16
+          Second|t-6,2|t-5,6|t-4,11|t-3,12|t-2,17|t-1,10|t,13
+          >> [ inline="true", aggregate="true" ]
+        }
+      }
+    }
+  }
+}
+
+

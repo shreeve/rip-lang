@@ -1,0 +1,237 @@
+Application {
+  name: "Medical Demo"
+  /**
+   * Customize some environment-wide UI properties that will be set into the UIManager.
+   * Using an inline URL in-lieu of and external file
+   */
+  lookAndFeelPropertiesURL:<<
+    defaultBackground=ColorShade|#DCE0DC [os="windows]
+    defaultBackground=ColorShade|#E8E8E8 [os="os x,linux"]
+    Sage.control=Color|defaultBackground
+
+    TitledBorder.titleColor=Color|#404040
+    TitledBorder.font=Font|{style: bold}
+    abnormal=Color|#800000
+
+    rowHilite=Color|defaultBackground+10 [os="windows]
+    rowHilite=Color|defaultBackground+6 [os="os x,linux"]
+    infobarColor=Color|defaultBackground+10,defaultBackground-10 [os="linux,windows"]
+    infobarColor=Color|#bcbcbc,#cccccc [os="os x"]
+
+    >> [ inline="true" ]
+
+  /**
+   * Define some application level icons that can
+   * be accessed via window.getIcon(iconName). The 'lib' URL
+   * identifies the icons as residing is some jar in the class path
+   */
+  resourceIconsURL:<<
+    icon_female=lib:images/female.png
+    icon_male=lib:images/male.png
+    icon_note_write=lib:images/note-write.png
+    icon_note_edit=lib:images/note-edit.png
+    icon_bookmark=lib:images/bookmark.png
+    icon_index=lib:images/index.png
+    icon_calendar_day=lib:images/calendar_day.png
+    icon_calendar_week=lib:images/calendar_week.png
+    icon_history=lib:images/history.png
+    icon_patients=lib:images/patients.png
+    icon_patient=lib:images/patient.png
+    icon_summary=lib:images/patient.png
+    icon_orders=lib:images/patient.png
+    icon_lab_results=lib:images/patient.png
+    icon_documents=lib:images/patient.png
+    icon_problems=lib:images/patient.png
+    icon_adt=lib:images/patient.png
+    icon_notes=lib:images/patient.png
+    icon_reports=lib:images/patient.png
+    icon_consults=lib:images/patient.png
+    icon_pen=lib:images/pen.png
+    icon_filtered=lib:images/filtered.png
+    icon_acrobat=lib:images/acrobat.png
+    >> [ inline="true" ]
+
+  /**
+   * Specify supplemental jars that will be downloaded at runtime.
+   * The only jar is the one that contains this application’s icons
+   */
+  supplementalJars {
+    "../jars/medical-images.jar"
+  }
+
+  /**
+   * Define a set of reusable actions that can be used on menus or buttons
+   * or invoked programmatically
+   */
+  actionItemsURL: << Set {
+    {
+      name: "action_find_patient"
+      value: "Find Patient"
+      icon: "resource:Sage.icon.search"
+      actionLink {
+        url: "patient_lookup_window.sdf"
+        target: _new_window [ windowType="dialog", title="Find Patient", modal="true" ]
+      }
+    }
+  }
+  >> [inline=true]
+
+   attributesURL: << Set{
+      {
+        name: "patient.name"
+        value: "Banks, Tyra"
+      }
+    }
+    >> [inline=true]
+
+  /**
+   * Define a set of application attributes that can be accessed
+   * via window.getAttribute(@attributeName)
+   */
+
+  overlapAutoToolTips: true
+  ignoreFormatExceptions: true
+  allTextFieldsDraggable: true
+
+  /**
+   * A custom painter for list type selections
+   */
+  selectionPainter {
+    bgColor: "white@50,textHighlight@25"
+    borders {
+      line [ color="textHighlight"]
+    }
+  } [ foreground="textText" ]
+
+  /**
+   * A custom painter for list type selections
+   * when the widget looses focus
+   */
+  lostFocusSelectionPainter {
+    bgColor: "white@50,controlShadow@10"
+    borders {
+      line [ color="controlShadow"]
+    }
+  } [ foreground="textText" ]
+
+  /**
+   * A custom painter for tooltips
+   */
+  tooltipPainter {
+    bgColor: "white,gray"
+  } [ foreground="textText" ]
+
+  /**
+   * Define the main window for the application
+   */
+  mainWindow {
+    templateURL: "template.sdf" [ cache="true" ] //application level template to use to under-skin widgets
+    title: "Sage - Medical App Demo"
+    icon: "lib:images/medical.png"
+    bounds {
+      x: "-1"
+      y: "-1"
+      width: "560dlu"
+      height: "500dlu"
+    }
+    font {
+      size: 13
+    }
+    menuBar {
+      dataURL: "menu.sdf"
+    }
+    statusBar {
+      bgColor: "infobarColor"
+    } [onConfigure="if(sage.isMac()){widget.addAsWindowDragger(window)}"]
+
+    /**
+     * Define a viewer for the content area of the window
+     */
+    viewer {
+      GridPane {
+        rows: 2
+        rowSpacing: 0
+        regions {
+          {
+            x: "0"
+            y: "0"
+            name: "patient_info"
+            bgColor: "infobarColor"
+            verticalFill: preferred
+            dataURL: "infobar.sdf"
+            collapsibleInfo {
+              title: "Patient Information"
+              opaqueTitleBar: false
+            }
+          }
+          {
+            x: "0"
+            y: "1"
+            verticalFill: maximum
+            viewer {
+              DocumentTabPane {
+                name: "applicationTabs"
+                borders {
+                  none
+                }
+                popupMenu {
+                  {
+                    name: "Sage.action.reload"
+                  }
+                }
+                tabPosition: bottom
+                closeButton: none
+                tabStyle: office2003
+                tabBgColor: "defaultBackground-10,defaultBackground+10"
+                selectedTabBgColor: "defaultBackground-20,defaultBackground"
+                selectedIndex: 0
+                tabs {
+                  {
+                    name: "summary"
+                    dataURL: "summary.sdf"
+                    title: "Summary"
+                  }
+                  {
+                    name: "problems"
+                    dataURL: "problems.sdf"
+                    title: "Problems"
+                  }
+                  {
+                    name: "orders"
+                    dataURL: "orders.sdf"
+                    title: "Orders"
+                  }
+                  {
+                    name: "labs"
+                    dataURL: "labs.sdf"
+                    title: "Lab Results"
+                  }
+                  {
+                    name: "documents"
+                    dataURL: "documents.sdf"
+                    title: "Documents"
+                  }
+                  {
+                    name: "adt"
+                    title: "Admissions/Discharges"
+                    enabled: false
+                  }
+                  {
+                    name: "reports"
+                    dataURL: "reports.sdf"
+                    title: "Reports"
+                  }
+                  {
+                    name: "expenses"
+                    dataURL: "expenses.sdf"
+                    title: "Expenses"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

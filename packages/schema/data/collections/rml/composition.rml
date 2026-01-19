@@ -1,0 +1,4 @@
+DataCollection {
+  name: "composition"
+  title: "Composition"
+} [data_extends="struct"]

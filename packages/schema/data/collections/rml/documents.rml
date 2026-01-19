@@ -1,0 +1,43 @@
+DataCollection {
+  name: "documents"
+  title: "Clinical Documents"
+  dataURL: "svc:///documents/" [columnSeparator="^", ldSeparator="|"]
+  columns {
+    {
+      name: "date"
+      title: "Date"
+      valueType: date_time_type
+      columnType: timestamp_linked_id
+    }
+    {
+      name: "title"
+      title: "Title"
+      columnType: name
+    }
+    {
+      name: "author"
+      title: "Author"
+      valueType: array_type
+      valueContext: "createItems=true"
+    }
+    {
+      name: "status"
+      title: "Status"
+    }
+    {
+      name: "type"
+      title: "Type"
+    }
+    {
+      name: "hasAttachments"
+    }
+    {
+      name: "parentId"
+    }
+    {
+      name: "documentUrl"
+      columnType: href
+    }
+  }
+  sort: true [descending=true]
+}

@@ -1,0 +1,36 @@
+DataCollection {
+  name: "document_index"
+  columns {
+    {
+      name: "type"
+      title: "Type"
+      description: "The type of indexed item"
+    }
+    {
+      name: "title"
+      title: "Title"
+    }
+    {
+      name: "date"
+      valueType: date_time_type
+    }
+    {
+      name: "is_main"
+      description: "Wheter the item is the main document
+      valueType: boolean_type
+    }
+    {
+      name: "documentUrl"
+      columnType: href
+    }
+    {
+      name: "description"
+      columnType: description
+    }
+    {
+      name: "partIndex"
+      description: "The index of the part within a multipart document"
+    }
+  }
+  sort: true [descending=true, column="date"]
+}

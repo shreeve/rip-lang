@@ -1,0 +1,330 @@
+# HealthStream Client Configuration
+# Converted from client.json to Rip object syntax
+
+serverInfo:
+  photoPath: "photos"
+  isStatic: true
+  serverURL: ""
+
+htmlInfo:
+  headerToInject: '<style type="text/css"> * {font-size:12pt; }</style>'
+
+systemColors:
+  tintColor: ["indigo", "#5ac8fa"]
+  foregroundColor: ["#1b1919", "#f4f6f6"]
+  backgroundColor: ["white", "#1f1f1f"]
+  alternatingBackgroundColor: ["#f8f8f8", "#1a1b1b"]
+  popupMenuBackgroundColor: ["white", "#111111"]
+  sectionHeaderColor: ["#eeeeee", "#181818"]
+
+globalContext:
+  colors:
+    normal:
+      foreground: ["#1f1f1f", "#e4e6e6"]
+      background: ["#ffffff", "#3f3f3f"]
+      bright: ["#000000", "#ffffff"]
+      dim: ["#555555", "#a4a4a4"]
+      prompt: ["#444444", "#cacaca"]
+      "foreground-pop": ["indigo", "#5ac8fa"]
+      "sparkLine-line": ["indigo", "#5ac8fa"]
+      "sparkLine-range": ["#00000060", "#ffffff80"]
+      "sparkLine-bg_start": ["#cfcfcf", "#333333"]
+      "sparkLine-bg_end": ["#efefef", "#222222"]
+      "chart-band": ["#008000", "#b6e3b6"]
+      "chart-line": ["#00a7ff", "#00a7ff"]
+    meaning:
+      default: ["#999900"]
+      H: ["red"]
+      HH: ["red"]
+      L: ["red"]
+      LL: ["red"]
+      C: ["red"]
+      A: ["red"]
+      "*": ["#d5b60a"]
+      POS: ["#d5b60a"]
+      NEG: ["#d5b60a"]
+  fontSizes:
+    small: "90%"
+    smaller: "95%"
+    larger: "110%"
+    large: "120%"
+  dateFormats:
+    short: "MM/dd'@'hh:mma"
+    time: "@'hh:mma"
+  globals: {}
+
+chartInfo:
+  dateFormat: "MM/dd'@'hh:mma"
+  pageSize: 10
+  autoRotateLabels: true
+  useLineForRefRange: true
+
+layoutNameMap:
+  vitals: "vitalsAndLabs"
+  labs: "vitalsAndLabs"
+
+namedLayouts:
+  patientHeader:
+    rows: [
+      columns: [
+        markup: ["{{name|titlecase|bold|color:'foreground-pop'}} ({{birthDate||age:' day',' mo',' yr'}}/{{gender}})"]
+      ]
+      columns: [
+        { align: "right", width: "8ch", markup: ["{{'Location:'|color:'prompt'}}"] }
+        { markup: ["{{location.value|concat:' : ',rm_bed|color:'dim'}}"] }
+      ]
+      columns: [
+        { align: "right", width: "8ch", markup: ["{{'Admit DX:'|color:'prompt'}}"] }
+        { markup: ["{{encounterReasons|join-truncate:'; ',30|color:'dim'}}"] }
+      ]
+    ]
+
+  patientList:
+    rows: [
+      columns: [markup: ["{{name|titlecase|bold|color:'foreground-pop'}} ({{birthDate||age:' day',' mo',' yr'}}/{{gender}})"]]
+      columns: [markup: ["{{'Mrn:'|color:'bright'}} {{mrn|color:'dim'}}"]]
+      columns: [markup: ["{{'Location:'|color:'bright'}} {{location|concat:' : ',rm_bed|color:'dim'}}"]]
+    ]
+
+  social_history:
+    otherData: { title: "Social History", icon: "social_history" }
+    cellStyle: { cellInsets: "8" }
+    rows: [
+      columns: [
+        { width: "60%", markup: ["{{name}}"] }
+        { markup: ["{{date|formatDate:'date',date|color:'dim'}}"] }
+      ]
+      columns: [markup: ["{{value|color:'dim'}}"]]
+    ]
+
+  conditions:
+    otherData: { title: "Conditions", icon: "conditions" }
+    cellStyle: { cellInsets: "8" }
+    rows: [
+      columns: [markup: ["{{condition}}"]]
+      columns: [
+        { width: "7ch", align: "right", markup: ["{{'Status:'|color:'prompt'}}"] }
+        { markup: ["{{verificationStatus|titlecase|color:'dim'}}"] }
+      ]
+      columns: [
+        { width: "7ch", align: "right", markup: ["{{'Onset:'|color:'prompt'}}"] }
+        { markup: ["{{onset|formatDate:'date','Unknown'|color:'dim'}}"] }
+      ]
+    ]
+
+  medications:
+    rows: [
+      columns: [
+        { width: "10ch", align: "right", markup: ["{{'Medication:'|color:'prompt'}}"] }
+        { markup: ["{{orderedItem}}"] }
+      ]
+      columns: [
+        { width: "10ch", align: "right", markup: ["{{'Details:'|color:'prompt'}}"] }
+        { markup: ["{{directions}}"] }
+      ]
+      columns: [
+        { width: "10ch", align: "right", markup: ["{{'Comments:'|color:'prompt'}}"] }
+        { markup: ["{{comment}}\n"] }
+      ]
+      columns: [
+        { width: "10ch", align: "right", markup: ["{{'OrderedBy:'|color:'prompt'}}"] }
+        { markup: ["{{orderedBy}}"] }
+      ]
+      columns: [
+        { width: "10ch", align: "right", markup: ["{{'Start Date:'|color:'prompt'}}"] }
+        { markup: ["{{startDate|formattedDate}}"] }
+      ]
+      columns: [
+        { width: "10ch", align: "right", markup: ["{{'Stop Date:'|color:'prompt'}}"] }
+        { markup: ["{{stopDate|formattedDate}}"] }
+      ]
+      columns: [
+        { width: "10ch", align: "right", markup: ["{{'Status:'|color:'prompt'}}"] }
+        { markup: ["{{status}}"] }
+      ]
+    ]
+
+  documentHeader:
+    rows: [
+      columns: [markup: ["{{condition}}"]]
+      columns: [
+        { width: "7ch", align: "right", markup: ["{{'Status:'|color:'prompt'}}"] }
+        { markup: ["{{verificationStatus|titlecase|color:'dim'}}"] }
+      ]
+      columns: [
+        { width: "7ch", align: "right", markup: ["{{'Onset:'|color:'prompt'}}"] }
+        { markup: ["{{onset|formatDate:'date','Unknown'|color:'dim'}}"] }
+      ]
+    ]
+
+feedLayout:
+  dateMarkup: "{{formattedTime|concat:' - ',formattedDate,' - ',itemType|bold}}"
+  collectionDateMarkup: "{{formattedTime|concat:' - ',formattedDate|bold}}"
+  dateTimeFormat: "MMM dd'@'HH:mm"
+  dateFormat: "M/dd"
+  timeFormat: "'@'HH:mm"
+  endTimeFormat: "'-'HH:mm"
+  headerCellStyle:
+    backgroundColor: "backgroundColor"
+    foregroundColor: "foreground-pop"
+    separatorColor: "dim"
+    contentInsets: "8,18,8,8"
+  collectionHeaderCellStyle:
+    backgroundColor: "backgroundColor"
+    foregroundColor: "bright"
+    separatorColor: "dim"
+    contentInsets: "8,18,8,8"
+
+tableLayout:
+  cellStyle: { contentInsets: "8,18,8,8" }
+  headerLayout:
+    cellStyle: { contentInsets: "8,8,8,8" }
+    rows: [markup: "{% if icon  %}{{icon|icon}} {% endif %}{{title}}"]
+
+itemLayouts:
+  VTS:
+    headerCellStyle: { icon: "vitals" }
+    collectionHeaderCellStyle: {}
+    cellStyle: { cellInsets: "0,4,0,4" }
+    clustering:
+      cluster: true
+      emptyMeaningIsNormal: true
+      dateFormat: "M/dd'@'HH:mm"
+      clusteredMarkupSingular: "{% filter color:'dim'|font:'smaller' %}There was one other set of vitals recorded during the {{formattedStartDate}} - {{formattedEndDate}} timeframe.{% endfilter %}"
+      clusteredMarkupPlural: "{% filter color:'dim'|font:'smaller' %}There were {{count}} other set of vitals recorded during the {{formattedStartDate}} - {{formattedEndDate}} timeframe.{% endfilter %}"
+      allNormalMarkup: "All items were within the normal."
+      seeMoreMarkup: "{% filter color:'foreground-pop' %}See {{count}} More {% endfilter %}"
+    title: "Vitals Recorded"
+    collectionTitle: "Vitals"
+    sparkLine:
+      position: "left"
+      pointCount: 6
+      lineColor: "sparkLine-line"
+      rangeColor: "sparkLine-range"
+      backgroundColors: ["sparkLine-bg_start", "sparkLine-bg_end"]
+    layout:
+      icons: { right: "{% if documentUrl %}paperclip{% endif %}" }
+      columns: [
+        { width: "60%", markup: ["{{name}}\n{{'Reference Range'|color-font:'dim','smaller'}}"] }
+        { markup: ["{% if meaning %}{% set color = 'color-meaning-'|concat:meaning %}{{value|concat:' (',meaning,')'|color:color}}{% else %}{{value}}{% endif %}", "{{range|color-font:'dim','smaller'}}"] }
+      ]
+
+  LAB:
+    extends: "VTS"
+    title: "Lab Results"
+    collectionTitle: "Lab Results"
+    headerCellStyle: { icon: "labs" }
+    clustering: { cluster: false }
+
+  DOC:
+    headerCellStyle: { icon: "notes" }
+    cellStyle: { cellInsets: "0,10,0,10" }
+    title: "Notes"
+    layout:
+      rows: [
+        columns: [markup: ["{{'The following documentation/note was entered or updated:'|color:'dim'}}\n"]]
+        columns: [markup: ["{{name|color:'bright'}}\n"]]
+        columns: [
+          { width: "7ch", align: "right", markup: ["{{'Author: '|color:'dim'}}"] }
+          { markup: ["{{author$value|join-truncate:'; ',50|color:'dim'}}"] }
+        ]
+        columns: [
+          { width: "7ch", align: "right", markup: ["{{'Status: '|color:'dim'}}"] }
+          { markup: ["{{status|color-font:'dim','smaller'}}"] }
+        ]
+      ]
+
+  MED:
+    headerCellStyle: { icon: "meds" }
+    title: "Medication Orders"
+    cellStyle: { cellInsets: "0,10,0,10" }
+    layout:
+      rows: [
+        columns: [markup: ["{{'The following medication was ordered:'|color:'dim'}}\n"]]
+        columns: [markup: ["{{name|color:'bright'}}"]]
+        { indent: 10, columns: [markup: ["{{value|color-font:'dim','smaller'}}\n"]] }
+        indent: 10
+        columns: [
+          { width: "40%", markup: ["{{'Status: '|color-font:'prompt','smaller'}}{{status|color-font:'dim','smaller'}}"] }
+          { markup: ["{% if startDate  %}{% set fs = startDate|formatDate:'short' %}{{'Start Date: '|color-font:'prompt','smaller'}}{{fs|color-font:'dim','smaller'}} {% endif %}"] }
+        ]
+      ]
+    drillDownLayout: {}
+
+  PRC:
+    headerCellStyle: { icon: "atom" }
+    title: "Procedures"
+    cellStyle: { cellInsets: "0,10,0,10" }
+    layout:
+      rows: [
+        columns: [markup: ["{{'The following procedure was entered or updated:'|color:'dim'}}\n"]]
+        columns: [markup: ["{{name|color:'bright'}}\n"]]
+        columns: [
+          { width: "9ch", align: "right", markup: ["{{'Status: '|color:'dim'}}"] }
+          { markup: ["{{status|color-font:'dim','smaller'}}"] }
+        ]
+        notEmpty: "performer"
+        columns: [
+          { width: "9ch", align: "right", markup: ["{{'Performer: '|color:'dim'}}"] }
+          { markup: ["{{performer$value|join-truncate:'; ',50|color:'dim'}}"] }
+        ]
+        notEmpty: "performer"
+        columns: [
+          { width: "9ch", align: "right", markup: ["{{'Outcome: '|color:'dim'}}"] }
+          { markup: ["{{outcome|color-font:'dim','smaller'}}"] }
+        ]
+      ]
+
+collectionItemLayouts:
+  DOC:
+    title: "Notes"
+    cellStyle: { cellInsets: "0,10,0,10" }
+    layout:
+      rows: [
+        columns: [markup: ["{{name|color:'bright'}}\n"]]
+        columns: [
+          { width: "7ch", align: "right", markup: ["{{'Author: '|color:'dim'}}"] }
+          { markup: ["{{author$value|join-truncate:'; ',50|color:'dim'}}"] }
+        ]
+        columns: [
+          { width: "7ch", align: "right", markup: ["{{'Status: '|color:'dim'}}"] }
+          { markup: ["{{status|color-font:'dim','smaller'}}"] }
+        ]
+      ]
+
+  MED:
+    headerCellStyle: { icon: "meds" }
+    title: "Medication Orders"
+    cellStyle: { cellInsets: "0,10,0,10" }
+    layout:
+      rows: [
+        columns: [markup: ["{{name|color:'bright'}}"]]
+        { indent: 10, columns: [markup: ["{{value|color-font:'dim','smaller'}}\n"]] }
+        indent: 10
+        columns: [
+          { width: "40%", markup: ["{{'Status: '|color-font:'prompt','smaller'}}{{status|color-font:'dim','smaller'}}"] }
+          { markup: ["{% if startDate  %}{% set fs = startDate|formatDate:'short' %}{{'Start Date: '|color-font:'prompt','smaller'}}{{fs|color-font:'dim','smaller'}} {% endif %}"] }
+        ]
+      ]
+
+  PRC:
+    title: "Procedures"
+    cellStyle: { cellInsets: "0,10,0,10" }
+    layout:
+      rows: [
+        columns: [markup: ["{{name|color:'bright'}}\n"]]
+        columns: [
+          { width: "9ch", align: "right", markup: ["{{'Status: '|color:'dim'}}"] }
+          { markup: ["{{status|color-font:'dim','smaller'}}"] }
+        ]
+        notEmpty: "performer"
+        columns: [
+          { width: "9ch", align: "right", markup: ["{{'Performer: '|color:'dim'}}"] }
+          { markup: ["{{performer$value|join-truncate:'; ',50|color:'dim'}}"] }
+        ]
+        notEmpty: "performer"
+        columns: [
+          { width: "9ch", align: "right", markup: ["{{'Outcome: '|color:'dim'}}"] }
+          { markup: ["{{outcome|color-font:'dim','smaller'}}"] }
+        ]
+      ]

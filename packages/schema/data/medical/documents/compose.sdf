@@ -1,0 +1,20 @@
+Tree {
+  borders: "bevel_lowered"
+  name: "templatesTree"
+  expandAll: "true"
+  dataURL:<< 
+    1,Allergy and Immunology
+    1,Cardiology
+    1,Endocrinology
+    1,ENT
+    1,Family Medicine
+    1,Infectious Health
+    2,Airbourne
+    2,Contageous
+    1,Internal Medicine
+    1,Mental Health
+		>> [ mimeType="text/plain", inline="true", riSeparator="," ]
+  rootNode { value: "Shared Templates" }
+}
+
+

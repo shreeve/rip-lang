@@ -1,0 +1,43 @@
+|01/30/07|02/03/07|07034AB5859|Brad Johnson|Saddleback Valley Radiology|Ultrasound|Hernia|$740.00|$328.50|$411.50|$0.00|$411.55|$411.55|Screening exam for mass|||||||
+|02/05/07|03/12/07|07071AP2208|Brad Johnson|WestView Pediatrics|Preventive Care|Hernia|$110.00|$28.19|$81.81|$0.00|$81.81|$81.81||||||||
+|02/05/07|03/12/07|07071AP2209|Brad Johnson|Pediatric Surgical Specialist|Medical Visit|Hernia|$110.00|$28.19|$81.81|$0.00|$81.81|$81.81|Routine Office visit in preparation for hernia surgery|||||||
+|03/29/07|03/29/07|07106AE5891|Brad Johnson|Mission Hills Children Hospital|Operating Room|Hernia|$70.00|$57.35|$12.65|$0.00|$12.65|$12.65|Presurgical prepration, 29 minutes in OR, post surgical recovery|||||||
+|03/29/07|03/29/07|07138AN6049|Brad Johnson|Mission Hills Pathology|Surgical Pathology|Hernia|$6,195.28|$4,045.28|$2,150.00|$133.97|$2,016.03|$2,016.03|What is this?|||||
+|03/29/07|03/29/07|07101AN8025|Brad Johnson|Pediatric Surgical Specialist|Surgeon|Hernia|$1,148.00|$581.81|$566.19|$0.00|$566.19|$566.19||||||
+|04/03/07|04/12/07|07102AI6928|Brad Johnson|Mission Hills Anesthesia|Anesthesiologist|Hernia|$30.00|$16.64|$13.36|$0.00|$13.36|$13.36||||||
+|05/15/07|05/28/07|07148AA4912|Brad Johnson|WestView Pediatrics|Preventive Care|Hernia|$200.00|$106.25|$93.75|$0.00|$93.75|$93.75|Preventive Services and well child care|||||
+|01/05/07|01/22/07|07022AA3135|Jenny Johnson|Mission OB-GYN Medical Group|Pregnancy Care|Maternal Care|$30.00|$16.64|$13.36|$0.00|$13.36|$13.36|Routine Pregnancy evaluation and screening|||||
+|02/15/07|02/15/07|07076AG2356|Jenny Johnson|Mission OB-GYN Medical Group|Ultrasound|Maternal Care|$309.00|$176.81|$132.19|$0.00|$132.19|$132.19|Ultrasound + Routine pregnancy evaluation and screening|||||
+|03/13/07|03/26/07|07085AA6577|Jenny Johnson|Mission OB-GYN Medical Group|Pregnancy Care|Maternal Care|$63.00|$41.25|$21.75|$0.00|$21.75|$21.75|Routine Pregnancy evaluation and screening|||||
+|03/29/07|03/29/07|07128AD6781|Jenny Johnson|Mission OB-GYN Medical Group|Pregnancy Care|Maternal Care|$595.00|$203.00|$392.00|$0.00|$392.00|$392.00|Routine Pregnancy evaluation and screening|||||
+|04/17/07|04/25/07|07115AG4541|Jenny Johnson|Mission OB-GYN Medical Group|Pregnancy Care|Maternal Care|$30.00|$16.64|$13.36|$0.00|$13.36|$13.36|Routine Pregnancy evaluation and screening|||||
+|05/01/07|05/15/07|07135AI3833|Jenny Johnson|Mission OB-GYN Medical Group|Pregnancy Care|Maternal Care|$30.00|$16.64|$13.36|$0.00|$13.36|$13.36|Routine Pregnancy evaluation and screening|||||
+|05/14/07|07/20/07|07201AA6342|Jenny Johnson|Mission Hospital|Maternal Care|Maternal Care|$361.00|$137.42|$223.58|$223.58|$0.00|$0.00|Maternal Services|||||
+|05/29/07|06/07/07|07158AA9192|Jenny Johnson|Mission OB-GYN Medical Group|Ultrasound|Maternal Care|$30.00|$16.64|$13.36|$0.00|$13.36|$13.36|Ultrasound + Routine pregnancy evaluation and screening|||||
+|06/05/07|07/20/07|07201AA8029|Jenny Johnson|Mission OB-GYN Medical Group|Maternal Care|Maternal Care|$3,000.00|$999.34|$2,000.66|$2,000.66|$0.00|$0.00|Childbirth Services|||||
+|06/11/07|07/20/07|07201AA6371|Jenny Johnson|Mission OB-GYN Medical Group|Pregnancy Care|Maternal Care|$145.00|$71.20|$73.80|$73.80|$0.00|$0.00|Routine Pregnancy evaluation and screening|||||
+|07/16/07|08/24/07|07236AY8911|Jenny Johnson|Mission Pathology Med Group|Laboratory Testing|Maternal Care|$145.00|$71.20|$73.80|$73.80|$0.00|$0.00|Post partum laboratory tests?
+|07/17/07|08/03/07|07215AP1852|Jenny Johnson|Mission OB-GYN Medical Group|Preventive Care|Maternal Care|$65.00|$35.82|$29.18|$29.18|$0.00|$0.00|Female preventive care post maternity
+|10/31/07|11/06/07|07310AQ2133|Jenny Johnson|Mission OB-GYN Medical Group|Surgery and Supplies|Maternal Care|$200.00|$86.11|$113.89|$113.89|$0.00|$0.00|Placement of IUD
+|12/19/06|01/23/07|7006446350|Alex Johnson|Leslie Micheals,MD|Routine Visit|Seizures|$180.00|$98.19|$81.81|$81.81|$0.00|$0.00|Repeat physical exam
+|04/03/07|04/18/07|7107133608|Alex Johnson|Leslie Micheals,MD|EEG Test|Seizures|$150.00|$85.53|$64.47|$0.00|$64.47|$64.47|Performed at Sleep Lab
+|08/13/07|04/16/08|08107AF5253|Brad Johnson|Mission Ambulatory Clinic|Operating Room|Tympanostomy|$454.00|$167.58||$286.42|$0.00|$0.00|Bilaterial tympanostomy
+|11/30/07|02/29/08|08060AW3674|Brad Johnson|Head and Neck Associates|Surgeon|Tympanostomy|$188.00|$47.68||$140.32|$0.00|$0.00|Bilaterial tympanostomy
+|12/13/07|02/04/08|08017BG0771|Brad Johnson|Mission Hills Anesthesia|Anesthesiologist|Tympanostomy|$3,794.00|$1,889.00|$1,905.00|$1,905.05|$0.00|$0.00|
+|11/30/07|12/06/07|07340AL5069|Alex Johnson|West Dermatology|Skin Care|Wart Removal|$188.00|$188.00|$0.00|$0.00|$188.00|$0.00|Wart Evaluation
+|12/13/07|01/03/08|08003BF3011|Alex Johnson|West Dermatology|Surgery|Wart Removal|$690.00|$376.98|$313.02|$313.02|$0.00|$0.00|Wart Evaluation
+|12/13/06|02/09/07|07038AT4862|Lucy Johnson|WestView Pediatrics|Medical Visit / Surgery|Wellness Exam|$155.00|$33.30|$121.70|$121.70|$0.00|$0.00|What is this?
+|01/05/07|02/27/07|07057AF9341|Lucy Johnson|WestView Pediatrics|Medical Visit|Wellness Exam|$110.00|$28.19|$81.81|$0.00|$81.81|$81.81|
+|01/05/07|03/16/07|7074258203|Lucy Johnson|WestView Pediatrics|Medical Visit|Wellness Exam|$110.00|$0.00|$110.00|$110.00|$0.00|$0.00|
+|01/30/07|02/12/07|07043AA5460|Lucy Johnson|WestView Pediatrics|Health Services|Wellness Exam|$480.00|$220.13|$259.87|$0.00|$259.87|$259.87|
+|02/21/07|04/18/07|07107AR5448|Lucy Johnson|WestView Pediatrics|Preventive Care|Wellness Exam|$145.00|$71.20|$73.80|$38.80|$35.00|$35.00|What is this?
+|02/27/07|03/08/07|07067AA7887|Lucy Johnson|WestView Pediatrics|Medical Visit|Wellness Exam|$30.00|$16.64|$13.36|$0.00|$13.36|$13.36|What is this?
+|05/23/07|07/27/07|07208AY3648|Mary Johnson|WestView Pediatrics|Preventive Care|Wellness Exam|$160.00|$62.85|$97.15|$97.15|$0.00|$0.00|Infant wellness
+|05/23/07|07/27/07|07208AY3647|Mary Johnson|WestView Pediatrics|Preventive Care|Wellness Exam|$362.00|$291.21|$70.79|$70.79|$0.00|$0.00|Infant wellness
+|06/05/07|06/15/07|07166AC7563|Lucy Johnson|WestView Pediatrics|Preventive Care|Wellness Exam|$8,942.46|$3,618.46|$5,324.00|$4,657.49|$666.51|$666.51|
+|06/06/07|06/11/07|07162AK1842|Alex Johnson|WestView Pediatrics|Preventive Care|Wellness Exam|$375.00|$208.35|$166.65|$166.65|$0.00|$0.00|
+|07/17/07|07/25/07|07206AA8487|Mary Johnson|WestView Pediatrics|Medical Services|Wellness Exam|$191.00|$79.90|$111.10|$111.10|$0.00|$0.00|Nursery Screening exam and wellness check at hospital
+|09/06/07|09/26/07|07262AA8953|Mary Johnson|WestView Pediatrics|Preventive Care|Wellness Exam|$775.00|$236.89|$538.11|$538.11|$0.00|$0.00|
+|10/15/07|10/30/07|07303AX8844|Jack Johnson|South Coast Medical Group|Preventive Care|Wellness Exam|$454.00|$155.60|$298.40|$298.40|$0.00|$0.00|General Wellness
+|12/12/07|01/23/08|08023BL5505|Lucy Johnson|WestView Pediatrics|Preventive Care|Wellness Exam|$260.00|$48.09|$211.91|$211.91|$0.00|$0.00|
+|12/13/07|01/04/08|07363AK5713|Mary Johnson|WestView Pediatrics|Preventive Care|Wellness Exam|$510.00|$174.00|$336.00|$336.00|$0.00|$0.00|Infant wellness

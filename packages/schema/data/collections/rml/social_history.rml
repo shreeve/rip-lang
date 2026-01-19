@@ -1,0 +1,6 @@
+DataCollection {
+  name: "social_history"
+  title: "Social History"
+  dataURL: "svc:///social_history/" [columnSeparator="^", ldSeparator="|"]
+
+} [data_extends="observations"]

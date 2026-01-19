@@ -1,0 +1,86 @@
+DataCollection {
+  name: "medications"
+  title: "Medications"
+  description: "Medications"
+  dataURL: "svc:///medications/" [columnSeparator="^", ldSeparator="|"]
+  parsingFilterURL: ".healthcare.MedicationCategorizer" [mimeType="application/java"]
+  processingFilterURL: ".healthcare.Orders" [mimeType="application/java"]
+  columns {
+    {
+      name: "id"
+      columnType: id
+    }
+    {
+      name: "orderedItem" [data_subCollections="_all"]
+      title: "Ordered Item"
+      columnType: name_linked_id
+    }
+    {
+      name: "dosage" [data_subCollections="_all"]
+      title: "Unit Per Dose"
+      columnType: value_units
+    }
+    {
+      name: "route"
+      title: "Route"
+    }
+    {
+      name: "directions" [data_subCollections="_all"]
+      title: "Directions"
+      columnType: value
+    }
+    {
+      name: "quantity"
+      title: "Quantity"
+    }
+    {
+      name: "duration"
+      title: "Duration"
+    }
+    {
+      name: "orderedBy"
+    }
+    {
+      name: "orderDate" [data_subCollections="_all"]
+      valueType: date_time_type
+      columnType: timestamp
+    }
+    {
+      name: "startDate" [data_subCollections="_all"]
+      valueType: date_time_type
+    }
+    {
+      name: "stopDate" [data_subCollections="_all"]
+      valueType: date_time_type
+    }
+    {
+      name: "status" [data_subCollections="list,summary"]
+    }
+    {
+      name: "comment"
+    }
+    {
+      name: "communicationType"
+    }
+    {
+      name: "adminInstructions"
+    }
+    {
+      name: "asNeeded"
+    }
+    {
+      name: "clinicalCategory" [data_subCollections="list"]
+      title: "Clinical Category"
+      columnType: category
+    }
+    {
+      name: "signed"
+      valueType: boolean_type
+    }
+    {
+      name: "flagged"
+      valueType: boolean_type
+    }
+  }
+  sort: true [ column="orderedItem", descending="false", caseInsensitive="true"]
+}

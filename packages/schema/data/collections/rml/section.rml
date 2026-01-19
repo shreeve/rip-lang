@@ -1,0 +1,29 @@
+DataCollection {
+  name: "section"
+  title: "AdHoc Section
+  columns {
+    {
+      name: "id"
+      title: "Identifier"
+      description: "the identifier of the section
+      columnType: id
+    }
+    {
+      name: "title"
+      title: "Title"
+      valueType: date_type
+    }
+    {
+      name: "date"
+      title: "Date"
+      valueType: date_time_type
+    }
+    {
+      name: "endDate"
+      valueType: date_time_type
+    }
+    {
+     name:"contentURL"
+    }
+  }
+ }

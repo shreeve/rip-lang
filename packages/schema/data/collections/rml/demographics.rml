@@ -1,0 +1,4 @@
+DataCollection {
+  name: "demographics"
+  dataURL: "svc:///demographics/" [columnSeparator="^", ldSeparator="|"]
+}[ data_extends="patient"]

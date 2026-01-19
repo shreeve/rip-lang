@@ -1,0 +1,15 @@
+DataCollection {
+  name: "user"
+  dataURL: "svc:///users/" [ columnSeparator="^", ldSeparator="|" ]
+  columns {
+   {
+      name: "isProvider"
+      valueType: boolean_type
+    }
+    {
+      name: "qualification"
+      valueType: array_type
+    }
+
+  }
+}[data_extends="person"]

@@ -1,0 +1,1895 @@
+/**
+ * This class represents the configuration for an application instance.
+ */
+Application ::= Sequence {
+  name PrintableString Range(0..32) Optional, // Design: the name of the application
+  contextURL PrintableString Range(0..255) Optional [ redirect ], // Design: the URL to use when resolving relative link paths; if redirect is true then this app object is ignored and the contextURl is used to retrieve a new app object (this can be done only once)
+  applicationRoot PrintableString Range(0..255) Optional, // Design~~: A string to use to prefix URLs that start with a forward slash
+  defaultPackageName PrintableString Range(0..255) Optional, // Design~~: Default package name to prepend class names that start with or/does not contain a dot
+  lookAndFeelPropertiesURL PrintableString Optional [ inline, keep_color_keys ], // Design~url: url for a properties file formatted list of UI properties these properties will override any system properties with the same name
+  resourceStringsURL PrintableString Optional [ inline, locale="en_US" ], // Design~url: url for a java properties file formatted list of strings these strings will override any predefined resources string with the same name
+  resourceIconsURL PrintableString Optional [ inline, locale="en_US", localeSensitive="false" ], // Design~url: url for a java properties file formatted list of icons
+  actionItemsURL PrintableString Optional [ inline, locale="en_US", localeSensitive="false" ], // Design~url~~ActionItem: url for a set of named set of application-wide ActionItems that can be later referenced throughout the application
+  attributesURL PrintableString Optional [ inline, locale="en_US", localeSensitive="false" ], // Design~url: url for a set of application-specific name/value pairs. The default format is a set of name/value pairs separated by a semi-colon
+  dataCollectionsURL PrintableString Optional [ inline, locale="en_US", localeSensitive="false" ], // Design~urlset: url for a set DataCollection objects
+  widgetHandlers Set {
+    widget NameValuePair [ os ]  // Design: os can be 'Windows' 'Linux' 'OS X' 'ios' or 'android' to target the handler to a specific OS
+  } Reference, // a set language class name/mime-types pairs for widgets/viewers to add to/override in the application's environment
+  collectionHandlers Set {
+    handler NameValuePair [default=false]
+  } Reference, // Design: a set of name/language class name pairs for data collection handlers
+  supplementalFonts Set {
+    font NameValuePair [ type="truetype", os ]
+  } Reference, // Design: a set of name/url pairs defining custom fonts
+  supplementalJars Set {
+    url PrintableString Range(0..255) [ os ]  // os can be 'Windows' 'Linux' 'OS X' 'SunOS' or 'Unix' to target the handler to a specific OS
+  } Reference [ downloadMessage ], // Design~urlset: supplemental Jar ActionLink that can be used to resolve referenced classes
+  managePopupURLs Boolean Default true, // Design: whether popup URL's should be automatically managed
+  defaultScriptingLanguage PrintableString Default "text/javascript" [strict="false"], // Design: the MIME type for default scripting language for the application
+  defaultItemDateTimeFormat PrintableString Default "yyyy-MM-dd HH:mm", // Design: the default date/time format for date/time items
+  defaultItemDateFormat PrintableString Default "yyyy-MM-dd", // Design: the default date format for date items
+  defaultItemTimeFormat PrintableString Default "HH:mm", // Design: the default time format for time items
+  defaultDisplayDateTimeFormat PrintableString Default "MM/dd/yyyy hh:mm a", // Design: the default display date/time format (this format will be localized if necessary)
+  defaultDisplayDateFormat PrintableString Default "MM/dd/yyyy" [ yearMonthFormat ], // Design: the default display date format (this format will be localized if necessary)
+  defaultDisplayTimeFormat PrintableString Default "hh:mm a", // Design: the default display time format
+  autoLocalizeDateFormats Boolean Default true, // Design: whether display date/time formats should be automatically localized
+  autoLocalizeNumberFormats Boolean Default true, // Design: whether number formats should be automatically localized
+  autoAdjustFontSize Boolean Default false, // Design: whether to automatically adjust the default platform size when necessary
+  overlapAutoToolTips Boolean Default true, // Design: whether auto-generated tooltips overlap existing text
+  manageFocusedActions Boolean Default true, // Design: whether focused actions should be automatically managed
+  dynamicNameLookup Boolean Default true, // Design: whether unresolved script variable names will be automatically matched to widget names
+  populateGlobalConstants Boolean Default true [prefix, containerName], // Design: whether to populate the environment with useful global constants {prefix and containerName are mutually exclusive)
+  viewersLocalByDefault Boolean Default false, // Design: whether viewers should be made local by default
+  comURLRedirection Enumerated {
+    none                 (0), // do not redirect
+    all                  (1), // redirect all
+    same_context         (2), // redirect when within the same context
+    same_server          (3), // redirect when accessing the same server
+    same_server_and_port (4)  // redirect when accessing the same server and port
+  } Default none, // whether external component URLs should be redirected
+  startRedirectorOnDemand Boolean Default true, // whether the redirect proxy server should be started on demand (or at startup)
+  ignoreFormatExceptions Boolean Default false, // Design: whether number and date format exceptions should be ignored
+  allWidgetsDraggable Boolean Default false, // Design: whether all widgets should be draggable by default
+  allLabelsDraggable Boolean Default false, // Design: whether all label widgets should be draggable by default
+  allTextFieldsDraggable Boolean Default false, // Design: whether all textfield widgets should be draggable by default
+  allTextFieldsDroppable Boolean Default true, // Design: whether all textfield widgets should be able to be dropped onto by default
+  defaultMonospaceFont Font Reference, // Design: the monospaced font to use as the default
+  changeSelColorOnLostFocus Boolean Default true, // Design: whether the selection color on list type items should change when the widget looses focus
+  itemRenderer RenderableItem Reference [os] // Design: the default renderer for  items
+  itemHighlightedRenderer Renderer Reference [0s] , // Design:a painter definition to use to paint tooltips
+  lostFocusSelectionRenderer Renderer Reference [  os ], // a painter definition to use to paint selections in lists
+  tooltipRenderer Renderer Reference , // Design:a painter definition to use to paint tooltips
+  httpAuthHandler Enumerated {
+    auto     (0), // let the runtime decide bases on how the runtime was launched
+    standard (1), // authentication is handled transparently
+    none     (3)  // application  handles authentication
+  } Default standard [ authFunction, forceLowerCasePassword="false", keepPasswordHash="false", keepPassword="false" ],
+  scaleIconsWithFont Boolean Default false [ defaultBaseSize, defaultBaseScaleFactor, scaling ], // Design:whether icons should be scaled when the font is scaled
+  relativePrintSize Real Range(0..4) Default 0, // Design: the size to print at relative to the screen font size (0 - prints at the normal size, 1 - prints at the screen font size)
+  enableHTTPResponseCaching Boolean Default false [ mbMaxCacheSize="50", deleteOnExit="false", usePlatformCache="true", cacheName ],
+  useCustomFilePreferencesFactory Boolean Default false, // Design: whether to use the custom file preferences factory for preferences instead of the system default
+  manageScrollWheel Boolean Default true, // Design: whether to have sage automatically manage scroll wheel behavior
+  managedScreenSizes Enumerated {
+    none                      (0), // let the application manage
+    small_large               (1), // provide support for small, and large screens
+    small_medium_large        (3), // provide support for small, medium, and large screens
+    xsmall_small_large        (4), // provide support for extra small, small, and large screens
+    xsmall_small_medium_large (5)  // provide support for extra small, small, medium, and large screens
+  } Default none [ xsmallScreenPointSize, smallScreenPointSize, mediumScreenPointSize, autoFallback ], // whether to automatically provide support for multiple screen sizes
+  desktopIconDensity PrintableString Default "ldpi", // the density use for managed icons when running on desktops/non-touchable devices
+  mainWindow MainWindow Reference, // Hidden: the configuration for the application's main window
+  deferredImageIcon PrintableString Range(0..255) Optional [ size, scaling, density ], // Design~url: the default icon to use when image loading is deferred
+  customPropertyPrefix PrintableString Range(0..16) Default "my_", // Design: prefix to use to restrict custom properties on Widgets and RenderableDataItems
+  applicationListenerClass PrintableString Range(0..255) Optional  // Design~class: the name of a class to instantiate and add as an application listener
+  widgetCreatorClass PrintableString Range(0..255) Optional  // Design~class: the name of a class to instantiate and set as the widget creator
+} [ onAuthFailure, onFocusChange, onPermanentFocusChange, onChange, onPreExecute, onPostExecute ]
+
+/**
+ * This class represents the configuration for an application's main window.
+ * The main window consists of zero or more frames and a workspace.
+ * It can also contains a menu bar, a set of toolbars and a status bar
+ */
+MainWindow ::= Extends Viewer {
+  showTitleBar Boolean Optional [ os ], // Design: whether to show the title bar when one would not be normally visible
+  menuBar MenuBar Reference [ url, os ], // Appearance: the applications menu bar for platforms that with menu bar support
+  actionBar MenuBar Reference [ url, actionButtonInsets, os ], // Appearance: the applications menu bar
+  toolbar ToolBar Reference [ url, os ], // Appearance: a toolbar for the main window
+  statusBar StatusBar Reference [ os ], // Appearance: the status bar for the main window
+  decorated Boolean Default true [ os, color ], // Design: whether the main window is decorated
+  titlePane Any DefinedBy Widget Optional [ url, os ], // Appearance~widget~reload: a widget to use as the title pane for an undecorated window
+  viewer Any DefinedBy Widget Optional [ url ], // Hidden: a viewer for the window's workspace
+  windowListenerClass PrintableString Range(0..255) Optional  // Design~class: the name of a class to instantiate and add as a window listener
+} [ onOpened, onWillClose, onResize, onHasCollapsed, onHasExpanded, onError, style, opaque ]
+
+/**
+ * This class represents the configuration for a window's menu bar. The menu items are defined in the popupMenu property.
+ */
+MenuBar ::= Extends Viewer {
+} [ onAction ]
+
+/**
+ * This class represents the configuration for a toolbar
+ */
+ToolBar ::= Extends Viewer {
+  location Enumerated {
+    north (1),
+    south (2),
+    east  (3),
+    west  (4)
+  } Default north, // the location of the pane
+  row Integer Range(0..3) Default 0, // Design: the row for the toolbar (zero represents the top most position)
+  column Integer Range(0..3) Default 0, // Design: the position of the toolbar (zero represents left most position) in relation to other toolbars
+  horizontal Boolean Default true, // Appearance: whether the toolbar is to be horizontally oriented
+  buttonShowTextDefault Boolean Default false, // Appearance: the default for the showText property for push buttons when the value has no been explicitly set on the button
+  actAsFormViewer Boolean Default true, // Behavior: whether the pane should act as a form viewer (if false widgets will be registered with the next higher up form viewer)
+  widgets Set {
+    widget Any DefinedBy Widget
+  } Optional  // Hidden: the widgets to be placed on the toolbar
+}
+
+/**
+ * This class represents the configuration of a status bar
+ */
+StatusBar ::= Extends Viewer {
+  showTime Boolean Default false, // Appearance~~reload: whether the time of the day should be shown on the status bar
+  showMemoryUsage Boolean Default false, // Appearance~~reload: whether memory usage should be shown on the status bar
+  showInsertOverwrite Boolean Default false, // Appearance~~reload: whether the insert/overwrite button should be shown on the status bar
+  showResizeCorner Boolean Default false, // Appearance~~reload: whether a resizing corner should be shown
+  actions Set {
+    action ActionItem [ textHAlignment, textVAlignment, iconPosition ]
+  } Optional, // Design: a set of actions to place on the status bar
+  defaultMessage PrintableString Range(0..64) Default "Ready", // Appearance~resource~status: default status bar message
+  maxHistoryItems Integer Default 0  // Design: the maximum number of items to keep in the statusbar history
+} [ onAction, os ]
+
+/**
+ * This class represents the configuration information for a form viewer.
+ */
+Form ::= Extends GroupBox {
+  actAsFormViewer Boolean Default true, // Behavior: whether the pane should act as a form viewer (if false widgets will be registered with the next higher up form viewer)
+  submitAttributes PrintableString Optional [ mimeType ], // a list of name/value pairs that are to be submitted along with widget values. The default format is a set of name/value pairs separated by a semi-colon
+  retainInitialFieldValues Boolean Default true, // Behavior: whether initial widget values should be retained so that the form can be reset to it's initial state
+  defaultButtonName PrintableString Range(0..64) Optional  // the name of the default button for use when the form is the main viewer for a dialog or window
+  actionLink Link Reference  // Design: link to activate when the action is performed
+} [ onSubmit, onReset ]
+
+/**
+ * This class represents the configuration for a widget that groups other widgets together
+ */
+GroupBox ::= Extends Viewer {
+  layout Enumerated {
+    absolute (1), // use absolute screen coordinates for x, y
+    table    (2), // use column, row for x, y positions
+    forms    (3), // use JGoodies forms layout
+    flow     (4), // use a flow layout
+    custom   (10)  // use a custom layout manager
+  } Default table [ layoutManager, customInfo, panelComponent ], // Hidden: the type of layout to use for the form
+  rows PrintableString Default "1", // Hidden: the number of rows a table layout form will have
+  columns PrintableString Default "1", // Hidden: the number of columns a table layout form will have
+  columnSpacing Integer Range(0..24) Default 4, // Hidden: the amount of space between columns
+  rowSpacing Integer Range(0..24) Default 2, // Hidden: the amount of space between rows
+  columnGrouping Set {
+    group PrintableString
+  } Reference, // Hidden: layout specific column grouping information
+  rowGrouping Set {
+    group PrintableString
+  } Reference, // Hidden: layout specific row grouping information
+  cellRenderers Set {
+    renderer CellRenderer
+  } Reference, // Appearance~~reload: painters for the background of cells
+  overlayCellRenderers Set {
+    renderer Renderer
+  } Reference, // Appearance~~reload: painters for the overlay of cells (painted over widgets)
+  submitValue Enumerated {
+    widget_values      (0), // submit the individual widget values
+    viewer_linked_data (1), // submit the linked data for the viewer
+    viewer_value       (2)  // submit the value of the viewer
+  } Default widget_values, // Behavior: value to use when submitting data via a form
+  widgets Set {
+    widget Any DefinedBy Widget
+  } Optional, // Hidden: the set of widgets for the group box
+  scrollable Boolean Default false, // Behavior~~reload: whether the viewer is scrollable
+  scrollPane ScrollPane Reference  // Behavior~~reload: information specifying how the associated scroll pane should be configured if the viewer is scrollable
+} [ onItemChanged ]
+
+/**
+ * This class represents the configuration information for a Grid viewer utilizing a table layout. Each cell in the grid is a region.
+ * The region's configuration defines the type of viewer, the viewer's location and how the viewer will be laid out within the cell.
+ */
+GridPane ::= Extends Viewer {
+  rows Integer Range(0..24) Default 1, // Hidden: the number of rows the grid will have
+  columns Integer Range(0..80) Default 1, // Hidden: the number of columns the grid will have
+  columnSpacing Integer Range(0..24) Default 4, // Layout: the amount of space between columns
+  rowSpacing Integer Range(0..24) Default 2, // Layout: the amount of space between rows
+  columnGrouping Set {
+    group PrintableString
+  } Reference, // Design: layout specific column grouping information
+  rowGrouping Set {
+    group PrintableString
+  } Reference, // Design: layout specific row grouping information
+  actAsFormViewer Boolean Default true, // Behavior: whether the pane should act as a form viewer (if false widgets will be registered with the next higher up form viewer)
+  scrollable Boolean Default false, // Behavior~~reload: whether the viewer is scrollable
+  scrollPane ScrollPane Reference, // Behavior~~reload: information specifying how the associated scroll pane should be configured if the viewer is scrollable
+  regions Set {
+    region Region
+  } Optional  // Design: the set of regions
+}
+
+/**
+ * This class represents the configuration information for a viewer that treats a set of viewers as a stack (like cards).
+ * Only one viewer can be active at any given time. The viewers can be referenced by name or index
+ */
+StackPane ::= Extends Viewer {
+  loadOnActivation Boolean Default true, // Design: whether viewers should be loaded when they are first activated or when the pane is loaded
+  reloadOnActivation Boolean Default false, // Design: whether viewers should be reloaded every time they are activated
+  selectedIndex Integer Range(-1..) Default 0, // // Behavior: the index of the viewer that is to be initially selected
+  transitionAnimator PrintableString Optional [ duration, direction, acceleration, deceleration, horizontal, fadeIn, fadeOut, diagonal, diagonalAnchor, autoOrient, customProperties ], // Behavior: name of the animator to use to animate transitions
+  actAsFormViewer Boolean Default false, // Behavior: whether the pane should act as a form viewer (if false widgets will be registered with the next higher up form viewer)
+  viewers Set {
+    viewer Any DefinedBy Viewer [ name ]
+  } Reference, // Hidden: the set of viewers for the stack pane
+  viewerURLs Set {
+    url PrintableString [ name, mimeType, deferred ]
+  } Reference  // Design~urlset: a the set of URLs representing viewer configurations
+} [ onChange ]
+
+/**
+ * This class represents the configuration information for a viewer that splits its section of the screen into multiple resizable regions.
+ */
+SplitPane ::= Extends Viewer {
+  splitOrientation Enumerated {
+    top_to_bottom (0),
+    left_to_right (1)
+  } Default left_to_right Optional, // Layout: the orientation of the split
+  oneTouchExpandable Boolean Default false, // Behavior: specifies whether the split pane should provide a collapse/expand widget for panes
+  autoAdjustProportions Boolean Default true, // Behavior: specifies whether the split pane should automatically adjust its proportions when a widget is bigger than it allotted space
+  showGripper Boolean Default true, // Appearance: whether the resizing gripper is shown
+  dividerSize Integer Range(0..100) Optional, // Appearance: the divider size (zero hides the divider)
+  continuousLayout Boolean Default true, // Design: whether the regions a continuously laid out during resize operations
+  actAsFormViewer Boolean Default true, // Behavior: whether the pane should act as a form viewer (if false widgets will be registered with the next higher up form viewer)
+  splitProportions Set {
+    splitProportion Real Range(0..1)
+  } Reference, // Hidden: the split proportions the set should contain on less entry than there are viewers (defaults to an even split). For example a splitProportion of 0.4 would provide a 40/60 split
+  regions Set {
+    region Region
+  }, // Design: the set of regions
+  transitionAnimator PrintableString Optional [ duration, direction, acceleration, deceleration, horizontal, fadeIn, fadeOut, diagonal, diagonalAnchor, autoOrient, customProperties ], // Behavior: name of the animator to use to animate transitions
+  scrollable Boolean Default false, // Behavior~~reload: whether the viewer is scrollable
+  scrollPane ScrollPane Reference  // Behavior~~reload: information specifying how the associated scroll pane should be configured if the viewer is scrollable
+} [ onChange ]
+
+/**
+ * This class represents the configuration information for a viewer that arranges a section of the screen into a set of regions,
+ * only one of which can be selected at a given time. A region can be selected by clicking on its tab
+ */
+TabPane ::= Extends Viewer {
+  tabPosition Enumerated {
+    top    (1),
+    bottom (2),
+    left   (3),
+    right  (4)
+  } Default bottom Optional, // Appearance~~reload: the position of the tabs in relation to the tab area
+  closeButton Enumerated {
+    none   (0),
+    on_tab (1),
+    corner (2)
+  } Default none Optional, // Appearance~~reload: where the tab close button should be placed
+  tabStyle Enumerated {
+    auto         (0),
+    box          (1),
+    chrome       (2),
+    flat         (3),
+    office       (4),
+    rounded_flat (5),
+    windows      (6),
+    stacked      (7)
+  } Default auto, // Appearance~~reload: the style of tab to use
+  moreIconType Enumerated {
+    menu   (1),
+    dots   (2),
+    custom (3)
+  } Default menu [ icon ], // Appearance: the type of icon to use for the more table item
+  tabRenderer RenderableItem Reference , // Appearance~~reload: a painter for the tab buttons
+  tabAreaRenderer Renderer Reference, // Appearance~~reload: a painter for the tab area
+  boldSelectedTab Boolean Default true, // Appearance~~reload: whether the selected tab should be bold
+  rolloverPainted Boolean Default false, // Behavior: whether item rollovers are painted
+  showIconsOnTab Boolean Default true, // Appearance~~reload: whether icons should be shown on the tabs
+  tabEditingAllowed Boolean Default false, // Design: whether editing of tab titles is allowed
+  tabHeight PrintableString Range(0..32) Optional [ touchOnly ], // Appearance~unit: the height to use for each tab
+  selectedIndex Integer Range(-1..) Default 0, // Appearance~~selectedTab: the index of the tab that is to be initially selected
+  tabs Set {
+    tab Tab
+  } Optional, // Design: the set of tabs
+  defaultTabIcon PrintableString Range(0..255) Optional [ alt, slice, size, scaling, density ], // Design~url: URL for an icon to use for tab's that don't define their own
+  actAsFormViewer Boolean Default true, // Behavior: whether the pane should act as a form viewer (if false widgets will be registered with the next higher up form viewer)
+  leadingHeaderWidget Any DefinedBy Widget Optional, // a leading widget for the tab area header
+  trailingHeaderWidget Any DefinedBy Widget Optional, // a trailing widget for the tab area header
+  transitionAnimator PrintableString Range(0..255) Optional [ duration, direction, acceleration, deceleration, horizontal, fadeIn, fadeOut, diagonal, diagonalAnchor, autoOrient, customProperties ], // Behavior: name of the animator to use to animate transitions
+  visibleCount Integer Range(1..32) Optional, // Appearance: the number of visible tabs (when present determines the number of visible tabs when stacking)
+  resizable Boolean Default false, // Appearance: determines whether the tab strip is resizable when tabs are stacked
+  smallIconFraction Real Range(0.1..1) Default 0.5, // Appearance: the fraction of the size of a tab icon to use to display the small icon for stacked tabs
+} [ onChange, onOpened, onClosed, onWillClose, onItemChanged ]
+
+/**
+ * This class represents the configuration information for a viewer that can display and edit documents
+ */
+DocumentPane ::= Extends Viewer {
+  editable Boolean Default false, // Behavior: whether the pane will support editing
+  wordWrap Boolean Default true, // Behavior: whether word wrap should be enabled
+  speechInputSupported Boolean Default true, // Behavior: whether the speech input is supported
+  style Enumerated {
+    text_editor (0),
+    html_editor (1)
+  } Default text_editor, // the style of viewer to create
+  cursorShown Enumerated {
+    when_editable       (0),
+    always              (1),
+    always_for_non_html (2),
+    never               (3)
+  } Default always_for_non_html, // Behavior: when a cursor should be shown
+  keyboardType Enumerated {
+    default_type             (0),
+    text_type                (1),
+    number_type              (2),
+    number_punctuation_type  (3),
+    decimal_type             (4),
+    decimal_punctuation_type (5),
+    phone_number_type        (6),
+    name_phone_number_type   (7),
+    email_address_type       (8),
+    url_type                 (9)
+  } Default default_type [ autoCorrect, autoComplete, autoShow="true", autoCapitalize="sentences", spellCheck ], // Design: the type of keyboard to use for input. spellCheck is true/false; autoCapitalize is none/words/sentences/all
+  keyboardReturnButtonType Enumerated {
+    default_type (0),
+    go_type      (1),
+    join_type    (2),
+    next_type    (3),
+    search_type  (4),
+    send_type    (5),
+    none_type    (6),
+    done_type    (7)
+  } Default default_type [ autoEnable="true", text ], // Design: the type of keyboard to use for input; text is custom text for the button if supported by the platform
+  scrollPane ScrollPane Reference  // Behavior~~reload: information specifying if the viewer is scrollable and how the associated scroll pane should be configured
+  emptyText EmptyText Reference  // Appearance~font~reload: text to show when the widget is empty
+} [ onChange ]
+
+/**
+ * This class represents the configuration information for a viewer that wraps a widget
+ */
+WidgetPane ::= Extends Viewer {
+  actAsFormViewer Boolean Default false, // Behavior: whether the pane should act as a form viewer (if false widgets will be registered with the next higher up form viewer)
+  autoResizeWidget Boolean Default true, // Behavior~~reload: whether the pane should resize the widget to fill available space
+  scrollable Boolean Default false, // Behavior~~reload: whether the viewer is scrollable
+  scrollPane ScrollPane Reference, // Behavior~~reload: information specifying how the associated scroll pane should be configured if the viewer is scrollable
+  transitionAnimator PrintableString Range(0..255) Optional [ duration, direction, acceleration, deceleration, horizontal, fadeIn, fadeOut, diagonal, diagonalAnchor, autoOrient, customProperties ], // Behavior: name of the animator to use to animate transitions
+  widget Any DefinedBy Widget Optional  // Hidden: the widget to be wrapped (if not specified in the dataURL)
+}
+
+/**
+ * This class represents the configuration information for a viewer that displays and image and provides tools for manipulating the image
+ */
+ImagePane ::= Extends Viewer {
+  zoomingAllowed Boolean Default true [ minimum="10%", maximum="200%", increment="10%" ], // Behavior: whether image zooming should be allowed
+  scrollWheelZoomingAllowed Boolean Default true, // Behavior: whether image zooming via a the mouse scroll wheel should be allowed
+  movingAllowed Boolean Default false, // Behavior: whether image moving should be allowed
+  rotatingAllowed Boolean Default false, // Behavior: whether image rotating should be allowed
+  scaling Enumerated {
+    nearest_neighbor            (0),
+    bilinear                    (1),
+    bicubic                     (2),
+    bilinear_cached             (3),
+    bicubic_cached              (4),
+    progressive_bilinear        (5),
+    progressive_bicubic         (6),
+    progressive_bilinear_cached (7),
+    progressive_bicubic_cached  (8)
+  } Default bilinear, // Behavior: the type of scaling to perform
+  autoScale Boolean Default false, // Behavior: whether the image should be automatically scaled to fit the size of the pane (if enabled zooming/panning/moving will be disabled)
+  centerImage Boolean Default false, // Behavior: whether the image should be automatically centered when first displayed
+  preserveAspectRatio Boolean Default true [ fill ], // Design: whether the aspect ratio of images are preserved
+  userSelectionAllowed Boolean Default false [ selectionColor, lineThickness="1.5", strokeType="dotted" ], // Behavior: whether the user can select parts of the image (for image types that support it)
+  showLoadStatus Boolean Default true, // Behavior: whether the loading status of the image should be shown
+  scrollable Boolean Default false, // Behavior~~reload: whether the viewer is scrollable
+  scrollPane ScrollPane Reference, // Behavior~~reload: information specifying how the associated scroll pane should be configured if the viewer is scrollable
+  emptyText EmptyText Reference  // Appearance~font~reload: text to show when the widget is empty
+} [ onChange ]
+
+/**
+ * This class represents the configuration information for a viewer that supports the expansion and collapsing of it contents
+ */
+CollapsiblePane ::= Extends WidgetPane {
+  collapsibleInfo CollapsibleInfo  // Appearance~~reload: information specifying how the expand/collapse functionality should be configured
+} [ onWillExpand, onWillCollapse, onHasCollapsed, onHasExpanded ]
+
+/**
+ * This class represents configuration information for a widget that displays and manages multiple rows and columns of data.
+ */
+Table ::= Extends Viewer {
+  sortedByColumn Integer Range(-1..) Optional [ descending ], // Design: the column that the data will be initially sorted by when it is retrieved for the data source
+  autoResizeMode Enumerated {
+    none                      (0), // do not adjust column widths automatically; use a scrollbar.
+    resize_next_column        (1), // when a column is adjusted in the UI, adjust the next column the opposite way
+    resize_subsequent_columns (2), // during UI adjustment, change subsequent columns to preserve the total width; this is the default behavior.
+    resize_last_column        (3), // during all resize operations, apply adjustments to the last column only
+    resize_all_columns        (4)  // during all resize operations, proportionately resize all columns.
+  } Default resize_subsequent_columns Optional, // Behavior: the resize mode to utilized during user initiated column resizing
+  selectionMode Enumerated {
+    none      (0), // selection not allowed
+    single    (1), // only a single item can be selected at a time
+    multiple  (2), // multiple items can be selected at a time
+    block     (3), // multiple items can be selected at a time but the items must be in a contiguous block
+    invisible (5)  // selection not allowed but the standard selection indicator is not painted
+  } Default single Optional, // Behavior: the selection mode for the table
+  columnSelectionAllowed Boolean Default false, // Behavior: whether column selection is allowed
+  columnSortingAllowed Boolean Default true, // Behavior: whether column sorting is allowed
+  columnResizingAllowed Boolean Default true, // Behavior: whether column resizing is allowed
+  columnReorderingAllowed Boolean Default false, // Behavior: whether column reordering is allowed
+  columnHidingAllowed Boolean Default false, // Behavior: whether column hiding is allowed
+  itemCursorsSupported Boolean Default false [ getCursorScript ], // Behavior: whether to support cursors for data items
+  columnChooserEnabled Boolean Default false [showButtons=true] // Behavior: whether to enable the default column chooser
+  deleteSelectionClearsCells Boolean Default false, // Behavior:whether the delete selection operation simply clears cells or actually removes rows
+  changeSelColorOnLostFocus Boolean Default true, // Behavior: whether the selection color should change when the table looses focus (overrides the global default)
+  deselectEventsEnabled Boolean Default false, // Behavior: whether events should be fired when an item is deselected
+  singleClickActionEnabled Boolean Default false, // Behavior: whether a single click will trigger an action event
+  boldColumnHeaders Boolean Default false, // Appearance: whether column headers should be bold
+  columnDropTracking Boolean Default false, // Behavior: whether to provide tracking support for dropping on a specific column (as opposed to just tracking for dropping on the row)
+  gridLineType Enumerated {
+    none             (0),
+    horizontal_lines (1),
+    vertical_lines   (2),
+    both             (3)
+  } Default horizontal_lines, // Appearance: the type of line to use for drawing the grid
+  gridLineStyle Enumerated {
+    dotted (1),
+    dashed (2),
+    solid  (3)
+  } Default solid, // Appearance: the style of line to use for drawing the grid
+  gridLineColor PrintableString Range(0..64) Optional, // Appearance~color: the color of the grid line
+  rolloverPainted Boolean Default false, // Behavior: whether item rollovers are painted
+  headerHeight PrintableString Range(0..32) Default "-1", // Appearance~unit~reload: the height of the table header
+  headerRenderer Renderer Reference, //
+  headerCellMarkup RenderableItem Reference, //
+  headerRolloverPainted Boolean Default false, // Behavior: whether column header rollovers are painted
+  headerSeparatorColor PrintableString Range(0..64) Optional, // Appearance~color~headerSeparatorColor: the color for the header column separator
+  headerBottomSeparatorColor PrintableString Range(0..64) Optional, // Appearance~color~headerBottomSeparatorColor: the color for the separator between the header and the table (defaults to the column separator)
+  rowHeaderFooterSelectionPainted Boolean Default true, // Behavior: whether row header/footer selections are painted when they are selected
+  alternatingHighlightColor PrintableString Range(0..64) Optional, // Appearance~color: the color to use for alternating row/column highlighting
+  alternatingHighlightType Enumerated {
+    none   (0),
+    row    (1),
+    column (3)
+  } Default none, // Appearance: the type to use for alternating highlighting to perform
+  highlightSortColumn Boolean Default false, // Behavior: whether the sort column should be highlighted (this is independent of row/column highlighting)
+  sortColumnHighlightColor PrintableString Range(0..64) Optional, // Appearance~color~runtime: the color to use for sort column highlighting
+  extendBackgroundRendering Boolean Default true, // Appearance: whether the table background rendering (grid, alternating colors, etc.) should be extended to fill any empty space)
+  autoSizeColumnsToFit Boolean Default false, // Behavior: whether table columns should be automatically sized to fit their contents
+  autoSizeRowsToFit Boolean Default false, // Behavior: whether table rows should be automatically sized to fit their contents
+  wordWrapByDefault Boolean Default false, // Behavior: whether table rows should be automatically sized to fit their contents
+  rowHeight PrintableString Range(0..32) Default "1ln", // Appearance~unit: the height to use for each row in the table
+  minVisibleRowCount Integer Default 1, // Appearance:the desired minimum number of visible rows
+  visibleRowCount Integer Optional, // Appearance: the desired number of visible rows
+  enterKeyAction Enumerated {
+    none         (0), // no action
+    action_event (1), // triggers an action event
+    next_row     (2), // move to the next row
+    both         (3)  // trigger and action event and then move to the next row
+  } Default action_event, // Behavior: what action should be taken when the enter key is pressed
+  tabKeyAction Enumerated {
+    next_component                 (0), // moves to the next focusable component
+    next_component_unless_editable (1), // moves to the next focusable component unless the table is editable
+    next_cell                      (2)  // moves to the next cell
+  } Default next_component_unless_editable, // Behavior: what action should be taken when the enter key is pressed
+  selectedIndex Integer Range(-1..) Default -1, // Appearance~~runtime: the index of the row that is to be initially selected
+  handleFirstFocusSelection Boolean Default false, // Behavior: whether the widget should automatically handle the selection when the widget receives focus for the first time
+  submitValue Enumerated {
+    selected_value_text                  (0), // submit the text of the selected rows
+    selected_value                       (1), // use the actual selection value (useful for manual submission)
+    selected_linked_data                 (2), // submit the linked of the selected rows
+    selected_index                       (3), // submit the indexes of the selected rows
+    selected_specific_column_value_text  (4), // submit the text of the column identified as the submit column for all selected rows
+    selected_specific_column_linked_data (5)  // submit the linked data of the column identified as the submit column for all selected rows
+  } Default selected_value_text, // Behavior: value to use when submitting data via a form
+  submitColumn Integer Range(0..) Default 0, // Behavior: the column to use when submitting data
+  showStandardColumnHeader Boolean Default true, // Appearance~~reload: whether the standard column header is shown
+  selectionGroupName PrintableString Range(0..64) Optional [ position ], // Design: the name of a selection group to tie this table's selection to
+  overlapAutoToolTips Boolean, // Behavior: whether auto-generated tooltips overlap existing text
+  scrollPane ScrollPane Reference, // Behavior~~reload: information specifying if the widget is scrollable and how the associated scroll pane should be configured
+  modifiedItemImageURL PrintableString Range(0..255) Optional [ opacity="100%", renderType="upper_right", renderSpace="component", composite="src_over", scaling, density, displayed="always" ], // Appearance~image~runtime: an overlay image to use to denote a modified item
+  columns Set {
+    column ItemDescription [ onAction ]
+  } Optional [ onAction ], // Appearance~~reload: the set of columns for the table
+  columnPopupMenu Set {
+    menuItem MenuItem
+  } Reference [ onConfigure ], // Appearance~~runtime: popup menu for the widget.
+  dataURL Refine Optional [columnSeparator="|" ], // Design~url~reload: a URL to use to retrieve data for the widget
+  lostFocusSelectionRenderer Renderer Reference, // Appearance: painter for when an item in the list is selected but the list does not have focus
+  inheritDefaultStateRenderers Boolean Default true, // Design: whether the default state renderers for the button type is inherited if not explicitly set
+  displayAsGridView Boolean Default false, // Appearance: whether the table should be displayed as a grid view
+  gridViewType Enumerated {
+    vertical_wrap   (0), // a single row of data that wraps based on the width of the table
+    horizontal_wrap (1)  // a single row of data that wraps based on the height of the table
+  } Default vertical_wrap [ preferredColumnCount ]  // Appearance: the type of grid view when the table is configured as a grid view
+  emptyText EmptyText Reference  // Appearance~font~reload: text to show when the widget is empty
+} [ onAction, onChange, onItemChanged, onItemDeleted ]
+
+/**
+ * This class represents configuration information for a widget that displays and manages multiple rows and columns of data
+ * as well as providing functionality for expanding and contracting rows.
+ */
+TreeTable ::= Extends Table {
+  expandableColumn Integer Range(0..) Default 1, // Design: the column that is expandable
+  expandAll Boolean Default false, // Design~expandAll: whether all of the table rows should be initially expanded
+  showRootHandles Boolean Default true, // Appearance: whether root node handles should be shown
+  parentItemsSelectable Boolean Default true, // Appearance: whether parent items are selectable
+  toggleOnTwistyOnly Boolean, // Appearance: whether parent items expand/collapse only when the twisty is clicked (double tap always toggles) selectable
+  indentBy Integer Range(-1..100) Default 16, // Appearance: the number of pixels to use to indent a child node from a parent
+  autoScrollOnExpansion Boolean Default true  // Behavior: whether to automatically scroll rows of a newly expanded branch into view
+  boldParentItems Boolean Default true,
+  appendCountToParentItems Boolean Default false,
+  groupingInfo GroupingInfo Reference
+} [ onHasCollapsed, onHasExpanded, onWillExpand, onWillCollapse ]
+
+/**
+ * This class represents the configuration information for a widget that provides charting functionality
+ */
+Chart ::= Extends Viewer {
+  chartType Enumerated {
+    line             (0),
+    bar              (1),
+    stacked_bar      (2),
+    range_bar        (3),
+    pie              (4),
+    pie3d            (5),
+    area             (6),
+    stacked_area     (7),
+    range_area       (8),
+    step_area        (9),
+    step_line        (10),
+    bubble           (11),
+    hi_lo            (12),
+    hi_lo_open_close (13),
+    candlestick      (14),
+    funnel           (15),
+    spline           (16),
+    spline_area      (17),
+    point            (18),
+    rose             (19),
+    pyramid          (20)
+  } Default line [ renderer ], // Design~~reload: the type of chart
+  horizontal Boolean Default false, // whether the chart is to be horizontally oriented
+  showLegends Boolean Default true [ location ], // whether legends are to be shown
+  showTooltips Boolean Default true, // whether tooltips are to be shown
+  showPlotLabels Boolean Default false, // Appearance~~reload: whether plot labels are shown
+  zoomingAllowed Boolean Default true, // whether zooming is allowed
+  domainAxis ChartAxis [timeUnit], //  the domain axis (x-axis).
+  rangeAxises Set {
+    rangeAxis ChartAxis , // a set of range axises (y-axis) the range axis.
+  },
+  chartTitle DataItem Reference [ location ], // data item representing the chart title
+  emptyText EmptyText Reference, // Appearance~font~reload: text to show when the widget is empty
+  plot Plot Reference, // a reference to the plotting information
+  dataURL Refine Optional [columnSeparator="|" ], // Design~url~reload: a URL to use to retrieve data for the widget
+  subTitles Set {
+    subTitle DataItem
+  } Reference, // a set of sub titles for the chart
+  annotations Set {
+    annotation DataItem
+  } Reference, // a set of annotations for the chart
+  rangeMarkers Set {
+    marker DataItem
+  } Reference, // a set of range markers for the chart
+  domainMarkers Set {
+    marker DataItem
+  } Reference, // a set of domain markers for the chart
+  scrollPane ScrollPane Reference  // Behavior~~reload: information specifying if the widget is scrollable and how the associated scroll pane should be configured
+} [onAction]
+
+/**
+ * This class represents an axis for a chart
+ */
+ChartAxis ::= Extends DataItem  {
+  lowerBound Real Optional,
+  upperBound Real Optional,
+  tickIncrement Real Optional,
+  tickUnit PrintableString  Range(0..16) Optional, //unit for tick increment
+  lineColor PrintableString Range(0..64) Optional,
+  labelAngle Integer Range(0..360) Default 0,
+  lineThickness Integer Range(0..16) Optional,
+  alternatingHighlightColor PrintableString Range(0..64) Optional, // Appearance~color: the color to use for alternating row/column highlighting
+  showLabels Boolean Default true,
+  showGridLine Boolean Default true [color, style, thickness]
+  showMajorTicks Boolean Default true
+  showMinorTicks Boolean Default true
+  visible Boolean Default true, // Behavior: whether the item is visible
+  oppositeSide Boolean Default false,
+  axisValues Set {
+    value DataItem
+  } Reference
+}
+
+/**
+ * This class represents the configuration information for plotting information for a chart widget
+ */
+Plot ::= Sequence {
+  bgImageURL PrintableString Range(0..255) Optional [ opacity="100%", renderType="tiled", waitForLoad="false", renderSpace="within_border", composite="src_over", scaling, displayed="always", density ], // Appearance~image~backgroundOverlayPainter: an background image for the widget (not all widgets support background images)
+  contentPadding Margin Reference, // Layout~insets: margin to separate the plot for the chart's border
+  bgColor PrintableString Range(0..128) Optional [ type="linear", direction="vertical_top", magnitude, distribution, radius ], // Appearance~gradient: the background color can be "transparent" for transparent backgrounds
+  borderColor PrintableString Range(0..64) Optional, // Appearance~color: the color for the border around the plot
+  shapes Enumerated {
+    none                (0), // no shapes are drawn
+    filled              (1), // a filled-in shape is drawn for each data point
+    outlined            (2), // an outlined shape is drawn for each data point
+    filled_and_outlined (3)  // a filled-in and outlined shape is drawn for each data point
+  } Default filled [ outlineColor, filledColor ], // Appearance: how shapes representing data points are drawn
+  labels Enumerated {
+    values      (0), // data points are labeled with the value of the data point
+    tooltips    (1), // data points are labeled with the tooltip of the data point
+    linked_data (2)  // data points are labeled with the linked data of the data point
+  } Default values [ format, offset, styleCSS ], // Appearance: how data points are labeled
+  fgAlpha Integer Range(0..255) Default 255 Optional, // Appearance: color alpha transparency value for chart foreground colors
+  lineThickness Real Range(0..255) Optional, // Appearance: color alpha transparency value for chart foreground colors
+  outlineThickness Real Range(0..20) Default 1 Optional, // Appearance: color alpha transparency value for chart foreground colors
+  templateName PrintableString Range(0..64) Optional [ context ]  // Design~~reload: name of an object template to use to customize the plot
+}
+
+/**
+ * This class represents configuration information for a widget that displays and manages hierarchical set of data items
+ * and provides functionality for expanding and contracting those items
+ */
+Tree ::= Extends Viewer {
+  selectionMode Enumerated {
+    none        (0), // selection not allowed
+    single      (1), // only a single item can be selected at a time
+    multiple    (2), // multiple items can be selected at a time
+    block       (3), // multiple items can be selected at a time but the items must be in a contiguous block
+    single_auto (4), // only a single item can be selected at a time, items will automatically be selected as the cursor moved over them. This is only valid if use in conjunction with singleClickAction
+    invisible   (5)  // selection not allowed but the standard selection indicator is not painted
+  } Default single Optional [ paintRow ], // Behavior: the selection mode for the tree
+  editingMode Enumerated {
+    none                (0),
+    leaves              (1),
+    branches            (2),
+    leaves_and_branches (3)
+  } Default none, // Behavior: the of node editing allowed
+  rootNode DataItem Reference, // Appearance~~reload: the item for the root node of the tree
+  showRootHandles Boolean Default true, // Appearance: whether root node handles should be shown
+  showRootNode Boolean Default true, // Appearance: whether the root node should be shown
+  rootNodeCollapsible Boolean Default true, // Appearance: whether the root node is collapsible
+  parentItemsSelectable Boolean Default true, // Appearance: whether parent items are selectable
+  toggleOnTwistyOnly Boolean, // Appearance: whether parent items expand/collapse only when the twisty is clicked (double tap always toggles) selectable
+  rolloverPainted Boolean Default false, // Behavior: whether item rollovers are painted
+  indentBy Integer Range(-1..100) Default 16, // Appearance: the number of pixels to use to indent a child node from a parent
+  changeSelColorOnLostFocus Boolean Default true, // Behavior: whether the selection color should change when the table looses focus (overrides the global default)
+  deselectEventsEnabled Boolean Default false, // Behavior: whether events should be fired when an item is deselected
+  itemCursorsSupported Boolean Default false [ getCursorScript ], // Behavior:whether to support cursors for data items
+  singleClickActionEnabled Boolean Default false, // Behavior: whether a single click will trigger an action event
+  leafIcon PrintableString Range(0..255) Optional [ alt, slice, size, scaling, density ], // Appearance~icon: icon to use for a leaf if the item does not provide it's own icon
+  folderOpenIcon PrintableString Range(0..255) Optional [ alt, slice, size, scaling, density ], // Appearance~icon: icon to use for open folders if the item does not provide it's own icon
+  folderClosedIcon PrintableString Range(0..255) Optional [ alt, slice, size, scaling ], // Appearance~icon: icon to use for closed folders if the item does not provide it's own icon
+  itemDescription ItemDescription Reference, // Design: an optional description of the items that will populate the list
+  selectedIndex Integer Range(-1..) Default -1, // Appearance~~runtime: the index of the row that is to be initially selected
+  handleFirstFocusSelection Boolean Default true, // Behavior: whether the widget should automatically handle the selection when the widget receives focus for the first time
+  submitValue Enumerated {
+    selected_value_text  (0), // submit the text of the selected rows
+    selected_value       (1), // use the actual selection value (useful for manual submission)
+    selected_linked_data (2), // submit the linked of the selected rows
+    selected_index       (3), // submit the indexes of the selected rows
+    checked_value_text   (4), // submit the text of the checked rows
+    checked_index        (5), // submit the indexes of the checked rows
+    checked_linked_data  (6)  // submit the linked data of the checked rows
+  } Default selected_value_text, // value to use when submitting data via a form
+  minVisibleRowCount Integer Default 1, // Appearance:the desired minimum number of visible rows
+  visibleRowCount Integer Optional, // Appearance: the desired number of visible rows
+  rowHeight PrintableString Range(0..32) Default "1ln", // Appearance~unit: the height to use for each row in the list
+  alternatingHighlightColor PrintableString Range(0..64) Optional, // Appearance~color: the color to use for alternating row/column highlighting
+  selectionGroupName PrintableString Range(0..64) Optional [ position ], // Design: the name of a selection group to tie this tree to
+  scrollPane ScrollPane Reference, // Behavior~~reload: information specifying if the widget is scrollable and how the associated scroll pane should be configured
+  overlapAutoToolTips Boolean, // Behavior: whether auto-generated tooltips overlap existing text
+  expandAll Boolean Default false, // Behavior: whether all of the tree rows should be initially expanded
+  autoScrollOnExpansion Boolean Default true, // Behavior: whether to automatically scroll rows of a newly expanded branch into view
+  autoSizeRowsToFit Boolean Default false, // Behavior: whether tree rows should be automatically sized to fit their contents
+  showDividerLine Boolean, // Appearance: whether a line is drawn between rows
+  dividerLineStyle Enumerated {
+    dotted (1),
+    dashed (2),
+    solid  (3)
+  } Default solid, // Appearance: the style of line to use for drawing the grid
+  dividerLineColor PrintableString Range(0..64) Optional, // Appearance~color: the color of the divider line
+  lostFocusSelectionRenderer Renderer Reference  // Appearance: painter for when an item in the list is selected but the list does not have focus
+  inheritDefaultStateRenderers Boolean Default true, // Design: whether the default state renderers for the button type is inherited if not explicitly set
+  emptyText EmptyText Reference  // Appearance~font~reload: text to show when the widget is empty
+  groupingInfo GroupingInfo Reference,
+} [ onAction, onChange, onWillExpand, onWillCollapse, onHasCollapsed, onHasExpanded, onItemChanged, onItemDeleted ]
+
+/**
+ * This class represents configuration information for a widget that displays and manages hierarchical set of data items
+ * and provides functionality for expanding and contracting those items. Each node is also preceded by a check box that can independently selected
+ */
+CheckBoxTree ::= Extends Tree {
+  linkSelection Boolean Default false, // Design: whether checkboxes and the list selection are automatically linked
+  checkboxTrailing Boolean Default false, // Design: whether the checkbox is leading or trailing the item
+  manageChildNodeSelections Boolean Default true  // Behavior: whether checking the parent node will force all children to be selected
+}
+
+/**
+ * This class represents configuration information for a widget that manages a list of data items.
+ */
+ListBox ::= Extends Viewer {
+  selectionMode Enumerated {
+    none        (0), // selection not allowed
+    single      (1), // only a single item can be selected at a time
+    multiple    (2), // multiple items can be selected at a time
+    block       (3), // multiple items can be selected at a time but the items must be in a contiguous block
+    single_auto (4), // Behavior: only a single item can be selected at a time, items will automatically be selected as the cursor moved over them. This is only valid if use in conjunction with singleClickAction
+    invisible   (5)  // selection not allowed but the standard selection indicator is not painted
+  } Default single Optional, // Behavior: the selection mode for the list
+  itemDescription ItemDescription Reference, // Design: an optional description of the items that will populate the list
+  selectedIndex Integer Range(-1..) Default -1, // Behavior: the index of the row that is to be initially selected
+  handleFirstFocusSelection Boolean Default true, // Behavior: whether the widget should automatically handle the selection when the widget receives focus for the first time
+  submitValue Enumerated {
+    selected_value_text  (0), // submit the text of the selected rows
+    selected_value       (1), // use the actual selection value (useful for manual submission)
+    selected_linked_data (2), // submit the linked of the selected rows
+    selected_index       (3), // submit the indexes of the selected rows
+    checked_value_text   (4), // submit the text of the checked rows
+    checked_index        (5), // submit the indexes of the checked rows
+    checked_linked_data  (6)  // submit the linked data of the checked rows
+  } Default selected_value_text, // value to use when submitting data via a form
+  minVisibleRowCount Integer Default 1, // Appearance:the desired minimum number of visible rows
+  visibleRowCount Integer Optional, // Appearance:the desired number of visible rows
+  changeSelColorOnLostFocus Boolean Default true, // Behavior: whether the selection color should change when the table looses focus (overrides the global default)
+  rolloverPainted Boolean Default false, // Behavior: whether item rollovers are painted
+  alternatingHighlightColor PrintableString Range(0..64) Optional, // Appearance~color: the color to use for alternating row/column highlighting
+  deselectEventsEnabled Boolean Default false, // Behavior: whether events should be fired when an item is deselected
+  itemCursorsSupported Boolean Default false [ getCursorScript ], // Behavior:whether to support cursors for data items
+  autoSizeRowsToFit Boolean Default false, // Behavior: whether list rows should be automatically sized to fit their contents
+  editingMode Enumerated {
+    none                     (0),
+    reordering               (1),
+    selection                (2),
+    deleting                 (3),
+    reordering_and_selection (4),
+    reordering_and_deleting  (5)
+  } Default none [ alwaysCreateToolbar, autoEnd, allowSwiping ], // editing mode for the list
+  showDividerLine Boolean [ showLastLine ], // Appearance: whether a line is drawn between rows
+  dividerLineStyle Enumerated {
+    dotted (1),
+    dashed (2),
+    solid  (3)
+  } Default solid, // Appearance: the style of line to use for drawing the grid
+  dividerLineColor PrintableString Range(0..64) Optional, // Appearance~color: the color of the divider line
+  singleClickActionEnabled Boolean Default false, // Behavior: whether a single click will trigger an action event
+  indexForFiltering Boolean Default false [ showIndexUI, useNativeIndexUI, addIndexSectionsToList, showSectionHeader, sectionHeaderHeight ], // whether items should be indexed (by first character) to improve filtering performance
+  indexSectionRenderer Renderer Reference, // Appearance: painter for when an index item is automatically added to an indexed list
+  rowHeight PrintableString Range(0..32) Default "1ln" Optional, // Appearance~unit: the height of rows
+  cellWidth PrintableString Range(0..32) Optional, // Appearance~unit: the width of a cell
+  selectionGroupName PrintableString Range(0..64) Optional [ position ], // Design: the name of a selection group to tie this list to
+  overlapAutoToolTips Boolean, // Behavior: whether auto-generated tooltips overlap existing text
+  scrollPane ScrollPane Reference, // Behavior~~reload: information specifying if the widget is scrollable and how the associated scroll pane should be configured
+  lostFocusSelectionRenderer Renderer Reference   // Appearance: painter for when an item in the list is selected but the list does not have focus
+  inheritDefaultStateRenderers Boolean Default true, // Design: whether the default state renderers for the button type is inherited if not explicitly set
+  emptyText EmptyText Reference  // Appearance~font~reload: text to show when the widget is empty
+} [ onAction, onChange, onItemChanged, onItemDeleted ]
+
+/**
+ * This class represents configuration information for a widget that manages a list of data items.
+ * Each item is also preceded by a check box that can independently selected
+ */
+CheckBoxList ::= Extends ListBox {
+  linkSelection Boolean Default true, // Design: whether checkboxes and the list selection are automatically linked
+  checkboxTrailing Boolean Default false  // Design: whether the checkbox is leading or trailing the item
+}
+
+/**
+ * The class represents a drawing surface compatible with the HTML5 Canvas specification
+ */
+Canvas ::= Extends Viewer {
+  context PrintableString Default "2d", // Design: the type of context
+  scaling Enumerated {
+    nearest_neighbor            (0),
+    bilinear                    (1),
+    bicubic                     (2),
+    bilinear_cached             (3),
+    bicubic_cached              (4),
+    progressive_bilinear        (5),
+    progressive_bicubic         (6),
+    progressive_bilinear_cached (7),
+    progressive_bicubic_cached  (8)
+  } Default bilinear  // Behavior: the type of scaling to perform
+}
+
+/**
+ * The class represents a viewer the presents a sets of items
+ * as a carousel
+ */
+Carousel ::= Extends Viewer {
+  dataType Enumerated {
+    data_items  (0),
+    image_urls  (1),
+    widget_urls (2)
+  } Default data_items [ usesImagesAlways ], // Behavior: the type of data for the carousel
+  useLinkedData Boolean Default false, // Design: whether the linked data for an item is used to populate the viewer
+  preserveAspectRatio Boolean Default true, // Design: whether the aspect ratio of images are preserved
+  maxSideItems Integer Optional, // Appearance: the maximum number of side items to display
+  scrollbarOpacity Real Range(0..1) Default 1, // Appearance: the opacity of the scroll bar
+  flatList Boolean Default false [ gap ], // Appearance: whether to display the images flat (instead of using a perspective)
+  imageGap Integer Default 0, // Appearance: the gap between images
+  animateSelection Boolean Default false, // Appearance: whether to use animation when selecting
+  perspectiveFraction Real Range(0..1) Optional, // Appearance: the fraction of the size to use when creating the perspective transform
+  reflectionFraction Real Range(0..1) Optional, // Appearance: the fraction of the height to use when creating the reflection
+  selectedFraction Real Range(0..1) Default 1, // Appearance: the fraction of the height to use for the selected item
+  sideFraction Real Range(0..1) Default 0.5, // Appearance: the fraction of the height of the selected item to use for side items
+  encodeParsedURLs Boolean Default true, // Design: whether strings representing urls in data items need to be encoded
+  renderTitles Boolean Default true, // Appearance: whether the title of the selected item is rendered
+  renderSecondaryTitles Boolean Default false, // Appearance: whether the title of the items right next to the selected item are rendered
+  cacheSize Integer Default 0 [ strongReference="true" ], // Design: the size of the cache to use for caching images
+  areaMargin Margin Reference, // Appearance: the margin between the items and the edge of the carousel area
+  scaling Enumerated {
+    nearest_neighbor            (0),
+    bilinear                    (1),
+    bicubic                     (2),
+    bilinear_cached             (3),
+    bicubic_cached              (4),
+    progressive_bilinear        (5),
+    progressive_bicubic         (6),
+    progressive_bilinear_cached (7),
+    progressive_bicubic_cached  (8)
+  } Default bilinear, // Behavior: the type of scaling to perform
+  selectionCell Renderer Reference, // Appearance: cell to use to paint the selection
+  itemCell Renderer Reference, // Appearance: cell to use to paint items
+  itemDescription ItemDescription Reference, // Design: an optional description of the items that will populate the carousel
+  useSeparateLoader Boolean Default false [ maxThreads ], // Design: whether a special loader is used to load images
+  deferredImageIcon PrintableString Range(0..255) Optional [ alt, slice, size, scaling, density ]  // Design~icon: the icon to use when image loading is deferred for this widget
+} [ onChange, onAction ]
+
+/**
+ * The class represents the embedded browser for the platform
+ */
+Browser ::= Extends Viewer {
+  updateStatusBar Boolean Default true [ showCancel="true" ], // Design: whether the status bar should be updated automatically (this will only happen if no change listener is installed)
+  showLocationBar Boolean Default false, // Design: whether the browser's location bar should be shown (if the browser supports it)
+  showToolBar Boolean Default false, // Design: whether the browser's toolbar should be shown (if the browser supports it)
+  showStatusBar Boolean Default false  // Design: whether the browser's statusbar should be shown (if the browser supports it); if true then the updateStatusBar property is ignored
+} [ onChange, onStartedLoading, onFinishedLoading ]
+
+/**
+ * The class represents the embedded media player for the platform
+ */
+MediaPlayer ::= Extends Viewer {
+  showControlBar Boolean Default true, // Design: whether the media player's control bar will be shown
+  stretchToFit Boolean Default true  // Design: whether the media player will stretch to fit the available space
+}
+
+/**
+ * The class provides the base configuration for viewer A viewer is a high level widget that can occupy screen regions
+ * and can serves as a container for widgets or other viewers. Viewers also support more complex functionality such as printing and saving.
+ */
+Viewer ::= Extends Widget {
+  contextURL PrintableString Range(0..255) Optional, // the URL to use when resolving relative URL paths
+  templateURL PrintableString Optional [ inline, cache ], // Design~url~reload: url for a object template
+  collapsedTitle PrintableString Range(0..255) Optional, // Appearance~resource: title to use if the viewer container is collapsed
+  scriptURL PrintableString Optional [ mimeType, inline, runOnce="true", shared="true", eventHandler=false , usesNestedClassForFormWidgets, os ], // Design~url: the URL for a script for the viewer. Only loads an runs a non-inline script once based on the script's URL
+  local Boolean, // Behavior: Whether the viewer is local or global, local viewers are not registered (cannot be accessed by name outside of their container).
+  disableBehavior Enumerated {
+    disable_container (0),
+    disable_widgets   (1),
+    disable_both      (2)
+  } Default disable_container  // Behavior: the behavior for a disabled viewer
+} [ onLoad, onUnload, onDispose, viewerClass, language, lockable ] // lockable=true makes the viewer lockable language is the scripting language for the viewer's events
+
+/**
+ * This class provides the base configuration for widgets. A widget represents a visual component that can be utilized
+ * to display and manipulate data items. A widget must be contained within a viewer in order to be realized on the screen.
+ */
+Widget ::= Extends RenderableItem {
+  name PrintableString Range(0..64) Optional, // Design: the name to use to programmatically address the widget
+  title PrintableString Range(0..64) Optional, // Appearance~resource~reload: title/prompt for the widget
+  titleLocation Enumerated {
+    not_displayed        (0),
+    auto                 (1),
+    top_left             (2),
+    top_right            (3),
+    top_center           (4),
+    bottom_left          (5),
+    bottom_center        (6),
+    bottom_right         (7),
+    frame_top_left       (8),
+    frame_top_center     (9),
+    frame_top_right      (10),
+    frame_bottom_left    (11),
+    frame_bottom_center  (12),
+    frame_bottom_right   (13),
+    inside_top_left      (14),
+    inside_top_right     (15),
+    inside_top_center    (16),
+    inside_bottom_left   (17),
+    inside_bottom_center (18),
+    inside_bottom_right  (19),
+    center_left          (20),
+    collapsible_frame    (21)
+  } Default auto Optional, // Appearance~title~reload: where the title/prompt is to be displayed
+  bounds Rectangle Optional [ constraints ], // Layout: the size and location of the widget (based on the layout of it's parent viewer)
+  contentPadding Margin Reference, // Layout~insets: the margin between the widget's content and it's border
+  cellPadding Margin Reference, // Layout~insets: the margin between the widget's border and it's cell bounds when in a form or grid
+  required Boolean Default false, // Behavior: whether the widget is required to have a value for form submission
+  enabled Boolean Default true, // Behavior: whether the item is enabled
+  focusable Boolean Default true, // Behavior: whether the widget can obtain focus
+  visible Boolean Default true, // Behavior: whether the item is visible
+  selected Boolean Default false [checked], // Behavior: whether the item is selectable
+  submittable Boolean Default true, // Behavior: whether the widget's is submitted when an enclosing form is submitted
+  copyingAllowed Boolean, // Behavior: whether the widget allows the copying of its contents
+  pastingAllowed Boolean, // Behavior: whether the widget allows pasting
+  draggingAllowed Boolean Default false, // Behavior: whether the widget allows items to be dragged
+  deletingAllowed Boolean Default false, // Behavior: whether the widget allows deleting
+  inheritFromDefaultRenderer Boolean Default true // Design: whether you custom renderer definitions will inherit from the default renderer for the widget
+  defaultContextMenu Boolean Default true, // Behavior: whether the widget's should show a default context menu
+  propertyChangeInterest PrintableString Optional, // Behavior: a comma separated list of property names that will cause trigger the onPropertyChange handler
+  keystrokeMappings PrintableString Optional, // Behavior: a set of keystroke names and code fragments (predefined actions can be used by prefacing the action name with 'action:') to execute for the keystroke
+  dataURL PrintableString Optional [ mimeType, method, deferred, columnSeparator, inline, ldSeparator, riSeparator, unescape="false", parser, customProperties, linkAttributes ], // Design~url~reload: a URL to use to retrieve data for the widget
+  dropTracking Enumerated {
+    none         (0), // drop support not enabled
+    auto         (1), // drop support will be configured based on system defaults
+    on_item      (2), // track for dropping on an item
+    insert_item  (3), // track for inserting an item
+    on_or_insert (4)  // track for dropping on and item or inserting an item
+  } Default none [ explicitItemImport ], // Behavior: drop mode tracking explicitItemImport=true means that the item must explicitly import the data flavor being dropped for the 'on' mode to be supported by that item
+  importDataFlavors Set {
+    flavor PrintableString Range(0..255)
+  } Reference, // Design: data flavors that this widget can import
+  exportDataFlavors Set {
+    flavor PrintableString Range(0..255)
+  } Reference, // Design: data flavors that this widget can export
+  supportedActions Set {
+    action PrintableString Range(0..64)
+  } Reference, // Design: registered actions that this widget supports
+  popupMenu Set {
+    menuItem MenuItem
+  } Reference [ cache, onAction, icon, cancelButtonText, modal ], // Design: popup menu for the widget.
+  accessibleContext AccessibleContext Reference, // accessibility information
+  customProperties PrintableString Optional [ mimeType, delimiter ], // a set of custom name/value for the object. The default format is a set of name/value pairs separated by a semi-colon
+  textDirection Enumerated {
+    auto (0),
+    ltr  (1),
+    rtl  (2)
+  } Default auto  // Behavior: the direction of text
+} [ onBlur, onClick, onConfigure, onCreated, onDblClick, onDrag, onDragEnd, onDragEnter, onDragExit, onDragOver, onDragStart, onDrop, onDropEnd, onError, onStartedLoading, onFinishedLoading, onFocus, onHidden, onKeyDown, onKeyPress, onKeyUp, onMouseDown, onMouseDragged, onMouseIn, onMouseMoved, onMouseOut, onMouseUp, onScroll, onResize, onShown, onScale, onFling, onContextMenu, onRotate, onPropertyChange, formValueFunction, submittable ]
+
+
+
+/**
+ * This class represents configuration information for a widget that provide the navigation
+ * via a horizontal series of buttons that can identify a path taken; or the current selection
+ * or state of a certain option
+ */
+Navigator ::= Extends Widget {
+  type Enumerated {
+    hierarchical (0),
+    toggle      (1),
+    option      (2)
+  } Default hierarchical, // Appearance~~reload: the type of navigator
+  selectedIndex Integer Range(-1..) Default -1, // Appearance: the index of the button that is to be initially selected (when not a hierarchical type)
+  showBackButton Boolean Default true, // Appearance: whether the back button should be shown
+  useTextForTooltip Boolean Default true, // Design: whether a buttons text should be used a it's tool tip
+  showIconsOnly Boolean Default false, // Appearance: whether to show only icons or toe show both icons and text
+  buttonsSameSize Boolean Default false, // Appearance: whether all buttons should be the same size
+  separatorLineColor PrintableString Range(0..64) Optional, // Appearance~color~reload: the color for the line that separates the buttons
+  actions Set {
+    action ActionItem [ visible ]
+  } Optional  // Design: a set of actions that will be used to create the navigation buttons
+}
+
+/**
+ * This class represents configuration information for a widget that manages a popup for which selections can be made.
+ * It can also allow the user to type in a value if no of the predefined values are applicable
+ */
+ComboBox ::= Extends Widget {
+  editable Boolean Default false Optional, // Behavior: the combo box will be editable
+  visibleRowCount Integer Optional, // Design: the maximum number of items to display in list type popups
+  itemDescription ItemDescription Reference, // an optional description of the items that will populate the list
+  value PrintableString Optional, // Appearance~resource: the value for an editable combobox or the value to use when a non-editable combobox is empty and no item matches the value and selectedIndex is not set
+  selectedIndex Integer Range(-1..) Default -1, // Behavior: the index of the row that is to be initially selected
+  submitValue Enumerated {
+    selected_value_text  (0),
+    selected_value       (1), // use the actual selection value (useful for manual submission)
+    selected_linked_data (2),
+    selected_index       (3)
+  } Default selected_value_text, // Behavior: value to use when submitting data via a form
+  deselectEventsEnabled Boolean Default false, // Behavior: whether events should be fired when an item is deselected
+  componentType Enumerated {
+    listbox          (0), // a list box
+    widget           (1), // the widget defined in the popupWidget property
+    file_chooser     (2), // a predefined component for choosing a file
+    folder_chooser   (3), // a predefined component for choosing a folder
+    font_chooser     (4), // a predefined component for choosing a font
+    fontname_chooser (5), // a predefined component for choosing a font
+    custom           (99)  // a custom combobox specified buy the custom class property
+  } Default listbox [ buttonOnly ], // Appearance~~reload: the type of popup component that the combo box will display
+  indexForFiltering Boolean Default false, // Behavior: whether items should be indexed (by first character) to improve filtering performance
+  popupResizable Boolean Default false, // Behavior: whether the popup is resizable
+  showPopupAsDialog Boolean Default false, // Behavior: whether the popup should be shown as a dialog box
+  showPopupButton Boolean Default true, // Appearance~~reload: whether the popup button should be shown
+  popupButtonRenderer RenderableItem Reference, // Design: a painter for the popup button
+  popupRenderer Renderer Reference [ showDivider, dividerLineColor ], // Design: a painter for the popup background
+  useSameBorderForPopup Boolean Default false, // Behavior: whether the popup should use the same border as the combobox
+  rowHeight PrintableString Range(0..32) Optional, // Appearance~unit: the height to use for each row in the combobox
+  minVisibleRowCount Integer Default 2, // Appearance:the desired minimum number of visible rows
+  maxVisibleRowCount Integer Optional, // Appearance:the desired maximum number of visible rows
+  customClass PrintableString Range(0..255) Optional, // Design~class~reload: the class name of a custom combobox derived from AbstractComboBox
+  converterClass PrintableString Range(0..255) Optional, // Design~class:the programmatic class that converts the item's string value to an object
+  valueContext PrintableString Optional, // Design: additional value describing the information
+  popupWidget Any DefinedBy Widget Optional [ closeOnAction="true", okWidget, cancelWidget, valueWidget, valueAttribute, horizontalAlignment, url, deferred ], // Design~widget: a popup widget for the widget componentType
+  scrollPane ScrollPane Reference, // Behavior: use to customize the scroll pane for listbox componentType
+  emptyText EmptyText Reference, // Appearance~~reload: text to show when the widget is empty
+  speechInputSupported Boolean Default true  // Behavior: whether the speech input is supported
+} [ onAction, onChange, onWillExpand, onWillCollapse ]
+
+/**
+ * This class represents the configuration for a widget that allows a single line of text to be entered and/or edited
+ */
+TextField ::= Extends Widget {
+  visibleCharacters Integer Range(0..) Optional, // Appearance: number of characters columns to size the field for (use zero to let the widget decide)
+  value PrintableString Optional, // Appearance~resource: the value for the field
+  emptyText EmptyText Reference, // Appearance~~reload: text to show when the widget is empty
+  errorMessage PrintableString Optional [ displayWidget ], // Behavior~resource: error message to display for invalid input
+  inputMask PrintableString Range(0..64) Optional [ placeHolder, preserveLiteralCharacters="false" ], // Behavior: format specifier for controlling the format of text input
+  inputValidator PrintableString Range(0..64) Optional [ valueType="number", reformat, validateOnLostFocus="true", submitRawValue, maximum, minimum ], // Behavior: format specifier for validating input text input valueType can be string date or number
+  validCharacters PrintableString Optional, // Behavior: a list of valid characters
+  editable Boolean Default true, // Behavior: whether the field is editable
+  minCharacters Integer Range(0..) Optional, // Behavior: the minimum characters to allow (use zero for no minimum)
+  maxCharacters Integer Range(0..) Optional, // Behavior: the maximum characters to allow (use zero for no maximum)
+  undoLimit Integer Range(-1..) Default 100, // Behavior: the maximum number of undo(s) to support
+  speechInputSupported Boolean Default true, // Behavior: whether the speech input is supported
+  allowDefaultSuggestions Boolean Default false, // Behavior: whether default suggestions are allowed
+  keyboardType Enumerated {
+    default_type             (0),
+    text_type                (1),
+    number_type              (2),
+    number_punctuation_type  (3),
+    decimal_type             (4),
+    decimal_punctuation_type (5),
+    phone_number_type        (6),
+    name_phone_number_type   (7),
+    email_address_type       (8),
+    url_type                 (9)
+  } Default default_type [ autoCorrect, autoComplete, autoShow="true", autoCapitalize="sentences", spellCheck ], // Design: the type of keyboard to use for input. spellCheck is true/false; autoCapitalize is none/words/sentences/all
+  keyboardReturnButtonType Enumerated {
+    default_type (0),
+    go_type      (1),
+    join_type    (2),
+    next_type    (3),
+    search_type  (4),
+    send_type    (5),
+    none_type    (6),
+    done_type    (7)
+  } Default default_type [ autoEnable="true", text ]  // Design: the type of keyboard to use for input; text is custom text for the button if supported by the platform
+} [ onAction, onChange ]
+
+/**
+ * This class represents the configuration for a widget that allows a password to be entered.
+ * The password can be hashed prior to submission. If the password is hashed, it will be transmitted as a base64 encoded string
+ */
+PasswordField ::= Extends TextField {
+  echoChar Integer Range(0..65535) Optional, // Behavior: the character to echo
+  hashAlgorithm Enumerated {
+    none (0),
+    md5  (1),
+    sha  (2)
+  } Default none Optional  // Design:the type of hashing to do on the password
+}
+
+/**
+ * This class represents the configuration for a widget that allows one or more lines of text to be entered and/or edited
+ */
+TextArea ::= Extends TextField {
+  visibleLines Integer Range(0..) Optional, // Appearance: number of lines to size the area for (use zero to let the widget decide)
+  wordWrap Boolean Default true, // Behavior: whether the field will word wrap if is a multiline field
+}
+
+/**
+ * This class represents the configuration for an abstract button widget
+ * it is mean to be used as a base for button type widgets
+ */
+Button ::= Extends Widget {
+  value PrintableString Range(0..255) Optional, // Appearance~resource: the text for the button's value
+  showText Boolean Default true, // Appearance: whether the button text should be shown (or used only as a tool tip)
+  pressedIcon PrintableString Range(0..255) Optional [ alt, slice, size, scaling, density ], // Appearance~icon: url to use to retrieve a icon associated with the item's pressed state
+  selectedIcon PrintableString Range(0..255) Optional [ alt, slice, size, scaling, density ], // Appearance~icon: url to use to retrieve an icon associated with the item's rollover state
+  rolloverIcon PrintableString Range(0..255) Optional [ alt, slice, size, scaling, density ], // Appearance~icon: url to use to retrieve an icon associated with the item's selected state
+  disabledIcon PrintableString Range(0..255) Optional [ alt, slice, size, scaling, density ], // Appearance~icon: url to use to retrieve a icon associated with the item's disabled state
+  textHAlignment Enumerated {
+    auto     (0), // let the widget decide
+    left     (1), // the text is left aligned
+    right    (2), // the text is right aligned
+    leading  (3), // the text is aligned along the leading edge
+    trailing (4), // the text is aligned along the trailing edge
+    center   (5)  // the text is centered
+  } Default auto, // Appearance: the horizontal alignment of the text
+  textVAlignment Enumerated {
+    auto   (0), // let the widget decide
+    top    (1), // the text is top aligned
+    bottom (2), // the text is bottom aligned
+    center (5)  // the text is centered
+  } Default auto, // Appearance: the vertical alignment of the text
+  submitValue Enumerated {
+    state_on_off              (0), // submit the state of the button using on/off
+    state_selected_deselected (1), // submit the state of the button using selected/deselected
+    state_zero_one            (2), // submit the state of the button using 0/1
+    text                      (3), // submit the text of the button
+    value_property            (4)  // submit the custom property by the name of 'value' (html forms compatibility)
+  } Default state_on_off, // Behavior: value to use when submitting data via a form
+  rolloverEnabled Boolean Default true, // Behavior: whether the rollover effect should be enabled
+  groupName PrintableString Range(0..64) Optional [ allowDeselection="false" ], // Design: the name of the group the button belongs to
+  selected Boolean Default false, // Appearance: whether the button is initially selected
+  wordWrap Boolean Default false [ os ], // Behavior: whether word wrapping is supported or text is truncated
+  inheritDefaultStateRenderers Boolean Default true, // Design: whether the default state renderers for the button type is inherited if not explicitly set
+} [ onAction ]
+
+/**
+ * This class represents the configuration for a button widget
+ */
+PushButton ::= Extends Button {
+  actionType Enumerated {
+    scripted     (0), // the button action will be handled by a script
+    submit_form  (1), // the button will submit the enclosed form
+    clear_form   (2), // the button will clear the enclosed form
+    popup_menu   (3), // the button will popup a menu
+    popup_widget (4), // the button will popup a widget
+    link         (5), // the button will activate a link
+    list_toggle  (6)  // the button will toggle its set of list values every time it is clicked
+  } Default scripted, // Behavior: the type of action for the button
+  buttonStyle Enumerated {
+    standard                   (0), // a standard button
+    toolbar                    (1), // a toolbar style button
+    hyperlink                  (2), // a hyperlink button that is underlined when the mouse hovers above it
+    hyperlink_always_underline (4), // a hyperlink button that is always underlined
+    toggle                     (6), // a button that supports a two states
+    split_toolbar              (7), // a button that supports a pull-down menu
+    toggle_toolbar             (8), // a toolbar style button that supports a two states
+    platform                   (9)  // a button in the platform's default style
+  } Default standard, // Appearance~~reload: the style of button
+  defaultMenuIndex Integer Range(-1..100) Default -1, // Design: default menu index for popup menu action types
+  popupWidget Any DefinedBy Widget Optional [ transient="true", resizable="false", closeOnAction="true", matchBackground="true", okWidget, cancelWidget, contentPadding, url, scrollable ], // Appearance: the definition of the widget for a popup_widget button
+  popupAnimator PrintableString Range(0..255) Optional [ duration, direction, acceleration, deceleration, horizontal, fadeIn, fadeOut, customProperties ], // Behavior: class name of the animator to use to animate transitions
+  focusedAction Boolean Default false, // Behavior: whether the button represents a focused action (will only be enabled when a supported component is focused)
+  enabledOnSelectionOnly Boolean Default false, // Behavior: whether the action is only enabled when there is a selection is a supported component
+  actionRepeats Boolean Default false [ delay="300" ], // Behavior: whether the button's action repeats when the button is held down
+  useSharedBorderForPopup Boolean Default true [ color, thickness, cornerArc="4" ], // Behavior: whether a shared border will be use when a popup widget is displayed (the border will encompass both the button and the popup widget)
+  submitValue Refine Default text  // Behavior: value to use when submitting data via a form
+} [ onWillExpand, onWillCollapse ]
+
+/**
+ * This class represents the configuration for a radio button
+ */
+RadioButton ::= Extends Button {
+} [ onChange ]
+
+/**
+ * This class represents the configuration for a check box
+ */
+CheckBox ::= Extends Button {
+  style Enumerated {
+    standard      (0),
+    on_off_switch (1),
+    tri_state     (2)
+  } Default standard, // Appearance: the checkbox style
+  initialState Enumerated {
+    deselected    (0),
+    selected      (1),
+    indeterminate (2)
+  } Default deselected, // Appearance~~state: the initial state of the checkbox
+  indeterminateIcon PrintableString Range(0..255) Optional [ alt, slice, size, scaling, density ]  // Appearance~icon: url to use to retrieve an icon for the checkbox when it's in a state other than selected or deselected (if it is a tri-state checkbox)
+} [ onChange ]
+
+/**
+ * This class represents the configuration for a label widget
+ */
+Label ::= Extends Widget {
+  value PrintableString Optional, // Appearance~resource: the text for the label's value
+  labelFor PrintableString Range(0..255) Optional, // Design: the name of the widget that the label is for
+  textHAlignment Enumerated {
+    auto     (0), // let the widget decide
+    left     (1), // the text is left aligned
+    right    (2), // the text is right aligned
+    leading  (3), // the text is aligned along the leading edge
+    trailing (4), // the text is aligned along the trailing edge
+    center   (5)  // the text is centered
+  } Default auto, // Appearance: the horizontal alignment
+  textVAlignment Enumerated {
+    auto   (0), // let the widget decide
+    top    (1), // the text is top aligned
+    bottom (2), // the text is bottom aligned
+    center (5)  // the text is centered
+  } Default auto, // Appearance: the vertical alignment
+  supportHyperLinks Boolean Default false, // Design: whether hyperlinks are supported in the label
+  wordWrap Boolean Default false  // Behavior: whether word wrapping is supported or text is truncated
+} [ onChange, onAction ]
+
+/**
+ * This class represents the configuration for a widget that allows an integer value to be selected for a fixed range using a slider
+ */
+Slider ::= Extends Widget {
+  value Real Default 0, // Appearance: the value for the slider
+  minValue Real Default 0, // Behavior~spinner: minimum value for the slider
+  maxValue Real Default 100, // Behavior~spinner: maximum value for the slider
+  horizontal Boolean Default true, // Appearance~~orientation: whether the slider is to be horizontally oriented
+  snapToTicks Boolean Default false, // Behavior: whether the slider should snap to tick marks
+  minorTickSpacing Real Range(0..) Default 0, // Appearance~spinner: the amount of space between minor ticks
+  majorTickSpacing Real Range(0..) Default 10, // Appearance~spinner: the amount of space between major ticks
+  showLabels Boolean Default false, // Appearance: whether labels should be shown for the tick marks
+  showTicks Boolean Default false, // Appearance: whether the tick marks should be shown
+  showTrack Boolean Default true, // Appearance: whether the track should be shown
+  leftLabel PrintableString Range(0..80) Optional, // Appearance~~leftText: label for the left/top side of the slider
+  leftIcon PrintableString Range(0..255) Optional [ alt, slice, size, scaling, density ], // Appearance~icon: url to use to retrieve an icon for the left/top side of the slider
+  rightLabel PrintableString Range(0..80) Optional, // Appearance~~rightText: label for the right/bottom side of the slider
+  rightIcon PrintableString Range(0..255) Optional [ alt, slice, size, scaling, density ], // Appearance~icon: url to use to retrieve an icon for the right/bottom side of the slider
+  thumbIcon PrintableString Range(0..255) Optional [ alt, slice, size, scaling, density ], // Appearance~icon~reload: url to use to retrieve an icon for the label
+  paintInnerTicks Boolean Default false [ tickType="minor", offset, color, tickStyle="line", paintArea="value" ], // Appearance~~reload:whether ticks should be painted inside the track
+  trackRenderer Renderer [width] Reference, // Appearance~~reload:a painter for the track
+  sliderOffset Integer Default 0, // Appearance~spinner~reload: the amount to offset to slider when there are left/right labels or icons
+  tickLabels Set {
+    label PrintableString Range(0..80)
+  } Reference  // Appearance~~labels: custom labels for the tick marks
+} [ onChange ]
+
+/**
+ * This class represents the configuration for a bar that can display the progress of an ongoing operation
+ * Progress values range between 0 and 100
+ */
+ProgressBar ::= Extends Widget {
+  value Integer Default 0, // Appearance: the value for the slider
+  horizontal Boolean Default true, // Appearance~~orientation: whether the progress bar is to be horizontally oriented
+  indeterminate Boolean Default false [ useSpinner ], // Appearance: whether the progress state is indeterminate
+  showText Boolean Default true, // Appearance: whether a progress text area should be shown
+  progressText PrintableString Range(0..255) Optional, // Appearance~resource: progress text to display
+  graphicSize PrintableString Range(0..32) Optional, // Appearance~unit: size of the progress graphic
+  labelSide Enumerated {
+    auto   (0),
+    left   (1),
+    right  (2),
+    top    (3),
+    bottom (4)
+  } Default auto  // Layout: the location of the text label
+} [ onChange ]
+
+/**
+ * This class represents the configuration for a widget spins through a set of data items
+ */
+Spinner ::= Extends Widget {
+  visibleCharacters Integer Range(0..) Optional, // Appearance~~reload: number of characters columns to size the field for (use zero to let the widget decide)
+  editable Boolean Default true, // Behavior: whether the combo box will be editable
+  isCircular Boolean Default false, // Behavior: whether the spinner is circular (must has a maximum and minimum value if isCircular is true)
+  buttonsVisible Boolean Default true, // Appearance: whether the default buttons should be hidden
+  selectedIndex Integer Range(-1..) Default -1, // Appearance~~runtime: the index of the viewer that is to be initially selected
+  autoSelect Boolean Default true, // Behavior: whether the value is auto selected when the spinner's edit field gains focus
+  useDesktopStyle Boolean Default false  // Appearance: whether to use a desktop style spinner
+} [ onChange ]
+
+/**
+ * This class represents the configuration for a widget spins through a set of numbers while also allowing a number to be manually entered
+ */
+NumberSpinner ::= Extends Spinner {
+  value Real Optional, // Appearance~spinner~value: the value for the spinner
+  minValue Real Optional, // Behavior~spinner: minimum value for the spinner
+  maxValue Real Optional, // Behavior~spinner: maximum value for the spinner
+  incrementValue Real Optional, // Behavior~spinner: increment value for the spinner
+  supportDecimalValues Boolean Default false [ maximumPlaces ], // Behavior: whether the decimal values are supported
+  format PrintableString Range(0..64) Optional  // Behavior: a format string for how the number should be displayed
+}
+
+/**
+ * This class represents the configuration for a widget spins through a date range while also allowing a date to be manually entered
+ */
+DateSpinner ::= Extends Spinner {
+  value Date Optional, // Appearance: the value for the spinner
+  minValue Date Optional, // Behavior: minimum value for the spinner
+  maxValue Date Optional, // Behavior: minimum value for the spinner
+  format PrintableString Range(0..64) Optional  // Behavior: a format string for how the date should be displayed
+}
+
+/**
+ * This class represents the configuration for a widget spins through a date range and associated
+ * time while also allowing a date or time to be manually entered
+ */
+DateTimeSpinner ::= Extends Spinner {
+  value DateTime Optional, // Appearance: the value for the spinner
+  minValue DateTime Optional, // Behavior: minimum value for the spinner
+  maxValue DateTime Optional, // Behavior: maximum value for the spinner
+  format PrintableString Range(0..64) Optional  // a format string for how the date/time should be displayed
+}
+
+/**
+ * This class represents the configuration for a widget spins through a time range while also allowing a time to be manually entered
+ */
+TimeSpinner ::= Extends Spinner {
+  value Time Optional, // Appearance: the value for the spinner
+  minValue Time Optional, // Behavior: minimum value for the spinner
+  maxValue Time Optional, // Behavior: maximum value for the spinner
+  format PrintableString Range(0..64) Optional  // Behavior: a format string for how the time should be displayed
+}
+
+/**
+ * This class represents the configuration for a widget that allows a date and optionally a time to be selected.
+ * Unlike a spinner this widget utilizes a calendar metaphor. Multiple calendars can be displayed by choosing a
+ * multiple' display type and specifying the number of columns and or rows that the chooser will use.
+ */
+DateChooser ::= Extends Widget {
+  editable Boolean Default false Optional, // Behavior: whether the combo box will be editable
+  value DateTime Optional, // Appearance: a initial value to select
+  minValue DateTime Optional, // Behavior~~minValue: minimum date that can be selected
+  maxValue DateTime Optional, // maximum date that can be selected
+  displayType Enumerated {
+    combo_box         (0), // use a drop down (combo box style) for the chooser
+    single_calendar   (2), // display a single calendar as the chooser
+    multiple_calendar (3), // display a multiple calendar as the chooser
+    button            (4)  // display a button as the chooser
+  } Default combo_box, // Layout: the type of chooser
+  showPopupButton Boolean Default true, // Appearance~~reload: whether the popup button should be shown
+  showPopupAsDialog Boolean Default false [ dialogTitle ], // Behavior: whether the popup should be shown as a dialog box
+  popupButtonRenderer RenderableItem Reference, // Design: a painter for the popup button
+  popupRenderer Renderer Reference, // Design: a painter for the popup background
+  format PrintableString Range(0..64) Optional, // a format string for how the date/time should be displayed for drop downs
+  monthDisplayCols Integer Range(0..12) Default 1, // Layout: the number of month display columns to show
+  monthDisplayRows Integer Range(0..12) Default 1, // Layout: the number of month display rows to show
+  autoResizeRowsColumns Boolean Default true, // Behavior~~reload: whether the chooser should automatically adjust the number of columns and rows based on available space
+  showOkButton Boolean Default false, // Appearance~~reload: whether the Ok button is displayed
+  showNoneButton Boolean Default false, // Appearance~~reload: whether the None button is displayed
+  showTodayButton Boolean Default false, // Appearance~~reload: whether the Today button is displayed
+  showTime Boolean Default false [ timeOnlyChooser, ampmFormat="true" ], // Appearance~~reload: whether a time selection component is displayed
+  showNavigationButtons Boolean Default true, // Appearance~~reload: whether month navigation buttons are displayed
+  selectionMode Enumerated {
+    none     (0), // selection not allowed
+    single   (1), // only a single date can be selected at a time
+    multiple (2), // multiple dates can be selected at a time
+    block    (3)  // multiple dates can be selected at a time but the dates must be contiguous
+  } Default single Optional, // Behavior: the selection mode for the chooser
+  selectionType Enumerated {
+    all      (0), // all days are selectable
+    weekdays (1), // only week days are selectable
+    weekend  (2)  // only weekend days are selectable
+  } Default all Optional, // Behavior: the selection type for the chooser
+  converterClass PrintableString Range(0..255) Optional, // Design:~class the programmatic class that converts the item's string value to an object
+  valueContext PrintableString Optional  // Design: additional value describing the information
+} [ onAction, onChange, onWillExpand, onWillCollapse ]
+
+/**
+ * This class represents the configuration for a widget that allows a color to be selected from a specified palette
+ */
+ColorChooser ::= Extends Widget {
+  editable Boolean Default true Optional, // Behavior: the combo box will be editable
+  value PrintableString Range(0..64) Optional, // Appearance~color: an initial color to select
+  dropDownType Enumerated {
+    none      (0), // don't use a drop-down, simply display the color palette
+    combo_box (1), // use a combo box style drop down for the chooser
+    button    (2)  // use a button with a popup down for the chooser
+  } Default combo_box, // Layout: the type of drop-down to use
+  deselectEventsEnabled Boolean Default false, // Behavior: whether events should be fired when an item is deselected
+  showPopupAsDialog Boolean Default false [ dialogTitle ], // Behavior: whether the popup should be shown as a dialog box
+  showOkButton Boolean Optional, // Appearance~~reload: whether the Ok button is displayed
+  showNoneButton Boolean Default false, // Appearance~~reload: whether a none button should be shown
+  showValueAsHex Boolean Default true, // Appearance~~reload: whether the hex values of the color should be displayed when using a combo box
+  colorPalette Enumerated {
+    color_40 (0),
+    color_16 (1),
+    gray_16  (2),
+    custom   (3)
+  } Default color_40 [ useList ], // Design: the color palette to use
+  showPopupButton Boolean Default true, // Appearance~~reload: whether the popup button should be shown
+  popupButtonRenderer RenderableItem Reference, // Design: a painter for the popup button
+  popupRenderer Renderer Reference, // Design: a painter for the popup background
+  buttonIcon PrintableString Range(0..255) Optional [ alt, slice, size, scaling, density ]  // Appearance~icon: url to use to retrieve an icon for the button style drop down
+} [ onAction, onWillExpand, onWillCollapse ]
+
+/**
+ * This class represents the configuration information for a horizontal or vertical line
+ */
+Line ::= Extends Widget {
+  horizontal Boolean Default true, // Layout: whether the line is to be horizontally oriented
+  leftLabel PrintableString Range(0..64) Optional, // Appearance~resource~leftText: label for the left/top side of the line
+  leftIcon PrintableString Range(0..255) Optional [ alt, slice, size, scaling, density ], // Appearance~icon: url to use to retrieve an icon for the left/top side of the line
+  rightLabel PrintableString Range(0..80) Optional, // Appearance~resource~rightText: label for the right/bottom side of the line
+  rightIcon PrintableString Range(0..255) Optional [ alt, slice, size, scaling, density ], // Appearance~icon: url to use to retrieve an icon for the right/bottom side of the line
+  lines Set {
+    lineStyle Enumerated {
+      separator (1),
+      solid     (2),
+      dashed    (3),
+      dotted    (4)
+    } Default separator [ color, thickness, leftOffset, rightOffset ]
+  } Reference, // Appearance~lines~reload: the line style; if not specified than a standard line will be drawn
+  position Enumerated {
+    top    (1),
+    center (2),
+    bottom (3)
+  } Default center  // Layout: the position of the line
+}
+
+/**
+ * This class represents the configuration information for an arbitrary native component that can be
+ * specified as a class name or the url f
+ */
+Native ::= Extends Widget {
+  customClass PrintableString Range(0..255) Optional, // Design~class: the class name for the native component or it's configurer
+  customProperties Any DefinedBy Sequence Reference, // Design: custom properties
+  failureMessage PrintableString Optional  // the string to display when the custom class cannot be instantiated
+} [ onItemAdded, onAction, onChange, onWillExpand, onWillCollapse, onHasCollapsed, onHasExpanded ]
+
+/**
+ * This class represents the configuration information for a scroll pane that can be used
+ * as part of a widget or viewer that inherently supports scrolling
+ */
+ScrollPane ::= Sequence {
+  horizontalScrollbar Enumerated {
+    hidden         (0),
+    show_as_needed (1),
+    show_always    (2)
+  } Default show_as_needed [ onChange, onConfigure, ui, adjPrefSizeForHidden, opaque="true" ], // Appearance: horizontal scrollbar policy
+  verticalScrollbar Enumerated {
+    hidden         (0),
+    show_as_needed (1),
+    show_always    (2)
+  } Default show_as_needed [ onChange, onConfigure, ui, adjPrefSizeForHidden, opaque="true" ], // Appearance: vertical scrollbar policy
+  columnHeader Any DefinedBy Widget Optional, // Appearance~widget:widget to use as the column header for the scroll pane it scrolls with when the main widget scrolls
+  rowHeader Any DefinedBy Widget Optional, // Appearance~widget:widget to use as the row header for the scroll pane it scrolls with when the main widget scrolls
+  columnFooter Any DefinedBy Widget Optional, // Appearance~widget:widget to use as a fixed column footer
+  rowFooter Any DefinedBy Widget Optional, // Appearance~widget:widget to use as a fixed row footer (does not necessarily scroll when the main widget scrolls)
+  urCorner Any DefinedBy Widget Optional, // Appearance~widget:upper right corner widget (when a corner is needed)
+  lrCorner Any DefinedBy Widget Optional, // Appearance~widget:lower right corner widget (when a corner is needed)
+  ulCorner Any DefinedBy Widget Optional, // Appearance~widget:upper left corner widget (when a corner is needed)
+  llCorner Any DefinedBy Widget Optional, // Appearance~widget:lower left corner widget (when a corner is needed)
+  wheelScrollingAllowed Boolean Default true, // whether scroll wheel scrolling is enabled
+  extendVerticalScrollbar Boolean, // Appearance: whether the vertical scrollbar should be extended to encompass column headers
+  extendHorizontalScrollbar Boolean, // Appearance: whether the horizontal scrollbar should be extended to encompass row headers and footers
+  templateName PrintableString Range(0..64) Optional [ context ]  // Design~~reload: name of an object template to use to customize the scrollpane
+}
+
+/**
+ * This class represents the configuration information for a viewable region on the screen
+ */
+Region ::= Extends CellRenderer {
+  name PrintableString Range(0..64) Optional, // Design: the name of the region (used to target the region)
+  horizontalFill Enumerated {
+    maximum   (1), // use all available space
+    preferred (2)  // use enough space to accommodate the viewers preferred size
+  } Default maximum, // Appearance: how the region should fill/allocate space horizontally
+  verticalFill Enumerated {
+    maximum   (1), // use all available space
+    preferred (2)  // use enough space to accommodate the viewers preferred size
+  } Default maximum, // Appearance: how the region should fill/allocate space vertically
+  visible Boolean Default true, // Design: whether the region is initially visible
+  contentPadding Margin Reference, // Layout~insets: the margin between the region's content and it's border
+  viewer Any DefinedBy Widget Optional, // Design: a viewer for the region
+  dataURL PrintableString Optional [ mimeType, method, deferred, columnSeparator, inline, customProperties, linkAttributes ], // Design~url~reload: a URL to use to retrieve the viewer for the region
+  collapsibleInfo CollapsibleInfo Reference  // Appearance: information specifying if the viewer is collapsible and how the expand/collapse functionality should be configured
+}
+
+/**
+ * This class represents the configuration information of a structure for holding name/value pairs.
+ */
+NameValuePair ::= Sequence {
+  name PrintableString Range(0..255), // the name to associate with the value
+  value PrintableString Optional  // the value
+} [ type, converterClass, converterContext ]
+
+/**
+ * This class represents the configuration information of a rectangular view area.
+ * The elements are strings in order to allow units to be specified.
+ * If no units are specified then absolute device pixels are assumed
+ * The supported units are:<ul>
+ * <li>px - for 96 dpi-based relative pixels</li>
+ * <li>pt - for point</li>
+ * <li>pc - for pica</li>
+ * <li>in - for inch</li>
+ * <li>cm - for centimeter </li>
+ * <li>mm - for millimeter</li>
+ * <li>ch - for character (will use the size of the 'W' character </li>
+ * <li>ln - for line (will use the line height of the font)</li>
+ * <li>ex - same as 'ln' (should behave the same as in CSS)</li>
+ * <li>em - equivalent to %/100 (should behave the same as in CSS)</li>
+ * <li>% - for percent</li>
+ * </ul>
+ */
+Rectangle ::= Sequence {
+  x PrintableString Range(0..32) Default "-1", // Layout~unit: the x-position (the default of minus one (-1) tells the viewer decide
+  y PrintableString Range(0..32) Default "-1", // Layout~unit: the y-position (the default of minus one (-1) tells the viewer decide
+  width PrintableString Range(0..32) Default "-1" [ min ], // Layout~unit: the width (the default of minus one (-1) tells the viewer decide
+  height PrintableString Range(0..32) Default "-1" [ min ]  // Layout~unit: the height (the default of minus one (-1) tells the viewer decide
+}
+
+/**
+ * This class represents the configuration information of a margin around a widget or viewable area
+ */
+Margin ::= Sequence {
+  top PrintableString Range(0..32) Default "0", // Layout~unit: the empty space to leave at the top
+  right PrintableString Range(0..32) Default "0", // Layout~unit: the empty space to leave on the right
+  bottom PrintableString Range(0..32) Default "0", // Layout~unit: the empty space to leave at the bottom
+  left PrintableString Range(0..32) Default "0"  // Layout~unit: the empty space to leave on the left
+}
+
+/**
+ * This class represents the configuration information of a structure for holding static and dynamic links to data sources.
+ * Named data items (viewer attributes, properties, etc.) can be embedded in the URL by surrounding them with curly braces.
+ * The value of these items will be resolved and substituted in prior to submission.
+ */
+Link ::= Sequence {
+  url PrintableString Optional [ mimeType, inline, unescape ], // Design~url: the URL for the link
+  target Enumerated {
+    _self       (0), // link viewer replaces the current view
+    _new_window (1), // link viewer is opened in a new window
+    _new_popup  (2), // link viewer is opened in a new modeless window
+    _workspace  (3), // link viewer replaces the application workspace
+    _parent     (4), // link viewer replaces the parent's content
+    _toolbar    (5), // link viewer replaces the toolbar's content
+    _menubar    (6), // link viewer replaces the menu bar's content
+    _blank      (7), // link viewer is opened in a new window (html compatibility)
+    _null       (255)  // no data is expected
+  } Default _new_window Optional [ windowType="frame", resizable="true", movable="true", top, left, title, status, bgColor, icon, width, height, border, onOpened, onWillClose, onDrop, onWillExpand, onWillCollapse, onHasCollapsed, onHasExpanded, onFocus, onBlur, contentPadding, modal, timeout ], // the target for the returned content (type can be frame, popup, dialog, popup_orphan)
+  regionName PrintableString Range(0..64) Optional, // the name of a region that is the target of the viewer (if target is not specified)
+  requestType Enumerated {
+    post   (0), // create
+    get    (1), // read
+    put    (2), // update
+    delete (3)  // delete
+  } Default get, // the type of HTTP request to use to activate the link
+  requestEncoding Enumerated {
+    http_form (0),
+    json      (1)
+  } Default http_form,
+  attributes PrintableString Optional [ mimeType ], // attributes for the link. These values will be encoded with the URL based on the request type. The default format is a set of name/value pairs separated by a semi-colon
+  headers PrintableString Optional, // HTTP header for the link. The default format is a set of name/value pairs separated by a semi-colon
+  statusMessage PrintableString Range(0..255) Optional  // message to display on the status bar while the link is being accessed
+}
+
+/**
+ * This class represents the configuration information of a structure for specifying menu items.
+ */
+MenuItem ::= Extends ActionItem {
+  subMenu Set {
+    menuItem MenuItem Optional
+  } Reference, // Design: a set of sub-menu items for this menu
+  checkbox Boolean Default false, // Design: whether the menu item should be a check box item
+  selected Boolean Default false  // Design: whether checkbox menu item is to be initially selected
+  widgetProperties PrintableString Optional [ mimeType, delimiter ]  // a set of custom name/value pairs that will be set into the widget prior to the action event firing
+}
+
+/**
+ * This class represents the configuration information of a structure for specifying action items.
+ * The value of the item can contain embedded data by surrounding them with curly braces.
+ * The data embedded will be resolved prior to the action being visually presented
+ */
+ActionItem ::= Sequence {
+  name PrintableString Range(0..64) Optional, // Design: the name of the item
+  value PrintableString Range(0..64) Optional, // Appearance~resource: the action's text. If not specified then the menu is a separator
+  tooltip PrintableString Range(0..64) Optional, // Appearance~resource: the action's tool tip.
+  icon PrintableString Range(0..255) Optional [ alt, slice, size, scaling, density ], // Appearance~icon: url to use to retrieve an icon for the action
+  disabledIcon PrintableString Range(0..255) Optional [ alt, slice, size, scaling, density ], // Appearance~icon: link to use to retrieve the disabled icon for the item
+  selectedIcon PrintableString Range(0..255) Optional [ alt, slice, size, scaling, density ], // Appearance~icon: link to use to retrieve selected state icon for the item
+  enabled Boolean Default true, // Design: whether the action is enabled
+  focusedAction Boolean Default false, // Design: whether the action represents a focused action (will only be enabled when a supported component is focused)
+  enabledOnSelectionOnly Boolean Default false, // Design: whether the action is only enabled when there is a selection in a supported component
+  enabledIfHasValueOnly Boolean Default false, // Design: whether the action is only enabled when there is data in a supported component
+  groupName PrintableString Range(0..64) Optional, // Design: the name of the group this action belongs to
+  shortcutKeystroke PrintableString Range(0..64) Optional, // Design: the name of a key stroke that will be a short cut for the action
+  linkedData PrintableString Range(0..255) Optional, // Design: data to link with the action
+  actionLink Link Reference  // Design: link to activate when the action is performed
+} [ onAction ]
+
+/**
+ * This class represents the configuration information of a structure for describing items
+ */
+ItemDescription ::= Extends DataItem {
+  title PrintableString Range(0..255) Optional, // Appearance~resource: the display name for the item
+  name PrintableString Range(0..64) Optional, // Design: the name to use to reference the item
+  category PrintableString Range(0..32) Optional, // Design~resource: the category for items
+  renderType Enumerated {
+    normal              (0), // as a normal item
+    header              (1), // as a header item (does not scroll horizontally)
+    footer              (2), // as a footer item (does not scroll horizontally)
+    header_index        (3), // as a header index item (will render the index number of each row (1 relative)
+    footer_index        (4), // as a header index item (will render the index number of each row (1 relative)
+    header_normal       (5), // as a header item that visually looks like a normal item (except it does not scroll horizontally)
+    footer_normal       (6), // as a footer item that visually looks like a normal item (except it does not scroll horizontally)
+    header_index_normal (7), // as a header index item that visually looks like a normal item (except it does not scroll horizontally)
+    footer_index_normal (8), // as a footer index item that visually looks like a normal item (except it does not scroll horizontally)
+    normal_index        (9)  // as a normal index column (will render the index number of each row (1 relative)
+  } Default normal, // Appearance: how items should be rendered
+  renderDetail Enumerated {
+    auto          (0), // let the widget decide
+    all           (1), // render every detail
+    text_and_icon (2), // only render the text and the icon
+    text_only     (3), // only render the text
+    icon_only     (4), // only render the icon
+    none          (5)  // don't render any thing
+  } Default auto, // Appearance: the amount of detail to render about for an item
+  width PrintableString Range(0..32) Optional [ min, max ], // Design~unit: the width for items(zero specifies a hidden column)
+  visible Boolean Default true, // Behavior: whether the item is visible
+  hideable Boolean Default true, // Design: whether items can be hidden
+  editable Boolean Default false, // Behavior: whether the item is editable
+  sortable Boolean Default true, // Design: whether items are sort-able (if the containing  widget allows item sorting)
+  moveable Boolean Default true, // Design: whether items are movable (if the containing widget allows item reordering)
+  showable Boolean Default true, // Design: whether items are showable
+  wordWrap Boolean Default false [ supportHTML ], // Behavior: whether word wrapping is supported or text is truncated in the c
+  overrideSelectionPaint Boolean Default false, // Behavior: whether the item's will be painted as normal when selected
+  rendererClass PrintableString Range(0..255) Optional [ options ], // Design~class: the programmatic class that can render the items
+  editorClass PrintableString Range(0..255) Optional, // Design~class: the programmatic class that can edit the items
+  editorWidget Any DefinedBy Widget Optional, // Design~widget: a widget to use to edit items
+  contentPadding Margin Reference, // Layout~insets: the margin between the cell and its content
+  headerMarkup RenderableItem Reference, // Design: renderable info for the header
+  headerWordWrap Boolean Default true [ supportHTML ], // Behavior: whether word wrapping is supported or text is truncated in the header
+  dataIndex Integer Default -1, //index into the source collection's array (if specified, it must be specified for all columns)
+  popupMenu Set {
+    menuItem MenuItem
+  } Reference [ onConfigure ], // popup menu for items
+  subItems Set {
+    item ItemDescription
+  } Reference [ url ], // sub item description for a struct item type
+}
+
+/**
+ * This class represents the configuration information of a tab in a tab viewer
+ */
+Tab ::= Extends Region {
+  title PrintableString Range(0..255) Default "Tab", // Appearance~resource: the tab's title
+  selectedRenderer Renderer Reference , // Appearance~~reload: a painter for when the item is selected
+  pressedRenderer Renderer Reference , // Appearance~~reload: a painter for when the item is pressed
+  pressedSelectedRenderer Renderer Reference , // Appearance~~reload: a painter for when the item is selected
+  disabledRenderer Renderer Reference , // Appearance~~reload: a painter for when the item is disabled
+  disabledSelectedRenderer Renderer Reference , // Appearance~~reload: a painter for when the item is disabled
+  rolloverRenderer Renderer Reference , // Appearance~~reload: a painter for when the item is rolled over
+  rolloverSelectedRenderer Renderer Reference , // Appearance~~reload: a painter for when the item is disabled
+  statesInheritBackground Boolean Default true // Design: whether state renderers inherit the default background if none is set on the state renderer
+  loadOnActivation Boolean Default true, // Behavior: whether the tab's data should be loaded when it is activated or when the viewer is loaded
+  reloadOnActivation Boolean Default false, // Behavior: whether the tab's data should be reloaded every time the tab is activated
+  tooltip PrintableString Optional, // Appearance~resource: the foreground color for the tab
+  linkedData PrintableString Optional, // Design: data linked to the tab
+  enabled Boolean Default true  // Design: whether the tab is enabled
+}
+
+/**
+ * This class represents the configuration information of a font
+ */
+Font ::= Sequence {
+  family PrintableString Range(0..255) Optional [ isProperty ], // Appearance~fontnames: the font family
+  size PrintableString Range(0..255) Optional, // Appearance~unit: the font size (can prefix with '+' or '-' or '*' )
+  style Enumerated {
+    normal      (0), // normal font
+    bold        (1), // bold font
+    italic      (2), // italic font
+    bold_italic (3)  // italic and bold font
+  } Default normal Optional, // Appearance: the font style
+  monospaced Boolean Default false, // Appearance: whether to use a monospace font (if true will ignore the family property)
+  underlined Boolean Default false, // Appearance: whether to underline text
+  strikeThrough Boolean Default false  // Appearance: whether to strike through text
+}
+
+/**
+ * This class represents the configuration information of collapsible information for use with collapsible viewers
+ */
+CollapsibleInfo ::= Sequence {
+  icon PrintableString Range(0..255) Optional [ alt, slice, size, scaling, density ], // Appearance~icon~reload: url to use to retrieve an icon associated with the value (if not defined, the icon of the widget is used)
+  initiallyCollapsed Boolean Default false, // Behavior: whether the parent container should be initially collapsed
+  title PrintableString Range(0..255) Optional, // Appearance~resource: title for the collapsible pane (if not defined, the title of the widget is used)
+  collapsedTitle PrintableString Range(0..255) Optional, // Appearance~resource: title to use if the parent container is collapsed
+  collapseTip PrintableString Range(0..255) Optional, // Design~resource: tooltip to use when the parent container is collapsed
+  expandTip PrintableString Range(0..255) Optional, // Design~resource:tooltip to use when the parent container is expanded
+  titleCell Renderer Reference [height], // Appearance~~reload: the background for the title
+  titleFont Font Optional, // Appearance~font~reload: the font for the title
+  expandOnDragOver Boolean Default false, // Behavior: whether the parent container is automatically expanded on a drag-over operation
+  expander Enumerated {
+    twisty  (0),
+    chevron (1),
+    custom  (2)
+  } Default twisty [ expandIcon, collapseIcon, iconOnTheLeft ], // Appearance: the type of expander/collapser to use
+  animateTransitions Boolean Default false [ duration, acceleration, deceleration, diagonal, diagonalAnchor, fade ], // Behavior: whether the collapse/expand operations are animated using the sizing animation
+  toggleOnTitleSingleClick Boolean Default false, // Behavior:whether to toggle when the title is single clicked by default a double-click is required
+  userControllable Boolean Default true, // Behavior: whether the user can collapse/expand (other collapsing/expanding can only be done programmatically)
+  showTitleBar Boolean Default true, // Behavior: whether the title bar is shown
+  opaqueTitleBar Boolean Default true, // Behavior: whether the title bar is opaque
+  templateName PrintableString Range(0..64) Optional [ context ]  // Design~~reload: name of an object template to use to customize the item
+} [ onWillExpand, onWillCollapse, onHasCollapsed, onHasExpanded ]
+
+/**
+ * This class represents the configuration information for a generic data item
+ */
+RenderableItem ::= Extends Renderer {
+  horizontalAlign Enumerated {
+    auto     (0), // let the container decide
+    left     (1), // the item is left aligned
+    right    (2), // the item is right aligned
+    leading  (3), // the item is aligned along the leading edge
+    trailing (4), // the item is aligned along the trailing edge
+    center   (5)  // the item is centered
+    full     (6)  // the item fills the area centered
+    grow     (7)  // the item can grow to fill available space if the contained supports this
+  } Default auto Optional, // Layout: horizontal alignment
+  verticalAlign Enumerated {
+    auto   (0), // let the container decide
+    top    (1), // the item is top aligned
+    bottom (2), // the item is bottom aligned
+    center (5)  // the item is centered
+    full   (6)  // the item fills the area centered
+    grow   (7)  // the item can grow to fill extra container space
+  } Default auto Optional, // Layout: vertical alignment
+  iconPosition Enumerated {
+    auto            (0), // let the widget decide
+    left            (1), // the icon is positioned to the left of the text
+    right           (2), // the icon is positioned the right of the text
+    leading         (3), // the icon is positioned along the leading edge
+    trailing        (4), // the icon is positioned along the trailing edge
+    top_center      (5), // the icon is positioned above the text and is centered
+    top_left        (6), // the icon is positioned to the top_left of the text
+    top_right       (7), // the icon is positioned the top_right of the text
+    bottom_center   (8), // the icon is positioned below the text and is centered
+    bottom_left     (9), // the icon is positioned to the bottom_left of the text
+    bottom_right    (10), // the icon is positioned the bottom_right of the text
+    right_justified (11)  // the icon is positioned to the far right of the text
+  } Default auto, // the position of the icon
+  scaleIcon Boolean Default false [ percent ], // Behavior: whether the widget's icon is scaled based on the widget's size
+  orientation Enumerated {
+    auto          (0),
+    horizontal    (1),
+    vertical_up   (2),
+    vertical_down (3)
+  } Default auto, // Layout: how to scale the widget's icon
+  selectable Boolean Default true, // Behavior: whether the item is selectable
+  focusPainted Boolean Optional , // Behavior: whether the item focus is painted
+  draggingAllowed Boolean Default true, // whether to allow the item to be dragged if the widget allows dragging
+  tooltip PrintableString Range(0..255) Optional, // Design~resource: the tooltip for the item
+  cursorName PrintableString Range(0..64) Optional [ cursorDisplayType ], // the name of a cursor for the item
+  selectedRenderer Renderer Reference , // Appearance~~reload: a painter for when the item is selected
+  pressedRenderer Renderer Reference , // Appearance~~reload: a painter for when the item is pressed
+  pressedSelectedRenderer Renderer Reference , // Appearance~~reload: a painter for when the item is selected
+  disabledRenderer Renderer Reference , // Appearance~~reload: a painter for when the item is disabled
+  disabledSelectedRenderer Renderer Reference , // Appearance~~reload: a painter for when the item is disabled
+  rolloverRenderer Renderer Reference , // Appearance~~reload: a painter for when the item is rolled over
+  rolloverSelectedRenderer Renderer Reference , // Appearance~~reload: a painter for when the item is disabled
+  focusRenderer Renderer Reference , // Appearance~~reload: a painter for when the item is had focus
+  rowSpan Integer Range(0..) Default 1, // the number of rows the item will span
+  columnSpan Integer Range(-1..) Default 1, // the number of columns the item will span
+  customProperties PrintableString Optional [ mimeType, delimiter ]  // a set of custom name/value for the object. The default format is a set of name/value pairs separated by a semi-colon
+  statesInheritBackground Boolean Default true // Design: whether state renderers inherit the default background if none is set on the state renderer
+  statesInheritBorder Boolean Default true // Design: whether state renderers inherit the default border if none is set on the state renderer
+}
+
+/**
+ * This class represents an area painter
+ */
+Renderer ::= Sequence {
+  icon PrintableString Range(0..255) Optional [ alt, slice, size, scaling, density ], // Appearance~icon: url to use to retrieve a icon associated with the cell
+  fgColor PrintableString Range(0..64) Optional, // Appearance~color: the foreground color for the item
+  bgColor PrintableString Range(0..128) Optional [ type="linear", direction="vertical_top", magnitude, distribution, radius ], // Appearance~gradient~background: the background color (use "transparent" for transparent backgrounds)
+  bgImageURL PrintableString Range(0..255) Optional [ opacity="100%", renderType="tiled", waitForLoad="false", renderSpace="within_border", composite="src_over", scaling, displayed="always", density ], // Appearance~image~backgroundOverlayPainter: an background image for the widget (not all widgets support background images)
+  overlayImageURL PrintableString Range(0..255) Optional [ opacity="25%", renderType="tiled", waitForLoad="false", renderSpace="within_border", composite="src_over", scaling, displayed="always", density ], // Appearance~image~overlayPainter: an overlay image for the widget (not all widgets support overlay images)
+  borders Set {
+    border Enumerated {
+      none           (0),
+      standard       (1),
+      line           (2),
+      empty          (3),
+      raised         (4),
+      lowered        (5),
+      bevel_raised   (6),
+      bevel_lowered  (7),
+      etched_raised  (8),
+      etched_lowered (9),
+      frame_raised   (10),
+      frame_lowered  (11),
+      drop_shadow    (12),
+      shadow         (13),
+      group_box      (14),
+      icon           (15),
+      matte          (16),
+      back           (17),
+      balloon        (18),
+      custom         (31)
+    } Default standard Optional [ color, thickness, style, cornerArc, padForArc="true", insets, title, titleLocation, titleFont, titleColor, icon, flatTop, flatBottom, noBottom, noTop, noLeft, noRight, class, renderType, opacity, customProperties ]  // the type of border
+  } Reference, // Appearance~borders~reload: borders for the cell
+  font Font Reference, // Appearance~font: the font for text items
+  templateName PrintableString Range(0..64) Optional [ context ]  // Design~~reload: name of an object template to use to customize the item
+}
+
+/**
+ *This class represents a cell in a grid that can be painted
+ */
+CellRenderer ::= Extends Renderer {
+  bounds Rectangle // Layout: the bounds of the cell to be painted
+}
+/**
+ * This class represents configuration information for the accessible context for a widget
+ */
+AccessibleContext ::= Sequence {
+  name PrintableString Range(0..255) Optional,
+  description PrintableString Optional  // Appearance~resource:
+}
+
+/**
+ * This class represents configuration information for specifying the text to display when the widget is empty
+ */
+EmptyText ::= Sequence {
+  value PrintableString Optional, // Appearance~resource: optional text to display in the table when the table is empty
+  font Font Reference, // Appearance~font~reload: the font to use to display the specified empty table text
+  fgColor PrintableString Range(0..64) Optional  // Appearance~color: the color to use to display the specified empty table text
+}
+
+/**
+ * This class represents the configuration information for a generic data item
+ */
+DataItem ::= Sequence{
+  valueType Enumerated {
+    auto_type         (0), // type is determined by the widget and/or other configuration information
+    string_type       (1), // the data represents string items
+    integer_type      (2), // the data represents integer numbers
+    decimal_type      (3), // the data represents decimal numbers
+    date_time_type    (4), // the data represents date and time items
+    date_type         (5), // the data represents date items
+    time_type         (6), // the data represents time items
+    boolean_type      (7), // the data represents boolean items
+    bytes_base64_type (8), // the data represents a byte array that will be base64 encoded
+    struct_type       (9), // the data represents items that themselves can contain other items )
+    array_type        (10), // the data represents array items
+    number_range_type  (11), // the data represents number range
+    enum_type         (12), // item represent an enumeration
+    widget_type       (98), // the data represents widget items
+    custom_type       (99)  // items are of a custom type
+  } Default string_type, // Design: the type of data the column represents
+  value PrintableString Optional, // Appearance~resource: the item's value
+  valueContext PrintableString Optional, // Design: additional value describing the information (e.g. date format for dates)
+  linkedData PrintableString Optional, // Design: data linked with the value
+  linkedDataContext PrintableString Optional, // Design: additional value describing the linked data
+  onAction PrintableString Optional, // code to activate when a an the item's action is initiated
+  converterClass PrintableString Range(0..255) Optional, // the programmatic class that converts the item's string value to an object
+  linkedDataConverterClass PrintableString Range(0..255) Optional, // the programmatic class that converts the item's string value to an object
+  markup RenderableItem Reference, // Design: rendering information for the item
+}
+
+Visualization ::= Sequence {
+  name PrintableString Range(0..64) [register=false], //Design: the name to use to reference the item
+  title PrintableString Range(0..64) Optional, // the name of the visualization
+  description PrintableString Range(0..255) Optional, // the description of the item
+  lookAndFeelPropertiesURL PrintableString Optional [ inline ], // Design~url: url for a properties file formatted list of UI properties these properties will override any system properties with the same name
+  resourceStringsURL PrintableString Optional [ inline ], // Design~url: url for a java properties file formatted list of strings these strings will override any predefined resources string with the same name
+  resourceIconsURL PrintableString Optional [ inline], // Design~url: url for a java properties file formatted list of icons
+  actions Set {
+    action ActionItem
+  } Optional, // Design: a set of actions to place on the status bar
+  templateURL PrintableString Optional [ inline, cache ], // Design~url~reload: url for a object template
+  cache Boolean Default false //Whether the visualization should be cached
+  eventHandlerURL PrintableString Optional [ mimeType, inline], // Design~url: the URL for the event handler that handles the visualization events
+  nameRemapping PrintableString Optional [ mimeType, delimiter ], //comma separated name/value pairs widget names to change
+  collectionTargets Set {
+    target CollectionTarget
+  } Reference
+  viewer Any DefinedBy Viewer Optional, // Design~widget: the viewer for the visualization
+  viewerURL PrintableString [ mimeType, inline, deferred ] // Design~widgeturl: the viewer for the visualization
+  otherData Set {
+    url PrintableString [ name, mimeType, inline, returnDataType]
+  } Reference //other data to load when the visualization is loaded; accessible by name and store in and object holder
+ } [ onCreated, onConfigure, onDispose, onLoad, onUnload ]
+
+/**
+ * This class represents a set of templates for object definitions
+ */
+TemplateContext ::= Sequence {
+  name PrintableString Range(0..64) Optional, // Design: the name of the template context
+  autoSkin Boolean Default false, // Design: true to automatically widgets that do not have a templateName defined
+  widgets Set {
+    widget Any DefinedBy Widget [ baseTemplateName, templateContext, os ]
+  } Optional [ url ], // Design: the set of widgets for the group box
+  columns Set {
+    column ItemDescription [ baseTemplateName, templateContext, os ]
+  } Optional [ url ], // Design: the set of columns for the table
+  cellRenderers Set {
+    renderer CellRenderer [ baseTemplateName, templateContext, os ]
+  } Optional [ url ], // Design: painters for the cells in the form grid
+  collapsibles Set {
+    collapsibleInfo CollapsibleInfo [ baseTemplateName, templateContext, os ]
+  } Optional [ url ], // Design: collapsible definitions
+  regions Set {
+    region Region [ baseTemplateName, templateContext, os ]
+  } Optional [ url ], // Design: collapsible definitions
+  scrollPanes Set {
+    scrollPane ScrollPane [ baseTemplateName, templateContext, os ]
+  } Optional [ url ], // Design: scrollPane definitions
+  plots Set {
+    plot Plot [ baseTemplateName, templateContext, os ]
+  } Optional [ url ]  // Design: chart plot definitions
+}

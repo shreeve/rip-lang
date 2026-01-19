@@ -1,0 +1,10 @@
+DataCollection {
+  name: "struct"
+  title: "Struct Holder Collection"
+  columns {
+    {
+      name: "object"
+      valueType: struct_type
+    }
+  }
+}

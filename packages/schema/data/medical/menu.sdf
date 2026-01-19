@@ -1,0 +1,69 @@
+MenuBar {
+  name: "main_menu"
+  borders {
+    matte [insets="0,0,1,0"]
+  }
+  popupMenu {
+    {
+      name: "menu_file"
+      value: "&File"
+      subMenu {
+        {name: "action_find_patient" }
+        {name: "Sage.bean.separator" }
+        {name: "Sage.action.exit" }
+      }
+    }
+    {name: "Sage.menu.edit" }
+    {
+      name: "menu_go"
+      value: "&Go"
+      subMenu {
+        {
+          value: "Summary"
+          icon: "resource:icon_summary"
+        } [ onAction="window.getViewer('applicationTabs').setSelectedTab(0)" ]
+        {
+          value: "Problems"
+          icon: "resource:icon_problems"
+        } [ onAction="window.getViewer('applicationTabs').setSelectedTab(1)" ]
+        {
+          value: "Orders"
+          icon: "resource:icon_orders"
+        } [ onAction="window.getViewer('applicationTabs').setSelectedTab(2)" ]
+        {
+          value: "Lab Results"
+          icon: "resource:icon_lab_results"
+        } [ onAction="window.getViewer('applicationTabs').setSelectedTab(3)" ]
+        {
+          value: "Documents"
+          icon: "resource:icon_documents"
+        } [ onAction="window.getViewer('applicationTabs').setSelectedTab(4)" ]
+        {
+          value: "Admissions, Discharges, and Transfers"
+          icon: "resource:icon_adt"
+          enabled: "false"
+        } [ onAction="window.getViewer('applicationTabs').setSelectedTab(5)" ]
+        {
+          value: "Reports"
+          icon: "resource:icon_reports"
+        } [ onAction="window.getViewer('applicationTabs').setSelectedTab(6)" ]
+      }
+    }
+    {
+      name: "menu_actions"
+      value: "&Actions"
+      subMenu {
+        {value: "No Actions" }
+      }
+    }
+    {
+      name: "menu_help"
+      value: "&Help"
+      subMenu {
+        {value: "About Clinical Browser" }
+      }
+    }
+  }
+}
+
+

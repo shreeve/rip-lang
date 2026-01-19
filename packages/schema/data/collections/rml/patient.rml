@@ -1,0 +1,72 @@
+DataCollection {
+  name: "patient"
+  dataURL: "svc:///patient/" [ columnSeparator="^", ldSeparator="|" ]
+
+  columns {
+    {
+      name: "mrn"
+      title: "Mrn"
+    }
+    {
+      name: "provider"
+      title: "Provider"
+      valueType: array_type
+      valueContext: "createItems=true,ldSeparator=|"
+    }
+    {
+      name: "encounterDate"
+      title: "Encounter Date"
+      valueType:date_time_type
+    }
+    {
+      name: "encounterReasons"
+      title: "Encounter Reasons"
+      valueType: array_type
+      valueContext: "createItems=true"
+    }
+    {
+      name: "location"
+      title: "Location"
+    }
+    {
+      name: "rm_bed"
+      title: "RM Bed"
+    }
+    {
+      name: "relationship"
+    }
+    {
+      name: "language"
+    }
+    {
+      name: "codeStatus"
+    }
+    {
+      name: "weight"
+      title: "Weight"
+    }
+    {
+      name: "height"
+      title: "Height"
+    }
+    {
+      name: "has_allergies"
+      title: "Allergies"
+      valueType: boolean_type
+    }
+    {
+      name: "has_flags"
+      title: "Flags"
+      valueType: boolean_type
+    }
+    {
+      name: "has_alerts"
+      title: "Alerts"
+      valueType: boolean_type
+    }
+    {
+      name: "otherInfo"
+      valueType: struct_type
+    }
+  }
+} [data_extends="person"]

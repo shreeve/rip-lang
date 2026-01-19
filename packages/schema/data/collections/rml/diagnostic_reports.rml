@@ -1,0 +1,36 @@
+DataCollection {
+  name: "diagnostic_reports"
+  title: "Diagnostic Reports"
+  dataURL: "svc:///diagnostic_report/" [columnSeparator="^", ldSeparator="|"]
+  sort: true [descending="true", column="date"]
+  columns {
+    {
+      name: "date"
+      title: "Date"
+      valueType: date_time_type
+      columnType: linked_id
+    }
+    {
+      name: "name"
+      title: "Name"
+      columnType: name
+    }
+    {
+      name: "conclusion"
+      title: "Conclusion"
+    }
+    {
+      name: "category"
+    }
+    {
+      name: "status"
+    }
+    {
+      name: "parentID"
+    }
+    {
+      name: "documentUrl"
+      columnType: href
+    }
+  }
+}

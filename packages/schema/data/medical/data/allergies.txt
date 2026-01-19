@@ -1,0 +1,3 @@
+Aspirin|Anaphylactic Shock
+Penicillin|Anaphylactic Shock
+Sulfonimides|Mild Rash

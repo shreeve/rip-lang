@@ -1,0 +1,55 @@
+DataCollection {
+  name: "allergies"
+  dataURL: "svc:///patient/allergies/" [columnSeparator="^", ldSeparator="|"]
+  columns {
+    {
+      name: "id"
+      columnType: id
+    }
+    {
+      name: "allergen"
+      title:"Allergen"
+      columnType: name
+    }
+    {
+      name: "reaction"
+      title:"Reaction"
+      valueType: array_type
+
+    }
+    {
+      name: "clinicalStatus"
+    }
+    {
+      name: "verificationStatus"
+      title: "Verification"
+    }
+    {
+      name: "onset"
+      valueType: date_time_type
+    }
+    {
+      name:"criticality"
+      title:"Criticality"
+    }
+    {
+      name: "category"
+    }
+    {
+      name: "type"
+    }
+    {
+      name:"notes"
+      title:"Notes"
+      valueType:array_type
+    }
+    {
+      name:"recordedDate"
+      valueType: date_time_type
+    }
+    {
+      name:"lastOccurrence"
+      valueType: date_time_type
+    }
+  }
+}

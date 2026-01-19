@@ -1,0 +1,9 @@
+DataCollection {
+  name: "place_holder"
+  title: "Place Holder"
+  columns {
+    {
+      name: "column"
+    }
+  }
+}

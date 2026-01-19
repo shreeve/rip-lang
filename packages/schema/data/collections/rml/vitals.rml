@@ -1,0 +1,7 @@
+DataCollection {
+  name: "vitals"
+  title: "Vital Signs"
+  dataURL: "svc:///vitals/" [columnSeparator="^", ldSeparator="|"]
+  transformURL: ".healthcare.VitalsBPTransform" [mimeType="application/java"]
+  registerViewsByDefault: true
+} [data_extends="observations"]

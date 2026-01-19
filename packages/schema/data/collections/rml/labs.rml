@@ -1,0 +1,39 @@
+DataCollection {
+  name: "labs"
+  title: "Labs"
+  dataURL: "svc:///labs/" [columnSeparator="^", ldSeparator="|"]
+  parsingFilterURL: ".healthcare.LabCategorizer" [mimeType="application/java"]
+
+  registerViewsByDefault: true
+  columns {
+    {
+      name: "labCategory"
+      description: "the category of the lab"
+      columnType: category
+    }
+    {
+      name: "parent_id"
+    }
+  }
+  queryParameters {
+    {
+      name: "patientID"
+      title: "Patient ID:"
+      description: "The patient's system identifier
+      valueType: string_type
+    }
+    {
+      name: "from"
+      title: "From Date:"
+      description: "A starting data/time for the results"
+      valueType: date_time_type
+    }
+    {
+      name: "to"
+      title: "To Date:"
+      description: "A ending data/time for the results"
+      valueType: date_time_type
+    }
+  }
+  sort: true [descending=true]
+}[ data_extends="observations"]

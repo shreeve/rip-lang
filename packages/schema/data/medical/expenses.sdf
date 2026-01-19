@@ -1,0 +1,93 @@
+TreeTable {
+  name: "expensesTable"
+  titleLocation: "top_left"
+  borders {
+    shadow [ thickness="7" ]
+  } [ thickness="7" ]
+  verticalAlign: "full"
+  horizontalAlign: "full"
+  bounds { x: "0"; y: "1" }
+  focusPainted: "false"
+  
+  /**
+   * Define an inline script that creates a data collection from a url,
+   * groups the data by the fourth and seventh columns and then
+   * populates a tree table with the result. The script is invoked
+   * via the onConfigure event
+   */
+  scriptURL:<< 
+    function configure() {
+      var al=window.createActionLink(widget,"data/expenses.txt")
+      window.createDataCollection("crossover",al,false,true)
+      groupBy(4,7)
+    }
+    function groupBy(col1, col2) {
+      var gp=sage.createGrouper()
+      var cols=new Array(2)
+      cols[0]=col1
+      cols[1]=col2
+      gp.columns=cols
+      gp.preserveFirst=true
+      gp.preserveRest=true
+      gp.formatForTable=true
+      gp.boldGroupTitles=true
+      var co=window.getDataCollection("crossover")
+      widget.handleGroupedCollection(co.group(widget,gp))
+    }
+  >> [ inline="true" ]
+  autoResizeMode: "none"
+  selectionMode: "single"
+  columnReorderingAllowed: "true"
+  columnSpanningAllowed: "true"
+  quickFindSupport: "search_bar"
+  boldColumnHeaders: "true"
+  gridLineType: "horizontal_lines"
+  alternatingHighlightColor: "defaultBackground+12"
+  alternatingHighlightType: "row"
+  autoSizeColumnsToFit: "true"
+  autoSizeRowsToFit: "false"
+  columnChooserEnabled: "true"
+  columns {
+    {width: "18!"; hideable: "false" }
+    {
+      title: "Service Date"
+      valueType: "date_type"
+      valueContext: "MM/dd/yy|MM/dd/yyyy"
+    }
+    {
+      title: "Processing Date"
+      valueType: "date_type"
+      valueContext: "MM/dd/yy|MM/dd/yyyy"
+    }
+    {title: "Claim Number" }
+    {title: "Patient Name" }
+    {title: "Service Provider" }
+    {title: "Service Description" }
+    {title: "Episode" }
+    {title: "Billed Amount"; valueType: "decimal_type"; valueContext: "'$'0.00" }
+    {
+      title: "Network Discount"
+      valueType: "decimal_type"
+      valueContext: "'$'0.00"
+    }
+    {title: "Balance Owed"; valueType: "decimal_type"; valueContext: "'$'0.00" }
+    {
+      title: "Paid by Insurance"
+      valueType: "decimal_type"
+      valueContext: "'$'0.00"
+    }
+    {
+      title: "Member Responsible"
+      valueType: "decimal_type"
+      valueContext: "'$'0.00"
+    }
+    {
+      title: "Applied to Deductible"
+      valueType: "decimal_type"
+      valueContext: "'$'0.00"
+    }
+  }
+  expandAll: "true"
+} [ onConfigure="configure()" ]
+
+

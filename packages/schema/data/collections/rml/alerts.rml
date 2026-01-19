@@ -1,0 +1,5 @@
+DataCollection {
+  name: "alerts"
+  dataURL: "svc:///patient/alerts" [columnSeparator="^", ldSeparator="|"]
+
+}//!extend:appointments.rml

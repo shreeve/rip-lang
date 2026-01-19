@@ -1,0 +1,275 @@
+Form {
+  name: "labsForm"
+  /**
+   * Define an inline script that takes the data in the currently selected row
+   * in the table and creates a line chart series that is feed to 
+   * the chart viewer. The onChange event for the table invokes this code.
+   */
+  scriptURL:<< 
+    var selectedRow
+    function showGraph(table) {
+      var row=table.getSelectedItem()
+      if(row==null || row==selectedRow) return
+      var chart=labChart
+      chart.clearChartData()
+      var series=chart.createSeries(row.get(0))
+      var len=row.getItemCount()-2
+      var i
+      var s
+      for(i=1;i<len;i++) {
+        s=row.get(i).value
+        if(s!="" && s!=null) {
+          series.add(chart.createSeriesValue(chart.getDomainValue(i-1),s))
+        }
+      }
+      chart.addSeries(series)
+      series.setForeground(window.getColor("blue"))
+      chart.setRangeLabel(row.getItem(len+1).toString())
+      row=chart.addRangeMarker(row.getItem(len).toString()+"-Reference Range",'-')
+      row.setForeground(window.getColor("#00ff0040"))
+      chart.refreshItems()
+      selectedRow=row
+    }
+  >> [ inline="true" ]
+  rows: "2"
+  widgets {
+    {
+      GroupBox {
+        borders {
+          none
+        }
+        bounds {
+          x: "0"
+          y: "0"
+        }
+        columns: "7"
+        widgets {
+          {
+            PushButton {
+              bounds {
+                x: "0"
+                y: "0"
+              }
+              popupMenu {
+                {
+                  value: "Most Recent Lab Results"
+                }
+                {
+                  value: "Chemistry"
+                }
+                {
+                  value: "Microbiology"
+                }
+                {
+                  value: "Pathology"
+                }
+              }
+              templateName: "viewsList"
+            }
+          }
+          {
+            Label {
+              bounds {
+                x: "1"
+                y: "0"
+                width: "5ch"
+              }
+            }
+          }
+          {
+            Label {
+              bounds {
+                x: "2"
+                y: "0"
+              }
+              templateName: "viewLabel"
+              value: "Most Recent Lab Results"
+            }
+          }
+          {
+            Label {
+              bounds {
+                x: "3"
+                y: "0"
+                width: "5ch"
+              }
+            }
+          }
+        }
+      }
+    }
+    {
+      SplitPane {
+        name: "labsSplitPane"
+        verticalAlign: full
+        horizontalAlign: full
+        bgColor: "defaultBackground+5"
+        bounds {
+          x: "0"
+          y: "1"
+        }
+        splitProportions {
+          .5
+        }
+        regions {
+          {
+            viewer {
+              /**
+               * This table definition leverages the embeddable dataTime function
+               * and the automatic data/time converter to specify relative date values
+               * that change based on the current data (T=today)
+               */
+              Table {
+                name: "labsTable"
+                focusPainted: false
+                dataURL: "data/labs.txt" 
+                templateName: "prototypeTable" 
+                autoResizeMode: none
+                quickFindSupport: search_bar
+                rowHeaderFooterSelectionPainted: false
+                autoSizeColumnsToFit: true
+                columns {
+                  {
+                    title: "Lab Test"
+                    renderType: header_normal
+                    gridCell {
+                      bgColor: ",TableHeader.background" [ direction="horizontal_left" ]
+                      borders {
+                        empty [insets="0,5,0,0"]
+                      }
+                    }
+                    headerHorizontalAlign: center
+                    headerVerticalAlign: center
+                  }
+                  {
+                    title: "<html><center>{$dateTime('T-9@0600','MMM dd, yyyy '<br>' @HH:mm')}</center></html>"
+                    horizontalAlign: center
+                  }
+                  {
+                    title: "<html><center>{$dateTime('T-8@0600','MMM dd, yyyy '<br>' @HH:mm')}</center></html>"
+                    horizontalAlign: center
+                  }
+                  {
+                    title: "<html><center>{$dateTime('T-7@0600','MMM dd, yyyy '<br>' @HH:mm')}</center></html>"
+                    horizontalAlign: center
+                  }
+                  {
+                    title: "<html><center>{$dateTime('T-6@0600','MMM dd, yyyy '<br>' @HH:mm')}</center></html>"
+                    horizontalAlign: center
+                  }
+                  {
+                    title: "<html><center>{$dateTime('T-5@0600','MMM dd, yyyy '<br>' @HH:mm')}</center></html>"
+                    horizontalAlign: center
+                  }
+                  {
+                    title: "<html><center>{$dateTime('T-4@0600','MMM dd, yyyy '<br>' @HH:mm')}</center></html>"
+                    horizontalAlign: center
+                  }
+                  {
+                    title: "<html><center>{$dateTime('T-3@0600','MMM dd, yyyy '<br>' @HH:mm')}</center></html>"
+                    horizontalAlign: center
+                  }
+                  {
+                    title: "<html><center>{$dateTime('T-2@0600','MMM dd, yyyy '<br>' @HH:mm')}</center></html>"
+                    horizontalAlign: center
+                  }
+                  {
+                    title: "<html><center>{$dateTime('T-1@0600','MMM dd, yyyy '<br>' @HH:mm')}</center></html>"
+                    horizontalAlign: center
+                  }
+                  {
+                    title: "<html><center>{$dateTime('T@0600','MMM dd, yyyy '<br>' @HH:mm')}</center></html>"
+                    horizontalAlign: center
+                  }
+                  {
+                    title: "<html><center>Reference<br/> Range"
+                    horizontalAlign: center
+                    renderType: footer_normal
+                    gridCell {
+                      bgColor: ",TableHeader.background" [ direction="horizontal_left" ]
+                      }
+                  }
+                  {
+                    title: "Units"
+                    horizontalAlign: center
+                    renderType: footer_normal
+                    gridCell {
+                      bgColor: ",TableHeader.background" [ direction="horizontal_left" ]
+                    }
+                    headerVerticalAlign: center
+                  }
+                }
+              } [ onChange="showGraph(widget)" ]
+            }
+          }
+          {
+            viewer {
+              Chart {
+                name: "labChart"
+                borders {
+                  shadow [ thickness="7" ]
+                } [ thickness="7" ]
+                bgColor: "defaultBackground+5"
+                domainAxis {
+                  valueType: date_time_type
+                  value: "Date/Time"
+                  subItems {
+                    {
+                      value: "T-9@0600"
+                    }
+                    {
+                      value: "T-8@0600"
+                    }
+                    {
+                      value: "T-7@0600"
+                    }
+                    {
+                      value: "T-6@0600"
+                    }
+                    {
+                      value: "T-5@0600"
+                    }
+                    {
+                      value: "T-4@0600"
+                    }
+                    {
+                      value: "T-3@0600"
+                    }
+                    {
+                      value: "T-2@0600"
+                    }
+                    {
+                      value: "T-1@0600"
+                    }
+                    {
+                      value: "T@0600"
+                    }
+                  }
+                } [ timeUnit="hour" ]
+                rangeAxis {
+                  valueType: integer_type
+                  value: "Result"
+                }
+                plot {
+                  bgColor: "white"
+                  gridLine: auto [ color="gray" ]
+                  labels: tooltips
+                  noDataMessage {
+                    value: "Please select a lab test to graph the result values"
+                    font {
+                      size: "*2"
+                    }
+                    fgColor: "blue"
+                  }
+                }
+                scrollPane {
+                  verticalScrollbar: hidden
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

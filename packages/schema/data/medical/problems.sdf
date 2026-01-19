@@ -1,0 +1,115 @@
+Form {
+  name: "problemsForm"
+  rows: "2"
+  scriptURL:<< 
+    function filterTable(str) {
+      if(str==null) {
+        problemsTable.unfilter();
+        filterLabel.value="All Orders";
+        filterLabel.foreground=window.getColor("black");
+      }
+      else {
+        problemsTable.filter(0,str,false)
+        filterLabel.value=str+" Orders";
+        filterLabel.foreground=window.getColor("#800000");
+      }
+    }
+    >> [inline=true]
+  widgets {
+    {
+      GroupBox {
+        columns: "7"
+        borders: "none"
+        contentPadding-bottom: "2"
+        widgets {
+          {
+            PushButton {
+              templateName: "viewsList"
+              popupMenu {
+                {
+                  value: "All"
+                } [ onAction="filterTable(null)" ]
+                {
+                  value: "Active"
+                } [ onAction="filterTable('Active')" ]
+                {
+                  value: "Inactive"
+                } [ onAction="filterTable('Inactive')" ]
+              }
+            }
+          }
+          {
+            Label { bounds-width: "5ch" }
+          }
+          {
+            Label {
+              templateName: "viewLabel"
+              name: "filterLabel"
+              value: "Active problems"
+            }
+          }
+          {
+            Label { bounds-width: "5ch" }
+          }
+        }
+      }
+    }
+    {
+      SplitPane {
+        name: "problemsSplitPane"
+        splitProportions { ".75" }
+        horizontalAlign: "full"
+        verticalAlign: "full"
+        regions {
+          {
+            viewer {
+              Table {
+                templateName: "prototypeTable"
+                name: "problemsTable"
+                focusPainted: "false"
+                autoResizeMode: "none"
+                autoSizeRowsToFit: "true"
+                columns {
+                  {title: "Status"; width: "10ch" }
+                  {title: "Description"; textWrapping: "word"; width: "25ch" }
+                  {
+                    title: "Onset date"
+                    valueType: "date_type"
+                    valueContext: "|MMM dd, yyyy"
+                    width: "10ch"
+                  }
+                  {
+                    title: "Last Updated"
+                    valueType: "date_type"
+                    valueContext: "|MMM dd, yyyy"
+                    width: "10ch"
+                  }
+                  {title: "Location"; width: "10ch" }
+                  {title: "Provider"; width: "10ch" }
+                  {title: "Service"; width: "10ch" }
+                }
+                dataURL: "data/problems.txt"
+                
+                /**
+                 * Define a semi-transparent overlay image that automatically goes
+                 * away when the user first interacts with the table
+                 */
+                overlayImageURL: "lib:images/sticky-note.gif" [ renderType="upper_middle", opacity="75%", waitForLoad="true", displayed="before_interaction" ]
+              }
+            }
+          }
+          {
+            viewer {
+              DocumentPane {
+                name: "problemDetails"
+                borders: "shadow" [ thickness="7" ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+

@@ -1,0 +1,30 @@
+DataCollection {
+  name: "flags"
+  dataURL: "svc:///patient/flags" [columnSeparator="^", ldSeparator="|"]
+  columns {
+    {
+      name: "id"
+      columnType: linked_id
+    }
+    {
+      name: "type"
+      title: "Type"
+    }
+    {
+      name: "description"
+      title: "Description"
+    }
+    {
+      name: "status"
+    }
+    {
+      name: "date"
+    }
+    {
+      name: "encounter"
+    }
+    {
+      name: "author"
+    }
+  }
+}

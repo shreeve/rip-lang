@@ -1,0 +1,56 @@
+DataCollection {
+  name: "schedule"
+  title: "Provider Schedule
+  columns {
+    {
+      name: "id"
+      title: "Identifier"
+      description: "the identifier of the schedule owner
+      columnType: id
+    }
+    {
+      name: "appt_time"
+      title: "Appointment Time"
+      valueType: date_time_type
+    }
+    {
+      name: "name"
+      title: "Name"
+      columnType: name
+    }
+    {
+      name: "dob"
+      title: "Date of Birth"
+      valueType: date_type
+    }
+    {
+      name: "gender"
+      title: "Gender"
+    }
+    {
+      name: "appt_reason"
+      title: "Appontment Reason"
+    }
+    {
+      name: "photo"
+      title: "Photo"
+    }
+  }
+  queryParameters {
+    {
+      name: "id"
+      title: "Identifier"
+      description: "the identifier of the schedule owner
+    } [ required="false" ]
+    {
+      name: "startTime"
+      title: "Start Time"
+      description: "The ending time to return appointments"
+    } [ required="false" ]
+    {
+      name: "endTime"
+      title: "End Time"
+      description: "The starting time to return appointments"
+    } [ required="false" ]
+  } [ required="true" ]
+}

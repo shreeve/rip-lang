@@ -1,0 +1,13 @@
+1,{columnSpan: -1; font-style: bold}Outpatient Medications
+2,{linkedData: "Outpatient Medications"}|Renew METOPROLOL TAB 50MG\nTake one tablet by mouth twice a day\n  Quantity: 180\n  Refills: 5|Y-1|T-3|KOOP,C EVERETT|Inactive||||
+2,{linkedData: "Outpatient Medications"}|Renew SIMVASTATIN TAB 40MG\nTake one tablet by mouth every evening\n  Quantity: 90\n   Refills: 5|Y-1|T-3|KOOP,C EVERETT|Inactive||||
+2,{linkedData: "Outpatient Medications"}|METFORMIN TAB,SA 500MG Take one tablet by mouth twice a day\n  Quantity: 180\n   Refills: 3|T-180|T-3|KOOP,C EVERETT|Active||||
+1,{columnSpan: -1; font-style: bold}Nursing Orders
+2,{linkedData: "Nursing Orders"}|>>Nursing Orders Cleanse wound with Betadine and cover with 4x4s|T-2|T-1|JONES,BOB|Canceled||||7A GEN MED
+1,{columnSpan: -1; font-style: bold}Inpatient Medications
+2,{linkedData: "Inpatient Medications"}|ACETAMINOPHEN TAB 325MG PO q6H PRN|T-3||JONES,BOB|Active||||7A GEN MED
+2,{linkedData: "Inpatient Medications"}|FUROSEMIDE TAB 20MG PO QID|T-2|T|JONES,BOB|Active||||7A GEN MED
+2,{linkedData: "Inpatient Medications"}|METFORMIN TAB,SA 500MG PO BID|T-3|T|JONES,BOB|Active||||7A GEN MED
+2,{linkedData: "Inpatient Medications"}|METOPROLOL TAB 50MG PO BID|T-2||JONES,BOB|Active||||7A GEN MED
+1,{columnSpan: -1; font-style: bold}Dietetics
+2,{linkedData: "Dietetics"}|REGULAR DIET|T-2||MILLER,KATHY|Active||||7A GEN MED

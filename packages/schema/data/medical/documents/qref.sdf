@@ -1,0 +1,93 @@
+GridPane {
+  rows: "2"
+  columns: "1"
+  regions {
+    {
+      verticalFill: "preferred"
+      viewer {
+        Navigator {
+          name: "qrefNavigator"
+          actions {
+            {
+              icon: "resource:Sage.icon.navigatorHome"
+            } [ onAction="window.alert('Going Home')" ]
+            {
+              value: "Medications"
+            } [ onAction="window.alert('Going back to Medications')" ]
+            {value: "LASIX" }
+          }
+        }
+      }
+    }
+    {
+      contentPadding { left: "4"; top: "2"; right: "4"; bottom: "2" }
+      viewer {
+        Form {
+          borders: "line" [ color="gray", thickness="2", cornerArc="10" ]
+          contentPadding { left: "4"; top: "2"; right: "4"; bottom: "2" }
+          bgColor: "white"
+          columns: "3"
+          widgets {
+            {
+              Label {
+                name: "noteDetail"
+                bounds { x: "0"; y: "0" }
+                textHAlignment: "left"
+                horizontalAlign: "full"
+                font-style: "bold"
+                fgColor: "blue+10"
+                value: "LABS"
+              }
+            }
+            {
+              PushButton {
+                name: "showDocuments"
+                bounds { x: "1"; y: "0" }
+                fgColor: "blue"
+                value: "Documents"
+                buttonStyle: "hyperlink_always_underline"
+              }
+            }
+            {
+              PushButton {
+                name: "showMedications"
+                bounds { x: "2"; y: "0" }
+                fgColor: "blue"
+                value: "Medications"
+                buttonStyle: "hyperlink_always_underline"
+              }
+            }
+            {
+              DocumentPane {
+                borders: "focus"
+                editable: "false"
+                wordWrap: "false"
+                verticalAlign: "full"
+                horizontalAlign: "full"
+                columnSpan: "3"
+                font { monospaced: "true"; size: "-1" }
+                dataURL:<< 
+FUROSIMIDE 20MG TAB 20MG PO BID
+
+Activity:
+  New Order  entered
+
+       Order Text: FUROSIMIDE 20MG TAB PO BID
+  Nature of Order: ELECTRONICALLY ENTERED
+   Elec Signature: DeCoteau, Don
+
+               Current Data:
+   Current Primary Provider: DeCoteau, Don
+Current Attending Physician: DeCoteau, Don
+       Technical Specialist:
+   >> [ inline="true" ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+

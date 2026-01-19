@@ -1,0 +1,48 @@
+DataCollection {
+  name: "procedures"
+  title: "Procedures"
+  dataURL: "svc:///procedures/" [ columnSeparator="^", ldSeparator="|" ]
+  columns {
+    {
+      name: "date"
+      title: "Date"
+      valueType: date_time_type
+      columnType: timestamp_linked_id
+    }
+    {
+      name: "name"
+      title: "Name"
+      columnType: name
+    }
+    {
+      name: "performer"
+      title: "Performer"
+      valueType: array_type
+      valueContext: "createItems=true,valueType=struct_type,valueContext='createItems=true'"
+    }
+    {
+      name: "status"
+      title: "Status"
+    }
+    {
+      name: "reason"
+      valueType: array_type
+      valueContext: "createItems=true"
+    }
+    {
+      name: "type"
+    }
+    {
+      name: "outcome"
+      title: "Outcome"
+    }
+    {
+      name: "parentID"
+    }
+    {
+      name: "documentUrl"
+    }
+
+  }
+  sort: true [descending=true]
+}

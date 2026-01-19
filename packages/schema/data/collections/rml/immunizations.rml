@@ -1,0 +1,44 @@
+DataCollection {
+  name: "immunizations"
+  title: "Immunizations"
+  columns {
+    {
+      name: "date"
+      title: "Date"
+      description: "The date/time the immunization was given"
+      valueType: date_time_type
+      columnType: timestamp_linked_id
+    }
+    {
+      name: "name"
+      title: "Name"
+      description: "The name of the immunization
+      columnType: name
+    }
+    {
+      name: "dosage"
+    }
+    {
+      name: "route"
+    }
+    {
+      name: "site"
+    }
+    {
+      name: "manufacturer"
+      description: "The manufacturer of the immunization"
+    }
+    {
+      name: "lotNumber"
+    }
+    {
+      name: "expirationDate"
+      valueType: date_type
+    }
+    {
+      name: "status"
+      description: "The status of the immunization"
+    }
+  }
+  sort: true [descending=true]
+}

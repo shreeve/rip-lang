@@ -1,0 +1,58 @@
+TemplateContext {
+  widgets {
+    {
+      Table {
+        templateName: "prototypeTable"
+        titleLocation: "top_left"
+        alternatingHighlightType: "row"
+        alternatingHighlightColor: "rowHilite"
+        borders: "shadow" [ thickness="7" ]
+        gridLineType: "both"
+        selectionMode: "single"
+        boldColumnHeaders: "true"
+      }
+    }
+    {
+      PushButton {
+        templateName: "viewsList"
+        name: "viewsList"
+        value: "Views"
+        actionType: "popup_menu"
+      }
+    }
+    {
+      Label {
+        templateName: "viewLabel"
+        name: "viewLabel"
+        contentPadding { top: "2"; bottom: "2" }
+        horizontalAlign: "full"
+        textHAlignment: "center"
+        fgColor: "TitledBorder.titleColor"
+        font-style: "bold"
+      }
+    }
+    {
+      Label {
+        templateName: "ordersValueField"
+        titleLocation: "center_left"
+        borders { "drop_shadow"; "line" }
+        contentPadding-left: "1"
+        textHAlignment: "left"
+        bounds { x: "1"; width: "20ch"; height: "1.25ln" }
+        font-style: "bold"
+      }
+    }
+    {
+      TextField {
+        templateName: "infobar.field"
+        bgColor: "defaultBackground"
+        editable: false
+        borders {
+          line_3d [cornerArc=6]
+        }
+      }
+    }
+  }
+}
+
+

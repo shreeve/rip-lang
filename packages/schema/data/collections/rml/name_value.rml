@@ -1,0 +1,12 @@
+DataCollection {
+  name: "name_value"
+  title: "Name Value Collection"
+  columns {
+    {
+      name: "name"
+    }
+    {
+      name: "value"
+    }
+  }
+}

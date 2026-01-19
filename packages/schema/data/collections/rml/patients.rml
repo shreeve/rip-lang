@@ -1,0 +1,10 @@
+DataCollection {
+  name: "patients"
+  dataURL: "svc:///patients/" [ columnSeparator="^", ldSeparator="|" ]
+  columns {
+    {
+      name: "signal"
+    }
+  }
+  sort: true [column="name",caseInsensitive="true"]
+}[data_extends="patient"]

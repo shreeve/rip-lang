@@ -1,0 +1,67 @@
+SplitPane {
+  name: "documentsPane"
+  splitProportions { "0.35" }
+  splitOrientation: "left_to_right"
+  regions {
+    {
+      name: "documentsPaneTop"
+      viewer {
+        SplitPane {
+          splitOrientation: "top_to_bottom"
+          regions {
+            {
+              viewer {
+                Table {
+                  templateName: "prototypeTable"
+                  borders: "shadow"
+                  name: "documentsTable"
+                  columns {
+                    {width: "18!"; headerIcon: "resource:Sage.icon.paperclip" }
+                    {
+                      title: "Reference Date"
+                      valueType: "date_time_type"
+                      width: "13ch"
+                      valueContext: "MMM dd, yyyy HH:mm"
+                    }
+                    {title: "Description" }
+                  }
+                  dataURL: "data/documents_list.txt"
+                }
+              }
+            }
+            {
+              viewer {
+                TabPane {
+                  name: "documentsTabPane"
+                  tabPosition: "top"
+                  closeButton: "none"
+                  selectedIndex: "3"
+                  borders: "shadow"
+                  tabBgColor: "defaultBackground-15,defaultBackground+15"
+                  tabStyle: "office2003"
+                  tabs {
+                    {
+                      name: "documentsCompose"
+                      title: "Compose"
+                      dataURL: "documents/compose.sdf"
+                    }
+                    {name: "documentsProblems"; title: "Problems" }
+                    {name: "documentsOrders"; title: "Orders" }
+                    {
+                      name: "documentsQref"
+                      title: "QRef"
+                      dataURL: "documents/qref.sdf"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    {name: "documentsPaneBottom"; dataURL: "documents/reader.sdf" }
+  }
+}
+
+

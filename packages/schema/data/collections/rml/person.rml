@@ -1,0 +1,67 @@
+DataCollection {
+  name: "person"
+  dataURL: "svc:///patients/" [ columnSeparator="^", ldSeparator="|" ]
+  columns {
+    {
+      name: "id"
+      title: "Id"
+      columnType: id
+    }
+    {
+      name: "name"
+      title: "Name"
+      columnType: name
+    }
+    {
+      name: "givenName"
+      valueType: array_type
+    }
+    {
+      name: "familyName"
+      valueType: array_type
+    }
+    {
+      name: "birthDate"
+      title: "Dob"
+      valueType: date_type
+    }
+    {
+      name: "gender"
+      title: "Gender"
+    }
+    {
+      name: "race"
+    }
+    {
+      name: "ethnicity"
+    }
+    {
+      name: "maritalStatus"
+    }
+    {
+      name: "photo"
+      title: "Photo"
+    }
+    {
+      name: "phone"
+      valueType: array_type
+      valueContext: "createItems=false,valueType=struct_type"
+    }
+    {
+      name: "email"
+      valueType: array_type
+      valueContext: "createItems=false,valueType=struct_type"
+    }
+    {
+      name: "address"
+      valueType: array_type
+      valueContext: "createItems=false,valueType=struct_type"
+    }
+
+    {
+      name: "active"
+      valueType: boolean_type
+    }
+
+  }
+}

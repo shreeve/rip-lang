@@ -1,0 +1,40 @@
+DataCollection {
+  name: "conditions"
+  title: "Conditions"
+  dataURL: "svc:///patient/conditions/" [columnSeparator="^", ldSeparator="|"]
+  columns {
+    {
+      name: "id"
+      columnType: id
+    }
+    {
+      name: "condition"
+      title:"Condition"
+      columnType: name_linked_id
+    }
+   {
+      name: "clinicalStatus"
+      title: "Clinical Status"
+    }
+    {
+      name: "verificationStatus"
+      title: "Verification Status"
+    }
+    {
+      name: "onset"
+      title:"Onset"
+    }
+    {
+      name:"severity"
+      title:"Severity"
+    }
+    {
+      name: "category"
+    }
+    {
+      name:"notes"
+      title:"Notes"
+      valueType: array_type
+    }
+  }
+}

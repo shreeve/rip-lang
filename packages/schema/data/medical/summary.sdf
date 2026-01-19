@@ -1,0 +1,180 @@
+SplitPane {
+  name: "coverSheet"
+  splitProportions { "0.3"; "0.3" }
+  regions {
+    {
+      viewer {
+        SplitPane {
+          splitOrientation: "left_to_right"
+          regions {
+            {
+              name: "summaryProblems"
+              viewer {
+                Table {
+                  templateName: "prototypeTable"
+                  name: "summary_problems"
+                  title: "Active Problems"
+                  dataURL: "data/problems_summary.txt"
+                  autoSizeRowsToFit: "true"
+                  columns {
+                    {title: "Problem"; textWrapping: "line" }
+                  }
+                }
+              }
+            }
+            {
+              name: "summaryReactions"
+              viewer {
+                Table {
+                  templateName: "prototypeTable"
+                  name: "summary_allergies"
+                  title: "Allergies"
+                  dataURL: "data/allergies.txt"
+                  columns {
+                    {title: "Allergen"; width: "40%"; fgColor: "#80000" }
+                    {title: "Adverse Reaction" }
+                  }
+                }
+              }
+            }
+            {
+              name: "summaryPostings"
+              viewer {
+                Table {
+                  templateName: "prototypeTable"
+                  name: "summary_postings"
+                  title: "Postings"
+                  dataURL: "data/postings.txt"
+                  columns {
+                    {title: "Posting"; fgColor: "#80000" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    {
+      viewer {
+        SplitPane {
+          splitOrientation: "left_to_right"
+          regions {
+            {
+              name: "summaryMeds"
+              viewer {
+                Table {
+                  templateName: "prototypeTable"
+                  name: "summary_meds"
+                  title: "Active Medications"
+                  dataURL: "data/activemeds.txt"
+                  columns {
+                    {title: "Medication"; width: "80%" }
+                    {title: "Status" }
+                  }
+                }
+              }
+            }
+            {
+              name: "summaryReminders"
+              viewer {
+                Table {
+                  templateName: "prototypeTable"
+                  name: "summary_reminders"
+                  title: "Clinical Reminders"
+                  dataURL: "data/reminders.txt"
+                  columns {
+                    {title: "Clinical Event" }
+                    {
+                      title: "Due Date"
+                      valueType: "date_time_type"
+                      valueContext: "MMM dd, yyyy HH:mm"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    {
+      viewer {
+        SplitPane {
+          splitOrientation: "left_to_right"
+          regions {
+            {
+              name: "summaryLabs"
+              viewer {
+                Table {
+                  templateName: "prototypeTable"
+                  name: "summary_labs"
+                  title: "Recent Labs"
+                  dataURL: "data/labs_summary.txt"
+                  columns {
+                    {
+                      title: "Date"
+                      valueType: "date_time_type"
+                      valueContext: "MMM dd, yyyy HH:mm"
+                      width: "13ch"
+                    }
+                    {title: "Test" }
+                    {title: "Result"; width: "5ch" }
+                  }
+                }
+              }
+            }
+            {
+              name: "summaryVitals"
+              viewer {
+                Table {
+                  templateName: "prototypeTable"
+                  name: "summary_vitals"
+                  title: "Vitals"
+                  dataURL: "data/vitals.txt"
+                  popupMenu {
+                    {
+                      value: "Show Vital"
+                    } [ onAction="window.status=widget.selection.get(0)" ]
+                  }
+                  gridLineType: "both"
+                  columns {
+                    {title: "Type"; fgColor: "#1C0B5A"; width: "6ch" }
+                    {title: "Result"; width: "6ch" }
+                    {
+                      title: "Date/Time"
+                      valueType: "date_time_type"
+                      valueContext: "MMM dd, yyyy HH:mm"
+                    }
+                  }
+                }
+              }
+            }
+            {
+              viewer {
+                Table {
+                  templateName: "prototypeTable"
+                  name: "summary_visits"
+                  title: "Appointments/Visits/Admissions"
+                  dataURL: "data/visits.txt"
+                  columns {
+                    {
+                      title: "Date"
+                      valueType: "date_time_type"
+                      valueContext: "MMM dd, yyyy HH:mm"
+                      width: "40%"
+                    }
+                    {title: "Type"; width: "30%" }
+                    {title: "Location" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+

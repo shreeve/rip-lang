@@ -1,0 +1,36 @@
+DataCollection {
+  name: "family_history"
+  title: "Family History"
+  dataURL: "svc:///family_history/" [columnSeparator="^", ldSeparator="|"]
+  columns {
+    {
+      name: "id"
+      columnType: id
+    }
+    {
+      name: "relationship"
+      description: "The relationship of the family member
+    }
+    {
+      name: "problem"
+      columnType: value
+      columnType: name
+    }
+    {
+      name: "onsetDate"
+      valueType: date_type
+    }
+    {
+      name: "resolvedDate"
+      valueType: date_type
+    }
+    {
+      name: "diedOfDate"
+      valueType: date_type
+    }
+    {
+      name: "notes"
+    }
+  }
+
+}

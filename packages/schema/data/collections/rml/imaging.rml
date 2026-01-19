@@ -1,0 +1,31 @@
+DataCollection {
+  name: "imaging"
+  title: "Imaging Studies"
+  dataURL: "svc:///imaging" [columnSeparator="^", ldSeparator="|"]
+  columns {
+    {
+      name: "date"
+      title: "Date"
+      valueType: date_time_type
+      columnType: linked_id
+    }
+    {
+      name: "description"
+      title: "Description"
+    }
+    {
+      name: "status"
+      title: "Status"
+    }
+    {
+      name: "type"
+    }
+    {
+      name: "parentID"
+    }
+    {
+      name: "documentUrl"
+    }
+  }
+  sort: true [descending=true]
+}

@@ -1,0 +1,230 @@
+Form {
+  rows: "9"
+  contentPadding { top: "4"; left: "4"; bottom: "4"; right: "4" }
+  widgets {
+    {
+      Line { leftLabel: "Browse/Search" }
+    }
+    {
+      GroupBox {
+        title: "Search"
+        columns: "6"
+        rows: "2"
+        contentPadding { top: "4"; left: "4"; bottom: "4"; right: "4" }
+        widgets {
+          {
+            TextField {
+              name: "lastName"
+              title: "Last Name"
+              minCharacters: "2"
+              maxCharacters: "30"
+              bounds { width: "12ch"; x: "1"; y: "0" }
+            }
+          }
+          {
+            TextField {
+              name: "firstName"
+              title: "First Name"
+              minCharacters: "1"
+              maxCharacters: "20"
+              bounds { width: "12ch"; x: "3"; y: "0" }
+            }
+          }
+          {
+            TextField {
+              name: "memberID"
+              title: "Member ID"
+              bounds { x: "1"; y: "1"; width: "12ch" }
+            }
+          }
+          {
+            TextField {
+              name: "accountNumber"
+              title: "Account #:"
+              bounds { x: "3"; y: "1"; width: "12ch" }
+            }
+          }
+          {
+            PushButton {
+              value: "Search"
+              icon: "resource:Sage.icon.search"
+              buttonStyle: "toolbox"
+              horizontalAlign: "full"
+              bounds { x: "5"; y: "0" }
+            }
+          }
+          {
+            PushButton {
+              value: "Clear"
+              icon: "resource:Sage.icon.delete"
+              horizontalAlign: "full"
+              buttonStyle: "toolbox"
+              bounds { x: "5"; y: "1" }
+            }
+          }
+        }
+      }
+    }
+    {
+      GroupBox {
+        contentPadding { top: "4"; left: "4"; bottom: "4"; right: "4" }
+        title: "Browse by last initial"
+        widgets {
+          {
+            ToolBar {
+                buttonShowTextDefault: true
+              widgets {
+                {
+                  PushButton { value: "a"}
+                }
+                {
+                  PushButton { value: "b"}
+                }
+                {
+                  PushButton { value: "c"}
+                }
+                {
+                  PushButton { value: "d"}
+                }
+                {
+                  PushButton { value: "e"}
+                }
+                {
+                  PushButton { value: "f"}
+                }
+                {
+                  PushButton { value: "g"}
+                }
+                {
+                  PushButton { value: "h"}
+                }
+                {
+                  PushButton { value: "i"}
+                }
+                {
+                  PushButton { value: "j"}
+                }
+                {
+                  PushButton { value: "k"}
+                }
+                {
+                  PushButton { value: "l"}
+                }
+                {
+                  PushButton { value: "m" }
+                }
+                {
+                  PushButton { value: "n"}
+                }
+                {
+                  PushButton { value: "o"}
+                }
+                {
+                  PushButton { value: "p"}
+                }
+                {
+                  PushButton { value: "q"}
+                }
+                {
+                  PushButton { value: "r"}
+                }
+                {
+                  PushButton { value: "s"}
+                }
+                {
+                  PushButton { value: "t"}
+                }
+                {
+                  PushButton { value: "u"}
+                }
+                {
+                  PushButton { value: "v"}
+                }
+                {
+                  PushButton { value: "w"}
+                }
+                {
+                  PushButton { value: "x"}
+                }
+                {
+                  PushButton { value: "y"}
+                }
+                {
+                  PushButton { value: "z"}
+                }
+              }
+              horizontalAlign: "full"
+              borders: "etched_lowered"
+            }
+          }
+        }
+      }
+    }
+    {
+      Line { leftLabel: "Results" }
+    }
+    {
+      Table {
+        bounds { height: "20ln" }
+        alternatingHighlightType: "row"
+        alternatingHighlightColor: "defaultBackground+18"
+        borders: "shadow"
+        gridLineType: "both"
+        autoResizeMode: "resize_last_column"
+        selectionMode: "single"
+        boldColumnHeaders: "true"
+        columns {
+          {title: "Patient Name"; width: "25ch" }
+          {title: "Member ID"; width: "10ch" }
+          {
+            title: "Date of Birth"
+            width: "11ch"
+            valueType: "date_time_type"
+            valueContext: "MM/dd/yyyy"
+          }
+        }
+        scrollPane {
+          fixedColumnFooter {
+            ToolBar {
+              contentPadding { top: "4"; left: "4"; bottom: "4"; right: "4" }
+              widgets {
+                {
+                  TextField {
+                    bounds { x: "1"; width: "30ch" }
+                    titleLocation: "center_left"
+                    title: "Filter:"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    {
+      GroupBox {
+        borders: "none"
+        columns: "2"
+        horizontalAlign: "center"
+        widgets {
+          {
+            PushButton {
+              name: "okButton"
+              value: "Ok"
+              bounds { width: "55dlu"; x: "0" }
+            } [ onAction="window.close()" ]
+          }
+          {
+            PushButton {
+              name: "cancelButton"
+              value: "Cancel"
+              bounds { width: "55dlu"; x: "1" }
+            } [ onAction="window.close()" ]
+          }
+        }
+      }
+    }
+  }
+}
+
+

@@ -1,0 +1,89 @@
+DataCollection {
+  name: "observations"
+  title: "Observations"
+  columns {
+    {
+      name: "date"
+      title: "Date"
+      description: "The date/time the vital was recorded"
+      valueType: date_time_type
+      valueContext: "|MMM dd, yyyy'@'HH:mm"
+      columnType: timestamp_linked_id
+    }
+    {
+      name: "name"
+      title: "Name"
+      description: "The name of the observation
+      columnType: name_linked_id
+    }
+    {
+      name: "value"
+      title: "Value"
+      description: "The recorded result"
+      columnType: value
+    }
+    {
+      name: "unit"
+      description: "The unit of measurement for the observation"
+      columnType: value_units
+    }
+    {
+      name: "range"
+      title: "Reference Range"
+      description: "The reference range for the vital"
+      columnType: value_range
+    }
+    {
+      name: "documentUrl"
+      columnType: href
+    }
+    {
+      name: "sortOrder"
+      description: "A sort order for the vitals for display purposes"
+    }
+
+  }
+  presentationTransformURL: <<
+    rows.eachItem(function(result,unit,refRange) {
+      var u=unit.value;
+      var r=refRange.value;
+      if(notEmpty(result.linkedData)) {
+        result.setPresentationClass("abnormal-result");
+        if(isEmpty(u)) {
+          result.value=concat(result.value," (",result.linkedData,")");
+        }
+        else {
+          result.value=concat(result.value," ",u," (",result.linkedData,")");
+        }
+      }
+      else if(notEmpty(u)){
+        result.value=concat(result.value," ",u);
+      }
+      if(allNotEmpty(u,r)) {
+        refRange.value=concat("[",r,"]  ",u);
+      }
+    },2,3,4);
+    return false;
+   >> [mimeType="application/x-appnativa-script", inline="true"]
+  queryParameters {
+    {
+      name: "patient"
+      title: "Patient ID:"
+      description: "The patient's system identifier
+      valueType: string_type
+    }
+    {
+      name: "from"
+      title: "From Date:"
+      description: "A starting data/time for the results"
+      valueType: date_time_type
+    }
+    {
+      name: "to"
+      title: "To Date:"
+      description: "A ending data/time for the results"
+      valueType: date_time_type
+    }
+  }
+  sort: true [descending=true]
+}

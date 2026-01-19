@@ -1,0 +1,138 @@
+/**
+ * This class represents a data collection. The data is retrieved via the dataURL.
+ *  The option selection filter is then applied to filter the results
+ */
+DataCollection ::= Sequence {
+  name PrintableString Range(0..64), // the name of the collection
+  title PrintableString Range(0..64) Optional, // the name of the collection
+  description PrintableString Range(0..255) Optional, // the description of the item
+  icon PrintableString Range(0..255) Optional [ alt, slice, size, scaling, density ], // Appearance~icon~reload: url to use to retrieve an icon associated with the value (if not defined, the icon of the widget is used)
+  eventHandlerURL PrintableString Optional [ mimeType, inline ], // Design~url: the URL for a script that handles the collection's events
+  handler PrintableString Range(0..255) Optional, // the name of class that handles the collection. If not specified the default handler is used
+  dataURL PrintableString Optional [ mimeType, method, deferred, columnSeparator, inline, ldSeparator, riSeparator, unescape="false", parser, customProperties, linkAttributes, copyType ], // a URL to use to retrieve data for the collection or collection definition can be a collection: URL
+  blob Boolean Default false, // whether the data is blob (blobs automatically have href,mime_tye,value columns defined)
+  graphable Boolean Optional, // whether the collection can be graphed; if not set the data column value types are used to figure this out
+  columns Set {
+    column DataColumn
+  } Reference,
+  queryParameters Set {
+    column DataColumn [ required ]
+  } Reference [ required ], // set of parameters that can be applied to the data url to restrict the results set
+  sort Boolean Default false [ column, descending, loadSortColumn, loadSortDescending, caseInsensitive ], // whether the collection is sorted after it is loaded
+  uniqueKeyColumnName PrintableString Range(0..64) Optional [ useLinkedData ], // the name of the column that is a unique key correlating to a name type column (if no specified the linked data in a name_linked_id type column is assumed)
+  parsingFilterURL PrintableString Optional [ mimeType, inline ], // Design~url: filter to use to filter the results after parsing; can be a javascript function or java class name
+  processingFilterURL PrintableString Optional [ mimeType, inline ], // Design~url: filter to use to filter the results after processing (string values converted to native types) ; can be a javascript function or java class name
+  transformURL PrintableString Optional [ mimeType, inline ], // Design~url: used to transform the collection after all rows have been processed; can be a javascript function java class name or SQL
+  presentationTransformURL PrintableString Optional [ mimeType, inline ], // Design~url: used to transform the collection for visual presentation; can be a javascript function java class name or SQL
+  customPropertiesURL PrintableString Optional [ mimeType, delimiter, inline ], // Design~url: a set of custom name/value for the object. The default format is a set of name/value pairs separated by a semi-colon
+  registerViewsByDefault Boolean Default false, // Design: whether views are registered by default
+  registerViewsList Boolean Default false [ name, title, description, addParent="true", parentTitle="All" ], // Design: whether the collection is registered
+  noDataMessage PrintableString Optional [ isResource ], // the message to display when the collection is empty
+  views Set {
+    view DataView
+  } Reference  // predefined views for this collection
+} [ onCreated, onDispose, onStartedLoading, onFinishedLoading ]
+
+DataColumn ::= Sequence {
+  name PrintableString Range(0..64), // the name to use to reference the item
+  title PrintableString Range(0..64) Optional, // the name of the collection
+  description PrintableString Range(0..255) Optional, // the description of the item
+  valueType Enumerated {
+    string_type       (1), // the data represents string items
+    integer_type      (2), // the data represents integer numbers
+    decimal_type      (3), // the data represents decimal numbers
+    date_time_type    (4), // the data represents date and time items
+    date_type         (5), // the data represents date items
+    time_type         (6), // the data represents time items
+    boolean_type      (7), // the data represents boolean items
+    bytes_base64_type (8), // the data represents a byte array that will be base64 encoded
+    struct_type       (9), // the data represents items that themselves can contain other items  (valueContext equivalent to mime type separator attributes for dataURL for CSV data)
+    array_type        (10), // the data represents array items  (valueContext equivalent to mime type separator attributes for dataURL for CSV data)
+    number_range_type (11), // the data represents number range
+    enum_type         (12), // item represent an enumeration
+    widget_type       (98), // the data represents widget items
+    custom_type       (99)  // items are of a custom type
+  } Default string_type [ raw="false" ], // Design: the type of data the column represents
+  columnType Enumerated {
+    other               (0), // unspecified column type
+    id                  (1), // the id that uniquely identifies the record within its domain
+    timestamp           (2), // timestamp for the value, this is inherently a domain value
+    name                (3), // the name of the represented entity
+    name_linked_id      (4), // the name and a linked id that uniquely identifies the entity within its domain
+    domain              (5), // a value that can be used as a domain for graphing
+    value               (6), // the value associated with the name
+    value_units         (7), // represents the units for the value column
+    value_range         (8), // represents the valid range for values
+    description         (9), // a description of the represented entity
+    mime_type           (10), // the mime type for the value
+    href                (11), // the string representation of the url used to retrieve the value
+    hidden              (12), // the string representation of the url used to retrieve the value
+    linked_id           (13), // // the linked data is id that uniquely identifies the record within its domain
+    domain_linked_id    (14), // // the linked data is id that uniquely identifies the record within its domain
+    timestamp_linked_id (15), // // the linked data is id that uniquely identifies the record within its domain
+    category       (16)  // item represents a category designation
+  } Default other,
+  dataIndex Integer Default -1, // index into the source collection's array (if specified, it must be specified for all columns)
+  converterClass PrintableString Optional, // Design~class: the class name for the converter to convert to and from the type
+  linkedDataConverterClass PrintableString Optional, // Design~class: the class name for the converter to convert to and from the type
+  valueContext PrintableString Optional, // additional value describing a value (e.g. date format for dates)
+  linkedDataContext PrintableString Optional, // additional value describing the linked data
+  runtime Boolean Default false [ isTemplate="false" ], // true if this column is created and inserted into the data stream at runtime
+  structColumns Set {
+    column DataColumn
+  } Reference [ templateName, addTemplateColumnsAfter="false" ]
+}
+
+DataView ::= Sequence {
+  name PrintableString Range(0..255) Optional, // the name to use to reference the item
+  title PrintableString Range(0..64) Optional, // the name of the view
+  description PrintableString Range(0..255) Optional, // the description of the item
+  icon PrintableString Range(0..255) Optional [ alt, slice, size, scaling, density ], // Appearance~icon~reload: url to use to retrieve an icon associated with the value (if not defined, the icon of the widget is used)
+  sourceView PrintableString Range(0..255) Optional [ isURLSegment, supportsParentQueryParameters ], // the name of a view to use as the source (instead of the collection itself). If isURLSegment is true the sourceView is appended to the collections URL to be used to retrieve the views data
+  queryParameters Set {
+    column DataColumn [ required ]
+  } Reference [ required ], // optional parameters for a sourceView that is a URL segment
+  queryURL PrintableString [ mimeType, inline ], // Design~url: query to use to filter the results after processing (string values converted to native types) ; can be a javascript function or java class namee
+  transformURL PrintableString Optional [ mimeType, inline ], // Design~url: used to transform the collection after all rows have been processed; can be a javascript function java class name or SQL
+  updateInline Boolean Default false, // whether the view should be updated inline with changed to it's parent collection
+  graphable Boolean Optional, // whether the view can be graphed; if not set the data column value types are used to figure this out
+  register Boolean Optional [ name ], // Design: whether the view is registered
+  typeMask Integer Default 1, // Design: developer specific mask for view that can be used at runtime to categorize views
+  templateFile PrintableString Range(0..255) Optional  // Design: used by back end generators to generate the display for the view
+}
+
+CollectionTarget ::= Sequence {
+  targetName PrintableString Range(0..64), // name of the widget the set the collection into
+  dataURL PrintableString Optional [ mimeType, method, deferred, columnSeparator, inline, ldSeparator, riSeparator, unescape="false", parser, customProperties, linkAttributes, copyType, monitor="true" ], // / a URL to use to retrieve data for the collection or collection definition can be a collection: URL
+  collectionName PrintableString Range(0..64) Optional,
+  registerCollection Boolean Default false [ title, registerViewsByDefault, registerViewsList, viewsListName, viewsListTitle, addParentToViewsList, viewsListParentTitle ], // Design: true to register the collection
+  queryURL PrintableString Optional [ mimeType, inline ], // Design~url: query filter to apply to source collection can be default is a comma separated list of columns (text/csv] or SQL of script code
+  transformURL PrintableString Optional [ mimeType, inline ], // Design~url: transform to apply to data
+  fieldMapping PrintableString Optional [ mimeType, delimiter ], // comma separated list of mappings for column name to field name if target is a formles
+  replaceTableColumnTitle Boolean Default false, // whether to replace the column title in the UI markup with the data column title
+  replaceTableColumns Boolean Default false [ columnCount ], // whether to replace the table columns in the UI markup with the data columns
+  projectWidgetAsCollection Boolean Default false [ name, title, registerSelectionView, useWidgetAsSelectionSource, selectionViewTitle ], // whether the widgets data should be presented as a registered collection
+  itemAttributeHandling Enumerated {
+    none            (0), // pass the item to the widget
+    apply_to_widget (1), // extract the attributes and apply then to the widget
+    convert_to_html (2),
+    strip           (3)  // strip t
+  } Default convert_to_html, // how item display attributes are treated the when the item's value is set into the widget does not directly support items
+  updateWhenDataChanges Boolean Default false, // whether the UI should be updated when data changes
+  copySourceViews Boolean Default true, // Design~wheter the source views should be copied into the new collection
+  views Set {
+    view DataView
+  } Reference, // predefined views for this collection
+  initialSelection PrintableString Range(0..64) Optional [ selectionType="index" ], // initial selectionType can be index,value or linkedData
+  generateCategoryViews Boolean Default false [ categoryColumn, useLinkedDataWhenGrouping, register, typeMask ],
+  grouping GroupingInfo Reference [ appendCounts, boldGroupTitles, titlesSelectable ]
+}
+
+GroupingInfo ::= Sequence {
+  columns PrintableString, // columns to group the collection by (names or numbers)
+  groupTitleColumnPosition Integer Default 1, // the location where the group title with be placed if grouping tabular data
+  preserveGroupingColumns Boolean Default true, // whether grouping columns will be preserved once grouping has occurred
+  useStringComparison Boolean Default true, // whether values should be compared as string when grouping
+  groupingSortOrder PrintableString Range(0..20) Optional, // comma separated list of numbers denoting the sorting order for each group (-1 = descending,  0 = not sorting, 1 = ascending)
+  sortingColumn PrintableString Range(0..64) Optional [ sortOrder="1" ]  // The name of number of the column to sort the items of the last grouping by
+}

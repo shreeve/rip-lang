@@ -1,0 +1,376 @@
+SplitPane {
+  name: "ordersSplitPane"
+  splitOrientation: left_to_right
+  splitProportions {
+    .75
+  }
+  regions {
+    {
+      viewer {
+        Form {
+          name: "ordersForm"
+          borders {
+            shadow [ thickness="7" ]
+          } [ thickness="7" ]
+          scriptURL:<< 
+            function filterTable(str) {
+              if(str==null) {
+                ordersTable.unfilter();
+                filterLabel.value="All Orders";
+                filterLabel.foreground=window.getColor("black");
+              }
+              else {
+                ordersTable.filter(5,str,false)
+                filterLabel.value=str+" Orders";
+                filterLabel.foreground=window.getColor("#800000");
+              }
+              orderDetails.resetForm();
+            }
+            function updateDetails() {
+              orderDetails.resetForm();
+            }
+            >> [inline=true]
+          rows: "2"
+          widgets {
+            {
+              GroupBox {
+                borders {
+                  none
+                }
+                bgColor: "defaultBackground+10,defaultBackground-10"
+                bounds {
+                  x: "0"
+                  y: "0"
+                }
+                contentPadding {
+                  top: "2"
+                  right: "2"
+                  bottom: "2"
+                  left: "2"
+                }
+                columns: "7"
+                widgets {
+                  {
+                    PushButton {
+                      bounds {
+                        x: "0"
+                        y: "0"
+                      }
+                      popupMenu {
+                        {
+                          value: "All"
+                        } [ onAction="filterTable(null)" ]
+                        {
+                          value: "Active"
+                        } [ onAction="filterTable('Active')" ]
+                        {
+                          value: "Inactive"
+                        } [ onAction="filterTable('Inactive')" ]
+                        {
+                          value: "Canceled"
+                        } [ onAction="filterTable('Canceled')" ]
+                      }
+                      templateName: "viewsList"
+                    }
+                  }
+                  {
+                    Label {
+                      bounds {
+                        x: "1"
+                        y: "0"
+                        width: "5ch"
+                      }
+                    }
+                  }
+                  {
+                    Label {
+                      name: "filterLabel"
+                      bounds {
+                        x: "2"
+                        y: "0"
+                      }
+                      templateName: "viewLabel"
+                      value: "All Orders"
+                    }
+                  }
+                  {
+                    Label {
+                      bounds {
+                        x: "3"
+                        y: "0"
+                        width: "5ch"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            {
+              TreeTable {
+                name: "ordersTable"
+                borders {
+                  none
+                }
+                verticalAlign: full
+                horizontalAlign: full
+                bounds {
+                  x: "0"
+                  y: "1"
+                }
+                focusPainted: false
+                dataURL: "data/orders.txt" [ riSeparator=","]
+                templateName: "prototypeTable"
+                autoResizeMode: none
+                columnSpanningAllowed: true
+                quickFindSupport: search_bar
+                autoSizeRowsToFit: true
+                gridLineType: horizontal_lines
+                columnChooserEnabled: true
+                columns {
+                  {
+                    width: "18!"
+                    hideable: false
+                  }
+                  {
+                    title: "Order"
+                    width: "17ch"
+                    hideable: false
+                    textWrapping: line
+                    converterClass: "StringConverter"
+                    verticalAlign: top
+                  }
+                  {
+                    title: "Start date"
+                    valueType: date_time_type
+                    valueContext: "|MMM dd, yyyy HH:mm"
+                    verticalAlign: top
+                    width: "10ch"
+                  }
+                  {
+                    title: "Stop date"
+                    valueType: date_time_type
+                    valueContext: "|MMM dd, yyyy HH:mm"
+                    verticalAlign: top
+                    width: "10ch"
+                  }
+                  {
+                    title: "Provider"
+                    verticalAlign: top
+                    width: "10ch"
+                  }
+                  {
+                    title: "Status"
+                    verticalAlign: top
+                    width: "6ch"
+                  }
+                  {
+                    title: "Nurse"
+                    width: "10ch"
+                    verticalAlign: top
+                    visible: false
+                  }
+                  {
+                    title: "Clerk"
+                    width: "10ch"
+                    verticalAlign: top
+                    visible: false
+                  }
+                  {
+                    title: "Chart"
+                    width: "10ch"
+                    verticalAlign: top
+                    visible: false
+                  }
+                  {
+                    title: "Location"
+                    width: "10ch"
+                    verticalAlign: top
+                    visible: false
+                  }
+                }
+                expandAll: true
+              } [ onChange="updateDetails()" ]
+            }
+          }
+        }
+      }
+    }
+    {
+      viewer {
+        /**
+         * Define a form that will show the details of the selected row.
+         * The widget values are embedded references to columns in the selected
+         * row of the table. A call to resetForm() every time the selection in the table changes
+         * cause the values to reset based on the current selection
+         */
+        Form {
+          name: "orderDetails"
+          borders {
+            shadow [ thickness="7" ]
+          } [ thickness="7" ]
+          contentPadding {
+            top: "2"
+            right: "2"
+            bottom: "2"
+            left: "2"
+          }
+          rows: "11"
+          columns: "2"
+          widgets {
+            {
+              Label {
+                borders {
+                  line
+                }
+                columnSpan: 2
+                horizontalAlign: full
+                font {
+                  style: bold
+                }
+                fgColor: "TitledBorder.titleColor"
+                bgColor: "defaultBackground+10,defaultBackground-10"
+                bounds {
+                  x: "0"
+                  y: "0"
+                  height: "1.25ln"
+                }
+                value: "Order Detail"
+                textHAlignment: center
+              }
+            }
+            {
+              TextArea {
+                name: "orderField"
+                borders {
+                  shadow
+                  line
+                }
+                columnSpan: 2
+                horizontalAlign: full
+                font {
+                  style: bold
+                }
+                bgColor: "defaultBackground+10,defaultBackground"
+                bounds {
+                  x: "0"
+                  y: "1"
+                  height: "10ln"
+                }
+                value: "{/ordersTable/%selectionValue[1]}"
+                editable: false
+              }
+            }
+            {
+              Label {
+                name: "service"
+                title: "Service"
+                templateName: "ordersValueField"
+                bounds {
+                  x: "1"
+                  y: "2"
+                }
+                value: "{/ordersTable/%selectionData[0]}"
+              }
+            }
+            {
+              Label {
+                name: "startDate"
+                title: "Start Date"
+                templateName: "ordersValueField"
+                bounds {
+                  x: "1"
+                  y: "3"
+                }
+                value: "{/ordersTable/%selectionValue[2]}"
+              }
+            }
+            {
+              Label {
+                name: "stopDate"
+                title: "Stop Date"
+                templateName: "ordersValueField"
+                bounds {
+                  x: "1"
+                  y: "4"
+                }
+                value: "{/ordersTable/%selectionValue[3]}"
+              }
+            }
+            {
+              Label {
+                name: "provider"
+                title: "Provider"
+                templateName: "ordersValueField"
+                bounds {
+                  x: "1"
+                  y: "5"
+                }
+                value: "{/ordersTable/%selectionValue[4]}"
+              }
+            }
+            {
+              Label {
+                name: "nurse"
+                title: "Nurse"
+                templateName: "ordersValueField"
+                bounds {
+                  x: "1"
+                  y: "6"
+                }
+                value: "{/ordersTable/%selectionValue[6]}"
+              }
+            }
+            {
+              Label {
+                name: "clerk"
+                title: "Clerk"
+                templateName: "ordersValueField"
+                bounds {
+                  x: "1"
+                  y: "7"
+                }
+                value: "{/ordersTable/%selectionValue[7]}"
+              }
+            }
+            {
+              Label {
+                name: "chart"
+                title: "Chart"
+                templateName: "ordersValueField"
+                bounds {
+                  x: "1"
+                  y: "8"
+                }
+                value: "{/ordersTable/%selectionValue[8]}"
+              }
+            }
+            {
+              Label {
+                name: "status"
+                title: "Status"
+                templateName: "ordersValueField"
+                bounds {
+                  x: "1"
+                  y: "9"
+                }
+                value: "{/ordersTable/%selectionValue[5]}"
+              }
+            }
+            {
+              Label {
+                name: "location"
+                title: "Location"
+                templateName: "ordersValueField"
+                bounds {
+                  x: "1"
+                  y: "10"
+                }
+                value: "{/ordersTable/%selectionValue[9]}"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

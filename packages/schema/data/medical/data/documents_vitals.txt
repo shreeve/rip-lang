@@ -1,0 +1,6 @@
+Blood Pressure|150/110|T-1@16:08
+Height|64 in|T-1@16:04|1.62 m
+Pulse|93|T-1@13:11
+Resperation|22|T-1@13:11
+Temperature|99.5 F|T-1@13:45|37.5 c
+Weight|125 lb|T-1@16:08|56.7 kg

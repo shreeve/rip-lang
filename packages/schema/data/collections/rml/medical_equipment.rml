@@ -1,0 +1,28 @@
+DataCollection {
+  name: "medical_equipment"
+  title: "Medical Equipment
+  columns {
+    {
+      name: "id"
+      title:"Equipment"
+      columnType: id
+    }
+    {
+      name: "equipment"
+      title:"Equipment"
+    }
+    {
+      name: "type"
+      valueType: date_type
+    }
+    {
+      name: "date"
+      title: "Date"
+      valueType: date_time_type
+    }
+    {
+      name: "site"
+      description: "Site of implanted devices"
+    }
+  }
+ }

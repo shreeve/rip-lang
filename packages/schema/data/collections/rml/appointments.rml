@@ -1,0 +1,44 @@
+DataCollection {
+  name: "appointments"
+  title: "Patient Appointments"
+  columns {
+    {
+      name: "id"
+      description: "the identifier of the schedule owner
+      columnType: id
+    }
+    {
+      name: "type"
+    }
+    {
+      name: "startDate"
+      title: "Start Date"
+      valueType: date_time_type
+    }
+    {
+      name: "endDate"
+      title: "End Time"
+      valueType: date_time_type
+    }
+    {
+      name: "reason"
+      title: "Reason"
+    }
+    {
+      name: "description"
+    }
+    {
+      name: "comments"
+    }
+    {
+      name: "participants"
+      valueType: array_type
+    }
+    {
+      name: "status"
+    }
+    {
+      name: "priority"
+    }
+  }
+}
