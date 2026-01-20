@@ -24,9 +24,9 @@ Rip is a modern reactive language that compiles to JavaScript. It takes the eleg
 **Reactivity is built into the language.** Unlike React, Vue, or Svelte where reactivity comes from libraries or compiler magic, Rip's reactive features are **language-level operators**:
 
 ```coffee
-count := 0              # State (reactive value)
-doubled ~= count * 2    # Computed (auto-updates)
-~> log doubled          # Effect (side effects)
+count := 0          # State (reactive value)  "has state"
+twice ~= count * 2  # Computed (auto-updates) "always equal"
+trace ~> log count  # Effect (side effects)   "always calls"
 ```
 
 No imports. No hooks. No dependency arrays. Just write code.
