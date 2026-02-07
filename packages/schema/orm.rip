@@ -320,8 +320,8 @@ export class Model
     return null if result.rows is 0
     @_materialize result.meta, result.data[0]
 
-  @where: (conditions, params...) ->
-    new Query(@).where(conditions, params...)
+  @where: (conditions, ...params) ->
+    new Query(@).where(conditions, ...params)
 
   @count: (conditions = null) ->
     q = new Query(@)
@@ -344,7 +344,7 @@ class Query
     @_limit = null
     @_offset = null
 
-  where: (conditions, params...) ->
+  where: (conditions, ...params) ->
     if typeof conditions is 'string'
       @_where.push conditions
       @_params.push ...params

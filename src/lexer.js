@@ -1076,6 +1076,8 @@ export class Lexer {
     else if (SHIFT.has(val))           tag = 'SHIFT';
     // Spaced ? → SPACE? (ternary)
     else if (val === '?' && prev?.spaced) tag = 'SPACE?';
+    // ?[ and ?( without dot → treat as optional chaining (?.)
+    else if (val === '?' && (this.chunk[1] === '[' || this.chunk[1] === '(')) tag = '?.';
     // Call/index context (ES6 optional chaining only)
     else if (prev) {
       if (val === '(' && !prev.spaced && CALLABLE.has(prev[0])) {
@@ -1190,15 +1192,11 @@ export class Lexer {
     let starter = null;
     let indent = null;
     let outdent = null;
-    let bodyStart = null;
-
     let condition = (token, i) => {
       return token[1] !== ';' && SINGLE_CLOSERS.has(token[0]) &&
         !(token[0] === 'TERMINATOR' && EXPRESSION_CLOSE.has(this.tokens[i + 1]?.[0])) &&
         !(token[0] === 'ELSE' && starter !== 'THEN') ||
-        token[0] === ',' && (starter === '->' || starter === '=>') &&
-          !(bodyStart != null && IMPLICIT_FUNC.has(this.tokens[bodyStart]?.[0]) && this.tokens[bodyStart]?.spaced &&
-            (IMPLICIT_CALL.has(this.tokens[bodyStart + 1]?.[0]) || (this.tokens[bodyStart + 1]?.[0] === '...' && IMPLICIT_CALL.has(this.tokens[bodyStart + 2]?.[0])))) ||
+        token[0] === ',' && (starter === '->' || starter === '=>') && !this.commaInImplicitCall(i) ||
         CALL_CLOSERS.has(token[0]) && (this.tokens[i - 1]?.newLine || this.tokens[i - 1]?.[0] === 'OUTDENT');
     };
 
@@ -1240,7 +1238,6 @@ export class Lexer {
       if (SINGLE_LINERS.has(tag) && this.tokens[i + 1]?.[0] !== 'INDENT' &&
           !(tag === 'ELSE' && this.tokens[i + 1]?.[0] === 'IF')) {
         starter = tag;
-        bodyStart = i + 2;
         [indent, outdent] = this.makeIndentation();
         if (tag === 'THEN') indent.fromThen = true;
         tokens.splice(i + 1, 0, indent);
@@ -1499,6 +1496,27 @@ export class Lexer {
       }
       i++;
     }
+  }
+
+  // Scan backward from comma to see if it's inside an implicit function call
+  commaInImplicitCall(i) {
+    let levels = 0;
+    for (let j = i - 1; j >= 0; j--) {
+      let tag = this.tokens[j][0];
+      if (EXPRESSION_END.has(tag)) { levels++; continue; }
+      if (EXPRESSION_START.has(tag)) {
+        if (tag === 'INDENT') return false;
+        levels--;
+        if (levels < 0) return false;
+        continue;
+      }
+      if (levels > 0) continue;
+      if (IMPLICIT_FUNC.has(tag) && this.tokens[j].spaced) {
+        let nt = this.tokens[j + 1]?.[0];
+        return IMPLICIT_CALL.has(nt) || (nt === '...' && IMPLICIT_CALL.has(this.tokens[j + 2]?.[0]));
+      }
+    }
+    return false;
   }
 
   looksObjectish(j) {

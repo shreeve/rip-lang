@@ -401,7 +401,7 @@ toMoney = (value, half, cents) ->
   c = if neg then -c else c
   if cents then c else c / 100
 
-export toName = (str, type...) ->
+export toName = (str, ...type) ->
   s = String(str)
   s = s.toLowerCase().replace(/\s+/g, ' ').trim()
   s = s.replace /(^|(?<=\P{L}))(\p{L})/gu, (m, pre, ch) -> pre + ch.toUpperCase()

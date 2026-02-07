@@ -6,7 +6,7 @@
 # Each rule maps a pattern of tokens/types to an s-expression action.
 #
 # Action format:
-#   - Numbers (1, 2, 3...) reference matched symbols by position
+#   - Numbers (1, 2, ...3) reference matched symbols by position
 #   - ...N spreads the array at position N
 #   - String literals become s-expression nodes: '["if", 2, 3]'
 #   - Default action (no action given) returns position 1

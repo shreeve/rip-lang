@@ -53,7 +53,7 @@ class Item
 
 # LR State: A set of items with transitions to other states
 class State
-  constructor: (items...) ->
+  constructor: (...items) ->
     @id           = null           # state number (assigned later)
     @items        = new Set(items) # kernel and closure items
     @transitions  = new Map        # symbol → next state
