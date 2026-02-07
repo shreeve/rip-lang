@@ -27,8 +27,6 @@ Rip 3.0 is a ground-up rewrite of the entire compiler pipeline. Every component 
 #### Removed
 - Postfix spread/rest (`x...`) — use prefix `...x` (ES6)
 - Prototype access (`x::y`, `x?::y`) — use `.prototype` or class syntax
-- Soak call sugar (`fn?(arg)`) — use `fn?.(arg)` (ES6 optional call)
-- Soak index sugar (`arr?[i]`) — use `arr?.[i]` (ES6 optional index)
 - `is not` contraction — use `isnt`
 
 #### Added
@@ -37,15 +35,16 @@ Rip 3.0 is a ground-up rewrite of the entire compiler pipeline. Every component 
 - `as!` async shorthand: `for x as! iterable` (shorthand for `for await x as iterable`)
 
 #### Kept
-- Existence check: `x?` compiles to `(x != null)`
+- Existence check: `x?` compiles to `(x != null)` — works after any expression
 - All reactive operators: `:=`, `~=`, `~>`, `=!`
 - Dammit operator: `x!` compiles to `await x()`
-- Optional chaining: `?.`, `?.[]`, `?.()` (ES6 dot-form only)
+- Optional chaining: `?.`, `?.[]`, `?.()` (ES6 dot-form)
+- Optional chaining shorthand: `?[]`, `?()` (compiles to `?.[]`, `?.()`)
 - Nullish coalescing: `??`
 - All other CoffeeScript-compatible syntax
 
 ### Tests
-- 1,048 tests passing (100%)
+- 1,073 tests passing (100%)
 - 25 test files across all language features
 
 ---

@@ -17,7 +17,7 @@ echo 'your code' | ./bin/rip -s  # S-expressions (parser)
 echo 'your code' | ./bin/rip -c  # JavaScript (codegen)
 
 # Run tests
-bun run test                              # All tests (1048)
+bun run test                              # All tests (1073)
 bun test/runner.js test/rip/FILE.rip     # Specific file
 
 # Rebuild parser (after grammar changes)
@@ -31,8 +31,8 @@ bun run browser
 
 | Metric | Value |
 |--------|-------|
-| Version | 3.0.0 |
-| Tests | 1,048/1,048 (100%) |
+| Version | 3.0.2 |
+| Tests | 1,073/1,073 (100%) |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
 
@@ -54,7 +54,7 @@ rip-lang/
 ├── docs/
 │   ├── RIP-LANG.md      # Language reference
 │   └── RIP-INTERNALS.md # Compiler architecture & design decisions
-├── test/rip/            # 25 test files (1,048 tests)
+├── test/rip/            # 25 test files (1,073 tests)
 └── scripts/             # Build utilities
 ```
 
@@ -225,7 +225,7 @@ code "name", "x + y", "(x + y)"
 fail "name", "invalid syntax"
 ```
 
-### Test Files (25 files, 1,048 tests)
+### Test Files (25 files, 1,073 tests)
 
 ```
 test/rip/
@@ -266,8 +266,6 @@ test/rip/
 |---------|-------------|
 | Postfix spread/rest (`x...`) | Prefix only: `...x` (ES6) |
 | Prototype access (`x::y`, `x?::y`) | `.prototype` or class syntax |
-| Soak call sugar (`fn?(arg)`) | `fn?.(arg)` (ES6 optional call) |
-| Soak index sugar (`arr?[i]`) | `arr?.[i]` (ES6 optional index) |
 | Binary existential (`x ? y`) | `x ?? y` (nullish coalescing) |
 | `is not` contraction | `isnt` |
 | `for x from iterable` | `for x as iterable` |
@@ -285,7 +283,8 @@ test/rip/
 | Feature | Syntax | Compiles to |
 |---------|--------|-------------|
 | Existence check | `x?` | `(x != null)` |
-| Optional chaining | `a?.b`, `a?.[]`, `a?.()` | ES6 optional chaining |
+| Optional chaining | `a?.b`, `a?.[0]`, `a?.()` | ES6 optional chaining |
+| Optional chaining shorthand | `a?[0]`, `a?(x)` | `a?.[0]`, `a?.(x)` |
 | Nullish coalescing | `a ?? b` | `a ?? b` |
 | Dammit operator | `fetchData!` | `await fetchData()` |
 

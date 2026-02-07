@@ -235,7 +235,7 @@ src/
     ├── grammar.rip  # Grammar specification (887 LOC)
     └── solar.rip    # Parser generator (1,001 LOC) — don't edit
 
-test/rip/            # 25 test files, 1,048 tests
+test/rip/            # 25 test files, 1,073 tests
 docs/                # Comprehensive documentation
 ```
 

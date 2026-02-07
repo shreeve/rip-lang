@@ -63,7 +63,7 @@ console.log(code);
 
 | Feature | CoffeeScript | Rip |
 |---------|-------------|------|
-| Optional chaining | 4 soak operators | ES6 `?.` / `?.[]` / `?.()` |
+| Optional chaining | 4 soak operators | ES6 `?.` / `?.[]` / `?.()` + shorthand `?[]` / `?()` |
 | Ternary | No | `x ? a : b` |
 | Regex features | Basic | Ruby-style (`=~`, indexing, captures in `_`) |
 | Async shorthand | No | Dammit operator (`!`) |
@@ -298,8 +298,6 @@ The `!` suffix on `as` in for-loops (`as!`) emits `FORASAWAIT` instead of `FORAS
 |---------|-----------|-------------|
 | Postfix spread/rest | `x...` | `...x` (ES6 prefix only) |
 | Prototype access | `x::y`, `x?::y` | Direct `.prototype` or class syntax; `::` reserved for type annotations |
-| Soak call sugar | `x?(args)` | `x?.(args)` (ES6 optional call) |
-| Soak index sugar | `x?[i]` | `x?.[i]` (ES6 optional index) |
 | `is not` contraction | `x is not y` | `x isnt y` |
 
 ### Added
@@ -395,13 +393,15 @@ counter = ->
 | `x ?? y` | `x ?? y` |
 | `x ??= 10` | `x ??= 10` |
 
-Optional chaining uses ES6 syntax:
+Optional chaining uses ES6 syntax (both forms supported):
 
 | Syntax | Compiles To |
 |--------|-------------|
 | `obj?.prop` | `obj?.prop` |
 | `arr?.[0]` | `arr?.[0]` |
 | `fn?.(x)` | `fn?.(x)` |
+| `arr?[0]` | `arr?.[0]` |
+| `fn?(x)` | `fn?.(x)` |
 
 ## Range Optimization
 
@@ -458,8 +458,6 @@ The `Compiler` class's lexer adapter reconstructs `new String()` wrapping from t
 |-----------|--------|--------|
 | `generatePrototype` | `::` | Feature removed from lexer |
 | `generateOptionalPrototype` | `?::` | Feature removed from lexer |
-| `generateSoakIndex` | `?[]` | Replaced by `optindex` / `?.[]` |
-| `generateSoakCall` | `?call` | Replaced by `optcall` / `?.()` |
 
 ## Renamed: `for-from` → `for-as`
 
@@ -573,4 +571,4 @@ bun src/compare-compilers.js
 
 ---
 
-*Rip 3.0.0 — 1,048 tests passing — Zero dependencies — Self-hosting — ~7,700 LOC*
+*Rip 3.0 — 1,073 tests passing — Zero dependencies — Self-hosting — ~7,700 LOC*

@@ -9,9 +9,9 @@
 </p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.0.0-blue.svg" alt="Version"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.0.2-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
-  <a href="#"><img src="https://img.shields.io/badge/tests-1048%2F1048-brightgreen.svg" alt="Tests"></a>
+  <a href="#"><img src="https://img.shields.io/badge/tests-1073%2F1073-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
 </p>
 
@@ -147,6 +147,7 @@ State, computed values, and effects as language operators:
 | `?` (existence) | `x?` | True if `x != null` |
 | `?:` (ternary) | `x > 0 ? 'yes' : 'no'` | JS-style ternary expression |
 | `?.` `?.[]` `?.()` | `a?.b` `a?.[0]` `a?.()` | Optional chaining (ES6) |
+| `?[]` `?()` | `a?[0]` `a?(x)` | Optional chaining shorthand |
 | `??` | `a ?? b` | Nullish coalescing |
 | `...` (spread) | `[...items, last]` | Prefix spread (ES6) |
 | `//` | `7 // 2` | Floor division |
@@ -303,7 +304,7 @@ rip file.rip           # Run
 rip -c file.rip        # Compile
 rip -t file.rip        # Tokens
 rip -s file.rip        # S-expressions
-bun run test           # 1048 tests
+bun run test           # 1073 tests
 bun run parser         # Rebuild parser
 bun run browser        # Build browser bundle
 ```

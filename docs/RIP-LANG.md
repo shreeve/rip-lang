@@ -273,6 +273,7 @@ Multiple lines
 | `?` (postfix) | `a?` | Existence check (`a != null`) |
 | `?` (ternary) | `a ? b : c` | Ternary conditional |
 | `?.` `?.[]` `?.()` | `a?.b` `a?.[0]` `a?.()` | Optional chaining (ES6) |
+| `?[]` `?()` | `a?[0]` `a?(x)` | Optional chaining shorthand |
 | `??` | `a ?? b` | Nullish coalescing |
 
 ## Rip-Specific Operators
@@ -311,10 +312,14 @@ x ||= val    # x = x || val
 ## Optional Chaining
 
 ```coffee
-# ES6 optional chaining (dot required)
+# ES6 optional chaining (with dot)
 user?.profile?.name
 arr?.[0]
 fn?.(arg)
+
+# Shorthand (without dot — same behavior)
+arr?[0]       # Compiles to arr?.[0]
+fn?(arg)      # Compiles to fn?.(arg)
 ```
 
 ## Ternary Operator
@@ -1123,4 +1128,4 @@ count = 10  # Logs: "Count: 10, Doubled: 20"
 
 ---
 
-*Rip 3.0.0 — 1,048 tests passing — Zero dependencies — Self-hosting — ~7,700 LOC*
+*Rip 3.0 — 1,073 tests passing — Zero dependencies — Self-hosting — ~7,700 LOC*

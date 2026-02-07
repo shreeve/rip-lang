@@ -18,7 +18,7 @@
 
 o = (pattern, action, options) ->
   pattern = pattern.trim().replace /\s{2,}/g, ' '
-  [pattern, action ? 1, options]
+  [pattern, action ?? 1, options]
 
 mode = 'sexp'
 

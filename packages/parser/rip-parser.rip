@@ -335,7 +335,7 @@ class Generator
 
       # Single pass: group items by nextSymbol
       symbolItems = new Map
-      for item from itemSet.items when item.nextSymbol and item.nextSymbol isnt '$end'
+      for item as itemSet.items when item.nextSymbol and item.nextSymbol isnt '$end'
         items = symbolItems.get(item.nextSymbol)
         unless items
           items = []
@@ -343,7 +343,7 @@ class Generator
         items.push(item)
 
       # Process each symbol with its pre-collected items
-      for [symbol, items] from symbolItems
+      for [symbol, items] as symbolItems
         @_insertStateWithItems symbol, items, itemSet, states, stateMap
 
     @states = states
@@ -359,7 +359,7 @@ class Generator
       newItems = new Set
 
       # Only process item cores we haven't yet seen
-      for item from workingSet when !itemCores.has(item.id)
+      for item as workingSet when !itemCores.has(item.id)
 
         # Add item to closure
         closureSet.items.add(item)
@@ -392,7 +392,7 @@ class Generator
   _goto: (itemSet, symbol) ->
     gotoSet = new State
 
-    for item from itemSet.items when item.nextSymbol is symbol
+    for item as itemSet.items when item.nextSymbol is symbol
       # Create advanced item (lookaheads will be set from FOLLOW sets later)
       newItem = new Item item.rule, null, item.dot + 1
       gotoSet.items.add newItem
@@ -442,12 +442,12 @@ class Generator
 
       # Mark rules nullable if all handle symbols are nullable
       for rule in @rules when not rule.nullable
-        if rule.symbols.every (symbol) => @_isNullable symbol
+        if rule.symbols.every((symbol) => @_isNullable symbol)
           rule.nullable = changed = true
 
       # Propagate to types
       for symbol, type of @types when not @_isNullable symbol
-        if type.rules.some (p) -> p.nullable
+        if type.rules.some((p) -> p.nullable)
           type.nullable = changed = true
 
   _isNullable: (symbol) ->
@@ -522,11 +522,11 @@ class Generator
   # Assign FOLLOW sets to reduction items
   _assignItemLookaheads!: ->
     for state in @states
-      for item from state.reductions
+      for item as state.reductions
         follows = @types[item.rule.type]?.follows
         if follows
           item.lookaheads.clear()
-          item.lookaheads.add token for token from follows
+          item.lookaheads.add token for token as follows
 
   # ============================================================================
   # Parse Table Generation
@@ -541,19 +541,19 @@ class Generator
       state = states[k] = {}
 
       # Shift and goto actions
-      for [stackSymbol, gotoState] from itemSet.transitions when @symbolIds[stackSymbol]?
+      for [stackSymbol, gotoState] as itemSet.transitions when @symbolIds[stackSymbol]?
         if types[stackSymbol]
           state[@symbolIds[stackSymbol]] = gotoState
         else
           state[@symbolIds[stackSymbol]] = [SHIFT, gotoState]
 
       # Accept action
-      for item from itemSet.items when item.nextSymbol is "$end" and @symbolIds["$end"]?
+      for item as itemSet.items when item.nextSymbol is "$end" and @symbolIds["$end"]?
         state[@symbolIds["$end"]] = [ACCEPT]
 
       # Reduce actions
-      for item from itemSet.reductions
-        for stackSymbol from item.lookaheads when @symbolIds[stackSymbol]?
+      for item as itemSet.reductions
+        for stackSymbol as item.lookaheads when @symbolIds[stackSymbol]?
           action = state[@symbolIds[stackSymbol]]
           op = operators[stackSymbol]
 
@@ -960,7 +960,7 @@ if isRunAsScript
 
         if grammar.grammar
           parts.push '  (rules'
-          for [name, productions] from Object.entries(grammar.grammar)
+          for [name, productions] as Object.entries(grammar.grammar)
             parts.push "    (#{name}"
             for production in productions
               [pattern, action, opts] = production

@@ -52,11 +52,23 @@ test "es6 optional index exists", "arr = [1, 2, 3]\narr?.[1]", 2
 test "es6 optional index null", "arr = null\narr?.[0]", undefined
 test "es6 optional index chain", "obj = {arr: [1, 2]}\nobj?.arr?.[0]", 1
 
+# Optional index without dot: arr?[index] → arr?.[index]
+test "optional index no dot", "arr = [1, 2, 3]\narr?[1]", 2
+test "optional index no dot null", "arr = null\narr?[0]", undefined
+test "optional index no dot chain", "obj = {arr: [1, 2]}\nobj?.arr?[0]", 1
+code "optional index no dot gen", "arr?[0]", "arr?.[0]"
+
 # Optional call (ES6): ES6 native optional chaining
 # Pattern: fn?.(arg) → fn?.(arg) (ES6 native)
 test "es6 optional call exists", "fn = (x) -> x * 2\nfn?.(5)", 10
 test "es6 optional call null", "fn = null\nfn?.(5)", undefined
 test "es6 optional call chain", "obj = {fn: (x) -> x}\nobj?.fn?.(42)", 42
+
+# Optional call without dot: fn?(arg) → fn?.(arg)
+test "optional call no dot", "fn = (x) -> x * 2\nfn?(5)", 10
+test "optional call no dot null", "fn = null\nfn?(5)", undefined
+test "optional call no dot chain", "obj = {fn: (x) -> x}\nobj?.fn?(42)", 42
+code "optional call no dot gen", "fn?(42)", "fn?.(42)"
 
 # ============================================================================
 # Optional Chaining in Expressions

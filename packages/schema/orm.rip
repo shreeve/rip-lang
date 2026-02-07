@@ -146,16 +146,16 @@ export class Model
   # ---------------------------------------------------------------------------
   # Instance state
   # ---------------------------------------------------------------------------
-  Object.defineProperty @::, '$isNew',
+  Object.defineProperty @constructor.prototype, '$isNew',
     get: -> not @_persisted
 
-  Object.defineProperty @::, '$dirty',
+  Object.defineProperty @constructor.prototype, '$dirty',
     get: -> Object.keys(@_dirty)
 
-  Object.defineProperty @::, '$changed',
+  Object.defineProperty @constructor.prototype, '$changed',
     get: -> Object.keys(@_dirty).length > 0
 
-  Object.defineProperty @::, '$data',
+  Object.defineProperty @constructor.prototype, '$data',
     get: -> { ...@_data }
 
   # ---------------------------------------------------------------------------
