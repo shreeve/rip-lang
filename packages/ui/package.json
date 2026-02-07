@@ -1,0 +1,51 @@
+{
+  "name": "@rip-lang/ui",
+  "version": "0.1.0",
+  "description": "Zero-build reactive web framework — VFS, file-based routing, reactive stash",
+  "type": "module",
+  "main": "ui.js",
+  "exports": {
+    ".": "./ui.js",
+    "./stash": "./stash.js",
+    "./vfs": "./vfs.js",
+    "./router": "./router.js",
+    "./renderer": "./renderer.js"
+  },
+  "scripts": {
+    "test": "echo \"Tests coming soon\" && exit 0"
+  },
+  "keywords": [
+    "ui",
+    "framework",
+    "reactive",
+    "vfs",
+    "router",
+    "stash",
+    "signals",
+    "no-build",
+    "rip",
+    "rip-lang"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreeve/rip-lang.git",
+    "directory": "packages/ui"
+  },
+  "homepage": "https://github.com/shreeve/rip-lang/tree/main/packages/ui#readme",
+  "bugs": {
+    "url": "https://github.com/shreeve/rip-lang/issues"
+  },
+  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "rip-lang": "^3.0.2"
+  },
+  "files": [
+    "ui.js",
+    "stash.js",
+    "vfs.js",
+    "router.js",
+    "renderer.js",
+    "README.md"
+  ]
+}
