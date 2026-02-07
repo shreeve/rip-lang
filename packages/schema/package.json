@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/schema",
-  "version": "0.3.0",
+  "version": "0.1.0",
   "description": "Unified schema language for types, validation, database models, UI widgets, and reactive state",
   "type": "module",
   "main": "index.js",
@@ -36,6 +36,9 @@
   },
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
+  "dependencies": {
+    "rip-lang": "^3.0.0"
+  },
   "files": [
     "index.js",
     "runtime.js",

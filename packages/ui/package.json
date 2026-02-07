@@ -27,6 +27,9 @@
   },
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
+  "dependencies": {
+    "rip-lang": "^3.0.0"
+  },
   "files": [
     "index.js",
     "README.md",
