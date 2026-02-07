@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rip UI Demo</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Demo Styles -->
+    <link rel="stylesheet" href="/css/demo.css">
+</head>
+<body>
+
+    <!-- App Shell -->
+    <div id="app"></div>
+
+    <!-- Boot the framework -->
+    <script type="module">
+        // Import the Rip compiler (browser build)
+        import { compileToJS } from '/rip.browser.js';
+
+        // Import the UI framework
+        import { createApp } from '/ui.js';
+
+        // Page manifest — files to load into the VFS
+        const pages = [
+            'pages/_layout.rip',
+            'pages/index.rip',
+            'pages/about.rip',
+            'pages/counter.rip',
+            'pages/todos.rip'
+        ];
+
+        // Boot
+        async function boot() {
+            const app = createApp({
+                target: '#app',
+                compile: compileToJS,
+                state: {
+                    appName: 'Rip UI Demo',
+                    version: '0.1.0',
+                    theme: 'light'
+                },
+                transition: { duration: 150 },
+                onNavigate: ({ path }) => console.log(`[Router] ${path}`),
+                onError: (err) => console.error('[App]', err)
+            });
+
+            // Fetch all page files from the server into the VFS
+            await app.load(pages);
+
+            // Start routing and rendering
+            app.start();
+
+            // Expose for console debugging
+            window.app = app;
+            console.log(`Rip UI Demo booted — ${app.fs.size} files in VFS`);
+            console.log('Routes:', app.router.routes.map(r => r.pattern));
+            console.log('Try: app.set("theme", "dark") or app.go("/counter")');
+        }
+
+        boot().catch(console.error);
+    </script>
+
+</body>
+</html>

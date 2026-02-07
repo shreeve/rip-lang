@@ -1,0 +1,18 @@
+# Root Layout
+
+component Layout
+
+  render
+    .app-layout
+      nav.app-nav
+        .nav-inner
+          a.nav-brand "Rip UI"
+          .nav-links
+            a.nav-link href: "/", "Home"
+            a.nav-link href: "/counter", "Counter"
+            a.nav-link href: "/todos", "Todos"
+            a.nav-link href: "/about", "About"
+      main.app-main
+        div data-slot: "true"
+
+Layout.new().mount "#app"

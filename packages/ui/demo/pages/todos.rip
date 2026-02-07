@@ -1,0 +1,52 @@
+# Todos Page
+
+component Todos
+  newTodo := ''
+  todos := []
+  nextId := 1
+
+  remaining ~= todos.filter((t) -> not t.done).length
+  total ~= todos.length
+
+  addTodo: ->
+    text = newTodo.trim()
+    if text
+      todos = [...todos, { id: nextId, text: text, done: false }]
+      nextId++
+      newTodo = ''
+
+  toggleTodo: (id) ->
+    todos = todos.map (t) ->
+      if t.id is id then { ...t, done: not t.done } else t
+
+  deleteTodo: (id) ->
+    todos = todos.filter (t) -> t.id isnt id
+
+  clearDone: ->
+    todos = todos.filter (t) -> not t.done
+
+  handleKey: (e) ->
+    @addTodo() if e.key is 'Enter'
+
+  render
+    div
+      .page-header
+        h1.page-title "Todos"
+        p.page-subtitle "List rendering and state management"
+
+      .card
+        .todo-input-row
+          input.input type: "text", placeholder: "What needs to be done?", @input: ((e) -> newTodo = e.target.value), @keydown: @handleKey
+          button.btn.btn-primary @click: @addTodo, "Add"
+
+        ul.todo-list
+          for todo in todos
+            li.todo-item
+              span.todo-text todo.text
+              button.todo-delete @click: (=> @deleteTodo(todo.id)), "x"
+
+        .todo-stats
+          span "#{remaining} remaining"
+          button.btn.btn-sm @click: @clearDone, "Clear done"
+
+Todos.new().mount "#app"

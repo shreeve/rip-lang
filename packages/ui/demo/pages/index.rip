@@ -1,0 +1,32 @@
+# Home Page
+
+component Home
+
+  render
+    div
+      .page-header
+        h1.page-title "Rip UI Framework"
+        p.page-subtitle "Zero-build reactive web apps"
+
+      .feature-grid
+        .feature-card
+          .feature-icon "🗂"
+          .feature-name "Virtual File System"
+          .feature-desc "Browser-local file storage. Components compiled on demand."
+
+        .feature-card
+          .feature-icon "🔀"
+          .feature-name "File-Based Router"
+          .feature-desc "URLs map to VFS paths. Dynamic segments and nested layouts."
+
+        .feature-card
+          .feature-icon "⚡"
+          .feature-name "Reactive Stash"
+          .feature-desc "Deep state tree with path navigation. Every property tracked."
+
+        .feature-card
+          .feature-icon "🎯"
+          .feature-name "Fine-Grained Rendering"
+          .feature-desc "No virtual DOM. Direct DOM updates via reactive effects."
+
+Home.new().mount "#app"

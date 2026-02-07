@@ -1,0 +1,35 @@
+# About Page
+
+component About
+
+  render
+    div
+      .page-header
+        h1.page-title "About"
+        p.page-subtitle "How this demo works"
+
+      .card
+        h3 "Architecture"
+        p "This app runs entirely in the browser. The Rip compiler (35KB) compiles .rip source files to JavaScript on demand. No build step, no bundler, no server-side rendering."
+
+      .card
+        h3 "Stack"
+        .btn-group
+          .stat
+            span "Compiler "
+            span.stat-value "35KB"
+          .stat
+            span "Framework "
+            span.stat-value "~8KB"
+          .stat
+            span "Build step "
+            span.stat-value "None"
+          .stat
+            span "Dependencies "
+            span.stat-value "Zero"
+
+      .card
+        h3 "How It Works"
+        p "The Virtual File System stores page components in memory. The Router maps URLs to VFS paths. When you navigate, the Renderer compiles the matching .rip file and mounts the resulting component. Reactivity uses := for state, ~= for computed values, and ~> for effects."
+
+About.new().mount "#app"

@@ -1,0 +1,500 @@
+/**
+ * Rip UI Demo — Self-contained styles
+ * No external dependencies (no Tailwind)
+ */
+
+/* ============================================
+   Design Tokens
+   ============================================ */
+
+:root {
+    --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+    --gray-50:  #f9fafb;
+    --gray-100: #f3f4f6;
+    --gray-200: #e5e7eb;
+    --gray-300: #d1d5db;
+    --gray-400: #9ca3af;
+    --gray-500: #6b7280;
+    --gray-600: #4b5563;
+    --gray-700: #374151;
+    --gray-800: #1f2937;
+    --gray-900: #111827;
+
+    --blue-50:  #eff6ff;
+    --blue-100: #dbeafe;
+    --blue-500: #3b82f6;
+    --blue-600: #2563eb;
+    --blue-700: #1d4ed8;
+
+    --green-50:  #f0fdf4;
+    --green-500: #22c55e;
+    --green-600: #16a34a;
+
+    --red-50:  #fef2f2;
+    --red-500: #ef4444;
+
+    --surface: var(--gray-50);
+    --card: #ffffff;
+    --text: var(--gray-900);
+    --text-secondary: var(--gray-500);
+    --text-muted: var(--gray-400);
+    --border: var(--gray-200);
+    --accent: var(--blue-600);
+    --accent-hover: var(--blue-700);
+
+    --radius: 0.75rem;
+    --radius-lg: 1rem;
+    --shadow: 0 1px 3px rgb(0 0 0 / 0.1), 0 1px 2px rgb(0 0 0 / 0.06);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    --transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============================================
+   Reset
+   ============================================ */
+
+*, *::before, *::after { box-sizing: border-box; }
+* { margin: 0; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+    font-family: var(--font);
+    line-height: 1.6;
+    color: var(--text);
+    background: var(--surface);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+img, svg { display: block; max-width: 100%; }
+input, button, textarea, select { font: inherit; }
+
+/* ============================================
+   Layout Shell
+   ============================================ */
+
+.app-layout {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.app-nav {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 0 1.5rem;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.nav-inner {
+    max-width: 48rem;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 3.5rem;
+}
+
+.nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none;
+    color: var(--text);
+    font-weight: 600;
+    font-size: 0.9375rem;
+    letter-spacing: -0.02em;
+}
+
+.nav-logo {
+    width: 1.75rem;
+    height: 1.75rem;
+    background: var(--accent);
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 0.6875rem;
+    font-weight: 700;
+}
+
+.nav-links {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.nav-link {
+    padding: 0.375rem 0.75rem;
+    border-radius: 0.5rem;
+    text-decoration: none;
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    transition: all var(--transition);
+}
+
+.nav-link:hover {
+    color: var(--text);
+    background: var(--gray-100);
+}
+
+.nav-link.active {
+    color: var(--accent);
+    background: var(--blue-50);
+}
+
+.app-main {
+    flex: 1;
+    max-width: 48rem;
+    width: 100%;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+}
+
+/* ============================================
+   Page Sections
+   ============================================ */
+
+.page-header {
+    margin-bottom: 2rem;
+}
+
+.page-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1.2;
+    color: var(--text);
+}
+
+.page-subtitle {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-top: 0.25rem;
+}
+
+/* ============================================
+   Card
+   ============================================ */
+
+.card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    padding: 1.5rem;
+}
+
+.card + .card {
+    margin-top: 1rem;
+}
+
+.card-title {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+}
+
+/* ============================================
+   Button
+   ============================================ */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    background: var(--card);
+    color: var(--text);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition);
+    user-select: none;
+}
+
+.btn:hover { background: var(--gray-50); border-color: var(--gray-300); }
+.btn:active { transform: scale(0.98); }
+
+.btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+}
+
+.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+
+.btn-danger {
+    color: var(--red-500);
+    border-color: var(--red-500);
+}
+
+.btn-danger:hover { background: var(--red-50); }
+
+.btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+}
+
+.btn-group {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+/* ============================================
+   Counter Display
+   ============================================ */
+
+.counter-display {
+    font-size: 4rem;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    text-align: center;
+    padding: 2rem 0;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+    transition: color var(--transition);
+}
+
+.counter-display.positive { color: var(--green-600); }
+.counter-display.negative { color: var(--red-500); }
+
+.counter-controls {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+/* ============================================
+   Input
+   ============================================ */
+
+.input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    background: var(--card);
+    color: var(--text);
+    font-size: 0.875rem;
+    transition: all var(--transition);
+}
+
+.input::placeholder { color: var(--text-muted); }
+.input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--blue-100); }
+
+/* ============================================
+   Todo List
+   ============================================ */
+
+.todo-input-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.todo-input-row .input { flex: 1; }
+
+.todo-list {
+    list-style: none;
+    padding: 0;
+}
+
+.todo-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--gray-100);
+    transition: opacity var(--transition);
+}
+
+.todo-item:last-child { border-bottom: none; }
+
+.todo-checkbox {
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 2px solid var(--gray-300);
+    border-radius: 0.375rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition);
+    flex-shrink: 0;
+}
+
+.todo-checkbox:hover { border-color: var(--accent); }
+
+.todo-checkbox.checked {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.todo-checkbox.checked::after {
+    content: '';
+    width: 0.4rem;
+    height: 0.25rem;
+    border-left: 2px solid white;
+    border-bottom: 2px solid white;
+    transform: rotate(-45deg);
+    margin-bottom: 1px;
+}
+
+.todo-text {
+    flex: 1;
+    font-size: 0.875rem;
+    color: var(--text);
+}
+
+.todo-text.done {
+    text-decoration: line-through;
+    color: var(--text-muted);
+}
+
+.todo-delete {
+    opacity: 0;
+    padding: 0.125rem 0.375rem;
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    transition: all var(--transition);
+}
+
+.todo-item:hover .todo-delete { opacity: 1; }
+.todo-delete:hover { color: var(--red-500); background: var(--red-50); }
+
+.todo-stats {
+    display: flex;
+    justify-content: space-between;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--gray-100);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+/* ============================================
+   Feature Grid (Home page)
+   ============================================ */
+
+.feature-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+@media (max-width: 640px) {
+    .feature-grid { grid-template-columns: 1fr; }
+}
+
+.feature-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    transition: all var(--transition);
+}
+
+.feature-card:hover {
+    border-color: var(--gray-300);
+    box-shadow: var(--shadow);
+}
+
+.feature-icon {
+    font-size: 1.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.feature-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 0.25rem;
+}
+
+.feature-desc {
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+/* ============================================
+   Code Block
+   ============================================ */
+
+.code-block {
+    background: var(--gray-800);
+    color: var(--gray-100);
+    padding: 1rem 1.25rem;
+    border-radius: var(--radius);
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    overflow-x: auto;
+    white-space: pre;
+}
+
+.code-keyword { color: #c084fc; }
+.code-string  { color: #86efac; }
+.code-comment { color: var(--gray-500); }
+.code-number  { color: #fbbf24; }
+
+/* ============================================
+   Route Transitions
+   ============================================ */
+
+.route-transition-enter {
+    animation: fadeIn 150ms ease-out;
+}
+
+.route-transition-exit {
+    animation: fadeOut 150ms ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeOut {
+    from { opacity: 1; transform: translateY(0); }
+    to   { opacity: 0; transform: translateY(-4px); }
+}
+
+/* ============================================
+   Stat badge
+   ============================================ */
+
+.stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    background: var(--gray-100);
+    border-radius: var(--radius);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.stat-value {
+    font-weight: 700;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
