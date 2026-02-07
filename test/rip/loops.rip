@@ -166,6 +166,37 @@ test "continue in for-in", '''
   ''', 25
 
 # ============================================================================
+# For-As Loops (ES6 for-of on iterables): "for-as"
+# ============================================================================
+
+# Basic for-as
+test "for-as array", "sum = 0; for x as [1, 2, 3]\n  sum += x\nsum", 6
+test "for-as set", "sum = 0; s = new Set([10, 20, 30]); for x as s\n  sum += x\nsum", 60
+
+# For-as with destructuring (used in packages for Map.entries())
+test "for-as destructure", '''
+  m = new Map()
+  m.set("a", 1)
+  m.set("b", 2)
+  result = []
+  for [k, v] as m.entries()
+    result.push("#{k}=#{v}")
+  result
+  ''', ["a=1", "b=2"]
+
+test "for-as destructure array", '''
+  pairs = [[1, 2], [3, 4], [5, 6]]
+  sum = 0
+  for [a, b] as pairs
+    sum += a + b
+  sum
+  ''', 21
+
+# Code generation
+code "for-as loop", "for x as iter\n  x", "for (const x of iter) { x; }"
+code "for-as destructure gen", "for [k, v] as m.entries()\n  k", "for (const [k, v] of m.entries()) { k; }"
+
+# ============================================================================
 # Nested Loops
 # ============================================================================
 

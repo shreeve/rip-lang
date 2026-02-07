@@ -17,6 +17,23 @@ test "if not exists", "x = null; if x? then 'exists' else 'missing'", "missing"
 # Code generation
 code "existence check", "x?", "(x != null)"
 
+# Existence after subscript access: arr[i]?
+test "existence subscript", "arr = [1, 2, 3]; arr[0]?", true
+test "existence subscript undefined", "arr = [1, 2, 3]; arr[99]?", false
+test "existence subscript null element", "arr = [null]; arr[0]?", false
+test "existence subscript expression", "arr = [10, 20]; arr[1 - 1]?", true
+code "existence subscript gen", "arr[0]?", "(arr[0] != null)"
+
+# Existence after function call: fn()?
+test "existence call", "fn = -> 42; fn()?", true
+test "existence call null", "fn = -> null; fn()?", false
+test "existence call undefined", "fn = -> undefined; fn()?", false
+code "existence call gen", "fn()?", "(fn() != null)"
+
+# Existence after property access (already works, but verify compound)
+test "existence deep subscript", "obj = {a: [1, 2]}; obj.a[0]?", true
+test "existence deep subscript null", "obj = {a: [null]}; obj.a[0]?", false
+
 # ============================================================================
 # DOT-BASED ?. - ES6 Optional Chaining (Native Passthrough)
 # ============================================================================

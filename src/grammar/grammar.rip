@@ -15,10 +15,8 @@
 #   - Removed :: and ?:: (prototype access) — reserved for future type annotations
 #   - Removed INDEX_SOAK — use ES6 optional indexing (?.[i]) instead
 #   - Removed FUNC_EXIST / OptFuncExist — use ES6 optional call (?.(args)) instead
-#   - Removed Expression ? (existence check) — use ?? instead
 #   - Renamed FORFROM → FORAS, for-from → for-as (for x as iterable)
 #   - Simplified Invocation (no soak variants)
-#
 # ==============================================================================
 
 o = (pattern, action, options) ->
@@ -796,6 +794,9 @@ grammar =
     o '- Expression'          , '["-", 2]', prec: 'UNARY_MATH'
     o '+ Expression'          , '["+", 2]', prec: 'UNARY_MATH'
 
+    # Postfix existence check: expr? → (expr != null)
+    o 'Value ?'               , '["?", 1]'
+
     # Await
     o 'AWAIT Expression'            , '["await", 2]'
     o 'AWAIT INDENT Object OUTDENT' , '["await", 3]'
@@ -856,7 +857,7 @@ operators = """
   right       DO_IIFE
   left        . ?.
   left        CALL_START CALL_END
-  nonassoc    ++ --
+  nonassoc    ++ -- ?
   right       UNARY DO
   right       AWAIT
   right       **
