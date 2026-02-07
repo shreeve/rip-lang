@@ -1,0 +1,816 @@
+# ==============================================================================
+# Final Polish - Advanced Pattern Bug Fixes
+# ==============================================================================
+#
+# These tests target edge cases found when compiling solar.rip with the new
+# s-expression compiler. Each test represents a bug that needs fixing.
+#
+# ALL TESTS SHOULD FAIL INITIALLY (proving they test real bugs)
+# ==============================================================================
+
+# ==============================================================================
+# BUG #1: Double Return in Switch Cases
+# ==============================================================================
+# Issue: Switch cases with explicit returns get ANOTHER implicit return added
+# Pattern: switch x; when 'a'; return "value"
+# Expected: case 'a': return "value";
+# Actual: case 'a': return return "value";
+
+test 'switch case with explicit return', '''
+  fn = (x) ->
+    switch x
+      when 'a'
+        return "found a"
+      when 'b'
+        return "found b"
+      else
+        return "other"
+  fn('b')
+  ''', "found b"
+
+test 'nested switch with explicit returns', '''
+  outer = (x) ->
+    switch x
+      when 1
+        switch x
+          when 1
+            return "one"
+      else
+        return "other"
+  outer(1)
+  ''', "one"
+
+test 'switch with multi-statement block and return', '''
+  fn = (x) ->
+    y = 0
+    z = 0
+    switch x
+      when 'a'
+        y = 1
+        z = 2
+        return "result: #{y + z}"
+  fn('a')
+  ''', "result: 3"
+
+# ==============================================================================
+# BUG #2: Return Break/Continue
+# ==============================================================================
+# Issue: break/continue in for loops treated as returnable expressions
+# Pattern: for x in arr; if condition then break
+# Expected: if (condition) { break; }
+# Actual: return break;
+
+test 'break in for loop', '''
+  result = []
+  for x in [1, 2, 3, 4, 5]
+    if x is 3
+      break
+    result.push(x)
+  result
+  ''', [1, 2]
+
+test 'continue in for loop', '''
+  result = []
+  for x in [1, 2, 3, 4, 5]
+    if x is 3
+      continue
+    result.push(x)
+  result
+  ''', [1, 2, 4, 5]
+
+test 'break with condition', '''
+  i = 0
+  for x in [1, 2, 3, 4, 5]
+    break if x > 3
+    i = x
+  i
+  ''', 3
+
+test 'comprehension with break in if', '''
+  result = for x in [1, 2, 3, 4, 5]
+    if x is 3
+      break
+    x
+  result
+  ''', [1, 2]
+
+test 'comprehension with continue in if', '''
+  result = for x in [1, 2, 3, 4, 5]
+    if x is 3
+      continue
+    x
+  result
+  ''', [1, 2, 4, 5]
+
+# ==============================================================================
+# BUG #3: Unless in Value Context
+# ==============================================================================
+# Issue: Postfix unless treated incorrectly in return statements
+# Pattern: return x unless condition
+# Expected: if (!condition) { return x; }
+# Actual: return new unless(condition, x)
+
+test 'return with postfix unless', '''
+  fn = (x) ->
+    return "yes" unless x
+    "no"
+  fn(false)
+  ''', "yes"
+
+test 'assignment with postfix unless', '''
+  x = 5
+  y = 10 unless x > 10
+  y
+  ''', 10
+
+test 'expression with postfix unless', '''
+  fn = (x) -> x * 2 unless x < 0
+  fn(5)
+  ''', 10
+
+# ==============================================================================
+# BUG #4: Switch Case Label Issues
+# ==============================================================================
+# Issue: String literals in switch cases getting corrupted
+# Pattern: switch x; when '-h', '--help'
+# Expected: case '-h': case '--help':
+# Actual: case -: case h:
+
+test 'switch with string cases', '''
+  fn = (arg) ->
+    switch arg
+      when '-h', '--help'
+        "help"
+      when '-v'
+        "version"
+      else
+        "unknown"
+  fn('--help')
+  ''', "help"
+
+test 'switch with negative number case', '''
+  fn = (x) ->
+    switch x
+      when -1
+        "negative one"
+      when 0
+        "zero"
+      else
+        "other"
+  fn(-1)
+  ''', "negative one"
+
+# ==============================================================================
+# BUG #5: Unreachable Code in If/Else
+# ==============================================================================
+# Issue: Multiple returns in if/else causing unreachable code
+# Pattern: if x then return a else return b; return c
+# Expected: if (x) { return a; } else { return b; }
+# Actual: if (x) { return a; } return b; return c;
+
+test 'if else with returns', '''
+  fn = (x) ->
+    if x then return "yes" else return "no"
+  fn(true)
+  ''', "yes"
+
+test 'unless else with returns', '''
+  fn = (x) ->
+    unless x then return "no" else return "yes"
+  fn(true)
+  ''', "yes"
+
+# ==============================================================================
+# BUG #6: Complex Ternary Issues
+# ==============================================================================
+# Issue: Ternary operators with complex conditions
+# Pattern: x ? (y ? z) (nested ternaries)
+# May have issues with operator precedence or parenthesization
+
+# KNOWN LIMITATION: Nested ternaries in THEN branch not supported
+# But right-associative nesting (in ELSE branch) works fine!
+
+fail 'nested ternary in then branch', 'x = true ? (false ? "a" : "b") : "c"'
+
+test 'nested ternary in else branch (works!)', '''
+  x = 1
+  y = 0
+  z = 0
+  result = x > 0 ? "x" : y > 0 ? "y" : z > 0 ? "z" : "none"
+  result
+  ''', "x"
+
+test 'nested ternary with parens in else (works!)', '''
+  x = 0
+  y = 1
+  result = x > 0 ? "x" : (y > 0 ? "y" : "none")
+  result
+  ''', "y"
+
+test 'ternary in function', '''
+  fn = (x) -> x > 0 ? "positive" : "negative"
+  fn(5)
+  ''', "positive"
+
+test 'ternary with method call', '''
+  x = "hello"
+  result = x.length > 0 ? x.toUpperCase() : "empty"
+  result
+  ''', "HELLO"
+
+# ==============================================================================
+# CODE GENERATION TESTS
+# ==============================================================================
+
+code 'switch with explicit return', '''
+  fn = (x) ->
+    switch x
+      when 'a'
+        return "A"
+  ''', '''
+  let fn;
+  fn = function(x) {
+    switch (x) {
+      case 'a':
+        return "A";
+    }
+  };
+'''
+
+code 'break in for loop', '''
+  for x in arr
+    if x > 5
+      break
+  ''', '''
+  for (const x of arr) {
+    if (x > 5) {
+      break;
+    }
+  }
+'''
+
+code 'return with postfix unless', '''
+  fn = -> return 5 unless x
+  ''', '''
+  let fn;
+  fn = function() {
+    if (!x) return 5;
+  };
+'''
+
+# ==============================================================================
+# BUG #7: Dynamic Import in Conditional
+# ==============================================================================
+# Issue: Complex dynamic import expressions in if/else getting mangled
+# Pattern: x = if cond then (await import(expr)).prop else other
+# Expected: Clean conditional with await import
+# Actual: Mangled import syntax
+
+code 'dynamic import in if expression', '''
+  x = if cond
+    (await import(url)).default
+  else
+    null
+  ''', '''
+  let x;
+  x = cond ? (await import(url)).default : null;
+'''
+
+code 'dynamic import property access', '''
+  x = (await import(url)).default
+  ''', '''
+  let x;
+  x = (await import(url)).default;
+'''
+
+# ==============================================================================
+# BUG #8: Switch with Code After (Statement Context)
+# ==============================================================================
+# Issue: Switch cases get implicit returns even when there's code after switch
+# Pattern: switch assigns to var, then code uses var
+# Expected: Cases should assign without return, fall through
+# Actual: Cases return early, code after switch is unreachable
+
+test 'switch assigns then uses result', '''
+  fn = (mode) ->
+    switch mode
+      when 'a'
+        result = 1
+      when 'b'
+        result = 2
+      else
+        result = 3
+    result * 10
+  [fn('a'), fn('b'), fn('c')]
+  ''', [10, 20, 30]
+
+test 'switch assigns in inner switch then uses result', '''
+  fn = (action, mode) ->
+    switch mode
+      when 'sexp'
+        switch action
+          when 'string'
+            result = 'str'
+          when 'number'
+            result = 'num'
+          else
+            result = 'other'
+        result + '-processed'
+      else
+        'unknown'
+  fn('string', 'sexp')
+  ''', 'str-processed'
+
+code 'switch statement with code after', '''
+  fn = (x) ->
+    switch x
+      when 1
+        result = 'one'
+      when 2
+        result = 'two'
+      else
+        result = 'other'
+    return result
+  ''', '''
+  let fn;
+  fn = function(x) {
+    let result;
+    switch (x) {
+      case 1:
+        result = 'one';
+        break;
+      case 2:
+        result = 'two';
+        break;
+      default:
+        result = 'other';
+        break;
+    }
+    return result;
+  };
+'''
+
+# ==============================================================================
+# BUG #9: Unnecessary IIFE for If/Else as Last Statement
+# ==============================================================================
+# Issue: If/else with multi-statement branches wrapped in IIFE even when it's the last statement
+# Pattern: Function ends with if/else that has multiple statements per branch
+# Expected: Plain if/else with early returns (like CoffeeScript generates)
+# Actual: Wrapped in IIFE unnecessarily
+
+test 'if/else as last statement no IIFE needed', '''
+  fn = (handle) ->
+    if Array.isArray handle
+      symbols = handle[0]
+      action = handle[1]
+      [symbols, action]
+    else
+      symbols = handle.split(' ')
+      [symbols, null]
+  result = fn(['a', 'b'])
+  result
+  ''', ['a', 'b']
+
+test 'if/else multi-statement returns correctly', '''
+  fn = (x) ->
+    if x > 0
+      a = x * 2
+      b = a + 10
+      [a, b]
+    else
+      c = x * -1
+      [c, 0]
+  fn(5)
+  ''', [10, 20]
+
+code 'if/else last statement uses early returns not IIFE', '''
+  fn = (handle) ->
+    if Array.isArray handle
+      symbols = handle[0]
+      action = handle[1]
+      [symbols, action]
+    else
+      symbols = handle.split(' ')
+      [symbols, null]
+  ''', '''
+  let fn;
+
+  fn = function(handle) {
+    let action, symbols;
+    if (Array.isArray(handle)) {
+      symbols = handle[0];
+      action = handle[1];
+      return [symbols, action];
+    } else {
+      symbols = handle.split(' ');
+      return [symbols, null];
+    }
+};
+'''
+
+# ==============================================================================
+# BUG #11: Excessive Parentheses in Ternary Operators
+# ==============================================================================
+# Issue: Ternary conditions get double/triple wrapped in parens
+# Pattern: if/else compiled to ternary adds extra parens layers
+# Expected: Minimal parens like CoffeeScript
+# Actual: Multiple paren layers
+
+code 'ternary with typeof and or - minimal parens', '''
+  action = if typeof handle[1] is 'string' or handle.length is 3 then handle[1] else null
+  ''', '''
+  let action;
+  action = ((typeof handle[1] === 'string') || (handle.length === 3)) ? handle[1] : null;
+'''
+
+test 'ternary with complex condition works', '''
+  fn = (handle) ->
+    action = if typeof handle[1] is 'string' or handle.length is 3 then handle[1] else null
+    action
+  fn([1, 'test', 3])
+  ''', 'test'
+
+# ==============================================================================
+# If/Else-If Chain Tests (Parser + Codegen Fix)
+# ==============================================================================
+
+test "if-else-if chain 4 branches", '''
+  fn = (x) ->
+    if x is 1
+      'one'
+    else if x is 2
+      'two'
+    else if x is 3
+      'three'
+    else
+      'other'
+  [fn(1), fn(2), fn(3), fn(4)]
+  ''', ['one', 'two', 'three', 'other']
+
+test "if-else-if chain 5 branches", '''
+  fn = (x) ->
+    if x is 1 then 'one'
+    else if x is 2 then 'two'
+    else if x is 3 then 'three'
+    else if x is 4 then 'four'
+    else 'other'
+  [fn(1), fn(2), fn(3), fn(4), fn(5)]
+  ''', ['one', 'two', 'three', 'four', 'other']
+
+test "nested if-else-if in value context", '''
+  x = 7
+  result = if x > 10
+    'big'
+  else if x > 5
+    'medium'
+  else if x > 0
+    'small'
+  else
+    'zero or negative'
+  result
+  ''', 'medium'
+
+test "multi-branch if-else-if returns correct value", '''
+  fn = (x) ->
+    if typeof x is 'number'
+      "number"
+    else if typeof x is 'string'
+      "string"
+    else if typeof x is 'boolean'
+      "boolean"
+    else if Array.isArray(x)
+      "array"
+    else
+      "other"
+  [fn(42), fn("hi"), fn(true), fn([1]), fn(null)]
+  ''', ["number", "string", "boolean", "array", "other"]
+
+code "if-else-if generates proper chain", '''
+  x = if a then 1 else if b then 2 else if c then 3 else 4
+  ''', '''
+  let x;
+  x = a ? 1 : (b ? 2 : (c ? 3 : 4));
+'''
+
+# ==============================================================================
+# Postfix Return Tests (Codegen Fix)
+# ==============================================================================
+
+test "postfix unless with return - executes next statement", '''
+  fn = (x) ->
+    return "null" unless x?
+    x * 2
+  fn(5)
+  ''', 10
+
+test "postfix unless with return - returns early", '''
+  fn = (x) ->
+    return "null" unless x?
+    x * 2
+  fn(null)
+  ''', "null"
+
+test "postfix if with return", '''
+  fn = (x) ->
+    return "big" if x > 100
+    x * 2
+  fn(150)
+  ''', "big"
+
+test "postfix if with return - continues", '''
+  fn = (x) ->
+    return "big" if x > 100
+    x * 2
+  fn(50)
+  ''', 100
+
+# ==============================================================================
+# BUG #10: Postfix Unless on Function Call (Undefined Values)
+# ==============================================================================
+# Issue: actions.push "x" unless cond generates: actions.push((!cond ? "x" : undefined))
+# This pushes undefined to array when condition is true!
+# Expected: if (!cond) actions.push("x")  (only push when condition false)
+
+test 'postfix unless on push no undefined', '''
+  actions = []
+  for item in [1, 2, 3, 4, 5]
+    actions.push item unless item > 3
+  actions
+  ''', [1, 2, 3]
+
+test 'postfix if on push', '''
+  actions = []
+  for item in [1, 2, 3, 4, 5]
+    actions.push item if item > 3
+  actions
+  ''', [4, 5]
+
+code 'postfix unless on call generates if statement', '''
+  for item in arr
+    actions.push item unless item > 3
+  ''', '''
+  for (const item of arr) {
+    if (!(item > 3)) actions.push(item);
+  }
+'''
+
+test 'postfix unless with binary op in argument', '''
+  actions = []
+  for item in [1, 2, 3]
+    actions.push "item:" + item unless item > 2
+  actions
+  ''', ["item:1", "item:2"]
+
+# ==============================================================================
+# BUG #11: Return Throw (Invalid Syntax)
+# ==============================================================================
+# Issue: throw in else block gets "return" prepended
+# Pattern: if cond then expr else throw error
+# Expected: else { throw error; }
+# Actual: else { return throw error; }  (INVALID!)
+
+test 'throw in else block no return', '''
+  fn = (str, hash) ->
+    if hash.recoverable
+      @trace str
+    else
+      error = new Error str
+      error.hash = hash
+      throw error
+  result = null
+  try
+    fn("test", {recoverable: false})
+  catch e
+    result = e.message
+  result
+  ''', "test"
+
+test 'throw as last statement in function', '''
+  fn = (x) ->
+    throw new Error("bad: #{x}")
+  result = null
+  try
+    fn(42)
+  catch e
+    result = e.message
+  result
+  ''', "bad: 42"
+
+test 'throw in if-else', '''
+  fn = (x) ->
+    if x > 0
+      x * 2
+    else
+      throw new Error("negative")
+  result = fn(5)
+  result
+  ''', 10
+
+code 'throw in else block', '''
+  fn = (x) ->
+    if x
+      "ok"
+    else
+      throw new Error("bad")
+  ''', '''
+  let fn;
+  fn = function(x) {
+    return (() => { if (x) {
+      return "ok";
+    } else {
+      throw new Error("bad");
+    } })();
+};
+'''
+
+# ==============================================================================
+# Variable Declaration Tests
+# ==============================================================================
+
+test "postfix if declares variable", '''
+  fn = ->
+    x = 5 if true
+    y = 10 unless false
+    x + y
+  fn()
+  ''', 15
+
+test "timing-style conditional assignment", '''
+  fn = (cond, val) ->
+    result = val if cond
+    result
+  fn(true, 42)
+  ''', 42
+
+test "timing returns undefined when condition false", '''
+  fn = (cond, val) ->
+    result = val if cond
+    result
+  fn(false, 42)
+  ''', undefined
+
+test "switch collects all variables from all cases", '''
+  fn = (mode) ->
+    switch mode
+      when 1
+        a = 10
+        b = 20
+        a + b
+      when 2
+        c = 30
+        c * 2
+      else
+        d = 40
+        d - 5
+  [fn(1), fn(2), fn(3)]
+  ''', [30, 60, 35]
+
+# ==============================================================================
+# BOOTSTRAP BUGS - Bugs Found During Self-Hosting
+# ==============================================================================
+# These bugs were discovered when compiling solar.rip for self-hosting.
+# Each bug prevented successful bootstrap and is now fixed.
+
+# ==============================================================================
+# BUG #1: Range Loops Generated Wasteful IIFE
+# ==============================================================================
+# Issue: for k in [1...n] generated array-building IIFE instead of plain loop
+# Impact: 98-char overhead, slow execution, memory waste
+# Fix: Optimize simple numeric ranges to traditional for-loop
+
+test 'range loop optimization - simple numeric', '''
+  result = []
+  for k in [1...5]
+    result.push k
+  result
+  ''', [1, 2, 3, 4]
+
+test 'range loop optimization - property access', '''
+  obj = {arr: [10, 20, 30, 40]}
+  result = []
+  for k in [0...obj.arr.length]
+    result.push obj.arr[k]
+  result
+  ''', [10, 20, 30, 40]
+
+test 'inclusive range loop', '''
+  result = []
+  for k in [1..3]
+    result.push k
+  result
+  ''', [1, 2, 3]
+
+code 'range loop generates traditional for', '''
+  for k in [1...10]
+    console.log k
+  ''', '''
+  for (let k = 1; k < 10; k++) {
+    console.log(k);
+  }
+'''
+
+# ==============================================================================
+# BUG #2: Reverse Iteration (by -1) Not Implemented
+# ==============================================================================
+# Issue: for x in arr by -1 was ignored, always iterated forward
+# Impact: Critical for solar.rip precedence calculation (Rule 32: prec 5→6)
+# Fix: Implement reverse iteration in for-in, comprehensions, plain loops
+
+test 'reverse iteration with by -1', '''
+  result = []
+  for x in [1, 2, 3, 4, 5] by -1
+    result.push x
+  result
+  ''', [5, 4, 3, 2, 1]
+
+test 'reverse iteration with break', '''
+  result = []
+  for x in [10, 20, 30, 40, 50] by -1
+    break if x < 25
+    result.push x
+  result
+  ''', [50, 40, 30]
+
+test 'reverse iteration in function', '''
+  fn = (arr) ->
+    last = null
+    for x in arr by -1
+      if x > 0
+        last = x
+        break
+    last
+  fn([1, 2, -5, 3, -1])
+  ''', 3
+
+code 'reverse iteration generates countdown', '''
+  for x in arr by -1
+    console.log x
+  ''', '''
+  for (let _i = arr.length - 1; _i >= 0; _i--) {
+    const x = arr[_i];
+    console.log(x);
+  }
+'''
+
+# ==============================================================================
+# BUG #3: Postfix Unless on Assignment with || Mis-compiled
+# ==============================================================================
+# Issue: x = a or b unless cond → x = (a || (unless cond then b))
+# Expected: if (!cond) { x = a || b }
+# Impact: Wrong operator precedence grouping
+# Fix: Use explicit if statement in solar.rip
+
+test 'assignment with explicit if instead of postfix unless', '''
+  token = null
+  value = 42
+  if typeof value isnt "number"
+    token = value or "default"
+  else
+    token = value
+  token
+  ''', 42
+
+test 'conditional assignment with typeof check', '''
+  lookup = (x) ->
+    result = null
+    if typeof x isnt "number"
+      result = x or "not-found"
+    result
+  [lookup(42), lookup("hello"), lookup(null)]
+  ''', [null, "hello", "not-found"]
+
+# ==============================================================================
+# BUG #4: Multi-Statement Else Block in Value Context
+# ==============================================================================
+# Issue: else block with 2 statements in value context generates broken IIFE
+# Pattern: x = if cond then "a" else "b"; sideEffect()
+# Problem: sideEffect() was INSIDE else block instead of after assignment
+# Fix: Move parseError call outside if/else in solar.rip
+
+test 'if-else value context with statement after', '''
+  fn = (cond) ->
+    msg = if cond
+      "yes"
+    else
+      "no"
+
+    msg + "-processed"
+
+  [fn(true), fn(false)]
+  ''', ["yes-processed", "no-processed"]
+
+test 'ternary with side effect after assignment', '''
+  sideEffect = 0
+  fn = (x) ->
+    result = if x then "true" else "false"
+    sideEffect = 1
+    result
+  [fn(true), sideEffect]
+  ''', ["true", 1]
+
+code 'if-else in value context uses ternary not IIFE for simple branches', '''
+  x = if cond then "yes" else "no"
+  ''', '''
+  let x;
+  x = cond ? "yes" : "no";
+'''

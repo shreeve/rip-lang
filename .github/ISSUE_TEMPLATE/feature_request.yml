@@ -1,0 +1,82 @@
+name: Feature Request
+description: Suggest a new feature or enhancement for Rip
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature! Please provide as much detail as possible.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Feature Description
+      description: A clear description of the feature you'd like to see
+      placeholder: Describe the feature...
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case
+      description: Why would this feature be useful? What problem does it solve?
+      placeholder: |
+        I often need to...
+        This would help with...
+    validations:
+      required: true
+
+  - type: textarea
+    id: syntax
+    attributes:
+      label: Proposed Syntax (Optional)
+      description: If you have ideas for how this should look in Rip
+      placeholder: |
+        # Example:
+        result = something new
+      render: coffeescript
+    validations:
+      required: false
+
+  - type: textarea
+    id: javascript
+    attributes:
+      label: Expected JavaScript Output (Optional)
+      description: What JavaScript should this compile to?
+      placeholder: |
+        // Example:
+        const result = ...
+      render: javascript
+    validations:
+      required: false
+
+  - type: dropdown
+    id: compatibility
+    attributes:
+      label: CoffeeScript Compatibility
+      description: Does CoffeeScript have this feature?
+      options:
+        - "Yes - CoffeeScript has this"
+        - "No - This is new"
+        - "Not sure"
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Are there workarounds or alternative approaches you've tried?
+      placeholder: Currently I have to...
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any other relevant information
+    validations:
+      required: false

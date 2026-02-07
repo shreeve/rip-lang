@@ -1,0 +1,239 @@
+# ==============================================================================
+# Loop Guard Tests (when clause)
+# ==============================================================================
+#
+# Tests for 'when' guards in for-in, for-of, while, and until loops.
+# Guards filter iterations/executions based on a condition.
+# ==============================================================================
+
+# ==============================================================================
+# FOR-IN GUARDS
+# ==============================================================================
+
+test 'for-in with simple guard', '''
+  result = []
+  for x in [1, 2, 3, 4, 5] when x > 2
+    result.push(x)
+  result
+  ''', [3, 4, 5]
+
+test 'for-in guard with not', '''
+  result = []
+  for x in [1, 2, 3, 4, 5] when not (x is 3)
+    result.push(x)
+  result
+  ''', [1, 2, 4, 5]
+
+test 'for-in guard with and', '''
+  result = []
+  for x in [1, 2, 3, 4, 5, 6] when x > 2 and x < 5
+    result.push(x)
+  result
+  ''', [3, 4]
+
+test 'for-in guard with modulo', '''
+  result = []
+  for x in [1, 2, 3, 4, 5, 6] when x % 2 is 0
+    result.push(x)
+  result
+  ''', [2, 4, 6]
+
+test 'for-in guard filtering strings', '''
+  result = []
+  for line in ["", "hello", "", "world", "  "] when line and line.trim()
+    result.push(line)
+  result
+  ''', ["hello", "world"]
+
+# ==============================================================================
+# FOR-OF GUARDS
+# ==============================================================================
+
+test 'for-of with guard (key only)', '''
+  result = []
+  for k of {a: 1, b: 2, c: 3} when k isnt 'b'
+    result.push(k)
+  result
+  ''', ["a", "c"]
+
+test 'for-of guard key only comprehension', '''
+  result = (k for k of {a: 1, b: 2, c: 3} when k isnt 'b')
+  result
+  ''', ["a", "c"]
+
+test 'for-of with guard single entry', '''
+  result = []
+  for k, v of {a: 1} when v > 0
+    result.push(k)
+  result
+  ''', ["a"]
+
+test 'for-of guard single entry comprehension', '''
+  result = (k for k, v of {a: 1} when v > 0)
+  result
+  ''', ["a"]
+
+test 'for-of with guard (key and value)', '''
+  result = []
+  for k, v of {a: 1, b: 2, c: 3, d: 4} when v > 2
+    result.push(k)
+  result
+  ''', ["c", "d"]
+
+test 'for-of guard complex condition', '''
+  obj = {x: 10, y: 20, z: 30}
+  sum = 0
+  for key, val of obj when val >= 20
+    sum += val
+  sum
+  ''', 50
+
+# ==============================================================================
+# COMPREHENSIONS WITH GUARDS
+# ==============================================================================
+
+test 'comprehension with guard', '''
+  result = (x for x in [1, 2, 3, 4, 5] when x > 2)
+  result
+  ''', [3, 4, 5]
+
+test 'comprehension guard with not', '''
+  result = (x for x in [1, 2, 3, 4, 5] when not (x is 3))
+  result
+  ''', [1, 2, 4, 5]
+
+test 'comprehension guard complex', '''
+  result = (x * 2 for x in [1, 2, 3, 4, 5, 6] when x % 2 is 0 and x < 5)
+  result
+  ''', [4, 8]
+
+test 'object comprehension with guard', '''
+  result = {k: v for k, v of {a: 1, b: 2, c: 3} when v > 1}
+  result.b
+  ''', 2
+
+# ==============================================================================
+# EDGE CASES
+# ==============================================================================
+
+test 'guard with method call', '''
+  items = ["hello", "", "world", "  "]
+  result = []
+  for item in items when item.trim()
+    result.push(item)
+  result
+  ''', ["hello", "world"]
+
+test 'guard with property access', '''
+  objects = [{ok: true, val: 1}, {ok: false, val: 2}, {ok: true, val: 3}]
+  sum = 0
+  for obj in objects when obj.ok
+    sum += obj.val
+  sum
+  ''', 4
+
+test 'guard with negated method', '''
+  lines = ["# comment", "data", "# another", "more"]
+  result = []
+  for line in lines when not line.startsWith("#")
+    result.push(line)
+  result
+  ''', ["data", "more"]
+
+# ==============================================================================
+# OWN KEYWORD (for-of only)
+# ==============================================================================
+
+test 'own filters inherited properties', '''
+  obj = Object.create({inherited: 'parent'})
+  obj.own1 = 'value1'
+  obj.own2 = 'value2'
+  result = []
+  for own k of obj
+    result.push(k)
+  result
+  ''', ["own1", "own2"]
+
+test 'own with key and value', '''
+  obj = Object.create({inherited: 99})
+  obj.a = 1
+  obj.b = 2
+  sum = 0
+  for own k, v of obj
+    sum += v
+  sum
+  ''', 3
+
+test 'own with guard', '''
+  obj = Object.create({inherited: 0})
+  obj.a = 1
+  obj.b = 2
+  obj.c = 3
+  result = []
+  for own k, v of obj when v > 1
+    result.push(k)
+  result
+  ''', ["b", "c"]
+
+test 'own in comprehension', '''
+  obj = Object.create({inherited: 'x'})
+  obj.a = 1
+  obj.b = 2
+  result = (k for own k of obj)
+  result
+  ''', ["a", "b"]
+
+test 'own in object comprehension', '''
+  obj = Object.create({inherited: 99})
+  obj.a = 1
+  obj.b = 2
+  result = {k: v for own k, v of obj}
+  Object.keys(result).sort()
+  ''', ["a", "b"]
+
+test 'own with guard in comprehension', '''
+  obj = Object.create({inherited: 0})
+  obj.a = 1
+  obj.b = 2
+  obj.c = 3
+  result = (k for own k, v of obj when v > 1)
+  result
+  ''', ["b", "c"]
+
+# ==============================================================================
+# CODE GENERATION TESTS
+# ==============================================================================
+
+code 'for-in guard code', '''
+  for x in arr when x > 5
+    console.log x
+  ''', '''
+  for (const x of arr) {
+    if (x > 5) {
+      console.log(x);
+    }
+  }
+'''
+
+code 'for-of guard code', '''
+  for k, v of obj when v > 0
+    console.log k
+  ''', '''
+  for (const k in obj) {
+    const v = obj[k];
+    if ((v > 0)) {
+      console.log(k);
+    }
+  }
+'''
+
+code 'for-of with own code', '''
+  for own k, v of obj
+    console.log k
+  ''', '''
+  for (const k in obj) {
+if (!Object.hasOwn(obj, k)) continue;
+const v = obj[k];
+console.log(k);
+}
+'''

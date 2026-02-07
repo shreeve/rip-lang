@@ -1,0 +1,46 @@
+---
+description: Rip programming language syntax and conventions
+globs: ["**/*.rip"]
+alwaysApply: false
+---
+
+# Rip Language
+
+Rip is a modern reactive language that compiles to ES2022 JavaScript.
+
+When working with `.rip` files, read `docs/RIP-LANG.md` for
+complete syntax reference, operators, and patterns.
+
+For compiler internals and project structure, read `AGENT.md` at the repo root.
+
+## Key Syntax Notes
+
+### Heredoc Whitespace Stripping
+
+Heredocs (`'''` and `"""`) use the closing delimiter's column position as the
+left margin. That amount of leading whitespace is stripped from every content
+line. This lets you keep heredocs indented in your code while controlling the
+output format precisely:
+
+```coffee
+# Closing """ aligns with content → fully left-aligned output
+msg = """
+  Hello, #{name}!
+  Welcome to Rip.
+  """
+# Result: "Hello, World!\nWelcome to Rip."
+```
+
+Use `"""` for interpolated strings, `'''` for literal strings.
+
+### The `?` Operator
+
+The single `?` in Rip is used for two things only:
+
+- **Postfix existence check**: `x?` compiles to `(x != null)`
+- **Ternary conditional**: `x ? y : z` compiles to `(x ? y : z)`
+
+CoffeeScript's binary existential `x ? y` (fallback if null/undefined) has been
+**removed**. Use JavaScript's `??` nullish coalescing operator instead:
+`x ?? y`. This eliminates the ambiguity between `x ? y` (existential) and
+`x ? y : z` (ternary).

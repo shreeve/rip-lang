@@ -1,0 +1,54 @@
+name: Question / Discussion
+description: Ask a question or start a discussion about Rip
+title: "[Question]: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have a question about Rip? Need help understanding something? Let us know!
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your Question
+      description: What would you like to know?
+      placeholder: How do I...? / Why does Rip...? / What's the difference between...?
+    validations:
+      required: true
+
+  - type: textarea
+    id: code
+    attributes:
+      label: Related Code (Optional)
+      description: If your question involves specific code, paste it here
+      placeholder: |
+        # Example:
+        x = 42
+      render: coffeescript
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: What You've Tried (Optional)
+      description: Have you checked the documentation? Tried any approaches?
+      placeholder: |
+        I looked at...
+        I tried...
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: docs-check
+    attributes:
+      label: Documentation Checked
+      description: Which docs have you reviewed? (Just curious!)
+      options:
+        - label: README.md
+        - label: AGENT.md
+        - label: docs/CODEGEN.md
+        - label: docs/COMPREHENSIONS.md
+        - label: docs/SOLAR.md
+        - label: Other docs in docs/ folder

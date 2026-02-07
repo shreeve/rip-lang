@@ -1,0 +1,378 @@
+# ==============================================================================
+# @rip-lang/swarm — Parallel job runner with worker threads
+#
+# Author: Steve Shreeve (steve.shreeve@gmail.com)
+#   Date: January 18, 2026
+#
+# Usage:
+#   import { swarm, init, retry, todo } from '@rip-lang/swarm'
+#
+#   setup = ->
+#     unless retry()
+#       init()
+#       for i in [1..100] then todo(i)
+#     { startedAt: Date.now() }
+#
+#   perform = (task, ctx) ->
+#     await Bun.sleep(Math.random() * 1000)
+#
+#   swarm { setup, perform }
+# ==============================================================================
+
+import { isMainThread } from 'worker_threads'
+import { existsSync, mkdirSync, readdirSync, renameSync, writeFileSync, rmSync } from 'fs'
+import { join, resolve, dirname } from 'path'
+import { cpus } from 'os'
+
+# ==============================================================================
+# Module state
+# ==============================================================================
+
+_dir  = resolve('.swarm')
+_todo = join(_dir, 'todo')
+_done = join(_dir, 'done')
+_died = join(_dir, 'died')
+
+# ==============================================================================
+# Task queue (file-based)
+# ==============================================================================
+
+export init = ->
+  rmSync(_dir, { recursive: true, force: true })
+  mkdirSync(_todo, { recursive: true })
+  mkdirSync(_done, { recursive: true })
+  mkdirSync(_died, { recursive: true })
+
+export retry = ->
+  return false unless existsSync(_died) and existsSync(_todo)
+  died = readdirSync(_died)
+  todo = readdirSync(_todo)
+  return todo.length > 0 if died.length is 0
+  for file in died
+    renameSync(join(_died, file), join(_todo, file))
+  true
+
+export todo = (name, data) ->
+  path = join(_todo, String(name))
+  if data?
+    writeFileSync(path, if typeof data is 'string' then data else JSON.stringify(data))
+  else
+    writeFileSync(path, '')
+
+move = (path, dest) ->
+  try renameSync(path, join(dest, path.split('/').pop()))
+  catch then null
+
+# ==============================================================================
+# ANSI terminal
+# ==============================================================================
+
+STDOUT = process.stdout
+
+write  = (s) -> STDOUT.write(s)
+clear  = (line) -> if line then "\x1b[K" else "\x1b[2J"
+cursor = (show) -> write(if show then "\x1b[?25h" else "\x1b[?25l")
+go     = (r = 1, c = 1) -> "\x1b[#{r};#{c}H"
+
+_hex = {}
+
+hex = (str) ->
+  return _hex[str] if _hex[str]?
+  s = str.replace(/^#/, '')
+  m = s.match(/^([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i) or s.match(/^([0-9a-f])([0-9a-f])([0-9a-f])$/i)
+  return '' unless m
+  result = if m[1].length is 1
+    [parseInt(m[1]+m[1], 16), parseInt(m[2]+m[2], 16), parseInt(m[3]+m[3], 16)].join(';')
+  else
+    [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)].join(';')
+  _hex[str] = result
+
+fg = (rgb) -> if rgb then "\x1b[38;2;#{hex(rgb)}m" else "\x1b[39m"
+bg = (rgb) -> if rgb then "\x1b[48;2;#{hex(rgb)}m" else "\x1b[49m"
+
+# ==============================================================================
+# Progress display
+# ==============================================================================
+
+_char = _wide = _len = null
+
+drawFrame = (workers) ->
+  _len = String(workers).length
+  write clear()
+  write go(2 + workers, _len + 3) + "╰" + "─".repeat(_wide + 2) + "╯"
+  write go(1,           _len + 3) + "╭" + "─".repeat(_wide + 2) + "╮"
+  for i in [0...workers]
+    write go(i + 2, 1)
+    label = String(i + 1).padStart(_len)
+    write " #{label} │ " + " ".repeat(_wide) + " │"
+  # summary bar row
+  write go(workers + 3, _len + 3) + "│ " + " ".repeat(_wide) + " │"
+
+draw = (state) ->
+  { live, done, died, jobs, workers, info } = state
+
+  ppct = (done + died) / jobs
+  most = Math.max(...Object.values(info), 1)
+
+  # worker bars
+  for slot, count of info
+    tpct = count / most
+    cols = Math.floor(ppct * tpct * _wide)
+    write go(parseInt(slot) + 1, _len + 5) + bg("5383ec") + _char.repeat(cols) + bg()
+
+  # summary bar
+  dpct = done / jobs
+  lpct = live / jobs
+  gcol = Math.floor(dpct * _wide)
+  ycol = Math.floor(lpct * _wide)
+  rcol = Math.max(0, _wide - gcol - ycol)
+  row  = workers + 3
+
+  write go(row, _len + 5)
+  write fg("fff")
+  write bg("58a65c") + _char.repeat(gcol)          # green  (done)
+  write bg("f1bf42") + _char.repeat(ycol)           # yellow (live)
+  write bg("d85140") + " ".repeat(rcol)             # red    (rest)
+  write go(row, _len + 5 + _wide + 3)
+  write bg("5383ec") + " #{(ppct * 100).toFixed(1)}% "
+  write bg() + " " + bg("58a65c") + " #{done}/#{jobs} done " if done > 0
+  write bg() + " " + bg("d85140") + " #{died} died "         if died > 0
+  write fg() + bg()
+
+# ==============================================================================
+# Worker orchestration
+# ==============================================================================
+
+# Worker mode: register perform function for the worker bootstrap
+_workerPerform = null
+export _getPerform = -> _workerPerform
+
+export swarm = (opts = {}) ->
+  unless isMainThread
+    _workerPerform = opts.perform
+    return
+
+  { Worker } = import!('worker_threads')
+
+  # parse CLI options
+  args    = process.argv.slice(2)
+  workers = parseInt(findArg(args, '-w', '--workers')) or opts.workers or cpus().length
+  barw    = parseInt(findArg(args, '-b', '--bar'))     or opts.bar    or 20
+  char    = findArg(args, '-c', '--char')              or opts.char   or '•'
+  doreset = args.includes('-r') or args.includes('--reset')
+  dosafe  = args.includes('-s') or args.includes('--safe')
+
+  if workers < 1
+    console.error 'error: workers must be at least 1'
+    process.exit(1)
+
+  _wide = barw
+  _char = char[0]
+
+  if doreset
+    rmSync(_dir, { recursive: true, force: true })
+    console.log 'removed .swarm directory'
+    process.exit(0)
+
+  # run setup
+  unless typeof opts.perform is 'function'
+    console.error 'error: perform() function is required'
+    process.exit(1)
+
+  context = {}
+  if typeof opts.setup is 'function'
+    result = await opts.setup()
+    context = result if result? and typeof result is 'object'
+  context.safe = dosafe
+
+  # read task list
+  unless existsSync(_todo)
+    console.error 'error: no .swarm/todo directory found (did setup run?)'
+    process.exit(1)
+
+  tasks = readdirSync(_todo).sort().map (f) -> join(_todo, f)
+
+  if tasks.length is 0
+    console.log 'no tasks to process'
+    process.exit(0)
+
+  jobs = tasks.length
+
+  # resolve paths
+  workerPath = join(dirname(new URL(import.meta.url).pathname), 'lib', 'worker.mjs')
+  scriptPath = resolve(process.argv[1] or '')
+
+  # find rip-loader for workers (check local, then global)
+  loaderPath = null
+  try
+    loaderPath = join(dirname(require.resolve('rip-lang')), '..', 'rip-loader.js')
+  catch
+    # fall back to global install
+    try
+      globalDir = join(process.env.HOME or '', '.bun', 'install', 'global', 'node_modules', 'rip-lang')
+      loaderPath = join(globalDir, 'rip-loader.js') if existsSync(join(globalDir, 'rip-loader.js'))
+    catch
+      null
+
+  # state
+  live    = 0
+  done    = 0
+  died    = 0
+  info    = {}
+  taskIdx = 0
+  inflight = {}  # slot → taskPath (track in-flight tasks for crash recovery)
+  lastTask = {}  # slot → last completed task name (for display)
+
+  # signal handlers
+  process.on 'SIGINT', ->
+    cursor(true)
+    write go(workers + 5, 1) + "\n"
+    process.exit(1)
+  process.on 'SIGWINCH', ->
+    drawFrame(workers)
+    draw({ live, done, died, jobs, workers, info })
+
+  # draw initial frame
+  startTime = Date.now()
+  cursor(false)
+  drawFrame(workers)
+
+  # create workers and dispatch tasks
+  allWorkers = []
+
+  await new Promise (resolveAll) ->
+
+    finished = false
+    checkDone = ->
+      if not finished and done + died >= jobs
+        finished = true
+        for wk in allWorkers
+          try wk.unref()
+          catch then null
+        resolveAll()
+
+    dispatchNext = (worker, slot) ->
+      if taskIdx < tasks.length
+        taskPath = tasks[taskIdx++]
+        inflight[slot] = taskPath
+        live++
+        write go(slot + 1, _len + 5 + _wide + 3) + " " + taskPath.split('/').pop() + clear(true)
+        draw({ live, done, died, jobs, workers, info })
+        worker.postMessage { type: 'task', taskPath }
+      else
+        inflight[slot] = null
+        checkDone()
+
+    spawnWorker = (slot) ->
+      info[slot] ?= 0
+
+      wopts = { workerData: { scriptPath, context } }
+      wopts.preload = [loaderPath] if loaderPath
+      w = new Worker(workerPath, wopts)
+      allWorkers.push(w)
+
+      w.on 'message', (msg) ->
+        switch msg.type
+          when 'error'
+            writeFileSync('.swarm/errors.log', "worker #{slot} startup: #{msg.error}\n", { flag: 'a' }) if existsSync(_dir)
+          when 'ready'
+            dispatchNext(w, slot)
+          when 'done'
+            move(msg.taskPath, _done)
+            lastTask[slot] = msg.taskPath.split('/').pop()
+            inflight[slot] = null
+            live--
+            done++
+            info[slot]++
+            draw({ live, done, died, jobs, workers, info })
+            dispatchNext(w, slot)
+          when 'failed'
+            move(msg.taskPath, _died)
+            lastTask[slot] = msg.taskPath.split('/').pop()
+            writeFileSync('.swarm/errors.log', "#{msg.taskPath.split('/').pop()}: #{msg.error or 'unknown'}\n", { flag: 'a' }) if existsSync(_dir)
+            inflight[slot] = null
+            live--
+            died++
+            info[slot]++
+            draw({ live, done, died, jobs, workers, info })
+            dispatchNext(w, slot)
+
+      w.on 'error', (err) ->
+        writeFileSync('.swarm/errors.log', "worker #{slot} error: #{err.message}\n", { flag: 'a' }) if existsSync(_dir)
+
+      w.on 'exit', (code) ->
+        writeFileSync('.swarm/errors.log', "worker #{slot} exited with code #{code}, inflight: #{inflight[slot]}\n", { flag: 'a' }) if existsSync(_dir)
+        # if worker crashed mid-task, count the in-flight task as died
+        if inflight[slot]
+          move(inflight[slot], _died)
+          inflight[slot] = null
+          live--
+          died++
+          info[slot]++
+          draw({ live, done, died, jobs, workers, info })
+        # respawn if there's still work to do
+        if done + died < jobs
+          spawnWorker(slot)
+        else
+          checkDone()
+
+    # spawn worker pool
+    count = Math.min(workers, jobs)
+    for slot in [1..count]
+      spawnWorker(slot)
+
+  # final redraw — fill all worker bars and show per-worker stats
+  secs = (Date.now() - startTime) / 1000
+  for slot of info
+    s = parseInt(slot)
+    n = info[slot]
+    rate = if secs > 0 then (n / secs).toFixed(1) else '—'
+    write go(s + 1, _len + 5) + bg("5383ec") + _char.repeat(_wide) + bg() + " │ #{n} jobs @ #{rate}/sec" + clear(true)
+  draw({ live: 0, done, died, jobs, workers, info })
+
+  # summary
+  cursor(true)
+  write go(workers + 5, 1)
+  write "#{secs.toFixed(2)} secs"
+  write " for #{jobs} jobs"
+  write " by #{workers} workers"
+  write " @ #{(jobs / secs).toFixed(2)} jobs/sec" if secs > 0
+  write "\n\n"
+
+# ==============================================================================
+# CLI helpers
+# ==============================================================================
+
+# flags that swarm consumes (with value)
+_flagsWithValue = ['-w', '--workers', '-b', '--bar', '-c', '--char']
+# flags that swarm consumes (standalone)
+_flagsAlone     = ['-r', '--reset', '-s', '--safe', '-h', '--help', '-v', '--version']
+
+findArg = (args, short, long) ->
+  for arg, i in args
+    if arg is short or arg is long
+      return args[i + 1] if args[i + 1]?
+    if arg.startsWith("#{long}=")
+      return arg.split('=')[1]
+    if arg.startsWith("#{short}=")
+      return arg.split('=')[1]
+  null
+
+# return process.argv with swarm's flags stripped — only your args remain
+export args = ->
+  result = []
+  list = process.argv.slice(2)
+  skip = false
+  for arg in list
+    if skip
+      skip = false
+      continue
+    if arg in _flagsWithValue
+      skip = true
+      continue
+    if arg in _flagsAlone
+      continue
+    if _flagsWithValue.some((f) -> arg.startsWith("#{f}="))
+      continue
+    result.push(arg)
+  result

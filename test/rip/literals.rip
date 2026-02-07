@@ -1,0 +1,116 @@
+# Test: Literals (5 node types)
+# Tests NUMBER, undefined, null, BOOL, this node types
+
+# ============================================================================
+# Number Literals: NUMBER
+# ============================================================================
+
+# Integers
+test "integer literal", "42", 42
+test "negative integer", "-10", -10
+test "zero", "0", 0
+
+# Decimals
+test "decimal literal", "3.14", 3.14
+test "decimal negative", "-2.5", -2.5
+
+# Special number formats
+test "hex literal", "0xFF", 255
+test "binary literal", "0b1010", 10
+test "octal literal", "0o777", 511
+test "scientific notation", "1.5e3", 1500
+test "number with underscores", "1_000_000", 1000000
+
+# Code generation
+code "integer", "42", "42"
+code "decimal", "3.14", "3.14"
+code "hex", "0xFF", "0xFF"
+
+# ============================================================================
+# Undefined: "undefined"
+# ============================================================================
+
+test "undefined literal", "undefined", undefined
+
+# Code generation
+code "undefined", "undefined", "undefined"
+
+# ============================================================================
+# Null: "null"
+# ============================================================================
+
+test "null literal", "null", null
+
+# Code generation
+code "null", "null", "null"
+
+# ============================================================================
+# Boolean: BOOL
+# ============================================================================
+
+test "true literal", "true", true
+test "false literal", "false", false
+
+# Code generation
+code "true", "true", "true"
+code "false", "false", "false"
+
+# ============================================================================
+# This: "this"
+# ============================================================================
+
+# Basic this
+test "this in method", "obj = {x: 42, fn: -> this.x}\nobj.fn()", 42
+
+# @ shorthand
+test "@ shorthand", "obj = {x: 42, fn: -> @x}\nobj.fn()", 42
+
+# Code generation
+code "this keyword", "this", "this"
+code "@ shorthand", "@", "this"
+
+# ============================================================================
+# Inline JavaScript: backtick syntax
+# ============================================================================
+
+# Single-line inline JS
+test 'inline JavaScript evaluation', '''
+  `var x = 5`
+  x
+  ''', 5
+
+# Block inline JavaScript
+test 'block inline JavaScript', '''
+  ```
+  let a = 1;
+  let b = 2;
+  ```
+  c = 3
+  a + b + c
+  ''', 6
+
+# JS blocks mixed with Rip
+test 'JS blocks mixed with Rip', '''
+  x = 1
+  ```
+  let y = 2;
+  ```
+  z = 3
+  x + y + z
+  ''', 6
+
+# Inline JS with return value
+test 'inline JS with return value', '''
+  result = `(function() { return 42; })()`
+  result
+  ''', 42
+
+# Multiple JS blocks
+test 'multiple JS variables', '''
+  ```
+  let a = 10;
+  let b = 20;
+  let c = 30;
+  ```
+  a + b + c
+  ''', 60

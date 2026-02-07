@@ -1,0 +1,388 @@
+# ==============================================================================
+# @rip-lang/db — DuckDB Server
+# ==============================================================================
+#
+# A simple HTTP server for DuckDB queries. One server per database.
+# Fully compatible with the official DuckDB UI!
+#
+# Usage:
+#   rip db.rip <database.duckdb> [--port 4213]
+#   rip db.rip :memory: --port 4213
+#
+# Then open http://localhost:4213/ for the official DuckDB UI!
+# (UI assets are proxied from ui.duckdb.org)
+#
+# Architecture:
+#   - Pure Bun FFI to DuckDB library (no npm package, no Zig)
+#   - Binary serialization in Rip for DuckDB UI protocol
+#   - Simple, clean, fast
+#
+# ==============================================================================
+
+import { get, post, read, start, use } from '@rip-lang/api'
+import { cors } from '@rip-lang/api/middleware'
+import { version as VERSION } from './package.json'
+
+# Database access via pure Bun FFI
+duckdb = import!('./lib/duckdb.mjs')
+open = duckdb.open
+duckdbVersion = duckdb.version
+
+# Binary serialization for DuckDB UI protocol
+{
+  serializeSuccessResult
+  serializeErrorResult
+  serializeEmptyResult
+  serializeTokenizeResult
+  tokenizeSQL
+} = import!('./lib/duckdb-binary.rip')
+
+# Enable CORS for DuckDB UI and other clients
+use cors preflight: true
+
+# Log all requests
+use (c, next) ->
+  t0 = Date.now()
+  result = next!
+  ms = Date.now() - t0
+  console.log "#{c.req.method} #{c.req.path} #{ms}ms"
+  result
+
+# ==============================================================================
+# Configuration
+# ==============================================================================
+
+# Parse command line arguments
+args = process.argv.slice(2)
+
+# Handle --help and --version
+if '--help' in args or '-h' in args
+  console.log """
+    rip-db v#{VERSION} — DuckDB Server (Pure Bun FFI)
+
+    Usage: rip db.rip [database] [options]
+
+    Arguments:
+      database    Path to DuckDB file (default: :memory:)
+
+    Options:
+      --port=N    Port to listen on (default: 4213)
+      --help      Show this help
+      --version   Show version
+
+    Endpoints:
+      GET  /           Official DuckDB UI
+      POST /sql        Execute SQL (JSON API)
+      POST /ddb/run    DuckDB UI binary protocol
+      GET  /health     Health check
+      GET  /tables     List all tables
+
+    Examples:
+      rip db.rip                    # In-memory database on port 4213
+      rip db.rip mydb.duckdb        # File-based database
+      rip db.rip :memory: --port=8080
+  """
+  process.exit(0)
+
+if '--version' in args or '-v' in args
+  console.log "rip-db v#{VERSION}"
+  process.exit(0)
+
+# Database and port configuration
+path = process.env.DB_PATH or args.find((a) -> not a.startsWith('-')) or ':memory:'
+
+# Support both --port=N and --port N
+portArg = do ->
+  for a, i in args
+    return a.split('=')[1] if a.startsWith('--port=')
+    return args[i + 1] if a is '--port' and args[i + 1]
+  null
+port = parseInt(process.env.DB_PORT or portArg) or 4213
+
+# Open database and create persistent connection
+db = open(path)
+conn = db.connect()
+console.log "rip-db: database=#{path} (bun-ffi)"
+console.log "rip-db: DuckDB version=#{duckdbVersion()}"
+
+# ==============================================================================
+# Helpers
+# ==============================================================================
+
+# Helper for binary responses
+binaryResponse = (data) ->
+  new Response data, headers: { 'Content-Type': 'application/octet-stream' }
+
+# Check if SQL is a query that returns results
+isSelectQuery = (sql) ->
+  upper = sql.trim().toUpperCase()
+  upper.startsWith('SELECT') or
+    upper.startsWith('WITH') or
+    upper.startsWith('SHOW') or
+    upper.startsWith('DESCRIBE') or
+    upper.startsWith('EXPLAIN') or
+    upper.startsWith('PRAGMA')
+
+# Log SQL query (truncated if long)
+logSQL = (sql) ->
+  preview = sql.replace(/\s+/g, ' ').trim()
+  preview = "#{preview.slice(0, 100)}..." if preview.length > 100
+  console.log "SQL: #{preview}"
+
+# Execute SQL and return result (uses persistent connection)
+executeSQL = (sql, params = []) ->
+  logSQL sql
+  startTime = Date.now()
+
+  try
+    rows = await conn.query(sql, params)
+    columns = rows.columns or []
+
+    if isSelectQuery(sql)
+      {
+        meta: columns.map((col) -> { name: col.name, type: col.typeName })
+        data: rows.map((row) -> columns.map((col) -> row[col.name]))
+        rows: rows.length
+        time: (Date.now() - startTime) / 1000
+      }
+    else
+      { meta: [], data: [], rows: 0, time: (Date.now() - startTime) / 1000 }
+  catch err
+    { error: err.message }
+
+# ==============================================================================
+# JSON Endpoints (for custom apps)
+# ==============================================================================
+
+# POST /sql — Execute SQL with optional parameters
+post '/sql' ->
+  contentType = @req.header('content-type') or ''
+  if contentType.includes('application/json')
+    body = read()
+    sql = body?.sql or body
+    params = body?.params or []
+  else
+    sql = read 'body', 'string'
+    params = []
+  return { error: 'Empty query' } unless sql
+  executeSQL sql, params
+
+# POST / — Raw SQL in body (duck-ui compatible)
+post '/' ->
+  sql = read 'body', 'string'
+  return { error: 'Empty query' } unless sql
+  executeSQL sql
+
+# GET /health — Health check
+get '/health' ->
+  { status: 'ok', version: VERSION }
+
+# GET /tables — List all tables
+get '/tables' ->
+  rows = await conn.query "SELECT table_name FROM information_schema.tables WHERE table_schema = 'main'"
+  { tables: rows.map((r) -> r.table_name) }
+
+# GET /schema/:table — Get table schema
+get '/schema/:table' ->
+  table = @req.params.table.replace(/[^a-zA-Z0-9_]/g, '')  # sanitize
+  try
+    rows = await conn.query "DESCRIBE \"#{table}\""
+    { schema: rows }
+  catch err
+    { error: err.message }
+
+# ==============================================================================
+# DuckDB UI Binary Protocol
+# ==============================================================================
+
+# Remote UI URL for proxying assets
+UI_REMOTE_URL = 'https://ui.duckdb.org'
+
+# Helper to extract parameters from DuckDB UI headers (base64 encoded)
+# The official C++ extension passes all params as strings (VARCHAR).
+# DuckDB handles implicit casting to target types.
+getUIParams = (req) ->
+  count = parseInt(req.header('x-duckdb-ui-parameter-count') or '0')
+  return [] if count is 0
+
+  params = []
+  for i in [0...count]
+    encoded = req.header("x-duckdb-ui-parameter-value-#{i}")
+    if encoded
+      try
+        decoded = atob(encoded)
+        # The UI sends literal "null" for NULL values
+        if decoded is 'null'
+          params.push null
+        else
+          params.push decoded
+      catch
+        params.push ''
+    else
+      params.push null
+  params
+
+# POST /ddb/run — Execute SQL and return binary result (DuckDB UI protocol)
+post '/ddb/run' ->
+  try
+    sql = read 'body', 'string'
+    return binaryResponse serializeErrorResult 'Empty query' unless sql
+
+    logSQL sql
+    rowLimit = parseInt(@req.header('x-duckdb-ui-result-row-limit') or '10000')
+    params = getUIParams(@req)
+
+    rows = await conn.query sql, params
+    columns = rows.columns or []
+
+    # Build column info for serialization
+    colInfo = columns.map (col) -> { name: col.name, type: col.typeName }
+
+    # Convert rows to arrays (ensure undefined becomes null for serialization)
+    limitedRows = rows.slice(0, rowLimit)
+    arrayRows = limitedRows.map (row) ->
+      columns.map (col) ->
+        val = row[col.name]
+        if val is undefined then null else val
+
+    binaryResponse serializeSuccessResult colInfo, arrayRows
+
+  catch err
+    msg = err?.message or 'Unknown error'
+    # Handle _duckdb_ui catalog queries - return empty success instead of error
+    if msg.includes('_duckdb_ui')
+      return binaryResponse serializeSuccessResult [], []
+    console.error "POST /ddb/run error:", msg
+    binaryResponse serializeErrorResult msg
+
+# POST /ddb/interrupt — Cancel running query
+post '/ddb/interrupt' ->
+  binaryResponse serializeEmptyResult()
+
+# POST /ddb/tokenize — Tokenize SQL for syntax highlighting
+post '/ddb/tokenize' ->
+  sql = read 'body', 'string'
+  tokens = tokenizeSQL(sql or '')
+  binaryResponse serializeTokenizeResult(tokens)
+
+# ==============================================================================
+# DuckDB UI Compatibility Endpoints
+# (Responses match the official DuckDB UI extension exactly)
+# ==============================================================================
+
+# UI extension version — must match what /config advertises for our DuckDB version
+UI_EXT_VERSION = '150-5582dfaffc'
+
+# Detect platform for DuckDB headers
+PLATFORM = switch "#{process.platform}_#{process.arch}"
+  when 'darwin_arm64' then 'osx_arm64'
+  when 'darwin_x64'   then 'osx_amd64'
+  when 'linux_arm64'  then 'linux_arm64'
+  when 'linux_x64'    then 'linux_amd64'
+  else "#{process.platform}_#{process.arch}"
+
+# GET /version — Tell UI we're running in host/HTTP mode (not WASM)
+get '/version' ->
+  { origin: 'host', version: "main@e6517d259ec5f27ab713e5755a29d775a7750dc5" }
+
+# GET /localToken — Return 401 to skip MotherDuck auth (matches official)
+get '/localToken' ->
+  new Response null, { status: 401 }
+
+# GET /info — Server version info (headers only, empty body — matches official)
+get '/info' ->
+  @body '', 200,
+    'Access-Control-Allow-Origin': '*'
+    'Content-Type': 'text/plain'
+    'X-DuckDB-Version': duckdbVersion()
+    'X-DuckDB-Platform': PLATFORM
+    'X-DuckDB-UI-Extension-Version': UI_EXT_VERSION
+
+# GET /config — Proxy from ui.duckdb.org with DuckDB version headers
+# The UI checks these HEADERS (not just /info) to decide HTTP vs WASM mode
+get '/config' ->
+  try
+    response = fetch! "#{UI_REMOTE_URL}/config",
+      headers: { 'User-Agent': "rip-db/#{VERSION}" }
+    body = response.text!
+    new Response body,
+      status: response.status
+      headers:
+        'Content-Type': 'application/json'
+        'X-DuckDB-Version': duckdbVersion()
+        'X-DuckDB-Platform': PLATFORM
+        'X-DuckDB-UI-Extension-Version': UI_EXT_VERSION
+  catch
+    new Response JSON.stringify({
+      globalApiUrl: "http://localhost:#{port}"
+      apiUrl: "http://localhost:#{port}"
+      momApiUrl: "http://localhost:#{port}/mom"
+      logging: { enabled: false }
+      datadog: { applicationId: '', clientToken: '', site: '', env: 'local', allowedTracingOrigins: [] }
+      defaultFeatureValues: {}
+      desiredDuckDBUIExtensionVersions: { "#{duckdbVersion()}": UI_EXT_VERSION }
+    }),
+      headers:
+        'Content-Type': 'application/json'
+        'X-DuckDB-Version': duckdbVersion()
+        'X-DuckDB-Platform': PLATFORM
+        'X-DuckDB-UI-Extension-Version': UI_EXT_VERSION
+
+# GET /localEvents — SSE stream with keepalive (matches official extension)
+# The official blocks 5s per iteration, sends ":\r\r" keepalive if no events.
+get '/localEvents' ->
+  keepalive = null
+  new Response new ReadableStream({
+    start: (controller) ->
+      # Send keepalive every 5 seconds (SSE comment, matches official ":\r\r")
+      keepalive = setInterval ->
+        try
+          controller.enqueue ":\r\r"
+        catch
+          clearInterval keepalive
+      , 5000
+    cancel: ->
+      clearInterval keepalive if keepalive
+  }),
+    headers:
+      'Content-Type': 'text/event-stream'
+
+# GET /mom/* — MotherDuck API stubs (prevent OAuth, return 401)
+get '/mom/*' ->
+  new Response null, { status: 401 }
+
+# GET /* — Proxy UI assets from ui.duckdb.org (catch-all, must be last)
+get '/*' ->
+  reqPath = @req.path
+
+  try
+    response = fetch! "#{UI_REMOTE_URL}#{reqPath}",
+      headers: { 'User-Agent': "rip-db/#{VERSION}" }
+
+    body = response.arrayBuffer!
+    contentType = response.headers.get('Content-Type') or 'application/octet-stream'
+
+    # Build response headers
+    headers =
+      'Content-Type': contentType
+      'Cache-Control': response.headers.get('Cache-Control') or 'public, max-age=3600'
+      # COOP/COEP required for SharedArrayBuffer (DuckDB WASM fallback)
+      'Cross-Origin-Opener-Policy': 'same-origin'
+      'Cross-Origin-Embedder-Policy': 'credentialless'
+
+    new Response body,
+      status: response.status
+      headers: headers
+
+  catch err
+    console.error "Proxy error for #{reqPath}:", err?.message
+    new Response "Failed to fetch UI asset: #{reqPath}", { status: 502 }
+
+# ==============================================================================
+# Start Server
+# ==============================================================================
+
+start port: port
+
+console.log "rip-db: listening on http://localhost:#{port}"
+console.log "rip-db: DuckDB UI available at http://localhost:#{port}/"

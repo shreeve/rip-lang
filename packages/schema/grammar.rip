@@ -1,0 +1,498 @@
+# ==============================================================================
+# Schema Grammar - S-Expression Output for Rip Schema Definitions
+#
+# A unified schema language for types, validation, database models, and UI.
+# Inspired by SPOT/Sage, rip-schema, TypeScript, and Zod.
+#
+# Author: Steve Shreeve <steve.shreeve@gmail.com>
+#   Date: January 2026
+#
+# Key syntax:
+#   @enum Role: admin, user, guest
+#   @type Address
+#   @model User
+#     name!: string, [1, 100]     # ! = required, [min, max]
+#     email!#: email              # # = unique
+#     role?: Role, [user]         # ? = optional, [default]
+# ==============================================================================
+
+o = (pattern, action, options) ->
+  pattern = pattern.trim().replace /\s{2,}/g, ' '
+  [pattern, action ? 1, options]
+
+mode = 'sexp'
+
+grammar =
+
+  # ============================================================================
+  # Top-Level Structure
+  # ============================================================================
+
+  Schema: [
+    o ''           , '["schema"]'
+    o 'Definitions', '["schema", ...1]'
+  ]
+
+  Definitions: [
+    o 'Definition'                        , '[1]'
+    o 'Definitions TERMINATOR Definition' , '[...1, 3]'
+    o 'Definitions TERMINATOR'
+  ]
+
+  Definition: [
+    o 'Import'
+    o 'EnumDef'
+    o 'TypeDef'
+    o 'ModelDef'
+    o 'MixinDef'
+    o 'WidgetDef'
+    o 'FormDef'
+    o 'StateDef'
+  ]
+
+  # ============================================================================
+  # Import Statements
+  # ============================================================================
+
+  Import: [
+    o 'IMPORT STRING', '["import", 2]'
+  ]
+
+  # ============================================================================
+  # Helper: Optional Terminator before INDENT
+  # ============================================================================
+
+  Block: [
+    o 'INDENT Body OUTDENT'             , 2
+    o 'TERMINATOR INDENT Body OUTDENT'  , 3
+  ]
+
+  # ============================================================================
+  # Enum Definitions
+  # ============================================================================
+
+  # @enum Role: admin, user, guest
+  # @enum Status
+  #   pending: 0
+  #   active: 1
+
+  EnumDef: [
+    o 'ENUM Identifier : EnumValues'                , '["enum", 2, 4]'
+    o 'ENUM Identifier INDENT EnumMembers OUTDENT'  , '["enum", 2, 4]'
+    o 'ENUM Identifier TERMINATOR INDENT EnumMembers OUTDENT', '["enum", 2, 5]'
+  ]
+
+  EnumValues: [
+    o 'Identifier'                 , '[1]'
+    o 'EnumValues , Identifier'    , '[...1, 3]'
+  ]
+
+  EnumMembers: [
+    o 'EnumMember'                           , '[1]'
+    o 'EnumMembers TERMINATOR EnumMember'    , '[...1, 3]'
+    o 'EnumMembers TERMINATOR'
+  ]
+
+  EnumMember: [
+    o 'Identifier : Literal', '[1, 3]'
+  ]
+
+  # ============================================================================
+  # Type Definitions (reusable structures, no DB)
+  # ============================================================================
+
+  TypeDef: [
+    o 'TYPE Identifier Block'                  , '["type", 2, null, 3]'
+    o 'TYPE Identifier : Identifier Block'     , '["type", 2, 4, 5]'
+  ]
+
+  # ============================================================================
+  # Model Definitions (database-backed entities)
+  # ============================================================================
+
+  ModelDef: [
+    o 'MODEL Identifier Block'                 , '["model", 2, null, 3]'
+    o 'MODEL Identifier : Identifier Block'    , '["model", 2, 4, 5]'
+  ]
+
+  # ============================================================================
+  # Mixin Definitions (reusable field groups)
+  # ============================================================================
+
+  MixinDef: [
+    o 'MIXIN Identifier Block', '["mixin", 2, 3]'
+  ]
+
+  # ============================================================================
+  # Widget Definitions (UI components)
+  # ============================================================================
+
+  WidgetDef: [
+    o 'WIDGET Identifier Block'                , '["widget", 2, null, 3]'
+    o 'WIDGET Identifier : Identifier Block'   , '["widget", 2, 4, 5]'
+  ]
+
+  # ============================================================================
+  # Form Definitions (model + layout)
+  # ============================================================================
+
+  FormDef: [
+    o 'FORM Identifier : Identifier Block'     , '["form", 2, 4, 5]'
+  ]
+
+  # ============================================================================
+  # State Definitions (reactive state)
+  # ============================================================================
+
+  StateDef: [
+    o 'STATE Identifier Block', '["state", 2, 3]'
+  ]
+
+  # ============================================================================
+  # Body - List of members (fields, directives, etc.)
+  # ============================================================================
+
+  Body: [
+    o 'Member'                        , '[1]'
+    o 'Body TERMINATOR Member'        , '[...1, 3]'
+    o 'Body TERMINATOR'
+  ]
+
+  Member: [
+    o 'Field'
+    o 'Directive'
+    o 'Relation'
+    o 'IndexDef'
+    o 'ComputedBlock'
+    o 'ValidateBlock'
+    o 'EventsDef'
+    o 'ActionsBlock'
+    o 'FormField'
+  ]
+
+  # ============================================================================
+  # Field Definitions
+  # ============================================================================
+
+  # Syntax: name[!#?]: type[, constraints][, attributes]
+  #
+  # Examples:
+  #   name!: string                      Required string
+  #   email!#: email                     Required + unique
+  #   bio?: text, [0, 1000]              Optional with max length
+  #   role: Role, [user]                 Enum with default
+  #   items: Item[]                      Array type
+  #   data: json, [{}]                   JSON with default
+  #   phone: string, { mask: "###" }     With UI attributes
+
+  # Field definition - handles both regular fields and computed fields
+  Field: [
+    # Regular field: name: type
+    o 'IDENTIFIER : FieldType'                                      , '["field", 1, [], 3, null, null]'
+    o 'IDENTIFIER : FieldType , Constraints'                        , '["field", 1, [], 3, 5, null]'
+    o 'IDENTIFIER : FieldType , Attrs'                              , '["field", 1, [], 3, null, 5]'
+    o 'IDENTIFIER : FieldType , Constraints , Attrs'                , '["field", 1, [], 3, 5, 7]'
+    # Field with modifiers: name!: type, name!#: type, etc.
+    o 'IDENTIFIER FieldModifiers : FieldType'                       , '["field", 1, 2, 4, null, null]'
+    o 'IDENTIFIER FieldModifiers : FieldType , Constraints'         , '["field", 1, 2, 4, 6, null]'
+    o 'IDENTIFIER FieldModifiers : FieldType , Attrs'               , '["field", 1, 2, 4, null, 6]'
+    o 'IDENTIFIER FieldModifiers : FieldType , Constraints , Attrs' , '["field", 1, 2, 4, 6, 8]'
+    # Computed field: name: -> expr
+    o 'IDENTIFIER : ArrowFunc'                                      , '["computed", 1, 3]'
+  ]
+
+  FieldModifiers: [
+    o '!'                   , '["!"]'
+    o '#'                   , '["#"]'
+    o '?'                   , '["?"]'
+    o 'FieldModifiers !'    , '[...1, "!"]'
+    o 'FieldModifiers #'    , '[...1, "#"]'
+    o 'FieldModifiers ?'    , '[...1, "?"]'
+  ]
+
+  # Field type (supports arrays via [])
+  FieldType: [
+    o 'IDENTIFIER'                   # string, email, User, etc.
+    o 'IDENTIFIER [ ]'  , '["array", 1]'
+  ]
+
+  # Constraints in brackets: [min, max], [default], [min, max, default]
+  Constraints: [
+    o '[ ConstraintList ]', 2
+  ]
+
+  ConstraintList: [
+    o 'ConstraintValue'                    , '[1]'
+    o 'ConstraintList , ConstraintValue'   , '[...1, 3]'
+  ]
+
+  ConstraintValue: [
+    o 'Literal'
+    o 'IDENTIFIER'      # Enum values like [user]
+    o 'Object'
+    o 'Array'
+    o 'Regex'
+    o 'ArrowFunc'
+  ]
+
+  # Attributes in braces (for UI hints)
+  Attrs: [
+    o 'Object'
+  ]
+
+  # ============================================================================
+  # Directives (@timestamps, @softDelete, etc.)
+  # ============================================================================
+
+  Directive: [
+    o 'TIMESTAMPS'              , '["timestamps"]'
+    o 'SOFT_DELETE'             , '["softDelete"]'
+    o 'INCLUDE IDENTIFIER'      , '["include", 2]'
+    o 'PATTERN Regex'           , '["pattern", 2]'
+  ]
+
+  # ============================================================================
+  # Relationships
+  # ============================================================================
+
+  Relation: [
+    o 'BELONGS_TO IDENTIFIER'                  , '["belongs_to", 2, null]'
+    o 'BELONGS_TO IDENTIFIER , RelationOpts'   , '["belongs_to", 2, 4]'
+    o 'HAS_ONE IDENTIFIER'                     , '["has_one", 2, null]'
+    o 'HAS_ONE IDENTIFIER , RelationOpts'      , '["has_one", 2, 4]'
+    o 'HAS_MANY IDENTIFIER'                    , '["has_many", 2, null]'
+    o 'HAS_MANY IDENTIFIER , RelationOpts'     , '["has_many", 2, 4]'
+  ]
+
+  RelationOpts: [
+    o 'Object'
+  ]
+
+  # ============================================================================
+  # Indexes
+  # ============================================================================
+
+  IndexDef: [
+    o 'INDEX IDENTIFIER'                          , '["index", [2], false]'
+    o 'INDEX IDENTIFIER #'                        , '["index", [2], true]'
+    o 'INDEX [ IndexFields ]'                     , '["index", 3, false]'
+    o 'INDEX [ IndexFields ] #'                   , '["index", 3, true]'
+  ]
+
+  IndexFields: [
+    o 'IDENTIFIER'                   , '[1]'
+    o 'IndexFields , IDENTIFIER'     , '[...1, 3]'
+  ]
+
+  # ============================================================================
+  # Computed Fields Block
+  # ============================================================================
+
+  ComputedBlock: [
+    o 'COMPUTED Block', '["computed", 2]'
+  ]
+
+  # ============================================================================
+  # Validation Block
+  # ============================================================================
+
+  ValidateBlock: [
+    o 'VALIDATE Block', '["validate", 2]'
+  ]
+
+  # ============================================================================
+  # Events (for widgets)
+  # ============================================================================
+
+  EventsDef: [
+    o 'EVENTS EventList', '["events", 2]'
+  ]
+
+  EventList: [
+    o 'IDENTIFIER'               , '[1]'
+    o 'EventList , IDENTIFIER'   , '[...1, 3]'
+  ]
+
+  # ============================================================================
+  # Actions Block (for forms/state)
+  # ============================================================================
+
+  ActionsBlock: [
+    o 'ACTIONS Block', '["actions", 2]'
+  ]
+
+  # ============================================================================
+  # Form Fields (field with placement)
+  # ============================================================================
+
+  FormField: [
+    o 'IDENTIFIER Object', '["placement", 1, 2]'
+  ]
+
+  # ============================================================================
+  # Literals and Values
+  # ============================================================================
+
+  Identifier: [
+    o 'IDENTIFIER'
+  ]
+
+  Literal: [
+    o 'NUMBER'
+    o 'STRING'
+    o 'BOOL'
+    o 'NULL'
+    o 'UNDEFINED'
+  ]
+
+  Regex: [
+    o 'REGEX'
+  ]
+
+  # ============================================================================
+  # Object Literals: { key: value, ... }
+  # ============================================================================
+
+  Object: [
+    o '{ }'                  , '["object"]'
+    o '{ ObjectEntries }'    , '["object", ...2]'
+  ]
+
+  ObjectEntries: [
+    o 'ObjectEntry'                               , '[1]'
+    o 'ObjectEntries , ObjectEntry'               , '[...1, 3]'
+    o 'ObjectEntries OptComma TERMINATOR ObjectEntry'    , '[...1, 4]'
+    o 'ObjectEntries OptComma TERMINATOR'
+    o 'INDENT ObjectEntries OptComma OUTDENT'     , 2
+  ]
+
+  ObjectEntry: [
+    o 'IDENTIFIER'                  , '[1, 1]'        # Shorthand { x }
+    o 'IDENTIFIER : Value'          , '[1, 3]'
+    o 'STRING : Value'              , '[1, 3]'
+    o '... IDENTIFIER'              , '["...", 2]'    # Spread
+  ]
+
+  OptComma: [
+    o ''
+    o ','
+  ]
+
+  # ============================================================================
+  # Array Literals: [a, b, c]
+  # ============================================================================
+
+  Array: [
+    o '[ ]'              , '["array"]'
+    o '[ ArrayItems ]'   , '["array", ...2]'
+  ]
+
+  ArrayItems: [
+    o 'Value'                               , '[1]'
+    o 'ArrayItems , Value'                  , '[...1, 3]'
+    o 'ArrayItems OptComma TERMINATOR Value', '[...1, 4]'
+    o 'ArrayItems OptComma TERMINATOR'
+  ]
+
+  # ============================================================================
+  # Arrow Functions: -> expr or (params) -> expr
+  # ============================================================================
+
+  ArrowFunc: [
+    o '-> Value'                               , '["->", [], 2]'
+    o '-> INDENT Value OUTDENT'                , '["->", [], 3]'
+    o '( Params ) -> Value'                    , '["->", 2, 5]'
+    o '( Params ) -> INDENT Value OUTDENT'     , '["->", 2, 6]'
+  ]
+
+  Params: [
+    o ''                       , '[]'
+    o 'IDENTIFIER'             , '[1]'
+    o 'Params , IDENTIFIER'    , '[...1, 3]'
+  ]
+
+  # ============================================================================
+  # Values (simplified expressions for schemas)
+  # ============================================================================
+
+  # Value is what can appear in constraints, defaults, computed fields, etc.
+  # This is intentionally simpler than full expressions to reduce conflicts.
+
+  Value: [
+    o 'Primary'
+    o 'Value . IDENTIFIER'       , '[".", 1, 3]'         # Property access
+    o 'Value ?. IDENTIFIER'      , '["?.", 1, 3]'        # Optional chaining
+    o 'Value [ Value ]'          , '["[]", 1, 3]'        # Index access
+    o 'Value ( )'                , '["call", 1, []]'     # Function call
+    o 'Value ( Args )'           , '["call", 1, 3]'
+    o 'Value BinOp Value'        , '[2, 1, 3]'           # Binary operators
+    o 'UnaryOp Value'            , '[1, 2]', prec: 'UNARY'
+    o '( Value )'                , 2                      # Grouping
+  ]
+
+  Primary: [
+    o 'Literal'
+    o 'IDENTIFIER'
+    o 'Object'
+    o 'Array'
+    o 'Regex'
+    o 'ArrowFunc'
+    o '@ IDENTIFIER'             , '[".", "this", 2]'     # @field → this.field
+    o '@'                        , '"this"'              # @ → this
+  ]
+
+  Args: [
+    o 'Value'                   , '[1]'
+    o 'Args , Value'            , '[...1, 3]'
+  ]
+
+  # Binary operators (single rule to reduce states)
+  BinOp: [
+    o '+'   , '"+"'
+    o '-'   , '"-"'
+    o '*'   , '"*"'
+    o '/'   , '"/"'
+    o '=='  , '"=="'
+    o '!='  , '"!="'
+    o '<'   , '"<"'
+    o '>'   , '">"'
+    o '<='  , '"<="'
+    o '>='  , '">="'
+    o '&&'  , '"&&"'
+    o '||'  , '"||"'
+    o '??'  , '"??"'
+    o 'IS'  , '"is"'
+    o 'ISNT', '"isnt"'
+  ]
+
+  # Unary operators
+  UnaryOp: [
+    o 'NOT' , '"not"'
+    o '!'   , '"!"'
+    o '-'   , '"-"'
+  ]
+
+# ============================================================================
+# Operator Precedence (low to high - reversed for solar)
+# ============================================================================
+
+operators = """
+  right       ,
+  right       :
+  right       ->
+  left        ??
+  left        ||
+  left        &&
+  left        == != IS ISNT
+  left        < > <= >=
+  left        + -
+  left        * /
+  right       UNARY NOT
+  left        . ?. [ ] ( )
+""".trim().split('\n').reverse().map (line) -> line.trim().split /\s+/
+
+# ============================================================================
+# Export
+# ============================================================================
+
+export default {mode, grammar, operators}

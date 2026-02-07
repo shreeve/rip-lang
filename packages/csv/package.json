@@ -1,0 +1,40 @@
+{
+  "name": "@rip-lang/csv",
+  "version": "1.0.5",
+  "description": "Fast, flexible CSV parser and writer for Rip — indexOf ratchet engine, auto-detection, zero dependencies",
+  "type": "module",
+  "main": "csv.rip",
+  "exports": {
+    ".": "./csv.rip"
+  },
+  "scripts": {
+    "test": "rip test/basic.rip"
+  },
+  "keywords": [
+    "csv",
+    "parser",
+    "writer",
+    "fast",
+    "indexOf",
+    "bun",
+    "rip"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreeve/rip-lang.git",
+    "directory": "packages/csv"
+  },
+  "homepage": "https://github.com/shreeve/rip-lang/tree/main/packages/csv#readme",
+  "bugs": {
+    "url": "https://github.com/shreeve/rip-lang/issues"
+  },
+  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "rip-lang": "^2.9.0"
+  },
+  "files": [
+    "csv.rip",
+    "README.md"
+  ]
+}

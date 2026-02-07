@@ -1,0 +1,392 @@
+# Test: Function Definitions (1 node type)
+# Tests "def" node type
+
+# ============================================================================
+# Function Definitions: "def"
+# ============================================================================
+
+# Simple function
+test "simple function", "def add(a, b)\n  a + b\nadd(2, 3)", 5
+test "function with no params", "def greet\n  'hello'\ngreet()", "hello"
+
+# Function with body
+test "function with multiple statements", "def fn\n  x = 5\n  y = 10\n  x + y\nfn()", 15
+
+# Code generation
+code "simple def", "def add(a, b)\n  a + b", "function add(a, b) { return (a + b); }"
+
+# Implicit return
+test "implicit return", "def getValue\n  42\ngetValue()", 42
+test "implicit return last statement", "def fn\n  x = 1\n  x + 1\nfn()", 2
+
+# Function calling other functions
+test "function calling function", "def double(x)\n  x * 2\ndef quad(x)\n  double(double(x))\nquad(3)", 12
+
+# Recursive functions
+test "recursive factorial", "def factorial(n)\n  if n <= 1\n    1\n  else\n    n * factorial(n - 1)\nfactorial(5)", 120
+
+# ============================================================================
+# Async Functions (auto-detection)
+# ============================================================================
+
+test "async function", "def fetchData\n  await Promise.resolve(42)\nfetchData()", 42
+
+# ============================================================================
+# Thin Arrow: "->"
+# ============================================================================
+
+# Basic thin arrow
+test "thin arrow simple", "add = (a, b) -> a + b\nadd(2, 3)", 5
+test "thin arrow no params", "greet = -> 'hello'\ngreet()", "hello"
+test "thin arrow one param", "double = (x) -> x * 2\ndouble(5)", 10
+
+# Code generation
+code "thin arrow", "(a, b) -> a + b", "function(a, b) { return (a + b); }"
+
+# Thin arrow with block body
+test "thin arrow block", "fn = ->\n  x = 5\n  x * 2\nfn()", 10
+
+# Implicit return
+test "thin arrow implicit return", "getValue = -> 42\ngetValue()", 42
+
+# Thin arrow 'this' binding (call-site determined)
+test "thin arrow this call-site", "obj = {x: 5, fn: -> this.x}\nobj.fn()", 5
+
+# ============================================================================
+# Fat Arrow: "=>"
+# ============================================================================
+
+# Basic fat arrow
+test "fat arrow simple", "add = (a, b) => a + b\nadd(2, 3)", 5
+test "fat arrow no params", "greet = => 'hello'\ngreet()", "hello"
+test "fat arrow one param", "double = (x) => x * 2\ndouble(5)", 10
+
+# Code generation
+code "fat arrow", "(a, b) => a + b", "(a, b) => (a + b)"
+
+# Fat arrow with block body
+test "fat arrow block", "fn = =>\n  x = 5\n  x * 2\nfn()", 10
+
+# Fat arrow 'this' binding (lexically bound to outer scope)
+test "fat arrow this lexical", "obj = {x: 5, fn: => this?.x}\nobj.fn()", undefined
+
+# ============================================================================
+# Arrow Functions in Collections
+# ============================================================================
+
+# Arrow in array
+test "arrow in array", "fns = [(x) -> x + 1, (x) -> x * 2]\nfns[0](5)", 6
+
+# Arrow in object
+test "arrow in object", "obj = {fn: (x) -> x * 2}\nobj.fn(5)", 10
+
+# ============================================================================
+# Function Calls
+# ============================================================================
+
+# Simple calls
+test "call no args", "fn = -> 42\nfn()", 42
+test "call with args", "add = (a, b) -> a + b\nadd(2, 3)", 5
+test "call with multiple args", "sum = (a, b, c) -> a + b + c\nsum(1, 2, 3)", 6
+
+# Code generation
+code "simple call", "fn()", "fn()"
+code "call with args", "fn(a, b)", "fn(a, b)"
+
+# Nested calls
+test "nested calls", "double = (x) -> x * 2\ntriple = (x) -> x * 3\ndouble(triple(2))", 12
+
+# Calls with expressions
+test "call with expression arg", "double = (x) -> x * 2\ndouble(2 + 3)", 10
+
+# Method calls
+test "method call", "obj = {fn: -> 42}\nobj.fn()", 42
+
+# ============================================================================
+# Spread in Calls: "..."
+# ============================================================================
+
+# Spread arguments
+test "spread args", "add = (a, b, c) -> a + b + c\nargs = [1, 2, 3]\nadd(...args)", 6
+test "spread with other args", "fn = (a, b, c) -> a + b + c\nfn(1, ...[2, 3])", 6
+
+# ============================================================================
+# Rest Parameters: "rest"
+# ============================================================================
+
+# Basic rest parameters
+test "rest params", "fn = (first, ...rest) -> rest.length\nfn(1, 2, 3, 4)", 3
+test "rest params values", "fn = (first, ...rest) -> rest[0]\nfn(1, 2, 3)", 2
+test "rest params empty", "fn = (...rest) -> rest.length\nfn()", 0
+
+# Code generation
+code "rest params", "(first, ...rest) -> rest", "function(first, ...rest) { return rest; }"
+
+# Rest with no other params
+test "rest only", "fn = (...all) -> all.length\nfn(1, 2, 3)", 3
+
+
+# ============================================================================
+# Default Parameters: "default"
+# ============================================================================
+
+# Basic default parameters
+test "default param used", "fn = (x = 10) -> x\nfn()", 10
+test "default param override", "fn = (x = 10) -> x\nfn(20)", 20
+test "default param expression", "fn = (x = 5 + 5) -> x\nfn()", 10
+
+# Code generation
+code "default param", "(x = 10) -> x", "function(x = 10) { return x; }"
+
+# Multiple default params
+test "multiple defaults", "fn = (a = 1, b = 2) -> a + b\nfn()", 3
+test "partial defaults", "fn = (a = 1, b = 2) -> a + b\nfn(5)", 7
+
+# ============================================================================
+# Expansion: "expansion"
+# ============================================================================
+
+# Expansion marker: (a, ..., b)
+test "expansion marker", "fn = (a, ..., b) -> a + b\nfn(1, 2, 3, 4)", 5
+
+# ============================================================================
+# Return Statements: "return"
+# ============================================================================
+
+# Explicit return
+test "explicit return", "fn = -> return 42\nfn()", 42
+test "early return", "fn = (x) ->\n  return 1 if x < 0\n  return 2\nfn(-5)", 1
+test "return expression", "fn = -> return 5 + 10\nfn()", 15
+
+# Code generation
+code "simple return", "return 42", "return 42"
+code "return expression", "return a + b", "return (a + b)"
+
+# Return in different contexts
+test "return in if", "fn = (x) ->\n  if x > 0\n    return 'positive'\n  'negative'\nfn(5)", "positive"
+
+# Multiple returns
+test "multiple returns", "fn = (x) ->\n  return 1 if x == 1\n  return 2 if x == 2\n  return 3\nfn(2)", 2
+
+# Return vs implicit return
+test "explicit vs implicit", "fn = (x) ->\n  if x > 0\n    return x\n  0\nfn(5)", 5
+
+# ============================================================================
+# IIFE (Immediately Invoked Function Expression)
+# ============================================================================
+
+test "IIFE simple", "(-> 42)()", 42
+test "IIFE with params", "((x) -> x * 2)(5)", 10
+test "IIFE with block", "(-> \n  x = 5\n  x * 2)()", 10
+
+# ============================================================================
+# Closures
+# ============================================================================
+
+test "closure captures variable", '''
+  makeCounter = ->
+    count = 0
+    -> count++
+  counter = makeCounter()
+  counter()
+  counter()
+  counter()
+  ''', 2
+
+test "closure multiple instances", '''
+  makeAdder = (n) ->
+    (x) -> x + n
+  add5 = makeAdder(5)
+  add10 = makeAdder(10)
+  add5(3) + add10(3)
+  ''', 21
+
+# ============================================================================
+# Higher-Order Functions
+# ============================================================================
+
+test "function returns function", '''
+  outer = (x) ->
+    (y) -> x + y
+  add5 = outer(5)
+  add5(3)
+  ''', 8
+
+test "function takes function", '''
+  apply = (fn, x) -> fn(x)
+  double = (x) -> x * 2
+  apply(double, 5)
+  ''', 10
+
+# ============================================================================
+# Void Functions (! at definition - side-effect only)
+# ============================================================================
+
+test "void function no implicit return", '''
+  def process!
+    x = 42
+    x * 2
+  result = process()
+  result
+  ''', undefined
+
+test "void function with params", '''
+  def update!(arr, val)
+    arr.push val
+    val * 2
+  arr = []
+  update(arr, 5)
+  arr
+  ''', [5]
+
+test "void function with early return", '''
+  def validate!(x)
+    return if x < 0
+    console.log "valid"
+    x * 2
+  [validate(5), validate(-1)]
+  ''', [undefined, undefined]
+
+test "void function return strips value", '''
+  def compute!(x)
+    return x * 10
+  result = compute(5)
+  result
+  ''', undefined
+
+test "normal function for comparison", '''
+  def compute(x)
+    return x * 10
+  result = compute(5)
+  result
+  ''', 50
+
+test "void function in loop", '''
+  results = []
+  def append!(val)
+    results.push val
+  for x in [1, 2, 3]
+    append(x)
+  results
+  ''', [1, 2, 3]
+
+test "void function with comprehension", '''
+  def process!
+    for x in [1, 2, 3]
+      console.log x
+  result = process()
+  result
+  ''', undefined
+
+code "void function no implicit return in compiler", '''
+  def process!
+    x = 42
+    x * 2
+  ''', '''
+  function process() {
+    let x;
+    x = 42;
+    (x * 2);
+    return;
+  }
+'''
+
+code "void function early return no value", '''
+  def validate!(x)
+    return if x < 0
+    console.log "ok"
+  ''', '''
+  function validate(x) {
+    if (x < 0) return;
+    console.log("ok");
+    return;
+  }
+'''
+
+code "void function strips return value", '''
+  def compute!(x)
+    return x * 2
+  ''', '''
+  function compute(x) {
+    return;
+  }
+'''
+
+# ============================================================================
+# Void Arrow Functions (! with -> and =>)
+# ============================================================================
+
+test "void thin arrow no implicit return", '''
+  c! = ->
+    x = 42
+    x * 2
+  result = c()
+  result
+  ''', undefined
+
+test "void thin arrow with params", '''
+  add! = (a, b) ->
+    a + b
+  result = add(5, 10)
+  result
+  ''', undefined
+
+test "void thin arrow with return", '''
+  c! = ->
+    return "hello world"
+  result = c()
+  result
+  ''', undefined
+
+test "void fat arrow no implicit return", '''
+  d! = =>
+    x = 100
+    x * 2
+  result = d()
+  result
+  ''', undefined
+
+test "void fat arrow with params", '''
+  multiply! = (a, b) =>
+    a * b
+  result = multiply(3, 4)
+  result
+  ''', undefined
+
+test "void fat arrow with comprehension", '''
+  d! = (e, f, g) =>
+    h = for i in [3..6]
+      i + 4
+  result = d(1, 2, 3)
+  result
+  ''', undefined
+
+code "void thin arrow compiler", '''
+  c! = ->
+    return "hello world"
+  ''', '''
+  let c;
+  c = function() {
+    return;
+  };
+'''
+
+code "void fat arrow compiler", '''
+  process! = (x) =>
+    x * 2
+  ''', '''
+  let process;
+  process = x => {
+    (x * 2);
+    return;
+  };
+'''
+
+# NOTE: Object method void syntax (fn!:) not yet supported by parser
+# test "void arrow in object method", '''
+#   obj = {
+#     fn!: -> 42
+#   }
+#   result = obj.fn()
+#   result
+#   ''', undefined

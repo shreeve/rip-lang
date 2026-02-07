@@ -1,0 +1,150 @@
+# Test: Comprehensions (2 node types)
+# Tests "comprehension" and "object-comprehension" node types
+
+# ============================================================================
+# Array Comprehensions: "comprehension"
+# ============================================================================
+
+# Basic array comprehension
+test "simple comprehension", "(x * 2 for x in [1, 2, 3])", [2, 4, 6]
+test "comprehension with string", "(c.toUpperCase() for c in ['a', 'b', 'c'])", ['A', 'B', 'C']
+
+# Comprehension with guard
+test "comprehension when", "(x for x in [1, 2, 3, 4, 5] when x > 2)", [3, 4, 5]
+test "comprehension multiple guards", "(x for x in [1, 2, 3, 4] when x > 1 && x < 4)", [2, 3]
+
+# Comprehension with index
+test "comprehension with index", "(i for item, i in ['a', 'b', 'c'])", [0, 1, 2]
+
+# Nested comprehensions
+test "nested comprehension", "((x * y for x in [1, 2]) for y in [10, 20])", [[10, 20], [20, 40]]
+
+# Comprehension from range
+test "comprehension range", "(x * x for x in [1..5])", [1, 4, 9, 16, 25]
+
+# String comprehension
+test 'string comprehension', "(c.toUpperCase() for c in 'abc')", ['A', 'B', 'C']
+
+# Comprehension with destructuring
+test 'comprehension with array destructuring', '''
+  pairs = [[1,2], [3,4], [5,6]]
+  (a + b for [a, b] in pairs)
+  ''', [3, 7, 11]
+
+# Empty comprehension
+test 'empty comprehension', "(x for x in [] when x > 0)", []
+
+# Comprehension with break
+test 'comprehension with break', '''
+  result = for i in [1..10]
+    break if i > 3
+    i
+  result
+  ''', [1, 2, 3]
+
+# Comprehension with continue
+test 'comprehension with continue', '''
+  result = for i in [1..5]
+    continue if i == 3
+    i
+  result
+  ''', [1, 2, 4, 5]
+
+# Comprehension with step (by)
+test "comprehension by 2", "(x for x in [0...10] by 2)", [0, 2, 4, 6, 8]
+test "comprehension by 3", "(x * 2 for x in [0...12] by 3)", [0, 6, 12, 18]
+test "comprehension by step with guard", "(x for x in [0...20] by 2 when x > 5)", [6, 8, 10, 12, 14, 16, 18]
+
+# Nested comprehensions should use plain loops (not nested IIFEs)
+test "nested comprehension side effects", '''
+  count = 0
+  for x in [1, 2]
+    count++ for y in [1, 2, 3]
+  count
+  ''', 6
+
+code "nested comprehension plain loops", '''
+  for x in [1, 2]
+    process(y) for y in [1, 2, 3]
+  ''', "for (const x of [1, 2]) {\n  for (const y of [1, 2, 3]) {\n    process(y);\n  }\n}"
+
+# Code generation
+code "comprehension", "(x * 2 for x in arr)", "(() => {\n  const result = [];\n  for (const x of arr) {\n    result.push((x * 2));\n  }\n  return result;\n})()"
+
+# ============================================================================
+# Object Comprehensions: "object-comprehension"
+# ============================================================================
+
+# Basic object comprehension
+test "object comprehension", "{k: v * 2 for k, v of {a: 1, b: 2}}", {a: 2, b: 4}
+test "object comprehension keys only", "{k: k for k of {a: 1, b: 2}}", {a: 'a', b: 'b'}
+
+# Object comprehension with guard
+test "object comprehension when", "{k: v for k, v of {a: 1, b: 2, c: 3} when v > 1}", {b: 2, c: 3}
+
+# Object comprehension values
+test 'object comprehension values', '''
+  obj = {a: 1, b: 2, c: 3}
+  {k: v * 2 for k, v of obj}
+  ''', {a: 2, b: 4, c: 6}
+
+# Object comprehension key-value
+test 'object comprehension key-value', '''
+  {k: k for k, v of {x: 1, y: 2}}
+  ''', {x: 'x', y: 'y'}
+
+# Code generation
+code "object comprehension", "{k: v * 2 for k, v of obj}", "(() => {\n  const result = {};\n  for (const k in obj) {\n    const v = obj[k];\n    result[k] = (v * 2);\n  }\n  return result;\n})()"
+
+# ============================================================================
+# Function-Local Comprehension Assignment (direct array building, no IIFE)
+# ============================================================================
+
+code "function comprehension assignment", '''
+  def makeList
+    items = (x * 2 for x in [1, 2, 3])
+  ''', '''
+  function makeList() {
+    let items;
+    items = [];
+    for (const x of [1, 2, 3]) {
+      items.push(x * 2);
+    }
+    return items;
+  }
+'''
+
+code "function for-in assignment", '''
+  def makeList
+    items = for x in [1, 2, 3]
+      x * 2
+  ''', '''
+  function makeList() {
+    let items;
+    items = [];
+    for (const x of [1, 2, 3]) {
+      items.push(x * 2);
+    }
+    return items;
+  }
+'''
+
+test "function comprehension execution", '''
+  def makeList
+    items = (x * 2 for x in [1, 2, 3])
+  makeList()
+  ''', [2, 4, 6]
+
+test "no iife in generated code", '''
+  def test
+    x = (i for i in [1, 2, 3])
+  result = test()
+  result
+  ''', [1, 2, 3]
+
+test "no iife with guard", '''
+  def test
+    x = (i for i in [1, 2, 3, 4, 5] when i > 2)
+  result = test()
+  result
+  ''', [3, 4, 5]

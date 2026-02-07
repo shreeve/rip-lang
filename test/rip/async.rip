@@ -1,0 +1,380 @@
+# Test: Async/Await (2 node types)
+# Tests "await" and "await-return" node types
+
+# ============================================================================
+# Await: "await"
+# ============================================================================
+
+# Basic await
+test "await promise", "fn = -> await Promise.resolve(42)\nfn()", 42
+test "await in function", "getData = -> await Promise.resolve('data')\ngetData()", "data"
+
+# Await with expression
+test "await expression", "fn = -> await Promise.resolve(5) + 10\nfn()", 15
+
+# Multiple awaits
+test "multiple awaits", "fn = ->\n  a = await Promise.resolve(5)\n  b = await Promise.resolve(10)\n  a + b\nfn()", 15
+
+# Await in try-catch
+test "await in try", "fn = ->\n  try\n    await Promise.reject('error')\n  catch e\n    e\nfn()", "error"
+
+# ============================================================================
+# Async Auto-Detection
+# ============================================================================
+
+# Async automatically detected
+test "auto async", "fn = -> await Promise.resolve(42)\nfn.constructor.name", "AsyncFunction"
+test "async returns promise", "a = -> await Promise.resolve(5)\na().constructor.name", "Promise"
+
+# ============================================================================
+# Async with Parameters
+# ============================================================================
+
+test "async with params", '''
+  add = (a, b) -> await Promise.resolve(a + b)
+  add(5, 3)
+  ''', 8
+
+test "async with destructuring", '''
+  fn = (a, [b, c]) ->
+    arr = [a, b, c]
+    await Promise.resolve(arr)
+  do ->
+    await fn(1, [2, 3])
+  ''', [1, 2, 3]
+
+# ============================================================================
+# Async Error Handling
+# ============================================================================
+
+test "async with catch", '''
+  fn = ->
+    try
+      await Promise.reject('error')
+    catch e
+      e
+  fn()
+  ''', "error"
+
+# Async generator detection (runtime tests)
+test "async generator detection", '''
+  foo = ->
+    yield await 1
+  foo.constructor.name
+''', "AsyncGeneratorFunction"
+
+test "async generator with multiple yields", '''
+  fn = ->
+    yield await 1
+    yield await 2
+    yield 3
+  fn.constructor.name
+''', "AsyncGeneratorFunction"
+
+# Code generation tests (Rip-specific format with 'let')
+# These verify we generate correct modern ES2022 syntax
+code "async for-as loop", '''
+  for await x as iterable
+    x
+''', '''
+for await (const x of iterable) {
+  x;
+};
+'''
+
+code "async for-as with destructuring", '''
+  for await [a, b] as iterable
+    a + b
+''', '''
+for await (const [a, b] of iterable) {
+  (a + b);
+};
+'''
+
+code "async for with break", '''
+  for await x as iterable
+    break if x > 10
+    x
+''', '''
+for await (const x of iterable) {
+  if (x > 10) break;
+  x;
+}
+'''
+
+code "async for with continue", '''
+  for await x as iterable
+    continue if x < 5
+    x
+''', '''
+for await (const x of iterable) {
+  if (x < 5) continue;
+  x;
+}
+'''
+
+# Dammit form: as! (shorthand for await ... as)
+code "as! loop", '''
+  for x as! iterable
+    x
+''', '''
+for await (const x of iterable) {
+  x;
+};
+'''
+
+code "as! with destructuring", '''
+  for [a, b] as! iterable
+    a + b
+''', '''
+for await (const [a, b] of iterable) {
+  (a + b);
+};
+'''
+
+code "as! with break", '''
+  for x as! iterable
+    break if x > 10
+    x
+''', '''
+for await (const x of iterable) {
+  if (x > 10) break;
+  x;
+}
+'''
+
+code "as! with continue", '''
+  for x as! iterable
+    continue if x < 5
+    x
+''', '''
+for await (const x of iterable) {
+  if (x < 5) continue;
+  x;
+}
+'''
+
+# ============================================================================
+# Yield: "yield"
+# ============================================================================
+
+# Basic yield
+test "basic generator", '''
+  gen = ->
+    yield 1
+    yield 2
+    yield 3
+  it = gen()
+  [it.next().value, it.next().value, it.next().value]
+  ''', [1, 2, 3]
+
+# Yield with value
+test "yield expression", '''
+  gen = (x) ->
+    yield x * 2
+    yield x * 3
+  it = gen(5)
+  [it.next().value, it.next().value]
+  ''', [10, 15]
+
+# Yield in loop
+test "yield in loop", '''
+  gen = ->
+    for i in [1, 2, 3]
+      yield i * i
+  it = gen()
+  [it.next().value, it.next().value]
+  ''', [1, 4]
+
+# Generator auto-detection
+test "generator function detection", "gen = -> yield\ngen.constructor.name", "GeneratorFunction"
+
+# Generator with return
+test "generator with return", '''
+  gen = ->
+    yield 1
+    return 2
+  g = gen()
+  g.next()
+  g.next().value
+  ''', 2
+
+# Yield undefined
+test "yield undefined", '''
+  gen = -> yield
+  g = gen()
+  g.next().value
+  ''', undefined
+
+# Generator sequence
+test "generator sequence", '''
+  gen = ->
+    yield 1
+    yield 2
+    yield 3
+  g = gen()
+  values = []
+  values.push g.next().value
+  values.push g.next().value
+  values.push g.next().value
+  values
+  ''', [1,2,3]
+
+# Code generation
+code "yield", "yield value", "yield value"
+
+# ============================================================================
+# Yield From (Generator Delegation): "yield-from"
+# ============================================================================
+
+# Yield from delegates to another generator
+test "yield from delegates", '''
+  other = ->
+    yield 1
+    yield 2
+
+  main = ->
+    yield from other()
+    yield 3
+
+  gen = main()
+  results = []
+  results.push gen.next().value
+  results.push gen.next().value
+  results.push gen.next().value
+  results
+  ''', [1, 2, 3]
+
+# Yield from with return value
+test "yield from with return", '''
+  other = ->
+    yield 1
+    return 42
+
+  main = ->
+    result = yield from other()
+    yield result
+
+  gen = main()
+  gen.next()  # 1
+  gen.next().value  # 42
+  ''', 42
+
+# Code generation for yield from
+code "yield from generates yield*", '''
+  gen = ->
+    yield from other()
+  ''', '''
+  let gen;
+  gen = function*() {
+    return yield* other();
+  };
+'''
+
+# ============================================================================
+# Dammit Operator (! suffix forces await)
+# ============================================================================
+
+# Basic dammit operator (! calls and awaits)
+test 'dammit operator basic', '''
+  do ->
+    fetchData = -> Promise.resolve(42)
+    fetchData!
+  ''', 42
+
+# Dammit with parameters (! calls, parens provide args)
+test 'dammit with params', '''
+  do ->
+    getData = (x) -> Promise.resolve(x * 2)
+    getData!(5)
+  ''', 10
+
+# Dammit in method call
+test 'dammit method call', '''
+  do ->
+    obj = {
+      get: -> Promise.resolve('data')
+    }
+    obj.get!
+  ''', 'data'
+
+# Multiple dammit calls
+test 'multiple dammits', '''
+  do ->
+    fetch1 = -> Promise.resolve(1)
+    fetch2 = -> Promise.resolve(2)
+    a = fetch1!
+    b = fetch2!
+    a + b
+  ''', 3
+
+# Dammit without parens (implicit call)
+test 'dammit no parens', '''
+  do ->
+    getData = -> Promise.resolve(5)
+    getData!
+  ''', 5
+
+# Dammit with empty parens (redundant but allowed)
+test 'dammit redundant parens', '''
+  do ->
+    getData = -> Promise.resolve(7)
+    getData!()
+  ''', 7
+
+# Verify ! calls function vs bare reference
+test 'dammit calls vs reference', '''
+  do ->
+    counter = 0
+    increment = ->
+      counter++
+      Promise.resolve(counter)
+
+    # Without ! - just returns the function reference
+    ref = increment
+    typeof ref
+  ''', 'function'
+
+test 'dammit actually calls', '''
+  do ->
+    counter = 0
+    increment = ->
+      counter++
+      Promise.resolve(counter)
+
+    # With ! - calls the function and returns result
+    result1 = increment!
+    result2 = increment!
+    result2
+  ''', 2
+
+# Dammit in expressions
+test 'dammit in expression', '''
+  do ->
+    getValue = -> Promise.resolve(10)
+    x = 5 + getValue!
+    x
+  ''', 15
+
+# Dammit in array literal
+test 'dammit in array', '''
+  do ->
+    get1 = -> Promise.resolve(1)
+    get2 = -> Promise.resolve(2)
+    [get1!, get2!]
+  ''', [1, 2]
+
+# Note: ! in declarations now supported for void functions (side-effect only)
+# getData! = -> 42  (void arrow function)
+# def fetchData!    (void named function)
+# See test/rip/functions.rip for comprehensive void function tests
+
+# Code generation
+code 'dammit bare', 'getData!', 'await getData()'
+code 'dammit with parens', 'getData!()', 'await getData()'
+code 'dammit with args', 'getData!(x)', 'await getData(x)'
+code 'dammit method with args', 'console.log!("hey")', 'await console.log("hey")'
+
+# Dynamic import with dammit operator
+code 'import! dynamic', 'import!("./foo.rip")', '(await import("./foo.rip"))'
+code 'import! with variable', 'import!(path)', '(await import(path))'

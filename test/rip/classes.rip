@@ -1,0 +1,205 @@
+# Test: Classes (2 node types)
+# Tests "class" and "super" node types
+
+# ============================================================================
+# Class Definitions: "class"
+# ============================================================================
+
+# Basic class
+test "basic class", "class Animal\n  constructor: (@name) ->\n  speak: -> @name\na = new Animal('Dog'); a.speak()", "Dog"
+
+# Class with methods
+test "class methods", "class Math\n  add: (a, b) -> a + b\n  multiply: (a, b) -> a * b\nm = new Math(); m.add(2, 3)", 5
+
+# Class with inheritance
+test "class inheritance", "class Animal\n  constructor: (@name) ->\nclass Dog extends Animal\n  bark: -> 'woof'\nd = new Dog('Spot'); d.name", "Spot"
+
+# Static methods
+test "static method", "class Utils\n  @square: (x) -> x * x\nUtils.square(5)", 25
+
+# Class with constructor logic
+test "constructor logic", "class Counter\n  constructor: ->\n    @count = 0\n  increment: -> @count += 1\nc = new Counter(); c.increment(); c.count", 1
+
+# Code generation
+code "simple class", "class Animal\n  constructor: (@name) ->", "class Animal { constructor(name) { this.name = name; } }"
+
+# ============================================================================
+# Super Calls: "super"
+# ============================================================================
+
+# Super in constructor
+test "super in constructor", "class Animal\n  constructor: (@name) ->\nclass Dog extends Animal\n  constructor: (name, @breed) ->\n    super(name)\nd = new Dog('Spot', 'Terrier'); d.name", "Spot"
+
+# Super method call
+test "super method call", "class Animal\n  speak: -> 'sound'\nclass Dog extends Animal\n  speak: -> super.speak() + '!'\nd = new Dog(); d.speak()", "sound!"
+
+# Super with spread arguments (Rip ES6 prefix syntax)
+test "super with spread args", '''
+  class Parent
+    method: (...args) -> args.join('-')
+
+  class Child extends Parent
+    method: -> super(...arguments)
+
+  c = new Child()
+  c.method(1, 2, 3)
+''', '1-2-3'
+
+# Code generation
+code "super call", "super(arg)", "super(arg)"
+code "super method", "super.method()", "super.method()"
+
+# ============================================================================
+# More Class Features
+# ============================================================================
+
+# Class expressions
+test 'class expression', '''
+  Animal = class
+    speak: -> 'sound'
+  new Animal().speak()
+  ''', 'sound'
+
+# Empty class
+test 'empty class', '''
+  class Empty
+  new Empty().constructor.name
+  ''', 'Empty'
+
+# Multiple @ parameters
+test 'multiple @ parameters', '''
+  class Person
+    constructor: (@first, @last) ->
+  p = new Person('John', 'Doe')
+  [p.first, p.last]
+  ''', ['John', 'Doe']
+
+# Method chaining
+test 'method chaining', '''
+  class Builder
+    setValue: (v) -> @value = v; this
+    getValue: -> @value
+  new Builder().setValue(42).getValue()
+  ''', 42
+
+# Bound methods
+test 'bound method', '''
+  class Counter
+    constructor: -> @count = 0
+    increment: => @count++
+  c = new Counter()
+  fn = c.increment
+  fn()
+  c.count
+  ''', 1
+
+# instanceof
+test 'instanceof check', '''
+  class Animal
+  a = new Animal()
+  a instanceof Animal
+  ''', true
+
+# Override method
+test 'override method', '''
+  class Animal
+    speak: -> 'sound'
+  class Dog extends Animal
+    speak: -> 'bark'
+  new Dog().speak()
+  ''', 'bark'
+
+# Constructor explicit return
+test 'constructor explicit return', '''
+  class A
+    constructor: ->
+      return {custom: 'object'}
+  new A().custom
+  ''', 'object'
+
+# Async method
+test 'async method', '''
+  class Async
+    getData: -> await Promise.resolve(42)
+  do ->
+    await new Async().getData()
+  ''', 42
+
+# Four-level inheritance
+test 'four-level inheritance', '''
+  class A
+    val: -> 'a'
+  class B extends A
+  class C extends B
+  class D extends C
+  new D().val()
+  ''', 'a'
+
+# ============================================================================
+# Ruby-style Constructor: XXX.new()
+# ============================================================================
+
+# Ruby-style new
+test 'ruby-style new', '''
+  class Animal
+    constructor: (@name) ->
+  Animal.new('Dog').name
+  ''', 'Dog'
+
+# Ruby-style new with chaining
+test 'ruby-style new chained', '''
+  class Builder
+    constructor: (@val) ->
+    get: -> @val
+  Builder.new(42).get()
+  ''', 42
+
+# Code generation
+code "ruby-style new", "Counter.new()", "new Counter()"
+code "ruby-style new args", "Counter.new(1, 2)", "new Counter(1, 2)"
+code "ruby-style new expression", "getClass().new(x)", "new (getClass())(x)"
+
+# ============================================================================
+# Meta Properties
+# ============================================================================
+
+# new.target (ES6 meta property)
+test "new.target in constructor", '''
+  class A
+    constructor: ->
+      @isNew = new.target?
+  (new A()).isNew
+  ''', true
+
+# ============================================================================
+# Ruby-style .new() Constructor Syntax
+# ============================================================================
+
+# Basic XXX.new() → new XXX()
+test 'ruby style new', '''
+  class Counter
+    constructor: -> @count = 0
+  Counter.new().count
+  ''', 0
+
+# With arguments
+test 'ruby style new with args', '''
+  class Person
+    constructor: (@name, @age) ->
+  p = Person.new('Alice', 30)
+  [p.name, p.age]
+  ''', ['Alice', 30]
+
+# Chained call after .new()
+test 'ruby style new chained', '''
+  class Builder
+    constructor: (val) -> @val = val or 0
+    add: (n) -> @val += n; this
+    get: -> @val
+  Builder.new(10).add(5).get()
+  ''', 15
+
+# Code generation
+code 'ruby style new simple', 'Counter.new()', 'new Counter()'
+code 'ruby style new args', 'Counter.new(1, 2)', 'new Counter(1, 2)'
+code 'ruby style new expression', 'getClass().new()', 'new (getClass())()'

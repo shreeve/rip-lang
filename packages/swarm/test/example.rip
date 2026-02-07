@@ -1,0 +1,16 @@
+#!/usr/bin/env rip
+
+import { swarm, init, retry, todo } from '../swarm.rip'
+
+setup = ->
+  unless retry()
+    init()
+    for i in [1..100]
+      todo(i)
+  { startedAt: Date.now() }
+
+perform = (task, ctx) ->
+  await Bun.sleep(Math.random() * 1000)  # simulate work
+  throw new Error("random failure") if Math.random() < 0.03  # 3% failure rate
+
+swarm { setup, perform }

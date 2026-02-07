@@ -1,0 +1,431 @@
+# ==============================================================================
+# csv — Fast, flexible CSV parser and writer for Rip
+#
+# Author: Steve Shreeve (steve.shreeve@gmail.com)
+#   Date: February 6, 2026
+#
+# Engine: indexOf ratchet — SIMD-accelerated scanning via the JS engine's
+#         native indexOf, skipping bulk content in a single call. No regex
+#         in the hot loop. Auto-detects delimiter, quoting, escaping, BOM,
+#         and line endings. Supports excel mode, relax mode, headers, comments,
+#         streaming via row callback, and reusable writer instances.
+# ==============================================================================
+
+# ==[ Constants ]==
+
+DELIMITERS =! [',', '\t', '|', ';']
+CRLF       =! '\r\n'
+CR         =! 13      # \r
+LF         =! 10      # \n
+EQ         =! 61      # =
+
+# ==============================================================================
+# Probe — auto-detect CSV dialect from the first few KB
+# ==============================================================================
+
+def probe(str, opts = {})
+
+  # strip BOM
+  if str.charCodeAt(0) is 0xFEFF
+    str = str.slice(1)
+
+  # detect sep= header (Excel convention)
+  if str[0..3] is "sep="
+    end = str.indexOf('\n')
+    end = str.indexOf('\r') if end is -1
+    stop = (end > 0 and str.charCodeAt(end - 1) is CR) ? end - 1 : end
+    sep = str.slice(4, stop)
+    str = str.slice(end + 1) if end >= 0
+
+  # sample first ~8KB for sniffing
+  sample = str.slice(0, 8192)
+
+  # detect line ending style
+  cr = sample.indexOf('\r')
+  lf = sample.indexOf('\n')
+  if cr >= 0 and lf is cr + 1
+    row = CRLF
+  else if lf >= 0
+    row = '\n'
+  else if cr >= 0
+    row = '\r'
+  else
+    row = '\n'
+
+  # detect delimiter from first line
+  lineEnd = sample.indexOf(row is CRLF ? '\r' : row)
+  lineEnd = sample.length if lineEnd is -1
+  firstLine = sample.slice(0, lineEnd)
+  unless opts.sep
+    best = null
+    bestCount = 0
+    for d in DELIMITERS
+      n = 0
+      i = -1
+      n++ while (i = firstLine.indexOf(d, i + 1)) isnt -1
+      if n > bestCount
+        best = d
+        bestCount = n
+    sep ?= best ?? ','
+
+  # detect quoting
+  quote = opts.quote ?? '"'
+  hasQuotes = sample.indexOf(quote) >= 0
+
+  # detect escape style: backslash vs doubled quote
+  escape = opts.escape
+  unless escape
+    if hasQuotes
+      escape = sample.indexOf("\\#{quote}") >= 0 ? '\\' : quote
+    else
+      escape = quote
+
+  # merge with user options (user wins)
+  {
+    str
+    sep:            opts.sep ?? sep
+    quote:          quote
+    escape:         escape
+    row:            opts.row ?? row
+    hasQuotes:      hasQuotes
+    excel:          opts.excel ?? false
+    relax:          opts.relax ?? false
+    strip:          opts.strip ?? false
+    headers:        opts.headers ?? false
+    comments:       opts.comments ?? null
+    skipBlanks:     opts.skipBlanks ?? true
+    each:           opts.each ?? null
+  }
+
+# ==============================================================================
+# Helpers — emit rows with headers/callback support
+# ==============================================================================
+
+def makeEmitter(cfg)
+  {headers, strip, each} = cfg
+  ctx = {keys: null, rows: (each ? null : []), count: 0}
+
+  emit = (row) ->
+    row = row.map((c) -> c.trim()) if strip
+
+    # first row becomes keys in headers mode
+    if headers and not ctx.keys
+      ctx.keys = row
+      return true
+
+    # zip with keys for object output
+    if ctx.keys
+      obj = {}
+      for key, i in ctx.keys
+        obj[key] = row[i] ?? ''
+      if each
+        ctx.count++
+        return each(obj, ctx.count - 1) isnt false
+      ctx.rows.push obj
+      return true
+
+    # plain array output
+    if each
+      ctx.count++
+      return each(row, ctx.count - 1) isnt false
+    ctx.rows.push row
+    true
+
+  result = -> each ? ctx.count : ctx.rows
+
+  {emit, result}
+
+# ==============================================================================
+# Helper — advance past \r\n or single \r or \n
+# ==============================================================================
+
+def crlfLen(str, pos)
+  if str.charCodeAt(pos) is CR and str.charCodeAt(pos + 1) is LF then 2 else 1
+
+# ==============================================================================
+# Reader — Fast path (no quotes detected)
+# ==============================================================================
+
+def readFast(str, cfg)
+  {sep, row: rowDelim, comments, skipBlanks} = cfg
+  {emit, result} = makeEmitter(cfg)
+
+  sepLen = sep.length
+  rowLen = rowDelim.length
+  len    = str.length
+  pos    = 0
+
+  while pos < len
+    # find end of current line
+    rowEnd = str.indexOf(rowDelim, pos)
+    rowEnd = len if rowEnd is -1
+
+    # skip empty lines
+    if pos is rowEnd
+      pos = rowEnd + rowLen
+      continue if skipBlanks
+
+    # skip comment lines
+    if comments and str[pos] is comments
+      pos = rowEnd + rowLen
+      continue
+
+    # extract fields with indexOf ratchet for separator
+    row = []
+    p = pos
+    loop
+      s = str.indexOf(sep, p)
+      if s >= 0 and s < rowEnd
+        row.push str.slice(p, s)
+        p = s + sepLen
+        if p >= rowEnd
+          row.push ''  # trailing separator -> empty final field
+          break
+      else
+        row.push str.slice(p, rowEnd)
+        break
+
+    pos = rowEnd + rowLen
+
+    # trim trailing \r for mixed line endings
+    last = row.length - 1
+    if last >= 0 and row[last].endsWith('\r')
+      row[last] = row[last].slice(0, -1)
+
+    break unless emit(row)
+
+  result()
+
+# ==============================================================================
+# Reader — Full path (quotes present)
+# ==============================================================================
+
+def readFull(str, cfg)
+  {sep, quote, escape, excel, relax} = cfg
+  {row: rowDelim, comments, skipBlanks} = cfg
+  {emit, result} = makeEmitter(cfg)
+
+  sepCode   = sep.charCodeAt(0)
+  quoteCode = quote.charCodeAt(0)
+  sepLen    = sep.length
+  escSame   = escape is quote
+  escCode   = escape.charCodeAt(0)
+  nlChar    = rowDelim[0]               # '\n' or '\r' (for \r\n)
+  nlCode    = nlChar.charCodeAt(0)
+  len       = str.length
+  pos       = 0
+
+  row = []
+  atLineStart = true
+
+  while pos < len
+    c = str.charCodeAt(pos)
+
+    # skip empty lines at line start
+    if atLineStart
+      if skipBlanks and c is nlCode
+        pos += crlfLen(str, pos)
+        continue
+      if comments and str[pos] is comments
+        nl = str.indexOf(nlChar, pos)
+        pos = nl is -1 ? len : nl + crlfLen(str, nl)
+        continue
+      atLineStart = false
+
+    # === quoted field ===
+    if c is quoteCode or (excel and c is EQ and str.charCodeAt(pos + 1) is quoteCode)
+      if excel and c is EQ
+        pos += 2  # skip ="
+      else
+        pos += 1  # skip opening quote
+
+      field = ''
+      loop
+        # indexOf to jump to next quote — bulk skip over content
+        q = str.indexOf(quote, pos)
+
+        unless q >= 0
+          # no closing quote found
+          if relax
+            field += str.slice(pos)
+            pos = len
+            break
+          throw new Error "CSV: unclosed quote at position #{pos}"
+
+        field += str.slice(pos, q)
+        pos = q + quote.length
+
+        # doubled-quote escape: "" -> "
+        if escSame
+          if pos < len and str.charCodeAt(pos) is quoteCode
+            field += quote
+            pos += quote.length
+            continue
+        else
+          # backslash escape: \" -> "
+          if q > 0 and str.charCodeAt(q - 1) is escCode
+            field = field.slice(0, -1) + quote
+            continue
+
+        # check what follows the closing quote
+        break if pos >= len  # end of string
+
+        c2 = str.charCodeAt(pos)
+        break if c2 is sepCode or c2 is nlCode  # valid end-of-field
+
+        # unexpected character after closing quote
+        unless relax
+          throw new Error "CSV: unexpected character after quote at position #{pos}"
+
+        # relax mode: treat the quote as literal, keep scanning
+        field += quote
+        continue
+
+      # push field and consume trailing delimiter
+      row.push field
+
+      if pos < len
+        c2 = str.charCodeAt(pos)
+        if c2 is sepCode
+          pos += sepLen
+        else if c2 is nlCode
+          pos += crlfLen(str, pos)
+          break unless emit(row)
+          row = []
+          atLineStart = true
+
+    # === newline (end of row) ===
+    else if c is nlCode
+      pos += crlfLen(str, pos)
+      break unless emit(row)
+      row = []
+      atLineStart = true
+
+    # === separator (empty field) ===
+    else if c is sepCode
+      row.push ''
+      pos += sepLen
+
+    # === unquoted field ===
+    else
+      # indexOf ratchet: find nearest sep or newline
+      s  = str.indexOf(sep, pos)
+      nl = str.indexOf(nlChar, pos)
+
+      # take the nearer boundary
+      if s >= 0 and (nl is -1 or s < nl)
+        row.push str.slice(pos, s)
+        pos = s + sepLen
+      else if nl >= 0
+        row.push str.slice(pos, nl)
+        pos = nl + crlfLen(str, nl)
+        break unless emit(row)
+        row = []
+        atLineStart = true
+      else
+        row.push str.slice(pos)
+        pos = len
+
+  # emit final row if pending
+  emit(row) if row.length > 0
+
+  result()
+
+# ==============================================================================
+# Writer — format data as CSV strings
+# ==============================================================================
+
+class Writer
+  constructor: (opts = {}) ->
+    @sep    = opts.sep    ?? ','
+    @quote  = opts.quote  ?? '"'
+    @escape = opts.escape ?? @quote
+    @mode   = opts.mode   ?? 'compact'
+    @excel  = opts.excel  ?? false
+    @drop   = opts.drop   ?? false
+    @rowsep = opts.rowsep ?? '\n'
+
+    # pre-compute escaped quote
+    @esc      = @escape + @quote
+    @leadZero = /^0\d+$/
+
+  # check if a cell value needs quoting
+  needsQuote: (cell) ->
+    cell.indexOf(@sep)  >= 0 or
+    cell.indexOf('\n')  >= 0 or
+    cell.indexOf('\r')  >= 0 or
+    cell.indexOf(@quote) >= 0
+
+  # format a single row as a CSV line (no trailing row separator)
+  row: (data) ->
+    cells = (String(v ?? '') for v in data)
+
+    # drop trailing empty columns
+    if @drop
+      cells.pop() while cells.length > 0 and cells[cells.length - 1] is ''
+
+    q   = @quote
+    esc = @esc
+
+    formatted = switch @mode
+      when 'compact'
+        if not @excel and not @needsQuote(cells.join(''))
+          cells
+        else
+          for cell in cells
+            if @excel and @leadZero.test(cell)
+              "=#{q}#{cell}#{q}"
+            else if @needsQuote(cell)
+              "#{q}#{cell.replaceAll(q, esc)}#{q}"
+            else
+              cell
+      when 'full'
+        for cell in cells
+          if @excel and @leadZero.test(cell)
+            "=#{q}#{cell}#{q}"
+          else
+            "#{q}#{cell.replaceAll(q, esc)}#{q}"
+      else
+        cells
+
+    formatted.join @sep
+
+  # format multiple rows as a complete CSV string
+  rows: (data) ->
+    return '' unless data?.length
+    ((@row(r) for r in data).join(@rowsep)) + @rowsep
+
+# ==============================================================================
+# Public API
+# ==============================================================================
+
+export CSV =
+  # parse a CSV string into rows (arrays or objects)
+  read: (str, opts = {}) ->
+    return [] unless str?.length
+    cfg = probe(str, opts)
+    if cfg.hasQuotes
+      readFull(cfg.str, cfg)
+    else
+      readFast(cfg.str, cfg)
+
+  # format row arrays into a CSV string
+  write: (rows, opts = {}) ->
+    new Writer(opts).rows(rows)
+
+  # read and parse a CSV file (async — uses Bun.file)
+  load: (path, opts = {}) ->
+    str = Bun.file(path).text!
+    CSV.read str, opts
+
+  # write rows to a CSV file (async — uses Bun.write)
+  save: (path, rows, opts = {}) ->
+    Bun.write! path, CSV.write(rows, opts)
+
+  # create a reusable Writer instance
+  writer: (opts = {}) ->
+    new Writer(opts)
+
+  # format a single row (convenience — creates a one-shot Writer)
+  formatRow: (row, opts = {}) ->
+    new Writer(opts).row(row)

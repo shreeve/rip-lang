@@ -1,0 +1,434 @@
+# Test: Conditionals (2 node types)
+# Tests "if" and "unless" node types
+
+# ============================================================================
+# If Statements: "if"
+# ============================================================================
+
+# Basic if
+test "if true", "if true\n  42", 42
+test "if false", "if false\n  42\nelse\n  10", 10
+
+# If with else
+test "if else true branch", "x = if true then 'yes' else 'no'\nx", "yes"
+test "if else false branch", "x = if false then 'yes' else 'no'\nx", "no"
+
+# If as expression
+test "if expression", "x = if 5 > 3 then 'greater' else 'less'\nx", "greater"
+
+# Nested if
+test "nested if", "x = if true\n  if true\n    42\n  else\n    10\nx", 42
+
+# If with multiple conditions
+test "if else if", "x = 2\ny = if x == 1\n  'one'\nelse if x == 2\n  'two'\nelse\n  'other'\ny", "two"
+
+# Postfix if
+test "postfix if true", "x = 42 if true\nx", 42
+test "postfix if false", "x = 42 if false\nx", undefined
+
+# If in function
+test "if in function", "fn = (x) ->\n  if x > 0\n    'positive'\n  else\n    'negative'\nfn(5)", "positive"
+
+# Code generation
+code "simple if", "if cond then a else b", "if (cond) { a; } else { b; }"
+
+# ============================================================================
+# Unless Statements: "unless"
+# ============================================================================
+
+# Basic unless
+test "unless false", "unless false\n  42", 42
+test "unless true", "unless true\n  42\nelse\n  10", 10
+
+# Unless as expression
+test "unless expression", "x = unless false then 'yes' else 'no'\nx", "yes"
+
+# Postfix unless
+test "postfix unless false", "x = 42 unless false\nx", 42
+test "postfix unless true", "x = 42 unless true\nx", undefined
+
+# Unless vs if not
+test "unless vs if not", "a = unless true then 1 else 2; b = if !true then 1 else 2; a == b", true
+
+# Code generation
+code "unless", "unless cond then a", "if (!cond) { a; }"
+
+# ============================================================================
+# Ternary Operator: "?:"
+# ============================================================================
+
+# Basic ternary
+test "ternary true", "true ? 'yes' : 'no'", "yes"
+test "ternary false", "false ? 'yes' : 'no'", "no"
+
+# Ternary with expressions
+test "ternary with comparison", "5 > 3 ? 'greater' : 'less'", "greater"
+test "ternary with operations", "10 > 5 ? 100 + 1 : 200 + 1", 101
+
+# Nested ternary
+test "nested ternary", "x = 2\nx == 1 ? 'one' : x == 2 ? 'two' : 'other'", "two"
+
+# Ternary as expression
+test "ternary in assignment", "x = true ? 42 : 10\nx", 42
+test "ternary in function", "fn = (cond) -> cond ? 'yes' : 'no'\nfn(true)", "yes"
+
+# Code generation
+code "simple ternary", "true ? 1 : 2", "(true ? 1 : 2)"
+code "nested ternary", "true ? 1 : false ? 2 : 3", "(true ? 1 : (false ? 2 : 3))"
+
+# ============================================================================
+# Switch Statements: "switch"
+# ============================================================================
+
+# Basic switch with value
+test "switch with value", "x = 2; result = switch x\n  when 1 then 'one'\n  when 2 then 'two'\n  else 'other'\nresult", "two"
+
+# Switch with multiple cases
+test "switch multiple when", "x = 3; result = switch x\n  when 1, 2 then 'low'\n  when 3, 4 then 'mid'\n  else 'high'\nresult", "mid"
+
+# Switch with default
+test "switch default", "x = 10; result = switch x\n  when 1 then 'one'\n  when 2 then 'two'\n  else 'other'\nresult", "other"
+
+# Switch without discriminant (condition-based)
+test "switch no discriminant", "x = 15; result = switch\n  when x < 10 then 'low'\n  when x < 20 then 'mid'\n  else 'high'\nresult", "mid"
+
+# Switch with blocks
+test "switch with block", "x = 2; result = switch x\n  when 1\n    'one'\n  when 2\n    'two'\n  else\n    'other'\nresult", "two"
+
+# Switch without discriminant in statement context (loop)
+test "switch in loop for side effects", '''
+  count = 0
+  for x in [1, 2, 3]
+    switch
+      when x == 1
+        count += 1
+      when x == 2
+        count += 10
+      when x == 3
+        count += 100
+  count
+''', 111
+
+# Code generation
+code "switch", "switch x\n  when 1 then 'one'\n  else 'other'", "switch (x) {\n  case 1:\n    'one';\n    break;\n  default:\n    'other';\n    break;\n}"
+
+# ============================================================================
+# Statement Blocks: "block"
+# ============================================================================
+
+# Block in function
+test "block in function", "fn = ->\n  x = 5\n  y = 10\n  x + y\nfn()", 15
+
+# Block in if statement
+test "block in if", "x = if true\n  a = 5\n  b = 10\n  a + b\nx", 15
+
+# Block with multiple statements
+test "multiple statements", "fn = ->\n  a = 1\n  b = 2\n  c = 3\n  a + b + c\nfn()", 6
+
+# Empty block (edge case)
+test "empty block", "fn = ->\nfn()", undefined
+
+# Nested blocks
+test "nested blocks", "fn = ->\n  if true\n    x = 5\n    y = 10\n    x + y\nfn()", 15
+
+# ============================================================================
+# Do IIFE: "do-iife"
+# ============================================================================
+
+# Basic do expression
+test "do expression", "x = do -> 42\nx", 42
+
+# Do with multiple statements
+test "do block", "x = do ->\n  a = 5\n  b = 10\n  a + b\nx", 15
+
+# Do with parameters
+test "do with params", "counter = do (count = 0) -> -> count++\n[counter(), counter(), counter()]", [0, 1, 2]
+
+# Async do
+test "async do", "x = do -> await Promise.resolve(42)\nx", 42
+
+# Code generation
+code "do expression", "do -> 42", "(function() { return 42; })()"
+code "do block", "do ->\n  x = 5\n  x * 2", "(function() {\n  let x;\n  x = 5;\n  return (x * 2);\n})();"
+
+# ============================================================================
+# Control flow short-circuits: or return / or throw / and return / and throw
+# ============================================================================
+
+# or return - returns when expression is falsy
+test "or return with assignment falsy", """
+  fn = ->
+    sql = null or return 'empty'
+    'got: ' + sql
+  fn()
+""", "empty"
+
+test "or return with assignment truthy", """
+  fn = ->
+    sql = 'data' or return 'empty'
+    'got: ' + sql
+  fn()
+""", "got: data"
+
+# or throw - throws when expression is falsy
+test "or throw with assignment falsy", """
+  fn = ->
+    try
+      data = null or throw new Error 'No data'
+      'got: ' + data
+    catch e
+      'caught: ' + e.message
+  fn()
+""", "caught: No data"
+
+test "or throw with assignment truthy", """
+  fn = ->
+    try
+      data = 'value' or throw new Error 'No data'
+      'got: ' + data
+    catch e
+      'caught: ' + e.message
+  fn()
+""", "got: value"
+
+# and return - returns when expression is truthy
+test "and return with assignment truthy", """
+  fn = ->
+    cached = 'cached!' and return 'cached!'
+    'not cached'
+  fn()
+""", "cached!"
+
+test "and return with assignment falsy", """
+  fn = ->
+    cached = null and return 'cached!'
+    'not cached'
+  fn()
+""", "not cached"
+
+# and throw - throws when expression is truthy
+test "and throw with assignment truthy", """
+  fn = ->
+    try
+      error = 'validation failed' and throw new Error 'validation failed'
+      'success'
+    catch e
+      'caught: ' + e.message
+  fn()
+""", "caught: validation failed"
+
+test "and throw with assignment falsy", """
+  fn = ->
+    try
+      error = null and throw new Error 'should not throw'
+      'success'
+    catch e
+      'caught: ' + e.message
+  fn()
+""", "success"
+
+# Standalone (no assignment)
+test "standalone or return", """
+  fn = (val) ->
+    val or return 'fallback'
+    'got: ' + val
+  fn(null)
+""", "fallback"
+
+test "standalone and throw", """
+  fn = (isError) ->
+    try
+      isError and throw new Error 'error!'
+      'ok'
+    catch e
+      e.message
+  fn(true)
+""", "error!"
+
+# Code generation tests
+code "or return assignment generates if", """
+  sql = read 'body' or return { error: 'Empty' }
+""", """
+let sql;
+
+if (!(sql = read('body'))) return {error: 'Empty'};
+"""
+
+code "or throw assignment generates if", """
+  data = fetchData() or throw new Error 'No data'
+""", """
+let data;
+
+if (!(data = fetchData())) throw new Error('No data');
+"""
+
+code "and return assignment generates if", """
+  cached = getCache() and return cached
+""", """
+let cached;
+
+if ((cached = getCache())) return cached;
+"""
+
+code "and throw assignment generates if", """
+  error = validate() and throw error
+""", """
+let error;
+
+if ((error = validate())) throw error;
+"""
+
+code "standalone or return generates if", """
+  checkAuth() or return { status: 401 }
+""", """
+if (!(checkAuth())) return {status: 401};
+"""
+
+code "standalone and throw generates if", """
+  isError and throw new Error 'Failed'
+""", """
+if (isError) throw new Error('Failed');
+"""
+
+# ============================================================================
+# Nullish coalescing control flow: ?? return / ?? throw
+# Key difference: ?? only triggers on null/undefined, not other falsy values
+# ============================================================================
+
+# ?? return - returns only when expression is null/undefined
+test "?? return with null", """
+  fn = ->
+    data = null ?? return 'was null'
+    'got: ' + data
+  fn()
+""", "was null"
+
+test "?? return with undefined", """
+  fn = ->
+    data = undefined ?? return 'was undefined'
+    'got: ' + data
+  fn()
+""", "was undefined"
+
+test "?? return with empty string (should NOT return)", """
+  fn = ->
+    data = '' ?? return 'was nullish'
+    'got empty: ' + (data is '')
+  fn()
+""", "got empty: true"
+
+test "?? return with zero (should NOT return)", """
+  fn = ->
+    data = 0 ?? return 'was nullish'
+    'got zero: ' + data
+  fn()
+""", "got zero: 0"
+
+test "?? return with false (should NOT return)", """
+  fn = ->
+    data = false ?? return 'was nullish'
+    'got false: ' + data
+  fn()
+""", "got false: false"
+
+test "?? return with truthy value", """
+  fn = ->
+    data = 'hello' ?? return 'was nullish'
+    'got: ' + data
+  fn()
+""", "got: hello"
+
+# ?? throw - throws only when expression is null/undefined
+test "?? throw with null", """
+  fn = ->
+    try
+      data = null ?? throw new Error 'was null'
+      'got: ' + data
+    catch e
+      'caught: ' + e.message
+  fn()
+""", "caught: was null"
+
+test "?? throw with undefined", """
+  fn = ->
+    try
+      data = undefined ?? throw new Error 'was undefined'
+      'got: ' + data
+    catch e
+      'caught: ' + e.message
+  fn()
+""", "caught: was undefined"
+
+test "?? throw with empty string (should NOT throw)", """
+  fn = ->
+    try
+      data = '' ?? throw new Error 'was nullish'
+      'got empty: ' + (data is '')
+    catch e
+      'caught: ' + e.message
+  fn()
+""", "got empty: true"
+
+test "?? throw with zero (should NOT throw)", """
+  fn = ->
+    try
+      data = 0 ?? throw new Error 'was nullish'
+      'got zero: ' + data
+    catch e
+      'caught: ' + e.message
+  fn()
+""", "got zero: 0"
+
+# Standalone ?? return/throw
+test "standalone ?? return with null", """
+  fn = (val) ->
+    val ?? return 'fallback'
+    'got: ' + val
+  fn(null)
+""", "fallback"
+
+test "standalone ?? return with empty string", """
+  fn = (val) ->
+    val ?? return 'fallback'
+    'got empty: ' + (val is '')
+  fn('')
+""", "got empty: true"
+
+test "standalone ?? throw with undefined", """
+  fn = (val) ->
+    try
+      val ?? throw new Error 'was nullish'
+      'got: ' + val
+    catch e
+      e.message
+  fn(undefined)
+""", "was nullish"
+
+# Code generation tests for ?? variants
+code "?? return assignment generates if with nullish check", """
+  data = getValue() ?? return { error: 'No value' }
+""", """
+let data;
+
+if ((data = getValue()) == null) return {error: 'No value'};
+"""
+
+code "?? throw assignment generates if with nullish check", """
+  data = getValue() ?? throw new Error 'Missing'
+""", """
+let data;
+
+if ((data = getValue()) == null) throw new Error('Missing');
+"""
+
+code "standalone ?? return generates if with nullish check", """
+  checkValue() ?? return { status: 404 }
+""", """
+if ((checkValue()) == null) return {status: 404};
+"""
+
+code "standalone ?? throw generates if with nullish check", """
+  getValue() ?? throw new Error 'Not found'
+""", """
+if ((getValue()) == null) throw new Error('Not found');
+"""

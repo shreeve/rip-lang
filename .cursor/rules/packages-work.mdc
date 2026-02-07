@@ -1,0 +1,112 @@
+---
+description: Rules for working on Rip packages
+globs: ["packages/**/*.rip", "packages/**/*.ts", "packages/**/*.js"]
+alwaysApply: false
+---
+
+# Packages Development Rules
+
+## Package Overview
+
+| Package | Description | Status |
+|---------|-------------|--------|
+| **api** | Pure Rip API framework (zero deps) | Active |
+| **data** | DuckDB data platform | Early |
+| **parser** | SLR(1) parser generator | Early |
+| **schema** | Unified schema system | Active |
+| **server** | Production app server | Active |
+| **ui** | Component library | Early |
+
+## Key Packages
+
+### @rip-lang/api
+Pure Rip backend framework — zero dependencies, Sinatra-style elegance.
+
+```rip
+import { get, post, read, use, start, withHelpers } from '@rip-lang/api'
+
+use withHelpers  # Enable sync read()
+
+# Context-free handlers (Sinatra elegance!)
+get '/', -> 'Hello, World!'
+
+get '/users/:id', ->
+  id = read 'id', 'id!'      # Sync param reading
+  { user: { id } }
+
+post '/signup', ->
+  email = read 'email', 'email!'
+  age   = read 'age', [18, 120]   # Range validation
+  { success: true, email, age }
+
+# With context when needed
+get '/custom', (env) ->
+  env.header 'X-Custom', 'value'
+  env.json { ok: true }
+
+start port: 3000
+```
+
+**Key async pattern:** Use `fn!(args)` not `fn(args)!`
+```rip
+# ✅ Correct
+data = db.query!(sql)
+user = findUser!(id)
+
+# ❌ Wrong (parse error)
+data = db.query(sql)!
+```
+
+### @rip-lang/server
+Production server — multi-worker, hot reload, TLS.
+
+```bash
+bun server apps/myapp           # Start with defaults
+bun server apps/myapp@api       # With .local alias
+bun server w:auto apps/myapp    # Auto workers
+```
+
+### @rip-lang/schema
+Unified schema system — types, validation, database.
+
+```rip
+@model User
+  name!: string, [1, 100]
+  email!#: email
+  role: Role, [user]
+```
+
+## Development Commands
+
+```bash
+# Run a package test
+cd packages/api
+bun test.rip
+
+# Start server for testing
+bun server packages/api/test
+
+# Build schema parser
+bun scripts/build-schema-parser.js
+```
+
+## Architecture
+
+```
+@rip-lang/server (nginx + unicorn pattern)
+        │
+        │ spawns workers, loads app
+        ▼
+@rip-lang/api (pure Rip, Sinatra-style)
+        │
+        │ routes, middleware, validation
+        ▼
+    Your App
+```
+
+## Goals
+
+1. **Pure Rip** — Minimize TypeScript dependencies
+2. **Bun-first** — Optimize for Bun runtime
+3. **Zero deps** — No external dependencies where possible
+4. **Clean APIs** — Sinatra-style elegance

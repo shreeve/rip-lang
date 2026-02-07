@@ -1,0 +1,288 @@
+# Test: Regular Expressions (1 node type)
+# Tests "regex" node type
+
+# ============================================================================
+# Regular Expression Literals: "regex"
+# ============================================================================
+
+# Basic regex
+test "regex literal test", '/hello/.test("hello world")', true
+test "regex literal no match", '/goodbye/.test("hello world")', false
+
+# Regex with flags
+test "regex with i flag", '/HELLO/i.test("hello")', true
+test "regex with g flag", '"aaa".match(/a/g).length', 3
+
+# Code generation
+code "regex literal", "/test/", "/test/"
+code "regex with flags", "/test/gi", "/test/gi"
+
+# Regex methods
+test "regex exec", '/world/.exec("hello world")[0]', "world"
+test "string match", '"test123".match(/\\d+/)[0]', "123"
+
+# Test: Regex Features (=~ and regex indexing)
+# Tests Ruby-style regex matching with automatic _ variable capture
+
+# ============================================================================
+# =~ Operator (Regex Match with _ capture)
+# ============================================================================
+
+# Basic regex match
+test '=~ basic match', '''
+  text = 'hello world'
+  result = text =~ /world/
+  result[0]
+  ''', 'world'
+
+# Capture groups with _
+test '=~ capture groups', '''
+  text = 'hello world'
+  text =~ /(\\w+) (\\w+)/
+  _[1]
+  ''', 'hello'
+
+# Multiple captures
+test '=~ multiple captures', '''
+  text = 'hello world'
+  text =~ /(\\w+) (\\w+)/
+  _[2]
+  ''', 'world'
+
+# No match returns null
+test '=~ no match', '''
+  text = 'hello'
+  result = text =~ /xyz/
+  result
+  ''', null
+
+# Match at start
+test '=~ match at start', '''
+  text = 'hello world'
+  text =~ /^(\\w+)/
+  _[1]
+  ''', 'hello'
+
+# Match at end
+test '=~ match at end', '''
+  text = 'hello world'
+  text =~ /(\\w+)$/
+  _[1]
+  ''', 'world'
+
+# With flags
+test '=~ case insensitive', '''
+  text = 'HELLO'
+  text =~ /hello/i
+  _[0]
+  ''', 'HELLO'
+
+# Global flag (returns first match, sets _)
+test '=~ global flag', '''
+  text = 'foo bar foo'
+  text =~ /foo/g
+  _[0]
+  ''', 'foo'
+
+# Works with numbers (via toSearchable)
+test '=~ with number', '''
+  num = 12345
+  num =~ /(\\d{3})/
+  _[1]
+  ''', '123'
+
+# Works with null (converts to empty string)
+test '=~ with null', '''
+  x = null
+  result = x =~ /test/
+  result
+  ''', null
+
+# Email parsing example
+test '=~ email parsing', '''
+  email = 'user@example.com'
+  email =~ /(.+)@(.+)/
+  _[2]
+  ''', 'example.com'
+
+# ============================================================================
+# Regex Indexing (value[/pattern/] and value[/pattern/, n])
+# ============================================================================
+
+# Simple regex indexing (returns full match)
+test 'regex index simple', '"steve"[/eve/]', 'eve'
+
+# Regex indexing with capture group
+test 'regex index capture', '"steve"[/e(v)e/, 1]', 'v'
+
+# Multiple capture groups
+test 'regex index multiple captures', '''
+  text = 'hello world'
+  text[/(\\w+) (\\w+)/, 2]
+  ''', 'world'
+
+# No match returns null
+test 'regex index no match', '"hello"[/xyz/]', null
+
+# Works with numbers
+test 'regex index number', '''
+  num = 12345
+  num[/\\d{3}/]
+  ''', '123'
+
+# Email domain extraction
+test 'regex index email domain', '''
+  email = 'user@example.com'
+  email[/@(.+)$/, 1]
+  ''', 'example.com'
+
+# Phone parsing
+test 'regex index phone', '''
+  phone = '(555) 123-4567'
+  phone[/\\((\\d{3})\\) (\\d{3})-(\\d{4})/, 2]
+  ''', '123'
+
+# URL parsing
+test 'regex index url', '''
+  url = 'https://example.com/path'
+  url[/:\\/\\/(\\w+\\.\\w+)/, 1]
+  ''', 'example.com'
+
+# Case insensitive
+test 'regex index case insensitive', '"HELLO"[/hello/i]', 'HELLO'
+
+# With anchors (full match required, can't extract partial)
+test 'regex index anchored', '"test123"[/^(test)(\\d+)$/, 1]', 'test'
+
+# Nested groups
+test 'regex index nested groups', '''
+  text = 'abc123xyz'
+  text[/([a-z]+)(\\d+)/, 2]
+  ''', '123'
+
+# ============================================================================
+# Combined Usage (=~ then _ access)
+# ============================================================================
+
+# Use =~ then access _ directly
+test 'combined =~ and _', '''
+  text = 'hello world'
+  if text =~ /(\\w+) (\\w+)/
+    _[1] + '-' + _[2]
+  else
+    'no match'
+  ''', 'hello-world'
+
+# Chain multiple regex operations
+test 'chained regex ops', '''
+  email = 'admin@company.com'
+  if email =~ /(.+)@(.+)/
+    domain = _[2]
+    domain[/(\\w+)\\./, 1]
+  else
+    null
+  ''', 'company'
+
+# Regex in conditionals
+test 'regex in conditional', '''
+  text = 'user@example.com'
+  result = if text =~ /@/
+    'has @'
+  else
+    'no @'
+  result
+  ''', 'has @'
+
+# ============================================================================
+# Validator Pattern Examples (from your code)
+# ============================================================================
+
+# ID validator pattern
+test 'validator id pattern', '''
+  validate = (v) -> v[/^([1-9]\\d{0,19})$/] and parseInt(_[1])
+  validate('12345')
+  ''', 12345
+
+# Email validator pattern
+test 'validator email pattern', '''
+  validate = (v) -> v[/^([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})$/] and _[0]
+  validate('test@example.com')
+  ''', 'test@example.com'
+
+# Zip code extractor
+test 'validator zip pattern', '''
+  validate = (v) -> v[/^(\\d{5})/] and _[1]
+  validate('12345-6789')
+  ''', '12345'
+
+# Boolean validator with =~
+test 'validator truthy pattern', '''
+  validate = (v) -> (v =~ /^(true|t|1|yes|y|on)$/i) and true
+  validate('YES')
+  ''', true
+
+# Phone formatter pattern
+test 'validator phone pattern', '''
+  num = '2125551234'
+  if num =~ /^([2-9][0-8][0-9])([2-9]\\d\\d)(\\d{4})$/
+    "(#{_[1]}) #{_[2]}-#{_[3]}"
+  else
+    null
+  ''', '(212) 555-1234'
+
+# ============================================================================
+# Edge Cases
+# ============================================================================
+
+# Empty string
+test 'regex index empty string', '""[/test/]', null
+
+# Null value (converts to empty string)
+test 'regex match null', '''
+  x = null
+  x =~ /test/
+  ''', null
+
+# Array (joins with comma)
+test 'regex match array', '''
+  arr = ['hello', 'world']
+  arr =~ /hello/
+  _[0]
+  ''', 'hello'
+
+# Boolean (converts to string)
+test 'regex match boolean', '''
+  x = true
+  x =~ /true/
+  _[0]
+  ''', 'true'
+
+# Out of range capture index returns undefined
+test 'regex index out of range', '''
+  x = "test"[/test/, 5]
+  x
+  ''', undefined
+
+# ============================================================================
+# Heregex Interpolation Behavior
+# ============================================================================
+
+# IMPORTANT DISTINCTION:
+# - Strings: Both #{...} and ${...} interpolate
+# - Heregex: Only #{...} interpolates, ${...} stays literal (for regex patterns)
+
+# #{...} interpolation works in heregex (CoffeeScript style)
+test "heregex #{} interpolation", '''
+  name = "world"
+  pattern = ///hello#{name}///
+  pattern.test("helloworld")
+  ''', true
+
+# ${...} does NOT interpolate in heregex - stays as literal regex pattern (no escape needed!)
+code "heregex ${} no interpolation", '///test${var}end///', '/test${var}end/'
+
+# $ anchor works correctly in heregex
+test "heregex $ anchor", '''
+  pattern = ///^test$///
+  pattern.test("test") and not pattern.test("testing")
+  ''', true

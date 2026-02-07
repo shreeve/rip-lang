@@ -1,0 +1,208 @@
+# Test: __DATA__ Marker (Ruby-inspired inline data sections)
+# Tests embedding data after __DATA__ marker
+
+# ============================================================================
+# Basic __DATA__ Usage
+# ============================================================================
+
+# Simple data access
+test 'data marker simple', '''
+  x = DATA
+  x
+  __DATA__
+  hello world
+  ''', 'hello world\n'
+
+# Data length
+test 'data marker length', '''
+  DATA.length
+  __DATA__
+  test
+  ''', 5
+
+# Empty data section
+test 'data marker empty', '''
+  DATA
+  __DATA__
+  ''', ''
+
+# ============================================================================
+# Multi-line Data
+# ============================================================================
+
+# Multiple lines
+test 'data marker multiline', '''
+  lines = DATA.split("\\n").filter (l) -> l
+  lines.length
+  __DATA__
+  line1
+  line2
+  line3
+  ''', 3
+
+# First line access
+test 'data marker first line', '''
+  DATA.split("\\n")[0]
+  __DATA__
+  first
+  second
+  ''', 'first'
+
+# Last line access
+test 'data marker last line', '''
+  lines = DATA.trim().split("\\n")
+  lines[lines.length - 1]
+  __DATA__
+  first
+  second
+  last
+  ''', 'last'
+
+# ============================================================================
+# Configuration Parsing
+# ============================================================================
+
+# Parse key=value pairs
+test 'data marker config', '''
+  config = {}
+  for line in DATA.split("\\n") when line.trim()
+    [key, val] = line.split("=")
+    config[key] = val
+  config.port
+  __DATA__
+  host=localhost
+  port=8080
+  debug=true
+  ''', '8080'
+
+# CSV parsing
+test 'data marker csv', '''
+  rows = DATA.trim().split("\\n").map (line) ->
+    line.split(",")
+  rows[0][0]
+  __DATA__
+  Alice,alice@example.com
+  Bob,bob@example.com
+  ''', 'Alice'
+
+# ============================================================================
+# Templates
+# ============================================================================
+
+# Simple replacement
+test 'data marker template', '''
+  template = DATA
+  template.replace("{{name}}", "Alice")
+  __DATA__
+  Hello, {{name}}!
+  ''', 'Hello, Alice!\n'
+
+# ============================================================================
+# Code Generation Tests
+# ============================================================================
+
+# Verify DATA at bottom
+code 'data marker compiler', '''
+  x = 42
+  console.log DATA
+  __DATA__
+  test data
+  ''', '''
+  let x;
+  var DATA;
+  _setDataSection();
+
+  x = 42;
+  console.log(DATA);
+
+  function _setDataSection() {
+    DATA = "test data\\n";
+  }
+'''
+
+# Verify hoisting works
+code 'data marker hoisting', '''
+  console.log DATA
+  __DATA__
+  hoisted!
+  ''', '''
+  var DATA;
+  _setDataSection();
+
+  console.log(DATA);
+
+  function _setDataSection() {
+    DATA = "hoisted!\\n";
+  }
+'''
+
+# ============================================================================
+# Edge Cases
+# ============================================================================
+
+# __DATA__ with no code
+test 'data marker only', '''
+  DATA
+  __DATA__
+  just data
+  ''', 'just data\n'
+
+# __DATA__ with special chars
+test 'data marker special chars', '''
+  DATA.includes("@")
+  __DATA__
+  test@example.com
+  ''', true
+
+# __DATA__ with quotes
+test 'data marker quotes', '''
+  DATA.includes("'")
+  __DATA__
+  It's working!
+  ''', true
+
+# __DATA__ preserves whitespace
+test 'data marker whitespace', '''
+  DATA[0]
+  __DATA__
+    indented
+  ''', ' '
+
+# ============================================================================
+# Real-World Use Cases
+# ============================================================================
+
+# Load users from data
+test 'data marker users', '''
+  users = DATA.trim().split("\\n").map (line) ->
+    [name, email] = line.split(",")
+    {name, email}
+  users[1].name
+  __DATA__
+  Alice,alice@example.com
+  Bob,bob@example.com
+  Charlie,charlie@example.com
+  ''', 'Bob'
+
+# Parse JSON from data
+test 'data marker json', '''
+  obj = JSON.parse(DATA)
+  obj.name
+  __DATA__
+  {"name": "Alice", "age": 30}
+  ''', 'Alice'
+
+# Environment variables
+test 'data marker env parsing', '''
+  env = {}
+  for line in DATA.split("\\n") when line and not line.startsWith("#")
+    parts = line.split("=")
+    if parts.length is 2
+      [key, val] = parts
+      env[key.trim()] = val.trim()
+  env.PORT
+  __DATA__
+  # Config
+  HOST=localhost
+  PORT=3000
+  ''', '3000'

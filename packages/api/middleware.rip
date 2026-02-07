@@ -1,0 +1,463 @@
+# ==============================================================================
+# @rip-lang/api/middleware — Built-in Middleware
+# ==============================================================================
+#
+# Usage:
+#   import { cors, logger, compress, sessions, prettyJson } from '@rip-lang/api/middleware'
+#   import { session } from '@rip-lang/api'
+#
+#   use logger()
+#   use cors origin: 'https://myapp.com'
+#   use compress()
+#   use sessions()
+#   use prettyJson   # Pretty JSON for iOS mobile browsers
+#
+#   before ->
+#     session.userId = 123   # Works anywhere via AsyncLocalStorage
+#
+# Note: read() and session work automatically — no setup required!
+#
+# ==============================================================================
+
+# ==============================================================================
+# cors — Cross-Origin Resource Sharing
+# ==============================================================================
+#
+# Options:
+#   origin: '*' | string | string[] | (origin) -> boolean
+#   methods: 'GET,POST,...' | string[]
+#   headers: 'Content-Type,...' | string[]
+#   credentials: boolean
+#   maxAge: number (seconds)
+#   exposeHeaders: string | string[]
+#   preflight: boolean — handle OPTIONS before route matching (default: false)
+#
+
+import { enableCorsPreflight } from '@rip-lang/api'
+
+export cors = (opts = {}) ->
+  origin = opts.origin or '*'
+  methods = opts.methods or 'GET,POST,PUT,PATCH,DELETE,OPTIONS'
+  headers = opts.headers or 'Content-Type,Authorization,X-Requested-With'
+  credentials = opts.credentials or false
+  maxAge = opts.maxAge or 86400
+  exposeHeaders = opts.exposeHeaders or ''
+
+  # Normalize arrays to comma-separated strings
+  methods = methods.join(',') if Array.isArray(methods)
+  headers = headers.join(',') if Array.isArray(headers)
+  exposeHeaders = exposeHeaders.join(',') if Array.isArray(exposeHeaders)
+
+  # Enable early OPTIONS handling if preflight option is set
+  enableCorsPreflight() if opts.preflight
+
+  (c, next) ->
+    requestOrigin = c.req.header('Origin')
+
+    # Determine allowed origin
+    allowedOrigin = if typeof origin is 'function'
+      if origin(requestOrigin) then requestOrigin else null
+    else if Array.isArray(origin)
+      if origin.includes(requestOrigin) then requestOrigin else null
+    else if origin is '*'
+      '*'
+    else
+      origin
+
+    return next!() unless allowedOrigin
+
+    # Set CORS headers
+    c.header 'Access-Control-Allow-Origin', allowedOrigin
+    c.header 'Access-Control-Allow-Methods', methods
+    c.header 'Access-Control-Allow-Headers', headers
+
+    if credentials
+      c.header 'Access-Control-Allow-Credentials', 'true'
+
+    if exposeHeaders
+      c.header 'Access-Control-Expose-Headers', exposeHeaders
+
+    # Handle preflight OPTIONS request
+    if c.req.method is 'OPTIONS'
+      c.header 'Access-Control-Max-Age', String(maxAge)
+      return c.body null, 204
+
+    await next()
+
+# ==============================================================================
+# logger — Request Logging
+# ==============================================================================
+#
+# Options:
+#   format: 'tiny' | 'short' | 'dev' | 'full' | (info) -> string
+#   skip: (c) -> boolean
+#   stream: { write: (msg) -> } (default: console)
+#
+
+export logger = (opts = {}) ->
+  format = opts.format or 'dev'
+  skip = opts.skip or null
+  stream = opts.stream or { write: (msg) -> console.log msg.trim() }
+
+  formatters =
+    tiny: (info) -> "#{info.method} #{info.path} #{info.status} - #{info.ms}ms"
+    short: (info) -> "#{info.method} #{info.path} #{info.status} #{info.size} - #{info.ms}ms"
+    dev: (info) ->
+      color = if info.status >= 500 then '\x1b[31m'      # red
+      else if info.status >= 400 then '\x1b[33m'         # yellow
+      else if info.status >= 300 then '\x1b[36m'         # cyan
+      else '\x1b[32m'                                    # green
+      reset = '\x1b[0m'
+      "#{info.method} #{info.path} #{color}#{info.status}#{reset} - #{info.ms}ms"
+    full: (info) -> "[#{info.time}] #{info.method} #{info.path} #{info.status} #{info.size} - #{info.ms}ms"
+
+  (c, next) ->
+    return next!() if skip?(c)
+
+    start = Date.now()
+    await next()
+    ms = Date.now() - start
+
+    info =
+      method: c.req.method
+      path: c.req.path
+      status: c._response?.status or 200
+      ms: ms
+      size: c._response?.headers?.get('Content-Length') or '-'
+      time: new Date().toISOString()
+
+    msg = if typeof format is 'function' then format(info) else formatters[format]?(info) or formatters.dev(info)
+    stream.write "#{msg}\n"
+
+# ==============================================================================
+# compress — Response Compression (gzip, deflate)
+# ==============================================================================
+#
+# Options:
+#   threshold: number (min bytes to compress, default 1024)
+#   encodings: string[] (default ['gzip', 'deflate'])
+#
+# Note: Requires Bun's built-in compression support
+#
+
+export compress = (opts = {}) ->
+  threshold = opts.threshold or 1024
+  encodings = opts.encodings or ['gzip', 'deflate']
+
+  (c, next) ->
+    await next()
+
+    # Skip if no response body
+    response = c._response
+    return unless response?
+
+    # Check Accept-Encoding header
+    acceptEncoding = c.req.header('Accept-Encoding') or ''
+
+    # Find supported encoding
+    encoding = null
+    for enc in encodings
+      if acceptEncoding.includes(enc)
+        encoding = enc
+        break
+
+    return unless encoding
+
+    # Get body and check threshold
+    try
+      body = response.body
+      return unless body
+
+      # Clone to read the body
+      clone = response.clone()
+      text = clone.text!
+      return if text.length < threshold
+
+      # Compress using Bun's built-in CompressionStream
+      compressed = if encoding is 'gzip'
+        new Response(text).body.pipeThrough(new CompressionStream('gzip'))
+      else if encoding is 'deflate'
+        new Response(text).body.pipeThrough(new CompressionStream('deflate'))
+      else
+        return
+
+      # Create new response with compressed body
+      headers = new Headers(response.headers)
+      headers.set 'Content-Encoding', encoding
+      headers.delete 'Content-Length'  # Length changed
+
+      c._response = new Response compressed,
+        status: response.status
+        headers: headers
+    catch
+      # If compression fails, keep original response
+      return
+
+# ==============================================================================
+# sessions — Session Management
+# ==============================================================================
+#
+# Options:
+#   secret: string (REQUIRED for production — signs cookie to prevent tampering)
+#   name: string (cookie name, default 'session')
+#   maxAge: number (seconds, default 86400 = 24 hours)
+#   secure: boolean (HTTPS only)
+#   httpOnly: boolean (default true)
+#   sameSite: 'Strict' | 'Lax' | 'None' (default 'Lax')
+#
+# Usage:
+#   import { session } from '@rip-lang/api'
+#   import { sessions } from '@rip-lang/api/middleware'
+#
+#   use sessions secret: process.env.SESSION_SECRET
+#
+#   before ->
+#     session.userId = 123
+#
+#   get '/profile', ->
+#     { userId: session.userId }
+#
+# Security:
+#   Without `secret`, sessions use plain base64 (INSECURE — dev only).
+#   With `secret`, sessions are HMAC-SHA256 signed (tamper-proof).
+#
+# Note: Self-contained — parses cookies directly from request headers.
+#
+
+# HMAC-SHA256 signing helpers
+hmacSign = (data, secret) ->
+  encoder = new TextEncoder()
+  key = crypto.subtle.importKey! 'raw', encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  signature = crypto.subtle.sign! 'HMAC', key, encoder.encode(data)
+  Array.from(new Uint8Array(signature)).map((b) -> b.toString(16).padStart(2, '0')).join('')
+
+hmacVerify = (data, signature, secret) ->
+  expected = hmacSign! data, secret
+  # Constant-time comparison to prevent timing attacks
+  return false if expected.length isnt signature.length
+  result = 0
+  for i in [0...expected.length]
+    result |= expected.charCodeAt(i) ^ signature.charCodeAt(i)
+  result is 0
+
+encodeSession = (data, secret) ->
+  json = JSON.stringify(data)
+  payload = btoa(unescape(encodeURIComponent(json)))
+  return payload unless secret
+  signature = hmacSign! payload, secret
+  "#{payload}--#{signature}"
+
+decodeSession = (cookie, secret) ->
+  return {} unless cookie
+  try
+    if secret
+      [payload, signature] = cookie.split('--')
+      return {} unless payload and signature
+      return {} unless hmacVerify! payload, signature, secret
+      JSON.parse(decodeURIComponent(escape(atob(payload))))
+    else
+      JSON.parse(decodeURIComponent(escape(atob(cookie))))
+  catch
+    {}
+
+export sessions = (opts = {}) ->
+  secret = opts.secret
+  cookieName = opts.name or 'session'
+  maxAge = opts.maxAge or 86400
+  secure = opts.secure or false
+  httpOnly = opts.httpOnly ?? true
+  sameSite = opts.sameSite or 'Lax'
+
+  # Warn if no secret in production
+  if not secret and process.env.NODE_ENV is 'production'
+    console.warn 'WARNING: sessions() without secret is insecure. Set secret option for production.'
+
+  (c, next) ->
+    # Parse cookie header
+    cookieHeader = c.req.header('Cookie') or ''
+    cookies = {}
+    for pair in cookieHeader.split(';')
+      [key, val] = pair.trim().split('=')
+      cookies[key] = decodeURIComponent(val) if key and val
+
+    # Decode existing session
+    raw = cookies[cookieName]
+    c.session = decodeSession raw, secret
+
+    # Track original for change detection
+    original = JSON.stringify(c.session)
+
+    await next()
+
+    # Save session if changed
+    current = JSON.stringify(c.session)
+    if current isnt original and c._response?
+      encoded = encodeSession c.session, secret
+      parts = ["#{cookieName}=#{encodeURIComponent(encoded)}"]
+      parts.push "Path=/"
+      parts.push "Max-Age=#{maxAge}"
+      parts.push "HttpOnly" if httpOnly
+      parts.push "Secure" if secure
+      parts.push "SameSite=#{sameSite}"
+      cookie = parts.join('; ')
+
+      # Clone response with new header
+      headers = new Headers(c._response.headers)
+      headers.append 'Set-Cookie', cookie
+      c._response = new Response c._response.body,
+        status: c._response.status
+        headers: headers
+
+# ==============================================================================
+# secureHeaders — Security Headers
+# ==============================================================================
+#
+# Sets common security headers:
+#   X-Content-Type-Options: nosniff
+#   X-Frame-Options: DENY
+#   X-XSS-Protection: 1; mode=block
+#   Referrer-Policy: strict-origin-when-cross-origin
+#   Content-Security-Policy (optional)
+#
+
+export secureHeaders = (opts = {}) ->
+  (c, next) ->
+    c.header 'X-Content-Type-Options', 'nosniff'
+    c.header 'X-Frame-Options', opts.frameOptions or 'DENY'
+    c.header 'X-XSS-Protection', '1; mode=block'
+    c.header 'Referrer-Policy', opts.referrerPolicy or 'strict-origin-when-cross-origin'
+
+    if opts.contentSecurityPolicy
+      c.header 'Content-Security-Policy', opts.contentSecurityPolicy
+
+    if opts.hsts
+      maxAge = opts.hstsMaxAge or 31536000
+      c.header 'Strict-Transport-Security', "max-age=#{maxAge}; includeSubDomains"
+
+    await next()
+
+# ==============================================================================
+# timeout — Request Timeout
+# ==============================================================================
+#
+# Options:
+#   ms: number (timeout in milliseconds, default 30000)
+#   message: string (error message)
+#   status: number (status code, default 408)
+#
+
+export timeout = (opts = {}) ->
+  ms = opts.ms or 30000
+  message = opts.message or 'Request Timeout'
+  status = opts.status or 408
+
+  (c, next) ->
+    timer = null
+    timedOut = false
+
+    timeoutPromise = new Promise (_, reject) ->
+      timer = setTimeout ->
+        timedOut = true
+        reject new Error message
+      , ms
+
+    try
+      await Promise.race [next(), timeoutPromise]
+    catch err
+      if timedOut
+        return c.json { error: message }, status
+      throw err
+    finally
+      clearTimeout timer if timer
+
+# ==============================================================================
+# bodyLimit — Request Body Size Limit
+# ==============================================================================
+#
+# Options:
+#   maxSize: number (bytes, default 1MB)
+#   message: string (error message)
+#
+
+export bodyLimit = (opts = {}) ->
+  maxSize = opts.maxSize or 1024 * 1024  # 1MB default
+  message = opts.message or 'Request body too large'
+
+  (c, next) ->
+    contentLength = parseInt(c.req.header('Content-Length') or '0')
+
+    if contentLength > maxSize
+      return c.json { error: message }, 413
+
+    await next()
+
+# ==============================================================================
+# prettyJson — Pretty JSON for iOS Mobile Browsers
+# ==============================================================================
+#
+# Renders JSON as syntax-highlighted HTML for iOS mobile browsers.
+# Solves the iOS Safari/Chrome "download" footer issue when viewing JSON.
+#
+# Usage:
+#   use prettyJson
+#
+# Only activates when:
+#   1. Request is from iOS (iPhone/iPad)
+#   2. Browser is directly viewing (Accept: text/html, not API call)
+#
+
+export prettyJson = (c, next) ->
+  originalJson = c.json.bind(c)
+
+  c.json = (data, status = 200, headers = {}) ->
+    if _shouldRenderHtmlJson(c.req.raw)
+      return _renderHtmlJson(data, status)
+    originalJson(data, status, headers)
+
+  next!
+
+_shouldRenderHtmlJson = (req) ->
+  ua = req.headers.get('user-agent') or ''
+  accept = req.headers.get('accept') or ''
+  dest = req.headers.get('sec-fetch-dest') or ''
+
+  isIOS = /iPhone|iPad|iPod/i.test(ua)
+  acceptsHtml = accept.includes('text/html')
+  isNavigation = dest is 'document' or (acceptsHtml and not accept.startsWith('application/json'))
+
+  isIOS and isNavigation
+
+_renderHtmlJson = (data, status) ->
+  json = JSON.stringify(data, null, 2)
+
+  # HTML escape then syntax highlight
+  escaped = json
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+
+  highlighted = escaped
+    .replace(/"([^"]+)":/g, '<span class="k">"$1"</span>:')
+    .replace(/: "([^"]*)"/g, ': <span class="s">"$1"</span>')
+    .replace(/: (-?\d+\.?\d*)/g, ': <span class="n">$1</span>')
+    .replace(/: (true|false)/g, ': <span class="b">$1</span>')
+    .replace(/: (null)/g, ': <span class="b">$1</span>')
+
+  html = """<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JSON</title>
+<style>
+*{box-sizing:border-box}
+body{font:14px/1.5 ui-monospace,monospace;background:#1a1a2e;color:#e0e0e0;margin:0;padding:16px}
+pre{margin:0;white-space:pre-wrap;word-break:break-word}
+.k{color:#82aaff}.s{color:#c3e88d}.n{color:#f78c6c}.b{color:#89ddff}
+</style>
+</head><body><pre>#{highlighted}</pre></body></html>"""
+
+  new Response html, {
+    status: status
+    headers: new Headers({ 'content-type': 'text/html; charset=utf-8' })
+  }

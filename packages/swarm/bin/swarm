@@ -1,0 +1,15 @@
+#!/usr/bin/env bun
+
+import { execFileSync } from 'child_process';
+
+const script = process.argv[2];
+if (!script) {
+  console.error('usage: swarm [options] <script.rip>');
+  process.exit(1);
+}
+
+try {
+  execFileSync('rip', [script, ...process.argv.slice(3)], { stdio: 'inherit' });
+} catch (e) {
+  process.exit(e.status || 1);
+}

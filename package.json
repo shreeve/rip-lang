@@ -1,0 +1,69 @@
+{
+  "name": "rip-lang",
+  "version": "3.0.0",
+  "description": "A modern language that compiles to JavaScript",
+  "type": "module",
+  "main": "src/compiler.js",
+  "workspaces": [
+    "packages/*"
+  ],
+  "browser": "docs/dist/rip.browser.js",
+  "exports": {
+    ".": {
+      "bun": "./src/compiler.js",
+      "node": "./src/compiler.js",
+      "browser": "./docs/dist/rip.browser.js",
+      "default": "./src/compiler.js"
+    },
+    "./loader": "./rip-loader.js"
+  },
+  "bin": {
+    "rip": "bin/rip"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "docs/",
+    "scripts/serve.js",
+    "rip-loader.js",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "browser": "bun scripts/build-browser.js",
+    "bump": "bun scripts/bump-version.js",
+    "parser": "bun src/grammar/solar.rip -o src/parser.js src/grammar/grammar.rip",
+    "serve": "bun scripts/serve.js",
+    "test": "bun test/runner.js",
+    "version": "./bin/rip -v",
+    "pack": "npm pack --dry-run"
+  },
+  "keywords": [
+    "rip",
+    "compiler",
+    "language",
+    "s-expression",
+    "lisp",
+    "bun",
+    "browser",
+    "parser",
+    "transpiler",
+    "javascript",
+    "es2022",
+    "coffeescript"
+  ],
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreeve/rip-lang.git"
+  },
+  "bugs": {
+    "url": "https://github.com/shreeve/rip-lang/issues"
+  },
+  "homepage": "https://github.com/shreeve/rip-lang#readme",
+  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
+  "license": "MIT"
+}

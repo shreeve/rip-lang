@@ -1,0 +1,11 @@
+# Bun configuration for Rip
+
+# Load .rip files with current compiler
+preload = ["./rip-loader.js"]
+
+[install]
+# Auto-install dependencies
+auto = true
+
+# Use exact versions
+exact = true

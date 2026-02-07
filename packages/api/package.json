@@ -1,0 +1,43 @@
+{
+  "name": "@rip-lang/api",
+  "version": "1.0.3",
+  "description": "Pure Rip API framework — elegant, fast, zero dependencies",
+  "type": "module",
+  "main": "api.rip",
+  "exports": {
+    ".": "./api.rip",
+    "./middleware": "./middleware.rip"
+  },
+  "scripts": {
+    "build": "rip api.rip",
+    "test": "rip tests/read.test.rip"
+  },
+  "keywords": [
+    "api",
+    "web-framework",
+    "routing",
+    "middleware",
+    "validation",
+    "sinatra",
+    "rip"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreeve/rip-lang.git",
+    "directory": "packages/api"
+  },
+  "homepage": "https://github.com/shreeve/rip-lang/tree/main/packages/api#readme",
+  "bugs": {
+    "url": "https://github.com/shreeve/rip-lang/issues"
+  },
+  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "rip-lang": "^2.9.0"
+  },
+  "files": [
+    "api.rip",
+    "middleware.rip",
+    "README.md"
+  ]
+}

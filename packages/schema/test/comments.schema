@@ -1,0 +1,7 @@
+# Test comments in blocks
+
+@model User
+  # This is a comment
+  name!: string
+  # Another comment
+  email!: string

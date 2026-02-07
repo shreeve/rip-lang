@@ -1,0 +1,254 @@
+#!/usr/bin/env rip
+
+# ==============================================================================
+# Comprehensive read() tests — validates all 37 built-in validators
+# ==============================================================================
+#
+# Each test is self-contained: t(name, input, expected, fn)
+# No HTTP server needed — uses requestContext.run() directly.
+#
+# Run: rip packages/api/tests/read.test.rip
+#
+
+import { read, requestContext } from '../api.rip'
+
+# ==============================================================================
+# Test harness
+# ==============================================================================
+
+stringify = (v) ->
+  try JSON.stringify(v) catch then String(v)
+
+deepEq = (a, b) -> stringify(a) is stringify(b)
+
+passed = 0
+failed = 0
+total  = 0
+
+# t(name, was, now, fn) — test read() with input 'was', expect 'now'
+t = (name, was, now, fn) ->
+  total++
+  requestContext.run { data: { v: was } }, ->
+    try
+      actual = fn()
+      if deepEq(actual, now)
+        passed++
+        console.log "✓ #{name}"
+      else
+        failed++
+        console.log "✗ #{name}"
+        console.log "    was:      #{stringify(was)}"
+        console.log "    expected: #{stringify(now)}"
+        console.log "    actual:   #{stringify(actual)}"
+    catch err
+      failed++
+      console.log "✗ #{name} — threw: #{err.message}"
+
+# f(name, was, fn) — expect a throw
+f = (name, was, fn) ->
+  total++
+  requestContext.run { data: { v: was } }, ->
+    try
+      fn()
+      failed++
+      console.log "✗ #{name} — expected throw"
+    catch
+      passed++
+      console.log "✓ #{name}"
+
+# ==============================================================================
+# read() basics (no validator)
+# ==============================================================================
+
+t "raw trims strings"       , '  hi  '    , 'hi'     -> read 'v'
+t "raw trims only edges"    , '  ab  cd  ', 'ab  cd' -> read 'v'
+t "raw keeps numbers"       , 42          , 42       -> read 'v'
+t "raw missing -> null"     , undefined   , null     -> read 'v'
+t "raw uses default"        , undefined   , 'x'      -> read 'v', null, 'x'
+t "raw uses miss fn"        , undefined   , 'm'      -> read 'v', null, -> 'm'
+
+# ==============================================================================
+# required (!) behavior
+# ==============================================================================
+
+f "required throws"         , undefined             -> read 'v', 'string!'
+t "required miss fn"        , undefined, 'fallback' -> read 'v', 'string!' -> 'fallback'
+f "required blank"          , '   '                 -> read 'v', 'string!'
+
+# ==============================================================================
+# numbers
+# ==============================================================================
+
+t "id valid"                , '123'  , 123   -> read 'v', 'id'
+t "id rejects 0-lead"       , '012'  , null  -> read 'v', 'id'
+t "whole accepts 0"         , '0'    , 0     -> read 'v', 'whole'
+t "whole rejects neg"       , '-5'   , null  -> read 'v', 'whole'
+t "int positive"            , '42'   , 42    -> read 'v', 'int'
+t "int negative"            , '-5'   , -5    -> read 'v', 'int'
+t "int zero"                , '0'    , 0     -> read 'v', 'int'
+t "int rejects leading 0"   , '07'   , null  -> read 'v', 'int'
+t "int rejects float"       , '1.5'  , null  -> read 'v', 'int'
+t "float signed"            , '-1.25', -1.25 -> read 'v', 'float'
+t "float dot"               , '.5'  , 0.5   -> read 'v', 'float'
+t "float junk"              , 'abc' , null   -> read 'v', 'float'
+
+# ==============================================================================
+# money
+# ==============================================================================
+
+t "money basic"             , '1.23'        , 1.23     -> read 'v', 'money'
+t "money rounds up"         , '1.245'       , 1.25     -> read 'v', 'money'
+t "money neg half"          , '-0.005'      , -0.01    -> read 'v', 'money'
+t "money strips $,"         , '$7,221.245'  , 7221.25  -> read 'v', 'money'
+t "money spaced"            , '- $ 9,999.12', -9999.12 -> read 'v', 'money'
+t "money_even basic"        , '1.23'        , 1.23     -> read 'v', 'money_even'
+t "money_even rounds even"  , '1.245'       , 1.24     -> read 'v', 'money_even'
+t "money_even neg half"     , '-0.005'      , 0        -> read 'v', 'money_even'
+t "cents basic"             , '1.23'        , 123      -> read 'v', 'cents'
+t "cents rounds up"         , '1.245'       , 125      -> read 'v', 'cents'
+t "cents neg half"          , '-0.005'      , -1       -> read 'v', 'cents'
+t "cents past half"         , '1.2351'      , 124      -> read 'v', 'cents'
+t "cents strips $,"         , '$7,221.245'  , 722125   -> read 'v', 'cents'
+t "cents_even basic"        , '1.23'        , 123      -> read 'v', 'cents_even'
+t "cents_even rounds even"  , '1.245'       , 124      -> read 'v', 'cents_even'
+t "cents_even past half"    , '1.2351'      , 124      -> read 'v', 'cents_even'
+t "cents_even neg half"     , '-0.005'      , 0        -> read 'v', 'cents_even'
+
+# ==============================================================================
+# formatting
+# ==============================================================================
+
+t "string collapses"        , '  ab   cd  '  , 'ab cd'         -> read 'v', 'string'
+t "text collapses"          , 'a  b'         , 'a b'           -> read 'v', 'text'
+t "name normalizes"         , "al\t\nbeck"   , 'Al Beck'       -> read 'v', 'name'
+t "name is magical"         , " lArrY o'dOUl", "Larry O'Doul"  -> read 'v', 'name'
+t "address normalizes"      , "1\t Main   St", '1 Main St'     -> read 'v', 'address'
+t "address PO Box"          , 'P. o. bOX #44', 'PO Box #44'    -> read 'v', 'address'
+
+# ==============================================================================
+# time/date
+# ==============================================================================
+
+t "time HH:MM"              , '09:30'      , '09:30'       -> read 'v', 'time'
+t "time HH:MM:SS"           , '23:59:59'   , '23:59:59'    -> read 'v', 'time'
+t "time rejects 24"         , '24:00'      , null          -> read 'v', 'time'
+t "date ok"                 , '2026-01-18' , '2026-01-18'  -> read 'v', 'date'
+t "date rejects bad"        , '2026-1-8'   , null          -> read 'v', 'date'
+t "time ok"                 , '0:01'       , '0:01'        -> read 'v', 'time'
+t "time 24 hr"              , '16:05:30'   , '16:05:30'    -> read 'v', 'time'
+t "time12 lowercased"       , '9:05 PM'    , '9:05 pm'     -> read 'v', 'time12'
+
+# ==============================================================================
+# booleans
+# ==============================================================================
+
+t "truthy yes"              , 'yes'  , true  -> read 'v', 'truthy'
+t "truthy non-match"        , 'maybe', null  -> read 'v', 'truthy'
+t "falsy no"                , 'no'   , true  -> read 'v', 'falsy'
+t "bool true"               , 'ON'   , true  -> read 'v', 'bool'
+t "bool false"              , 'off'  , false -> read 'v', 'bool'
+t "bool junk"               , 'wat'  , null  -> read 'v', 'bool'
+
+# ==============================================================================
+# identity/contact
+# ==============================================================================
+
+t "email ok"                , 'a+b@ex.co'  , 'a+b@ex.co'  -> read 'v', 'email'
+t "email bad"               , 'nope@'      , null         -> read 'v', 'email'
+t "state uppercases"        , 'ca'         , 'CA'         -> read 'v', 'state'
+t "zip reads 5"             , '12345'      , '12345'      -> read 'v', 'zip'
+t "zipplus4 formats"        , '12345-6789' , '12345-6789' -> read 'v', 'zipplus4'
+t "ssn strips punct"        , '123-45-6789', '123456789'  -> read 'v', 'ssn'
+t "sex normalizes"          , 'Female'     , 'f'          -> read 'v', 'sex'
+
+# ==============================================================================
+# technical/web
+# ==============================================================================
+
+t "username lower"          , 'AbC_12',
+                              'abc_12'                  -> read 'v', 'username'
+t "username short"          , 'ab',
+                              null                      -> read 'v', 'username'
+t "ip valid"                , '192.168.1.1',
+                              '192.168.1.1'             -> read 'v', 'ip'
+t "ip rejects 999"          , '999.1.2.3',
+                              null                      -> read 'v', 'ip'
+t "mac normalizes"          , 'AA-BB-CC-DD-EE-FF',
+                              'aa:bb:cc:dd:ee:ff'       -> read 'v', 'mac'
+t "url ok"                  , 'https://example.com/a/b',
+                              'https://example.com/a/b' -> read 'v', 'url'
+t "color hash"              , 'ABC',
+                              '#abc'                    -> read 'v', 'color'
+t "uuid normalizes"         , 'A0B1C2D3E4F5A6B7C8D9E0F1A2B3C4D5',
+                              'a0b1c2d3-e4f5-a6b7-c8d9-e0f1a2b3c4d5' -> read 'v', 'uuid'
+t "semver ok"               , '1.2.3-alpha.1+build.5',
+                              '1.2.3-alpha.1+build.5'   -> read 'v', 'semver'
+t "slug ok"                 , 'a-b-c',
+                              'a-b-c'                   -> read 'v', 'slug'
+t "slug capitals"           , 'A-B',
+                              'a-b'                     -> read 'v', 'slug'
+t "phone formats"           , '555234-5678',
+                              '(555) 234-5678'          -> read 'v', 'phone'
+t "phone short"             , '123',
+                              null                      -> read 'v', 'phone'
+
+# ==============================================================================
+# collections
+# ==============================================================================
+
+t "array ok"                , [1, 2]    , [1, 2]    -> read 'v', 'array'
+t "array not object"        , { x: 1 }  , null      -> read 'v', 'array'
+t "hash ok"                 , { x: 1 }  , { x: 1 }  -> read 'v', 'hash'
+t "hash not array"          , []        , null      -> read 'v', 'hash'
+t "json parses str"         , '{"a":1}' , { a: 1 }  -> read 'v', 'json'
+t "json accepts obj"        , { a: 1 }  , { a: 1 }  -> read 'v', 'json'
+t "json rejects junk"       , '{'       , null      -> read 'v', 'json'
+t "ids sorts dedupes"       , '3, 2 2 1', [1, 2, 3] -> read 'v', 'ids'
+t "ids rejects 0"           , '0 1'     , null      -> read 'v', 'ids'
+t "ids empty null"          , '   '     , null      -> read 'v', 'ids'
+
+# ==============================================================================
+# regex type
+# ==============================================================================
+
+t "regex matches"           , 'abc' , 'abc' -> read 'v', /^[a-z]+$/
+t "regex non-match"         , 'ABC' , null  -> read 'v', /^[a-z]+$/
+
+# ==============================================================================
+# array range (numeric + string length + enum)
+# ==============================================================================
+
+t "range num ok str"        , '2'     , 2       -> read 'v', [1, 3]
+t "range num ok val"        , 3       , 3       -> read 'v', [1, 3]
+t "range num low"           , '0'     , null    -> read 'v', [1, 3]
+t "range str ok"            , 'abcd'  , 'abcd'  -> read 'v', [2, 4]
+t "range str long"          , 'abcde' , null    -> read 'v', [2, 4]
+t "enum ok"                 , 'green' , 'green' -> read 'v', ['red', 'green']
+t "enum bad"                , 'blue'  , null    -> read 'v', ['red', 'green']
+
+# ==============================================================================
+# object range (start/end + min/max)
+# ==============================================================================
+
+t "obj start/end ok"        , '7'   , 7     -> read 'v', { start: 5, end: 10 }
+t "obj start/end dec"       , '1.5' , null  -> read 'v', { start: 0, end: 10 }
+t "obj min/max ok"          , '2'   , 2     -> read 'v', { min:   1, max:  3 }
+t "obj min/max bad"         , '9'   , null  -> read 'v', { min:   1, max:  3 }
+t "obj str ok"              , 'abc' , 'abc' -> read 'v', { min:   2, max:  4 }
+t "obj str short"           , 'a'   , null  -> read 'v', { min:   2, max:  4 }
+
+# ==============================================================================
+# miss() edge cases
+# ==============================================================================
+
+t "miss uses default"       , undefined, 'no' -> read 'v', 'email', 'no'
+t "miss uses fn"            , undefined, 'no' -> read 'v', 'email', -> 'no'
+f "required w/ default"     , undefined       -> read 'v', 'email!', 'nope'
+t "required w/ miss()"      , undefined, 'ok' -> read 'v', 'email!', -> 'ok'
+
+# ==============================================================================
+# Results
+# ==============================================================================
+
+console.log "\n#{passed} passed, #{failed} failed (#{total} total)"
+process.exit(if failed > 0 then 1 else 0)

@@ -1,0 +1,164 @@
+# Test: Basic data Structures (3 node types)
+# Tests "array", "object", and "computed" node types
+
+# ============================================================================
+# Arrays: "array"
+# ============================================================================
+
+# Empty array
+test "empty array", "x = []; x.length", 0
+
+# Simple arrays
+test "array with integers", "x = [1, 2, 3]; x.length", 3
+test "array indexing", "x = [10, 20, 30]; x[1]", 20
+test "array mixed types", "x = [1, 'two', true]; x[1]", "two"
+
+# Code generation
+code "empty array", "[]", "[]"
+code "array with elements", "[1, 2, 3]", "[1, 2, 3]"
+
+# Nested arrays
+test "nested arrays", "x = [[1, 2], [3, 4]]; x[0][1]", 2
+
+# Array methods
+test "array length property", "[1, 2, 3].length", 3
+
+# Trailing commas
+test "trailing comma simple", "[1, 2, 3,].length", 3
+test "trailing comma multiline", '''
+  arr = [
+    1, 2, 3,
+    4, 5, 6
+    7, 8, 9,
+  ]
+  arr.length
+  ''', 9
+
+# Array elisions (sparse arrays)
+test "elision at start", "[,1].length", 2
+test "elision multiple", "[,,1,2,,].length", 5
+test "elision undefined check", "arr = [1,,2]; arr[1]", undefined
+
+# Elisions in destructuring
+test "elision destructuring simple", "arr = [1,2,3,4]; [,a] = arr; a", 2
+test "elision destructuring multiple", "arr = [1,2,3,4,5,6,7,8,9]; [,a,,b,,c] = arr; [a,b,c]", [2,4,6]
+
+# Spread in arrays
+test "array with spread", "nums = [1, 2, 3]; list = [0, ...nums, 4]; list", [0,1,2,3,4]
+test "spread with nested", "a = [[1]]; list = [0, ...a]; list[1][0]", 1
+
+# Array with functions
+test "array with functions", "a = [((x) -> x), ((x) -> x * x)]; a.length", 2
+
+# ============================================================================
+# Objects: "object"
+# ============================================================================
+
+# Empty object
+test "empty object", "x = {}; x", {}
+
+# Simple objects
+test "object with properties", 'x = {a: 1, b: 2}; x.a', 1
+test "object property access", 'x = {name: "test"}; x.name', "test"
+
+# Code generation
+code "empty object", "{}", "({})"
+code "object with properties", '{a: 1, b: 2}', "({a: 1, b: 2})"
+
+# Property shorthand
+test "property shorthand", "a = 5; x = {a}; x.a", 5
+
+# Nested objects
+test "nested object", "x = {a: {b: 10}}; x.a.b", 10
+
+# ============================================================================
+# Computed Properties: "computed"
+# ============================================================================
+
+# Computed property names
+test "computed property", 'key = "name"\nx = {[key]: "value"}\nx.name', "value"
+test "computed property expression", "x = {[1 + 1]: \"two\"}\nx[2]", "two"
+code "computed property code", "{[key]: value}", "({[key]: value})"
+
+# Interpolated string as object key
+test "interpolated string key", 'k = "x"\no = {"#{k}": 42}\no.x', 42
+test "interpolated string key access", 'n = "name"\no = {"#{n}": "Alice"}\no.name', "Alice"
+
+# ============================================================================
+# Inclusive Ranges (..)
+# ============================================================================
+
+test 'inclusive range', '[1..3]', [1, 2, 3]
+test 'inclusive range zero', '[0..2]', [0, 1, 2]
+test 'inclusive range negative', '[-2..0]', [-2, -1, 0]
+test 'inclusive range same', '[5..5]', [5]
+
+# ============================================================================
+# Exclusive Ranges (...)
+# ============================================================================
+
+test 'exclusive range', '[1...4]', [1, 2, 3]
+test 'exclusive range zero', '[0...3]', [0, 1, 2]
+test 'exclusive range negative', '[-2...1]', [-2, -1, 0]
+test 'exclusive range same', '[5...5]', []
+
+# ============================================================================
+# Reverse Ranges
+# ============================================================================
+
+test 'reverse inclusive', '[3..1]', [3, 2, 1]
+test 'reverse exclusive', '[3...0]', [3, 2, 1]
+test 'reverse negative', '[0..-2]', [0, -1, -2]
+
+# ============================================================================
+# Ranges with Variables
+# ============================================================================
+
+test 'range with variables', '''
+  start = 2
+  end = 5
+  [start..end]
+  ''', [2, 3, 4, 5]
+
+test 'range with expressions', '[1 + 1..2 * 3]', [2, 3, 4, 5, 6]
+
+# ============================================================================
+# Ranges in Loops
+# ============================================================================
+
+test 'for loop with inclusive range', '''
+  sum = 0
+  for i in [1..3]
+    sum += i
+  sum
+  ''', 6
+
+test 'for loop with exclusive range', '''
+  sum = 0
+  for i in [1...4]
+    sum += i
+  sum
+  ''', 6
+
+# ============================================================================
+# Array Slicing (using range syntax)
+# ============================================================================
+
+test 'basic inclusive slice', '[0,1,2,3,4,5][2..4]', [2,3,4]
+test 'basic exclusive slice', '[0,1,2,3,4,5][2...4]', [2,3]
+test 'slice from index to end', '[0,1,2,3,4,5][3..]', [3,4,5]
+test 'slice from beginning to index', '[0,1,2,3,4,5][...3]', [0,1,2]
+test 'slice entire array', '[0,1,2,3,4,5][..]', [0,1,2,3,4,5]
+
+# Slicing with property access as start index
+test 'slice from property to end', 'arr = [0,1,2,3,4,5]; _ = [{length: 3}]; arr[_[0].length..]', [3,4,5]
+test 'slice from nested property', 'arr = [0,1,2,3,4]; obj = {start: 2}; arr[obj.start..]', [2,3,4]
+
+# ============================================================================
+# String Slicing (using range syntax)
+# ============================================================================
+
+test 'string inclusive slice', '"abcdef"[1..3]', 'bcd'
+test 'string exclusive slice', '"abcdef"[1...3]', 'bc'
+test 'string from index', '"abcdef"[3..]', 'def'
+test 'string to index', '"abcdef"[...3]', 'abc'

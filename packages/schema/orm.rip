@@ -1,0 +1,422 @@
+# ==============================================================================
+# @rip-lang/schema/orm — ActiveRecord-style ORM
+# ==============================================================================
+#
+# Rich domain models with inheritance, behavior, schema, and reactive computed fields.
+#
+# Usage:
+#   import { Model, connect } from '@rip-lang/schema/orm'
+#
+#   connect 'http://localhost:4000'
+#
+#   class User extends Model
+#     @table    = 'users'
+#     @database = 'labs'
+#
+#     @schema
+#       id:        { type: 'int', primary: true }
+#       name:      { type: 'string', required: true, min: 1, max: 100 }
+#       email:     { type: 'email', required: true, unique: true }
+#       hairColor: { type: 'string', enum: ['blonde','brown','black','red'], column: 'hair_color' }
+#       active:    { type: 'bool', default: true }
+#
+#     # Instance methods
+#     createAccessCode: (secs = null) ->
+#       syms = 'ABCDEFGHJKMNPQRSTUVWXYZ'.split('')
+#       secs ?= 3600
+#       code = [1..5].map(-> syms[Math.floor(Math.random() * syms.length)]).join('')
+#       @code = code
+#       @codeExpiresAt = Date.now() + secs * 1000
+#       code
+#
+#     # Computed properties (reactive)
+#     @computed
+#       identifier: -> "#{@name} (##{@id})"
+#       isExpired:  -> @codeExpiresAt? and Date.now() > @codeExpiresAt
+#
+#   # Query API
+#   user = User(25)                         # Find by ID
+#   user = User.find(25)                    # Same thing
+#   users = User([1, 2, 3])                 # Find multiple
+#   users = User.all()                      # All records
+#   users = User.where(active: true)        # Filtered
+#   users = User.where('score > ?', 90)     # Parameterized
+#
+#   # Record instances
+#   user.hairColor                          # Property access
+#   user.hairColor = 'red'                  # Setter (tracks dirty)
+#   user.identifier                         # Computed property
+#   user.createAccessCode(3600)             # Instance method
+#   user.save()                             # Persist changes
+#
+# ==============================================================================
+
+_dbUrl = process.env.DB_URL or 'http://localhost:4000'
+
+export connect = (url) -> _dbUrl = url
+
+# ==============================================================================
+# Query helper
+# ==============================================================================
+
+query = (sql, params = []) ->
+  body = if params.length > 0 then { sql, params } else { sql }
+  res = fetch! "#{_dbUrl}/sql",
+    method: 'POST'
+    headers: { 'Content-Type': 'application/json' }
+    body: JSON.stringify body
+  data = res.json!
+  throw new Error data.error if data.error
+  data
+
+# ==============================================================================
+# Model — Base class for all domain models
+# ==============================================================================
+
+export class Model
+  # Class-level configuration (set by subclasses)
+  @table      = null
+  @database   = null
+  @primaryKey = 'id'
+  @_schema    = {}
+  @_computed  = {}
+  @_columns   = null  # Cache: field name -> column name
+
+  # ---------------------------------------------------------------------------
+  # Schema definition (called by subclass)
+  # ---------------------------------------------------------------------------
+  @schema: (fields) ->
+    @_schema = fields
+    @_columns = {}
+    for name, field of fields
+      @_columns[name] = field.column or name
+
+  # ---------------------------------------------------------------------------
+  # Computed fields definition (called by subclass)
+  # ---------------------------------------------------------------------------
+  @computed: (fields) ->
+    @_computed = fields
+
+  # ---------------------------------------------------------------------------
+  # Table name helper
+  # ---------------------------------------------------------------------------
+  @tableName: ->
+    if @database then "\"#{@database}\".\"#{@table}\"" else "\"#{@table}\""
+
+  # ---------------------------------------------------------------------------
+  # Constructor — creates a record instance
+  # ---------------------------------------------------------------------------
+  constructor: (data = {}, persisted = false) ->
+    @_data = {}
+    @_dirty = {}
+    @_persisted = persisted
+
+    # Apply schema defaults and initial data
+    schema = @constructor._schema
+    columns = @constructor._columns or {}
+
+    for name, field of schema
+      col = columns[name] or name
+      if data[col]?
+        @_data[col] = data[col]
+      else if data[name]?
+        @_data[col] = data[name]
+      else if field.default?
+        @_data[col] = if typeof field.default is 'function' then field.default() else field.default
+
+    # Define property accessors for schema fields
+    for name, field of schema
+      do (name, field) =>
+        col = columns[name] or name
+        Object.defineProperty @, name,
+          enumerable: true
+          get: -> @_data[col]
+          set: (value) ->
+            @_data[col] = value
+            @_dirty[name] = true
+
+    # Define computed property accessors (reactive getters)
+    computed = @constructor._computed
+    for name, fn of computed
+      do (name, fn) =>
+        Object.defineProperty @, name,
+          enumerable: true
+          get: -> fn.call(@)
+
+  # ---------------------------------------------------------------------------
+  # Instance state
+  # ---------------------------------------------------------------------------
+  Object.defineProperty @::, '$isNew',
+    get: -> not @_persisted
+
+  Object.defineProperty @::, '$dirty',
+    get: -> Object.keys(@_dirty)
+
+  Object.defineProperty @::, '$changed',
+    get: -> Object.keys(@_dirty).length > 0
+
+  Object.defineProperty @::, '$data',
+    get: -> { ...@_data }
+
+  # ---------------------------------------------------------------------------
+  # Validation
+  # ---------------------------------------------------------------------------
+  $validate: ->
+    errors = []
+    schema = @constructor._schema
+    columns = @constructor._columns or {}
+
+    for name, field of schema
+      col = columns[name] or name
+      value = @_data[col]
+
+      # Required check
+      if field.required and not value?
+        errors.push { field: name, error: 'required', message: "#{name} is required" }
+        continue
+
+      continue unless value?  # Skip optional empty fields
+
+      # Type checks
+      switch field.type
+        when 'string', 'text'
+          unless typeof value is 'string'
+            errors.push { field: name, error: 'type', message: "#{name} must be a string" }
+          else
+            if field.min? and value.length < field.min
+              errors.push { field: name, error: 'min', message: "#{name} must be at least #{field.min} characters" }
+            if field.max? and value.length > field.max
+              errors.push { field: name, error: 'max', message: "#{name} must be at most #{field.max} characters" }
+            if field.regex? and not field.regex.test(value)
+              errors.push { field: name, error: 'pattern', message: "#{name} is invalid" }
+        when 'int', 'integer'
+          unless Number.isInteger(value)
+            errors.push { field: name, error: 'type', message: "#{name} must be an integer" }
+          else
+            errors.push { field: name, error: 'min', message: "#{name} must be >= #{field.min}" } if field.min? and value < field.min
+            errors.push { field: name, error: 'max', message: "#{name} must be <= #{field.max}" } if field.max? and value > field.max
+        when 'bool', 'boolean'
+          unless typeof value is 'boolean'
+            errors.push { field: name, error: 'type', message: "#{name} must be a boolean" }
+        when 'email'
+          unless typeof value is 'string' and /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+            errors.push { field: name, error: 'type', message: "#{name} must be a valid email" }
+
+      # Enum check
+      if field.enum? and value not in field.enum
+        errors.push { field: name, error: 'enum', message: "#{name} must be one of: #{field.enum.join(', ')}" }
+
+    if errors.length > 0 then errors else null
+
+  # ---------------------------------------------------------------------------
+  # Persistence
+  # ---------------------------------------------------------------------------
+  save: ->
+    errors = @$validate()
+    throw new Error "Validation failed: #{JSON.stringify(errors)}" if errors
+
+    Model = @constructor
+    tableName = Model.tableName()
+    pk = Model.primaryKey
+    schema = Model._schema
+    columns = Model._columns or {}
+
+    if @_persisted
+      # UPDATE — only dirty fields
+      sets = []
+      values = []
+      for name in @$dirty
+        col = columns[name] or name
+        sets.push "\"#{col}\" = ?"
+        values.push @_data[col]
+      return @ if sets.length is 0
+
+      sql = "UPDATE #{tableName} SET #{sets.join(', ')} WHERE \"#{pk}\" = ?"
+      values.push @_data[pk]
+      query! sql, values
+    else
+      # INSERT
+      cols = []
+      placeholders = []
+      values = []
+      for name, field of schema
+        col = columns[name] or name
+        continue if field.primary and not @_data[col]?  # Skip auto PK
+        if @_data[col]?
+          cols.push "\"#{col}\""
+          placeholders.push '?'
+          values.push @_data[col]
+
+      sql = "INSERT INTO #{tableName} (#{cols.join(', ')}) VALUES (#{placeholders.join(', ')})"
+      query! sql, values
+      @_persisted = true
+
+    @_dirty = {}
+    @
+
+  delete: ->
+    return @ unless @_persisted
+    Model = @constructor
+    pk = Model.primaryKey
+    sql = "DELETE FROM #{Model.tableName()} WHERE \"#{pk}\" = ?"
+    query! sql, [@_data[pk]]
+    @_persisted = false
+    @
+
+  reload: ->
+    return @ unless @_persisted
+    Model = @constructor
+    pk = Model.primaryKey
+    record = Model.find @_data[pk]
+    if record
+      @_data = record._data
+      @_dirty = {}
+    @
+
+  toJSON: ->
+    obj = {}
+    for name of @constructor._schema
+      obj[name] = @[name]
+    # Include computed fields
+    for name of @constructor._computed
+      obj[name] = @[name]
+    obj
+
+  # ---------------------------------------------------------------------------
+  # Class methods — Query API
+  # ---------------------------------------------------------------------------
+
+  # Materialize row array to record instance
+  @_materialize: (meta, row) ->
+    data = {}
+    for col, i in meta
+      data[col.name] = row[i]
+    new @(data, true)
+
+  @find: (id) ->
+    pk = @primaryKey
+    sql = "SELECT * FROM #{@tableName()} WHERE \"#{pk}\" = ? LIMIT 1"
+    result = query! sql, [id]
+    return null if result.rows is 0
+    @_materialize result.meta, result.data[0]
+
+  @findMany: (ids) ->
+    return [] if ids.length is 0
+    pk = @primaryKey
+    placeholders = ids.map(-> '?').join(', ')
+    sql = "SELECT * FROM #{@tableName()} WHERE \"#{pk}\" IN (#{placeholders})"
+    result = query! sql, ids
+    result.data.map (row) => @_materialize result.meta, row
+
+  @all: (limit = null) ->
+    sql = "SELECT * FROM #{@tableName()}"
+    sql += " LIMIT #{limit}" if limit?
+    result = query! sql
+    result.data.map (row) => @_materialize result.meta, row
+
+  @first: ->
+    sql = "SELECT * FROM #{@tableName()} LIMIT 1"
+    result = query! sql
+    return null if result.rows is 0
+    @_materialize result.meta, result.data[0]
+
+  @where: (conditions, params...) ->
+    new Query(@).where(conditions, params...)
+
+  @count: (conditions = null) ->
+    q = new Query(@)
+    q.where(conditions) if conditions?
+    q.count()
+
+  @create: (data = {}) ->
+    record = new @(data, false)
+    record.save!()
+
+# ==============================================================================
+# Query — Chainable query builder
+# ==============================================================================
+
+class Query
+  constructor: (@_model) ->
+    @_where = []
+    @_params = []
+    @_order = null
+    @_limit = null
+    @_offset = null
+
+  where: (conditions, params...) ->
+    if typeof conditions is 'string'
+      @_where.push conditions
+      @_params.push ...params
+    else if typeof conditions is 'object'
+      columns = @_model._columns or {}
+      for key, value of conditions
+        col = columns[key] or key
+        @_where.push "\"#{col}\" = ?"
+        @_params.push value
+    @
+
+  orderBy: (column, direction = 'ASC') ->
+    columns = @_model._columns or {}
+    col = columns[column] or column
+    @_order = "\"#{col}\" #{direction.toUpperCase()}"
+    @
+
+  limit: (n) ->
+    @_limit = n
+    @
+
+  offset: (n) ->
+    @_offset = n
+    @
+
+  toSQL: ->
+    sql = "SELECT * FROM #{@_model.tableName()}"
+    sql += " WHERE #{@_where.join(' AND ')}" if @_where.length > 0
+    sql += " ORDER BY #{@_order}" if @_order
+    sql += " LIMIT #{@_limit}" if @_limit?
+    sql += " OFFSET #{@_offset}" if @_offset?
+    { sql, params: @_params }
+
+  all: ->
+    { sql, params } = @toSQL()
+    result = query! sql, params
+    result.data.map (row) => @_model._materialize result.meta, row
+
+  first: ->
+    @limit(1).all()[0] or null
+
+  count: ->
+    sql = "SELECT COUNT(*) FROM #{@_model.tableName()}"
+    sql += " WHERE #{@_where.join(' AND ')}" if @_where.length > 0
+    result = query! sql, @_params
+    result.data[0][0]
+
+# ==============================================================================
+# makeCallable — User(25) → User.find(25)
+# ==============================================================================
+
+export makeCallable = (ModelClass) ->
+  callable = (idOrIds) ->
+    if Array.isArray(idOrIds)
+      if idOrIds.length is 0 then ModelClass.all() else ModelClass.findMany(idOrIds)
+    else if idOrIds?
+      ModelClass.find(idOrIds)
+    else
+      ModelClass.all()
+
+  # Copy class methods
+  for key of ModelClass
+    callable[key] = ModelClass[key] if typeof ModelClass[key] is 'function'
+
+  # Copy class properties
+  callable.table = ModelClass.table
+  callable.database = ModelClass.database
+  callable.primaryKey = ModelClass.primaryKey
+  callable._schema = ModelClass._schema
+  callable._computed = ModelClass._computed
+  callable._columns = ModelClass._columns
+  callable.tableName = -> ModelClass.tableName()
+  callable._materialize = (meta, row) -> ModelClass._materialize(meta, row)
+
+  callable

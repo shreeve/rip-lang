@@ -1,0 +1,1211 @@
+# ==============================================================================
+# @rip-lang/server — Pure Rip Application Server
+# ==============================================================================
+#
+# A multi-worker application server written entirely in Rip.
+# Provides hot reloading, HTTPS, mDNS, and production-grade features.
+#
+# Usage:
+#   bun server.rip <app-path>              # Start server
+#   bun server.rip <app-path>@alias        # Start with mDNS alias
+#   bun server.rip stop                    # Stop server
+#   bun server.rip list                    # List registered hosts
+# ==============================================================================
+
+import { existsSync, statSync, readFileSync, writeFileSync, unlinkSync, mkdirSync, watch, utimesSync } from 'node:fs'
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
+import { homedir, cpus, networkInterfaces } from 'node:os'
+import { X509Certificate } from 'node:crypto'
+
+# Match capture holder for Rip's =~
+_ = null
+
+# ==============================================================================
+# Constants
+# ==============================================================================
+
+MAX_BACKOFF_MS = 30000        # Max delay between worker restart attempts
+MAX_RESTART_COUNT = 10        # Max consecutive worker crashes before giving up
+SHUTDOWN_TIMEOUT_MS = 30000   # Max time to wait for in-flight requests on shutdown
+
+# ==============================================================================
+# Utilities
+# ==============================================================================
+
+nowMs = -> Date.now()
+
+getWorkerSocketPath = (prefix, id) -> "/tmp/#{prefix}.#{id}.sock"
+getControlSocketPath = (prefix) -> "/tmp/#{prefix}.ctl.sock"
+getPidFilePath = (prefix) -> "/tmp/#{prefix}.pid"
+
+coerceInt = (value, fallback) ->
+  return fallback unless value? and value isnt ''
+  n = parseInt(String(value))
+  if Number.isFinite(n) then n else fallback
+
+# Environment detection (can be overridden by --env flag)
+_envOverride = null
+_debugMode = false
+
+isDev = ->
+  env = (_envOverride or process.env.NODE_ENV or '').toLowerCase()
+  env in ['development', 'dev', '']
+
+isDebug = -> _debugMode or process.env.RIP_DEBUG?
+
+formatTimestamp = ->
+  now = new Date()
+  pad = (n, w = 2) -> String(n).padStart(w, '0')
+  timestamp = "#{now.getFullYear()}-#{pad(now.getMonth() + 1)}-#{pad(now.getDate())} #{pad(now.getHours())}:#{pad(now.getMinutes())}:#{pad(now.getSeconds())}.#{String(now.getMilliseconds()).padStart(3, '0')}"
+  tzMin = now.getTimezoneOffset()
+  tzSign = if tzMin <= 0 then '+' else '-'
+  tzAbs = Math.abs(tzMin)
+  timezone = "#{tzSign}#{String(Math.floor(tzAbs / 60)).padStart(2, '0')}#{String(tzAbs % 60).padStart(2, '0')}"
+  { timestamp, timezone }
+
+scale = (value, unit, pad = true) ->
+  if value > 0 and Number.isFinite(value)
+    span = ['T', 'G', 'M', 'k', (if pad then ' ' else ''), 'm', 'µ', 'n', 'p']
+    base = 4
+    minSlot = 0
+    maxSlot = span.length - 1
+    slot = base
+
+    while value < 0.05 and slot <= maxSlot
+      value *= 1000
+      slot++
+    while value >= 999.5 and slot >= minSlot
+      value /= 1000
+      slot--
+
+    if slot >= minSlot and slot <= maxSlot
+      tens = Math.round(value * 10) / 10
+      if tens >= 99.5
+        nums = Math.round(value).toString()
+      else if tens >= 10
+        nums = Math.round(value).toString()
+      else
+        nums = tens.toFixed(1)
+      nums = nums.padStart(3, ' ') if pad
+      return "#{nums}#{span[slot]}#{unit}"
+
+  return (if pad then '  0 ' else '0') + unit if value is 0
+  '???' + (if pad then ' ' else '') + unit
+
+logAccessJson = (app, req, res, totalSeconds, workerSeconds) ->
+  url = new URL(req.url)
+  len = res.headers.get('content-length')
+  type = (res.headers.get('content-type') or '').split(';')[0] or undefined
+  console.log JSON.stringify
+    t: new Date().toISOString()
+    app: app
+    method: req.method or 'GET'
+    path: url.pathname
+    status: res.status
+    totalSeconds: totalSeconds
+    workerSeconds: workerSeconds
+    type: type
+    length: if len then Number(len) else undefined
+
+logAccessHuman = (app, req, res, totalSeconds, workerSeconds) ->
+  { timestamp, timezone } = formatTimestamp()
+  d1 = scale(totalSeconds, 's')
+  d2 = scale(workerSeconds, 's')
+  method = req.method or 'GET'
+  url = new URL(req.url)
+  path = url.pathname
+  status = res.status
+  lenHeader = res.headers.get('content-length') or ''
+  len = if lenHeader then "#{lenHeader}B" else ''
+  contentType = (res.headers.get('content-type') or '').split(';')[0] or ''
+  type = if contentType.includes('/') then contentType.split('/')[1] else contentType
+  console.log "[#{timestamp} #{timezone} #{d1} #{d2}] #{method} #{path} → #{status} #{type} #{len}"
+
+INTERNAL_HEADERS = new Set(['rip-worker-busy', 'rip-worker-id'])
+
+stripInternalHeaders = (h) ->
+  out = new Headers()
+  for [k, v] from h.entries()
+    continue if INTERNAL_HEADERS.has(k.toLowerCase())
+    out.append(k, v)
+  out
+
+# ==============================================================================
+# Flag Parsing
+# ==============================================================================
+
+parseWorkersToken = (token, fallback) ->
+  return fallback unless token
+  cores = cpus().length
+  return Math.max(1, cores) if token is 'auto'
+  return Math.max(1, Math.floor(cores / 2)) if token is 'half'
+  return Math.max(1, cores * 2) if token is '2x'
+  return Math.max(1, cores * 3) if token is '3x'
+  n = parseInt(token)
+  if Number.isFinite(n) and n > 0 then n else fallback
+
+parseRestartPolicy = (token, defReqs, defSecs) ->
+  return { maxRequests: defReqs, maxSeconds: defSecs } unless token
+  maxRequests = defReqs
+  maxSeconds = defSecs
+
+  for part in token.split(',').map((s) -> s.trim()).filter(Boolean)
+    if part.endsWith('s')
+      secs = parseInt(part.slice(0, -1))
+      maxSeconds = secs if Number.isFinite(secs) and secs >= 0
+    else
+      n = parseInt(part)
+      maxRequests = n if Number.isFinite(n) and n > 0
+
+  { maxRequests, maxSeconds }
+
+resolveAppEntry = (appPathInput) ->
+  abs = if isAbsolute(appPathInput) then appPathInput else resolve(process.cwd(), appPathInput)
+
+  if existsSync(abs) and statSync(abs).isDirectory()
+    baseDir = abs
+    one = join(abs, 'index.rip')
+    two = join(abs, 'index.ts')
+    if existsSync(one)
+      entryPath = one
+    else if existsSync(two)
+      entryPath = two
+    else
+      console.error "No app entry found. Probed: #{one}, #{two}"
+      process.exit(2)
+  else
+    unless existsSync(abs)
+      console.error "App path not found: #{abs}"
+      process.exit(2)
+    baseDir = dirname(abs)
+    entryPath = abs
+
+  appName = basename(baseDir)
+  { baseDir, entryPath, appName }
+
+parseFlags = (argv) ->
+  rawFlags = new Set()
+  appPathInput = null
+  appAliases = []
+
+  # Check if token looks like a flag
+  isFlag = (tok) ->
+    tok.startsWith('-') or tok.startsWith('--') or /^\d+$/.test(tok) or tok in ['http', 'https']
+
+  # Try to resolve a token as an app path
+  tryResolveApp = (tok) ->
+    looksLikePath = tok.includes('/') or tok.startsWith('.') or isAbsolute(tok) or tok.endsWith('.rip') or tok.endsWith('.ts')
+    return undefined unless looksLikePath
+    try
+      abs = if isAbsolute(tok) then tok else resolve(process.cwd(), tok)
+      if existsSync(abs) then tok else undefined
+    catch
+      undefined
+
+  for i in [2...argv.length]
+    tok = argv[i]
+    unless appPathInput
+      # Handle path@alias syntax
+      if tok.includes('@') and not tok.startsWith('-')
+        [pathPart, aliasesPart] = tok.split('@')
+        maybe = tryResolveApp(pathPart)
+        if maybe
+          appPathInput = maybe
+          appAliases = aliasesPart.split(',').map((a) -> a.trim()).filter((a) -> a)
+          continue
+        # pathPart might be an alias, not a path - check if entry exists in cwd
+        else if not pathPart.includes('/') and not pathPart.startsWith('.')
+          appAliases = [pathPart].concat(aliasesPart.split(',').map((a) -> a.trim()).filter((a) -> a))
+          continue
+
+      # Try as path first
+      maybe = tryResolveApp(tok)
+      if maybe
+        appPathInput = maybe
+        continue
+
+      # If not a flag and not a path, treat as app name/alias
+      unless isFlag(tok)
+        appAliases.push(tok)
+        continue
+
+    rawFlags.add(tok)
+
+  # Default to current directory if no path specified
+  unless appPathInput
+    cwd = process.cwd()
+    indexRip = join(cwd, 'index.rip')
+    indexTs = join(cwd, 'index.ts')
+    if existsSync(indexRip)
+      appPathInput = indexRip
+    else if existsSync(indexTs)
+      appPathInput = indexTs
+    else
+      console.error 'No app entry found. Looked for index.rip or index.ts in current directory.'
+      console.error 'Usage: rip-server [flags] [app-path] [app-name]'
+      console.error '       rip-server [flags] [app-path]@<alias1>,<alias2>,...'
+      process.exit(2)
+
+  getKV = (prefix) ->
+    for f from rawFlags
+      return f.slice(prefix.length) if f.startsWith(prefix)
+    undefined
+
+  has = (name) -> rawFlags.has(name)
+
+  { baseDir, entryPath, appName } = resolveAppEntry(appPathInput)
+  appAliases = [appName] if appAliases.length is 0
+
+  # Parse listener tokens
+  tokens = Array.from(rawFlags)
+  bareIntPort = null
+  hasHttpsKeyword = false
+  httpsPortToken = null
+  hasHttpKeyword = false
+  httpPortToken = null
+
+  for t in tokens
+    if /^\d+$/.test(t)
+      bareIntPort = parseInt(t)
+    else if t is 'https'
+      hasHttpsKeyword = true
+    else if t.startsWith('https:')
+      httpsPortToken = coerceInt(t.slice(6), 0)
+    else if t is 'http'
+      hasHttpKeyword = true
+    else if t.startsWith('http:')
+      httpPortToken = coerceInt(t.slice(5), 0)
+
+  httpsIntent = bareIntPort? or hasHttpsKeyword or httpsPortToken?
+  httpIntent = hasHttpKeyword or httpPortToken?
+  httpsIntent = true unless httpsIntent or httpIntent
+
+  httpPort = if httpIntent then (httpPortToken ?? 0) else 0
+  httpsPortDerived = if not httpIntent then (bareIntPort or httpsPortToken or 0) else null
+
+  socketPrefixOverride = getKV('--socket-prefix=')
+  socketPrefix = socketPrefixOverride or "rip_#{appName}"
+
+  cores = cpus().length
+  workers = parseWorkersToken(getKV('w:'), Math.max(1, Math.floor(cores / 2)))
+
+  policy = parseRestartPolicy(
+    getKV('r:'),
+    coerceInt(process.env.RIP_MAX_REQUESTS, 10000),
+    coerceInt(process.env.RIP_MAX_SECONDS, 3600)
+  )
+
+  reload = not (has('--static') or process.env.RIP_STATIC is '1')
+
+  # Environment mode (--env=production, --env=dev, etc.)
+  envValue = getKV('--env=')
+  if envValue
+    normalized = envValue.toLowerCase()
+    _envOverride = switch normalized
+      when 'prod', 'production' then 'production'
+      when 'dev', 'development' then 'development'
+      else normalized
+
+  # Debug mode
+  _debugMode = has('--debug')
+
+  # Watch mode: -w, --watch, -w=glob, --watch=glob
+  watchGlob = do ->
+    return getKV('-w=') if getKV('-w=')?
+    return getKV('--watch=') if getKV('--watch=')?
+    return '*.rip' if has('-w') or has('--watch')
+    null
+
+  httpsPort = do ->
+    kv = getKV('--https-port=')
+    return coerceInt(kv, 443) if kv?
+    httpsPortDerived
+
+  {
+    appPath: resolve(appPathInput)
+    appBaseDir: baseDir
+    appEntry: entryPath
+    appName
+    appAliases
+    workers
+    maxRequestsPerWorker: policy.maxRequests
+    maxSecondsPerWorker: policy.maxSeconds
+    httpPort
+    httpsPort
+    certPath: getKV('--cert=')
+    keyPath: getKV('--key=')
+    autoTls: has('--auto-tls')
+    hsts: has('--hsts')
+    redirectHttp: not has('--no-redirect-http')
+    reload
+    socketPrefix
+    maxQueue: coerceInt(getKV('--max-queue='), coerceInt(process.env.RIP_MAX_QUEUE, 512))
+    queueTimeoutMs: coerceInt(getKV('--queue-timeout-ms='), coerceInt(process.env.RIP_QUEUE_TIMEOUT_MS, 30000))
+    connectTimeoutMs: coerceInt(getKV('--connect-timeout-ms='), coerceInt(process.env.RIP_CONNECT_TIMEOUT_MS, 2000))
+    readTimeoutMs: coerceInt(getKV('--read-timeout-ms='), coerceInt(process.env.RIP_READ_TIMEOUT_MS, 30000))
+    jsonLogging: has('--json-logging')
+    accessLog: not has('--no-access-log')
+    watchGlob: watchGlob
+  }
+
+# ==============================================================================
+# Worker Mode
+# ==============================================================================
+
+runWorker = ->
+  workerId = parseInt(process.env.WORKER_ID or '0')
+  maxRequests = parseInt(process.env.MAX_REQUESTS or '10000')
+  maxSeconds = parseInt(process.env.MAX_SECONDS or '0')
+  appEntry = process.env.APP_ENTRY
+  socketPath = process.env.SOCKET_PATH
+  socketPrefix = process.env.SOCKET_PREFIX
+  version = parseInt(process.env.RIP_VERSION or '1')
+
+  startedAtMs = Date.now()
+  # Use object to avoid Rip closure scoping issues with mutable variables
+  workerState =
+    appReady: false
+    inflight: false
+    handled: 0
+    handler: null
+
+  getHandler = ->
+    return workerState.handler if workerState.handler
+
+    try
+      mod = import!(appEntry)
+
+      # Ensure module has fully executed by yielding to microtask queue
+      await Promise.resolve()
+
+      fresh = mod.default or mod
+
+      if typeof fresh is 'function'
+        h = fresh
+      else if fresh?.fetch?
+        h = fresh.fetch.bind(fresh)
+      else
+        h = globalThis.__ripHandler  # Handler set by start() in rip-server mode
+
+      unless h
+        try
+          api = import!('@rip-lang/api')
+          h = api?.startHandler?()
+        catch
+          null
+
+      workerState.handler = h if h
+      workerState.handler or (-> new Response('not ready', { status: 503 }))
+    catch e
+      console.error "[worker #{workerId}] import failed:", e
+      workerState.handler or (-> new Response('not ready', { status: 503 }))
+
+  selfJoin = ->
+    try
+      payload = { op: 'join', workerId, pid: process.pid, socket: socketPath, version }
+      body = JSON.stringify(payload)
+      ctl = getControlSocketPath(socketPrefix)
+      fetch!('http://localhost/worker', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl })
+    catch
+      null
+
+  selfQuit = ->
+    try
+      payload = { op: 'quit', workerId }
+      body = JSON.stringify(payload)
+      ctl = getControlSocketPath(socketPrefix)
+      fetch!('http://localhost/worker', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl })
+    catch
+      null
+
+  # Preload handler
+  try
+    initial = getHandler!
+    workerState.appReady = typeof initial is 'function'
+  catch
+    null
+
+  server = Bun.serve
+    unix: socketPath
+    maxRequestBodySize: 100 * 1024 * 1024
+    fetch: (req) ->
+      url = new URL(req.url)
+      return new Response(if workerState.appReady then 'ok' else 'not-ready') if url.pathname is '/ready'
+
+      if workerState.inflight
+        return new Response 'busy',
+          status: 503
+          headers: { 'Rip-Worker-Busy': '1', 'Retry-After': '0', 'Rip-Worker-Id': String(workerId) }
+
+      handlerFn = getHandler!
+      workerState.appReady = typeof handlerFn is 'function'
+      workerState.inflight = true
+
+      try
+        return new Response('not ready', { status: 503 }) unless typeof handlerFn is 'function'
+        res = handlerFn!(req)
+        res = res!(req) if typeof res is 'function'
+        if res instanceof Response then res else new Response(String(res))
+      catch err
+        console.error "[worker #{workerId}] ERROR:", err
+        new Response('error', { status: 500 })
+      finally
+        workerState.inflight = false
+        workerState.handled++
+        exceededReqs = workerState.handled >= maxRequests
+        exceededTime = maxSeconds > 0 and (Date.now() - startedAtMs) / 1000 >= maxSeconds
+        setTimeout (-> process.exit(0)), 10 if exceededReqs or exceededTime
+
+  selfJoin!
+
+  shutdown = ->
+    # Wait for in-flight request to complete (with timeout)
+    start = Date.now()
+    while workerState.inflight and Date.now() - start < SHUTDOWN_TIMEOUT_MS
+      await new Promise (r) -> setTimeout(r, 10)
+    try server.stop() catch then null
+    selfQuit!
+    process.exit(0)
+
+  process.on 'SIGTERM', shutdown
+  process.on 'SIGINT', shutdown
+
+# ==============================================================================
+# Manager Class
+# ==============================================================================
+
+class Manager
+  constructor: (@flags) ->
+    @workers = []
+    @shuttingDown = false
+    @lastCheck = 0
+    @currentMtime = 0
+    @isRolling = false
+    @lastRollAt = 0
+    @nextWorkerId = -1
+    @retiringIds = new Set()
+    @currentVersion = 1
+
+    process.on 'SIGTERM', => @shutdown!
+    process.on 'SIGINT', => @shutdown!
+
+  start: ->
+    @stop!
+    @workers = []
+    for i in [0...@flags.workers]
+      w = @spawnWorker!(@currentVersion)
+      @workers.push(w)
+
+    if @flags.reload
+      @currentMtime = @getEntryMtime()
+      interval = setInterval =>
+        return clearInterval(interval) if @shuttingDown
+        now = Date.now()
+        return if now - @lastCheck < 100
+        @lastCheck = now
+        mt = @getEntryMtime()
+        if mt > @currentMtime
+          return if @isRolling or (now - @lastRollAt) < 200
+          @currentMtime = mt
+          @isRolling = true
+          @lastRollAt = now
+          @rollingRestart!.finally => @isRolling = false
+      , 50
+
+      # Watch files in app directory - touch entry file on changes (opt-in via -w/--watch)
+      if @flags.watchGlob
+        entryFile = @flags.appEntry
+        entryBase = basename(entryFile)
+        watchExt = if @flags.watchGlob.startsWith('*.') then @flags.watchGlob.slice(1) else null
+        try
+          watch @flags.appBaseDir, { recursive: true }, (event, filename) =>
+            return unless filename
+            # Match by extension (e.g., *.rip) or exact glob
+            if watchExt
+              return unless filename.endsWith(watchExt)
+            else
+              return unless filename is @flags.watchGlob or filename.endsWith("/#{@flags.watchGlob}")
+            return if filename is entryBase or filename.endsWith("/#{entryBase}")
+            try
+              now = new Date()
+              utimesSync(entryFile, now, now)
+            catch
+              null
+        catch e
+          console.warn "rip-server: directory watch failed: #{e.message}"
+
+  stop: ->
+    for w in @workers
+      try w.process.kill() catch then null
+      try unlinkSync(w.socketPath) catch then null
+    @workers = []
+
+  spawnWorker: (version) ->
+    workerId = ++@nextWorkerId
+    socketPath = getWorkerSocketPath(@flags.socketPrefix, workerId)
+    try unlinkSync(socketPath) catch then null
+
+    workerEnv = Object.assign {}, process.env,
+      RIP_WORKER_MODE: '1'
+      WORKER_ID: String(workerId)
+      SOCKET_PATH: socketPath
+      SOCKET_PREFIX: @flags.socketPrefix
+      APP_ENTRY: @flags.appEntry
+      MAX_REQUESTS: String(@flags.maxRequestsPerWorker)
+      MAX_SECONDS: String(@flags.maxSecondsPerWorker)
+      RIP_LOG_JSON: if @flags.jsonLogging then '1' else '0'
+      RIP_VERSION: String(version or @currentVersion)
+
+    proc = Bun.spawn ['rip', import.meta.path],
+      stdout: 'inherit'
+      stderr: 'inherit'
+      stdin: 'ignore'
+      cwd: process.cwd()
+      env: workerEnv
+
+    tracked = { id: workerId, process: proc, socketPath, restartCount: 0, backoffMs: 1000, startedAt: nowMs() }
+    @monitor(tracked)
+    tracked
+
+  monitor: (w) ->
+    # Watch for process exit in background (don't block)
+    w.process.exited.then =>
+      return if @shuttingDown
+      return if @retiringIds.has(w.id)
+
+      # Notify server to remove dead worker's socket entry (fire-and-forget)
+      try
+        ctl = getControlSocketPath(@flags.socketPrefix)
+        body = JSON.stringify({ op: 'quit', workerId: w.id })
+        fetch!('http://localhost/worker', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl }).catch(-> null)
+      catch
+        null
+
+      w.restartCount++
+      w.backoffMs = Math.min(w.backoffMs * 2, MAX_BACKOFF_MS)
+      return if w.restartCount > MAX_RESTART_COUNT
+      setTimeout =>
+        idx = @workers.findIndex((x) -> x.id is w.id)
+        @workers[idx] = @spawnWorker(@currentVersion) if idx >= 0
+      , w.backoffMs
+
+  waitWorkerReady: (socketPath, timeoutMs = 5000) ->
+    start = Date.now()
+    while Date.now() - start < timeoutMs
+      try
+        res = fetch!('http://localhost/ready', { unix: socketPath, method: 'GET' })
+        if res.ok
+          txt = res.text!
+          return true if txt is 'ok'
+      catch
+        null
+      await new Promise (r) -> setTimeout(r, 30)
+    false
+
+  rollingRestart: ->
+    olds = [...@workers]
+    pairs = []
+    @currentVersion++
+
+    for oldWorker in olds
+      replacement = @spawnWorker!(@currentVersion)
+      @workers.push(replacement)
+      pairs.push({ old: oldWorker, replacement })
+
+    # Wait for all replacements and check readiness
+    readyResults = Promise.all!(pairs.map((p) => @waitWorkerReady(p.replacement.socketPath, 3000)))
+
+    # Check if all replacements are ready
+    allReady = readyResults.every((ready) -> ready)
+    unless allReady
+      console.error "[manager] Rolling restart aborted: not all new workers ready"
+      # Kill failed replacements and keep old workers
+      for pair, i in pairs
+        unless readyResults[i]
+          try pair.replacement.process.kill() catch then null
+          @workers = @workers.filter((w) -> w.id isnt pair.replacement.id)
+      return
+
+    # All ready - retire old workers
+    for { old } in pairs
+      @retiringIds.add(old.id)
+      try old.process.kill() catch then null
+
+    Promise.all!(pairs.map(({ old }) -> old.process.exited.catch(-> null)))
+
+    # Notify server to remove old workers' socket entries
+    ctl = getControlSocketPath(@flags.socketPrefix)
+    for { old } in pairs
+      try
+        body = JSON.stringify({ op: 'quit', workerId: old.id })
+        fetch!('http://localhost/worker', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl }).catch(-> null)
+      catch
+        null
+
+    retiring = new Set(pairs.map((p) -> p.old.id))
+    @workers = @workers.filter((w) -> not retiring.has(w.id))
+    @retiringIds.delete(id) for id from retiring
+
+  shutdown: ->
+    return if @shuttingDown
+    @shuttingDown = true
+    @stop!
+    process.exit(0)
+
+  getEntryMtime: ->
+    try statSync(@flags.appEntry).mtimeMs catch then 0
+
+# ==============================================================================
+# Server Class
+# ==============================================================================
+
+class Server
+  constructor: (@flags) ->
+    @server = null
+    @httpsServer = null
+    @control = null
+    @sockets = []
+    @availableWorkers = []
+    @inflightTotal = 0
+    @queue = []
+    @startedAt = nowMs()
+    @newestVersion = null
+    @httpsActive = false
+    @hostRegistry = new Set(['localhost', '127.0.0.1', 'rip.local'])
+    @mdnsProcesses = new Map()
+    try
+      pkg = JSON.parse(readFileSync(import.meta.dir + '/package.json', 'utf8'))
+      @serverVersion = pkg.version
+    catch
+      @serverVersion = 'unknown'
+
+    for alias in @flags.appAliases
+      host = if alias.includes('.') then alias else "#{alias}.local"
+      @hostRegistry.add(host)
+
+  start: ->
+    httpOnly = @flags.httpsPort is null
+    fetchFn = @fetch.bind(@)
+
+    # Helper to start server, incrementing port if needed
+    startOnPort = (p, opts = {}) =>
+      port = p
+      while true
+        try
+          return Bun.serve(Object.assign({ port, idleTimeout: 8, fetch: fetchFn }, opts))
+        catch e
+          throw e unless e?.code is 'EADDRINUSE'
+          port++
+
+    if httpOnly
+      if @flags.httpPort is 0
+        try
+          @server = Bun.serve({ port: 80, idleTimeout: 8, fetch: fetchFn })
+        catch e
+          throw e unless e?.code in ['EADDRINUSE', 'EACCES']
+          @server = startOnPort(5700)
+      else
+        @server = startOnPort(@flags.httpPort)
+      @flags.httpPort = @server.port
+    else
+      tls = @loadTlsMaterial!
+
+      if not @flags.httpsPort or @flags.httpsPort is 0
+        try
+          @httpsServer = Bun.serve({ port: 443, idleTimeout: 8, tls, fetch: fetchFn })
+        catch e
+          throw e unless e?.code in ['EADDRINUSE', 'EACCES']
+          @httpsServer = startOnPort(5700, { tls })
+      else
+        @httpsServer = startOnPort(@flags.httpsPort, { tls })
+
+      httpsPort = @httpsServer.port
+      @flags.httpsPort = httpsPort
+      @httpsActive = true
+
+      if @flags.redirectHttp
+        try
+          @server = Bun.serve
+            port: 80
+            idleTimeout: 8
+            fetch: (req) ->
+              url = new URL(req.url)
+              loc = "https://#{url.hostname}:#{httpsPort}#{url.pathname}#{url.search}"
+              new Response(null, { status: 301, headers: { Location: loc } })
+        catch
+          console.warn 'Warn: could not bind port 80 for HTTP→HTTPS redirect'
+
+      @flags.httpPort = if @server then @server.port else 0
+
+    @startControl!
+
+  stop: ->
+    try @server?.stop() catch then null
+    try @httpsServer?.stop() catch then null
+    try @control?.stop() catch then null
+
+    for [host, proc] from @mdnsProcesses
+      try
+        proc.kill()
+        console.log "rip-server: stopped advertising #{host} via mDNS"
+      catch
+        null
+    @mdnsProcesses.clear()
+
+  fetch: (req) ->
+    url = new URL(req.url)
+    host = url.hostname.toLowerCase()
+
+    # Dashboard for rip.local
+    if host is 'rip.local' and url.pathname in ['/', '']
+      return new Response Bun.file(import.meta.dir + '/server.html')
+
+    return @status() if url.pathname is '/status'
+
+    if url.pathname is '/server'
+      headers = new Headers({ 'content-type': 'text/plain' })
+      @maybeAddSecurityHeaders(headers)
+      return new Response('ok', { headers })
+
+    # Host-based routing guard
+    if @hostRegistry.size > 0 and not @hostRegistry.has(host)
+      return new Response('Host not found', { status: 404 })
+
+    # Fast path: try available worker
+    if @inflightTotal < Math.max(1, @sockets.length)
+      sock = @getNextAvailableSocket()
+      if sock
+        @inflightTotal++
+        try
+          return @forwardToWorker!(req, sock)
+        finally
+          @inflightTotal--
+          setImmediate => @drainQueue()
+
+    if @queue.length >= @flags.maxQueue
+      return new Response('Server busy', { status: 503, headers: { 'Retry-After': '1' } })
+
+    new Promise (resolve, reject) =>
+      @queue.push({ req, resolve, reject, enqueuedAt: nowMs() })
+
+  status: ->
+    uptime = Math.floor((nowMs() - @startedAt) / 1000)
+    healthy = @sockets.length > 0
+    hosts = Array.from(@hostRegistry.values())
+    version = @serverVersion
+    body = JSON.stringify
+      status: if healthy then 'healthy' else 'degraded'
+      version: version
+      app: @flags.appName
+      workers: @sockets.length
+      ports: { http: @flags.httpPort or undefined, https: @flags.httpsPort or undefined }
+      uptime: uptime
+      hosts: hosts
+    headers = new Headers({ 'content-type': 'application/json', 'cache-control': 'no-cache' })
+    @maybeAddSecurityHeaders(headers)
+    new Response(body, { headers })
+
+  getNextAvailableSocket: ->
+    while @availableWorkers.length > 0
+      worker = @availableWorkers.pop()
+      return worker if worker.inflight is 0 and @isCurrentVersion(worker)
+    null
+
+  isCurrentVersion: (worker) ->
+    @newestVersion is null or worker.version is null or worker.version >= @newestVersion
+
+  releaseWorker: (worker) ->
+    return unless worker
+    return unless @sockets.some((s) -> s.socket is worker.socket)  # Validate still in pool
+    worker.inflight = 0
+    if @isCurrentVersion(worker)
+      @availableWorkers.push(worker)
+      # Force array mutation to be visible (workaround for timing issue)
+      @availableWorkers.length
+
+  logAccess: (req, res, totalSeconds, workerSeconds) ->
+    if @flags.jsonLogging
+      logAccessJson(@flags.appName, req, res, totalSeconds, workerSeconds)
+    else if @flags.accessLog
+      logAccessHuman(@flags.appName, req, res, totalSeconds, workerSeconds)
+
+  buildResponse: (res, req, start, workerSeconds) ->
+    headers = stripInternalHeaders(res.headers)
+    headers.delete('date')
+    @maybeAddSecurityHeaders(headers)
+    @logAccess(req, res, (performance.now() - start) / 1000, workerSeconds)
+    new Response(res.body, { status: res.status, statusText: res.statusText, headers })
+
+  forwardToWorker: (req, socket) ->
+    start = performance.now()
+    res = null
+    workerSeconds = 0
+    released = false
+
+    try
+      socket.inflight = 1
+      t0 = performance.now()
+      res = @forwardOnce!(req, socket.socket)
+      workerSeconds = (performance.now() - t0) / 1000
+
+      # Only retry bodyless requests (body stream can't be reused)
+      canRetry = req.method in ['GET', 'HEAD', 'OPTIONS', 'DELETE']
+      if canRetry and res.status is 503 and res.headers.get('Rip-Worker-Busy') is '1'
+        retry = @getNextAvailableSocket()
+        if retry and retry isnt socket
+          @releaseWorker(socket)
+          released = true
+          retry.inflight = 1
+          t1 = performance.now()
+          res = @forwardOnce!(req, retry.socket)
+          workerSeconds = (performance.now() - t1) / 1000
+          @releaseWorker(retry)
+          return @buildResponse(res, req, start, workerSeconds)
+    catch err
+      console.error "[server] forwardToWorker error:", err.message or err if isDebug()
+      @sockets = @sockets.filter((x) -> x.socket isnt socket.socket)
+      @availableWorkers = @availableWorkers.filter((x) -> x.socket isnt socket.socket)
+      released = true
+      return new Response('Service unavailable', { status: 503, headers: { 'Retry-After': '1' } })
+    finally
+      @releaseWorker(socket) unless released
+
+    return new Response('Service unavailable', { status: 503, headers: { 'Retry-After': '1' } }) unless res
+    @buildResponse(res, req, start, workerSeconds)
+
+  forwardOnce: (req, socketPath) ->
+    inUrl = new URL(req.url)
+    forwardUrl = "http://localhost#{inUrl.pathname}#{inUrl.search}"
+    readTimeoutMs = @flags.readTimeoutMs
+
+    try
+      fetchPromise = fetch(forwardUrl, { method: req.method, headers: req.headers, body: req.body, unix: socketPath })
+      readGuard = new Promise (_, rej) ->
+        setTimeout (-> rej(new Error('Upstream timeout'))), readTimeoutMs
+      res = Promise.race!([fetchPromise, readGuard])
+      res
+    catch err
+      if err.message is 'Upstream timeout'
+        return new Response('Gateway timeout', { status: 504 })
+      throw err
+
+  drainQueue: ->
+    while @inflightTotal < Math.max(1, @sockets.length) and @availableWorkers.length > 0
+      job = @queue.shift()
+      break unless job
+      if nowMs() - job.enqueuedAt > @flags.queueTimeoutMs
+        job.resolve(new Response('Queue timeout', { status: 504 }))
+        continue
+      @inflightTotal++
+      worker = @getNextAvailableSocket()
+      unless worker
+        @inflightTotal--
+        break
+      @forwardToWorker(job.req, worker)
+        .then((r) -> job.resolve(r))
+        .catch((e) -> job.resolve(if e instanceof Response then e else new Response('Internal error', { status: 500 })))
+        .finally =>
+          @inflightTotal--
+          setImmediate => @drainQueue()
+
+  startControl: ->
+    ctlPath = getControlSocketPath(@flags.socketPrefix)
+    try unlinkSync(ctlPath) catch then null
+    @control = Bun.serve({ unix: ctlPath, fetch: @controlFetch.bind(@) })
+
+    @startMdnsAdvertisement('rip.local')
+    for alias in @flags.appAliases
+      host = if alias.includes('.') then alias else "#{alias}.local"
+      @startMdnsAdvertisement(host)
+
+  controlFetch: (req) ->
+    url = new URL(req.url)
+
+    if req.method is 'POST' and url.pathname is '/worker'
+      try
+        j = req.json!
+        if j?.op is 'join' and typeof j.socket is 'string' and typeof j.workerId is 'number'
+          version = if typeof j.version is 'number' then j.version else null
+          exists = @sockets.find((x) -> x.socket is j.socket)
+          unless exists
+            worker = { socket: j.socket, inflight: 0, version, workerId: j.workerId }
+            @sockets.push(worker)
+            @availableWorkers.push(worker)
+          @newestVersion = if @newestVersion is null then version else Math.max(@newestVersion, version) if version?
+          return new Response(JSON.stringify({ ok: true }), { headers: { 'content-type': 'application/json' } })
+
+        if j?.op is 'quit' and typeof j.workerId is 'number'
+          @sockets = @sockets.filter((x) -> x.workerId isnt j.workerId)
+          @availableWorkers = @availableWorkers.filter((x) -> x.workerId isnt j.workerId)
+          return new Response(JSON.stringify({ ok: true }), { headers: { 'content-type': 'application/json' } })
+      catch
+        null
+      return new Response(JSON.stringify({ ok: false }), { status: 400, headers: { 'content-type': 'application/json' } })
+
+    if url.pathname is '/registry' and req.method is 'GET'
+      return new Response(JSON.stringify({ ok: true, hosts: Array.from(@hostRegistry.values()) }), { headers: { 'content-type': 'application/json' } })
+
+    new Response('not-found', { status: 404 })
+
+  maybeAddSecurityHeaders: (headers) ->
+    if @httpsActive and @flags.hsts
+      headers.set('strict-transport-security', 'max-age=31536000; includeSubDomains') unless headers.has('strict-transport-security')
+
+  loadTlsMaterial: ->
+    # Explicit cert/key paths
+    if @flags.certPath and @flags.keyPath
+      try
+        cert = readFileSync(@flags.certPath, 'utf8')
+        key = readFileSync(@flags.keyPath, 'utf8')
+        @printCertSummary(cert)
+        return { cert, key }
+      catch
+        console.error 'Failed to read TLS cert/key from provided paths. Use http or fix paths.'
+        process.exit(2)
+
+    # Ensure certs directory exists
+    certsDir = join(homedir(), '.rip', 'certs')
+    try mkdirSync(certsDir, { recursive: true }) catch then null
+
+    # Try mkcert first (trusted local CA)
+    if @flags.autoTls
+      certPath = join(certsDir, 'localhost.pem')
+      keyPath = join(certsDir, 'localhost-key.pem')
+      unless existsSync(certPath) and existsSync(keyPath)
+        try
+          Bun.spawnSync(['mkcert', '-install'])
+          Bun.spawnSync(['mkcert', '-key-file', keyPath, '-cert-file', certPath, 'localhost', '127.0.0.1', '::1'])
+        catch
+          null  # fall through to self-signed
+      if existsSync(certPath) and existsSync(keyPath)
+        cert = readFileSync(certPath, 'utf8')
+        key = readFileSync(keyPath, 'utf8')
+        @printCertSummary(cert)
+        return { cert, key }
+
+    # Self-signed via openssl
+    certPath = join(certsDir, 'selfsigned-localhost.pem')
+    keyPath = join(certsDir, 'selfsigned-localhost-key.pem')
+    unless existsSync(certPath) and existsSync(keyPath)
+      try
+        Bun.spawnSync(['openssl', 'req', '-x509', '-nodes', '-newkey', 'rsa:2048', '-keyout', keyPath, '-out', certPath, '-subj', '/CN=localhost', '-days', '3650'])
+      catch
+        console.error 'TLS required but could not provision a certificate (mkcert/openssl missing). Use http or provide --cert/--key.'
+        process.exit(2)
+    try
+      cert = readFileSync(certPath, 'utf8')
+      key = readFileSync(keyPath, 'utf8')
+      @printCertSummary(cert)
+      return { cert, key }
+    catch
+      console.error 'Failed to read generated self-signed cert/key from ~/.rip/certs'
+      process.exit(2)
+
+  printCertSummary: (certPem) ->
+    try
+      x = new X509Certificate(certPem)
+      subject = x.subject.split(/,/)[0]?.trim() or x.subject
+      issuer = x.issuer.split(/,/)[0]?.trim() or x.issuer
+      exp = new Date(x.validTo)
+      console.log "rip-server: tls cert #{subject} issued by #{issuer} expires #{exp.toISOString()}"
+    catch
+      null
+
+  getLanIP: ->
+    try
+      nets = networkInterfaces()
+      for name, addrs of nets
+        for addr in addrs
+          continue if addr.internal or addr.family isnt 'IPv4'
+          continue if addr.address.startsWith('169.254.')  # Link-local
+          return addr.address
+    catch
+      null
+    null
+
+  startMdnsAdvertisement: (host) ->
+    return unless host.endsWith('.local')
+    return if @mdnsProcesses.has(host)
+
+    lanIP = @getLanIP()
+    unless lanIP
+      console.log "rip-server: unable to detect LAN IP for mDNS advertisement of #{host}"
+      return
+
+    port = @flags.httpsPort or @flags.httpPort or 80
+    protocol = if @flags.httpsPort then 'https' else 'http'
+    serviceType = if @flags.httpsPort then '_https._tcp' else '_http._tcp'
+    serviceName = host.replace('.local', '')
+
+    try
+      proc = Bun.spawn [
+        'dns-sd', '-P'
+        serviceName
+        serviceType
+        'local'
+        String(port)
+        host
+        lanIP
+      ],
+        stdout: 'ignore'
+        stderr: 'ignore'
+
+      @mdnsProcesses.set(host, proc)
+      console.log "rip-server: #{protocol}://#{host}:#{port}"
+    catch e
+      console.error "rip-server: failed to advertise #{host} via mDNS:", e.message
+
+
+# ==============================================================================
+# Main Entry
+# ==============================================================================
+
+main = ->
+  # Version flag
+  if '--version' in process.argv or '-v' in process.argv
+    try
+      pkg = JSON.parse(readFileSync(import.meta.dir + '/package.json', 'utf8'))
+      console.log "rip-server v#{pkg.version}"
+    catch
+      console.log 'rip-server (version unknown)'
+    return
+
+  # Help flag
+  if '--help' in process.argv or '-h' in process.argv
+    console.log """
+      rip-server - Pure Rip application server
+
+      Usage:
+        rip-server [options] [app-path] [app-name]
+        rip-server [options] [app-path]@<alias1>,<alias2>,...
+
+      Options:
+        -h, --help              Show this help
+        -v, --version           Show version
+        -w, --watch             Watch *.rip files for changes (hot reload)
+        -w=<glob>               Watch custom glob pattern (e.g., -w=*.ts)
+        --static                Disable hot reload
+        --env=<mode>            Set environment (dev, production)
+        --debug                 Enable debug logging
+
+      Network:
+        http                    HTTP only (no TLS)
+        https                   HTTPS with auto TLS (default)
+        <port>                  Listen on specific port
+        --cert=<path>           TLS certificate file
+        --key=<path>            TLS key file
+        --auto-tls              Generate TLS cert via mkcert
+        --hsts                  Enable HSTS header
+        --no-redirect-http      Don't redirect HTTP to HTTPS
+
+      Workers:
+        w:<n>                   Number of workers (default: cores/2)
+        w:auto                  One worker per core
+        r:<n>,<s>s              Restart policy: max requests, max seconds
+
+      Examples:
+        rip-server              Start with ./index.rip
+        rip-server -w           Start with file watching
+        rip-server myapp        Start with app name "myapp"
+        rip-server api -w 8080  Watch mode on port 8080
+    """
+    return
+
+  # Helper functions for subcommands
+  getKV = (prefix) ->
+    for tok in process.argv
+      return tok.slice(prefix.length) if tok.startsWith(prefix)
+    undefined
+
+  findAppPathToken = ->
+    for i in [2...process.argv.length]
+      tok = process.argv[i]
+      pathPart = if tok.includes('@') then tok.split('@')[0] else tok
+      looksLikePath = pathPart.includes('/') or pathPart.startsWith('.') or pathPart.endsWith('.rip') or pathPart.endsWith('.ts')
+      try
+        return pathPart if looksLikePath and existsSync(if isAbsolute(pathPart) then pathPart else resolve(process.cwd(), pathPart))
+      catch
+        null
+    undefined
+
+  computeSocketPrefix = ->
+    override = getKV('--socket-prefix=')
+    return override if override
+    appTok = findAppPathToken()
+    if appTok
+      try
+        { appName } = resolveAppEntry(appTok)
+        return "rip_#{appName}"
+      catch
+        null
+    'rip_server'
+
+  # Subcommand: stop
+  if 'stop' in process.argv
+    prefix = computeSocketPrefix()
+    pidFile = getPidFilePath(prefix)
+    try
+      if existsSync(pidFile)
+        pid = parseInt(readFileSync(pidFile, 'utf8').trim())
+        process.kill(pid, 'SIGTERM')
+        console.log "rip-server: sent SIGTERM to process #{pid}"
+      else
+        console.log "rip-server: no PID file found at #{pidFile}, trying pkill..."
+        Bun.spawnSync(['pkill', '-f', import.meta.path])
+    catch e
+      console.error "rip-server: stop failed: #{e.message}"
+    return
+
+  # Subcommand: list
+  if 'list' in process.argv
+    controlUnix = getControlSocketPath(computeSocketPrefix())
+    try
+      res = fetch!('http://localhost/registry', { unix: controlUnix, method: 'GET' })
+      throw new Error("list failed: #{res.status}") unless res.ok
+      j = res.json!
+      hosts = if Array.isArray(j?.hosts) then j.hosts else []
+      console.log if hosts.length then hosts.join('\n') else '(no hosts)'
+    catch e
+      console.error "list command failed: #{e?.message or e}"
+      process.exit(1)
+    return
+
+  # Normal startup
+  flags = parseFlags(process.argv)
+  pidFile = getPidFilePath(flags.socketPrefix)
+  writeFileSync(pidFile, String(process.pid))
+
+  svr = new Server(flags)
+  mgr = new Manager(flags)
+
+  cleanup = ->
+    console.log 'rip-server: shutting down...'
+    try unlinkSync(pidFile) catch then null
+    svr.stop()
+    mgr.stop!
+    process.exit(0)
+
+  process.on 'SIGTERM', cleanup
+  process.on 'SIGINT', cleanup
+  process.on 'uncaughtException', (err) ->
+    console.error 'rip-server: uncaught exception:', err
+    cleanup()
+  process.on 'unhandledRejection', (err) ->
+    console.error 'rip-server: unhandled rejection:', err
+    cleanup()
+
+  svr.start!
+  mgr.start!
+
+  httpOnly = flags.httpsPort is null
+  url = if httpOnly then "http://localhost:#{flags.httpPort}/server" else "https://localhost:#{flags.httpsPort}/server"
+  console.log "rip-server: app=#{flags.appName} workers=#{flags.workers} url=#{url}"
+
+# ==============================================================================
+# Entry Point
+# ==============================================================================
+
+if process.env.RIP_WORKER_MODE
+  runWorker()
+else
+  main!

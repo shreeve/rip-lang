@@ -1,0 +1,80 @@
+# Test: Modules (5 node types)
+# Tests "import", "export", "export-default", "export-all", "export-from" node types
+
+# ============================================================================
+# Import: "import"
+# ============================================================================
+
+# Basic import
+code "import default", 'import React from "react"', "import React from 'react';"
+code "import named", 'import { useState } from "react"', "import { useState } from 'react';"
+code "import namespace", 'import * as Utils from "./utils"', "import * as Utils from './utils.js';"
+
+# Auto .js extension for local paths
+code "import auto .js", 'import foo from "./foo"', "import foo from './foo.js';"
+code "import preserve ext", 'import foo from "./foo.coffee"', "import foo from './foo.coffee';"
+
+# JSON import assertions
+code "import json", 'import data from "./config.json"', "import data from './config.json' with { type: 'json' };"
+
+# Multiple imports in one file (import hoisting and path fixing)
+code "multiple imports", "import React from \"react\"\nimport { useState } from \"react\"\nimport * as Utils from \"./utils\"\n\nx = 42\nconsole.log x", "import React from 'react';\nimport { useState } from 'react';\nimport * as Utils from './utils.js';\n\nlet x;\nx = 42;\nconsole.log(x);"
+
+# Mixed imports (default + named/namespace)
+code "import default and named", 'import React, { useState } from "react"', "import React, { useState } from 'react';"
+code "import default and namespace", 'import React, * as ReactDOM from "react-dom"', "import React, * as ReactDOM from 'react-dom';"
+
+# Import aliases
+code "import alias", 'import { useState as useS } from "react"', "import { useState as useS } from 'react';"
+code "import multiple aliases", 'import { useState as useS, useEffect as useE } from "react"', "import { useState as useS, useEffect as useE } from 'react';"
+
+# ============================================================================
+# Export: "export"
+# ============================================================================
+
+# Export variable
+code "export var", "export x = 42", "export const x = 42;"
+
+# Export function
+code "export function", "export def add(a, b)\n  a + b", "export function add(a, b) {\n  return (a + b);\n};"
+
+# Export class
+code "export class", "export class Animal\n  constructor: (@name) ->", "export class Animal {\n  constructor(name) {\n    this.name = name;\n  }\n};"
+
+# Named exports
+code "export named", "export { x, y }", "export { x, y };"
+
+# ============================================================================
+# Export Default: "export-default"
+# ============================================================================
+
+# Export default value
+code "export default value", "export default 42", "export default 42;"
+
+# Export default function
+code "export default function", "export default def greet(name)\n  name", "export default function greet(name) {\n  return name;\n};"
+
+# Export default class
+code "export default class", "export default class Animal", "export default class Animal {};"
+
+# ============================================================================
+# Export All: "export-all"
+# ============================================================================
+
+# Export all from module
+code "export all", 'export * from "./utils"', "export * from './utils.js';"
+code "export all json", 'export * from "./data.json"', "export * from './data.json' with { type: 'json' };"
+
+# ============================================================================
+# Export From: "export-from"
+# ============================================================================
+
+# Export named from module
+code "export from", 'export { add, multiply } from "./math"', "export { add, multiply } from './math.js';"
+
+# ============================================================================
+# Meta Properties (ES6)
+# ============================================================================
+
+# import.meta (ES6 module meta property)
+code "import.meta.url", 'x = import.meta.url', 'let x;\nx = import.meta.url'

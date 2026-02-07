@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 📚 Documentation
+    url: https://github.com/shreeve/rip-lang/tree/main/docs
+    about: Read the comprehensive documentation (CODEGEN.md, COMPREHENSIONS.md, SOLAR.md, etc.)
+  - name: 💬 Discussions
+    url: https://github.com/shreeve/rip-lang/discussions
+    about: Ask questions, share ideas, and discuss Rip with the community

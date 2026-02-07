@@ -1,0 +1,18 @@
+---
+description: Pause and reflect before finalizing work
+alwaysApply: true
+---
+
+# Reflect Before Finalizing
+
+Before finalizing your work, take a moment to step back.
+
+Review what you've built. Is the code correct, clear, consistent, concise, and efficient? Read through the changes as if seeing them for the first time.
+
+Question your approach. Now that you've implemented this, is there anything you'd do differently? Are the data structures right? Is information flowing through the system in the most natural way? If you were starting over with what you know now, would you make the same choices?
+
+Look for improvements. If something feels off, fix it now rather than noting it for later. Small refactors compound—clean code invites more clean code.
+
+Gather more context if you're uncertain. Pull up related code. Trace through the system. Sometimes the right answer becomes obvious once you see more of the picture.
+
+Do the work, not the meta-work. Improve the code itself. Don't write reflection documents.

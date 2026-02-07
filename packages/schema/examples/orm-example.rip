@@ -1,0 +1,135 @@
+# ==============================================================================
+# ORM Example — Rich Domain Models
+# ==============================================================================
+#
+# Demonstrates:
+#   - Class-based models with inheritance
+#   - Schema definition with constraints
+#   - Instance methods with business logic
+#   - Computed properties (reactive)
+#   - Property-style attribute access
+#   - Query API
+#
+# Run: rip orm-example.rip
+# Requires: rip-db running on localhost:4000 with labs.duckdb
+#
+# ==============================================================================
+
+import { Model, makeCallable, connect } from '@rip-lang/schema/orm'
+
+connect 'http://localhost:4000'
+
+# ==============================================================================
+# Model Definition — Better than Rails!
+# ==============================================================================
+#
+# In Rails, schema is scattered across:
+#   - migrations (column types)
+#   - validations (required, format)
+#   - database (constraints)
+#
+# In Rip, it's all in one place:
+
+class UserModel extends Model
+  @table    = 'users'
+  @database = 'labs'
+
+  # Schema: types, constraints, defaults, column mapping — all here
+  @schema
+    id:    { type: 'int', primary: true }
+    name:  { type: 'string', required: true, min: 1, max: 100 }
+    email: { type: 'email', required: true, unique: true }
+    score: { type: 'float' }
+    # hairColor: { type: 'string', enum: ['blonde','brown','black','red'], column: 'hair_color' }
+    # active:    { type: 'bool', default: true }
+
+  # ---------------------------------------------------------------------------
+  # Instance methods — Rich business logic on records
+  # ---------------------------------------------------------------------------
+
+  createAccessCode: (secs = 3600) ->
+    # Generate 5-char code from safe alphabet (no I, L, O)
+    syms = 'ABCDEFGHJKMNPQRSTUVWXYZ'.split('')
+    code = [1..5].map(-> syms[Math.floor(Math.random() * syms.length)]).join('')
+    @code = code
+    @codeExpiresAt = Date.now() + secs * 1000
+    code
+
+  greet: ->
+    "Hello, #{@name}!"
+
+  # ---------------------------------------------------------------------------
+  # Computed properties — Reactive getters (better than Ruby!)
+  # ---------------------------------------------------------------------------
+  #
+  # In Ruby:
+  #   def identifier
+  #     "#{name} (##{id})"
+  #   end
+  #
+  # In Rip, computed fields auto-update when dependencies change:
+
+  @computed
+    identifier: -> "#{@name} (##{@id})"
+    isHighScorer: -> @score? and @score > 90
+    # isExpired: -> @codeExpiresAt? and Date.now() > @codeExpiresAt
+
+# Make callable: User(25) → User.find(25)
+User = makeCallable UserModel
+
+# ==============================================================================
+# Query Examples
+# ==============================================================================
+
+console.log '=== Find by ID (callable style) ==='
+user = User! 1
+console.log user?.toJSON()
+console.log "Greeting: #{user?.greet()}"
+
+console.log '\n=== Find by ID (method style) ==='
+user = User.find! 2
+console.log user?.toJSON()
+
+console.log '\n=== Computed properties ==='
+user = User! 1
+console.log "identifier: #{user?.identifier}"
+console.log "isHighScorer: #{user?.isHighScorer}"
+
+console.log '\n=== All users ==='
+users = User.all!()
+for u in users
+  console.log "  #{u.identifier} — score=#{u.score} high=#{u.isHighScorer}"
+
+console.log '\n=== Where (object style) ==='
+users = User.where!(name: 'Alice').all!()
+console.log users.map (u) -> u.toJSON()
+
+console.log '\n=== Where (SQL style) ==='
+users = User.where!('score > ?', 90).all!()
+console.log "High scorers:", users.map (u) -> u.identifier
+
+console.log '\n=== Chainable query ==='
+users = User.where!('score > ?', 80).orderBy!('score', 'DESC').limit!(2).all!()
+console.log "Top 2:", users.map (u) -> "#{u.name}: #{u.score}"
+
+console.log '\n=== Count ==='
+console.log "Total users: #{User.count!()}"
+
+console.log '\n=== Instance method ==='
+user = User! 1
+code = user.createAccessCode(60)
+console.log "Access code for #{user.name}: #{code}"
+
+console.log '\n=== Property mutation + dirty tracking ==='
+user = User! 1
+console.log "Before: #{user.name}, dirty=#{user.$dirty}"
+user.name = "Alice Updated"
+console.log "After: #{user.name}, dirty=#{user.$dirty}, changed=#{user.$changed}"
+# user.save!()  # Would persist the change
+
+console.log '\n=== Validation ==='
+badUser = new UserModel { email: 'not-valid' }
+errors = badUser.$validate()
+console.log "Validation errors:", errors
+
+console.log '\n=== Done! ==='

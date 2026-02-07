@@ -1,0 +1,202 @@
+# ==============================================================================
+# csv tests — parsing and writing
+# ==============================================================================
+
+import { CSV } from '../csv.rip'
+
+pass = 0
+fail = 0
+
+def test(name, fn)
+  try
+    fn()
+    pass++
+    console.log "  ✓ #{name}"
+  catch e
+    fail++
+    console.log "  ✗ #{name}: #{e.message}"
+
+def eq(a, b)
+  ja = JSON.stringify(a)
+  jb = JSON.stringify(b)
+  unless ja is jb
+    throw new Error "expected #{jb}, got #{ja}"
+
+# ==[ Reading: Basic ]==
+
+console.log "\nReading — basic"
+
+test "simple CSV", ->
+  eq CSV.read("a,b,c\n1,2,3\n"), [['a','b','c'],['1','2','3']]
+
+test "no trailing newline", ->
+  eq CSV.read("a,b\n1,2"), [['a','b'],['1','2']]
+
+test "single column", ->
+  eq CSV.read("a\nb\nc\n"), [['a'],['b'],['c']]
+
+test "empty string", ->
+  eq CSV.read(""), []
+
+test "empty fields", ->
+  eq CSV.read("a,,c\n,,\n"), [['a','','c'],['','','']]
+
+test "tab delimiter", ->
+  eq CSV.read("a\tb\tc\n1\t2\t3\n"), [['a','b','c'],['1','2','3']]
+
+test "pipe delimiter", ->
+  eq CSV.read("a|b|c\n1|2|3\n"), [['a','b','c'],['1','2','3']]
+
+test "semicolon delimiter", ->
+  eq CSV.read("a;b;c\n1;2;3\n"), [['a','b','c'],['1','2','3']]
+
+test "explicit separator", ->
+  eq CSV.read("a:b:c\n1:2:3\n", sep: ':'), [['a','b','c'],['1','2','3']]
+
+# ==[ Reading: Quoted ]==
+
+console.log "\nReading — quoted fields"
+
+test "simple quoted fields", ->
+  eq CSV.read('"a","b","c"\n"1","2","3"\n'), [['a','b','c'],['1','2','3']]
+
+test "quoted with commas", ->
+  eq CSV.read('"a,1","b,2"\n'), [['a,1','b,2']]
+
+test "quoted with newlines", ->
+  eq CSV.read('"line1\nline2",b\n'), [['line1\nline2','b']]
+
+test "escaped quotes (doubled)", ->
+  eq CSV.read('"say ""hello""",b\n'), [['say "hello"','b']]
+
+test "mixed quoted and unquoted", ->
+  eq CSV.read('a,"b,c",d\n'), [['a','b,c','d']]
+
+# ==[ Reading: Headers ]==
+
+console.log "\nReading — headers mode"
+
+test "headers: true", ->
+  rows = CSV.read "name,age\nAlice,30\nBob,25\n", headers: true
+  eq rows, [{name: 'Alice', age: '30'}, {name: 'Bob', age: '25'}]
+
+test "headers with quoted fields", ->
+  rows = CSV.read '"name","age"\n"Alice","30"\n', headers: true
+  eq rows, [{name: 'Alice', age: '30'}]
+
+# ==[ Reading: Options ]==
+
+console.log "\nReading — options"
+
+test "strip whitespace", ->
+  eq CSV.read(" a , b \n 1 , 2 \n", strip: true), [['a','b'],['1','2']]
+
+test "skip empty lines", ->
+  eq CSV.read("a,b\n\n1,2\n\n"), [['a','b'],['1','2']]
+
+test "keep empty lines", ->
+  rows = CSV.read "a,b\n\n1,2\n", skipBlanks: false
+  eq rows.length, 3
+
+test "comment lines", ->
+  eq CSV.read("a,b\n# skip me\n1,2\n", comments: '#'), [['a','b'],['1','2']]
+
+test "each callback", ->
+  collected = []
+  n = CSV.read "a,b\n1,2\n3,4\n", each: (row) -> collected.push row
+  eq n, 3
+  eq collected, [['a','b'],['1','2'],['3','4']]
+
+test "each with early halt", ->
+  collected = []
+  n = CSV.read "a\n1\n2\n3\n", each: (row) ->
+    collected.push row
+    if row[0] is '1'
+      return false
+  eq n, 2
+  eq collected, [['a'],['1']]
+
+# ==[ Reading: Relax mode ]==
+
+console.log "\nReading — relax mode"
+
+test "stray quote in relax mode", ->
+  rows = CSV.read 'a,"bad"quote",b\n', relax: true
+  eq rows, [['a', 'bad"quote', 'b']]
+
+# ==[ Reading: Excel mode ]==
+
+console.log "\nReading — excel mode"
+
+test "excel literal =\"01\"", ->
+  rows = CSV.read '="01",b\n', excel: true
+  eq rows, [['01','b']]
+
+# ==[ Reading: BOM ]==
+
+console.log "\nReading — BOM"
+
+test "strip BOM", ->
+  eq CSV.read("\uFEFFa,b\n1,2\n"), [['a','b'],['1','2']]
+
+# ==[ Reading: Mixed line endings ]==
+
+console.log "\nReading — line endings"
+
+test "CRLF line endings", ->
+  eq CSV.read("a,b\r\n1,2\r\n"), [['a','b'],['1','2']]
+
+test "CR only line endings", ->
+  eq CSV.read("a,b\r1,2\r"), [['a','b'],['1','2']]
+
+# ==[ Writing ]==
+
+console.log "\nWriting — basic"
+
+test "simple write", ->
+  eq CSV.write([['a','b'],['1','2']]), "a,b\n1,2\n"
+
+test "write with quoting", ->
+  result = CSV.write([['a,b','c']])
+  eq result, '"a,b",c\n'
+
+test "write with escaped quotes", ->
+  result = CSV.write([['say "hi"','ok']])
+  eq result, '"say ""hi""",ok\n'
+
+test "write full mode", ->
+  result = CSV.write([['a','b']], mode: 'full')
+  eq result, '"a","b"\n'
+
+test "write with tab separator", ->
+  result = CSV.write([['a','b']], sep: '\t')
+  eq result, "a\tb\n"
+
+test "write excel mode", ->
+  result = CSV.write([['0123','hello']], excel: true)
+  eq result, '="0123",hello\n'
+
+test "write drop trailing empties", ->
+  result = CSV.write([['a','','']], drop: true)
+  eq result, "a\n"
+
+test "formatRow convenience", ->
+  eq CSV.formatRow(['a','b,c','d']), 'a,"b,c",d'
+
+# ==[ Writer instance ]==
+
+console.log "\nWriting — writer instance"
+
+test "reusable writer", ->
+  w = CSV.writer(sep: '\t')
+  eq w.row(['a','b']), "a\tb"
+  eq w.row(['1','2']), "1\t2"
+
+test "writer rows", ->
+  w = CSV.writer()
+  eq w.rows([['a','b'],['1','2']]), "a,b\n1,2\n"
+
+# ==[ Summary ]==
+
+console.log "\n#{pass + fail} tests: #{pass} passed, #{fail} failed\n"
+process.exit(1) if fail > 0

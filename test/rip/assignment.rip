@@ -1,0 +1,108 @@
+# Test: Assignment (1 node type)
+# Tests the "=" assignment operator
+
+# ============================================================================
+# Simple Assignment
+# ============================================================================
+
+test "assign integer", "x = 42; x", 42
+test "assign string", 'x = "hello"; x', "hello"
+test "assign boolean", "x = true; x", true
+test "assign null", "x = null; x", null
+test "assign expression", "x = 5 + 3; x", 8
+
+# Code generation tests
+code "simple assignment", "x = 42", "let x;\nx = 42"
+code "assignment with expression", "y = a + b", "let y;\n\ny = a + b"
+
+# ============================================================================
+# Multiple Assignments
+# ============================================================================
+
+test "multiple assignments", "x = 1; y = 2; x + y", 3
+test "chained values", "a = b = 5; a", 5
+
+# ============================================================================
+# Assignment to Properties
+# ============================================================================
+
+test "assign to property", "obj = {}; obj.x = 42; obj.x", 42
+test "assign to index", "arr = []; arr[0] = 10; arr[0]", 10
+
+# ============================================================================
+# Compound Assignment
+# ============================================================================
+
+test "addition assignment", "a = 5; a += 3; a", 8
+test "subtraction assignment", "a = 10; a -= 3; a", 7
+test "multiplication assignment", "a = 5; a *= 3; a", 15
+test "division assignment", "a = 15; a /= 3; a", 5
+test "modulo assignment", "a = 17; a %= 5; a", 2
+test "exponentiation assignment", "a = 2; a **= 3; a", 8
+test "floor division assignment", "a = 17; a //= 5; a", 3
+
+# ============================================================================
+# Logical Assignment
+# ============================================================================
+
+test "or assignment false", "a = false; a or= 5; a", 5
+test "or assignment true", "a = 10; a or= 5; a", 10
+test "and assignment true", "a = 10; a and= 5; a", 5
+test "and assignment false", "a = 0; a and= 5; a", 0
+test "nullish assignment null", "a = null; a ?= 5; a", 5
+test "nullish assignment value", "a = 10; a ?= 5; a", 10
+
+# ============================================================================
+# Bitwise Compound Assignment
+# ============================================================================
+
+test "bitwise and assignment", "a = 12; a &= 10; a", 8
+test "bitwise or assignment", "a = 12; a |= 3; a", 15
+test "bitwise xor assignment", "a = 12; a ^= 5; a", 9
+test "left shift assignment", "a = 5; a <<= 2; a", 20
+test "right shift assignment", "a = 20; a >>= 2; a", 5
+test "unsigned right shift assignment", "a = -1; a >>>= 1; a", 2147483647
+
+# ============================================================================
+# Destructuring Assignment
+# ============================================================================
+
+test "array destructuring", "[a, b, c] = [1, 2, 3]; a + b + c", 6
+test "object destructuring", "{x, y} = {x: 10, y: 20}; x + y", 30
+test "nested destructuring", "[a, {b, c}] = [1, {b: 2, c: 3}]; a + b + c", 6
+test "destructuring with defaults", "{a = 5, b = 10} = {a: 1}; a + b", 11
+test "array destructuring skip", "[a, , c] = [1, 2, 3]; a + c", 4
+test "destructuring swap", "a = 1; b = 2; [a, b] = [b, a]; a", 2
+
+# Array destructuring with rest in middle (CoffeeScript feature)
+test "array rest in middle", "[first, ...middle, last] = [1, 2, 3, 4, 5]; [first, middle, last]", [1, [2, 3, 4], 5]
+test "array rest in middle two after", "[a, ...mid, b, c] = [1, 2, 3, 4, 5]; [a, mid, b, c]", [1, [2, 3], 4, 5]
+test "array rest in middle empty", "[a, ...b, c] = [1, 2]; [a, b, c]", [1, [], 2]
+
+# ============================================================================
+# Rest in Destructuring
+# ============================================================================
+
+test "array rest destructuring", "[first, ...rest] = [1, 2, 3, 4]; rest.length", 3
+test "object rest destructuring", "{a, ...rest} = {a: 1, b: 2, c: 3}; rest.b + rest.c", 5
+
+# ============================================================================
+# Complex Patterns
+# ============================================================================
+
+test "destructuring rename", "{x: a, y: b} = {x: 1, y: 2}; a + b", 3
+test "deep object destructuring", "obj = {a: {b: {c: 5}}}; {a: {b: {c: value}}} = obj; value", 5
+test "mixed destructuring", "data = {items: [1, 2, 3], count: 3}; {items: [first], count} = data; first + count", 4
+
+# String key destructuring
+test "string key destructuring", '''
+  {'foo-bar': value} = {'foo-bar': 42}
+  value
+  ''', 42
+
+# Computed property destructuring
+test "computed property destructuring", '''
+  key = 'prop'
+  {[key]: value} = {prop: 100}
+  value
+  ''', 100

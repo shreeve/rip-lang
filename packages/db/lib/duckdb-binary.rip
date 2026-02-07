@@ -1,0 +1,546 @@
+# DuckDB Binary Protocol Serializer
+#
+# Implements the binary serialization format used by DuckDB's official UI.
+# This allows rip-db to serve responses that the DuckDB UI can understand.
+
+# ==============================================================================
+# LogicalTypeId - matches DuckDB's internal type IDs
+# ==============================================================================
+
+export LogicalTypeId =
+  BOOLEAN:       10
+  TINYINT:       11
+  SMALLINT:      12
+  INTEGER:       13
+  BIGINT:        14
+  DATE:          15
+  TIME:          16
+  TIMESTAMP_SEC: 17
+  TIMESTAMP_MS:  18
+  TIMESTAMP:     19
+  TIMESTAMP_NS:  20
+  DECIMAL:       21
+  FLOAT:         22
+  DOUBLE:        23
+  CHAR:          24
+  VARCHAR:       25
+  BLOB:          26
+  INTERVAL:      27
+  UTINYINT:      28
+  USMALLINT:     29
+  UINTEGER:      30
+  UBIGINT:       31
+  TIMESTAMP_TZ:  32
+  TIME_TZ:       34
+  BIT:           36
+  BIGNUM:        39
+  UHUGEINT:      49
+  HUGEINT:       50
+  UUID:          54
+  STRUCT:       100
+  LIST:         101
+  MAP:          102
+  ENUM:         104
+  UNION:        107
+  ARRAY:        108
+
+# Shared TextEncoder instance (avoid allocating per call)
+textEncoder = new TextEncoder()
+
+# ==============================================================================
+# BinarySerializer - writes the DuckDB binary format
+# ==============================================================================
+
+export class BinarySerializer
+  constructor: ->
+    @buffer = []
+
+  # ---------------------------------------------------------------------------
+  # Primitive writers
+  # ---------------------------------------------------------------------------
+
+  writeUint8: (value) ->
+    @buffer.push value & 0xFF
+
+  writeUint16LE: (value) ->
+    @buffer.push value & 0xFF
+    @buffer.push (value >> 8) & 0xFF
+
+  writeUint32LE: (value) ->
+    @buffer.push value & 0xFF
+    @buffer.push (value >> 8) & 0xFF
+    @buffer.push (value >> 16) & 0xFF
+    @buffer.push (value >> 24) & 0xFF
+
+  writeInt32LE: (value) ->
+    @writeUint32LE value >>> 0
+
+  writeUint64LE: (value) ->
+    big = BigInt value
+    for i in [0...8]
+      @buffer.push Number (big >> BigInt(i * 8)) & 0xFFn
+
+  writeInt64LE: (value) ->
+    @writeUint64LE value
+
+  writeFloat32: (value) ->
+    buf = new ArrayBuffer 4
+    new DataView(buf).setFloat32 0, value, true
+    bytes = new Uint8Array buf
+    @buffer.push ...bytes
+
+  writeFloat64: (value) ->
+    buf = new ArrayBuffer 8
+    new DataView(buf).setFloat64 0, value, true
+    bytes = new Uint8Array buf
+    @buffer.push ...bytes
+
+  writeVarInt: (value) ->
+    v = value >>> 0
+    loop
+      byte = v & 0x7F
+      v >>>= 7
+      if v isnt 0
+        @buffer.push byte | 0x80
+      else
+        @buffer.push byte
+        break
+
+  writeString: (str) ->
+    bytes = textEncoder.encode str
+    @writeVarInt bytes.length
+    @buffer.push ...bytes
+
+  writeData: (data) ->
+    bytes = if data instanceof Uint8Array then data else new Uint8Array data
+    @writeVarInt bytes.length
+    @buffer.push ...bytes
+
+  # ---------------------------------------------------------------------------
+  # Object structure writers
+  # ---------------------------------------------------------------------------
+
+  writeFieldId: (id) ->
+    @writeUint16LE id
+
+  writeEndMarker: ->
+    @writeUint16LE 0xFFFF
+
+  writeBoolean: (fieldId, value) ->
+    @writeFieldId fieldId
+    @writeUint8 if value then 1 else 0
+
+  writePropertyString: (fieldId, value) ->
+    @writeFieldId fieldId
+    @writeString value
+
+  writePropertyVarInt: (fieldId, value) ->
+    @writeFieldId fieldId
+    @writeVarInt value
+
+  writeList: (fieldId, items, writer) ->
+    @writeFieldId fieldId
+    @writeVarInt items.length
+    for item, i in items
+      writer this, item, i
+
+  # ---------------------------------------------------------------------------
+  # Get final buffer
+  # ---------------------------------------------------------------------------
+
+  toArrayBuffer: ->
+    new Uint8Array(@buffer).buffer
+
+  toUint8Array: ->
+    new Uint8Array @buffer
+
+# ==============================================================================
+# Result serializers
+# ==============================================================================
+
+export serializeSuccessResult = (columns, rows) ->
+  s = new BinarySerializer()
+
+  # field_100: success = true
+  s.writeBoolean 100, true
+
+  # field_101: ColumnNamesAndTypes
+  s.writeFieldId 101
+  serializeColumnNamesAndTypes s, columns
+
+  # field_102: list<DataChunk> (one chunk with all rows)
+  s.writeFieldId 102
+  s.writeVarInt 1
+  serializeDataChunk s, columns, rows
+
+  s.writeEndMarker()
+  s.toArrayBuffer()
+
+export serializeErrorResult = (message) ->
+  s = new BinarySerializer()
+  s.writeBoolean 100, false
+  s.writePropertyString 101, message
+  s.writeEndMarker()
+  s.toArrayBuffer()
+
+export serializeEmptyResult = ->
+  new BinarySerializer().toArrayBuffer()
+
+export serializeTokenizeResult = (tokens) ->
+  s = new BinarySerializer()
+  s.writeList 100, tokens.map((t) -> t.offset), (s, v) -> s.writeVarInt v
+  s.writeList 101, tokens.map((t) -> t.type), (s, v) -> s.writeVarInt v
+  s.writeEndMarker()
+  s.toArrayBuffer()
+
+# ==============================================================================
+# Internal serializers
+# ==============================================================================
+
+serializeColumnNamesAndTypes = (s, columns) ->
+  s.writeList 100, columns, (s, col) -> s.writeString col.name
+  s.writeList 101, columns, (s, col) -> serializeType s, col
+  s.writeEndMarker()
+
+serializeType = (s, column) ->
+  typeId = mapDuckDBType column.type
+  s.writeFieldId 100
+  s.writeUint8 typeId
+  s.writeFieldId 101
+  s.writeUint8 0  # null (no extra type info for basic types)
+  s.writeEndMarker()
+
+serializeDataChunk = (s, columns, rows) ->
+  s.writePropertyVarInt 100, rows.length
+  s.writeList 101, columns, (s, col, colIdx) ->
+    values = rows.map (row) -> row[colIdx]
+    serializeVector s, col, values
+  s.writeEndMarker()
+
+serializeVector = (s, column, values) ->
+  typeId = mapDuckDBType column.type
+  hasNulls = values.some (v) -> v is null or v is undefined
+
+  # allValid flag: 0 = all valid (no bitmap), non-zero = has validity bitmap
+  # The deserializer reads field 101 ONLY when allValid is truthy
+  s.writeFieldId 100
+  if hasNulls
+    s.writeUint8 1  # Has validity bitmap
+    s.writeFieldId 101
+    s.writeData createValidityBitmap values
+  else
+    s.writeUint8 0  # All valid, no bitmap needed
+
+  switch typeId
+    when LogicalTypeId.VARCHAR, LogicalTypeId.CHAR
+      s.writeList 102, values, (s, v) -> s.writeString String(v ?? '')
+
+    when LogicalTypeId.BOOLEAN
+      s.writeFieldId 102
+      bytes = new Uint8Array values.length
+      for v, i in values
+        bytes[i] = if v then 1 else 0
+      s.writeData bytes
+
+    when LogicalTypeId.TINYINT, LogicalTypeId.UTINYINT
+      s.writeFieldId 102
+      bytes = new Uint8Array values.length
+      for v, i in values
+        bytes[i] = (v ?? 0) & 0xFF
+      s.writeData bytes
+
+    when LogicalTypeId.SMALLINT
+      s.writeFieldId 102
+      bytes = new Uint8Array values.length * 2
+      dv = new DataView bytes.buffer
+      for v, i in values
+        dv.setInt16 i * 2, v ?? 0, true
+      s.writeData bytes
+
+    when LogicalTypeId.USMALLINT
+      s.writeFieldId 102
+      bytes = new Uint8Array values.length * 2
+      dv = new DataView bytes.buffer
+      for v, i in values
+        dv.setUint16 i * 2, v ?? 0, true
+      s.writeData bytes
+
+    when LogicalTypeId.INTEGER
+      s.writeFieldId 102
+      bytes = new Uint8Array values.length * 4
+      dv = new DataView bytes.buffer
+      for v, i in values
+        dv.setInt32 i * 4, v ?? 0, true
+      s.writeData bytes
+
+    when LogicalTypeId.UINTEGER
+      s.writeFieldId 102
+      bytes = new Uint8Array values.length * 4
+      dv = new DataView bytes.buffer
+      for v, i in values
+        dv.setUint32 i * 4, v ?? 0, true
+      s.writeData bytes
+
+    when LogicalTypeId.BIGINT
+      s.writeFieldId 102
+      bytes = new Uint8Array values.length * 8
+      dv = new DataView bytes.buffer
+      for v, i in values
+        dv.setBigInt64 i * 8, BigInt(v ?? 0), true
+      s.writeData bytes
+
+    when LogicalTypeId.UBIGINT
+      s.writeFieldId 102
+      bytes = new Uint8Array values.length * 8
+      dv = new DataView bytes.buffer
+      for v, i in values
+        dv.setBigUint64 i * 8, BigInt(v ?? 0), true
+      s.writeData bytes
+
+    when LogicalTypeId.FLOAT
+      s.writeFieldId 102
+      bytes = new Uint8Array values.length * 4
+      dv = new DataView bytes.buffer
+      for v, i in values
+        dv.setFloat32 i * 4, v ?? 0, true
+      s.writeData bytes
+
+    when LogicalTypeId.DOUBLE
+      s.writeFieldId 102
+      bytes = new Uint8Array values.length * 8
+      dv = new DataView bytes.buffer
+      for v, i in values
+        dv.setFloat64 i * 8, v ?? 0, true
+      s.writeData bytes
+
+    when LogicalTypeId.DATE
+      s.writeFieldId 102
+      bytes = new Uint8Array values.length * 4
+      dv = new DataView bytes.buffer
+      for v, i in values
+        days = if v? then dateToDays v else 0
+        dv.setInt32 i * 4, days, true
+      s.writeData bytes
+
+    when LogicalTypeId.TIMESTAMP, LogicalTypeId.TIMESTAMP_TZ
+      s.writeFieldId 102
+      bytes = new Uint8Array values.length * 8
+      dv = new DataView bytes.buffer
+      for v, i in values
+        micros = if v? then timestampToMicros v else 0n
+        dv.setBigInt64 i * 8, micros, true
+      s.writeData bytes
+
+    when LogicalTypeId.UUID
+      s.writeFieldId 102
+      bytes = new Uint8Array values.length * 16
+      dv = new DataView bytes.buffer
+      for v, i in values
+        { lo, hi } = uuidToHugeint(v)
+        dv.setBigUint64 i * 16, lo, true
+        dv.setBigInt64 i * 16 + 8, hi, true
+      s.writeData bytes
+
+    else
+      s.writeList 102, values, (s, v) -> s.writeString String(v ?? '')
+
+  s.writeEndMarker()
+
+# ==============================================================================
+# Helper functions
+# ==============================================================================
+
+createValidityBitmap = (values) ->
+  # Must be uint64-aligned (8-byte chunks) — the UI reads validity with getBigUint64
+  byteCount = Math.ceil(values.length / 64) * 8
+  bitmap = new Uint8Array byteCount
+  for v, i in values
+    if v?
+      byteIdx = Math.floor i / 8
+      bitIdx = i % 8
+      bitmap[byteIdx] |= 1 << bitIdx
+  bitmap
+
+dateToDays = (value) ->
+  if value instanceof Date
+    Math.floor value.getTime() / (24 * 60 * 60 * 1000)
+  else if typeof value is 'string'
+    Math.floor new Date(value).getTime() / (24 * 60 * 60 * 1000)
+  else if typeof value is 'number'
+    value
+  else
+    0
+
+timestampToMicros = (value) ->
+  if value instanceof Date
+    BigInt(value.getTime()) * 1000n
+  else if typeof value is 'string'
+    BigInt(new Date(value).getTime()) * 1000n
+  else if typeof value is 'number'
+    BigInt(value) * 1000n
+  else if typeof value is 'bigint'
+    value
+  else
+    0n
+
+uuidToHugeint = (uuid) ->
+  return { lo: 0n, hi: 0n } unless uuid
+  hex = String(uuid).replace(/-/g, '')
+  full = BigInt "0x#{hex}"
+  hi = (full >> 64n) ^ (1n << 63n)  # XOR sign bit for DuckDB sorting
+  lo = full & ((1n << 64n) - 1n)
+  { lo, hi }
+
+mapDuckDBType = (typeName) ->
+  return LogicalTypeId.VARCHAR unless typeName
+  upper = String(typeName).toUpperCase()
+
+  switch upper
+    when 'BOOLEAN', 'BOOL' then LogicalTypeId.BOOLEAN
+    when 'TINYINT', 'INT1' then LogicalTypeId.TINYINT
+    when 'SMALLINT', 'INT2' then LogicalTypeId.SMALLINT
+    when 'INTEGER', 'INT4', 'INT', 'SIGNED' then LogicalTypeId.INTEGER
+    when 'BIGINT', 'INT8', 'LONG' then LogicalTypeId.BIGINT
+    when 'UTINYINT' then LogicalTypeId.UTINYINT
+    when 'USMALLINT' then LogicalTypeId.USMALLINT
+    when 'UINTEGER', 'UINT' then LogicalTypeId.UINTEGER
+    when 'UBIGINT' then LogicalTypeId.UBIGINT
+    when 'HUGEINT' then LogicalTypeId.HUGEINT
+    when 'UHUGEINT' then LogicalTypeId.UHUGEINT
+    when 'FLOAT', 'FLOAT4', 'REAL' then LogicalTypeId.FLOAT
+    when 'DOUBLE', 'FLOAT8', 'NUMERIC' then LogicalTypeId.DOUBLE
+    when 'DATE' then LogicalTypeId.DATE
+    when 'TIME' then LogicalTypeId.TIME
+    when 'TIMESTAMP', 'DATETIME' then LogicalTypeId.TIMESTAMP
+    when 'TIMESTAMP WITH TIME ZONE', 'TIMESTAMPTZ' then LogicalTypeId.TIMESTAMP_TZ
+    when 'VARCHAR', 'TEXT', 'STRING', 'CHAR', 'BPCHAR' then LogicalTypeId.VARCHAR
+    when 'BLOB', 'BYTEA', 'BINARY', 'VARBINARY' then LogicalTypeId.BLOB
+    when 'UUID' then LogicalTypeId.UUID
+    when 'INTERVAL' then LogicalTypeId.INTERVAL
+    when 'JSON' then LogicalTypeId.VARCHAR
+    else
+      if upper.startsWith 'DECIMAL' then LogicalTypeId.VARCHAR  # Serialize as string to preserve exact precision
+      else if upper.startsWith 'VARCHAR' then LogicalTypeId.VARCHAR
+      else if upper.startsWith 'CHAR' then LogicalTypeId.CHAR
+      else LogicalTypeId.VARCHAR
+
+# ==============================================================================
+# SQL Tokenizer (for syntax highlighting)
+# ==============================================================================
+
+TokenType =
+  IDENTIFIER: 0
+  NUMERIC_CONSTANT: 1
+  STRING_CONSTANT: 2
+  OPERATOR: 3
+  KEYWORD: 4
+  COMMENT: 5
+
+SQL_KEYWORDS = new Set [
+  'SELECT', 'FROM', 'WHERE', 'AND', 'OR', 'NOT', 'IN', 'IS', 'NULL',
+  'AS', 'ON', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'FULL', 'CROSS',
+  'ORDER', 'BY', 'ASC', 'DESC', 'LIMIT', 'OFFSET', 'GROUP', 'HAVING',
+  'UNION', 'ALL', 'DISTINCT', 'INSERT', 'INTO', 'VALUES', 'UPDATE', 'SET',
+  'DELETE', 'CREATE', 'TABLE', 'INDEX', 'VIEW', 'DROP', 'ALTER', 'ADD',
+  'PRIMARY', 'KEY', 'FOREIGN', 'REFERENCES', 'CONSTRAINT', 'DEFAULT',
+  'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'CAST', 'TRUE', 'FALSE',
+  'WITH', 'RECURSIVE', 'OVER', 'PARTITION', 'WINDOW', 'ROWS',
+  'RANGE', 'BETWEEN', 'UNBOUNDED', 'PRECEDING', 'FOLLOWING', 'CURRENT',
+  'ROW', 'EXISTS', 'ANY', 'SOME', 'LIKE', 'ILIKE', 'SIMILAR', 'ESCAPE'
+]
+
+export tokenizeSQL = (sql) ->
+  tokens = []
+  i = 0
+
+  while i < sql.length
+    start = i
+    char = sql[i]
+
+    if /\s/.test char
+      i++
+      continue
+
+    if char is '-' and sql[i + 1] is '-'
+      i++ while i < sql.length and sql[i] isnt '\n'
+      tokens.push { offset: start, type: TokenType.COMMENT }
+      continue
+
+    if char is '/' and sql[i + 1] is '*'
+      i += 2
+      i++ while i < sql.length - 1 and not (sql[i] is '*' and sql[i + 1] is '/')
+      i += 2
+      tokens.push { offset: start, type: TokenType.COMMENT }
+      continue
+
+    if char is "'"
+      i++
+      while i < sql.length
+        if sql[i] is "'"
+          if sql[i + 1] is "'"
+            i += 2
+          else
+            i++
+            break
+        else
+          i++
+      tokens.push { offset: start, type: TokenType.STRING_CONSTANT }
+      continue
+
+    if char is '"'
+      i++
+      i++ while i < sql.length and sql[i] isnt '"'
+      i++ if i < sql.length
+      tokens.push { offset: start, type: TokenType.IDENTIFIER }
+      continue
+
+    if /[0-9]/.test(char) or (char is '.' and /[0-9]/.test(sql[i + 1] or ''))
+      i++ while i < sql.length and /[0-9.eE+-]/.test sql[i]
+      tokens.push { offset: start, type: TokenType.NUMERIC_CONSTANT }
+      continue
+
+    if /[a-zA-Z_]/.test char
+      i++ while i < sql.length and /[a-zA-Z0-9_]/.test sql[i]
+      word = sql.slice(start, i).toUpperCase()
+      type = if SQL_KEYWORDS.has word then TokenType.KEYWORD else TokenType.IDENTIFIER
+      tokens.push { offset: start, type }
+      continue
+
+    if /[+\-*/%=<>!&|^~]/.test char
+      if sql.slice(i, i + 2) in ['<=', '>=', '<>', '!=', '||', '&&', '::', '->']
+        i += 2
+      else i++
+      tokens.push { offset: start, type: TokenType.OPERATOR }
+      continue
+
+    if /[(),;.\[\]{}]/.test char
+      i++
+      tokens.push { offset: start, type: TokenType.OPERATOR }
+      continue
+
+    i++
+
+  tokens
+
+# ==============================================================================
+# Type inference from JavaScript values
+# ==============================================================================
+
+export inferType = (value) ->
+  return 'VARCHAR' if value is null or value is undefined
+
+  switch typeof value
+    when 'boolean' then 'BOOLEAN'
+    when 'number'
+      if Number.isInteger value
+        if value >= -2147483648 and value <= 2147483647 then 'INTEGER' else 'BIGINT'
+      else 'DOUBLE'
+    when 'bigint' then 'BIGINT'
+    when 'string'
+      if /^\d{4}-\d{2}-\d{2}$/.test value then 'DATE'
+      else if /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test value then 'TIMESTAMP'
+      else 'VARCHAR'
+    when 'object'
+      if value instanceof Date then 'TIMESTAMPTZ'
+      else 'VARCHAR'
+    else 'VARCHAR'

@@ -1,0 +1,114 @@
+# Test: Exception Handling (2 node types)
+# Tests "try" and "throw" node types
+
+# ============================================================================
+# Try/Catch: "try"
+# ============================================================================
+
+# Basic try-catch
+test "try catch", "result = try\n  throw 'error'\ncatch e\n  e\nresult", "error"
+
+# Try-catch with no error
+test "try no error", "result = try\n  42\ncatch e\n  'error'\nresult", 42
+
+# Try-catch-finally
+test "try catch finally", "x = 0; try\n  throw 'err'\ncatch e\n  x = 1\nfinally\n  x = 2\nx", 2
+
+# Try-finally (no catch)
+test "try finally", "x = 0; try\n  42\nfinally\n  x = 1\nx", 1
+
+# Catch with destructuring
+test "catch with pattern", "result = try\n  throw {code: 404}\ncatch {code}\n  code\nresult", 404
+
+# Catch without parameter
+test "catch no param", "result = try\n  throw 'error'\ncatch\n  'caught'\nresult", "caught"
+
+# Nested try-catch
+test "nested try", "result = try\n  try\n    throw 'inner'\n  catch\n    throw 'outer'\ncatch e\n  e\nresult", "outer"
+
+# Try as expression
+test "try expression", "x = try\n  42\ncatch\n  10\nx", 42
+
+# Code generation
+code "try catch", "try\n  body\ncatch e\n  handler", "try { body; } catch (e) { handler; }"
+
+# ============================================================================
+# Throw: "throw"
+# ============================================================================
+
+# Basic throw
+fail "throw error", "throw 'error'"
+fail "throw object", "throw {message: 'error'}"
+
+# Throw in function
+test "throw in function", "fn = -> throw 'error'\nresult = try\n  fn()\ncatch e\n  e\nresult", "error"
+
+# Throw with expression
+fail "throw expression", "throw 'Error: ' + 'message'"
+
+# Throw in expression position (must wrap in IIFE for valid JS)
+test "throw in || expression", '''
+  fn = -> null
+  result = try
+    x = fn() || throw "error"
+  catch e
+    e
+  result
+  ''', "error"
+
+test "throw in ternary", '''
+  result = try
+    x = if false then 42 else throw "invalid"
+  catch e
+    e
+  result
+  ''', "invalid"
+
+# Code generation
+code "throw", "throw e", "throw e"
+code "or throw as guard pattern", 'x = fn() or throw "err"', 'let x;\n\nif (!(x = fn())) throw "err";'
+
+# ============================================================================
+# Parser Errors
+# ============================================================================
+
+fail 'unmatched closing brace', '''
+  normalObject = {}
+  insideOutObject = }{
+'''
+
+fail 'unexpected in', 'foo in bar or in baz'
+fail 'unexpected comma', 'a:, b'
+fail 'unexpected closing paren', '(a:)'
+fail 'unexpected end after colon', 'a:'
+fail 'unexpected end after plus', 'a +'
+
+# ============================================================================
+# Invalid Assignments
+# ============================================================================
+
+fail 'number assignment', '1 = 2'
+fail 'string assignment', '"foo" = "bar"'
+fail 'boolean assignment', 'true = false'
+
+# ============================================================================
+# Invalid Operators
+# ============================================================================
+
+fail 'double comma', 'a(1,,2)'
+fail 'invalid extends', '3 extends 2'
+fail 'modulo requires expression', 'a %'
+
+# ============================================================================
+# Super Usage Errors
+# ============================================================================
+
+fail 'super outside method', 'super'
+fail 'super in root', 'super()'
+
+# ============================================================================
+# Invalid Splats
+# ============================================================================
+
+fail 'multiple splats in array', '[...a, ...b]'
+fail 'multiple splats in params', '(...a, ...b) ->'

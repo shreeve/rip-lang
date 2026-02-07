@@ -1,0 +1,569 @@
+# Test: Strings (2 node types)
+# Tests STRING literals and "str" (interpolation) node types
+
+# ============================================================================
+# String Literals: STRING
+# ============================================================================
+
+# Double quoted strings
+test "double quoted string", '"hello"', "hello"
+test "double quoted with spaces", '"hello world"', "hello world"
+test "empty double quoted", '""', ""
+
+# Single quoted strings
+test "single quoted string", "'hello'", "hello"
+test "single quoted with spaces", "'hello world'", "hello world"
+
+# Code generation
+code "double quoted", '"test"', '"test"'  # Double quotes preserved
+code "single quoted", "'test'", "'test'"  # Single quotes preserved
+
+# Escape sequences
+test "string with newline escape", '"hello\\nworld"', "hello\nworld"
+test "string with tab escape", '"hello\\tworld"', "hello\tworld"
+
+# ============================================================================
+# String Interpolation: "str"
+# ============================================================================
+
+# Basic interpolation (CoffeeScript uses #{} not ${})
+test "interpolation with variable", 'name = "Alice"\n"Hello, #{name}!"', "Hello, Alice!"
+test "interpolation with number", 'x = 42\n"The answer is #{x}"', "The answer is 42"
+
+# Multiple interpolations
+test "multiple interpolations", 'a = "foo"\nb = "bar"\n"#{a} and #{b}"', "foo and bar"
+
+# Expression interpolation
+test "interpolation with expression", 'x = 5\n"Result: #{x + 10}"', "Result: 15"
+test "interpolation with call", 'fn = -> "test"\n"Value: #{fn()}"', "Value: test"
+
+# Code generation
+code "simple interpolation", '"Hello #{name}"', '`Hello ${name}`'
+
+# Nested strings in interpolation
+test "nested string in interpolation", 'name = "World"\n"Hello #{"Mr. " + name}"', "Hello Mr. World"
+
+# ============================================================================
+# Tagged Template Literals: "tagged-template"
+# ============================================================================
+
+# Basic tagged template
+test "tagged template", 'tag = (strings, ...values) -> strings[0]\ntag"hello"', "hello"
+test "tagged template with interpolation", 'tag = (strings, ...values) -> values[0]\nx = 42\ntag"value: #{x}"', 42
+
+# ============================================================================
+# Heredoc Strings (Triple-Quoted)
+# ============================================================================
+
+# Basic heredoc
+test 'simple heredoc', '''
+  x = """
+    hello
+    world
+    """
+  x
+  ''', 'hello\nworld'
+
+# Heredoc with indentation stripping
+test 'heredoc indent strip', '''
+  x = """
+      line 1
+      line 2
+        extra indent
+      """
+  x
+  ''', 'line 1\nline 2\n  extra indent'
+
+# Heredoc with interpolation
+test 'heredoc interpolation', '''
+  name = 'Alice'
+  msg = """
+    Hello,
+    #{name}!
+    """
+  msg
+  ''', 'Hello,\nAlice!'
+
+# Empty heredoc
+test 'empty heredoc', 'x = """\n"""\nx', ''
+
+# Heredoc with only newlines
+test 'heredoc newlines only', 'x = """\n\n\n"""\nx', '\n'
+
+# ============================================================================
+# Heredoc Closing Delimiter Position (NEW in v1.5.0)
+# ============================================================================
+
+# When closing delimiter has ONLY whitespace before it, use its column as baseline
+
+# Closing at column 0 - preserve all indentation
+test 'heredoc closing at column 0', '''
+  x = \'\'\'
+    line 1
+      line 2
+  \'\'\'
+  x
+  ''', '  line 1\n    line 2'
+
+# Closing at column 2 - strip 2 spaces
+test 'heredoc closing at column 2', '''
+  x = \'\'\'
+    line 1
+      line 2
+    \'\'\'
+  x
+  ''', 'line 1\n  line 2'
+
+# Closing at column 4 - strip 4 spaces
+test 'heredoc closing at column 4', '''
+  x = \'\'\'
+      line 1
+        line 2
+      line 3
+      \'\'\'
+  x
+  ''', 'line 1\n  line 2\nline 3'
+
+# Closing inline (non-whitespace before) - fallback to minimum behavior
+test 'heredoc closing inline fallback', '''
+  x = \'\'\'
+    line 1
+      line 2
+    \'\'\'; y = 5
+  x
+  ''', 'line 1\n  line 2'
+
+# Empty heredoc with closing at column 2 (just whitespace content)
+test 'heredoc empty with closing indent', '''
+  x = \'\'\'
+
+    \'\'\'
+  x
+  ''', ''
+
+# Code generation use case - preserve base indent
+test 'heredoc compiler preserve indent', '''
+  generateCode = ->
+    \'\'\'
+      if (x) {
+        return y;
+      }
+    \'\'\'
+  generateCode()
+  ''', '  if (x) {\n    return y;\n  }'
+
+# Code generation use case - strip to flush left (closing at content level)
+test 'heredoc compiler strip indent', '''
+  generateCode = ->
+    \'\'\'
+      if (x) {
+        return y;
+      }
+      \'\'\'
+  generateCode()
+  ''', 'if (x) {\n  return y;\n}'
+
+# Mixed indentation levels
+test 'heredoc mixed indentation', '''
+  x = \'\'\'
+      deep
+    shallow
+      deep again
+    \'\'\'
+  x
+  ''', '  deep\nshallow\n  deep again'
+
+# Double-quote heredoc - closing at column 2
+test 'double-quote heredoc closing at column 2', '''
+  x = """
+    line 1
+      line 2
+    """
+  x
+  ''', 'line 1\n  line 2'
+
+# Double-quote heredoc - closing at column 0 (preserve indent)
+test 'double-quote heredoc closing at column 0', '''
+  x = """
+    line 1
+      line 2
+  """
+  x
+  ''', '  line 1\n    line 2'
+
+# ============================================================================
+# Heregex (Extended Regular Expressions) - The Star Feature!
+# ============================================================================
+
+# Basic heregex - whitespace stripped
+test 'heregex whitespace strip', '''
+  pattern = ///
+    \\d+
+    [a-z]+
+    ///
+  pattern.test('123abc')
+  ''', true
+
+# Heregex with comments removed
+test 'heregex with comments', '''
+  pattern = ///
+    ^ \\d+    # starts with digits
+    \\s*      # optional whitespace
+    [a-z]+   # followed by letters
+    $        # end of string
+    ///
+  pattern.test('123   xyz')
+  ''', true
+
+# Heregex with case-insensitive flag
+test 'heregex with flags', '''
+  pattern = ///
+    HELLO
+    ///i
+  pattern.test('hello')
+  ''', true
+
+# Heregex with global flag
+test 'heregex global flag', '''
+  pattern = ///
+    \\d+
+    ///g
+  'a1b2c3'.match(pattern).length
+  ''', 3
+
+# Heregex with multiple flags
+test 'heregex multiple flags', '''
+  pattern = ///
+    ^HELLO$
+    ///gim
+  pattern.test('hello')
+  ''', true
+
+# Heregex character classes preserved
+test 'heregex char class', '''
+  pattern = ///
+    [ \\t]+    # spaces and tabs INSIDE char class
+    ///
+  pattern.test('  ')
+  ''', true
+
+# Heregex with escaped hash
+test 'heregex escaped hash', '''
+  pattern = ///
+    \\#
+    ///
+  pattern.test('#')
+  ''', true
+
+# Heregex with escaped metacharacters
+test 'heregex escaped metacharacters', '''
+  pattern = ///
+    \\.        # escaped dot
+    \\*        # escaped star
+    \\+        # escaped plus
+    \\?        # escaped question
+    ///
+  pattern.test('.*+?')
+  ''', true
+
+# Heregex with literal brackets
+test 'heregex literal brackets', '''
+  pattern = ///
+    \\[        # literal [
+    [a-z]+    # char class
+    \\]        # literal ]
+    ///
+  pattern.test('[abc]')
+  ''', true
+
+# Heregex with capture groups
+test 'heregex capture groups', '''
+  pattern = ///
+    (\\w+)     # capture group
+    -(\\d+)    # another capture
+    ///
+  match = 'hello-123'.match(pattern)
+  match[1]
+  ''', 'hello'
+
+# Heregex with non-capture groups
+test 'heregex non-capture groups', '''
+  pattern = ///
+    (?:foo|bar)  # non-capture alternation
+    \\d+
+    ///
+  pattern.test('foo42')
+  ''', true
+
+# Heregex with quantifiers
+test 'heregex quantifiers', '''
+  pattern = ///
+    \\d{2,5}   # 2 to 5 digits
+    ///
+  pattern.test('123')
+  ''', true
+
+# Heregex with negated character class
+test 'heregex negated class', '''
+  pattern = ///
+    [^\\]]+    # not a closing bracket
+    ///
+  pattern.test('abc')
+  ''', true
+
+# Heregex with all flags
+test 'heregex all flags', '''
+  pattern = ///
+    ^HELLO$
+    ///gimsu
+  typeof pattern.flags
+  ''', 'string'
+
+# Heregex stress test - kitchen sink pattern
+test 'heregex stress test', '''
+  p = ///
+    ^                # anchor start
+    \\s*              # whitespace
+    (\\w+)            # capture word
+    [ \\t\\r\\n]+       # char class spaces
+    (?:foo|bar)      # alternation
+    \\d{2,5}          # quantifier
+    [^\\]]+           # negated class
+    \\#              # escaped hash
+    $                # anchor end
+    ///g
+  p.test("  word   foo123abc#")
+  ''', true
+
+# ============================================================================
+# String Quotes and Escaping
+# ============================================================================
+
+# Single quote in double-quoted string (no escape)
+test 'single quote in string', '''
+  x = "don't"
+  x
+  ''', "don't"
+
+# Double quote in single-quoted string (no escape)
+test 'double quote in string', '''
+  x = 'say "hello"'
+  x
+  ''', 'say "hello"'
+
+# Mixed quotes
+test 'mixed quotes', '''
+  x = "it's a test"
+  x
+  ''', "it's a test"
+
+# Backtick in string
+test 'backtick in string', '''
+  x = 'template `literal`'
+  x
+  ''', 'template `literal`'
+
+# Newline escape (using double quotes for escape processing)
+test 'newline escape', 'x = "line1\\nline2"\nx', 'line1\nline2'
+
+# Tab escape
+test 'tab escape', 'x = "col1\\tcol2"\nx', 'col1\tcol2'
+
+# Backslash literal
+test 'backslash literal', 'x = "back\\\\slash"\nx', 'back\\slash'
+
+# Unicode escape
+test 'unicode escape', 'x = "\\u0048ello"\nx', 'Hello'
+
+# ============================================================================
+# String Interpolation
+# ============================================================================
+
+# Interpolation with variable
+test 'interpolation variable', '''
+  x = 5
+  "Value: #{x}"
+  ''', 'Value: 5'
+
+# Interpolation at start
+test 'interpolation at start', '''
+  x = 5
+  "#{x} is the value"
+  ''', '5 is the value'
+
+# Interpolation at end
+test 'interpolation at end', '''
+  x = 5
+  "The value is #{x}"
+  ''', 'The value is 5'
+
+# Only interpolation
+test 'only interpolation', '''
+  x = 'test'
+  "#{x}"
+  ''', 'test'
+
+# Multiple interpolations
+test 'multiple interpolations', '''
+  a = 'foo'
+  b = 'bar'
+  "#{a} and #{b}"
+  ''', 'foo and bar'
+
+# Adjacent interpolations
+test 'adjacent interpolations', '''
+  a = 'foo'
+  b = 'bar'
+  "#{a}#{b}"
+  ''', 'foobar'
+
+# Interpolation with expression
+test 'interpolation expression', '''
+  x = 5
+  "Result: #{x + 10}"
+  ''', 'Result: 15'
+
+# Interpolation with function call
+test 'interpolation call', '''
+  fn = -> 'test'
+  "Value: #{fn()}"
+  ''', 'Value: test'
+
+# Complex interpolation with expression
+test 'complex interpolation', '''
+  arr = [1, 2, 3]
+  "Sum: #{arr.reduce(((a, b) => a + b), 0)}"
+  ''', 'Sum: 6'
+
+# Nested string in interpolation
+test 'nested string interpolation', '''
+  name = 'World'
+  "Hello #{'Mr. ' + name}"
+  ''', 'Hello Mr. World'
+
+# ============================================================================
+# Edge Cases
+# ============================================================================
+
+# Empty strings
+test 'empty string double', '""', ''
+test 'empty string single', "''", ''
+
+# String with only whitespace
+test 'whitespace string', '''
+  x = '   '
+  x
+  ''', '   '
+
+# String with unicode
+test 'unicode string', '''
+  x = 'Hello 世界'
+  x
+  ''', 'Hello 世界'
+
+# String with emoji
+test 'emoji string', '''
+  x = 'Hello 👋'
+  x
+  ''', 'Hello 👋'
+
+# String concatenation
+test 'string concat', '''
+  x = 'a' + 'b' + 'c' + 'd' + 'e'
+  x
+  ''', 'abcde'
+
+# String with special chars
+test 'special chars', '''
+  x = '!@#$%^&*()'
+  x
+  ''', '!@#$%^&*()'
+
+# Long string length
+test 'long string length', '''
+  x = 'The quick brown fox jumps over the lazy dog'
+  x.length
+  ''', 43
+
+# ============================================================================
+# Code Generation Tests
+# ============================================================================
+
+# Heregex generates regex literal with whitespace removed
+code 'heregex compiler', '''
+  pattern = ///
+    \d+
+    ///
+  ''', '''
+  let pattern;
+
+  pattern = /\d+/;
+'''
+
+# Heregex with flags in output
+code 'heregex flags compiler', '''
+  pattern = ///
+    test
+    ///gi
+  ''', '''
+  let pattern;
+
+  pattern = /test/gi;
+'''
+
+# Heregex with comments completely removed
+code 'heregex comment removal', '''
+  pattern = ///
+    \d+  # digit
+    ///
+  ''', '''
+  let pattern;
+
+  pattern = /\d+/;
+'''
+
+# Heregex character class preserved
+code 'heregex char class compiler', '''
+  pattern = ///
+    [ \t]+
+    ///
+  ''', '''
+  let pattern;
+
+  pattern = /[ \t]+/;
+'''
+
+# Interpolation generates template literal
+code 'interpolation compiler', '"Hello #{name}"', '`Hello ${name}`'
+
+# Heredoc generates template literal
+code 'heredoc compiler', """
+  x = '''
+    line1
+    line2
+    '''
+  """, """
+  let x;
+
+  x = `line1
+  line2`;
+"""
+
+# JavaScript-style ${} interpolation (for JS refugees)
+test 'dollar sign interpolation', '"x = ${5}"', 'x = 5'
+test 'dollar sign with variable', 'x = 42; "value: ${x}"', 'value: 42'
+test 'dollar sign with expression', 'x = 5; "result: ${x * 2}"', 'result: 10'
+test 'dollar sign with function call', '''
+  upper = (s) -> s.toUpperCase()
+  result = "name: ${upper("alice")}"
+  result
+  ''', 'name: ALICE'
+test 'mixed hash and dollar', 'x = 1; y = 2; "hash #{x} dollar ${y}"', 'hash 1 dollar 2'
+
+code 'dollar interpolation compiler', '"Value: ${x}"', '`Value: ${x}`'
+
+# Quote preservation - single quotes
+code 'single quote preserved', "'hello'", "'hello'"
+
+# Quote preservation - double quotes
+code 'double quote preserved', '"hello"', '"hello"'

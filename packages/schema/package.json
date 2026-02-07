@@ -1,0 +1,49 @@
+{
+  "name": "@rip-lang/schema",
+  "version": "0.3.0",
+  "description": "Unified schema language for types, validation, database models, UI widgets, and reactive state",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./runtime": "./runtime.js",
+    "./lexer": "./lexer.js",
+    "./parser": "./parser.js"
+  },
+  "scripts": {
+    "parser": "bun ../../src/grammar/solar.rip -o parser.js grammar.rip",
+    "test": "echo \"Tests coming soon\" && exit 0"
+  },
+  "keywords": [
+    "schema",
+    "validation",
+    "types",
+    "database",
+    "orm",
+    "forms",
+    "ui",
+    "state",
+    "rip"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreeve/rip-lang.git",
+    "directory": "packages/schema"
+  },
+  "homepage": "https://github.com/shreeve/rip-lang/tree/main/packages/schema#readme",
+  "bugs": {
+    "url": "https://github.com/shreeve/rip-lang/issues"
+  },
+  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
+  "license": "MIT",
+  "files": [
+    "index.js",
+    "runtime.js",
+    "lexer.js",
+    "parser.js",
+    "grammar.rip",
+    "README.md",
+    "GUIDE.md",
+    "SCHEMA.md"
+  ]
+}

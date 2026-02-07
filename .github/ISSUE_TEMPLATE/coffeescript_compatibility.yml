@@ -1,0 +1,85 @@
+name: CoffeeScript Compatibility Issue
+description: Report CoffeeScript code that doesn't compile or work correctly in Rip
+title: "[Compatibility]: "
+labels: ["compatibility", "coffeescript"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Migrating from CoffeeScript? Report code that works in CoffeeScript but fails in Rip.
+
+  - type: textarea
+    id: coffeescript
+    attributes:
+      label: CoffeeScript Code
+      description: The CoffeeScript code that works in CoffeeScript 2.x
+      placeholder: |
+        # Example:
+        result = (x for x in [1..10] by 2)
+      render: coffeescript
+    validations:
+      required: true
+
+  - type: textarea
+    id: error
+    attributes:
+      label: Error in Rip
+      description: What happens when you try to compile this with Rip?
+      placeholder: |
+        Compilation Error: ...
+        or
+        Generates incorrect output: ...
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: coffeescript-output
+    attributes:
+      label: CoffeeScript Output (Optional)
+      description: What JavaScript does CoffeeScript generate for this?
+      placeholder: |
+        // CoffeeScript 2.x generates:
+        var result = ...
+      render: javascript
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Impact
+      description: How important is this for your migration?
+      options:
+        - Blocking migration
+        - High - affects many files
+        - Medium - affects some files
+        - Low - easy to work around
+    validations:
+      required: false
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Workaround (if known)
+      description: Have you found a way to rewrite the code to work with Rip?
+      placeholder: |
+        Instead of:
+          x for x in arr by 2
+        Use:
+          for x in arr by 2
+            x
+      render: coffeescript
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: verification
+    attributes:
+      label: Verification
+      description: Please confirm
+      options:
+        - label: This code works in CoffeeScript 2.x
+          required: true
+        - label: I've tested with the latest version of Rip
+          required: false

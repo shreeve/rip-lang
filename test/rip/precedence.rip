@@ -1,0 +1,170 @@
+# Test: or/and Precedence with Implicit Calls
+# Tests that || and && end implicit function calls
+# Allows: read 'x' or '' instead of: read('x' || '')
+
+# ============================================================================
+# or (||) ends implicit calls - Runtime tests
+# ============================================================================
+
+# Basic: or after implicit call returns call result when truthy
+test "or returns call result when truthy", "fn = (x) -> x\nfn 'hello' or 'default'", "hello"
+
+# or returns default when call result is falsy
+test "or returns default when falsy", "fn = (x) -> x\nfn '' or 'default'", "default"
+
+# or with multiple arguments
+test "or with multiple args", "fn = (a, b) -> a + b\nfn 'a', 'b' or 'default'", "ab"
+
+# Chained or expressions
+test "chained or", "get = (x) -> null\nset = (x, v) -> v\nget 'x' or set 'x', 42 or 0", 42
+
+# ============================================================================
+# and (&&) ends implicit calls - Runtime tests
+# ============================================================================
+
+# and returns second value when first is truthy
+test "and returns second when first truthy", "fn = (x) -> x\nfn 'hello' and 'yes'", "yes"
+
+# and returns first value when first is falsy
+test "and returns first when first falsy", "fn = (x) -> x\nfn '' and 'yes'", ""
+
+# and with multiple arguments
+test "and with multiple args", "fn = (a, b) -> a + b\nfn 'a', 'b' and 'result'", "result"
+
+# ============================================================================
+# Explicit parens preserve grouping (when you WANT || inside args)
+# ============================================================================
+
+# Parens make or part of the argument
+test "parens preserve or in args", "fn = (x) -> x\nfn (true || false)", true
+test "parens preserve and in args", "fn = (x) -> x\nfn (true && false)", false
+
+# ============================================================================
+# Real-world patterns from rip-api
+# ============================================================================
+
+test "read with string default", "read = (k, t) -> null\nread 'body', 'string' or ''", ""
+test "read with number default", "read = (k, t) -> null\nread 'count', 'number' or 0", 0
+test "read with boolean default", "read = (k, t) -> null\nread 'flag', 'boolean' or false", false
+test "read returns value when present", "read = (k, t) -> 'value'\nread 'body', 'string' or ''", "value"
+
+# ============================================================================
+# Edge cases
+# ============================================================================
+
+# Nested function calls
+test "nested calls with or", "outer = (x) -> x\ninner = (x) -> x\nouter inner 'test' or 'fallback'", "test"
+
+# Method calls
+test "method call with or", "obj = { get: (x) -> x }\nobj.get 'value' or 'default'", "value"
+
+# Multiple or in chain
+test "multiple or chain", "fn = (x) -> null\nfn 'a' or fn 'b' or 'c'", "c"
+
+# ============================================================================
+# or/and INSIDE implicit objects (should NOT end the object)
+# ============================================================================
+
+# or inside object value should stay in object
+test "or in object value", "foo = null\nx = { a: foo or 'default' }\nx.a", "default"
+test "or in object with truthy", "foo = 'yes'\nx = { a: foo or 'default' }\nx.a", "yes"
+
+# and inside object value
+test "and in object value truthy", "foo = 'yes'\nx = { a: foo and 'result' }\nx.a", "result"
+test "and in object value falsy", "foo = null\nx = { a: foo and 'result' }\nx.a", null
+
+# Multiple properties with or/and
+test "multiple props with or", "foo = null\nx = { a: foo or 'A', b: 'B' }\nx.a + x.b", "AB"
+test "multiple props with and", "foo = 'yes'\nx = { a: foo and 'A', b: 'B' }\nx.a + x.b", "AB"
+
+# Nested implicit object with or
+test "nested object with or", "foo = null\nx = { outer: { inner: foo or 'default' } }\nx.outer.inner", "default"
+
+# Multi-line implicit object with or (the original bug case)
+code "multiline object with or", """
+  foo = null
+  x =
+    a: foo or 'default'
+    b: 'other'
+  x.a + x.b
+""", """
+let foo, x;
+
+foo = null;
+x = {a: (foo || 'default'), b: 'other'};
+(x.a + x.b);
+"""
+
+test "multiline object with or runtime", "foo = null\nx = { a: foo or 'default', b: 'other' }\nx.a + x.b", "defaultother"
+
+# Real-world pattern: Response headers with defaults
+test "headers with or defaults", """
+  req = { headers: { get: (k) -> null } }
+  headers =
+    'Access-Control-Allow-Origin': req.headers.get('origin') or '*'
+    'Content-Type': 'text/plain'
+  headers['Access-Control-Allow-Origin']
+""", "*"
+
+# ============================================================================
+# or/and in function call arguments with more args after
+# ============================================================================
+
+# or in first arg, more args after - or stays in args
+test "or in first arg with more", "fn = (a, b) -> a + ':' + b\nfn 'x' or 'y', 'z'", "x:z"
+test "or in first arg falsy with more", "fn = (a, b) -> a + ':' + b\nfn null or 'y', 'z'", "y:z"
+
+# new Response pattern (common in rip-api)
+test "Response with or in body", "Response = (b, o) -> { body: b, status: o.status }\nResponse 'ok' or 'error', { status: 200 }", { body: "ok", status: 200 }
+test "Response with or in body falsy", "Response = (b, o) -> { body: b, status: o.status }\nResponse null or 'error', { status: 500 }", { body: "error", status: 500 }
+
+# and in first arg with more args
+test "and in first arg with more", "fn = (a, b) -> b\nfn true and 'x', 'y'", "y"
+
+# Multiple ors with commas - complex case
+test "mixed or comma pattern", "fn = (a, b, c) -> a + b + c\nfn 'a' or 'A', 'b' or 'B', 'c' or 'C'", "abc"
+
+# ============================================================================
+# Postfix if/unless with implicit function calls
+# ============================================================================
+
+# return X unless Y - should only return when condition fails
+test "return unless falsy", "fn = (sql) ->\n  return 'error' unless sql\n  'success'\nfn null", "error"
+test "return unless truthy", "fn = (sql) ->\n  return 'error' unless sql\n  'success'\nfn 'data'", "success"
+
+# return with nested function calls unless Y
+test "return nested calls unless falsy", "fn = (sql) ->\n  return outer inner 'error' unless sql\n  'success'\nouter = (x) -> x\ninner = (x) -> x\nfn null", "error"
+test "return nested calls unless truthy", "fn = (sql) ->\n  return outer inner 'error' unless sql\n  'success'\nouter = (x) -> x\ninner = (x) -> x\nfn 'data'", "success"
+
+# return X if Y - should only return when condition passes
+test "return if truthy", "fn = (flag) ->\n  return 'early' if flag\n  'normal'\nfn true", "early"
+test "return if falsy", "fn = (flag) ->\n  return 'early' if flag\n  'normal'\nfn false", "normal"
+
+# code generation tests
+code "return unless generates if statement", """
+  return binaryResponse serializeErrorResult 'Error' unless sql
+""", """
+if (!sql) return binaryResponse(serializeErrorResult('Error'));
+"""
+
+code "return if generates if statement", """
+  return handleError 'Not found' if notFound
+""", """
+if (notFound) return handleError('Not found');
+"""
+
+# ============================================================================
+# Parenthesized sequences (multiple statements)
+# ============================================================================
+
+# Sequence returns last value
+test "paren sequence returns last", "x = (1; 2; 3)\nx", 3
+
+# Sequence with side effects
+test "paren sequence with side effect", "i = 0\nx = (i++; i++; i)\nx", 2
+
+# Break in parentheses
+test "break in parens", "i = 0\nwhile i < 10\n  if i is 5 then (i++; break)\n  i++\ni", 6
+
+# Continue in parentheses
+test "continue in parens", "sum = 0\nfor i in [1..5]\n  if i is 3 then (sum += 100; continue)\n  sum += i\nsum", 112

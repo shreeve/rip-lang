@@ -1,0 +1,46 @@
+{
+  "name": "@rip-lang/swarm",
+  "version": "1.0.6",
+  "description": "Parallel job runner with worker threads — setup once, swarm many",
+  "type": "module",
+  "main": "swarm.rip",
+  "bin": {
+    "swarm": "./bin/swarm"
+  },
+  "exports": {
+    ".": "./swarm.rip"
+  },
+  "scripts": {
+    "test": "rip test/example.rip -w 5"
+  },
+  "keywords": [
+    "parallel",
+    "workers",
+    "jobs",
+    "tasks",
+    "concurrency",
+    "progress",
+    "cli",
+    "rip"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreeve/rip-lang.git",
+    "directory": "packages/swarm"
+  },
+  "homepage": "https://github.com/shreeve/rip-lang/tree/main/packages/swarm#readme",
+  "bugs": {
+    "url": "https://github.com/shreeve/rip-lang/issues"
+  },
+  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "rip-lang": "^2.9.0"
+  },
+  "files": [
+    "swarm.rip",
+    "lib/",
+    "bin/",
+    "README.md"
+  ]
+}

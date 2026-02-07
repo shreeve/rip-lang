@@ -1,0 +1,59 @@
+# ==============================================================================
+# CoffeeScript Compatibility Tests
+# ==============================================================================
+#
+# Tests for backward compatibility features that allow legacy CoffeeScript
+# syntax to work in Rip while compiling to modern ES6 JavaScript.
+# ==============================================================================
+
+# -----------------------------------------------------------------------------
+# Range Operators
+# -----------------------------------------------------------------------------
+
+test 'inclusive range not transformed', '''
+  [1..5]
+  ''', [1, 2, 3, 4, 5]
+
+test 'exclusive range not transformed', '''
+  [1...5]
+  ''', [1, 2, 3, 4]
+
+test 'range in for loop not transformed', '''
+  sum = 0
+  sum += i for i in [1...5]
+  sum
+  ''', 10
+
+test 'array slice not transformed', '''
+  arr = [0, 1, 2, 3, 4]
+  arr[1...3]
+  ''', [1, 2]
+
+code 'range not transformed', '''
+  [1...10]
+  ''', '''
+  ((s, e) => Array.from({length: Math.max(0, Math.abs(e - s))}, (_, i) => s + (i * (s <= e ? 1 : -1))))(1, 10);
+'''
+
+# ==============================================================================
+# TERNARY OPERATOR
+# ==============================================================================
+
+test 'ternary unchanged', '''
+  condition = true
+  condition ? "yes" : "no"
+  ''', "yes"
+
+test 'ternary with numbers', '''
+  x = 5
+  x > 3 ? "big" : "small"
+  ''', "big"
+
+code 'ternary stays ternary', '''
+  x = true
+  x ? 1 : 2
+  ''', '''
+  let x;
+  x = true;
+  (x ? 1 : 2);
+'''

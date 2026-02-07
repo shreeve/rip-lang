@@ -1,0 +1,246 @@
+# Test: Operators (24 node types)
+# Systematically tests all operator node types from grammar
+
+# ============================================================================
+# Arithmetic Operators
+# ============================================================================
+
+# Addition: "+"
+test "addition integers", "5 + 3", 8
+test "addition decimals", "2.5 + 1.5", 4.0
+test "addition negative", "-5 + 10", 5
+code "addition parens", "a + b", "(a + b)"
+
+# Subtraction: "-" (binary and unary)
+test "subtraction integers", "10 - 4", 6
+test "subtraction negative result", "3 - 5", -2
+test "unary minus", "-5", -5
+code "subtraction parens", "a - b", "(a - b)"
+
+# Multiplication: "*"
+test "multiplication", "4 * 3", 12
+test "multiplication decimal", "2.5 * 2", 5.0
+code "multiplication parens", "a * b", "(a * b)"
+
+# Division: "/"
+test "division", "10 / 2", 5
+test "division decimal", "7 / 2", 3.5
+code "division parens", "a / b", "(a / b)"
+
+# Modulo: "%"
+test "modulo", "10 % 3", 1
+test "modulo zero", "10 % 5", 0
+code "modulo parens", "a % b", "(a % b)"
+
+# Exponentiation: "**"
+test "exponentiation", "2 ** 3", 8
+test "exponentiation decimal", "4 ** 0.5", 2
+code "exponentiation parens", "a ** b", "(a ** b)"
+
+# ============================================================================
+# Comparison Operators
+# ============================================================================
+
+# Equality: "==" (compiles to strict ===)
+test "equality true", "5 == 5", true
+test "equality false", "5 == 3", false
+test "is keyword", "5 is 5", true
+test "is keyword false", "5 is 3", false
+test "strict equality triple equals", "5 === 5", true
+test "strict equality false", "5 === 3", false
+
+code "equality compiles to strict", "a == b", "(a === b)"
+code "is compiles to strict", "a is b", "(a === b)"
+code "triple equals compiles to strict", "a === b", "(a === b)"
+
+# Inequality: "!=" (compiles to strict !==)
+test "inequality true", "5 != 3", true
+test "inequality false", "5 != 5", false
+test "isnt keyword", "5 isnt 3", true
+test "isnt keyword false", "5 isnt 5", false
+test "strict inequality triple", "5 !== 3", true
+test "strict inequality false", "5 !== 5", false
+
+code "inequality compiles to strict", "a != b", "(a !== b)"
+code "isnt compiles to strict", "a isnt b", "(a !== b)"
+code "triple not-equals compiles to strict", "a !== b", "(a !== b)"
+
+# Less than: "<"
+test "less than true", "3 < 5", true
+test "less than false", "5 < 3", false
+code "less than parens", "a < b", "(a < b)"
+
+# Greater than: ">"
+test "greater than true", "5 > 3", true
+test "greater than false", "3 > 5", false
+code "greater than parens", "a > b", "(a > b)"
+
+# Less than or equal: "<="
+test "less than or equal true", "3 <= 5", true
+test "less than or equal equal", "5 <= 5", true
+code "less than or equal parens", "a <= b", "(a <= b)"
+
+# Greater than or equal: ">="
+test "greater than or equal true", "5 >= 3", true
+test "greater than or equal equal", "5 >= 5", true
+code "greater than or equal parens", "a >= b", "(a >= b)"
+
+# ============================================================================
+# Logical Operators
+# ============================================================================
+
+# Logical NOT: "!"
+test "logical not true", "!false", true
+test "logical not false", "!true", false
+code "logical not simple", "!a", "!a"
+code "logical not complex", "!(a && b)", "!(a && b);"
+
+# Logical AND: "&&"
+test "logical and both true", "true && true", true
+test "logical and first false", "false && true", false
+test "logical and second false", "true && false", false
+code "logical and parens", "a && b", "(a && b)"
+
+# Logical OR: "||"
+test "logical or both false", "false || false", false
+test "logical or first true", "true || false", true
+test "logical or second true", "false || true", true
+code "logical or parens", "a || b", "(a || b)"
+
+# Nullish coalescing: "??"
+test "nullish with null", "null ?? 10", 10
+test "nullish with undefined", "undefined ?? 20", 20
+test "nullish with zero", "0 ?? 30", 0
+test "nullish with false", "false ?? 40", false
+code "nullish coalescing parens", "a ?? b", "(a ?? b)"
+
+# Otherwise operator: "!?" (undefined-only coalescing)
+test "otherwise with null", "null !? 10", null
+test "otherwise with undefined", "undefined !? 20", 20
+test "otherwise with zero", "0 !? 30", 0
+test "otherwise with false", "false !? 40", false
+test "otherwise with empty string", "'' !? 'default'", ''
+test "otherwise chain", "undefined !? undefined !? 42", 42
+test "otherwise all undefined", "undefined !? undefined !? 'fallback'", "fallback"
+test "otherwise first value", "5 !? 10 !? 15", 5
+test "otherwise second value", "undefined !? 10 !? 15", 10
+code "otherwise operator parens", "a !? b", "(a !== undefined ? a : b)"
+
+# ============================================================================
+# Bitwise Operators
+# ============================================================================
+
+# Bitwise AND: "&"
+test "bitwise and", "5 & 3", 1
+code "bitwise and parens", "a & b", "(a & b)"
+
+# Bitwise OR: "|"
+test "bitwise or", "5 | 3", 7
+code "bitwise or parens", "a | b", "(a | b)"
+
+# Bitwise XOR: "^"
+test "bitwise xor", "5 ^ 3", 6
+code "bitwise xor parens", "a ^ b", "(a ^ b)"
+
+# Bitwise NOT: "~"
+test "bitwise not", "~5", -6
+code "bitwise not parens", "~a", "(~a)"
+
+# ============================================================================
+# Increment/Decrement: "++" / "--"
+# ============================================================================
+
+# Prefix increment: "++"
+test "prefix increment", "x = 5\n++x", 6
+
+# Postfix increment: "++"
+test "postfix increment", "x = 5\nx++\nx", 6
+
+# Prefix decrement: "--"
+test "prefix decrement", "x = 5\n--x", 4
+
+# Postfix decrement: "--"
+test "postfix decrement", "x = 5\nx--\nx", 4
+
+# ============================================================================
+# In operator with string literals (critical for bootstrap!)
+# ============================================================================
+
+# String literal in object (use in operator)
+test "in operator object", "obj = {a: 1}\n'a' in obj", true
+test "in operator object missing", "obj = {b: 1}\n'a' in obj", false
+
+# String literal in string (should use .includes())
+# Critical: CoffeeScript 'x' in str should check if x is substring, not index!
+test "string in string present", "str = 'hello world'\n'world' in str", true
+test "string in string missing", "str = 'hello'\n'world' in str", false
+test "newline in string", "str = 'line1\\nline2'\n'\\n' in str", true
+
+# Code generation test - runtime check for string/array vs object
+code "string literal in variable uses runtime check", "'\\n' in action", "(Array.isArray(action) || typeof action === 'string' ? action.includes('\\n') : ('\\n' in action))"
+code "property in identifier also uses runtime check", "'key' in obj", "(Array.isArray(obj) || typeof obj === 'string' ? obj.includes('key') : ('key' in obj))"
+
+# ============================================================================
+# Array Membership Tests (Issue #60)
+# The 'in' operator should check VALUES in arrays, not INDICES
+# ============================================================================
+
+# Variable in array variable (primary bug case)
+test "variable in array variable", "list = ['apple', 'banana']\nval = 'apple'\nval in list", true
+test "variable not in array variable", "list = ['apple', 'banana']\nval = 'orange'\nval in list", false
+
+# String literal in array literal
+test "string literal in array literal", "'apple' in ['apple', 'banana']", true
+test "string not in array literal", "'orange' in ['apple', 'banana']", false
+
+# Variable in array literal
+test "variable in array literal", "val = 'apple'\nval in ['apple', 'banana']", true
+test "variable not in array literal", "val = 'orange'\nval in ['apple', 'banana']", false
+
+# Number in array (should check VALUE, not index!)
+test "number value in array", "val = 42\nval in [10, 42, 99]", true
+test "number not in array", "val = 5\nval in [10, 42, 99]", false
+
+# Critical edge case: number 1 as VALUE vs index 1
+test "number 1 as value in array", "1 in [5, 1, 9]", true
+test "number 1 not as value", "1 in [5, 9]", false
+
+# Empty array
+test "value in empty array", "'x' in []", false
+
+# Code generation - all non-object cases should use runtime check
+code "variable in variable uses runtime check", "val in list", "(Array.isArray(list) || typeof list === 'string' ? list.includes(val) : (val in list))"
+code "literal in literal uses runtime check", "'x' in ['a', 'b']", "(Array.isArray(['a', 'b']) || typeof ['a', 'b'] === 'string' ? ['a', 'b'].includes('x') : ('x' in ['a', 'b']))"
+code "variable in literal uses runtime check", "val in ['a', 'b']", "(Array.isArray(['a', 'b']) || typeof ['a', 'b'] === 'string' ? ['a', 'b'].includes(val) : (val in ['a', 'b']))"
+
+# Object literal should still use JavaScript 'in'
+code "property in object literal", "'key' in {key: 1}", "('key' in {key: 1})"
+
+# ============================================================================
+# Ternary Operator: "? :"
+# ============================================================================
+
+# Basic ternary
+test "ternary true branch", "true ? 'yes' : 'no'", 'yes'
+test "ternary false branch", "false ? 'yes' : 'no'", 'no'
+test "ternary with comparison", "5 > 3 ? 'big' : 'small'", 'big'
+test "ternary with variables", "a = true\nb = 10\nc = 20\na ? b : c", 10
+
+# Ternary with various true-branch expressions (all should work without parens)
+test "ternary simple identifier", "x = 5\ntrue ? x : 0", 5
+test "ternary property access", "obj = {foo: 42}\ntrue ? obj.foo : 0", 42
+test "ternary function call", "fn = -> 99\ntrue ? fn() : 0", 99
+test "ternary arithmetic", "true ? 2 + 3 : 0", 5
+test "ternary with match operator", "('ABC' =~ /B/) ? 'found' : 'nope'", 'found'
+
+# Code generation tests
+code "ternary basic", "a ? b : c", "(a ? b : c)"
+code "ternary with property access", "a ? b.foo : c", "(a ? b.foo : c)"
+code "ternary with function call", "a ? b() : c", "(a ? b() : c)"
+code "ternary with expression", "a ? b + 1 : c", "(a ? (b + 1) : c)"
+
+# NOTE: Subscript access in ternary true-branch requires parentheses
+# This is a known limitation: `a ? b[0] : c` needs to be written as `a ? (b[0]) : c`
+# The workaround is simple and explicit
+test "ternary subscript with parens", "arr = [1, 2, 3]\ntrue ? (arr[0]) : 0", 1
+code "ternary subscript with parens", "a ? (b[0]) : c", "(a ? b[0] : c)"

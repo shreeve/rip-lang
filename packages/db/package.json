@@ -1,0 +1,46 @@
+{
+  "name": "@rip-lang/db",
+  "version": "1.0.5",
+  "description": "DuckDB server with official DuckDB UI — pure Bun FFI",
+  "type": "module",
+  "main": "db.rip",
+  "bin": {
+    "rip-db": "./bin/rip-db"
+  },
+  "scripts": {
+    "start": "rip db.rip",
+    "dev": "rip db.rip :memory:"
+  },
+  "keywords": [
+    "db",
+    "database",
+    "duckdb",
+    "sql",
+    "http",
+    "api",
+    "bun",
+    "ffi",
+    "rip"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreeve/rip-lang.git",
+    "directory": "packages/db"
+  },
+  "homepage": "https://github.com/shreeve/rip-lang/tree/main/packages/db#readme",
+  "bugs": {
+    "url": "https://github.com/shreeve/rip-lang/issues"
+  },
+  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "rip-lang": "^2.9.0",
+    "@rip-lang/api": "^1.0.0"
+  },
+  "files": [
+    "db.rip",
+    "lib/",
+    "bin/",
+    "README.md"
+  ]
+}

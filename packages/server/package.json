@@ -1,0 +1,51 @@
+{
+  "name": "@rip-lang/server",
+  "version": "1.0.3",
+  "description": "Pure Rip application server — multi-worker, hot reload, HTTPS, mDNS",
+  "type": "module",
+  "main": "server.rip",
+  "exports": {
+    ".": "./server.rip"
+  },
+  "bin": {
+    "rip-server": "./bin/rip-server"
+  },
+  "scripts": {
+    "build": "rip -c server.rip",
+    "test": "echo \"Tests coming soon\" && exit 0"
+  },
+  "keywords": [
+    "server",
+    "app-server",
+    "hot-reload",
+    "multi-worker",
+    "https",
+    "tls",
+    "mdns",
+    "bun",
+    "rip",
+    "rip-lang"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreeve/rip-lang.git",
+    "directory": "packages/server"
+  },
+  "homepage": "https://github.com/shreeve/rip-lang/tree/main/packages/server#readme",
+  "bugs": {
+    "url": "https://github.com/shreeve/rip-lang/issues"
+  },
+  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "rip-lang": "^2.9.0",
+    "@rip-lang/api": "^1.0.0"
+  },
+  "files": [
+    "bin/",
+    "server.rip",
+    "server.html",
+    "docs/",
+    "README.md"
+  ]
+}

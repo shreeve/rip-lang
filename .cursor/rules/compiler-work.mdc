@@ -1,0 +1,61 @@
+---
+description: Rules for working on the Rip compiler
+globs: ["src/**/*.js", "src/**/*.rip"]
+alwaysApply: false
+---
+
+# Compiler Development Rules
+
+## File Editing Rules
+
+| File | Can Edit? | Notes |
+|------|-----------|-------|
+| `src/compiler.js` | Yes | Code generator (3,148 LOC) |
+| `src/lexer.js` | Yes | Lexer + Rewriter (1,542 LOC) |
+| `src/grammar/grammar.rip` | Carefully | Run `bun run parser` after changes |
+| `src/parser.js` | Never | Generated file (352 LOC) |
+| `src/grammar/solar.rip` | Never | Parser generator (1,001 LOC) |
+| `test/rip/*.rip` | Yes | Test files (1,048 tests) |
+
+## Compilation Pipeline
+
+```
+Rip Source  ->  Lexer  ->  Parser  ->  S-Expressions  ->  Codegen  ->  JavaScript
+```
+
+S-expressions are simple arrays like `["=", "x", 42]`.
+
+## Common S-Expression Patterns
+
+```javascript
+["=", "x", 42]                 // Assignment
+["+", left, right]             // Binary operator
+["def", "name", params, body]  // Function definition
+["->", params, body]           // Arrow function
+["if", condition, then, else]  // Conditional
+["state", name, expr]          // Reactive state (:=)
+["computed", name, expr]       // Computed value (~=)
+```
+
+## Debugging Workflow
+
+```bash
+# 1. See what the parser produces
+echo 'failing code' | ./bin/rip -s
+
+# 2. Find the generator in compiler.js
+grep "GENERATORS" src/compiler.js
+
+# 3. Fix the generator method
+
+# 4. Test
+bun run test
+```
+
+## Always Remember
+
+- **Never edit `src/parser.js`** — It's generated
+- **Never edit `src/grammar/solar.rip`** — It's given
+- Run `bun run test` before committing
+- Run `bun run parser` after grammar changes
+- Run `bun run browser` after codegen changes
