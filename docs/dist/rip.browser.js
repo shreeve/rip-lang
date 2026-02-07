@@ -926,6 +926,8 @@ class Lexer {
       tag = "SHIFT";
     else if (val === "?" && prev?.spaced)
       tag = "SPACE?";
+    else if (val === "?" && (this.chunk[1] === "[" || this.chunk[1] === "("))
+      tag = "?.";
     else if (prev) {
       if (val === "(" && !prev.spaced && CALLABLE.has(prev[0])) {
         if (prev[0] === "?.")
@@ -1019,9 +1021,8 @@ class Lexer {
     let starter = null;
     let indent = null;
     let outdent = null;
-    let bodyStart = null;
     let condition = (token, i) => {
-      return token[1] !== ";" && SINGLE_CLOSERS.has(token[0]) && !(token[0] === "TERMINATOR" && EXPRESSION_CLOSE.has(this.tokens[i + 1]?.[0])) && !(token[0] === "ELSE" && starter !== "THEN") || token[0] === "," && (starter === "->" || starter === "=>") && !(bodyStart != null && IMPLICIT_FUNC.has(this.tokens[bodyStart]?.[0]) && this.tokens[bodyStart]?.spaced && (IMPLICIT_CALL.has(this.tokens[bodyStart + 1]?.[0]) || this.tokens[bodyStart + 1]?.[0] === "..." && IMPLICIT_CALL.has(this.tokens[bodyStart + 2]?.[0]))) || CALL_CLOSERS.has(token[0]) && (this.tokens[i - 1]?.newLine || this.tokens[i - 1]?.[0] === "OUTDENT");
+      return token[1] !== ";" && SINGLE_CLOSERS.has(token[0]) && !(token[0] === "TERMINATOR" && EXPRESSION_CLOSE.has(this.tokens[i + 1]?.[0])) && !(token[0] === "ELSE" && starter !== "THEN") || token[0] === "," && (starter === "->" || starter === "=>") && !this.commaInImplicitCall(i) || CALL_CLOSERS.has(token[0]) && (this.tokens[i - 1]?.newLine || this.tokens[i - 1]?.[0] === "OUTDENT");
     };
     let action = (token, i) => {
       let idx = this.tokens[i - 1]?.[0] === "," ? i - 1 : i;
@@ -1055,7 +1056,6 @@ class Lexer {
       }
       if (SINGLE_LINERS.has(tag) && this.tokens[i + 1]?.[0] !== "INDENT" && !(tag === "ELSE" && this.tokens[i + 1]?.[0] === "IF")) {
         starter = tag;
-        bodyStart = i + 2;
         [indent, outdent] = this.makeIndentation();
         if (tag === "THEN")
           indent.fromThen = true;
@@ -1278,6 +1278,31 @@ class Lexer {
       }
       i++;
     }
+  }
+  commaInImplicitCall(i) {
+    let levels = 0;
+    for (let j = i - 1;j >= 0; j--) {
+      let tag = this.tokens[j][0];
+      if (EXPRESSION_END.has(tag)) {
+        levels++;
+        continue;
+      }
+      if (EXPRESSION_START.has(tag)) {
+        if (tag === "INDENT")
+          return false;
+        levels--;
+        if (levels < 0)
+          return false;
+        continue;
+      }
+      if (levels > 0)
+        continue;
+      if (IMPLICIT_FUNC.has(tag) && this.tokens[j].spaced) {
+        let nt = this.tokens[j + 1]?.[0];
+        return IMPLICIT_CALL.has(nt) || nt === "..." && IMPLICIT_CALL.has(this.tokens[j + 2]?.[0]);
+      }
+    }
+    return false;
   }
   looksObjectish(j) {
     if (!this.tokens[j])
@@ -5424,8 +5449,8 @@ function compileToJS(source, options = {}) {
   return new Compiler(options).compileToJS(source);
 }
 // src/browser.js
-var VERSION = "3.0.1";
-var BUILD_DATE = "2026-02-07@15:19:02GMT";
+var VERSION = "3.0.2";
+var BUILD_DATE = "2026-02-07@15:36:01GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
