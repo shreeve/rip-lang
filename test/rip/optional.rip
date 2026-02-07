@@ -25,9 +25,9 @@ test "existence subscript expression", "arr = [10, 20]; arr[1 - 1]?", true
 code "existence subscript gen", "arr[0]?", "(arr[0] != null)"
 
 # Existence after function call: fn()?
-test "existence call", "fn = -> 42; fn()?", true
-test "existence call null", "fn = -> null; fn()?", false
-test "existence call undefined", "fn = -> undefined; fn()?", false
+test "existence call", "fn = -> 42\nfn()?", true
+test "existence call null", "fn = -> null\nfn()?", false
+test "existence call undefined", "fn = -> undefined\nfn()?", false
 code "existence call gen", "fn()?", "(fn() != null)"
 
 # Existence after property access (already works, but verify compound)

@@ -125,7 +125,7 @@ INTERNAL_HEADERS = new Set(['rip-worker-busy', 'rip-worker-id'])
 
 stripInternalHeaders = (h) ->
   out = new Headers()
-  for [k, v] from h.entries()
+  for [k, v] as h.entries()
     continue if INTERNAL_HEADERS.has(k.toLowerCase())
     out.append(k, v)
   out
@@ -247,7 +247,7 @@ parseFlags = (argv) ->
       process.exit(2)
 
   getKV = (prefix) ->
-    for f from rawFlags
+    for f as rawFlags
       return f.slice(prefix.length) if f.startsWith(prefix)
     undefined
 
@@ -390,7 +390,7 @@ runWorker = ->
       unless h
         try
           api = import!('@rip-lang/api')
-          h = api?.startHandler?()
+          h = api?.startHandler?.()
         catch
           null
 
@@ -644,7 +644,7 @@ class Manager
 
     retiring = new Set(pairs.map((p) -> p.old.id))
     @workers = @workers.filter((w) -> not retiring.has(w.id))
-    @retiringIds.delete(id) for id from retiring
+    @retiringIds.delete(id) for id as retiring
 
   shutdown: ->
     return if @shuttingDown
@@ -744,7 +744,7 @@ class Server
     try @httpsServer?.stop() catch then null
     try @control?.stop() catch then null
 
-    for [host, proc] from @mdnsProcesses
+    for [host, proc] as @mdnsProcesses
       try
         proc.kill()
         console.log "rip-server: stopped advertising #{host} via mDNS"

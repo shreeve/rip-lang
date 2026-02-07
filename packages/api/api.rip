@@ -236,7 +236,7 @@ export prefix = (base, fn) ->
   old = _prefix
   _prefix = "#{_prefix}#{base}"
   try
-    fn?()
+    fn?.()
   finally
     _prefix = old
 
@@ -283,7 +283,7 @@ export fetch = (req) ->
   c = createContext(req, match.params)
 
   # Run raw filter before body parsing (e.g., fix content-type)
-  _rawFilter?(req) if method in ['POST', 'PUT', 'PATCH']
+  _rawFilter?.(req) if method in ['POST', 'PUT', 'PATCH']
 
   # Pre-parse body and query for sync read() — baked in, zero ceremony
   data = {}
@@ -342,7 +342,7 @@ export start = (opts = {}) ->
 
 export App = (fn) ->
   resetGlobals()
-  fn?()
+  fn?.()
   startHandler()
 
 # ==============================================================================

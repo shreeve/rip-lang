@@ -643,6 +643,12 @@ export class Lexer {
 
     // If we're in an unfinished expression, suppress the newline
     if (this.isUnfinished()) {
+      // Exception: comma at a lower indent continues the outer call, not the block
+      if (size < this.indent && /^\s*,/.test(this.chunk) && !UNFINISHED.has(this.prevTag())) {
+        this.outdentTo(size, indent.length);
+        if (this.prevTag() === 'TERMINATOR') this.tokens.pop();
+        return indent.length;
+      }
       return indent.length;
     }
 
@@ -1184,12 +1190,15 @@ export class Lexer {
     let starter = null;
     let indent = null;
     let outdent = null;
+    let bodyStart = null;
 
     let condition = (token, i) => {
       return token[1] !== ';' && SINGLE_CLOSERS.has(token[0]) &&
         !(token[0] === 'TERMINATOR' && EXPRESSION_CLOSE.has(this.tokens[i + 1]?.[0])) &&
         !(token[0] === 'ELSE' && starter !== 'THEN') ||
-        token[0] === ',' && (starter === '->' || starter === '=>') ||
+        token[0] === ',' && (starter === '->' || starter === '=>') &&
+          !(bodyStart != null && IMPLICIT_FUNC.has(this.tokens[bodyStart]?.[0]) && this.tokens[bodyStart]?.spaced &&
+            (IMPLICIT_CALL.has(this.tokens[bodyStart + 1]?.[0]) || (this.tokens[bodyStart + 1]?.[0] === '...' && IMPLICIT_CALL.has(this.tokens[bodyStart + 2]?.[0])))) ||
         CALL_CLOSERS.has(token[0]) && (this.tokens[i - 1]?.newLine || this.tokens[i - 1]?.[0] === 'OUTDENT');
     };
 
@@ -1231,6 +1240,7 @@ export class Lexer {
       if (SINGLE_LINERS.has(tag) && this.tokens[i + 1]?.[0] !== 'INDENT' &&
           !(tag === 'ELSE' && this.tokens[i + 1]?.[0] === 'IF')) {
         starter = tag;
+        bodyStart = i + 2;
         [indent, outdent] = this.makeIndentation();
         if (tag === 'THEN') indent.fromThen = true;
         tokens.splice(i + 1, 0, indent);
