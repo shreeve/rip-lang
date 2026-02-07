@@ -35,10 +35,12 @@ Use `"""` for interpolated strings, `'''` for literal strings.
 
 ### The `?` Operator
 
-The single `?` in Rip is used for two things only:
+The `?` character in Rip serves several roles:
 
-- **Postfix existence check**: `x?` compiles to `(x != null)`
+- **Postfix existence check**: `x?` compiles to `(x != null)` — works after any expression including subscripts (`arr[0]?`) and calls (`fn()?`)
 - **Ternary conditional**: `x ? y : z` compiles to `(x ? y : z)`
+- **Optional chaining**: `a?.b`, `a?.[0]`, `a?.(x)` — ES6 optional chaining
+- **Optional chaining shorthand**: `a?[0]` compiles to `a?.[0]`, `a?(x)` compiles to `a?.(x)` — dot is optional
 
 CoffeeScript's binary existential `x ? y` (fallback if null/undefined) has been
 **removed**. Use JavaScript's `??` nullish coalescing operator instead:

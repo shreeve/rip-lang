@@ -11,10 +11,12 @@ alwaysApply: false
 | Package | Description | Status |
 |---------|-------------|--------|
 | **api** | Pure Rip API framework (zero deps) | Active |
-| **data** | DuckDB data platform | Early |
+| **csv** | CSV parsing and generation | Active |
+| **db** | DuckDB server with official UI (pure Bun FFI) | Active |
 | **parser** | SLR(1) parser generator | Early |
 | **schema** | Unified schema system | Active |
 | **server** | Production app server | Active |
+| **swarm** | Multi-provider AI agent orchestration | Active |
 | **ui** | Component library | Early |
 
 ## Key Packages

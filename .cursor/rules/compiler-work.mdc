@@ -15,7 +15,7 @@ alwaysApply: false
 | `src/grammar/grammar.rip` | Carefully | Run `bun run parser` after changes |
 | `src/parser.js` | Never | Generated file (352 LOC) |
 | `src/grammar/solar.rip` | Never | Parser generator (1,001 LOC) |
-| `test/rip/*.rip` | Yes | Test files (1,048 tests) |
+| `test/rip/*.rip` | Yes | Test files (1,073 tests) |
 
 ## Compilation Pipeline
 
