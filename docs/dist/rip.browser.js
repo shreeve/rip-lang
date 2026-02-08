@@ -2977,7 +2977,7 @@ ${blockFactoriesCode}return ${lines.join(`
   proto.emitAttributes = function(elVar, objExpr) {
     const inputType = extractInputType(objExpr.slice(1));
     for (let i = 1;i < objExpr.length; i++) {
-      const [key, value] = objExpr[i];
+      let [key, value] = objExpr[i];
       if (Array.isArray(key) && key[0] === "." && key[1] === "this") {
         const eventName = key[2];
         const handlerCode = this.generateInComponent(value, "value");
@@ -2985,6 +2985,9 @@ ${blockFactoriesCode}return ${lines.join(`
         continue;
       }
       if (typeof key === "string") {
+        if (key.startsWith('"') && key.endsWith('"')) {
+          key = key.slice(1, -1);
+        }
         if (key.startsWith(BIND_PREFIX) && key.endsWith(BIND_SUFFIX)) {
           const prop = key.slice(BIND_PREFIX.length, -BIND_SUFFIX.length);
           const valueCode2 = this.generateInComponent(value, "value");
@@ -4035,6 +4038,12 @@ class CodeGenerator {
 `;
       needsBlank = true;
     }
+    let exportsCode = "";
+    if (exports.length > 0) {
+      exportsCode = `
+` + exports.map((s) => this.addSemicolon(s, this.generate(s, "statement"))).join(`
+`);
+    }
     if (this.usesReactivity && !this.options.skipReactiveRuntime) {
       if (typeof globalThis !== "undefined" && globalThis.__rip) {
         code += `const { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;
@@ -4063,11 +4072,7 @@ _setDataSection();
       code += `
 `;
     code += statementsCode;
-    if (exports.length > 0) {
-      code += `
-` + exports.map((s) => this.addSemicolon(s, this.generate(s, "statement"))).join(`
-`);
-    }
+    code += exportsCode;
     if (this.dataSection !== null && this.dataSection !== undefined) {
       code += `
 
@@ -6769,7 +6774,7 @@ function getComponentRuntime() {
 }
 // src/browser.js
 var VERSION = "3.1.1";
-var BUILD_DATE = "2026-02-08@10:21:02GMT";
+var BUILD_DATE = "2026-02-08@10:38:14GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

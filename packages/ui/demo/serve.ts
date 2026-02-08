@@ -55,7 +55,7 @@ Bun.serve({
         // Resolve rip.browser.js from the project root build
         if (path === '/rip.browser.js') {
             // Try built output first, then misc/lab copy
-            for (const loc of [`${ROOT_DIR}/dist/rip.browser.js`, `${ROOT_DIR}/misc/lab/rip.browser.js`]) {
+            for (const loc of [`${ROOT_DIR}/docs/dist/rip.browser.js`, `${ROOT_DIR}/dist/rip.browser.js`, `${ROOT_DIR}/misc/lab/rip.browser.js`]) {
                 const file = Bun.file(loc);
                 if (await file.exists()) {
                     return new Response(file, {

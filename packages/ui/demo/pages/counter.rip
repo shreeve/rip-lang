@@ -1,6 +1,6 @@
 # Counter Page
 
-Counter = component
+export Counter = component
   count := 0
   step := 1
 
@@ -34,5 +34,3 @@ Counter = component
           button.btn @click: (-> step = 5), "5"
           button.btn @click: (-> step = 10), "10"
           button.btn @click: (-> step = 100), "100"
-
-Counter.new().mount "#app"

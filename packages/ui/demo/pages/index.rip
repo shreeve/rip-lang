@@ -1,6 +1,6 @@
 # Home Page
 
-Home = component
+export Home = component
 
   render
     div
@@ -28,5 +28,3 @@ Home = component
           .feature-icon "🎯"
           .feature-name "Fine-Grained Rendering"
           .feature-desc "No virtual DOM. Direct DOM updates via reactive effects."
-
-Home.new().mount "#app"

@@ -633,6 +633,12 @@ export class CodeGenerator {
       needsBlank = true;
     }
 
+    // Generate exports code early so component/reactivity flags are set before runtime checks
+    let exportsCode = '';
+    if (exports.length > 0) {
+      exportsCode = '\n' + exports.map(s => this.addSemicolon(s, this.generate(s, 'statement'))).join('\n');
+    }
+
     if (this.usesReactivity && !this.options.skipReactiveRuntime) {
       if (typeof globalThis !== 'undefined' && globalThis.__rip) {
         code += 'const { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;\n';
@@ -658,10 +664,7 @@ export class CodeGenerator {
 
     if (needsBlank && code.length > 0) code += '\n';
     code += statementsCode;
-
-    if (exports.length > 0) {
-      code += '\n' + exports.map(s => this.addSemicolon(s, this.generate(s, 'statement'))).join('\n');
-    }
+    code += exportsCode;
 
     if (this.dataSection !== null && this.dataSection !== undefined) {
       code += `\n\nfunction _setDataSection() {\n  DATA = ${JSON.stringify(this.dataSection)};\n}`;

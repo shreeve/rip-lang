@@ -71,6 +71,12 @@ body {
 img, svg { display: block; max-width: 100%; }
 input, button, textarea, select { font: inherit; }
 
+#app {
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2rem 2rem;
+}
+
 /* ============================================
    Layout Shell
    ============================================ */

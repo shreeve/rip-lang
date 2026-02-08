@@ -1,6 +1,6 @@
 # Root Layout
 
-Layout = component
+export Layout = component
 
   render
     .app-layout
@@ -14,5 +14,3 @@ Layout = component
             a.nav-link href: "/about", "About"
       main.app-main
         div data-slot: "true"
-
-Layout.new().mount "#app"

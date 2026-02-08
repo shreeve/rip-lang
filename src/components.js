@@ -674,7 +674,7 @@ export function installComponentSupport(CodeGenerator) {
     const inputType = extractInputType(objExpr.slice(1));
 
     for (let i = 1; i < objExpr.length; i++) {
-      const [key, value] = objExpr[i];
+      let [key, value] = objExpr[i];
 
       // Event handler: @click or (. this eventName)
       if (Array.isArray(key) && key[0] === '.' && key[1] === 'this') {
@@ -686,6 +686,11 @@ export function installComponentSupport(CodeGenerator) {
 
       // Regular attribute
       if (typeof key === 'string') {
+        // Strip quotes from string keys (e.g., "data-slot" → data-slot)
+        if (key.startsWith('"') && key.endsWith('"')) {
+          key = key.slice(1, -1);
+        }
+
         // Two-way binding: __bind_value__ pattern
         if (key.startsWith(BIND_PREFIX) && key.endsWith(BIND_SUFFIX)) {
           const prop = key.slice(BIND_PREFIX.length, -BIND_SUFFIX.length);
