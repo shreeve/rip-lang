@@ -1,6 +1,6 @@
 # Todos Page
 
-component Todos
+Todos = component
   newTodo := ''
   todos := []
   nextId := 1
@@ -30,23 +30,23 @@ component Todos
 
   render
     div
-      .page-header
-        h1.page-title "Todos"
-        p.page-subtitle "List rendering and state management"
+      div.("page-header")
+        h1.("page-title") "Todos"
+        p.("page-subtitle") "List rendering and state management"
 
-      .card
-        .todo-input-row
+      div.card
+        div.("todo-input-row")
           input.input type: "text", placeholder: "What needs to be done?", @input: ((e) -> newTodo = e.target.value), @keydown: @handleKey
-          button.btn.btn-primary @click: @addTodo, "Add"
+          button.btn.("btn-primary") @click: @addTodo, "Add"
 
-        ul.todo-list
+        ul.("todo-list")
           for todo in todos
-            li.todo-item
-              span.todo-text todo.text
-              button.todo-delete @click: (=> @deleteTodo(todo.id)), "x"
+            li.("todo-item")
+              span.("todo-text") todo.text
+              button.("todo-delete") @click: (=> @deleteTodo(todo.id)), "x"
 
-        .todo-stats
+        div.("todo-stats")
           span "#{remaining} remaining"
-          button.btn.btn-sm @click: @clearDone, "Clear done"
+          button.btn.("btn-sm") @click: @clearDone, "Clear done"
 
 Todos.new().mount "#app"

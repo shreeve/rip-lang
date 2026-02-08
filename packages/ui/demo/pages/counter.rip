@@ -1,6 +1,6 @@
 # Counter Page
 
-component Counter
+Counter = component
   count := 0
   step := 1
 
@@ -15,21 +15,21 @@ component Counter
 
   render
     div
-      .page-header
-        h1.page-title "Counter"
-        p.page-subtitle "Reactive state with := operator"
+      div.("page-header")
+        h1.("page-title") "Counter"
+        p.("page-subtitle") "Reactive state with := operator"
 
-      .card
-        .counter-display "#{count}"
+      div.card
+        div.("counter-display") "#{count}"
 
-        .counter-controls
+        div.("counter-controls")
           button.btn @click: @decrement, "- #{step}"
           button.btn @click: @reset, "Reset"
-          button.btn.btn-primary @click: @increment, "+ #{step}"
+          button.btn.("btn-primary") @click: @increment, "+ #{step}"
 
-      .card
-        .card-title "Step Size"
-        .btn-group
+      div.card
+        div.("card-title") "Step Size"
+        div.("btn-group")
           button.btn @click: (-> step = 1), "1"
           button.btn @click: (-> step = 5), "5"
           button.btn @click: (-> step = 10), "10"
