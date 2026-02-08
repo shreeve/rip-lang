@@ -4,7 +4,7 @@
 # Solar - SLR(1) Parser Generator for Rip
 #
 # Author: Steve Shreeve <steve.shreeve@gmail.com>
-#   Date: November 15, 2025
+#   Date: February 8, 2026
 # ==============================================================================
 
 import * as fs from 'fs'
