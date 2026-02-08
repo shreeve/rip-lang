@@ -10,6 +10,7 @@
 
 import { Lexer } from './lexer.js';
 import { parser } from './parser.js';
+import { installComponentSupport } from './components.js';
 
 // =============================================================================
 // Metadata helpers — isolate all new String() awareness here
@@ -229,6 +230,10 @@ export class CodeGenerator {
     // Classes
     'class': 'generateClass',
     'super': 'generateSuper',
+
+    // Components
+    'component': 'generateComponent',
+    'render': 'generateRender',
 
     // Modules
     'import': 'generateImport',
@@ -630,6 +635,11 @@ export class CodeGenerator {
 
     if (this.usesReactivity && !this.options.skipReactiveRuntime) {
       code += this.getReactiveRuntime();
+      needsBlank = true;
+    }
+
+    if (this.usesTemplates) {
+      code += this.getComponentRuntime();
       needsBlank = true;
     }
 
@@ -3128,6 +3138,12 @@ export class Compiler {
   compileToJS(source) { return this.compile(source).code; }
   compileToSExpr(source) { return this.compile(source).sexpr; }
 }
+
+// =============================================================================
+// Component Support (prototype installation)
+// =============================================================================
+
+installComponentSupport(CodeGenerator);
 
 // =============================================================================
 // Convenience Functions
