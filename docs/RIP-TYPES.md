@@ -1,10 +1,10 @@
-# Rip Type-Led Design (TLD)
+# Rip Types
 
 > **Types describe what you mean. Code does what you say.**
 
-Rip supports **Type-Led Design**: a lightweight, expressive way to design
-software by defining shapes, intent, and contracts up front — without enforcing
-types at runtime or burdening the language with a full type system.
+Rip supports an optional, lightweight, expressive way to design software by
+defining shapes, intent, and contracts up front — without enforcing types at
+runtime or burdening the language with a full type system.
 
 Types in Rip are:
 
@@ -31,7 +31,7 @@ Both compile to identical JavaScript.
 
 ## Table of Contents
 
-1. [TLD Sigil Reference](#tld-sigil-reference)
+1. [Type Sigil Reference](#type-sigil-reference)
 2. [Type Annotations (`::`)](#type-annotations-)
 3. [Type Aliases (`::=`)](#type-aliases-)
 4. [Structural Types](#structural-types)
@@ -47,10 +47,11 @@ Both compile to identical JavaScript.
 14. [Boundary Validation](#boundary-validation)
 15. [Editor-First Workflow](#editor-first-workflow)
 16. [What Rip Intentionally Does Not Do](#what-rip-intentionally-does-not-do)
+17. [Implementation Plan](#implementation-plan)
 
 ---
 
-## TLD Sigil Reference
+## Type Sigil Reference
 
 | Sigil | Meaning | Example |
 |-------|---------|---------|
@@ -64,7 +65,7 @@ Both compile to identical JavaScript.
 | `->` | Function return type | `(a: number) -> string` |
 | `<T>` | Generic parameter | `Container<T>` |
 
-This is the complete Type-Led Design sigil vocabulary.
+This is the complete Rip Types sigil vocabulary.
 
 ---
 
@@ -224,6 +225,13 @@ type User = {
   name: string;
   email?: string;
   createdAt: Date;
+};
+
+type Config = {
+  host: string;
+  port: number;
+  ssl?: boolean;
+  timeout?: number;
 };
 ```
 
@@ -737,7 +745,7 @@ to re-validate.
 
 ## Editor-First Workflow
 
-Type-Led Design is primarily **editor-driven**. The intended loop:
+Rip Types is primarily **editor-driven**. The intended loop:
 
 1. Define shapes and contracts
 2. Annotate public boundaries
@@ -771,7 +779,7 @@ Rip only needs to:
 
 ## Summary
 
-Type-Led Design in Rip provides:
+Rip Types provides:
 
 - Expressive domain modeling with minimal syntax
 - Gradual adoption — add types where they help
@@ -783,6 +791,1164 @@ Rip remains a **JavaScript language**, with types as a **design language**
 layered on top.
 
 > **Static typing as a discipline, not a mandate.**
+
+---
+
+## Implementation Plan
+
+This section describes how to implement Rip Types in the compiler. It is
+designed to be self-contained — an implementor should be able to read this
+section and the referenced source files and complete the work in one pass.
+
+### File Architecture
+
+Rip Types follows the same pattern as the component system. Components added
+`src/components.js` alongside the compiler — types add `src/types.js`:
+
+| File | Role | Scope |
+|------|------|-------|
+| `src/lexer.js` | Detect `::` and `::=` tokens, add `rewriteTypes()` pass | Small inline changes |
+| `src/types.js` | Type codegen: `installTypeSupport()`, `DtsGenerator` class | New file, bulk of logic |
+| `src/compiler.js` | Import and wire `installTypeSupport()`, add `types` option | 3-5 lines |
+| `src/grammar/grammar.rip` | Add `TypeDecl` to `Expression`, `Enum`/`Interface` rules | Small additions |
+
+The boundary is the parser. Everything before parsing (token detection,
+rewriting) lives in `lexer.js`. Everything after parsing (code generation,
+`.d.ts` emission) lives in `types.js`.
+
+**The `components.js` pattern to follow:**
+
+```js
+// src/components.js — existing pattern
+export function installComponentSupport(CodeGenerator) {
+  const proto = CodeGenerator.prototype;
+  proto.generateComponent = function(head, rest, context) { ... };
+  proto.generateRender = function(head, rest, context, sexpr) { ... };
+  proto.buildRender = function(body) { ... };
+  // ...
+}
+
+// src/compiler.js — existing wiring
+import { installComponentSupport } from './components.js';
+installComponentSupport(CodeGenerator);  // at module level, after class definition
+```
+
+**The parallel for types:**
+
+```js
+// src/types.js — new file
+export function installTypeSupport(CodeGenerator) {
+  const proto = CodeGenerator.prototype;
+  proto.generateTypeAlias = function(head, rest, context) { ... };
+  proto.generateInterface = function(head, rest, context) { ... };
+  proto.generateEnum = function(head, rest, context) { ... };
+}
+
+export class DtsGenerator {
+  compile(sexpr) { ... }  // Walks s-expression tree, emits .d.ts
+}
+
+// src/compiler.js — new wiring (add next to installComponentSupport)
+import { installTypeSupport, DtsGenerator } from './types.js';
+installTypeSupport(CodeGenerator);
+```
+
+### Phase 1: Type Annotations (Metadata on Existing Tokens)
+
+Type annotations on variables, parameters, return types, and reactive state
+ride as **metadata** on existing tokens. The grammar never sees them. This
+means all existing grammar rules, s-expression shapes, and codegen work
+unchanged — types are invisible to everything except `rewriteTypes()` and
+the `.d.ts` generator.
+
+#### 1.1 Lexer: Token Detection
+
+**Add `::=` and `::` to `OPERATOR_RE`** (in `src/lexer.js`, near line 215).
+
+The current regex:
+
+```js
+let OPERATOR_RE = /^(?:<=>|[-=]>|~>|~=|:=|=!|===|!==|...)/;
+```
+
+Add `::=` and `::` with longest-match-first ordering (`::=` before `::`).
+Also note that `IDENTIFIER_RE` already avoids matching `:` when followed by
+`=` or `:` (the `(?![=:])` lookahead), so `::` after an identifier will fall
+through to `literalToken()` where `OPERATOR_RE` picks it up.
+
+**Tag the operators** (in the operator tagging section of `literalToken()`,
+near lines 1095-1100, alongside the reactive operators):
+
+```js
+else if (val === '::=') tag = 'TYPE_ALIAS';
+else if (val === '::')  tag = 'TYPE_ANNOTATION';
+```
+
+These must be checked **before** the `([-+:])\1` pattern in the regex, which
+currently matches `::` as a repeated `:`. The `::=` three-character match must
+come first.
+
+#### 1.2 Rewriter: `rewriteTypes()`
+
+**Add the pass to the rewrite pipeline** (in the `rewrite()` method, after
+`rewriteRender()`):
+
+```js
+rewrite(tokens) {
+  this.tokens = tokens;
+  this.removeLeadingNewlines();
+  this.closeOpenCalls();
+  this.closeOpenIndexes();
+  this.normalizeLines();
+  this.rewriteRender();
+  this.rewriteTypes();          // <-- NEW PASS
+  this.tagPostfixConditionals();
+  this.addImplicitBracesAndParens();
+  this.addImplicitCallCommas();
+  return this.tokens;
+}
+```
+
+**The `rewriteTypes()` method** scans the token stream using `scanTokens()`.
+When it encounters a `TYPE_ANNOTATION` (`::`) token, it:
+
+1. Collects all following tokens that are part of the type expression
+2. Joins them into a type string
+3. Finds the token that survives into the s-expression (see §1.4)
+4. Stores the type string on that token (`.data.type` or `.data.returnType`)
+5. Removes the `::` and collected type tokens from the stream
+
+```js
+rewriteTypes() {
+  this.scanTokens((token, i, tokens) => {
+    let tag = token[0];
+
+    // --- Handle :: (type annotations) ---
+    if (tag === 'TYPE_ANNOTATION') {
+      let prevToken = tokens[i - 1];
+      if (!prevToken) return 1;
+
+      // Collect the type expression
+      let typeTokens = [];
+      let j = i + 1;
+      let depth = 0;
+
+      while (j < tokens.length) {
+        let t = tokens[j];
+        let tTag = t[0];
+
+        // Bracket balancing
+        // NOTE: The lexer tags < and > as 'COMPARE', not '<' or '>'
+        let isOpen = tTag === '(' || tTag === '[' ||
+            tTag === 'CALL_START' || tTag === 'PARAM_START' || tTag === 'INDEX_START' ||
+            (tTag === 'COMPARE' && t[1] === '<');
+        let isClose = tTag === ')' || tTag === ']' ||
+            tTag === 'CALL_END' || tTag === 'PARAM_END' || tTag === 'INDEX_END' ||
+            (tTag === 'COMPARE' && t[1] === '>');
+
+        if (isOpen) {
+          depth++;
+          typeTokens.push(t);
+          j++;
+          continue;
+        }
+        if (isClose) {
+          if (depth > 0) {
+            depth--;
+            typeTokens.push(t);
+            j++;
+            continue;
+          }
+          break;  // Unbalanced close at depth 0 — end of type
+        }
+
+        // Delimiters that end the type at depth 0
+        if (depth === 0) {
+          if (tTag === '=' || tTag === 'REACTIVE_ASSIGN' ||
+              tTag === 'COMPUTED_ASSIGN' || tTag === 'READONLY_ASSIGN' ||
+              tTag === 'REACT_ASSIGN' || tTag === 'TERMINATOR' ||
+              tTag === 'INDENT' || tTag === 'OUTDENT') {
+            break;
+          }
+          if (tTag === ',') break;
+        }
+
+        // -> at depth 0: function return type separator, type continues
+        // Everything else: part of the type
+        typeTokens.push(t);
+        j++;
+      }
+
+      // Build type string from collected tokens
+      let typeStr = typeTokens.map(t => t[1]).join(' ').replace(/\s+/g, ' ').trim();
+      // Clean up spacing around brackets
+      typeStr = typeStr
+        .replace(/\s*<\s*/g, '<').replace(/\s*>\s*/g, '>')
+        .replace(/\s*\[\s*/g, '[').replace(/\s*\]\s*/g, ']')
+        .replace(/\s*\(\s*/g, '(').replace(/\s*\)\s*/g, ')')
+        .replace(/\s*,\s*/g, ', ');
+
+      // Attach type to the right target token
+      //
+      // IMPORTANT: For return types, the preceding token is CALL_END or
+      // PARAM_END, but the grammar discards these tokens (they don't appear
+      // in s-expressions). Instead, find the token that DOES survive:
+      //   CALL_END → scan backward to function name IDENTIFIER
+      //   PARAM_END → scan forward to the -> token
+      //
+      let target = prevToken;
+      let propName = 'type';
+
+      if (prevToken[0] === 'CALL_END' || prevToken[0] === ')') {
+        // Return type on DEF with parameters.
+        // Scan backward past balanced parens to find function name.
+        let d = 1, k = i - 2;
+        while (k >= 0 && d > 0) {
+          let kTag = tokens[k][0];
+          if (kTag === 'CALL_END' || kTag === ')') d++;
+          if (kTag === 'CALL_START' || kTag === '(') d--;
+          k--;
+        }
+        // k is now at the token before CALL_START — the function name
+        if (k >= 0) target = tokens[k];
+        propName = 'returnType';
+      } else if (prevToken[0] === 'PARAM_END') {
+        // Return type on arrow function: (x:: number):: string -> ...
+        // Scan forward past the type tokens to find the -> token.
+        let arrowIdx = i + 1 + typeTokens.length;
+        let arrowToken = tokens[arrowIdx];
+        if (arrowToken && (arrowToken[0] === '->' || arrowToken[0] === '=>')) {
+          target = arrowToken;
+        }
+        propName = 'returnType';
+      } else if (prevToken[0] === 'IDENTIFIER' && i >= 2 &&
+                 tokens[i - 2]?.[0] === 'DEF') {
+        // Return type on parameterless function: def foo:: string
+        propName = 'returnType';
+      }
+
+      if (!target.data) target.data = {};
+      target.data[propName] = typeStr;
+
+      // Remove :: and type tokens from stream
+      let removeCount = 1 + typeTokens.length;  // :: + type tokens
+      tokens.splice(i, removeCount);
+      return 0;  // Re-examine current position
+    }
+
+    // --- Handle ::= (type aliases) ---
+    // Described in Phase 2 below
+
+    return 1;
+  });
+}
+```
+
+#### 1.3 Type Expression Boundary Detection
+
+The hardest part of type rewriting is determining where a type expression ends.
+The rewriter must **balance brackets** while scanning.
+
+**Delimiters that end a type expression (at bracket depth 0):**
+
+| Token | Why it ends the type |
+|-------|---------------------|
+| `=` `:=` `~=` `=!` `~>` | Assignment operator follows |
+| `TERMINATOR` | End of line |
+| `INDENT` / `OUTDENT` | Block boundary |
+| `)` `CALL_END` `PARAM_END` | End of parameter list |
+| `,` | Next parameter or next item |
+
+**Tokens that adjust bracket depth:**
+
+| Open | Close | Context | Token tag |
+|------|-------|---------|-----------|
+| `<` | `>` | Generic type parameters | `COMPARE` (check `t[1]`) |
+| `(` | `)` | Function type parentheses | `(` / `)` or `CALL_START` / `CALL_END` |
+| `[` | `]` | Array type / index signatures | `[` / `]` or `INDEX_START` / `INDEX_END` |
+
+**Worked examples:**
+
+```
+INPUT:  count:: number = 0
+SCAN:   :: → start collecting
+        number → depth=0, type token
+        = → depth=0, assignment delimiter, STOP
+RESULT: type = "number"
+
+INPUT:  items:: Map<string, number> = x
+SCAN:   :: → start collecting
+        Map → depth=0, type token
+        < → depth=1, type token
+        string → depth=1, type token
+        , → depth=1 (inside <>), type token
+        number → depth=1, type token
+        > → depth=0, type token
+        = → depth=0, assignment delimiter, STOP
+RESULT: type = "Map<string, number>"
+
+INPUT:  def f(a:: number, b:: string)
+SCAN:   :: (after a) → start collecting
+        number → depth=0, type token
+        , → depth=0, parameter delimiter, STOP
+RESULT: type on a = "number"
+SCAN:   :: (after b) → start collecting
+        string → depth=0, type token
+        ) → depth=0, close paren, STOP
+RESULT: type on b = "string"
+
+INPUT:  fn:: (a: number, b: string) -> void = ...
+SCAN:   :: → start collecting
+        ( → depth=1, type token
+        a → depth=1, type token
+        : → depth=1, type token
+        number → depth=1, type token
+        , → depth=1 (inside parens), type token
+        b → depth=1, type token
+        : → depth=1, type token
+        string → depth=1, type token
+        ) → depth=0, type token
+        -> → depth=0, function return separator, type token (CONTINUES)
+        void → depth=0, type token
+        = → depth=0, assignment delimiter, STOP
+RESULT: type = "(a: number, b: string) -> void"
+```
+
+**Special cases:**
+
+- **`->` at depth 0 in a type**: This is a function return type separator.
+  The type expression continues after `->` to collect the return type. Do NOT
+  treat `->` as a delimiter.
+- **`?` / `??` / `!` suffixes**: These modify the type. When they appear
+  unspaced after an identifier at depth 0, they are part of the type:
+  `string?` → `"string?"`, `ID!` → `"ID!"`.
+- **Generic `<>` vs comparison**: Inside a type context (after `::`), always
+  treat `<` as opening a generic bracket. The type context is unambiguous
+  because we are already inside a `::` collection.
+
+#### 1.4 Return Type Annotations
+
+Return types appear after the parameter list close:
+
+```coffee
+def greet(name:: string):: string
+```
+
+After `rewriteTypes()` processes the `::` after `)`, the return type must be
+stored on the **function name IDENTIFIER**, not on `CALL_END`. This is because
+the grammar rule `["def", 2, 4, 6]` discards `CALL_END` (position 5) — any
+data stored there is lost when the parser builds the s-expression.
+
+The `rewriteTypes()` code above handles this uniformly — in each case,
+find the token that **survives into the s-expression** and store there:
+
+1. **`def` with params** — preceding token is `CALL_END`/`)`: scan **backward**
+   past the balanced parentheses to find the function name IDENTIFIER, store
+   `.data.returnType` there.
+2. **Arrow functions** — preceding token is `PARAM_END`: scan **forward** past
+   the collected type tokens to find the `->` token, store `.data.returnType`
+   there (`->` is the s-expression head: `["->", params, body]`).
+3. **Parameterless `def`** — preceding token is an IDENTIFIER preceded by DEF:
+   store `.data.returnType` directly on the name IDENTIFIER.
+
+**Property convention:**
+- `.data.type` — variable type, parameter type, property type
+- `.data.returnType` — function/method return type
+- `.data.typeParams` — generic type parameters (`<T, U>`)
+
+#### 1.5 Token Flow Examples
+
+Each example shows: Rip source → tokens after rewrite → s-expression → outputs.
+
+**Typed variable:**
+
+```coffee
+count:: number = 0
+```
+
+Tokens after `rewriteTypes()`:
+```
+IDENTIFIER("count", {type: "number"}), =, NUMBER(0)
+```
+
+S-expression (unchanged from untyped):
+```
+["=", count, 0]         # count carries .data.type = "number"
+```
+
+.js output (type erased):
+```js
+count = 0
+```
+
+.d.ts output:
+```ts
+let count: number;
+```
+
+**Typed constant:**
+
+```coffee
+MAX:: number =! 100
+```
+
+Tokens: `IDENTIFIER("MAX", {type: "number"}), READONLY_ASSIGN, NUMBER(100)`
+
+S-expression: `["readonly", MAX, 100]` — MAX carries `.data.type = "number"`
+
+.js: `const MAX = 100`
+
+.d.ts: `declare const MAX: number;`
+
+**Typed reactive state:**
+
+```coffee
+count:: number := 0
+doubled:: number ~= count * 2
+```
+
+S-expressions:
+```
+["state", count, 0]        # count carries .data.type = "number"
+["computed", doubled, ...]  # doubled carries .data.type = "number"
+```
+
+.d.ts:
+```ts
+declare const count: Signal<number>;
+declare const doubled: Computed<number>;
+```
+
+**Typed function:**
+
+```coffee
+def getUser(id:: number):: User
+  db.find!(id)
+```
+
+Tokens after rewrite:
+```
+DEF, IDENTIFIER("getUser", {returnType: "User"}), CALL_START,
+  IDENTIFIER("id", {type: "number"}),
+CALL_END, INDENT, ..., OUTDENT
+```
+
+S-expression: `["def", getUser, [id], body]`
+- `id` carries `.data.type = "number"`
+- `getUser` carries `.data.returnType = "User"`
+
+.js: `async function getUser(id) { return db.find(id); }`
+
+.d.ts: `declare function getUser(id: number): User;`
+
+**Typed arrow function:**
+
+```coffee
+greet = (name:: string):: string -> "Hello, #{name}!"
+```
+
+Tokens after rewrite:
+```
+IDENTIFIER("greet"), =, PARAM_START,
+  IDENTIFIER("name", {type: "string"}),
+PARAM_END, ->({returnType: "string"}), ...
+```
+
+**Class properties:**
+
+```coffee
+class UserService
+  db:: Database
+  cache:: Map<string, User>
+```
+
+Tokens: identifiers carry `.data.type`, grammar sees normal class body.
+
+.d.ts:
+```ts
+declare class UserService {
+  db: Database;
+  cache: Map<string, User>;
+}
+```
+
+### Phase 2: Type-Only Declarations
+
+These constructs exist only in the type system — they have no runtime
+representation (except `enum`). They need new token handling and either
+new grammar rules or rewriter transformations.
+
+#### 2.1 Keyword Migration
+
+**Move `enum` and `interface` from `RESERVED` to `RIP_KEYWORDS`** in
+`src/lexer.js`. Currently (line 83):
+
+```js
+let RESERVED = new Set([
+  'case', 'function', 'var', 'void', 'with', 'const', 'let',
+  'enum', 'native', 'implements', 'interface', 'package',
+  'private', 'protected', 'public', 'static',
+]);
+```
+
+Remove `enum` and `interface` from `RESERVED`. Add them to `RIP_KEYWORDS`:
+
+```js
+let RIP_KEYWORDS = new Set([
+  'undefined', 'Infinity', 'NaN',
+  'then', 'unless', 'until', 'loop', 'of', 'by', 'when', 'def',
+  'component', 'render',
+  'enum', 'interface',          // <-- ADD
+]);
+```
+
+No changes to `classifyKeyword()` are needed — the existing fallback
+`if (RIP_KEYWORDS.has(id)) return upper` (line 618) automatically tags
+`enum` as `ENUM` and `interface` as `INTERFACE`.
+
+#### 2.2 Type Aliases (`::=`)
+
+The `::=` operator declares a named type. The `rewriteTypes()` pass handles
+it by collecting the right-hand side and packaging it into a single `TYPE_DECL`
+token.
+
+**Simple alias:**
+
+```coffee
+ID ::= number
+UserID ::= number | string
+```
+
+When `rewriteTypes()` encounters `TYPE_ALIAS` (`::=`):
+
+1. Record the preceding `IDENTIFIER` token as the type name
+2. Collect all following tokens as the type body (same boundary rules as `::`)
+3. Replace the entire sequence (`IDENTIFIER`, `TYPE_ALIAS`, type tokens) with
+   a single `TYPE_DECL` token carrying structured metadata
+
+```js
+// Inside rewriteTypes(), handling TYPE_ALIAS:
+if (tag === 'TYPE_ALIAS') {
+  let nameToken = tokens[i - 1];
+  let name = nameToken[1];
+
+  // Collect type body tokens (same boundary logic as ::)
+  let typeTokens = [];
+  let j = i + 1;
+  let depth = 0;
+  // ... same collection loop as for TYPE_ANNOTATION ...
+
+  let typeStr = /* join collected tokens */;
+
+  // Replace name + ::= + type tokens with TYPE_DECL
+  let declToken = gen('TYPE_DECL', name, nameToken);
+  declToken.data = { name, kind: 'alias', typeText: typeStr };
+  tokens.splice(i - 1, 2 + typeTokens.length, declToken);
+  return 0;
+}
+```
+
+S-expression: The grammar sees `TYPE_DECL` as a value, producing `["type-alias", name, typeText]` or just passing the token through with its metadata.
+
+.d.ts: `type ID = number;`
+
+.js: *(nothing — type-only, erased)*
+
+**Structural type:**
+
+```coffee
+User ::= type
+  id: number
+  name: string
+  email?: string
+```
+
+When `rewriteTypes()` sees `TYPE_ALIAS` followed by `IDENTIFIER("type")` and
+then `INDENT`, it enters a structural type collection mode:
+
+1. Consume the `INDENT`
+2. Collect property declarations line by line until `OUTDENT`
+3. Each line has the form: `name (?: optional) : type`
+4. Package as metadata:
+   ```js
+   declToken.data = {
+     name: "User",
+     kind: "structural",
+     properties: [
+       { name: "id", type: "number", optional: false },
+       { name: "name", type: "string", optional: false },
+       { name: "email", type: "string", optional: true },
+     ]
+   };
+   ```
+5. Replace entire sequence with single `TYPE_DECL` token
+
+.d.ts:
+```ts
+type User = {
+  id: number;
+  name: string;
+  email?: string;
+};
+```
+
+**Block union:**
+
+```coffee
+HttpMethod ::=
+  | "GET"
+  | "POST"
+  | "PUT"
+  | "DELETE"
+```
+
+When `rewriteTypes()` sees `TYPE_ALIAS` followed by `TERMINATOR` or `INDENT`
+with leading `|` tokens, it collects union members:
+
+```js
+declToken.data = {
+  name: "HttpMethod",
+  kind: "union",
+  members: ['"GET"', '"POST"', '"PUT"', '"DELETE"']
+};
+```
+
+.d.ts: `type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";`
+
+#### 2.3 Interfaces
+
+```coffee
+interface Animal
+  name: string
+
+interface Dog extends Animal
+  breed: string
+  bark: () -> void
+```
+
+**Option A (grammar-based):** Add grammar rules:
+
+```
+Interface: [
+  o 'INTERFACE Identifier Block'                    , '["interface", 2, null, 3]'
+  o 'INTERFACE Identifier EXTENDS Identifier Block' , '["interface", 2, 4, 5]'
+]
+```
+
+Add `Interface` to the `Expression` list. The compiler's `generateInterface()`
+(in `types.js`) handles emission.
+
+**Option B (rewriter-based):** `rewriteTypes()` detects `INTERFACE` token and
+collects the body, replacing with a `TYPE_DECL` token of kind `"interface"`.
+
+Option A is cleaner for interfaces since they have an `extends` clause that
+parallels `class`. Recommended: **use grammar rules**.
+
+S-expression: `["interface", "Dog", "Animal", body]`
+
+.d.ts:
+```ts
+interface Dog extends Animal {
+  breed: string;
+  bark: () => void;
+}
+```
+
+.js: *(nothing — erased)*
+
+#### 2.4 Enums
+
+```coffee
+enum HttpCode
+  ok = 200
+  created = 201
+  notFound = 404
+  serverError = 500
+```
+
+Enums are the one type construct that emits **both** .js and .d.ts.
+
+**Grammar rules:**
+
+```
+Enum: [
+  o 'ENUM Identifier Block', '["enum", 2, 3]'
+]
+```
+
+Add `Enum` to the `Expression` list.
+
+S-expression: `["enum", "HttpCode", body]`
+
+.js (runtime reverse-mapping object):
+```js
+const HttpCode = {
+  ok: 200, created: 201, notFound: 404, serverError: 500,
+  200: "ok", 201: "created", 404: "notFound", 500: "serverError"
+};
+```
+
+.d.ts:
+```ts
+enum HttpCode {
+  ok = 200,
+  created = 201,
+  notFound = 404,
+  serverError = 500
+}
+```
+
+#### 2.5 Grammar Changes Summary
+
+In `src/grammar/grammar.rip`, add to the `Expression` list:
+
+```
+Expression: [
+  o 'Value'
+  o 'Code'
+  o 'Operation'
+  o 'Assign'
+  o 'ReactiveAssign'
+  o 'ComputedAssign'
+  o 'ReadonlyAssign'
+  o 'ReactAssign'
+  o 'TypeDecl'             # <-- ADD
+  o 'Interface'            # <-- ADD
+  o 'Enum'                 # <-- ADD
+  o 'If'
+  ...
+]
+```
+
+And add the new rules:
+
+```
+TypeDecl: [
+  o 'TYPE_DECL', '1'
+]
+
+Interface: [
+  o 'INTERFACE Identifier Block'                    , '["interface", 2, null, 3]'
+  o 'INTERFACE Identifier EXTENDS Identifier Block' , '["interface", 2, 4, 5]'
+]
+
+Enum: [
+  o 'ENUM Identifier Block', '["enum", 2, 3]'
+]
+```
+
+Also add to `Export`:
+
+```
+o 'EXPORT TypeDecl'    , '["export", 2]'
+o 'EXPORT Interface'   , '["export", 2]'
+o 'EXPORT Enum'        , '["export", 2]'
+```
+
+#### 2.6 Generic Type Parameters
+
+```coffee
+def identity<T>(value:: T):: T
+  value
+
+def map<T, U>(items:: T[], fn:: (item:: T) -> U):: U[]
+  items.map(fn)
+```
+
+Generic parameters on functions require special handling because `<` is
+normally a comparison operator.
+
+**Detection heuristic in `rewriteTypes()`:**
+
+When scanning and finding `DEF IDENTIFIER` followed by `<`:
+
+1. Look ahead from `<` — if the contents are uppercase identifiers, commas,
+   `extends`, and the sequence closes with `>` followed by `(` or `CALL_START`,
+   treat it as a generic parameter list
+2. Collect the generic params as a string (e.g., `"<T>"`, `"<T, U>"`,
+   `"<T extends Ordered>"`)
+3. Store on the function name token as `.data.typeParams`
+4. Remove the `<...>` tokens from the stream
+
+```js
+// Pseudocode for generic detection:
+if (tag === 'IDENTIFIER' && i >= 1 && tokens[i - 1]?.[0] === 'DEF') {
+  let next = tokens[i + 1];
+  if (next && next[0] === 'COMPARE' && next[1] === '<') {
+    // Look ahead for closing > before (
+    let genTokens = collectBalancedAngleBrackets(tokens, i + 1);
+    if (genTokens && nextAfterIs('(' or 'CALL_START')) {
+      token.data.typeParams = joinTokens(genTokens);
+      tokens.splice(i + 1, genTokens.length);
+    }
+  }
+}
+```
+
+Generic parameters on type aliases work the same way:
+
+```coffee
+Container<T> ::= type
+  value: T
+```
+
+The `rewriteTypes()` pass detects `IDENTIFIER <...> TYPE_ALIAS` and collects
+the generic params before processing the `::=`.
+
+.d.ts:
+```ts
+function identity<T>(value: T): T;
+function map<T, U>(items: T[], fn: (item: T) => U): U[];
+type Container<T> = { value: T; };
+```
+
+### Phase 3: Dual Emission (.js and .d.ts)
+
+All type-related code generation lives in `src/types.js`.
+
+#### 3.1 `installTypeSupport(CodeGenerator)`
+
+This function extends the `CodeGenerator` prototype with methods for type-only
+constructs. These methods are called during normal .js code generation:
+
+```js
+export function installTypeSupport(CodeGenerator) {
+  const proto = CodeGenerator.prototype;
+
+  // Type aliases produce no .js output
+  proto.generateTypeAlias = function(head, rest, context) {
+    return '';  // Erased — type only
+  };
+
+  // Interfaces produce no .js output
+  proto.generateInterface = function(head, rest, context) {
+    return '';  // Erased — type only
+  };
+
+  // Enums produce a runtime object
+  proto.generateEnum = function(head, rest, context) {
+    let [name, body] = rest;
+    // Parse body into key-value pairs
+    // Emit: const Name = { key: val, val: "key", ... };
+    let pairs = this.parseEnumBody(body);
+    let forward = pairs.map(([k, v]) => `${k}: ${v}`).join(', ');
+    let reverse = pairs.map(([k, v]) => `${v}: "${k}"`).join(', ');
+    return `const ${name} = {${forward}, ${reverse}}`;
+  };
+}
+```
+
+**Add to the `GENERATORS` dispatch table** in `CodeGenerator` (in
+`src/compiler.js`):
+
+```js
+static GENERATORS = {
+  // ... existing entries ...
+
+  // Types
+  'type-alias': 'generateTypeAlias',
+  'interface': 'generateInterface',
+  'enum': 'generateEnum',
+};
+```
+
+#### 3.2 `DtsGenerator` Class
+
+The `DtsGenerator` is a parallel code generator that walks the same s-expression
+tree but emits TypeScript declaration (`.d.ts`) output instead of JavaScript.
+
+```js
+export class DtsGenerator {
+  constructor(options = {}) {
+    this.indentLevel = 0;
+    this.indentString = '  ';
+    this.lines = [];
+  }
+
+  compile(sexpr) {
+    this.walk(sexpr);
+    return this.lines.join('\n') + '\n';
+  }
+
+  indent() {
+    return this.indentString.repeat(this.indentLevel);
+  }
+
+  walk(sexpr) {
+    if (!Array.isArray(sexpr)) return;
+    let [head, ...rest] = sexpr;
+    let h = head?.valueOf?.() ?? head;
+
+    switch (h) {
+      case 'program':
+        rest.forEach(stmt => this.walk(stmt));
+        break;
+
+      case '=': {
+        // Variable: let name: Type;
+        let [target, value] = rest;
+        let name = target?.valueOf?.() ?? target;
+        let type = target?.type || 'any';
+        this.lines.push(`${this.indent()}let ${name}: ${type};`);
+        break;
+      }
+
+      case 'readonly': {
+        // Constant: const name: Type = value;
+        let [target, value] = rest;
+        let name = target?.valueOf?.() ?? target;
+        let type = target?.type || 'any';
+        this.lines.push(`${this.indent()}declare const ${name}: ${type};`);
+        break;
+      }
+
+      case 'state': {
+        let [target, value] = rest;
+        let name = target?.valueOf?.() ?? target;
+        let type = target?.type;
+        let typeStr = type ? `Signal<${type}>` : 'Signal<any>';
+        this.lines.push(`${this.indent()}declare const ${name}: ${typeStr};`);
+        break;
+      }
+
+      case 'computed': {
+        let [target, value] = rest;
+        let name = target?.valueOf?.() ?? target;
+        let type = target?.type;
+        let typeStr = type ? `Computed<${type}>` : 'Computed<any>';
+        this.lines.push(`${this.indent()}declare const ${name}: ${typeStr};`);
+        break;
+      }
+
+      case 'def': {
+        // Function declaration
+        let [name, params, body] = rest;
+        let fnName = name?.valueOf?.() ?? name;
+        let typeParams = name?.typeParams || '';
+        let returnType = name?.returnType || 'void';
+        let paramStr = this.formatParams(params);
+        this.lines.push(
+          `${this.indent()}declare function ${fnName}${typeParams}(${paramStr}): ${returnType};`
+        );
+        break;
+      }
+
+      case 'type-alias': {
+        let token = rest[0] || sexpr;
+        let data = token?.data || token;
+        // Emit based on kind: alias, structural, union
+        // ... (read from token metadata)
+        break;
+      }
+
+      case 'interface': {
+        let [name, parent, body] = rest;
+        let ext = parent ? ` extends ${parent}` : '';
+        this.lines.push(`${this.indent()}interface ${name}${ext} {`);
+        this.indentLevel++;
+        // ... emit properties from body
+        this.indentLevel--;
+        this.lines.push(`${this.indent()}}`);
+        break;
+      }
+
+      case 'enum': {
+        let [name, body] = rest;
+        this.lines.push(`${this.indent()}enum ${name} {`);
+        this.indentLevel++;
+        // ... emit members from body
+        this.indentLevel--;
+        this.lines.push(`${this.indent()}}`);
+        break;
+      }
+
+      case 'export': {
+        // Wrap inner declaration with 'export'
+        let [decl] = rest;
+        let saved = this.lines.length;
+        this.walk(decl);
+        // Prepend 'export ' to whatever was emitted
+        for (let k = saved; k < this.lines.length; k++) {
+          this.lines[k] = this.lines[k].replace(/^(\s*)(?:declare )?/, '$1export ');
+        }
+        break;
+      }
+
+      case 'class': {
+        let [className, parentClass, ...bodyParts] = rest;
+        let ext = parentClass ? ` extends ${parentClass}` : '';
+        this.lines.push(`${this.indent()}declare class ${className}${ext} {`);
+        this.indentLevel++;
+        // ... emit typed properties and method signatures
+        this.indentLevel--;
+        this.lines.push(`${this.indent()}}`);
+        break;
+      }
+
+      default:
+        // Recurse into blocks and other structures
+        rest.forEach(item => {
+          if (Array.isArray(item)) this.walk(item);
+        });
+    }
+  }
+
+  formatParams(params) {
+    if (!Array.isArray(params) || params.length === 0) return '';
+    return params.map(p => {
+      let name = p?.valueOf?.() ?? p;
+      let type = p?.type || 'any';
+      if (Array.isArray(p) && p[0] === 'default') {
+        let [, paramName, defaultVal] = p;
+        name = paramName?.valueOf?.() ?? paramName;
+        type = paramName?.type || 'any';
+        return `${name}?: ${type}`;
+      }
+      if (Array.isArray(p) && p[0] === 'rest') {
+        let restName = p[1]?.valueOf?.() ?? p[1];
+        let restType = p[1]?.type || 'any[]';
+        return `...${restName}: ${restType}`;
+      }
+      return `${name}: ${type}`;
+    }).join(', ');
+  }
+}
+```
+
+#### 3.3 Compiler Wiring
+
+In `src/compiler.js`, add minimal wiring:
+
+**Import** (near the existing component import):
+
+```js
+import { installTypeSupport, DtsGenerator } from './types.js';
+```
+
+**Install** (near the existing `installComponentSupport` call):
+
+```js
+installTypeSupport(CodeGenerator);
+```
+
+**Add `types` option to `Compiler.compile()`**:
+
+```js
+compile(source) {
+  // ... existing tokenize → parse → generate pipeline ...
+  let code = generator.compile(sexpr);
+
+  // Type declaration generation (new)
+  let dts = null;
+  if (this.options.types === 'emit' || this.options.types === 'check') {
+    let dtsGen = new DtsGenerator();
+    dts = dtsGen.compile(sexpr);
+  }
+
+  return { tokens, sexpr, code, dts, data: dataSection, reactiveVars: generator.reactiveVars };
+}
+```
+
+#### 3.4 `const` Emission Rule
+
+Type annotations never affect `let` vs `const` in `.js` output:
+
+| Rip operator | .js keyword | .d.ts keyword |
+|-------------|-------------|---------------|
+| `=` | `let` (hoisted by `programVars`) | `let` |
+| `=!` | `const` | `const` |
+| `:=` | `const` (reactive signal) | `const` (Signal) |
+| `~=` | `const` (computed signal) | `const` (Computed) |
+| `~>` | `const` (effect) | `const` |
+
+### Edge Cases
+
+#### Optionality Suffixes in Types
+
+The `?`, `??`, and `!` suffixes appear unspaced after the type name:
+
+```coffee
+email:: string?       # → type = "string?"
+middle:: string??     # → type = "string??"
+id:: ID!              # → type = "ID!"
+```
+
+In `rewriteTypes()`, when collecting type tokens, if the next token is `?`,
+`??`, or `!` and is **not spaced** from the previous token, include it as
+part of the type string.
+
+The `DtsGenerator` expands these suffixes and converts syntax:
+
+| Rip syntax | TypeScript expansion |
+|-----------|---------------------|
+| `T?` | `T \| undefined` |
+| `T??` | `T \| null \| undefined` |
+| `T!` | `NonNullable<T>` |
+| `->` | `=>` (in function type expressions) |
+
+#### File-Level Type Directives
+
+```coffee
+# @types off     — ignore types in this file
+# @types emit    — emit .d.ts
+# @types check   — emit .d.ts + enable tsc validation
+```
+
+These are comments. The lexer's `commentToken()` method can detect this
+pattern and set a flag. Alternatively, the `Compiler` can scan for the
+directive before tokenizing.
+
+#### Export of Type-Only Declarations
+
+```coffee
+export User ::= type
+  id: number
+  name: string
+
+export def getUser(id:: number):: User?
+  db.find(id)
+```
+
+The existing `Export` grammar rules already handle `EXPORT Expression`, so
+exported type aliases work via `EXPORT TypeDecl`. For the `.d.ts` generator,
+exported declarations get `export` prepended.
+
+.js (type alias erased, function exported):
+```js
+export function getUser(id) {
+  return db.find(id);
+}
+```
+
+.d.ts (both exported):
+```ts
+export type User = { id: number; name: string; };
+export function getUser(id: number): User | undefined;
+```
+
+### Test Matrix
+
+Each row is a test case. Verify both .js and .d.ts output.
+
+| # | Rip Input | .js Output | .d.ts Output |
+|---|-----------|-----------|-------------|
+| 1 | `count:: number = 0` | `count = 0` | `let count: number;` |
+| 2 | `MAX:: number =! 100` | `const MAX = 100` | `declare const MAX: number;` |
+| 3 | `count:: number := 0` | `const count = __state(0)` | `declare const count: Signal<number>;` |
+| 4 | `doubled:: number ~= x * 2` | `const doubled = __computed(...)` | `declare const doubled: Computed<number>;` |
+| 5 | `def f(a:: number):: string` | `function f(a) { ... }` | `declare function f(a: number): string;` |
+| 6 | `(x:: number):: number -> x + 1` | `(x) => x + 1` | `(x: number) => number` |
+| 7 | `ID ::= number` | *(empty)* | `type ID = number;` |
+| 8 | `User ::= type` (+ block) | *(empty)* | `type User = { id: number; ... };` |
+| 9 | `Status ::= \| "a" \| "b"` | *(empty)* | `type Status = "a" \| "b";` |
+| 10 | `interface Foo` (+ block) | *(empty)* | `interface Foo { ... }` |
+| 11 | `enum Code` (+ block) | `const Code = { ... }` | `enum Code { ... }` |
+| 12 | `items:: Map<string, number> = x` | `items = x` | `let items: Map<string, number>;` |
+| 13 | `email:: string?` | — | `let email: string \| undefined;` |
+| 14 | `id:: ID!` | — | `let id: NonNullable<ID>;` |
+| 15 | `def identity<T>(v:: T):: T` | `function identity(v) { ... }` | `declare function identity<T>(v: T): T;` |
+| 16 | `export User ::= type` (+ block) | *(empty)* | `export type User = { ... };` |
+| 17 | `export def f(x:: number):: number` | `export function f(x) { ... }` | `export function f(x: number): number;` |
 
 ---
 
