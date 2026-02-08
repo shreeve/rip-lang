@@ -120,6 +120,11 @@ export function installComponentSupport(CodeGenerator) {
       return sexpr;
     }
 
+    // Force thin arrows to fat arrows inside components to preserve this binding
+    if (sexpr[0] === '->') {
+      return ['=>', ...sexpr.slice(1).map(item => this.transformComponentMembers(item))];
+    }
+
     return sexpr.map(item => this.transformComponentMembers(item));
   };
 
