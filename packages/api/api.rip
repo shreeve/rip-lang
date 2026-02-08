@@ -12,7 +12,7 @@
 #   Handlers:   onError, notFound
 #   Validation: read, validators, registerValidator, getValidator
 #   Context:    ctx, session, env
-#   Utilities:  isBlank, toName, toPhone
+#   Utilities:  isBlank, toName, toPhone, mimeType
 #   Dev:        resetGlobals
 # ==============================================================================
 
@@ -81,6 +81,46 @@ matchRoute = (method, pathname) ->
   null
 
 # ==============================================================================
+# MIME Types — Auto-detect content type from file extension
+# ==============================================================================
+
+_mimeTypes =
+  '.html':  'text/html; charset=UTF-8'
+  '.htm':   'text/html; charset=UTF-8'
+  '.css':   'text/css; charset=UTF-8'
+  '.js':    'application/javascript'
+  '.mjs':   'application/javascript'
+  '.json':  'application/json'
+  '.txt':   'text/plain; charset=UTF-8'
+  '.csv':   'text/csv; charset=UTF-8'
+  '.xml':   'application/xml'
+  '.svg':   'image/svg+xml'
+  '.png':   'image/png'
+  '.jpg':   'image/jpeg'
+  '.jpeg':  'image/jpeg'
+  '.gif':   'image/gif'
+  '.webp':  'image/webp'
+  '.avif':  'image/avif'
+  '.ico':   'image/x-icon'
+  '.woff':  'font/woff'
+  '.woff2': 'font/woff2'
+  '.ttf':   'font/ttf'
+  '.otf':   'font/otf'
+  '.mp3':   'audio/mpeg'
+  '.mp4':   'video/mp4'
+  '.webm':  'video/webm'
+  '.ogg':   'audio/ogg'
+  '.pdf':   'application/pdf'
+  '.zip':   'application/zip'
+  '.gz':    'application/gzip'
+  '.wasm':  'application/wasm'
+  '.rip':   'text/plain; charset=UTF-8'
+
+export mimeType = (path) ->
+  ext = path.substring(path.lastIndexOf('.'))
+  _mimeTypes[ext] or 'application/octet-stream'
+
+# ==============================================================================
 # Context Factory
 # ==============================================================================
 
@@ -110,6 +150,10 @@ createContext = (req, params = {}) ->
     body: (data, status = 200, headers = {}) ->
       for k, v of headers then out.set(k, v)
       new Response data, { status, headers: out }
+
+    send: (path, type) ->
+      out.set 'Content-Type', (type or mimeType(path))
+      new Response Bun.file(path), { status: 200, headers: out }
 
     header: (name, value, opts = {}) ->
       if value?
@@ -277,7 +321,7 @@ export fetch = (req) ->
   unless match
     c = createContext(req)
     if _notFoundHandler?
-      return _notFoundHandler!(c)
+      return _notFoundHandler.call!(c, c)
     return new Response('Not Found', { status: 404 })
 
   c = createContext(req, match.params)
