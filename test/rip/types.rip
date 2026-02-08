@@ -1,0 +1,168 @@
+# Test: Rip Types
+# Tests the optional type system — type annotations, type aliases,
+# structural types, interfaces, enums, generics, and .d.ts emission.
+#
+# Type annotations are erased from .js output. The `types: true` option
+# enables .d.ts emission via emitTypes().
+
+# ============================================================================
+# Phase 1: Type Annotations — Types Erased from JS
+# ============================================================================
+
+# Variables with type annotations compile to plain JS
+code "typed variable", "count:: number = 0", "let count;\ncount = 0"
+code "typed string variable", 'name:: string = "Rip"', 'let name;\nname = "Rip"'
+
+# Constants with type annotations
+code "typed constant", "MAX:: number =! 100", "const MAX = 100"
+
+# Function parameters with types
+code "typed function params", '''
+  def add(a:: number, b:: number)
+    a + b
+  ''', '''
+  function add(a, b) {
+    return (a + b);
+  }
+  '''
+
+# Return types
+code "typed function return", '''
+  def greet(name:: string):: string
+    "Hello, #{name}!"
+  ''', '''
+  function greet(name) {
+    return `Hello, ${name}!`;
+  }
+  '''
+
+# Parameterless function with return type
+code "parameterless typed function", '''
+  def answer():: number
+    42
+  ''', '''
+  function answer() {
+    return 42;
+  }
+  '''
+
+# ============================================================================
+# Phase 2: Type-Only Declarations — Erased from JS
+# ============================================================================
+
+# Type aliases produce no JS output
+code "type alias erased", "ID ::= number", ""
+
+# Structural types produce no JS output
+code "structural type erased", '''
+  User ::= type
+    id: number
+    name: string
+  ''', ""
+
+# Block unions produce no JS output
+code "block union erased", '''
+  Status ::=
+    | "pending"
+    | "active"
+    | "done"
+  ''', ""
+
+# Interfaces produce no JS output
+code "interface erased", '''
+  interface Animal
+    name: string
+    age: number
+  ''', ""
+
+# Interface with extends
+code "interface extends erased", '''
+  interface Dog extends Animal
+    breed: string
+  ''', ""
+
+# ============================================================================
+# Enums — Runtime JS Output
+# ============================================================================
+
+# Enums produce runtime JS
+test "enum creates object", '''
+  enum Color
+    red = 0
+    green = 1
+    blue = 2
+  Color.red
+  ''', 0
+
+test "enum reverse mapping", '''
+  enum Color
+    red = 0
+    green = 1
+    blue = 2
+  Color[1]
+  ''', "green"
+
+test "enum with string-like values", '''
+  enum HttpCode
+    ok = 200
+    notFound = 404
+  HttpCode.ok
+  ''', 200
+
+# ============================================================================
+# Mixed: Types + Code Together
+# ============================================================================
+
+# Type annotations don't affect runtime behavior
+test "typed variable runtime", "count:: number = 42; count", 42
+test "typed constant runtime", 'msg:: string =! "hello"; msg', "hello"
+
+test "typed function runtime", '''
+  def double(x:: number):: number
+    x * 2
+  double(21)
+  ''', 42
+
+test "typed params runtime", '''
+  def add(a:: number, b:: number):: number
+    a + b
+  add(3, 4)
+  ''', 7
+
+# Type alias + code coexisting
+test "type alias with code", '''
+  ID ::= number
+  x = 42
+  x
+  ''', 42
+
+# Interface + code coexisting
+test "interface with code", '''
+  interface Config
+    host: string
+    port: number
+  x = 99
+  x
+  ''', 99
+
+# Enum + other code
+test "enum with other code", '''
+  enum Dir
+    up = 0
+    down = 1
+  x = Dir.up
+  x
+  ''', 0
+
+# ============================================================================
+# Complex Types in Annotations
+# ============================================================================
+
+# Generic types in annotations
+code "generic type annotation", "items:: Map<string, number> = x", "let items;\nitems = x"
+
+# Simple type alias with union
+code "union type alias", 'UserID ::= number | string', ""
+
+# Array type
+code "array type annotation", "ids:: number[] = []", "let ids;\nids = []"

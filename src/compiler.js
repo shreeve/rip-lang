@@ -11,6 +11,7 @@
 import { Lexer } from './lexer.js';
 import { parser } from './parser.js';
 import { installComponentSupport } from './components.js';
+import { emitTypes, generateEnum } from './types.js';
 
 // =============================================================================
 // Metadata helpers — isolate all new String() awareness here
@@ -234,6 +235,9 @@ export class CodeGenerator {
     // Components
     'component': 'generateComponent',
     'render': 'generateRender',
+
+    // Types
+    'enum': 'generateEnum',
 
     // Modules
     'import': 'generateImport',
@@ -2004,6 +2008,7 @@ export class CodeGenerator {
 
   formatParam(param) {
     if (typeof param === 'string') return param;
+    if (param instanceof String) return param.valueOf();
     if (Array.isArray(param) && param[0] === 'rest') return `...${param[1]}`;
     if (Array.isArray(param) && param[0] === 'default') return `${param[1]} = ${this.generate(param[2], 'value')}`;
     if (Array.isArray(param) && param[0] === '.' && param[1] === 'this') return param[2];
@@ -3098,12 +3103,31 @@ export class Compiler {
       source = lines.slice(0, dataLineIndex).join('\n');
     }
 
-    // Step 1: Tokenize
+    // Step 1: Tokenize (includes rewriteTypes() via installTypeSupport)
     let lexer = new Lexer();
     let tokens = lexer.tokenize(source);
     if (this.options.showTokens) {
       tokens.forEach(t => console.log(`${t[0].padEnd(12)} ${JSON.stringify(t[1])}`));
       console.log();
+    }
+
+    // Step 1.5: Emit .d.ts from annotated tokens (before parsing)
+    let dts = null;
+    if (this.options.types === 'emit' || this.options.types === 'check' || this.options.types === true) {
+      dts = emitTypes(tokens);
+    }
+
+    // Always remove TYPE_DECL markers — the parser doesn't know about them
+    tokens = tokens.filter(t => t[0] !== 'TYPE_DECL');
+
+    // Strip leading terminators that may result from removed type declarations
+    while (tokens.length > 0 && tokens[0][0] === 'TERMINATOR') {
+      tokens.shift();
+    }
+
+    // If only terminators remain (type-only source), return early
+    if (tokens.every(t => t[0] === 'TERMINATOR')) {
+      return { tokens, sexpr: ['program'], code: '', dts, data: dataSection, reactiveVars: {} };
     }
 
     // Step 2: Parse — shim adapter wraps token values with metadata
@@ -3149,7 +3173,7 @@ export class Compiler {
     });
     let code = generator.compile(sexpr);
 
-    return { tokens, sexpr, code, data: dataSection, reactiveVars: generator.reactiveVars };
+    return { tokens, sexpr, code, dts, data: dataSection, reactiveVars: generator.reactiveVars };
   }
 
   compileToJS(source) { return this.compile(source).code; }
@@ -3161,6 +3185,12 @@ export class Compiler {
 // =============================================================================
 
 installComponentSupport(CodeGenerator);
+
+// =============================================================================
+// Type Support (enum generator)
+// =============================================================================
+
+CodeGenerator.prototype.generateEnum = generateEnum;
 
 // =============================================================================
 // Convenience Functions

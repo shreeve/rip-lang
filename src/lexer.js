@@ -40,6 +40,7 @@
 // ==========================================================================
 
 import { TEMPLATE_TAGS } from './tags.js';
+import { installTypeSupport } from './types.js';
 
 // ==========================================================================
 // Token Category Sets
@@ -62,6 +63,7 @@ let RIP_KEYWORDS = new Set([
   'undefined', 'Infinity', 'NaN',
   'then', 'unless', 'until', 'loop', 'of', 'by', 'when', 'def',
   'component', 'render',
+  'enum', 'interface',
 ]);
 
 // Rip aliases: word → operator/value
@@ -82,7 +84,7 @@ let ALIAS_WORDS = new Set(Object.keys(ALIASES));
 // Reserved words — cannot be used as identifiers
 let RESERVED = new Set([
   'case', 'function', 'var', 'void', 'with', 'const', 'let',
-  'enum', 'native', 'implements', 'interface', 'package',
+  'native', 'implements', 'package',
   'private', 'protected', 'public', 'static',
 ]);
 
@@ -212,7 +214,7 @@ let UNARY_MATH = new Set(['!', '~']);
 // conflict with ?. (optional chaining), ?? (nullish), ?.( and ?.[
 let IDENTIFIER_RE = /^(?!\d)((?:(?!\s)[$\w\x7f-\uffff])+(?:!|[?](?![.?[(]))?)([^\n\S]*:(?![=:]))?/;
 let NUMBER_RE     = /^0b[01](?:_?[01])*n?|^0o[0-7](?:_?[0-7])*n?|^0x[\da-f](?:_?[\da-f])*n?|^\d+(?:_\d+)*n|^(?:\d+(?:_\d+)*)?\.?\d+(?:_\d+)*(?:e[+-]?\d+(?:_\d+)*)?/i;
-let OPERATOR_RE   = /^(?:<=>|[-=]>|~>|~=|:=|=!|===|!==|!\?|\?\?|=~|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?\.?|\.{2,3})/;
+let OPERATOR_RE   = /^(?:<=>|::=|::|[-=]>|~>|~=|:=|=!|===|!==|!\?|\?\?|=~|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?\.?|\.{2,3})/;
 let WHITESPACE_RE = /^[^\n\S]+/;
 let NEWLINE_RE    = /^(?:\n[^\n\S]*)+/;
 let COMMENT_RE    = /^(\s*)###([^#][\s\S]*?)(?:###([^\n\S]*)|###$)|^((?:\s*#(?!##[^#]).*)+)/;
@@ -1092,6 +1094,9 @@ export class Lexer {
       this.seenFor = this.seenImport = this.seenExport = false;
       tag = 'TERMINATOR';
     }
+    // Type operators
+    else if (val === '::=') tag = 'TYPE_ALIAS';
+    else if (val === '::')  tag = 'TYPE_ANNOTATION';
     // Reactive operators
     else if (val === '~=') tag = 'COMPUTED_ASSIGN';
     else if (val === ':=') tag = 'REACTIVE_ASSIGN';
@@ -1176,6 +1181,7 @@ export class Lexer {
     this.closeOpenIndexes();
     this.normalizeLines();
     this.rewriteRender();
+    this.rewriteTypes();
     this.tagPostfixConditionals();
     this.addImplicitBracesAndParens();
     this.addImplicitCallCommas();
@@ -1844,6 +1850,12 @@ export class Lexer {
     return [indent, outdent];
   }
 }
+
+// ==========================================================================
+// Type Support (prototype installation)
+// ==========================================================================
+
+installTypeSupport(Lexer);
 
 // ==========================================================================
 // Convenience export

@@ -85,6 +85,7 @@ grammar =
     o 'Throw'
     o 'Yield'
     o 'Def'
+    o 'Enum'
   ]
 
   # Single-line expressions (for postfix forms and inline arrows).
@@ -709,6 +710,14 @@ grammar =
   ]
 
   # ============================================================================
+  # Enums (runtime type construct)
+  # ============================================================================
+
+  Enum: [
+    o 'ENUM Identifier Block', '["enum", 2, 3]'
+  ]
+
+  # ============================================================================
   # Components
   # ============================================================================
 
@@ -784,6 +793,7 @@ grammar =
     o 'EXPORT Class'                                       , '["export", 2]'
     o 'EXPORT Component'                                   , '["export", 2]'
     o 'EXPORT Def'                                         , '["export", 2]'
+    o 'EXPORT Enum'                                        , '["export", 2]'
     o 'EXPORT Identifier = Expression'                     , '["export", ["=", 2, 4]]'
     o 'EXPORT Identifier = TERMINATOR Expression'          , '["export", ["=", 2, 5]]'
     o 'EXPORT Identifier = INDENT Expression OUTDENT'      , '["export", ["=", 2, 5]]'
