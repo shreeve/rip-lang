@@ -6,27 +6,22 @@ export Todos = component
   nextId := 1
 
   remaining ~= todos.filter((t) -> not t.done).length
-  total ~= todos.length
 
   addTodo: ->
-    text = newTodo.trim()
-    if text
-      todos = [...todos, { id: nextId, text: text, done: false }]
+    if newTodo.trim()
+      todos = [...todos, { id: nextId, text: newTodo.trim(), done: false }]
       nextId++
       newTodo = ''
-
-  toggleTodo: (id) ->
-    todos = todos.map (t) ->
-      if t.id is id then { ...t, done: not t.done } else t
 
   deleteTodo: (id) ->
     todos = todos.filter (t) -> t.id isnt id
 
-  clearDone: ->
-    todos = todos.filter (t) -> not t.done
+  clearAll: ->
+    todos = []
 
   handleKey: (e) ->
-    @addTodo() if e.key is 'Enter'
+    if e.key is 'Enter'
+      @addTodo()
 
   render
     div
@@ -36,7 +31,7 @@ export Todos = component
 
       .card
         .todo-input-row
-          input.input type: "text", placeholder: "What needs to be done?", @input: ((e) -> newTodo = e.target.value), @keydown: @handleKey
+          input.input type: "text", value: newTodo, placeholder: "What needs to be done?", @keydown: @handleKey
           button.btn.btn-primary @click: @addTodo, "Add"
 
         ul.todo-list
@@ -47,4 +42,4 @@ export Todos = component
 
         .todo-stats
           span "#{remaining} remaining"
-          button.btn.btn-sm @click: @clearDone, "Clear done"
+          button.btn.btn-sm @click: @clearAll, "Clear all"

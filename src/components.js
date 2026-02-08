@@ -712,6 +712,20 @@ export function installComponentSupport(CodeGenerator) {
         }
 
         const valueCode = this.generateInComponent(value, 'value');
+
+        // Smart two-way binding for value/checked when bound to reactive state
+        if ((key === 'value' || key === 'checked') && this.hasReactiveDeps(value)) {
+          // Reactive effect: signal → DOM property
+          this._emitSetupLines.push(`__effect(() => { ${elVar}.${key} = ${valueCode}; });`);
+          // Event listener: DOM → signal (two-way)
+          const event = key === 'checked' ? 'change' : 'input';
+          const accessor = key === 'checked' ? 'e.target.checked'
+            : (inputType === 'number' || inputType === 'range') ? 'e.target.valueAsNumber'
+            : 'e.target.value';
+          this._emitCreateLines.push(`${elVar}.addEventListener('${event}', (e) => { ${valueCode} = ${accessor}; });`);
+          continue;
+        }
+
         if (this.hasReactiveDeps(value)) {
           this._emitSetupLines.push(`__effect(() => { ${elVar}.setAttribute('${key}', ${valueCode}); });`);
         } else {
@@ -828,7 +842,11 @@ export function installComponentSupport(CodeGenerator) {
     this._emitSetupLines = savedSetupLines;
 
     const localizeVar = (line) => {
-      return line.replace(/this\.(_el\d+|_t\d+|_anchor\d+|_frag\d+|_slot\d+|_c\d+|_inst\d+|_empty\d+)/g, '$1');
+      // First localize template element refs (this._elN → _elN)
+      let result = line.replace(/this\.(_el\d+|_t\d+|_anchor\d+|_frag\d+|_slot\d+|_c\d+|_inst\d+|_empty\d+)/g, '$1');
+      // Then replace remaining this. with ctx. (component instance in block context)
+      result = result.replace(/\bthis\./g, 'ctx.');
+      return result;
     };
 
     const factoryLines = [];
@@ -949,7 +967,11 @@ export function installComponentSupport(CodeGenerator) {
     this._emitSetupLines = savedSetupLines;
 
     const localizeVar = (line) => {
-      return line.replace(/this\.(_el\d+|_t\d+|_anchor\d+|_frag\d+|_slot\d+|_c\d+|_inst\d+|_empty\d+)/g, '$1');
+      // First localize template element refs (this._elN → _elN)
+      let result = line.replace(/this\.(_el\d+|_t\d+|_anchor\d+|_frag\d+|_slot\d+|_c\d+|_inst\d+|_empty\d+)/g, '$1');
+      // Then replace remaining this. with ctx. (component instance in block context)
+      result = result.replace(/\bthis\./g, 'ctx.');
+      return result;
     };
 
     // Generate block factory

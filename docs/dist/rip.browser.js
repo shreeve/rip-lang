@@ -3004,6 +3004,13 @@ ${blockFactoriesCode}return ${lines.join(`
           continue;
         }
         const valueCode = this.generateInComponent(value, "value");
+        if ((key === "value" || key === "checked") && this.hasReactiveDeps(value)) {
+          this._emitSetupLines.push(`__effect(() => { ${elVar}.${key} = ${valueCode}; });`);
+          const event = key === "checked" ? "change" : "input";
+          const accessor = key === "checked" ? "e.target.checked" : inputType === "number" || inputType === "range" ? "e.target.valueAsNumber" : "e.target.value";
+          this._emitCreateLines.push(`${elVar}.addEventListener('${event}', (e) => { ${valueCode} = ${accessor}; });`);
+          continue;
+        }
         if (this.hasReactiveDeps(value)) {
           this._emitSetupLines.push(`__effect(() => { ${elVar}.setAttribute('${key}', ${valueCode}); });`);
         } else {
@@ -3093,7 +3100,9 @@ ${blockFactoriesCode}return ${lines.join(`
     this._emitCreateLines = savedCreateLines;
     this._emitSetupLines = savedSetupLines;
     const localizeVar = (line) => {
-      return line.replace(/this\.(_el\d+|_t\d+|_anchor\d+|_frag\d+|_slot\d+|_c\d+|_inst\d+|_empty\d+)/g, "$1");
+      let result = line.replace(/this\.(_el\d+|_t\d+|_anchor\d+|_frag\d+|_slot\d+|_c\d+|_inst\d+|_empty\d+)/g, "$1");
+      result = result.replace(/\bthis\./g, "ctx.");
+      return result;
     };
     const factoryLines = [];
     factoryLines.push(`function ${blockName}(ctx) {`);
@@ -3179,7 +3188,9 @@ ${blockFactoriesCode}return ${lines.join(`
     this._emitCreateLines = savedCreateLines;
     this._emitSetupLines = savedSetupLines;
     const localizeVar = (line) => {
-      return line.replace(/this\.(_el\d+|_t\d+|_anchor\d+|_frag\d+|_slot\d+|_c\d+|_inst\d+|_empty\d+)/g, "$1");
+      let result = line.replace(/this\.(_el\d+|_t\d+|_anchor\d+|_frag\d+|_slot\d+|_c\d+|_inst\d+|_empty\d+)/g, "$1");
+      result = result.replace(/\bthis\./g, "ctx.");
+      return result;
     };
     const factoryLines = [];
     factoryLines.push(`function ${blockName}(ctx, ${itemVar}, ${indexVar}) {`);
@@ -6774,7 +6785,7 @@ function getComponentRuntime() {
 }
 // src/browser.js
 var VERSION = "3.1.1";
-var BUILD_DATE = "2026-02-08@10:38:14GMT";
+var BUILD_DATE = "2026-02-08@11:04:52GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
