@@ -32,3 +32,4 @@ yarn-error.log*
 .env.local
 .tool-versions
 notes.txt
+*.lock
