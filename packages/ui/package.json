@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/ui",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Zero-build reactive web framework — VFS, file-based routing, reactive stash",
   "type": "module",
   "main": "ui.js",
@@ -39,7 +39,7 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": "^3.0.2"
+    "rip-lang": "^3.1.1"
   },
   "files": [
     "ui.js",
