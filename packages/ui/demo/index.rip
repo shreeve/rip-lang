@@ -10,12 +10,12 @@
 # ==============================================================================
 
 import { get, use, start, notFound } from '@rip-lang/api'
-import { logger } from '@rip-lang/api/middleware'
+# import { logger } from '@rip-lang/api/middleware'
 import { ripUI } from '@rip-lang/ui/serve'
 
 dir = import.meta.dir
 
-use logger()
+# use logger()
 use ripUI pages: "#{dir}/pages", watch: true
 
 # CSS assets
