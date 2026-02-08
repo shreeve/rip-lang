@@ -6,17 +6,25 @@
 # enables .d.ts emission via emitTypes().
 
 # ============================================================================
-# Phase 1: Type Annotations — Types Erased from JS
+# Type Annotations on Variables — Erased from JS
 # ============================================================================
 
-# Variables with type annotations compile to plain JS
 code "typed variable", "count:: number = 0", "let count;\ncount = 0"
 code "typed string variable", 'name:: string = "Rip"', 'let name;\nname = "Rip"'
+code "typed array variable", "ids:: number[] = []", "let ids;\nids = []"
+code "typed generic variable", "items:: Map<string, number> = x", "let items;\nitems = x"
 
-# Constants with type annotations
+# ============================================================================
+# Type Annotations on Constants — Erased from JS
+# ============================================================================
+
 code "typed constant", "MAX:: number =! 100", "const MAX = 100"
+code "typed string constant", 'URL:: string =! "https://example.com"', 'const URL = "https://example.com"'
 
-# Function parameters with types
+# ============================================================================
+# Type Annotations on Functions — Erased from JS
+# ============================================================================
+
 code "typed function params", '''
   def add(a:: number, b:: number)
     a + b
@@ -26,7 +34,6 @@ code "typed function params", '''
   }
   '''
 
-# Return types
 code "typed function return", '''
   def greet(name:: string):: string
     "Hello, #{name}!"
@@ -36,7 +43,6 @@ code "typed function return", '''
   }
   '''
 
-# Parameterless function with return type
 code "parameterless typed function", '''
   def answer():: number
     42
@@ -46,21 +52,38 @@ code "parameterless typed function", '''
   }
   '''
 
+code "typed function three params", '''
+  def clamp(val:: number, min:: number, max:: number):: number
+    Math.max(min, Math.min(max, val))
+  ''', '''
+  function clamp(val, min, max) {
+    return Math.max(min, Math.min(max, val));
+  }
+  '''
+
 # ============================================================================
-# Phase 2: Type-Only Declarations — Erased from JS
+# Type-Only Declarations — Erased from JS
 # ============================================================================
 
-# Type aliases produce no JS output
+# Simple aliases
 code "type alias erased", "ID ::= number", ""
+code "union type alias erased", 'UserID ::= number | string', ""
 
-# Structural types produce no JS output
+# Structural types
 code "structural type erased", '''
   User ::= type
     id: number
     name: string
   ''', ""
 
-# Block unions produce no JS output
+code "structural type optional prop erased", '''
+  Config ::= type
+    host: string
+    port: number
+    ssl?: boolean
+  ''', ""
+
+# Block unions
 code "block union erased", '''
   Status ::=
     | "pending"
@@ -68,24 +91,37 @@ code "block union erased", '''
     | "done"
   ''', ""
 
-# Interfaces produce no JS output
+# Interfaces
 code "interface erased", '''
   interface Animal
     name: string
     age: number
   ''', ""
 
-# Interface with extends
 code "interface extends erased", '''
   interface Dog extends Animal
     breed: string
+  ''', ""
+
+# Multiple type declarations in sequence
+code "multiple types erased", '''
+  ID ::= number
+  Name ::= string
+  Status ::= "active" | "inactive"
+  ''', ""
+
+# Multiple interfaces in sequence
+code "multiple interfaces erased", '''
+  interface Readable
+    read: () => string
+  interface Writable
+    write: (data:: string) => boolean
   ''', ""
 
 # ============================================================================
 # Enums — Runtime JS Output
 # ============================================================================
 
-# Enums produce runtime JS
 test "enum creates object", '''
   enum Color
     red = 0
@@ -102,20 +138,40 @@ test "enum reverse mapping", '''
   Color[1]
   ''', "green"
 
-test "enum with string-like values", '''
+test "enum with large values", '''
   enum HttpCode
     ok = 200
+    created = 201
     notFound = 404
-  HttpCode.ok
-  ''', 200
+    serverError = 500
+  HttpCode.ok + HttpCode.notFound
+  ''', 604
+
+test "enum member access", '''
+  enum Dir
+    up = 0
+    down = 1
+    left = 2
+    right = 3
+  [Dir.up, Dir.down, Dir.left, Dir.right]
+  ''', [0, 1, 2, 3]
+
+test "enum reverse all", '''
+  enum Size
+    sm = 1
+    md = 2
+    lg = 3
+  [Size[1], Size[2], Size[3]]
+  ''', ["sm", "md", "lg"]
 
 # ============================================================================
-# Mixed: Types + Code Together
+# Runtime Behavior — Types Don't Affect Execution
 # ============================================================================
 
-# Type annotations don't affect runtime behavior
 test "typed variable runtime", "count:: number = 42; count", 42
 test "typed constant runtime", 'msg:: string =! "hello"; msg', "hello"
+test "typed boolean runtime", "flag:: boolean = true; flag", true
+test "typed null runtime", "val:: string = null; val", null
 
 test "typed function runtime", '''
   def double(x:: number):: number
@@ -129,14 +185,40 @@ test "typed params runtime", '''
   add(3, 4)
   ''', 7
 
-# Type alias + code coexisting
+test "typed function multiple calls", '''
+  def square(n:: number):: number
+    n * n
+  square(3) + square(4)
+  ''', 25
+
+test "typed function with string return", '''
+  def shout(msg:: string):: string
+    msg.toUpperCase()
+  shout("hello")
+  ''', "HELLO"
+
+test "typed function with array return", '''
+  def wrap(x:: number):: number[]
+    [x]
+  wrap(42)
+  ''', [42]
+
+test "typed parameterless runtime", '''
+  def pi():: number
+    3.14159
+  pi()
+  ''', 3.14159
+
+# ============================================================================
+# Mixed: Types + Code Coexisting
+# ============================================================================
+
 test "type alias with code", '''
   ID ::= number
   x = 42
   x
   ''', 42
 
-# Interface + code coexisting
 test "interface with code", '''
   interface Config
     host: string
@@ -145,7 +227,6 @@ test "interface with code", '''
   x
   ''', 99
 
-# Enum + other code
 test "enum with other code", '''
   enum Dir
     up = 0
@@ -154,15 +235,180 @@ test "enum with other code", '''
   x
   ''', 0
 
+test "multiple types then code", '''
+  ID ::= number
+  Name ::= string
+  interface User
+    id: number
+    name: string
+  x = "works"
+  x
+  ''', "works"
+
+test "type alias between functions", '''
+  def first():: number
+    1
+  ID ::= number
+  def second():: number
+    2
+  first() + second()
+  ''', 3
+
+test "interface then enum then code", '''
+  interface Shape
+    area: number
+  enum Color
+    red = 0
+    blue = 1
+  result = Color.red
+  result
+  ''', 0
+
+test "enum used in computation", '''
+  enum Op
+    add = 1
+    sub = 2
+    mul = 3
+  def apply(op:: number, a:: number, b:: number):: number
+    if op is Op.add
+      a + b
+    else if op is Op.mul
+      a * b
+    else
+      a - b
+  apply(Op.add, 10, 20)
+  ''', 30
+
 # ============================================================================
-# Complex Types in Annotations
+# Complex Type Annotations
 # ============================================================================
 
-# Generic types in annotations
-code "generic type annotation", "items:: Map<string, number> = x", "let items;\nitems = x"
+# Generic types survive in annotations without affecting JS
+code "nested generic annotation", "cache:: Map<string, Set<number>> = x", "let cache;\ncache = x"
 
-# Simple type alias with union
-code "union type alias", 'UserID ::= number | string', ""
+# Multiple typed variables in sequence
+test "multiple typed variables", '''
+  a:: number = 10
+  b:: number = 20
+  c:: number = 30
+  a + b + c
+  ''', 60
 
-# Array type
-code "array type annotation", "ids:: number[] = []", "let ids;\nids = []"
+# Typed variables used together
+test "typed variables in expression", '''
+  width:: number = 5
+  height:: number = 10
+  width * height
+  ''', 50
+
+# Typed constant used in function
+test "typed constant in function", '''
+  PI:: number =! 3.14159
+  def circleArea(r:: number):: number
+    PI * r * r
+  circleArea(1)
+  ''', 3.14159
+
+# ============================================================================
+# Generic Functions — Types Erased from JS
+# ============================================================================
+
+test "generic function runtime", '''
+  def identity<T>(value:: T):: T
+    value
+  identity(42)
+  ''', 42
+
+test "generic function with string", '''
+  def identity<T>(value:: T):: T
+    value
+  identity("hello")
+  ''', "hello"
+
+test "generic function with array", '''
+  def first<T>(items:: T[]):: T
+    items[0]
+  first([10, 20, 30])
+  ''', 10
+
+# ============================================================================
+# Structural Types with Optional Properties
+# ============================================================================
+
+code "optional property erased", '''
+  Config ::= type
+    host: string
+    port: number
+    ssl?: boolean
+    timeout?: number
+  ''', ""
+
+# ============================================================================
+# Block Unions — Various Forms
+# ============================================================================
+
+code "block union three members", '''
+  Light ::=
+    | "red"
+    | "yellow"
+    | "green"
+  ''', ""
+
+code "block union many members", '''
+  HttpMethod ::=
+    | "GET"
+    | "POST"
+    | "PUT"
+    | "PATCH"
+    | "DELETE"
+  ''', ""
+
+# ============================================================================
+# Edge Cases
+# ============================================================================
+
+# Type annotation with no assignment (in a function body)
+test "typed param used in expression", '''
+  def negate(x:: number):: number
+    -x
+  negate(5)
+  ''', -5
+
+# Enum with single member
+test "enum single member", '''
+  enum Single
+    only = 1
+  Single.only
+  ''', 1
+
+# Type alias then immediate use
+test "type alias immediate code", '''
+  ID ::= number
+  id = 123
+  id
+  ''', 123
+
+# Sequential enums
+test "multiple enums", '''
+  enum A
+    x = 1
+  enum B
+    y = 2
+  A.x + B.y
+  ''', 3
+
+# Typed function calling another typed function
+test "typed functions calling each other", '''
+  def double(n:: number):: number
+    n * 2
+  def quadruple(n:: number):: number
+    double(double(n))
+  quadruple(5)
+  ''', 20
+
+# Function with many typed params
+test "function many typed params", '''
+  def sum5(a:: number, b:: number, c:: number, d:: number, e:: number):: number
+    a + b + c + d + e
+  sum5(1, 2, 3, 4, 5)
+  ''', 15

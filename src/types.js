@@ -58,6 +58,18 @@ export function installTypeSupport(Lexer) {
               if (!token.data) token.data = {};
               token.data.typeParams = genTokens.map(t => t[1]).join('');
               tokens.splice(i + 1, genTokens.length);
+              // After removing <T>, retag ( as CALL_START if it follows DEF IDENTIFIER
+              if (isDef && tokens[i + 1]?.[0] === '(') {
+                tokens[i + 1][0] = 'CALL_START';
+                // Find matching ) and retag as CALL_END
+                let d = 1, m = i + 2;
+                while (m < tokens.length && d > 0) {
+                  if (tokens[m][0] === '(' || tokens[m][0] === 'CALL_START') d++;
+                  if (tokens[m][0] === ')' || tokens[m][0] === 'CALL_END') d--;
+                  if (d === 0) tokens[m][0] = 'CALL_END';
+                  m++;
+                }
+              }
             }
           }
         }
@@ -212,6 +224,14 @@ function collectTypeExpression(tokens, j) {
     let isClose = tTag === ')' || tTag === ']' ||
         tTag === 'CALL_END' || tTag === 'PARAM_END' || tTag === 'INDEX_END' ||
         (tTag === 'COMPARE' && t[1] === '>');
+
+    // Handle >> as two > closes (nested generics: Map<string, Set<number>>)
+    if (tTag === 'SHIFT' && t[1] === '>>' && depth >= 2) {
+      depth -= 2;
+      typeTokens.push(t);
+      j++;
+      continue;
+    }
 
     if (isOpen) {
       depth++;
