@@ -7,6 +7,49 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-02-08
+
+### Rip UI — Zero-Build Reactive Web Framework
+
+Rip UI inverts the traditional web development model. Instead of building and
+bundling on the server, the 35KB Rip compiler ships to the browser. Components
+are delivered as `.rip` source files, stored in a browser-local Virtual File
+System, compiled on demand, and rendered with fine-grained DOM updates.
+
+**Component model** — Two keywords added to the language:
+
+- `component` — Declares an anonymous ES6 class with reactive props, computed
+  values, effects, methods, and lifecycle hooks. `@` properties become props
+  the parent can set. `:=` creates signals, `~=` creates computed values.
+- `render` — Defines a Pug/Jade-like template DSL inside a component. Tags are
+  bare identifiers, classes use dot notation (`div.card.active`), dynamic
+  classes use dot-parens (`div.("active" if @selected)`), and events use
+  `@click: handler`. No virtual DOM — each reactive binding creates a direct
+  effect that updates exactly the DOM nodes it touches.
+
+**Framework modules** (all in `packages/ui/`):
+
+| Module | Role |
+|--------|------|
+| `stash.js` | Deep reactive state tree with path-based navigation |
+| `vfs.js` | Browser-local Virtual File System with file watchers |
+| `router.js` | File-based router (URL ↔ VFS paths, History API) |
+| `renderer.js` | Component lifecycle, layout nesting, route transitions |
+| `ui.js` | `createApp` entry point, re-exports everything |
+
+**Compiler changes** (`src/components.js`, 1,193 lines):
+
+- 22 methods installed on `CodeGenerator.prototype` via `installComponentSupport()`
+- Categorizes component body into state, computed, readonly, methods, effects, render
+- Emits fine-grained DOM creation (`_create()`) and reactive setup (`_setup()`)
+- Block factories for conditionals and loops with disposable effects
+- Keyed reconciliation for list rendering
+- Component runtime emitted only when `component` keyword is used
+
+**No build step. No bundler. No configuration files.**
+
+---
+
 ## [3.0.0] - 2026-02-07
 
 ### Complete Rewrite

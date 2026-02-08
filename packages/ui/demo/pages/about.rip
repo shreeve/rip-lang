@@ -5,12 +5,20 @@ component About
   render
     div
       .page-header
-        h1.page-title "About"
-        p.page-subtitle "How this demo works"
+        h1.page-title "About Rip UI"
+        p.page-subtitle "Zero-build reactive web apps"
+
+      .card
+        h3 "The Idea"
+        p "Traditional frameworks build and bundle on the server, then ship static artifacts. Rip UI ships the 35KB compiler to the browser instead. Components arrive as .rip source files, are compiled on demand, and render with fine-grained reactivity. No build step, no bundler, no configuration files."
+
+      .card
+        h3 "Two Keywords"
+        p "The component model adds exactly two keywords to the Rip language: component and render. Everything else — reactive state (:=), computed values (~=), effects (~>), methods, lifecycle hooks — is standard Rip syntax that already exists."
 
       .card
         h3 "Architecture"
-        p "This app runs entirely in the browser. The Rip compiler (35KB) compiles .rip source files to JavaScript on demand. No build step, no bundler, no server-side rendering."
+        p "The Virtual File System stores page components in memory. The Router maps URLs to VFS paths using file-based conventions (like Next.js). When you navigate, the Renderer compiles the matching .rip file and mounts the resulting component. Each reactive binding creates a direct DOM effect — no virtual DOM diffing."
 
       .card
         h3 "Stack"
@@ -29,7 +37,7 @@ component About
             span.stat-value "Zero"
 
       .card
-        h3 "How It Works"
-        p "The Virtual File System stores page components in memory. The Router maps URLs to VFS paths. When you navigate, the Renderer compiles the matching .rip file and mounts the resulting component. Reactivity uses := for state, ~= for computed values, and ~> for effects."
+        h3 "Modules"
+        p "stash.js — Deep reactive state tree with path-based navigation. vfs.js — Browser-local Virtual File System with file watchers. router.js — File-based router mapping URLs to VFS paths. renderer.js — Compiles and mounts components, manages layouts and transitions. ui.js — createApp entry point that wires everything together."
 
 About.new().mount "#app"

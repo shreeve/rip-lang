@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.0.2-blue.svg" alt="Version"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.1.0-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
   <a href="#"><img src="https://img.shields.io/badge/tests-1073%2F1073-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
@@ -203,6 +203,27 @@ Rip's reactivity is framework-agnostic — use it with React, Vue, Svelte, or va
 
 ---
 
+## Rip UI
+
+Ship the 35KB Rip compiler to the browser. Components are `.rip` source files, compiled on demand, rendered with fine-grained reactivity. No build step. No bundler.
+
+```coffee
+Counter = component
+  @count := 0
+
+  render
+    div.counter
+      h1 "Count: #{@count}"
+      button @click: (-> @count++), "+"
+      button @click: (-> @count--), "-"
+```
+
+Two keywords — `component` and `render` — are all the language adds. Everything else (`:=` state, `~=` computed, methods, lifecycle) is standard Rip.
+
+See [@rip-lang/ui](packages/ui/) for the full framework: Virtual File System, file-based router, reactive stash, and component renderer.
+
+---
+
 ## vs CoffeeScript
 
 | Feature | CoffeeScript | Rip |
@@ -264,6 +285,7 @@ Rip includes optional packages for full-stack development:
 
 | Package | Purpose | Lines |
 |---------|---------|-------|
+| [@rip-lang/ui](packages/ui/) | Zero-build reactive web framework (VFS, router, components) | ~1,300 |
 | [@rip-lang/api](packages/api/) | HTTP framework (Sinatra-style routing, 37 validators) | ~1,050 |
 | [@rip-lang/server](packages/server/) | Multi-worker app server (hot reload, HTTPS, mDNS) | ~1,210 |
 | [@rip-lang/db](packages/db/) | DuckDB server with official UI (pure Bun FFI) | ~1,740 |
