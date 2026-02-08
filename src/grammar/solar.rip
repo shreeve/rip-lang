@@ -3,9 +3,6 @@
 # ==============================================================================
 # Solar - SLR(1) Parser Generator for Rip
 #
-# Clean implementation influenced by Jison, but rewritten in Rip for
-# readability, efficiency, and maintainability.
-#
 # Author: Steve Shreeve <steve.shreeve@gmail.com>
 #   Date: November 15, 2025
 # ==============================================================================
