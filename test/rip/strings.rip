@@ -376,70 +376,29 @@ test 'backslash literal', 'x = "back\\\\slash"\nx', 'back\\slash'
 test 'unicode escape', 'x = "\\u0048ello"\nx', 'Hello'
 
 # ============================================================================
-# String Interpolation
+# Interpolation Position and Adjacency
 # ============================================================================
 
-# Interpolation with variable
-test 'interpolation variable', '''
-  x = 5
-  "Value: #{x}"
-  ''', 'Value: 5'
-
-# Interpolation at start
 test 'interpolation at start', '''
   x = 5
   "#{x} is the value"
   ''', '5 is the value'
 
-# Interpolation at end
-test 'interpolation at end', '''
-  x = 5
-  "The value is #{x}"
-  ''', 'The value is 5'
-
-# Only interpolation
 test 'only interpolation', '''
   x = 'test'
   "#{x}"
   ''', 'test'
 
-# Multiple interpolations
-test 'multiple interpolations', '''
-  a = 'foo'
-  b = 'bar'
-  "#{a} and #{b}"
-  ''', 'foo and bar'
-
-# Adjacent interpolations
 test 'adjacent interpolations', '''
   a = 'foo'
   b = 'bar'
   "#{a}#{b}"
   ''', 'foobar'
 
-# Interpolation with expression
-test 'interpolation expression', '''
-  x = 5
-  "Result: #{x + 10}"
-  ''', 'Result: 15'
-
-# Interpolation with function call
-test 'interpolation call', '''
-  fn = -> 'test'
-  "Value: #{fn()}"
-  ''', 'Value: test'
-
-# Complex interpolation with expression
-test 'complex interpolation', '''
+test 'complex interpolation with reduce', '''
   arr = [1, 2, 3]
   "Sum: #{arr.reduce(((a, b) => a + b), 0)}"
   ''', 'Sum: 6'
-
-# Nested string in interpolation
-test 'nested string interpolation', '''
-  name = 'World'
-  "Hello #{'Mr. ' + name}"
-  ''', 'Hello Mr. World'
 
 # ============================================================================
 # Edge Cases

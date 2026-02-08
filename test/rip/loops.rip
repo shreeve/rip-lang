@@ -45,69 +45,6 @@ test "while loop", "i = 0; sum = 0; while i < 5\n  sum += i\n  i += 1\nsum", 10
 # While with guard
 test "while when", "i = 0\nsum = 0\nwhile i < 10\n  if i % 2 == 0\n    sum += i\n  i += 1\nsum", 20
 
-# For-in with 'when' guard using 'in' operator
-test "for-in when item in list", '''
-  result = []
-  for item in ['apple', 'grape', 'banana'] when item in ['apple', 'banana']
-    result.push(item)
-  result
-  ''', ['apple', 'banana']
-
-# For-in with 'when' guard using 'not in' operator
-test "for-in when item not in list", '''
-  result = []
-  for item in ['apple', 'grape', 'banana'] when item not in ['apple', 'banana']
-    result.push(item)
-  result
-  ''', ['grape']
-
-# For-of with 'when' guard using 'of' operator
-test "for-of when key of object", '''
-  obj = {a: 1, b: 2, c: 3}
-  obj.d = 4
-  result = []
-  for key of obj when key of {a: true, c: true}
-    result.push(key)
-  result.sort()
-  ''', ['a', 'c']
-
-# For-of with 'when' guard using 'not of' operator
-test "for-of when key not of object", '''
-  obj = {a: 1, b: 2, c: 3}
-  result = []
-  for key of obj when key not of {a: true, c: true}
-    result.push(key)
-  result
-  ''', ['b']
-
-# For-in with 'when' guard using 'instanceof' operator
-test "for-in when instanceof", '''
-  class Fruit
-  class Veggie
-  apple = new Fruit
-  grape = new Fruit
-  carrot = new Veggie
-  items = [apple, grape, carrot]
-  result = []
-  for item in items when item instanceof Fruit
-    result.push(item)
-  result.length
-  ''', 2
-
-# For-in with 'when' guard using 'not instanceof' operator
-test "for-in when not instanceof", '''
-  class Fruit
-  class Veggie
-  apple = new Fruit
-  grape = new Fruit
-  carrot = new Veggie
-  items = [apple, grape, carrot]
-  result = []
-  for item in items when item not instanceof Fruit
-    result.push(item)
-  result.length
-  ''', 1
-
 # Postfix while
 test "postfix while", "i = 0; i += 1 while i < 5; i", 5
 
@@ -207,10 +144,6 @@ test "nested for-in", '''
       sum += i * j
   sum
   ''', 180
-
-# ============================================================================
-# Break and Continue in Loops
-# ============================================================================
 
 test 'break in for loop', '''
   result = []

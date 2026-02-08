@@ -233,3 +233,109 @@ const v = obj[k];
 console.log(k);
 }
 '''
+
+# ============================================================================
+# Guards with Relational Operators
+# ============================================================================
+
+test "for-in when item in list", '''
+  result = []
+  for item in ['apple', 'grape', 'banana'] when item in ['apple', 'banana']
+    result.push(item)
+  result
+  ''', ['apple', 'banana']
+
+test "for-in when item not in list", '''
+  result = []
+  for item in ['apple', 'grape', 'banana'] when item not in ['apple', 'banana']
+    result.push(item)
+  result
+  ''', ['grape']
+
+test "for-of when key of object", '''
+  obj = {a: 1, b: 2, c: 3}
+  obj.d = 4
+  result = []
+  for key of obj when key of {a: true, c: true}
+    result.push(key)
+  result.sort()
+  ''', ['a', 'c']
+
+test "for-of when key not of object", '''
+  obj = {a: 1, b: 2, c: 3}
+  result = []
+  for key of obj when key not of {a: true, c: true}
+    result.push(key)
+  result
+  ''', ['b']
+
+test "for-in when instanceof", '''
+  class Fruit
+  class Veggie
+  apple = new Fruit
+  grape = new Fruit
+  carrot = new Veggie
+  items = [apple, grape, carrot]
+  result = []
+  for item in items when item instanceof Fruit
+    result.push(item)
+  result.length
+  ''', 2
+
+test "for-in when not instanceof", '''
+  class Fruit
+  class Veggie
+  apple = new Fruit
+  grape = new Fruit
+  carrot = new Veggie
+  items = [apple, grape, carrot]
+  result = []
+  for item in items when item not instanceof Fruit
+    result.push(item)
+  result.length
+  ''', 1
+
+# ============================================================================
+# FOR-AS GUARDS (ES6 for-of on iterables)
+# ============================================================================
+
+test 'for-as with simple guard', '''
+  result = []
+  for x as [1, 2, 3, 4, 5] when x > 3
+    result.push(x)
+  result
+  ''', [4, 5]
+
+test 'for-as with even filter', '''
+  result = []
+  for x as [1, 2, 3, 4, 5, 6] when x % 2 is 0
+    result.push(x)
+  result
+  ''', [2, 4, 6]
+
+test 'for-as set with guard', '''
+  s = new Set([10, 20, 30, 40, 50])
+  result = []
+  for x as s when x > 25
+    result.push(x)
+  result.sort()
+  ''', [30, 40, 50]
+
+test 'for-as destructure with guard', '''
+  m = new Map([["a", 1], ["b", 2], ["c", 3]])
+  result = []
+  for [k, v] as m.entries() when v > 1
+    result.push(k)
+  result.sort()
+  ''', ["b", "c"]
+
+code 'for-as with guard', '''
+  for x as iter when x > 0
+    console.log x
+  ''', '''
+  for (const x of iter) {
+    if (x > 0) {
+      console.log(x);
+    }
+  }
+'''
