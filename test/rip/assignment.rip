@@ -74,7 +74,7 @@ test "destructuring with defaults", "{a = 5, b = 10} = {a: 1}; a + b", 11
 test "array destructuring skip", "[a, , c] = [1, 2, 3]; a + c", 4
 test "destructuring swap", "a = 1; b = 2; [a, b] = [b, a]; a", 2
 
-# Array destructuring with rest in middle (CoffeeScript feature)
+# Array destructuring with rest in middle
 test "array rest in middle", "[first, ...middle, last] = [1, 2, 3, 4, 5]; [first, middle, last]", [1, [2, 3, 4], 5]
 test "array rest in middle two after", "[a, ...mid, b, c] = [1, 2, 3, 4, 5]; [a, mid, b, c]", [1, [2, 3], 4, 5]
 test "array rest in middle empty", "[a, ...b, c] = [1, 2]; [a, b, c]", [1, [], 2]
@@ -106,3 +106,17 @@ test "computed property destructuring", '''
   {[key]: value} = {prop: 100}
   value
   ''', 100
+
+# ============================================================================
+# Conditional Assignment with typeof
+# ============================================================================
+
+test 'assignment with explicit if instead of postfix unless', '''
+  token = null
+  value = 42
+  if typeof value isnt "number"
+    token = value or "default"
+  else
+    token = value
+  token
+  ''', 42

@@ -432,3 +432,495 @@ code "standalone ?? throw generates if with nullish check", """
 """, """
 if ((getValue()) == null) throw new Error('Not found');
 """
+
+# ============================================================================
+# Switch with Explicit Returns
+# ============================================================================
+
+test 'switch case with explicit return', '''
+  fn = (x) ->
+    switch x
+      when 'a'
+        return "found a"
+      when 'b'
+        return "found b"
+      else
+        return "other"
+  fn('b')
+  ''', "found b"
+
+test 'nested switch with explicit returns', '''
+  outer = (x) ->
+    switch x
+      when 1
+        switch x
+          when 1
+            return "one"
+      else
+        return "other"
+  outer(1)
+  ''', "one"
+
+test 'switch with multi-statement block and return', '''
+  fn = (x) ->
+    y = 0
+    z = 0
+    switch x
+      when 'a'
+        y = 1
+        z = 2
+        return "result: #{y + z}"
+  fn('a')
+  ''', "result: 3"
+
+code 'switch with explicit return', '''
+  fn = (x) ->
+    switch x
+      when 'a'
+        return "A"
+  ''', '''
+  let fn;
+  fn = function(x) {
+    switch (x) {
+      case 'a':
+        return "A";
+    }
+  };
+'''
+
+# ============================================================================
+# Switch Case Labels
+# ============================================================================
+
+test 'switch with string cases', '''
+  fn = (arg) ->
+    switch arg
+      when '-h', '--help'
+        "help"
+      when '-v'
+        "version"
+      else
+        "unknown"
+  fn('--help')
+  ''', "help"
+
+test 'switch with negative number case', '''
+  fn = (x) ->
+    switch x
+      when -1
+        "negative one"
+      when 0
+        "zero"
+      else
+        "other"
+  fn(-1)
+  ''', "negative one"
+
+# ============================================================================
+# Switch with Code After (Statement Context)
+# ============================================================================
+
+test 'switch assigns then uses result', '''
+  fn = (mode) ->
+    switch mode
+      when 'a'
+        result = 1
+      when 'b'
+        result = 2
+      else
+        result = 3
+    result * 10
+  [fn('a'), fn('b'), fn('c')]
+  ''', [10, 20, 30]
+
+test 'switch assigns in inner switch then uses result', '''
+  fn = (action, mode) ->
+    switch mode
+      when 'sexp'
+        switch action
+          when 'string'
+            result = 'str'
+          when 'number'
+            result = 'num'
+          else
+            result = 'other'
+        result + '-processed'
+      else
+        'unknown'
+  fn('string', 'sexp')
+  ''', 'str-processed'
+
+code 'switch statement with code after', '''
+  fn = (x) ->
+    switch x
+      when 1
+        result = 'one'
+      when 2
+        result = 'two'
+      else
+        result = 'other'
+    return result
+  ''', '''
+  let fn;
+  fn = function(x) {
+    let result;
+    switch (x) {
+      case 1:
+        result = 'one';
+        break;
+      case 2:
+        result = 'two';
+        break;
+      default:
+        result = 'other';
+        break;
+    }
+    return result;
+  };
+'''
+
+test "switch collects all variables from all cases", '''
+  fn = (mode) ->
+    switch mode
+      when 1
+        a = 10
+        b = 20
+        a + b
+      when 2
+        c = 30
+        c * 2
+      else
+        d = 40
+        d - 5
+  [fn(1), fn(2), fn(3)]
+  ''', [30, 60, 35]
+
+# ============================================================================
+# Postfix Unless/If
+# ============================================================================
+
+test 'return with postfix unless', '''
+  fn = (x) ->
+    return "yes" unless x
+    "no"
+  fn(false)
+  ''', "yes"
+
+test 'assignment with postfix unless', '''
+  x = 5
+  y = 10 unless x > 10
+  y
+  ''', 10
+
+test 'expression with postfix unless', '''
+  fn = (x) -> x * 2 unless x < 0
+  fn(5)
+  ''', 10
+
+test "postfix unless with return - executes next statement", '''
+  fn = (x) ->
+    return "null" unless x?
+    x * 2
+  fn(5)
+  ''', 10
+
+test "postfix unless with return - returns early", '''
+  fn = (x) ->
+    return "null" unless x?
+    x * 2
+  fn(null)
+  ''', "null"
+
+test "postfix if with return", '''
+  fn = (x) ->
+    return "big" if x > 100
+    x * 2
+  fn(150)
+  ''', "big"
+
+test "postfix if with return - continues", '''
+  fn = (x) ->
+    return "big" if x > 100
+    x * 2
+  fn(50)
+  ''', 100
+
+test 'postfix unless on push no undefined', '''
+  actions = []
+  for item in [1, 2, 3, 4, 5]
+    actions.push item unless item > 3
+  actions
+  ''', [1, 2, 3]
+
+test 'postfix if on push', '''
+  actions = []
+  for item in [1, 2, 3, 4, 5]
+    actions.push item if item > 3
+  actions
+  ''', [4, 5]
+
+code 'postfix unless on call generates if statement', '''
+  for item in arr
+    actions.push item unless item > 3
+  ''', '''
+  for (const item of arr) {
+    if (!(item > 3)) actions.push(item);
+  }
+'''
+
+test 'postfix unless with binary op in argument', '''
+  actions = []
+  for item in [1, 2, 3]
+    actions.push "item:" + item unless item > 2
+  actions
+  ''', ["item:1", "item:2"]
+
+code 'return with postfix unless', '''
+  fn = -> return 5 unless x
+  ''', '''
+  let fn;
+  fn = function() {
+    if (!x) return 5;
+  };
+'''
+
+test 'conditional assignment with typeof check', '''
+  lookup = (x) ->
+    result = null
+    if typeof x isnt "number"
+      result = x or "not-found"
+    result
+  [lookup(42), lookup("hello"), lookup(null)]
+  ''', [null, "hello", "not-found"]
+
+# ============================================================================
+# If/Else Unreachable Code
+# ============================================================================
+
+test 'if else with returns', '''
+  fn = (x) ->
+    if x then return "yes" else return "no"
+  fn(true)
+  ''', "yes"
+
+test 'unless else with returns', '''
+  fn = (x) ->
+    unless x then return "no" else return "yes"
+  fn(true)
+  ''', "yes"
+
+# ============================================================================
+# If/Else-If Chains
+# ============================================================================
+
+test "if-else-if chain 4 branches", '''
+  fn = (x) ->
+    if x is 1
+      'one'
+    else if x is 2
+      'two'
+    else if x is 3
+      'three'
+    else
+      'other'
+  [fn(1), fn(2), fn(3), fn(4)]
+  ''', ['one', 'two', 'three', 'other']
+
+test "if-else-if chain 5 branches", '''
+  fn = (x) ->
+    if x is 1 then 'one'
+    else if x is 2 then 'two'
+    else if x is 3 then 'three'
+    else if x is 4 then 'four'
+    else 'other'
+  [fn(1), fn(2), fn(3), fn(4), fn(5)]
+  ''', ['one', 'two', 'three', 'four', 'other']
+
+test "nested if-else-if in value context", '''
+  x = 7
+  result = if x > 10
+    'big'
+  else if x > 5
+    'medium'
+  else if x > 0
+    'small'
+  else
+    'zero or negative'
+  result
+  ''', 'medium'
+
+test "multi-branch if-else-if returns correct value", '''
+  fn = (x) ->
+    if typeof x is 'number'
+      "number"
+    else if typeof x is 'string'
+      "string"
+    else if typeof x is 'boolean'
+      "boolean"
+    else if Array.isArray(x)
+      "array"
+    else
+      "other"
+  [fn(42), fn("hi"), fn(true), fn([1]), fn(null)]
+  ''', ["number", "string", "boolean", "array", "other"]
+
+code "if-else-if generates proper chain", '''
+  x = if a then 1 else if b then 2 else if c then 3 else 4
+  ''', '''
+  let x;
+  x = a ? 1 : (b ? 2 : (c ? 3 : 4));
+'''
+
+# ============================================================================
+# If/Else as Last Statement (IIFE avoidance)
+# ============================================================================
+
+test 'if/else as last statement no IIFE needed', '''
+  fn = (handle) ->
+    if Array.isArray handle
+      symbols = handle[0]
+      action = handle[1]
+      [symbols, action]
+    else
+      symbols = handle.split(' ')
+      [symbols, null]
+  result = fn(['a', 'b'])
+  result
+  ''', ['a', 'b']
+
+test 'if/else multi-statement returns correctly', '''
+  fn = (x) ->
+    if x > 0
+      a = x * 2
+      b = a + 10
+      [a, b]
+    else
+      c = x * -1
+      [c, 0]
+  fn(5)
+  ''', [10, 20]
+
+code 'if/else last statement uses early returns not IIFE', '''
+  fn = (handle) ->
+    if Array.isArray handle
+      symbols = handle[0]
+      action = handle[1]
+      [symbols, action]
+    else
+      symbols = handle.split(' ')
+      [symbols, null]
+  ''', '''
+  let fn;
+
+  fn = function(handle) {
+    let action, symbols;
+    if (Array.isArray(handle)) {
+      symbols = handle[0];
+      action = handle[1];
+      return [symbols, action];
+    } else {
+      symbols = handle.split(' ');
+      return [symbols, null];
+    }
+};
+'''
+
+test 'if-else value context with statement after', '''
+  fn = (cond) ->
+    msg = if cond
+      "yes"
+    else
+      "no"
+
+    msg + "-processed"
+
+  [fn(true), fn(false)]
+  ''', ["yes-processed", "no-processed"]
+
+test 'ternary with side effect after assignment', '''
+  sideEffect = 0
+  fn = (x) ->
+    result = if x then "true" else "false"
+    sideEffect = 1
+    result
+  [fn(true), sideEffect]
+  ''', ["true", 1]
+
+code 'if-else in value context uses ternary not IIFE for simple branches', '''
+  x = if cond then "yes" else "no"
+  ''', '''
+  let x;
+  x = cond ? "yes" : "no";
+'''
+
+# ============================================================================
+# Ternary Edge Cases
+# ============================================================================
+
+fail 'nested ternary in then branch', 'x = true ? (false ? "a" : "b") : "c"'
+
+test 'nested ternary in else branch', '''
+  x = 1
+  y = 0
+  z = 0
+  result = x > 0 ? "x" : y > 0 ? "y" : z > 0 ? "z" : "none"
+  result
+  ''', "x"
+
+test 'nested ternary with parens in else', '''
+  x = 0
+  y = 1
+  result = x > 0 ? "x" : (y > 0 ? "y" : "none")
+  result
+  ''', "y"
+
+test 'ternary in function', '''
+  fn = (x) -> x > 0 ? "positive" : "negative"
+  fn(5)
+  ''', "positive"
+
+test 'ternary with method call', '''
+  x = "hello"
+  result = x.length > 0 ? x.toUpperCase() : "empty"
+  result
+  ''', "HELLO"
+
+code 'ternary with typeof and or - minimal parens', '''
+  action = if typeof handle[1] is 'string' or handle.length is 3 then handle[1] else null
+  ''', '''
+  let action;
+  action = ((typeof handle[1] === 'string') || (handle.length === 3)) ? handle[1] : null;
+'''
+
+test 'ternary with complex condition works', '''
+  fn = (handle) ->
+    action = if typeof handle[1] is 'string' or handle.length is 3 then handle[1] else null
+    action
+  fn([1, 'test', 3])
+  ''', 'test'
+
+# ============================================================================
+# Postfix Conditional Variable Declarations
+# ============================================================================
+
+test "postfix if declares variable", '''
+  fn = ->
+    x = 5 if true
+    y = 10 unless false
+    x + y
+  fn()
+  ''', 15
+
+test "timing-style conditional assignment", '''
+  fn = (cond, val) ->
+    result = val if cond
+    result
+  fn(true, 42)
+  ''', 42
+
+test "timing returns undefined when condition false", '''
+  fn = (cond, val) ->
+    result = val if cond
+    result
+  fn(false, 42)
+  ''', undefined

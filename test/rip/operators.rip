@@ -171,7 +171,7 @@ test "in operator object", "obj = {a: 1}\n'a' in obj", true
 test "in operator object missing", "obj = {b: 1}\n'a' in obj", false
 
 # String literal in string (should use .includes())
-# Critical: CoffeeScript 'x' in str should check if x is substring, not index!
+# Critical: 'x' in str should check if x is substring, not index!
 test "string in string present", "str = 'hello world'\n'world' in str", true
 test "string in string missing", "str = 'hello'\n'world' in str", false
 test "newline in string", "str = 'line1\\nline2'\n'\\n' in str", true

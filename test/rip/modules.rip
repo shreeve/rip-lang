@@ -12,7 +12,7 @@ code "import namespace", 'import * as Utils from "./utils"', "import * as Utils 
 
 # Auto .js extension for local paths
 code "import auto .js", 'import foo from "./foo"', "import foo from './foo.js';"
-code "import preserve ext", 'import foo from "./foo.coffee"', "import foo from './foo.coffee';"
+code "import preserve ext", 'import foo from "./foo.mjs"', "import foo from './foo.mjs';"
 
 # JSON import assertions
 code "import json", 'import data from "./config.json"', "import data from './config.json' with { type: 'json' };"
@@ -78,3 +78,24 @@ code "export from", 'export { add, multiply } from "./math"', "export { add, mul
 
 # import.meta (ES6 module meta property)
 code "import.meta.url", 'x = import.meta.url', 'let x;\nx = import.meta.url'
+
+# ============================================================================
+# Dynamic Import
+# ============================================================================
+
+code 'dynamic import in if expression', '''
+  x = if cond
+    (await import(url)).default
+  else
+    null
+  ''', '''
+  let x;
+  x = cond ? (await import(url)).default : null;
+'''
+
+code 'dynamic import property access', '''
+  x = (await import(url)).default
+  ''', '''
+  let x;
+  x = (await import(url)).default;
+'''

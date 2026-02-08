@@ -1,0 +1,163 @@
+# Test: Reactivity (4 node types)
+# Tests the reactive operators: := (state), ~= (computed), ~> (effect),
+# and =! (readonly). These compile to __state(), __computed(), __effect(),
+# and const respectively.
+
+# ============================================================================
+# State (:=) — Code Generation
+# ============================================================================
+
+codeBody "state creation", "count := 0", "const count = __state(0)"
+
+codeBody "state with string", 'name := "Rip"', 'const name = __state("Rip")'
+
+codeBody "state update", '''
+  count := 0
+  count += 1
+  ''', '''
+  const count = __state(0);
+  count.value += 1
+  '''
+
+codeBody "state read", '''
+  count := 0
+  x = count
+  ''', '''
+  let x;
+
+  const count = __state(0);
+  x = count.value
+  '''
+
+# ============================================================================
+# Computed (~=) — Code Generation
+# ============================================================================
+
+codeBody "computed creation", "doubled ~= count * 2", "const doubled = __computed(() => (count * 2))"
+
+codeBody "computed with expression", '''
+  message ~= "Count is #{count}"
+  ''', '''
+  const message = __computed(() => `Count is ${count}`)
+  '''
+
+# ============================================================================
+# Effect (~>) — Code Generation
+# ============================================================================
+
+codeBody "fire-and-forget effect", '''
+  ~> console.log count
+  ''', '''
+  __effect(() => { console.log(count); })
+  '''
+
+codeBody "assigned effect", '''
+  logger ~> console.log count
+  ''', '''
+  const logger = __effect(() => { console.log(count); })
+  '''
+
+# ============================================================================
+# Readonly (=!) — Code Generation
+# ============================================================================
+
+code "readonly constant", "MAX =! 100", "const MAX = 100"
+code "readonly string", 'URL =! "https://example.com"', 'const URL = "https://example.com"'
+
+# ============================================================================
+# State (:=) — Runtime Behavior
+# ============================================================================
+
+test "state initial value", '''
+  count := 0
+  count + 0
+  ''', 0
+
+test "state update and read", '''
+  count := 10
+  count += 5
+  count + 0
+  ''', 15
+
+test "state with string", '''
+  name := "hello"
+  name += " world"
+  "" + name
+  ''', "hello world"
+
+test "state boolean coercion", '''
+  flag := true
+  flag is true
+  ''', true
+
+# ============================================================================
+# Computed (~=) — Runtime Behavior
+# ============================================================================
+
+test "computed initial value", '''
+  count := 5
+  doubled ~= count * 2
+  doubled + 0
+  ''', 10
+
+test "computed updates when state changes", '''
+  count := 3
+  doubled ~= count * 2
+  count += 1
+  doubled + 0
+  ''', 8
+
+test "computed with multiple dependencies", '''
+  a := 2
+  b := 3
+  sum ~= a + b
+  sum + 0
+  ''', 5
+
+test "computed chain", '''
+  base := 10
+  doubled ~= base * 2
+  quadrupled ~= doubled * 2
+  quadrupled + 0
+  ''', 40
+
+test "computed chain updates", '''
+  base := 10
+  doubled ~= base * 2
+  quadrupled ~= doubled * 2
+  base += 5
+  quadrupled + 0
+  ''', 60
+
+# ============================================================================
+# Readonly (=!) — Runtime Behavior
+# ============================================================================
+
+test "readonly value", "MAX =! 42; MAX", 42
+test "readonly string", 'MSG =! "hi"; MSG', "hi"
+test "readonly in expression", "PI =! 3; PI * 2", 6
+
+# ============================================================================
+# Mixed Reactive Patterns
+# ============================================================================
+
+test "state + computed together", '''
+  width := 5
+  height := 10
+  area ~= width * height
+  area + 0
+  ''', 50
+
+test "state + computed + update", '''
+  price := 100
+  tax ~= price * 0.1
+  price += 50
+  tax + 0
+  ''', 15
+
+test "multiple states", '''
+  a := 1
+  b := 2
+  c := 3
+  a + b + c + 0
+  ''', 6

@@ -26,7 +26,7 @@ test "string with tab escape", '"hello\\tworld"', "hello\tworld"
 # String Interpolation: "str"
 # ============================================================================
 
-# Basic interpolation (CoffeeScript uses #{} not ${})
+# Basic interpolation (#{} and ${} both work)
 test "interpolation with variable", 'name = "Alice"\n"Hello, #{name}!"', "Hello, Alice!"
 test "interpolation with number", 'x = 42\n"The answer is #{x}"', "The answer is 42"
 

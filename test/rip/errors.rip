@@ -112,3 +112,61 @@ fail 'super in root', 'super()'
 
 fail 'multiple splats in array', '[...a, ...b]'
 fail 'multiple splats in params', '(...a, ...b) ->'
+
+# ============================================================================
+# Throw in Else Block
+# ============================================================================
+
+test 'throw in else block no return', '''
+  fn = (str, hash) ->
+    if hash.recoverable
+      @trace str
+    else
+      error = new Error str
+      error.hash = hash
+      throw error
+  result = null
+  try
+    fn("test", {recoverable: false})
+  catch e
+    result = e.message
+  result
+  ''', "test"
+
+test 'throw as last statement in function', '''
+  fn = (x) ->
+    throw new Error("bad: #{x}")
+  result = null
+  try
+    fn(42)
+  catch e
+    result = e.message
+  result
+  ''', "bad: 42"
+
+test 'throw in if-else', '''
+  fn = (x) ->
+    if x > 0
+      x * 2
+    else
+      throw new Error("negative")
+  result = fn(5)
+  result
+  ''', 10
+
+code 'throw in else block', '''
+  fn = (x) ->
+    if x
+      "ok"
+    else
+      throw new Error("bad")
+  ''', '''
+  let fn;
+  fn = function(x) {
+    return (() => { if (x) {
+      return "ok";
+    } else {
+      throw new Error("bad");
+    } })();
+};
+'''

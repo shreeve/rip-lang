@@ -271,7 +271,7 @@ test 'regex index out of range', '''
 # - Strings: Both #{...} and ${...} interpolate
 # - Heregex: Only #{...} interpolates, ${...} stays literal (for regex patterns)
 
-# #{...} interpolation works in heregex (CoffeeScript style)
+# #{...} interpolation works in heregex
 test "heregex #{} interpolation", '''
   name = "world"
   pattern = ///hello#{name}///
