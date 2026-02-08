@@ -61,10 +61,10 @@ export function installTypeSupport(Lexer) {
       }
 
       // ── Generic type parameters on type aliases: Name<T> ::= ────────────
-      if (tag === 'IDENTIFIER' && tokens[i + 1]) {
+      // Only scan if next token is unspaced < and a TYPE_ALIAS follows
+      if (tag === 'IDENTIFIER' && i >= 0 && tokens[i - 1]?.[0] !== 'DEF') {
         let next = tokens[i + 1];
-        if (next[0] === 'COMPARE' && next[1] === '<' && !next.spaced) {
-          // Check if this is followed by ::= (after the angle brackets)
+        if (next && next[0] === 'COMPARE' && next[1] === '<' && !next.spaced) {
           let genTokens = collectBalancedAngles(tokens, i + 1);
           if (genTokens) {
             let afterIdx = i + 1 + genTokens.length;
@@ -193,7 +193,7 @@ export function installTypeSupport(Lexer) {
 
         // Collect body
         if (tokens[bodyIdx]?.[0] === 'INDENT') {
-          let typeText = collectInterfaceBody(tokens, bodyIdx);
+          let typeText = collectStructuralType(tokens, bodyIdx);
           let endIdx = findMatchingOutdent(tokens, bodyIdx);
           let declToken = gen('TYPE_DECL', name, nameToken);
           declToken.data = {
@@ -375,12 +375,6 @@ function collectStructuralType(tokens, indentIdx) {
   return '{ ' + props.join('; ') + ' }';
 }
 
-// Collect interface body properties
-function collectInterfaceBody(tokens, indentIdx) {
-  // Same logic as structural type but for interface format
-  return collectStructuralType(tokens, indentIdx);
-}
-
 // Find the matching OUTDENT for an INDENT at position idx
 function findMatchingOutdent(tokens, idx) {
   let depth = 0;
@@ -463,7 +457,22 @@ export function emitTypes(tokens) {
   let indentStr = '  ';
   let indent = () => indentStr.repeat(indentLevel);
   let inClass = false;
-  let className = '';
+
+  // Format { prop; prop } into multi-line block
+  let emitBlock = (prefix, body, suffix) => {
+    if (body.startsWith('{ ') && body.endsWith(' }')) {
+      let props = body.slice(2, -2).split('; ').filter(p => p.trim());
+      if (props.length > 0) {
+        lines.push(`${indent()}${prefix}{`);
+        indentLevel++;
+        for (let prop of props) lines.push(`${indent()}${prop};`);
+        indentLevel--;
+        lines.push(`${indent()}}${suffix}`);
+        return;
+      }
+    }
+    lines.push(`${indent()}${prefix}${body}${suffix}`);
+  };
 
   for (let i = 0; i < tokens.length; i++) {
     let t = tokens[i];
@@ -488,45 +497,10 @@ export function emitTypes(tokens) {
 
       if (data.kind === 'interface') {
         let ext = data.extends ? ` extends ${data.extends}` : '';
-        // Format interface body from { prop; prop } to multi-line
-        let body = data.typeText || '{}';
-        if (body.startsWith('{ ') && body.endsWith(' }')) {
-          let inner = body.slice(2, -2);
-          let props = inner.split('; ').filter(p => p.trim());
-          if (props.length > 0) {
-            lines.push(`${indent()}${exp}interface ${data.name}${params}${ext} {`);
-            indentLevel++;
-            for (let prop of props) {
-              lines.push(`${indent()}${prop};`);
-            }
-            indentLevel--;
-            lines.push(`${indent()}}`);
-          } else {
-            lines.push(`${indent()}${exp}interface ${data.name}${params}${ext} {}`);
-          }
-        } else {
-          lines.push(`${indent()}${exp}interface ${data.name}${params}${ext} ${body}`);
-        }
+        emitBlock(`${exp}interface ${data.name}${params}${ext} `, data.typeText || '{}', '');
       } else {
-        // Type alias — format structural types with multi-line
         let typeText = expandSuffixes(data.typeText || '');
-        if (typeText.startsWith('{ ') && typeText.endsWith(' }')) {
-          let inner = typeText.slice(2, -2);
-          let props = inner.split('; ').filter(p => p.trim());
-          if (props.length > 0) {
-            lines.push(`${indent()}${exp}type ${data.name}${params} = {`);
-            indentLevel++;
-            for (let prop of props) {
-              lines.push(`${indent()}${prop};`);
-            }
-            indentLevel--;
-            lines.push(`${indent()}};`);
-          } else {
-            lines.push(`${indent()}${exp}type ${data.name}${params} = ${typeText};`);
-          }
-        } else {
-          lines.push(`${indent()}${exp}type ${data.name}${params} = ${typeText};`);
-        }
+        emitBlock(`${exp}type ${data.name}${params} = `, typeText, ';');
       }
       continue;
     }
@@ -581,7 +555,7 @@ export function emitTypes(tokens) {
       let exp = exported ? 'export ' : '';
       let classNameToken = tokens[i + 1];
       if (!classNameToken) continue;
-      className = classNameToken[1];
+      let className = classNameToken[1];
 
       // Check for extends
       let ext = '';
@@ -633,10 +607,6 @@ export function emitTypes(tokens) {
             } else {
               params.push(paramName);
             }
-          }
-          // Handle default parameters
-          if (tokens[j][0] === 'DEFAULT') {
-            // skip default marker
           }
           j++;
         }
