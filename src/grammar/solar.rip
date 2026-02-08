@@ -442,12 +442,12 @@ class Generator
 
       # Mark rules nullable if all handle symbols are nullable
       for rule in @rules when not rule.nullable
-        if rule.symbols.every (symbol) => @_isNullable symbol
+        if rule.symbols.every((symbol) => @_isNullable symbol)
           rule.nullable = changed = true
 
       # Propagate to types
       for symbol, type of @types when not @_isNullable symbol
-        if type.rules.some (p) -> p.nullable
+        if type.rules.some((p) -> p.nullable)
           type.nullable = changed = true
 
   _isNullable: (symbol) ->
