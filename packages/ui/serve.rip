@@ -68,13 +68,16 @@ export ripUI = (opts = {}) ->
       return c.send files[name], 'application/javascript'
 
     # Auto-generated manifest — bundles all .rip page sources as JSON
+    # Written to file so Bun.file() responses proxy cleanly through rip-server
     if name is 'manifest.json'
       glob = new Bun.Glob("**/*.rip")
       bundle = {}
       paths = Array.from(glob.scanSync(pagesDir))
       for path in paths
         bundle["pages/#{path}"] = Bun.file("#{pagesDir}/#{path}").text!
-      return c.json(bundle)
+      manifestPath = "#{pagesDir}/.manifest.json"
+      Bun.write manifestPath, JSON.stringify(bundle)
+      return c.send manifestPath, 'application/json'
 
     # SSE watch endpoint — debounced, notify-only, with heartbeat
     if name is 'watch' and enableWatch
