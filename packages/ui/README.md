@@ -6,7 +6,7 @@
 
 Rip UI inverts the traditional web development model. Instead of building,
 bundling, and shipping static JavaScript artifacts to the browser, it ships the
-35KB Rip compiler itself. Components are delivered as source files, stored in a
+40KB Rip compiler itself. Components are delivered as source files, stored in a
 browser-local Virtual File System, compiled on demand, and rendered with
 fine-grained DOM updates powered by Rip's built-in reactivity. No build step.
 No bundler. No configuration files.
@@ -18,7 +18,7 @@ functions, methods) that Rip already provides.
 ## Architecture
 
 ```
-Browser loads:  rip.browser.js (35KB) + @rip-lang/ui (~8KB)
+Browser loads:  rip.browser.js (40KB) + @rip-lang/ui (~8KB)
                          │
         ┌────────────────┼────────────────┐
         │                │                │
@@ -52,7 +52,7 @@ developer experience is powerful, but the machinery is enormous.
 
 Rip UI asks: **what if the compiler ran in the browser?**
 
-At 35KB, the Rip compiler is small enough to ship alongside your application.
+At 40KB, the Rip compiler is small enough to ship alongside your application.
 Components arrive as `.rip` source files — plain text — and are compiled to
 JavaScript on the client's machine. This eliminates the build step entirely.
 There is no `dist/` folder, no source maps, no chunk splitting, no tree
@@ -69,7 +69,7 @@ with fine-grained DOM manipulation — no virtual DOM diffing.
 | | React/Vue/Svelte | Rip UI |
 |---|---|---|
 | **Build step** | Required (Vite, Webpack, etc.) | None — compiler runs in browser |
-| **Bundle size** | 40-100KB+ framework + app bundle | 35KB compiler + ~8KB framework + raw source |
+| **Bundle size** | 40-100KB+ framework + app bundle | 40KB compiler + ~8KB framework + raw source |
 | **HMR** | Dev server ↔ browser WebSocket | Not needed — recompile in-place |
 | **Deployment** | Build artifacts (`dist/`) | Source files served as-is |
 | **Component format** | JSX, SFC, templates | Rip source (`.rip` files) |
@@ -526,7 +526,7 @@ VFS automatically causes the next render to use the new version.
 ```
 my-app/
 ├── index.html               # HTML shell (the only "build" artifact)
-├── rip.browser.js           # Rip compiler (35KB)
+├── rip.browser.js           # Rip compiler (40KB)
 ├── ui.js                    # Framework entry point
 ├── stash.js                 # Reactive state
 ├── vfs.js                   # Virtual File System

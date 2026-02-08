@@ -205,7 +205,7 @@ Rip's reactivity is framework-agnostic — use it with React, Vue, Svelte, or va
 
 ## Rip UI
 
-Ship the 35KB Rip compiler to the browser. Components are `.rip` source files, compiled on demand, rendered with fine-grained reactivity. No build step. No bundler.
+Ship the 40KB Rip compiler to the browser. Components are `.rip` source files, compiled on demand, rendered with fine-grained reactivity. No build step. No bundler.
 
 ```coffee
 Counter = component

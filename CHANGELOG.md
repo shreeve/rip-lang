@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Rip UI — Zero-Build Reactive Web Framework
 
 Rip UI inverts the traditional web development model. Instead of building and
-bundling on the server, the 35KB Rip compiler ships to the browser. Components
+bundling on the server, the 40KB Rip compiler ships to the browser. Components
 are delivered as `.rip` source files, stored in a browser-local Virtual File
 System, compiled on demand, and rendered with fine-grained DOM updates.
 
