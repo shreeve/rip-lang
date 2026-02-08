@@ -748,7 +748,7 @@ class Generator
         }
         yyval._$.range = [locFirst.range[0], locLast.range[1]] if ranges
 
-        r = @ruleActions.apply yyval, [-action, val, loc, sharedState.yy]
+        r = @ruleActions.call yyval, -action, val, loc, sharedState.yy
         yyval.$ = r if r?
 
         if len

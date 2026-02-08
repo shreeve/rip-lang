@@ -317,7 +317,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         yyval._$ = { first_line: locFirst.first_line, last_line: locLast.last_line, first_column: locFirst.first_column, last_column: locLast.last_column };
         if (ranges)
           yyval._$.range = [locFirst.range[0], locLast.range[1]];
-        r = this.ruleActions.apply(yyval, [-action, val, loc, sharedState.yy]);
+        r = this.ruleActions.call(yyval, -action, val, loc, sharedState.yy);
         if (r != null)
           yyval.$ = r;
         if (len) {
