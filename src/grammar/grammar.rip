@@ -80,6 +80,8 @@ grammar =
     o 'For'
     o 'Switch'
     o 'Class'
+    o 'Component'
+    o 'Render'
     o 'Throw'
     o 'Yield'
     o 'Def'
@@ -707,6 +709,39 @@ grammar =
   ]
 
   # ============================================================================
+  # Components
+  # ============================================================================
+
+  # Component: expression-based anonymous class with render support.
+  # Usage: Counter = component
+  #          @count := 0
+  #          render
+  #            div "Count: {@count}"
+  Component: [
+    o 'COMPONENT INDENT ComponentBody OUTDENT', '["component", null, ["block", ...3]]'
+  ]
+
+  ComponentBody: [
+    o 'ComponentLine'                         , '[1]'
+    o 'ComponentBody TERMINATOR ComponentLine', '[...1, 3]'
+    o 'ComponentBody TERMINATOR'
+  ]
+
+  ComponentLine: [
+    o 'Expression'
+    o 'ExpressionLine'
+    o 'Statement'
+  ]
+
+  # Render block: template DSL for fine-grained reactive DOM.
+  # Usage: render
+  #          div.card
+  #            h1 "Hello"
+  Render: [
+    o 'RENDER Block', '["render", 2]'
+  ]
+
+  # ============================================================================
   # Import / Export
   # ============================================================================
 
@@ -747,6 +782,7 @@ grammar =
     o 'EXPORT { }'                                         , '["export", "{}"]'
     o 'EXPORT { ExportSpecifierList OptComma }'            , '["export", 3]'
     o 'EXPORT Class'                                       , '["export", 2]'
+    o 'EXPORT Component'                                   , '["export", 2]'
     o 'EXPORT Def'                                         , '["export", 2]'
     o 'EXPORT Identifier = Expression'                     , '["export", ["=", 2, 4]]'
     o 'EXPORT Identifier = TERMINATOR Expression'          , '["export", ["=", 2, 5]]'
@@ -877,7 +913,7 @@ operators = """
   right       YIELD
   right       = : COMPOUND_ASSIGN RETURN THROW EXTENDS
   right       FORIN FOROF FORAS FORASAWAIT BY WHEN
-  right       IF ELSE FOR WHILE UNTIL LOOP SUPER CLASS IMPORT EXPORT DYNAMIC_IMPORT
+  right       IF ELSE FOR WHILE UNTIL LOOP SUPER CLASS COMPONENT RENDER IMPORT EXPORT DYNAMIC_IMPORT
   left        POST_IF
 """.trim().split('\n').reverse().map (line) -> line.trim().split /\s+/
 

@@ -39,6 +39,8 @@
 //
 // ==========================================================================
 
+import { TEMPLATE_TAGS } from './tags.js';
+
 // ==========================================================================
 // Token Category Sets
 // ==========================================================================
@@ -59,6 +61,7 @@ let JS_KEYWORDS = new Set([
 let RIP_KEYWORDS = new Set([
   'undefined', 'Infinity', 'NaN',
   'then', 'unless', 'until', 'loop', 'of', 'by', 'when', 'def',
+  'component', 'render',
 ]);
 
 // Rip aliases: word → operator/value
@@ -158,7 +161,7 @@ let IMPLICIT_FUNC = new Set([
 ]);
 
 // Control flow tokens that don't end implicit calls/objects
-let CONTROL_IN_IMPLICIT = new Set(['IF', 'TRY', 'FINALLY', 'CATCH', 'CLASS', 'SWITCH']);
+let CONTROL_IN_IMPLICIT = new Set(['IF', 'TRY', 'FINALLY', 'CATCH', 'CLASS', 'SWITCH', 'COMPONENT']);
 
 // Single-liner keywords that get implicit INDENT/OUTDENT
 let SINGLE_LINERS = new Set(['ELSE', '->', '=>', 'TRY', 'FINALLY', 'THEN']);
@@ -1064,6 +1067,7 @@ export class Lexer {
     // Reactive operators
     else if (val === '~=') tag = 'COMPUTED_ASSIGN';
     else if (val === ':=') tag = 'REACTIVE_ASSIGN';
+    else if (val === '<=>') tag = 'BIND';
     else if (val === '~>') tag = 'REACT_ASSIGN';
     else if (val === '=!') tag = 'READONLY_ASSIGN';
     // Export all
@@ -1134,7 +1138,7 @@ export class Lexer {
   }
 
   // ==========================================================================
-  // Rewriter — 7 passes
+  // Rewriter — 8 passes
   // ==========================================================================
 
   rewrite(tokens) {
@@ -1143,6 +1147,7 @@ export class Lexer {
     this.closeOpenCalls();
     this.closeOpenIndexes();
     this.normalizeLines();
+    this.rewriteRender();
     this.tagPostfixConditionals();
     this.addImplicitBracesAndParens();
     this.addImplicitCallCommas();
@@ -1244,6 +1249,256 @@ export class Lexer {
         this.detectEnd(i + 2, condition, action);
         if (tag === 'THEN') tokens.splice(i, 1);
         return 1;
+      }
+
+      return 1;
+    });
+  }
+
+  // =========================================================================
+  // Render block rewriter
+  // =========================================================================
+  // Transforms template syntax inside render blocks:
+  //   - Implicit div for class-only selectors: .card → div.card
+  //   - Combine #id selectors: div # main → div#main
+  //   - Two-way binding: value <=> username → __bind_value__: username
+  //   - Event modifiers: @click.prevent: → [@click.prevent]:
+  //   - Dynamic classes: div.('card', x && 'active') → div.__cx__(...)
+  //   - Implicit nesting: inject -> before INDENT for template elements
+  //   - Hyphenated attributes: data-foo: "x" → "data-foo": "x"
+  // =========================================================================
+  rewriteRender() {
+    let inRender = false;
+    let renderIndentLevel = 0;
+    let currentIndent = 0;
+    let pendingCallEnds = [];
+
+    let isHtmlTag = (name) => {
+      let tagPart = name.split('#')[0];
+      return TEMPLATE_TAGS.has(tagPart);
+    };
+
+    let isComponent = (name) => {
+      if (!name || typeof name !== 'string') return false;
+      return /^[A-Z]/.test(name);
+    };
+
+    let isTemplateTag = (name) => {
+      return isHtmlTag(name) || isComponent(name);
+    };
+
+    let startsWithHtmlTag = (tokens, i) => {
+      let j = i;
+      while (j > 0) {
+        let pt = tokens[j - 1][0];
+        if (pt === 'INDENT' || pt === 'OUTDENT' || pt === 'TERMINATOR' || pt === 'RENDER' || pt === 'CALL_END' || pt === ')') {
+          break;
+        }
+        j--;
+      }
+      return tokens[j] && tokens[j][0] === 'IDENTIFIER' && isHtmlTag(tokens[j][1]);
+    };
+
+    this.scanTokens(function(token, i, tokens) {
+      let tag = token[0];
+      let nextToken = i < tokens.length - 1 ? tokens[i + 1] : null;
+
+      // Track entering render blocks
+      if (tag === 'RENDER') {
+        inRender = true;
+        renderIndentLevel = currentIndent + 1;
+        return 1;
+      }
+
+      // Track indentation
+      if (tag === 'INDENT') {
+        currentIndent++;
+        return 1;
+      }
+
+      if (tag === 'OUTDENT') {
+        currentIndent--;
+
+        // Insert pending CALL_END(s) after this OUTDENT
+        let inserted = 0;
+        while (pendingCallEnds.length > 0 && pendingCallEnds[pendingCallEnds.length - 1] > currentIndent) {
+          let callEndToken = gen('CALL_END', ')', token);
+          tokens.splice(i + 1 + inserted, 0, callEndToken);
+          pendingCallEnds.pop();
+          inserted++;
+        }
+
+        // Exit render block when we outdent past where it started
+        if (inRender && currentIndent < renderIndentLevel) {
+          inRender = false;
+        }
+        return 1 + inserted;
+      }
+
+      // Only process if we're inside a render block
+      if (!inRender) return 1;
+
+      // ─────────────────────────────────────────────────────────────────────
+      // Hyphenated attributes
+      // data-lucide: "search" → "data-lucide": "search"
+      // ─────────────────────────────────────────────────────────────────────
+      if (tag === 'IDENTIFIER' && !token.spaced) {
+        let parts = [token[1]];
+        let j = i + 1;
+        while (j + 1 < tokens.length) {
+          let hyphen = tokens[j];
+          let nextPart = tokens[j + 1];
+          if (hyphen[0] === '-' && !hyphen.spaced &&
+              (nextPart[0] === 'IDENTIFIER' || nextPart[0] === 'PROPERTY')) {
+            parts.push(nextPart[1]);
+            j += 2;
+            if (nextPart[0] === 'PROPERTY') break;
+          } else {
+            break;
+          }
+        }
+        if (parts.length > 1 && j > i + 1 && tokens[j - 1][0] === 'PROPERTY') {
+          token[0] = 'STRING';
+          token[1] = `"${parts.join('-')}"`;
+          tokens.splice(i + 1, j - i - 1);
+          return 1;
+        }
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
+      // Implicit div for class-only selectors
+      // .card → div.card
+      // ─────────────────────────────────────────────────────────────────────
+      if (tag === '.') {
+        let prevToken = i > 0 ? tokens[i - 1] : null;
+        let prevTag = prevToken ? prevToken[0] : null;
+        if (prevTag === 'INDENT' || prevTag === 'TERMINATOR') {
+          if (nextToken && nextToken[0] === 'PROPERTY') {
+            let divToken = gen('IDENTIFIER', 'div', token);
+            tokens.splice(i, 0, divToken);
+            return 2;
+          }
+        }
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
+      // Combine #id selectors
+      // div # main → div#main
+      // ─────────────────────────────────────────────────────────────────────
+      if (tag === 'IDENTIFIER' || tag === 'PROPERTY') {
+        let next = tokens[i + 1];
+        let nextNext = tokens[i + 2];
+        if (next && next[0] === '#' && nextNext && nextNext[0] === 'PROPERTY') {
+          token[1] = token[1] + '#' + nextNext[1];
+          if (nextNext.spaced) token.spaced = true;
+          tokens.splice(i + 1, 2);
+          return 1;
+        }
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
+      // Two-way binding
+      // value <=> username → __bind_value__: username
+      // ─────────────────────────────────────────────────────────────────────
+      if (tag === 'BIND') {
+        let prevToken = i > 0 ? tokens[i - 1] : null;
+        let nextBindToken = tokens[i + 1];
+        if (prevToken && (prevToken[0] === 'IDENTIFIER' || prevToken[0] === 'PROPERTY') &&
+            nextBindToken && nextBindToken[0] === 'IDENTIFIER') {
+          prevToken[1] = `__bind_${prevToken[1]}__`;
+          token[0] = ':';
+          token[1] = ':';
+          return 1;
+        }
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
+      // Event modifiers
+      // @click.prevent: handler → [@click.prevent]: handler
+      // ─────────────────────────────────────────────────────────────────────
+      if (tag === '@') {
+        let j = i + 1;
+        if (j < tokens.length && tokens[j][0] === 'PROPERTY') {
+          j++;
+          while (j + 1 < tokens.length && tokens[j][0] === '.' && tokens[j + 1][0] === 'PROPERTY') {
+            j += 2;
+          }
+          if (j > i + 2 && j < tokens.length && tokens[j][0] === ':') {
+            let openBracket = gen('[', '[', token);
+            tokens.splice(i, 0, openBracket);
+            let closeBracket = gen(']', ']', tokens[j + 1]);
+            tokens.splice(j + 1, 0, closeBracket);
+            return 2;
+          }
+        }
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
+      // Dynamic classes
+      // div.('card', x && 'active') → div.__cx__('card', x && 'active')
+      // .('card') → div.__cx__('card')
+      // ─────────────────────────────────────────────────────────────────────
+      if (tag === '.' && nextToken && nextToken[0] === '(') {
+        let prevToken = i > 0 ? tokens[i - 1] : null;
+        let prevTag = prevToken ? prevToken[0] : null;
+        let atLineStart = prevTag === 'INDENT' || prevTag === 'TERMINATOR';
+
+        let cxToken = gen('PROPERTY', '__cx__', token);
+        nextToken[0] = 'CALL_START';
+        let depth = 1;
+        for (let j = i + 2; j < tokens.length && depth > 0; j++) {
+          if (tokens[j][0] === '(' || tokens[j][0] === 'CALL_START') depth++;
+          else if (tokens[j][0] === ')') {
+            depth--;
+            if (depth === 0) tokens[j][0] = 'CALL_END';
+          } else if (tokens[j][0] === 'CALL_END') depth--;
+        }
+
+        if (atLineStart) {
+          let divToken = gen('IDENTIFIER', 'div', token);
+          tokens.splice(i, 0, divToken);
+          tokens.splice(i + 2, 0, cxToken);
+          return 3;
+        } else {
+          tokens.splice(i + 1, 0, cxToken);
+          return 2;
+        }
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
+      // Implicit nesting (inject -> before INDENT)
+      // ─────────────────────────────────────────────────────────────────────
+      if (nextToken && nextToken[0] === 'INDENT') {
+        if (tag === '->' || tag === '=>' || tag === 'CALL_START' || tag === '(') {
+          return 1;
+        }
+
+        let isTemplateElement = false;
+
+        if (tag === 'IDENTIFIER' && isTemplateTag(token[1])) {
+          isTemplateElement = true;
+        } else if (tag === 'PROPERTY' || tag === 'STRING' || tag === 'CALL_END' || tag === ')') {
+          isTemplateElement = startsWithHtmlTag(tokens, i);
+        }
+        else if (tag === 'IDENTIFIER' && i > 1 && tokens[i - 1][0] === '...') {
+          if (startsWithHtmlTag(tokens, i)) {
+            let commaToken = gen(',', ',', token);
+            let arrowToken = gen('->', '->', token);
+            arrowToken.newLine = true;
+            tokens.splice(i + 1, 0, commaToken, arrowToken);
+            return 3;
+          }
+        }
+
+        if (isTemplateElement) {
+          let callStartToken = gen('CALL_START', '(', token);
+          let arrowToken = gen('->', '->', token);
+          arrowToken.newLine = true;
+
+          tokens.splice(i + 1, 0, callStartToken, arrowToken);
+          pendingCallEnds.push(currentIndent + 1);
+          return 3;
+        }
       }
 
       return 1;
