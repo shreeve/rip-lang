@@ -2562,6 +2562,9 @@ function installComponentSupport(CodeGenerator) {
       }
       return sexpr;
     }
+    if (sexpr[0] === "->") {
+      return ["=>", ...sexpr.slice(1).map((item) => this.transformComponentMembers(item))];
+    }
     return sexpr.map((item) => this.transformComponentMembers(item));
   };
   proto.generateComponent = function(head, rest, context, sexpr) {
@@ -2646,9 +2649,7 @@ function installComponentSupport(CodeGenerator) {
     let blockFactoriesCode = "";
     lines.push("class {");
     lines.push("  constructor(props = {}) {");
-    lines.push("    this._parent = __currentComponent;");
-    lines.push("    const __prevComponent = __currentComponent;");
-    lines.push("    __currentComponent = this;");
+    lines.push("    const __prevComponent = __pushComponent(this);");
     lines.push("");
     for (const { name, value } of readonlyVars) {
       const val = this.generateInComponent(value, "value");
@@ -2668,7 +2669,7 @@ function installComponentSupport(CodeGenerator) {
       lines.push(`    __effect(${effectCode});`);
     }
     lines.push("");
-    lines.push("    __currentComponent = __prevComponent;");
+    lines.push("    __popComponent(__prevComponent);");
     lines.push("  }");
     for (const { name, func } of methods) {
       if (Array.isArray(func) && (func[0] === "->" || func[0] === "=>")) {
@@ -3336,6 +3337,17 @@ function isSignal(v) {
 
 let __currentComponent = null;
 
+function __pushComponent(component) {
+  component._parent = __currentComponent;
+  const prev = __currentComponent;
+  __currentComponent = component;
+  return prev;
+}
+
+function __popComponent(prev) {
+  __currentComponent = prev;
+}
+
 function setContext(key, value) {
   if (!__currentComponent) throw new Error('setContext must be called during component initialization');
   if (!__currentComponent._context) __currentComponent._context = new Map();
@@ -3362,6 +3374,11 @@ function hasContext(key) {
 
 function __cx__(...args) {
   return args.filter(Boolean).join(' ');
+}
+
+// Register on globalThis for runtime deduplication
+if (typeof globalThis !== 'undefined') {
+  globalThis.__ripComponent = { isSignal, __pushComponent, __popComponent, setContext, getContext, hasContext, __cx__ };
 }
 
 `;
@@ -4019,11 +4036,21 @@ class CodeGenerator {
       needsBlank = true;
     }
     if (this.usesReactivity && !this.options.skipReactiveRuntime) {
-      code += this.getReactiveRuntime();
+      if (typeof globalThis !== "undefined" && globalThis.__rip) {
+        code += `const { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;
+`;
+      } else {
+        code += this.getReactiveRuntime();
+      }
       needsBlank = true;
     }
-    if (this.usesTemplates) {
-      code += this.getComponentRuntime();
+    if (this.usesTemplates && !this.options.skipComponentRuntime) {
+      if (typeof globalThis !== "undefined" && globalThis.__ripComponent) {
+        code += `const { isSignal, __pushComponent, __popComponent, setContext, getContext, hasContext, __cx__ } = globalThis.__ripComponent;
+`;
+      } else {
+        code += this.getComponentRuntime();
+      }
       needsBlank = true;
     }
     if (this.dataSection !== null && this.dataSection !== undefined) {
@@ -6647,6 +6674,11 @@ function __catchErrors(fn) {
   };
 }
 
+// Register on globalThis for runtime deduplication
+if (typeof globalThis !== 'undefined') {
+  globalThis.__rip = { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors };
+}
+
 // === End Reactive Runtime ===
 `;
   }
@@ -6709,6 +6741,7 @@ class Compiler {
     let generator = new CodeGenerator({
       dataSection,
       skipReactiveRuntime: this.options.skipReactiveRuntime,
+      skipComponentRuntime: this.options.skipComponentRuntime,
       reactiveVars: this.options.reactiveVars
     });
     let code = generator.compile(sexpr);
@@ -6728,9 +6761,15 @@ function compile(source, options = {}) {
 function compileToJS(source, options = {}) {
   return new Compiler(options).compileToJS(source);
 }
+function getReactiveRuntime() {
+  return new CodeGenerator({}).getReactiveRuntime();
+}
+function getComponentRuntime() {
+  return new CodeGenerator({}).getComponentRuntime();
+}
 // src/browser.js
-var VERSION = "3.1.0";
-var BUILD_DATE = "2026-02-08@09:46:39GMT";
+var VERSION = "3.1.1";
+var BUILD_DATE = "2026-02-08@10:21:02GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
@@ -6780,6 +6819,8 @@ export {
   rip,
   processRipScripts,
   parser,
+  getReactiveRuntime,
+  getComponentRuntime,
   formatSExpr,
   compileToJS,
   compile,

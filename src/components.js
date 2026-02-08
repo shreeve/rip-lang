@@ -230,9 +230,7 @@ export function installComponentSupport(CodeGenerator) {
 
     // --- Constructor ---
     lines.push('  constructor(props = {}) {');
-    lines.push('    this._parent = __currentComponent;');
-    lines.push('    const __prevComponent = __currentComponent;');
-    lines.push('    __currentComponent = this;');
+    lines.push('    const __prevComponent = __pushComponent(this);');
     lines.push('');
 
     // Constants (readonly)
@@ -261,7 +259,7 @@ export function installComponentSupport(CodeGenerator) {
     }
 
     lines.push('');
-    lines.push('    __currentComponent = __prevComponent;');
+    lines.push('    __popComponent(__prevComponent);');
     lines.push('  }');
 
     // --- Methods ---
@@ -1165,6 +1163,17 @@ function isSignal(v) {
 
 let __currentComponent = null;
 
+function __pushComponent(component) {
+  component._parent = __currentComponent;
+  const prev = __currentComponent;
+  __currentComponent = component;
+  return prev;
+}
+
+function __popComponent(prev) {
+  __currentComponent = prev;
+}
+
 function setContext(key, value) {
   if (!__currentComponent) throw new Error('setContext must be called during component initialization');
   if (!__currentComponent._context) __currentComponent._context = new Map();
@@ -1191,6 +1200,11 @@ function hasContext(key) {
 
 function __cx__(...args) {
   return args.filter(Boolean).join(' ');
+}
+
+// Register on globalThis for runtime deduplication
+if (typeof globalThis !== 'undefined') {
+  globalThis.__ripComponent = { isSignal, __pushComponent, __popComponent, setContext, getContext, hasContext, __cx__ };
 }
 
 `;

@@ -634,12 +634,20 @@ export class CodeGenerator {
     }
 
     if (this.usesReactivity && !this.options.skipReactiveRuntime) {
-      code += this.getReactiveRuntime();
+      if (typeof globalThis !== 'undefined' && globalThis.__rip) {
+        code += 'const { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;\n';
+      } else {
+        code += this.getReactiveRuntime();
+      }
       needsBlank = true;
     }
 
-    if (this.usesTemplates) {
-      code += this.getComponentRuntime();
+    if (this.usesTemplates && !this.options.skipComponentRuntime) {
+      if (typeof globalThis !== 'undefined' && globalThis.__ripComponent) {
+        code += 'const { isSignal, __pushComponent, __popComponent, setContext, getContext, hasContext, __cx__ } = globalThis.__ripComponent;\n';
+      } else {
+        code += this.getComponentRuntime();
+      }
       needsBlank = true;
     }
 
@@ -3057,6 +3065,11 @@ function __catchErrors(fn) {
   };
 }
 
+// Register on globalThis for runtime deduplication
+if (typeof globalThis !== 'undefined') {
+  globalThis.__rip = { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors };
+}
+
 // === End Reactive Runtime ===
 `;
   }
@@ -3128,6 +3141,7 @@ export class Compiler {
     let generator = new CodeGenerator({
       dataSection,
       skipReactiveRuntime: this.options.skipReactiveRuntime,
+      skipComponentRuntime: this.options.skipComponentRuntime,
       reactiveVars: this.options.reactiveVars
     });
     let code = generator.compile(sexpr);
@@ -3159,6 +3173,14 @@ export function compileToJS(source, options = {}) {
 
 export function generate(sexpr, options = {}) {
   return new CodeGenerator(options).compile(sexpr);
+}
+
+export function getReactiveRuntime() {
+  return new CodeGenerator({}).getReactiveRuntime();
+}
+
+export function getComponentRuntime() {
+  return new CodeGenerator({}).getComponentRuntime();
 }
 
 export { formatSExpr };

@@ -65,8 +65,9 @@ export class RipREPL {
       __vars: this.vars  // Reference to persisted variables
     });
 
-    // Inject reactive runtime
+    // Inject reactive and component runtimes
     this.injectReactiveRuntime();
+    this.injectComponentRuntime();
 
     this.rl = readline.createInterface({
       input: process.stdin,
@@ -193,6 +194,56 @@ export class RipREPL {
     ctx.__readonly = function(v) { return Object.freeze({ value: v }); };
   }
 
+  injectComponentRuntime() {
+    // Define component primitives in the VM context
+    const ctx = this.vmContext;
+
+    let __currentComponent = null;
+
+    ctx.__pushComponent = function(component) {
+      component._parent = __currentComponent;
+      const prev = __currentComponent;
+      __currentComponent = component;
+      return prev;
+    };
+
+    ctx.__popComponent = function(prev) {
+      __currentComponent = prev;
+    };
+
+    ctx.isSignal = function(v) {
+      return v != null && typeof v === 'object' && typeof v.read === 'function';
+    };
+
+    ctx.setContext = function(key, value) {
+      if (!__currentComponent) throw new Error('setContext must be called during component initialization');
+      if (!__currentComponent._context) __currentComponent._context = new Map();
+      __currentComponent._context.set(key, value);
+    };
+
+    ctx.getContext = function(key) {
+      let component = __currentComponent;
+      while (component) {
+        if (component._context && component._context.has(key)) return component._context.get(key);
+        component = component._parent;
+      }
+      return undefined;
+    };
+
+    ctx.hasContext = function(key) {
+      let component = __currentComponent;
+      while (component) {
+        if (component._context && component._context.has(key)) return true;
+        component = component._parent;
+      }
+      return false;
+    };
+
+    ctx.__cx__ = function(...args) {
+      return args.filter(Boolean).join(' ');
+    };
+  }
+
   async handleLine(line) {
     // Handle special commands
     if (line.startsWith('.')) {
@@ -279,6 +330,7 @@ export class RipREPL {
         showTokens: this.showTokens,
         showSExpr: this.showSExp,
         skipReactiveRuntime: true,
+        skipComponentRuntime: true,
         reactiveVars: this.reactiveVars
       });
       const result = compiler.compile(code);

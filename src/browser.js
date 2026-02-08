@@ -3,7 +3,7 @@
 
 export { Lexer } from './lexer.js';
 export { parser } from './parser.js';
-export { CodeGenerator, Compiler, compile, compileToJS, formatSExpr } from './compiler.js';
+export { CodeGenerator, Compiler, compile, compileToJS, formatSExpr, getReactiveRuntime, getComponentRuntime } from './compiler.js';
 
 // Version info (replaced during build)
 export const VERSION = "0.0.0";
