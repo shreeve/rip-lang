@@ -21,7 +21,7 @@
 //   Date: February 2026
 // =============================================================================
 
-import { signal, effect } from './stash.js';
+import { signal, effect, batch } from './stash.js';
 
 // ---------------------------------------------------------------------------
 // Route tree — file paths → route patterns
@@ -173,12 +173,14 @@ export function createRouter(fs, options = {}) {
 
     const result = matchRoute(path, tree.routes);
     if (result) {
-      _path.set(path);
-      _params.set(result.params);
-      _route.set(result.route);
-      _layouts.set(getLayoutChain(result.route.file, root, tree.layouts));
-      _query.set(Object.fromEntries(new URLSearchParams(queryStr)));
-      _hash.set(hash);
+      batch(() => {
+        _path.set(path);
+        _params.set(result.params);
+        _route.set(result.route);
+        _layouts.set(getLayoutChain(result.route.file, root, tree.layouts));
+        _query.set(Object.fromEntries(new URLSearchParams(queryStr)));
+        _hash.set(hash);
+      });
 
       for (const cb of navigateCallbacks) cb(router.current);
       return true;

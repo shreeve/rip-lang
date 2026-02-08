@@ -91,6 +91,8 @@ export function createRenderer(options = {}) {
   let layoutInstances = [];
   let routeStash = null;      // per-route state
   let disposeEffect = null;    // cleanup for route-watching effect
+  let mountGeneration = 0;     // guard against overlapping async mounts
+  let currentMountPoint = container; // slot within layouts where pages mount
 
   // Unmount current component and layouts
   function unmountCurrent() {
@@ -109,12 +111,16 @@ export function createRenderer(options = {}) {
     }
     layoutInstances = [];
     routeStash = null;
+    currentMountPoint = container;
   }
 
   // Mount a component for the current route
   async function mountRoute(routeInfo) {
     const { route, params, layouts: layoutFiles } = routeInfo;
     if (!route) return;
+
+    // Guard against overlapping async mounts — only the latest wins
+    const generation = ++mountGeneration;
 
     try {
       // Read and compile the page component
@@ -135,6 +141,9 @@ export function createRenderer(options = {}) {
       } finally {
         URL.revokeObjectURL(url);
       }
+
+      // Bail if a newer navigation started while we were loading
+      if (generation !== mountGeneration) return;
 
       // Find the component class (first class export, or default)
       const ComponentClass = findComponentClass(module);
@@ -161,8 +170,8 @@ export function createRenderer(options = {}) {
         currentComponent = null;
       }
 
-      // Determine mount point
-      let mountPoint = container;
+      // Determine mount point — reuse existing layout slot when layouts haven't changed
+      let mountPoint = layoutsChanged ? container : currentMountPoint;
 
       // Compile and mount layouts if they changed
       if (layoutsChanged && layoutFiles.length > 0) {
@@ -182,6 +191,9 @@ export function createRenderer(options = {}) {
           } finally {
             URL.revokeObjectURL(layoutUrl);
           }
+
+          // Bail if a newer navigation started while we were loading
+          if (generation !== mountGeneration) return;
 
           const LayoutClass = findComponentClass(layoutModule);
           if (!LayoutClass) continue;
@@ -205,9 +217,11 @@ export function createRenderer(options = {}) {
           mountPoint = slot;
         }
         currentLayouts = [...layoutFiles];
+        currentMountPoint = mountPoint;
       } else if (layoutsChanged) {
         container.innerHTML = '';
         currentLayouts = [];
+        currentMountPoint = container;
       }
 
       // Apply transition (if configured)
