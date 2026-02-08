@@ -17,7 +17,7 @@ echo 'your code' | ./bin/rip -s  # S-expressions (parser)
 echo 'your code' | ./bin/rip -c  # JavaScript (codegen)
 
 # Run tests
-bun run test                              # All tests (1073)
+bun run test                              # All tests (1130)
 bun test/runner.js test/rip/FILE.rip     # Specific file
 
 # Rebuild parser (after grammar changes)
@@ -32,7 +32,7 @@ bun run browser
 | Metric | Value |
 |--------|-------|
 | Version | 3.1.1 |
-| Tests | 1,073/1,073 (100%) |
+| Tests | 1,130/1,130 (100%) |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
 
@@ -43,13 +43,15 @@ bun run browser
 ```
 rip-lang/
 ├── src/
-│   ├── lexer.js         # Lexer + Rewriter (1,854 LOC)
-│   ├── compiler.js      # Compiler + Code Generator (3,189 LOC)
-│   ├── parser.js        # Generated parser (355 LOC) — Don't edit!
+│   ├── lexer.js         # Lexer + Rewriter (1,866 LOC)
+│   ├── compiler.js      # Compiler + Code Generator (3,219 LOC)
+│   ├── types.js         # Type System — sidecar for lexer (718 LOC)
+│   ├── components.js    # Component System — sidecar for compiler
+│   ├── parser.js        # Generated parser (356 LOC) — Don't edit!
 │   ├── repl.js          # Terminal REPL (706 LOC)
 │   ├── browser.js       # Browser integration (79 LOC)
 │   └── grammar/
-│       ├── grammar.rip  # Grammar specification (924 LOC)
+│       ├── grammar.rip  # Grammar specification (934 LOC)
 │       └── solar.rip    # Parser generator (1,001 LOC) — Don't edit!
 ├── packages/            # Optional packages (see Packages section below)
 │   ├── api/             # @rip-lang/api — Web framework
@@ -61,8 +63,10 @@ rip-lang/
 │   └── csv/             # @rip-lang/csv — CSV parser + writer
 ├── docs/
 │   ├── RIP-LANG.md      # Language reference
+│   ├── RIP-TYPES.md     # Type system specification
+│   ├── RIP-REACTIVITY.md # Reactivity deep dive
 │   └── RIP-INTERNALS.md # Compiler architecture & design decisions
-├── test/rip/            # 25 test files (1,073 tests)
+├── test/rip/            # 26 test files (1,130 tests)
 └── scripts/             # Build utilities
 ```
 
@@ -72,6 +76,8 @@ rip-lang/
 |------|-----------|-------|
 | `src/compiler.js` | Yes | Code generator — main work here |
 | `src/lexer.js` | Yes | Lexer and rewriter |
+| `src/types.js` | Yes | Type system (lexer sidecar) |
+| `src/components.js` | Yes | Component system (compiler sidecar) |
 | `src/grammar/grammar.rip` | Carefully | Run `bun run parser` after changes |
 | `src/parser.js` | Never | Generated file |
 | `src/grammar/solar.rip` | Never | Parser generator (given) |
@@ -82,8 +88,10 @@ rip-lang/
 ## The Compilation Pipeline
 
 ```
-Rip Source  ->  Lexer  ->  Parser  ->  S-Expressions  ->  Codegen  ->  JavaScript
-               (1,854)    (355)       (simple arrays)     (3,189)      (ES2022)
+Rip Source  ->  Lexer  ->  emitTypes  ->  Parser  ->  S-Expressions  ->  Codegen  ->  JavaScript
+               (1,866)     (types.js)     (356)       (simple arrays)     (3,219)      (ES2022)
+                              ↓
+                           file.d.ts (when types: "emit")
 ```
 
 **Key insight:** S-expressions are simple arrays like `["=", "x", 42]`, not complex AST nodes. This makes the compiler dramatically smaller than CoffeeScript.
@@ -102,6 +110,7 @@ Rip Source  ->  Lexer  ->  Parser  ->  S-Expressions  ->  Codegen  ->  JavaScrip
 ["if", condition, then, else]  // Conditional
 ["state", name, expr]          // Reactive state (:=)
 ["computed", name, expr]       // Computed value (~=)
+["enum", name, body]           // Enum declaration
 ```
 
 ### 2. Context-Aware Generation

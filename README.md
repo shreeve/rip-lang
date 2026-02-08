@@ -11,7 +11,7 @@
 <p align="center">
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.1.0-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
-  <a href="#"><img src="https://img.shields.io/badge/tests-1073%2F1073-brightgreen.svg" alt="Tests"></a>
+  <a href="#"><img src="https://img.shields.io/badge/tests-1130%2F1130-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
 </p>
 
@@ -40,6 +40,7 @@ get '/users/:id' ->                 # RESTful API endpoint, comma-less
 - **Modern output** — ES2022 with native classes, `?.`, `??`, modules
 - **New operators** — `!`, `!?`, `//`, `%%`, `=~`, `.new()`, and more
 - **Reactive operators** — `:=`, `~=`, `~>` as language syntax
+- **Optional types** — `::` annotations, `::=` aliases, `.d.ts` emission
 - **Zero dependencies** — everything included, even the parser generator
 - **Self-hosting** — `bun run parser` rebuilds the compiler from source
 
@@ -134,6 +135,27 @@ State, computed values, and effects as language operators:
 | `~=` | "always equals" | `twice ~= count * 2` | Auto-updates on changes |
 | `~>` | "reacts to" | `~> log count` | Runs on dependency changes |
 | `=!` | "equals, dammit!" | `MAX =! 100` | Readonly constant |
+
+---
+
+### Types (Optional)
+
+Type annotations are erased at compile time — zero runtime cost:
+
+```coffee
+def greet(name:: string):: string        # Typed function
+  "Hello, #{name}!"
+
+User ::= type                            # Structural type
+  id: number
+  name: string
+
+enum HttpCode                            # Runtime enum
+  ok = 200
+  notFound = 404
+```
+
+Compiles to `.js` (types erased) + `.d.ts` (types preserved) — full IDE support via TypeScript Language Server. See [docs/RIP-TYPES.md](docs/RIP-TYPES.md).
 
 ---
 

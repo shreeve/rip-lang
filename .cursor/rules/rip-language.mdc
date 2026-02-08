@@ -12,8 +12,28 @@ When working with `.rip` files, read `docs/RIP-LANG.md` for
 complete syntax reference, operators, and patterns.
 
 For compiler internals and project structure, read `AGENT.md` at the repo root.
+For the optional type system, read `docs/RIP-TYPES.md`.
 
 ## Key Syntax Notes
+
+### Type Annotations (`::` and `::=`)
+
+Types are optional, erased at runtime, and emit `.d.ts` files:
+
+```coffee
+count:: number = 0               # Typed variable
+def add(a:: number, b:: number)  # Typed parameters
+def greet(name:: string):: string # Return type
+ID ::= number                    # Type alias
+User ::= type                   # Structural type
+  id: number
+  name: string
+```
+
+- `::` annotates types on variables, parameters, return values
+- `::=` declares type aliases (erased from JS)
+- `=>` is the function type arrow in type expressions
+- `->` is always a code arrow (function body)
 
 ### Heredoc Whitespace Stripping
 

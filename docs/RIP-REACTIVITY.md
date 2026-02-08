@@ -286,3 +286,24 @@ Rip's reactivity system:
 ✅ **Extra utilities** — `.lock()`, `.read()`, `.kill()` that others lack <br>
 
 **On par with Vue/Solid. Better than React. A fraction of the size.**
+
+---
+
+## Types and Reactivity
+
+Reactive operators work with Rip's optional type system:
+
+```coffee
+count:: number := 0               # Typed state
+doubled:: number ~= count * 2     # Typed computed
+```
+
+Type annotations are erased from `.js` output. In `.d.ts` output, reactive
+state emits `Signal<T>` and computed values emit `Computed<T>`:
+
+```ts
+declare const count: Signal<number>;
+declare const doubled: Computed<number>;
+```
+
+See [RIP-TYPES.md](RIP-TYPES.md) for the complete type system specification.

@@ -90,18 +90,22 @@ console.log(code);
 ## The Pipeline
 
 ```
-Source Code  →  Lexer  →  Parser  →  S-Expressions  →  Codegen  →  JavaScript
-                (1,542)    (352)       (simple arrays)     (3,148)      (ES2022)
+Source Code  →  Lexer  →  emitTypes  →  Parser  →  S-Expressions  →  Codegen  →  JavaScript
+                (1,866)    (types.js)    (356)       (simple arrays)     (3,219)      (ES2022)
+                              ↓
+                           file.d.ts (when types: "emit")
 ```
 
 ## Key Files
 
 | File | Purpose | Lines | Modify? |
 |------|---------|-------|---------|
-| `src/lexer.js` | Lexer + Rewriter | 1,542 | Yes |
-| `src/compiler.js` | Compiler + Code Generator | 3,148 | Yes |
-| `src/parser.js` | Generated parser | 352 | No (auto-gen) |
-| `src/grammar/grammar.rip` | Grammar specification | 887 | Yes (carefully) |
+| `src/lexer.js` | Lexer + Rewriter | 1,866 | Yes |
+| `src/compiler.js` | Compiler + Code Generator | 3,219 | Yes |
+| `src/types.js` | Type System (lexer sidecar) | 718 | Yes |
+| `src/components.js` | Component System (compiler sidecar) | ~1,240 | Yes |
+| `src/parser.js` | Generated parser | 356 | No (auto-gen) |
+| `src/grammar/grammar.rip` | Grammar specification | 934 | Yes (carefully) |
 | `src/grammar/solar.rip` | Parser generator | 1,001 | No |
 
 ## Example Flow
@@ -238,6 +242,12 @@ S-expressions are simple arrays that serve as Rip's intermediate representation 
 ### Classes
 ```javascript
 ['class', name, parent?, ...members]
+```
+
+### Types
+```javascript
+['enum', name, body]              // Enum declaration (runtime JS)
+// Type aliases, interfaces → handled by rewriter, never reach parser
 ```
 
 ### Ranges & Slicing
@@ -558,7 +568,6 @@ bun src/compare-compilers.js
 
 # 9. Future Work
 
-- `::` token for type annotations (see `docs/RIP-TYPES.md`)
 - Comment preservation for source maps
 - Parser update to read `.data` directly instead of `new String()` properties
 - Once parser supports `.data`, the `meta()`/`str()` helpers become trivial to update
@@ -567,8 +576,9 @@ bun src/compare-compilers.js
 
 **See Also:**
 - [RIP-LANG.md](RIP-LANG.md) — Language reference
+- [RIP-TYPES.md](RIP-TYPES.md) — Type system specification
 - [RIP-REACTIVITY.md](RIP-REACTIVITY.md) — Reactivity deep dive
 
 ---
 
-*Rip 3.0 — 1,073 tests passing — Zero dependencies — Self-hosting — ~7,700 LOC*
+*Rip 3.0 — 1,130 tests passing — Zero dependencies — Self-hosting — ~8,800 LOC*

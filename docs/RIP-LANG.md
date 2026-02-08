@@ -17,9 +17,10 @@ Rip is a modern reactive language that compiles to ES2022 JavaScript. It combine
 9. [Regex Features](#9-regex-features)
 10. [Server-Side Development](#10-server-side-development)
 11. [CLI Tools & Scripts](#11-cli-tools--scripts)
-12. [JavaScript Interop](#12-javascript-interop)
-13. [Common Patterns](#13-common-patterns)
-14. [Quick Reference](#14-quick-reference)
+12. [Types](#12-types)
+13. [JavaScript Interop](#13-javascript-interop)
+14. [Common Patterns](#14-common-patterns)
+15. [Quick Reference](#15-quick-reference)
 
 ---
 
@@ -924,7 +925,41 @@ for filename in files
 
 ---
 
-# 12. JavaScript Interop
+# 12. Types
+
+Rip supports an optional, compile-time-only type system. Types are erased from
+`.js` output and preserved in `.d.ts` declaration files.
+
+```coffee
+# Type annotations (::)
+count:: number = 0
+def greet(name:: string):: string
+  "Hello, #{name}!"
+
+# Type aliases (::=)
+ID ::= number
+User ::= type
+  id: number
+  name: string
+
+# Interfaces
+interface Animal
+  name: string
+
+# Enums (emit runtime JS)
+enum HttpCode
+  ok = 200
+  notFound = 404
+```
+
+Types use `=>` for function type arrows and `->` for code arrows. This
+disambiguates type expressions from function bodies cleanly.
+
+For the complete type system specification, see [RIP-TYPES.md](RIP-TYPES.md).
+
+---
+
+# 13. JavaScript Interop
 
 ```coffee
 # Import any npm package
@@ -954,7 +989,7 @@ const { code } = compile('x = 42');
 
 ---
 
-# 13. Common Patterns
+# 14. Common Patterns
 
 ## Error Handling
 
@@ -1036,7 +1071,7 @@ class EventEmitter
 
 ---
 
-# 14. Quick Reference
+# 15. Quick Reference
 
 ## Syntax Cheat Sheet
 
