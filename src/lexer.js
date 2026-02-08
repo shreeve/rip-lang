@@ -503,6 +503,18 @@ export class Lexer {
     // Property vs identifier
     if (colon || (prev && (prev[0] === '.' || prev[0] === '?.' || (!prev.spaced && prev[0] === '@')))) {
       tag = 'PROPERTY';
+
+      // In render blocks, consume hyphenated CSS class names: .counter-display → PROPERTY "counter-display"
+      if (this.inRenderBlock && prev && prev[0] === '.' && !colon) {
+        let rest = this.chunk.slice(idLen);
+        while (rest[0] === '-' && /^-[a-zA-Z]/.test(rest)) {
+          let m = /^-([a-zA-Z][\w]*)/.exec(rest);
+          if (!m) break;
+          id += '-' + m[1];
+          idLen += 1 + m[1].length;
+          rest = this.chunk.slice(idLen);
+        }
+      }
     } else {
       tag = 'IDENTIFIER';
     }

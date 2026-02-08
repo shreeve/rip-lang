@@ -4,9 +4,9 @@ About = component
 
   render
     div
-      .("page-header")
-        h1.("page-title") "About Rip UI"
-        p.("page-subtitle") "Zero-build reactive web apps"
+      .page-header
+        h1.page-title "About Rip UI"
+        p.page-subtitle "Zero-build reactive web apps"
 
       .card
         h3 "The Idea"
@@ -22,19 +22,19 @@ About = component
 
       .card
         h3 "Stack"
-        .("btn-group")
+        .btn-group
           .stat
             span "Compiler "
-            span.("stat-value") "40KB"
+            span.stat-value "40KB"
           .stat
             span "Framework "
-            span.("stat-value") "~8KB"
+            span.stat-value "~8KB"
           .stat
             span "Build step "
-            span.("stat-value") "None"
+            span.stat-value "None"
           .stat
             span "Dependencies "
-            span.("stat-value") "Zero"
+            span.stat-value "Zero"
 
       .card
         h3 "Modules"

@@ -519,6 +519,8 @@ class Lexer {
     this.seenExport = false;
     this.importSpecifierList = false;
     this.exportSpecifierList = false;
+    this.inRenderBlock = false;
+    this.renderIndent = 0;
     code = this.clean(code);
     this.code = code;
     while (this.pos < code.length) {
@@ -640,6 +642,17 @@ class Lexer {
       colon = null;
     if (colon || prev && (prev[0] === "." || prev[0] === "?." || !prev.spaced && prev[0] === "@")) {
       tag = "PROPERTY";
+      if (this.inRenderBlock && prev && prev[0] === "." && !colon) {
+        let rest = this.chunk.slice(idLen);
+        while (rest[0] === "-" && /^-[a-zA-Z]/.test(rest)) {
+          let m = /^-([a-zA-Z][\w]*)/.exec(rest);
+          if (!m)
+            break;
+          id += "-" + m[1];
+          idLen += 1 + m[1].length;
+          rest = this.chunk.slice(idLen);
+        }
+      }
     } else {
       tag = "IDENTIFIER";
     }
@@ -674,6 +687,10 @@ class Lexer {
       id = id.slice(0, -1);
     }
     let t = this.emit(tag, id, { len: idLen, data: Object.keys(data).length ? data : null });
+    if (tag === "RENDER") {
+      this.inRenderBlock = true;
+      this.renderIndent = this.indent;
+    }
     if (colon) {
       this.emit(":", ":", { len: 1 });
       return idLen + colon.length;
@@ -795,6 +812,9 @@ class Lexer {
     return indent.length;
   }
   outdentTo(targetSize, outdentLength = 0) {
+    if (this.inRenderBlock && targetSize <= this.renderIndent) {
+      this.inRenderBlock = false;
+    }
     let moveOut = this.indent - targetSize;
     while (moveOut > 0) {
       let lastIndent = this.indents[this.indents.length - 1];
@@ -820,6 +840,9 @@ class Lexer {
     }
   }
   isUnfinished() {
+    if (this.inRenderBlock && LINE_CONTINUER_RE.test(this.chunk) && /^\s*\./.test(this.chunk)) {
+      return false;
+    }
     return LINE_CONTINUER_RE.test(this.chunk) || UNFINISHED.has(this.prevTag());
   }
   pair(tag) {
@@ -6707,7 +6730,7 @@ function compileToJS(source, options = {}) {
 }
 // src/browser.js
 var VERSION = "3.1.0";
-var BUILD_DATE = "2026-02-08@09:16:31GMT";
+var BUILD_DATE = "2026-02-08@09:46:39GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
