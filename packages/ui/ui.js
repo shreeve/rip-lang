@@ -98,6 +98,8 @@ export function createApp(options = {}) {
 
     // Stop the application
     stop() {
+      instance._eventSource?.close();
+      instance._eventSource = null;
       renderer.stop();
       router.destroy();
       return instance;
@@ -145,8 +147,12 @@ export function createApp(options = {}) {
 
         // Refetch and remount only if current view is affected
         if (toFetch.length > 0) {
-          await Promise.all(toFetch.map(p => fs.fetch(p)));
-          renderer.remount();
+          try {
+            await Promise.all(toFetch.map(p => fs.fetch(p)));
+            renderer.remount();
+          } catch (err) {
+            console.error('[Rip] Hot reload fetch error:', err);
+          }
         }
       });
 

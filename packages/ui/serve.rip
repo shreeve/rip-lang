@@ -90,19 +90,19 @@ export ripUI = (opts = {}) ->
       watcher  = null
       heartbeat = null
 
+      cleanup = ->
+        watcher?.close()
+        clearTimeout(timer) if timer
+        clearInterval(heartbeat) if heartbeat
+        watcher = heartbeat = timer = null
+
       return new Response new ReadableStream(
         start: (controller) ->
           send = (event, data) ->
             try
               controller.enqueue encoder.encode("event: #{event}\ndata: #{JSON.stringify(data)}\n\n")
             catch
-              # Controller closed — client disconnected
               cleanup()
-
-          cleanup = ->
-            watcher?.close()
-            clearTimeout(timer) if timer
-            clearInterval(heartbeat) if heartbeat
 
           # Send initial connection confirmation
           send 'connected', { time: Date.now() }
@@ -129,10 +129,7 @@ export ripUI = (opts = {}) ->
             clearTimeout(timer) if timer
             timer = setTimeout(flush, debounceMs)
 
-        cancel: ->
-          watcher?.close()
-          clearTimeout(timer) if timer
-          clearInterval(heartbeat) if heartbeat
+        cancel: -> cleanup()
       ),
         headers:
           'Content-Type': 'text/event-stream'

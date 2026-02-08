@@ -51,7 +51,7 @@
     "README.md"
   ],
   "peerDependencies": {
-    "@rip-lang/api": ">=1.0.0"
+    "@rip-lang/api": ">=1.1.4"
   },
   "peerDependenciesMeta": {
     "@rip-lang/api": {
