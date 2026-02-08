@@ -800,26 +800,38 @@ This section describes how to implement Rip Types in the compiler. It is
 designed to be self-contained — an implementor should be able to read this
 section and the referenced source files and complete the work in one pass.
 
+> **Interoperability Principle.** Rip Types emits standard TypeScript `.d.ts`
+> declaration files — the same format any TypeScript project produces. The
+> goal is full ecosystem interoperability. A Rip library's types are
+> indistinguishable from hand-written TypeScript to any consumer. Rip
+> developers get IDE autocompletion and type checking for third-party
+> packages (React, Express, etc.) through the TypeScript Language Server,
+> which reads standard `.d.ts` files from `node_modules`. Rip is a
+> participant in the TypeScript ecosystem, not a replacement for it.
+
 ### File Architecture
 
-Rip Types follows the same pattern as the component system. Components added
-`src/components.js` alongside the compiler — types add `src/types.js`:
+Rip Types follows the same sidecar pattern as the component system.
+Components added `src/components.js` alongside the compiler — types add
+`src/types.js` alongside the lexer:
 
 | File | Role | Scope |
 |------|------|-------|
-| `src/lexer.js` | Detect `::` and `::=` tokens, add `rewriteTypes()` pass | Small inline changes |
-| `src/types.js` | Type codegen: `installTypeSupport()`, `DtsGenerator` class | New file, bulk of logic |
-| `src/compiler.js` | Import and wire `installTypeSupport()`, add `types` option | 3-5 lines |
-| `src/grammar/grammar.rip` | Add `TypeDecl` to `Expression`, `Enum`/`Interface` rules | Small additions |
+| `src/lexer.js` | Detect `::` and `::=` tokens, import `installTypeSupport` from `types.js` | Small inline changes |
+| `src/types.js` | Lexer sidecar: `installTypeSupport(Lexer)`, `emitTypes(tokens)`, `generateEnum()` | New file, bulk of logic |
+| `src/compiler.js` | Call `emitTypes()` before parsing, wire `generateEnum()` | ~8 lines |
+| `src/grammar/grammar.rip` | Add `Enum` rule to `Expression` | 1 rule + 1 export |
 
-The boundary is the parser. Everything before parsing (token detection,
-rewriting) lives in `lexer.js`. Everything after parsing (code generation,
-`.d.ts` emission) lives in `types.js`.
+The boundary is the token stream. Types are fully resolved before parsing —
+`rewriteTypes()` strips annotations, `emitTypes()` produces `.d.ts` from
+annotated tokens, and type-only constructs are removed before the parser
+runs. Only `enum` crosses into the parser/compiler because it generates
+runtime JavaScript.
 
 **The `components.js` pattern to follow:**
 
 ```js
-// src/components.js — existing pattern
+// src/components.js — existing sidecar for the compiler
 export function installComponentSupport(CodeGenerator) {
   const proto = CodeGenerator.prototype;
   proto.generateComponent = function(head, rest, context) { ... };
@@ -836,21 +848,22 @@ installComponentSupport(CodeGenerator);  // at module level, after class definit
 **The parallel for types:**
 
 ```js
-// src/types.js — new file
-export function installTypeSupport(CodeGenerator) {
-  const proto = CodeGenerator.prototype;
-  proto.generateTypeAlias = function(head, rest, context) { ... };
-  proto.generateInterface = function(head, rest, context) { ... };
-  proto.generateEnum = function(head, rest, context) { ... };
+// src/types.js — new sidecar for the lexer
+export function installTypeSupport(Lexer) {
+  Lexer.prototype.rewriteTypes = function() { ... };  // Uses this.scanTokens()
 }
+export function emitTypes(tokens) { ... }           // Annotated tokens -> .d.ts string
+export function generateEnum(head, rest, ctx) { ... } // Enum -> runtime JS object
 
-export class DtsGenerator {
-  compile(sexpr) { ... }  // Walks s-expression tree, emits .d.ts
-}
+// src/lexer.js — wiring (mirrors compiler.js wiring for components)
+import { installTypeSupport } from './types.js';
+installTypeSupport(Lexer);
 
-// src/compiler.js — new wiring (add next to installComponentSupport)
-import { installTypeSupport, DtsGenerator } from './types.js';
-installTypeSupport(CodeGenerator);
+// src/compiler.js — wiring
+import { emitTypes, generateEnum } from './types.js';
+CodeGenerator.prototype.generateEnum = generateEnum;
+CodeGenerator.GENERATORS['enum'] = 'generateEnum';
+// In compile(): let dts = emitTypes(tokens);
 ```
 
 ### Phase 1: Type Annotations (Metadata on Existing Tokens)
@@ -859,7 +872,7 @@ Type annotations on variables, parameters, return types, and reactive state
 ride as **metadata** on existing tokens. The grammar never sees them. This
 means all existing grammar rules, s-expression shapes, and codegen work
 unchanged — types are invisible to everything except `rewriteTypes()` and
-the `.d.ts` generator.
+`emitTypes()`.
 
 #### 1.1 Lexer: Token Detection
 
@@ -1272,11 +1285,55 @@ declare class UserService {
 }
 ```
 
+#### 1.6 Token-Level Type Emission
+
+After `rewriteTypes()` strips type annotations and stores metadata on
+tokens, the `emitTypes()` function scans the annotated token stream in a
+single forward pass and emits `.d.ts` declarations. This happens in
+`Compiler.compile()`, between tokenization and parsing — before the
+parser ever sees the tokens.
+
+`emitTypes()` is a standalone function (not a class). It maintains a
+simple state machine:
+
+- **Indent depth** — tracks INDENT/OUTDENT to know nesting level
+- **Current class** — when inside a CLASS body, emit class members
+- **Export flag** — when EXPORT precedes a declaration, prepend `export`
+
+**Pattern matching** — the function scans forward and recognizes:
+
+| Token pattern | Emission |
+|---------------|----------|
+| `DEF IDENTIFIER(+returnType) CALL_START params CALL_END` | `function name(params): ReturnType;` |
+| `DEF IDENTIFIER(+returnType)` (no params) | `function name(): ReturnType;` |
+| `IDENTIFIER(+type) = ...` | `let name: Type;` |
+| `IDENTIFIER(+type) READONLY_ASSIGN ...` | `const name: Type;` |
+| `STATE IDENTIFIER(+type) ...` | `const name: Signal<Type>;` |
+| `COMPUTED IDENTIFIER(+type) ...` | `const name: Computed<Type>;` |
+| `CLASS IDENTIFIER INDENT ... OUTDENT` | `class Name { ... }` |
+| `EXPORT <declaration>` | Prepend `export` to the declaration |
+| `TYPE_DECL` marker | `type Name = TypeText;` or `interface Name { ... }` |
+
+**Rip-to-TypeScript conversions** — `emitTypes()` converts Rip type
+syntax into standard TypeScript:
+
+| Rip syntax | TypeScript equivalent |
+|-----------|---------------------|
+| `::` | `:` (annotation sigil to type separator) |
+| `T?` | `T \| undefined` |
+| `T??` | `T \| null \| undefined` |
+| `T!` | `NonNullable<T>` |
+| `->` | `=>` (in function type expressions) |
+
+The function returns a `.d.ts` string. Declarations without type
+annotations are skipped — only annotated code appears in the output.
+
 ### Phase 2: Type-Only Declarations
 
 These constructs exist only in the type system — they have no runtime
-representation (except `enum`). They need new token handling and either
-new grammar rules or rewriter transformations.
+representation (except `enum`). The rewriter handles type aliases and
+interfaces entirely (they never enter the grammar). Only `enum` needs a
+grammar rule because it emits runtime JavaScript.
 
 #### 2.1 Keyword Migration
 
@@ -1306,11 +1363,14 @@ No changes to `classifyKeyword()` are needed — the existing fallback
 `if (RIP_KEYWORDS.has(id)) return upper` (line 618) automatically tags
 `enum` as `ENUM` and `interface` as `INTERFACE`.
 
-#### 2.2 Type Aliases (`::=`)
+#### 2.2 Type Aliases (`::=`) — Unified typeText
 
 The `::=` operator declares a named type. The `rewriteTypes()` pass handles
-it by collecting the right-hand side and packaging it into a single `TYPE_DECL`
-token.
+it by collecting the right-hand side, converting it to a TypeScript-compatible
+type string, and packaging it into a single `TYPE_DECL` marker token. All
+three forms (simple alias, structural type, block union) produce the same
+metadata shape: `{ name, typeText }`. The `emitTypes()` function simply
+emits `type ${name} = ${typeText};` for all of them.
 
 **Simple alias:**
 
@@ -1324,7 +1384,7 @@ When `rewriteTypes()` encounters `TYPE_ALIAS` (`::=`):
 1. Record the preceding `IDENTIFIER` token as the type name
 2. Collect all following tokens as the type body (same boundary rules as `::`)
 3. Replace the entire sequence (`IDENTIFIER`, `TYPE_ALIAS`, type tokens) with
-   a single `TYPE_DECL` token carrying structured metadata
+   a single `TYPE_DECL` marker token
 
 ```js
 // Inside rewriteTypes(), handling TYPE_ALIAS:
@@ -1340,15 +1400,16 @@ if (tag === 'TYPE_ALIAS') {
 
   let typeStr = /* join collected tokens */;
 
-  // Replace name + ::= + type tokens with TYPE_DECL
+  // Replace name + ::= + type tokens with TYPE_DECL marker
   let declToken = gen('TYPE_DECL', name, nameToken);
-  declToken.data = { name, kind: 'alias', typeText: typeStr };
+  declToken.data = { name, typeText: typeStr };
   tokens.splice(i - 1, 2 + typeTokens.length, declToken);
   return 0;
 }
 ```
 
-S-expression: The grammar sees `TYPE_DECL` as a value, producing `["type-alias", name, typeText]` or just passing the token through with its metadata.
+The `TYPE_DECL` marker is read by `emitTypes()` and then **removed from
+the token stream** before parsing. No grammar rule is needed.
 
 .d.ts: `type ID = number;`
 
@@ -1364,24 +1425,24 @@ User ::= type
 ```
 
 When `rewriteTypes()` sees `TYPE_ALIAS` followed by `IDENTIFIER("type")` and
-then `INDENT`, it enters a structural type collection mode:
+then `INDENT`, it collects the block body and converts it to a TypeScript
+object type string:
 
 1. Consume the `INDENT`
 2. Collect property declarations line by line until `OUTDENT`
-3. Each line has the form: `name (?: optional) : type`
-4. Package as metadata:
+3. Convert to TypeScript object syntax: `"{ id: number; name: string; email?: string; }"`
+4. Store as a single typeText string — no structured property metadata needed:
    ```js
    declToken.data = {
      name: "User",
-     kind: "structural",
-     properties: [
-       { name: "id", type: "number", optional: false },
-       { name: "name", type: "string", optional: false },
-       { name: "email", type: "string", optional: true },
-     ]
+     typeText: "{ id: number; name: string; email?: string; }"
    };
    ```
-5. Replace entire sequence with single `TYPE_DECL` token
+5. Replace entire sequence with single `TYPE_DECL` marker
+
+The rewriter does the Rip-to-TypeScript formatting (indented properties to
+`{ prop: type; ... }`). The emitter just writes `type ${name} = ${typeText};`
+without needing to understand the internal structure.
 
 .d.ts:
 ```ts
@@ -1403,19 +1464,18 @@ HttpMethod ::=
 ```
 
 When `rewriteTypes()` sees `TYPE_ALIAS` followed by `TERMINATOR` or `INDENT`
-with leading `|` tokens, it collects union members:
+with leading `|` tokens, it collects union members and joins them:
 
 ```js
 declToken.data = {
   name: "HttpMethod",
-  kind: "union",
-  members: ['"GET"', '"POST"', '"PUT"', '"DELETE"']
+  typeText: '"GET" | "POST" | "PUT" | "DELETE"'
 };
 ```
 
 .d.ts: `type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";`
 
-#### 2.3 Interfaces
+#### 2.3 Interfaces — Rewriter-Based
 
 ```coffee
 interface Animal
@@ -1426,33 +1486,35 @@ interface Dog extends Animal
   bark: () -> void
 ```
 
-**Option A (grammar-based):** Add grammar rules:
+Interfaces are type-only (no .js output), so they are handled entirely by
+the rewriter — no grammar rule needed. When `rewriteTypes()` encounters an
+`INTERFACE` token:
 
-```
-Interface: [
-  o 'INTERFACE Identifier Block'                    , '["interface", 2, null, 3]'
-  o 'INTERFACE Identifier EXTENDS Identifier Block' , '["interface", 2, 4, 5]'
-]
-```
+1. Record the interface name
+2. If followed by `EXTENDS`, record the parent name
+3. Collect the body block (between `INDENT` and `OUTDENT`)
+4. Convert to TypeScript interface body string
+5. Replace the entire sequence with a `TYPE_DECL` marker:
+   ```js
+   declToken.data = {
+     name: "Dog",
+     kind: "interface",
+     extends: "Animal",
+     typeText: "{ breed: string; bark: () => void; }"
+   };
+   ```
 
-Add `Interface` to the `Expression` list. The compiler's `generateInterface()`
-(in `types.js`) handles emission.
+The `emitTypes()` function recognizes kind `"interface"` and emits:
 
-**Option B (rewriter-based):** `rewriteTypes()` detects `INTERFACE` token and
-collects the body, replacing with a `TYPE_DECL` token of kind `"interface"`.
-
-Option A is cleaner for interfaces since they have an `extends` clause that
-parallels `class`. Recommended: **use grammar rules**.
-
-S-expression: `["interface", "Dog", "Animal", body]`
-
-.d.ts:
 ```ts
 interface Dog extends Animal {
   breed: string;
   bark: () => void;
 }
 ```
+
+The `TYPE_DECL` marker is removed before parsing. The parser and compiler
+never see interfaces.
 
 .js: *(nothing — erased)*
 
@@ -1466,9 +1528,10 @@ enum HttpCode
   serverError = 500
 ```
 
-Enums are the one type construct that emits **both** .js and .d.ts.
+Enums are the **one** type construct that emits both .js and .d.ts. They
+are the only construct that needs a grammar rule and a compiler generator.
 
-**Grammar rules:**
+**Grammar rule:**
 
 ```
 Enum: [
@@ -1480,7 +1543,7 @@ Add `Enum` to the `Expression` list.
 
 S-expression: `["enum", "HttpCode", body]`
 
-.js (runtime reverse-mapping object):
+.js (runtime reverse-mapping object, via `generateEnum()`):
 ```js
 const HttpCode = {
   ok: 200, created: 201, notFound: 404, serverError: 500,
@@ -1488,7 +1551,7 @@ const HttpCode = {
 };
 ```
 
-.d.ts:
+.d.ts (emitted by `emitTypes()` from the token stream):
 ```ts
 enum HttpCode {
   ok = 200,
@@ -1498,9 +1561,13 @@ enum HttpCode {
 }
 ```
 
+Note: `emitTypes()` reads enum info from the token stream before parsing.
+The enum tokens remain in the stream for the parser (unlike type aliases
+and interfaces, which are removed).
+
 #### 2.5 Grammar Changes Summary
 
-In `src/grammar/grammar.rip`, add to the `Expression` list:
+In `src/grammar/grammar.rip`, add `Enum` to the `Expression` list:
 
 ```
 Expression: [
@@ -1512,26 +1579,15 @@ Expression: [
   o 'ComputedAssign'
   o 'ReadonlyAssign'
   o 'ReactAssign'
-  o 'TypeDecl'             # <-- ADD
-  o 'Interface'            # <-- ADD
-  o 'Enum'                 # <-- ADD
+  o 'Enum'                 # <-- ADD (only type construct needing grammar)
   o 'If'
   ...
 ]
 ```
 
-And add the new rules:
+And add the single new rule:
 
 ```
-TypeDecl: [
-  o 'TYPE_DECL', '1'
-]
-
-Interface: [
-  o 'INTERFACE Identifier Block'                    , '["interface", 2, null, 3]'
-  o 'INTERFACE Identifier EXTENDS Identifier Block' , '["interface", 2, 4, 5]'
-]
-
 Enum: [
   o 'ENUM Identifier Block', '["enum", 2, 3]'
 ]
@@ -1540,10 +1596,11 @@ Enum: [
 Also add to `Export`:
 
 ```
-o 'EXPORT TypeDecl'    , '["export", 2]'
-o 'EXPORT Interface'   , '["export", 2]'
 o 'EXPORT Enum'        , '["export", 2]'
 ```
+
+No `TypeDecl` or `Interface` grammar rules — those are handled entirely by
+the rewriter and removed before parsing.
 
 #### 2.6 Generic Type Parameters
 
@@ -1558,26 +1615,28 @@ def map<T, U>(items:: T[], fn:: (item:: T) -> U):: U[]
 Generic parameters on functions require special handling because `<` is
 normally a comparison operator.
 
-**Detection heuristic in `rewriteTypes()`:**
+**Detection via `.spaced` property:**
 
-When scanning and finding `DEF IDENTIFIER` followed by `<`:
+The lexer tracks whitespace before every token via the `.spaced` property.
+In `def identity<T>`, the `<` token is unspaced from the identifier — this
+is the key signal. In a comparison `x < y`, the `<` is spaced.
 
-1. Look ahead from `<` — if the contents are uppercase identifiers, commas,
-   `extends`, and the sequence closes with `>` followed by `(` or `CALL_START`,
-   treat it as a generic parameter list
-2. Collect the generic params as a string (e.g., `"<T>"`, `"<T, U>"`,
+When `rewriteTypes()` sees `DEF IDENTIFIER` followed by an unspaced `<`:
+
+1. Treat it as a generic parameter list
+2. Collect balanced `<...>` tokens as a string (e.g., `"<T>"`, `"<T, U>"`,
    `"<T extends Ordered>"`)
 3. Store on the function name token as `.data.typeParams`
 4. Remove the `<...>` tokens from the stream
 
 ```js
-// Pseudocode for generic detection:
+// Generic detection using .spaced:
 if (tag === 'IDENTIFIER' && i >= 1 && tokens[i - 1]?.[0] === 'DEF') {
   let next = tokens[i + 1];
-  if (next && next[0] === 'COMPARE' && next[1] === '<') {
-    // Look ahead for closing > before (
+  if (next && next[0] === 'COMPARE' && next[1] === '<' && !next.spaced) {
     let genTokens = collectBalancedAngleBrackets(tokens, i + 1);
-    if (genTokens && nextAfterIs('(' or 'CALL_START')) {
+    if (genTokens) {
+      if (!token.data) token.data = {};
       token.data.typeParams = joinTokens(genTokens);
       tokens.splice(i + 1, genTokens.length);
     }
@@ -1592,8 +1651,8 @@ Container<T> ::= type
   value: T
 ```
 
-The `rewriteTypes()` pass detects `IDENTIFIER <...> TYPE_ALIAS` and collects
-the generic params before processing the `::=`.
+The `rewriteTypes()` pass detects `IDENTIFIER` + unspaced `<...>` +
+`TYPE_ALIAS` and collects the generic params before processing the `::=`.
 
 .d.ts:
 ```ts
@@ -1604,250 +1663,87 @@ type Container<T> = { value: T; };
 
 ### Phase 3: Dual Emission (.js and .d.ts)
 
-All type-related code generation lives in `src/types.js`.
+All type-related logic lives in `src/types.js`. The `.d.ts` is emitted from
+the annotated token stream (before parsing). The `.js` is generated by the
+existing CodeGenerator (after parsing), with only `generateEnum()` added.
 
-#### 3.1 `installTypeSupport(CodeGenerator)`
+#### 3.1 `generateEnum()` — The One Compiler Addition
 
-This function extends the `CodeGenerator` prototype with methods for type-only
-constructs. These methods are called during normal .js code generation:
+Enums are the only type construct that produces runtime JavaScript. The
+`generateEnum()` function is exported from `types.js` and wired onto the
+CodeGenerator prototype:
 
 ```js
-export function installTypeSupport(CodeGenerator) {
-  const proto = CodeGenerator.prototype;
-
-  // Type aliases produce no .js output
-  proto.generateTypeAlias = function(head, rest, context) {
-    return '';  // Erased — type only
-  };
-
-  // Interfaces produce no .js output
-  proto.generateInterface = function(head, rest, context) {
-    return '';  // Erased — type only
-  };
-
-  // Enums produce a runtime object
-  proto.generateEnum = function(head, rest, context) {
-    let [name, body] = rest;
-    // Parse body into key-value pairs
-    // Emit: const Name = { key: val, val: "key", ... };
-    let pairs = this.parseEnumBody(body);
-    let forward = pairs.map(([k, v]) => `${k}: ${v}`).join(', ');
-    let reverse = pairs.map(([k, v]) => `${v}: "${k}"`).join(', ');
-    return `const ${name} = {${forward}, ${reverse}}`;
-  };
+// In src/types.js
+export function generateEnum(head, rest, context) {
+  let [name, body] = rest;
+  // Parse body into key-value pairs
+  let pairs = this.parseEnumBody(body);
+  let forward = pairs.map(([k, v]) => `${k}: ${v}`).join(', ');
+  let reverse = pairs.map(([k, v]) => `${v}: "${k}"`).join(', ');
+  return `const ${name} = {${forward}, ${reverse}}`;
 }
 ```
 
-**Add to the `GENERATORS` dispatch table** in `CodeGenerator` (in
-`src/compiler.js`):
+**Wiring in `src/compiler.js`:**
 
 ```js
-static GENERATORS = {
-  // ... existing entries ...
-
-  // Types
-  'type-alias': 'generateTypeAlias',
-  'interface': 'generateInterface',
-  'enum': 'generateEnum',
-};
+import { emitTypes, generateEnum } from './types.js';
+CodeGenerator.prototype.generateEnum = generateEnum;
+CodeGenerator.GENERATORS['enum'] = 'generateEnum';
 ```
 
-#### 3.2 `DtsGenerator` Class
+No `generateTypeAlias()` or `generateInterface()` methods are needed —
+type aliases and interfaces are removed from the token stream by the
+rewriter before the parser ever sees them.
 
-The `DtsGenerator` is a parallel code generator that walks the same s-expression
-tree but emits TypeScript declaration (`.d.ts`) output instead of JavaScript.
+#### 3.2 `emitTypes()` — Token-Level .d.ts Emission
 
-```js
-export class DtsGenerator {
-  constructor(options = {}) {
-    this.indentLevel = 0;
-    this.indentString = '  ';
-    this.lines = [];
-  }
+The `emitTypes()` function replaces the `DtsGenerator` class. Instead of
+walking the s-expression tree, it scans the annotated token stream in a
+single forward pass. This is simpler because:
 
-  compile(sexpr) {
-    this.walk(sexpr);
-    return this.lines.join('\n') + '\n';
-  }
+- It doesn't duplicate the CodeGenerator's dispatch logic
+- It only handles declarations (not all AST node types)
+- It reads metadata that `rewriteTypes()` already placed on tokens
 
-  indent() {
-    return this.indentString.repeat(this.indentLevel);
-  }
-
-  walk(sexpr) {
-    if (!Array.isArray(sexpr)) return;
-    let [head, ...rest] = sexpr;
-    let h = head?.valueOf?.() ?? head;
-
-    switch (h) {
-      case 'program':
-        rest.forEach(stmt => this.walk(stmt));
-        break;
-
-      case '=': {
-        // Variable: let name: Type;
-        let [target, value] = rest;
-        let name = target?.valueOf?.() ?? target;
-        let type = target?.type || 'any';
-        this.lines.push(`${this.indent()}let ${name}: ${type};`);
-        break;
-      }
-
-      case 'readonly': {
-        // Constant: const name: Type = value;
-        let [target, value] = rest;
-        let name = target?.valueOf?.() ?? target;
-        let type = target?.type || 'any';
-        this.lines.push(`${this.indent()}declare const ${name}: ${type};`);
-        break;
-      }
-
-      case 'state': {
-        let [target, value] = rest;
-        let name = target?.valueOf?.() ?? target;
-        let type = target?.type;
-        let typeStr = type ? `Signal<${type}>` : 'Signal<any>';
-        this.lines.push(`${this.indent()}declare const ${name}: ${typeStr};`);
-        break;
-      }
-
-      case 'computed': {
-        let [target, value] = rest;
-        let name = target?.valueOf?.() ?? target;
-        let type = target?.type;
-        let typeStr = type ? `Computed<${type}>` : 'Computed<any>';
-        this.lines.push(`${this.indent()}declare const ${name}: ${typeStr};`);
-        break;
-      }
-
-      case 'def': {
-        // Function declaration
-        let [name, params, body] = rest;
-        let fnName = name?.valueOf?.() ?? name;
-        let typeParams = name?.typeParams || '';
-        let returnType = name?.returnType || 'void';
-        let paramStr = this.formatParams(params);
-        this.lines.push(
-          `${this.indent()}declare function ${fnName}${typeParams}(${paramStr}): ${returnType};`
-        );
-        break;
-      }
-
-      case 'type-alias': {
-        let token = rest[0] || sexpr;
-        let data = token?.data || token;
-        // Emit based on kind: alias, structural, union
-        // ... (read from token metadata)
-        break;
-      }
-
-      case 'interface': {
-        let [name, parent, body] = rest;
-        let ext = parent ? ` extends ${parent}` : '';
-        this.lines.push(`${this.indent()}interface ${name}${ext} {`);
-        this.indentLevel++;
-        // ... emit properties from body
-        this.indentLevel--;
-        this.lines.push(`${this.indent()}}`);
-        break;
-      }
-
-      case 'enum': {
-        let [name, body] = rest;
-        this.lines.push(`${this.indent()}enum ${name} {`);
-        this.indentLevel++;
-        // ... emit members from body
-        this.indentLevel--;
-        this.lines.push(`${this.indent()}}`);
-        break;
-      }
-
-      case 'export': {
-        // Wrap inner declaration with 'export'
-        let [decl] = rest;
-        let saved = this.lines.length;
-        this.walk(decl);
-        // Prepend 'export ' to whatever was emitted
-        for (let k = saved; k < this.lines.length; k++) {
-          this.lines[k] = this.lines[k].replace(/^(\s*)(?:declare )?/, '$1export ');
-        }
-        break;
-      }
-
-      case 'class': {
-        let [className, parentClass, ...bodyParts] = rest;
-        let ext = parentClass ? ` extends ${parentClass}` : '';
-        this.lines.push(`${this.indent()}declare class ${className}${ext} {`);
-        this.indentLevel++;
-        // ... emit typed properties and method signatures
-        this.indentLevel--;
-        this.lines.push(`${this.indent()}}`);
-        break;
-      }
-
-      default:
-        // Recurse into blocks and other structures
-        rest.forEach(item => {
-          if (Array.isArray(item)) this.walk(item);
-        });
-    }
-  }
-
-  formatParams(params) {
-    if (!Array.isArray(params) || params.length === 0) return '';
-    return params.map(p => {
-      let name = p?.valueOf?.() ?? p;
-      let type = p?.type || 'any';
-      if (Array.isArray(p) && p[0] === 'default') {
-        let [, paramName, defaultVal] = p;
-        name = paramName?.valueOf?.() ?? paramName;
-        type = paramName?.type || 'any';
-        return `${name}?: ${type}`;
-      }
-      if (Array.isArray(p) && p[0] === 'rest') {
-        let restName = p[1]?.valueOf?.() ?? p[1];
-        let restType = p[1]?.type || 'any[]';
-        return `...${restName}: ${restType}`;
-      }
-      return `${name}: ${type}`;
-    }).join(', ');
-  }
-}
-```
+See §1.6 for the pattern-matching table and state machine description.
 
 #### 3.3 Compiler Wiring
 
-In `src/compiler.js`, add minimal wiring:
-
-**Import** (near the existing component import):
-
-```js
-import { installTypeSupport, DtsGenerator } from './types.js';
-```
-
-**Install** (near the existing `installComponentSupport` call):
-
-```js
-installTypeSupport(CodeGenerator);
-```
-
-**Add `types` option to `Compiler.compile()`**:
+In `src/compiler.js`, the compilation pipeline becomes:
 
 ```js
 compile(source) {
-  // ... existing tokenize → parse → generate pipeline ...
-  let code = generator.compile(sexpr);
+  // Step 1: Tokenize (includes rewriteTypes() via installTypeSupport)
+  let lexer = new Lexer();
+  let tokens = lexer.tokenize(source);
 
-  // Type declaration generation (new)
+  // Step 2: Emit .d.ts from annotated tokens (before parsing)
   let dts = null;
   if (this.options.types === 'emit' || this.options.types === 'check') {
-    let dtsGen = new DtsGenerator();
-    dts = dtsGen.compile(sexpr);
+    dts = emitTypes(tokens);
+    // Remove TYPE_DECL markers so the parser doesn't see them
+    tokens = tokens.filter(t => t[0] !== 'TYPE_DECL');
   }
+
+  // Step 3: Parse (grammar only sees Enum as a new construct)
+  // ... existing parser setup ...
+  let sexpr = parser.parse(source);
+
+  // Step 4: Generate .js (CodeGenerator only needs generateEnum)
+  let generator = new CodeGenerator({ ... });
+  let code = generator.compile(sexpr);
 
   return { tokens, sexpr, code, dts, data: dataSection, reactiveVars: generator.reactiveVars };
 }
 ```
+
+The key insight: `.d.ts` emission happens **between tokenization and
+parsing**. After `emitTypes()` reads the annotated tokens, `TYPE_DECL`
+markers are filtered out. The parser receives a clean, type-free token
+stream — identical to what it would see from untyped Rip code, plus
+`ENUM` tokens.
 
 #### 3.4 `const` Emission Rule
 
@@ -1877,10 +1773,11 @@ In `rewriteTypes()`, when collecting type tokens, if the next token is `?`,
 `??`, or `!` and is **not spaced** from the previous token, include it as
 part of the type string.
 
-The `DtsGenerator` expands these suffixes and converts syntax:
+The `emitTypes()` function converts Rip type syntax into standard TypeScript:
 
-| Rip syntax | TypeScript expansion |
+| Rip syntax | TypeScript equivalent |
 |-----------|---------------------|
+| `::` | `:` (annotation sigil to type separator) |
 | `T?` | `T \| undefined` |
 | `T??` | `T \| null \| undefined` |
 | `T!` | `NonNullable<T>` |
@@ -1909,9 +1806,13 @@ export def getUser(id:: number):: User?
   db.find(id)
 ```
 
-The existing `Export` grammar rules already handle `EXPORT Expression`, so
-exported type aliases work via `EXPORT TypeDecl`. For the `.d.ts` generator,
-exported declarations get `export` prepended.
+The rewriter detects `EXPORT` before `::=` sequences and marks the
+`TYPE_DECL` marker accordingly. The `emitTypes()` function prepends
+`export` to the declaration. No grammar rule is involved for type-only
+exports — the `TYPE_DECL` marker is removed before parsing.
+
+For exported functions, the existing `Export` grammar rules handle
+`EXPORT Expression` as before.
 
 .js (type alias erased, function exported):
 ```js
