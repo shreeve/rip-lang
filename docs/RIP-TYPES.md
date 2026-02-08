@@ -62,7 +62,7 @@ Both compile to identical JavaScript.
 | `!` | Non-nullable (`NonNullable<T>`) | `id:: ID!` |
 | `?:` | Optional property | `email?: string` |
 | `\|` | Union member | `"a" \| "b" \| "c"` |
-| `->` | Function return type | `(a: number) -> string` |
+| `=>` | Function type arrow | `(a: number) => string` |
 | `<T>` | Generic parameter | `Container<T>` |
 
 This is the complete Rip Types sigil vocabulary.
@@ -182,8 +182,8 @@ Name ::= string
 
 # Complex types
 UserID ::= number | string
-Callback ::= (error:: Error?, data:: any) -> void
-Handler ::= (req:: Request, res:: Response) -> Promise<void>
+Callback ::= (error:: Error?, data:: any) => void
+Handler ::= (req:: Request, res:: Response) => Promise<void>
 ```
 
 **Emits:**
@@ -435,8 +435,8 @@ numeric values.
 
 ```coffee
 # Type aliases for function signatures
-Comparator ::= (a:: any, b:: any) -> number
-AsyncFetcher ::= (url:: string) -> Promise<Response>
+Comparator ::= (a:: any, b:: any) => number
+AsyncFetcher ::= (url:: string) => Promise<Response>
 
 # Overloads
 def toHtml(content:: string):: string
@@ -490,13 +490,13 @@ Pair<K, V> ::= type
 # With constraints
 Comparable<T extends Ordered> ::= type
   value: T
-  compareTo: (other:: T) -> number
+  compareTo: (other:: T) => number
 
 # Generic functions
 def identity<T>(value:: T):: T
   value
 
-def map<T, U>(items:: T[], fn:: (item:: T) -> U):: U[]
+def map<T, U>(items:: T[], fn:: (item:: T) => U):: U[]
   items.map(fn)
 
 def merge<T extends object, U extends object>(a:: T, b:: U):: T & U
@@ -537,7 +537,7 @@ interface Animal
 
 interface Dog extends Animal
   breed: string
-  bark: () -> void
+  bark: () => void
 ```
 
 **Emits:**
@@ -980,14 +980,15 @@ rewriteTypes() {
           if (tTag === '=' || tTag === 'REACTIVE_ASSIGN' ||
               tTag === 'COMPUTED_ASSIGN' || tTag === 'READONLY_ASSIGN' ||
               tTag === 'REACT_ASSIGN' || tTag === 'TERMINATOR' ||
-              tTag === 'INDENT' || tTag === 'OUTDENT') {
+              tTag === 'INDENT' || tTag === 'OUTDENT' ||
+              tTag === '->') {                        // code arrow ends type
             break;
           }
           if (tTag === ',') break;
         }
 
-        // -> at depth 0: function return type separator, type continues
-        // Everything else: part of the type
+        // => at depth 0: function type arrow, type continues
+        // -> at depth 0: code arrow, already handled as delimiter above
         typeTokens.push(t);
         j++;
       }
@@ -1067,10 +1068,17 @@ The rewriter must **balance brackets** while scanning.
 | Token | Why it ends the type |
 |-------|---------------------|
 | `=` `:=` `~=` `=!` `~>` | Assignment operator follows |
+| `->` | Code arrow — function body follows (not part of type) |
 | `TERMINATOR` | End of line |
 | `INDENT` / `OUTDENT` | Block boundary |
 | `)` `CALL_END` `PARAM_END` | End of parameter list |
 | `,` | Next parameter or next item |
+
+**`=>` is NOT a delimiter** — it is the function type arrow. When `=>`
+appears at depth 0 inside a type expression, the type continues (to
+collect the return type). This is why types use `=>` exclusively: it
+disambiguates the function type arrow from the code arrow `->`, which
+always ends a type expression.
 
 **Tokens that adjust bracket depth:**
 
@@ -1110,7 +1118,7 @@ SCAN:   :: (after b) → start collecting
         ) → depth=0, close paren, STOP
 RESULT: type on b = "string"
 
-INPUT:  fn:: (a: number, b: string) -> void = ...
+INPUT:  fn:: (a: number, b: string) => void = ...
 SCAN:   :: → start collecting
         ( → depth=1, type token
         a → depth=1, type token
@@ -1121,17 +1129,30 @@ SCAN:   :: → start collecting
         : → depth=1, type token
         string → depth=1, type token
         ) → depth=0, type token
-        -> → depth=0, function return separator, type token (CONTINUES)
+        => → depth=0, function type arrow, type token (CONTINUES)
         void → depth=0, type token
         = → depth=0, assignment delimiter, STOP
-RESULT: type = "(a: number, b: string) -> void"
+RESULT: type = "(a: number, b: string) => void"
+
+INPUT:  (name:: string):: string -> "Hello!"
+SCAN:   :: (after PARAM_END) → start collecting return type
+        string → depth=0, type token
+        -> → depth=0, code arrow delimiter, STOP
+RESULT: returnType = "string"
+        -> stays in stream as the function body arrow
 ```
 
-**Special cases:**
+**Arrow disambiguation:** Types use `=>` exclusively, code uses `->`.
+This means the rewriter never has to guess what an arrow means during type
+collection — the token itself is the answer:
 
-- **`->` at depth 0 in a type**: This is a function return type separator.
-  The type expression continues after `->` to collect the return type. Do NOT
-  treat `->` as a delimiter.
+| Arrow | In type collection | Meaning |
+|-------|-------------------|---------|
+| `=>` | Continue collecting | Function type arrow (part of the type) |
+| `->` | Stop collecting | Code arrow (function body follows) |
+
+**Other special cases:**
+
 - **`?` / `??` / `!` suffixes**: These modify the type. When they appear
   unspaced after an identifier at depth 0, they are part of the type:
   `string?` → `"string?"`, `ID!` → `"ID!"`.
@@ -1323,7 +1344,9 @@ syntax into standard TypeScript:
 | `T?` | `T \| undefined` |
 | `T??` | `T \| null \| undefined` |
 | `T!` | `NonNullable<T>` |
-| `->` | `=>` (in function type expressions) |
+
+Function type expressions use `=>` directly (same as TypeScript), so no
+arrow conversion is needed.
 
 The function returns a `.d.ts` string. Declarations without type
 annotations are skipped — only annotated code appears in the output.
@@ -1483,7 +1506,7 @@ interface Animal
 
 interface Dog extends Animal
   breed: string
-  bark: () -> void
+  bark: () => void
 ```
 
 Interfaces are type-only (no .js output), so they are handled entirely by
@@ -1608,7 +1631,7 @@ the rewriter and removed before parsing.
 def identity<T>(value:: T):: T
   value
 
-def map<T, U>(items:: T[], fn:: (item:: T) -> U):: U[]
+def map<T, U>(items:: T[], fn:: (item:: T) => U):: U[]
   items.map(fn)
 ```
 
@@ -1781,7 +1804,6 @@ The `emitTypes()` function converts Rip type syntax into standard TypeScript:
 | `T?` | `T \| undefined` |
 | `T??` | `T \| null \| undefined` |
 | `T!` | `NonNullable<T>` |
-| `->` | `=>` (in function type expressions) |
 
 #### File-Level Type Directives
 
