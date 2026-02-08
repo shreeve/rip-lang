@@ -1796,14 +1796,15 @@ In `rewriteTypes()`, when collecting type tokens, if the next token is `?`,
 `??`, or `!` and is **not spaced** from the previous token, include it as
 part of the type string.
 
-The `emitTypes()` function converts Rip type syntax into standard TypeScript:
+The `emitTypes()` function expands these suffixes into standard TypeScript:
 
-| Rip syntax | TypeScript equivalent |
+| Rip suffix | TypeScript equivalent |
 |-----------|---------------------|
-| `::` | `:` (annotation sigil to type separator) |
 | `T?` | `T \| undefined` |
 | `T??` | `T \| null \| undefined` |
 | `T!` | `NonNullable<T>` |
+
+See §1.6 for the full Rip-to-TypeScript conversion table (including `::` → `:`).
 
 #### File-Level Type Directives
 
