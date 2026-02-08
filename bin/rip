@@ -25,6 +25,7 @@ Usage:
 
 Options:
   -c, --compile       Show compiled JavaScript output
+  -d, --dts           Generate .d.ts type declaration file
   -h, --help          Show this help message
   -o, --output <file> Write JavaScript to file
   -q, --quiet         Suppress headers
@@ -44,6 +45,8 @@ Examples:
   rip -t example.rip            # Show ONLY tokens
   rip -s -c example.rip         # Show s-expressions AND JavaScript
   rip -s -t -c example.rip      # Show everything (full debug mode)
+  rip -d example.rip            # Generate example.d.ts
+  rip -cd example.rip           # Compile JS and generate .d.ts
   rip -q -c example.rip         # Just the JS, no headers (for piping)
   rip -w                        # Launch browser REPL (auto-opens)
   echo 'x = 1 + 2' | rip -c     # Compile from stdin
@@ -142,12 +145,14 @@ async function main() {
   const showTokens = ripOptions.includes('-t') || ripOptions.includes('--tokens');
   const showSExpr = ripOptions.includes('-s') || ripOptions.includes('--sexpr');
   const showCompiled = ripOptions.includes('-c') || ripOptions.includes('--compile');
+  const generateDts = ripOptions.includes('-d') || ripOptions.includes('--dts');
   const quiet = ripOptions.includes('-q') || ripOptions.includes('--quiet');
 
   const options = {
     showTokens,
     showSExpr,
-    quiet
+    quiet,
+    types: generateDts ? 'emit' : undefined
   };
 
   // Find input file and output file from ripOptions only
@@ -162,7 +167,7 @@ async function main() {
   }
 
   // If .rip file without compile flags → execute instead of compile
-  const hasCompileFlag = showCompiled || showTokens || showSExpr || outputFile;
+  const hasCompileFlag = showCompiled || showTokens || showSExpr || generateDts || outputFile;
   if (inputFile && inputFile.endsWith('.rip') && !hasCompileFlag) {
     // Check if file exists
     if (!existsSync(inputFile)) {
@@ -254,6 +259,23 @@ async function main() {
         console.log(`// == JavaScript output by Rip ${VERSION} == //\n`);
       }
       console.log(result.code);
+    }
+
+    // Write .d.ts file
+    if (generateDts && result.dts) {
+      if (inputFile) {
+        let dtsFile = inputFile.replace(/\.rip$/, '.d.ts');
+        writeFileSync(dtsFile, result.dts, 'utf-8');
+        if (!options.quiet) {
+          console.log(`Generated ${dtsFile}`);
+        }
+      } else {
+        // stdin — print .d.ts to stdout
+        if (!options.quiet) {
+          console.log(`// == Type declarations == //\n`);
+        }
+        console.log(result.dts);
+      }
     }
   } catch (error) {
     console.error('Compilation Error:', error.message);
