@@ -3111,7 +3111,7 @@ export class Compiler {
       console.log();
     }
 
-    // Step 1.5: Emit .d.ts from annotated tokens (before parsing)
+    // Step 2: Emit .d.ts from annotated tokens (before parsing)
     let dts = null;
     if (this.options.types === 'emit' || this.options.types === 'check' || this.options.types === true) {
       dts = emitTypes(tokens);
@@ -3130,7 +3130,7 @@ export class Compiler {
       return { tokens, sexpr: ['program'], code: '', dts, data: dataSection, reactiveVars: {} };
     }
 
-    // Step 2: Parse — shim adapter wraps token values with metadata
+    // Step 3: Parse — shim adapter wraps token values with metadata
     parser.lexer = {
       tokens, pos: 0,
       setInput: function() {},
@@ -3164,7 +3164,7 @@ export class Compiler {
       console.log();
     }
 
-    // Step 3: Generate JavaScript
+    // Step 4: Generate JavaScript
     let generator = new CodeGenerator({
       dataSection,
       skipReactiveRuntime: this.options.skipReactiveRuntime,
