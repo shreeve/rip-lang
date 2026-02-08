@@ -115,22 +115,21 @@ export function installTypeSupport(Lexer) {
         if (!nameToken) return 1;
         let name = nameToken[1];
         let exported = i >= 2 && tokens[i - 2]?.[0] === 'EXPORT';
-
+        let removeFrom = exported ? i - 2 : i - 1;
         let next = tokens[i + 1];
-        let declToken;
+
+        let makeDecl = (typeText) => {
+          let dt = gen('TYPE_DECL', name, nameToken);
+          dt.data = { name, typeText, exported };
+          if (nameToken.data?.typeParams) dt.data.typeParams = nameToken.data.typeParams;
+          return dt;
+        };
 
         // Structural type: Name ::= type INDENT ... OUTDENT
         if (next && next[0] === 'IDENTIFIER' && next[1] === 'type' &&
             tokens[i + 2]?.[0] === 'INDENT') {
-          let typeText = collectStructuralType(tokens, i + 2);
-          declToken = gen('TYPE_DECL', name, nameToken);
-          declToken.data = { name, typeText, exported };
-          if (nameToken.data?.typeParams) declToken.data.typeParams = nameToken.data.typeParams;
-          // Remove: name ::= type INDENT...OUTDENT (we measured how many to remove)
           let endIdx = findMatchingOutdent(tokens, i + 2);
-          let removeFrom = exported ? i - 2 : i - 1;
-          let removeCount = endIdx - removeFrom + 1;
-          tokens.splice(removeFrom, removeCount, declToken);
+          tokens.splice(removeFrom, endIdx - removeFrom + 1, makeDecl(collectStructuralType(tokens, i + 2)));
           return 0;
         }
 
@@ -138,25 +137,14 @@ export function installTypeSupport(Lexer) {
         if (next && (next[0] === 'TERMINATOR' || next[0] === 'INDENT')) {
           let result = collectBlockUnion(tokens, i + 1);
           if (result) {
-            declToken = gen('TYPE_DECL', name, nameToken);
-            declToken.data = { name, typeText: result.typeText, exported };
-            if (nameToken.data?.typeParams) declToken.data.typeParams = nameToken.data.typeParams;
-            let removeFrom = exported ? i - 2 : i - 1;
-            let removeCount = result.endIdx - removeFrom + 1;
-            tokens.splice(removeFrom, removeCount, declToken);
+            tokens.splice(removeFrom, result.endIdx - removeFrom + 1, makeDecl(result.typeText));
             return 0;
           }
         }
 
         // Simple alias: Name ::= type-expression
         let typeTokens = collectTypeExpression(tokens, i + 1);
-        let typeStr = buildTypeString(typeTokens);
-        declToken = gen('TYPE_DECL', name, nameToken);
-        declToken.data = { name, typeText: typeStr, exported };
-        if (nameToken.data?.typeParams) declToken.data.typeParams = nameToken.data.typeParams;
-        let removeFrom = exported ? i - 2 : i - 1;
-        let removeCount = (i + 1 + typeTokens.length) - removeFrom;
-        tokens.splice(removeFrom, removeCount, declToken);
+        tokens.splice(removeFrom, i + 1 + typeTokens.length - removeFrom, makeDecl(buildTypeString(typeTokens)));
         return 0;
       }
 
