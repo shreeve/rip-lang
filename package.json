@@ -65,5 +65,9 @@
   },
   "homepage": "https://github.com/shreeve/rip-lang#readme",
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@rip-lang/api": "workspace:*",
+    "@rip-lang/ui": "workspace:*"
+  }
 }
