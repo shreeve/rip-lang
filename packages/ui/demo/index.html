@@ -20,20 +20,9 @@
 
     <!-- Boot the framework -->
     <script type="module">
-        // Import the Rip compiler (browser build)
-        import { compileToJS } from '/rip.browser.js';
-
-        // Import the UI framework
-        import { createApp } from '/ui.js';
-
-        // Page manifest — files to load into the VFS
-        const pages = [
-            'pages/_layout.rip',
-            'pages/index.rip',
-            'pages/about.rip',
-            'pages/counter.rip',
-            'pages/todos.rip'
-        ];
+        // Import the Rip compiler and UI framework from /rip-ui/ middleware
+        import { compileToJS } from '/rip-ui/compiler.js';
+        import { createApp } from '/rip-ui/ui.js';
 
         // Boot
         async function boot() {
@@ -50,11 +39,14 @@
                 onError: (err) => console.error('[App]', err)
             });
 
-            // Fetch all page files from the server into the VFS
-            await app.load(pages);
+            // Load ALL pages in one request (auto-discovered, brotli compressed)
+            await app.loadBundle('/rip-ui/manifest.json');
 
             // Start routing and rendering
             app.start();
+
+            // Connect to dev server for hot reload
+            app.watch('/rip-ui/watch');
 
             // Expose for console debugging
             window.app = app;

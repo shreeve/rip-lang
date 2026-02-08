@@ -110,6 +110,58 @@ export function createApp(options = {}) {
       return instance;
     },
 
+    // Load a bundled manifest (all page sources in one JSON response)
+    async loadBundle(url) {
+      const res = await fetch(url);
+      const bundle = await res.json();
+      fs.load(bundle);
+      router.rebuild();
+      return instance;
+    },
+
+    // Connect to SSE watch endpoint for hot reload (notify + invalidate + refetch)
+    watch(url, opts = {}) {
+      const eagerFiles = new Set(opts.eager || []);
+      const es = new EventSource(url);
+
+      es.addEventListener('changed', async (e) => {
+        const { paths } = JSON.parse(e.data);
+
+        // Invalidate all changed files in VFS
+        for (const path of paths) {
+          fs.delete(path);
+        }
+
+        // Check if any affect the current route (page or layouts)
+        const current = router.current;
+        const toFetch = paths.filter(p =>
+          eagerFiles.has(p) ||
+          p === current.route?.file ||
+          current.layouts?.includes(p)
+        );
+
+        // Rebuild router (handles new/deleted pages)
+        router.rebuild();
+
+        // Refetch and remount only if current view is affected
+        if (toFetch.length > 0) {
+          await Promise.all(toFetch.map(p => fs.fetch(p)));
+          renderer.remount();
+        }
+      });
+
+      es.addEventListener('connected', () => {
+        console.log('[Rip] Hot reload connected');
+      });
+
+      es.onerror = () => {
+        console.log('[Rip] Hot reload reconnecting...');
+      };
+
+      instance._eventSource = es;
+      return instance;
+    },
+
     // Navigate to a route
     go(path) {
       router.push(path);

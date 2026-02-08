@@ -299,6 +299,14 @@ export function createRenderer(options = {}) {
     start,
     stop,
 
+    // Re-render the current route (for hot reload)
+    remount() {
+      const current = router.current;
+      if (current.route) {
+        mountRoute(current);
+      }
+    },
+
     // Mount a specific component class to a target
     mount(ComponentClass, target, props = {}) {
       const el = typeof target === 'string' ? document.querySelector(target) : target;

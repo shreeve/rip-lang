@@ -1,0 +1,146 @@
+# ==============================================================================
+# @rip-lang/ui/serve — Rip UI Middleware for rip-api
+# ==============================================================================
+#
+# Serves the Rip UI framework files, auto-generated page manifests, and
+# provides an SSE hot-reload channel for live development.
+#
+# Usage:
+#   import { ripUI } from '@rip-lang/ui/serve'
+#
+#   use ripUI pages: 'pages', watch: true
+#
+# Options:
+#   base:     string  — URL prefix for framework files (default: '/rip-ui')
+#   pages:    string  — directory containing .rip page files (default: 'pages')
+#   watch:    boolean — enable SSE hot-reload endpoint (default: false)
+#   debounce: number  — ms to batch filesystem events (default: 250)
+#
+# Registered routes:
+#   GET {base}/*           — framework JS files, manifest, SSE watch
+#   GET /pages/*           — individual .rip page files (for hot-reload refetch)
+#
+# ==============================================================================
+
+import { get } from '@rip-lang/api'
+import { brotliCompressSync } from 'node:zlib'
+import { watch as fsWatch } from 'node:fs'
+
+export ripUI = (opts = {}) ->
+  base       = opts.base or '/rip-ui'
+  pagesDir   = opts.pages or 'pages'
+  enableWatch = opts.watch or false
+  debounceMs = opts.debounce or 250
+  uiDir      = import.meta.dir
+
+  # Resolve compiler (rip.browser.js) from the rip-lang package
+  compilerPath = null
+  try
+    compilerPath = Bun.fileURLToPath(import.meta.resolve('rip-lang/docs/dist/rip.browser.js'))
+  catch
+    compilerPath = "#{uiDir}/../../docs/dist/rip.browser.js"
+
+  # Framework file map: logical name → filesystem path
+  files =
+    'ui.js':       "#{uiDir}/ui.js"
+    'stash.js':    "#{uiDir}/stash.js"
+    'vfs.js':      "#{uiDir}/vfs.js"
+    'router.js':   "#{uiDir}/router.js"
+    'renderer.js': "#{uiDir}/renderer.js"
+    'compiler.js': compilerPath
+
+  # ---------------------------------------------------------------------------
+  # Route: /pages/* — individual .rip page files (for hot-reload refetch)
+  # ---------------------------------------------------------------------------
+
+  get '/pages/*', (c) ->
+    name = c.req.path.slice('/pages/'.length)
+    c.send "#{pagesDir}/#{name}", 'text/plain; charset=UTF-8'
+
+  # ---------------------------------------------------------------------------
+  # Route: {base}/* — framework files, manifest, SSE watch
+  # ---------------------------------------------------------------------------
+
+  get "#{base}/*", (c) ->
+    name = c.req.path.slice(base.length + 1)
+
+    # Framework JS files
+    if files[name]
+      return c.send files[name], 'application/javascript'
+
+    # Auto-generated manifest — bundles all .rip sources as JSON (brotli compressed)
+    if name is 'manifest.json'
+      glob = new Bun.Glob("**/*.rip")
+      bundle = {}
+      paths = Array.from(glob.scanSync(pagesDir))
+      for path in paths
+        bundle["pages/#{path}"] = Bun.file("#{pagesDir}/#{path}").text!
+      json = JSON.stringify(bundle)
+      compressed = brotliCompressSync(Buffer.from(json))
+      return new Response compressed,
+        headers:
+          'Content-Type': 'application/json'
+          'Content-Encoding': 'br'
+
+    # SSE watch endpoint — debounced, notify-only, with heartbeat
+    if name is 'watch' and enableWatch
+      encoder = new TextEncoder()
+      pending = new Set()
+      timer    = null
+      watcher  = null
+      heartbeat = null
+
+      return new Response new ReadableStream(
+        start: (controller) ->
+          send = (event, data) ->
+            try
+              controller.enqueue encoder.encode("event: #{event}\ndata: #{JSON.stringify(data)}\n\n")
+            catch
+              # Controller closed — client disconnected
+              cleanup()
+
+          cleanup = ->
+            watcher?.close()
+            clearTimeout(timer) if timer
+            clearInterval(heartbeat) if heartbeat
+
+          # Send initial connection confirmation
+          send 'connected', { time: Date.now() }
+
+          # Heartbeat every 5s to prevent Bun's idle timeout from closing the SSE
+          heartbeat = setInterval ->
+            try
+              controller.enqueue encoder.encode(": heartbeat\n\n")
+            catch
+              cleanup()
+          , 5000
+
+          # Flush pending changes as one batched notification
+          flush = ->
+            paths = Array.from(pending)
+            pending.clear()
+            timer = null
+            send('changed', { paths }) if paths.length > 0
+
+          # Watch the pages directory for .rip file changes
+          watcher = fsWatch pagesDir, { recursive: true }, (event, filename) ->
+            return unless filename?.endsWith('.rip')
+            pending.add "pages/#{filename}"
+            clearTimeout(timer) if timer
+            timer = setTimeout(flush, debounceMs)
+
+        cancel: ->
+          watcher?.close()
+          clearTimeout(timer) if timer
+          clearInterval(heartbeat) if heartbeat
+      ),
+        headers:
+          'Content-Type': 'text/event-stream'
+          'Cache-Control': 'no-cache'
+          'Connection': 'keep-alive'
+
+    # Unknown path under /rip-ui/
+    new Response 'Not Found', status: 404
+
+  # Return pass-through middleware for use()
+  (c, next) -> next!()
