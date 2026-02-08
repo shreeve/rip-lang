@@ -4,29 +4,29 @@ Home = component
 
   render
     div
-      div.("page-header")
+      .("page-header")
         h1.("page-title") "Rip UI Framework"
         p.("page-subtitle") "Zero-build reactive web apps"
 
-      div.("feature-grid")
-        div.("feature-card")
-          div.("feature-icon") "🗂"
-          div.("feature-name") "Virtual File System"
-          div.("feature-desc") "Browser-local file storage. Components compiled on demand."
+      .("feature-grid")
+        .("feature-card")
+          .("feature-icon") "🗂"
+          .("feature-name") "Virtual File System"
+          .("feature-desc") "Browser-local file storage. Components compiled on demand."
 
-        div.("feature-card")
-          div.("feature-icon") "🔀"
-          div.("feature-name") "File-Based Router"
-          div.("feature-desc") "URLs map to VFS paths. Dynamic segments and nested layouts."
+        .("feature-card")
+          .("feature-icon") "🔀"
+          .("feature-name") "File-Based Router"
+          .("feature-desc") "URLs map to VFS paths. Dynamic segments and nested layouts."
 
-        div.("feature-card")
-          div.("feature-icon") "⚡"
-          div.("feature-name") "Reactive Stash"
-          div.("feature-desc") "Deep state tree with path navigation. Every property tracked."
+        .("feature-card")
+          .("feature-icon") "⚡"
+          .("feature-name") "Reactive Stash"
+          .("feature-desc") "Deep state tree with path navigation. Every property tracked."
 
-        div.("feature-card")
-          div.("feature-icon") "🎯"
-          div.("feature-name") "Fine-Grained Rendering"
-          div.("feature-desc") "No virtual DOM. Direct DOM updates via reactive effects."
+        .("feature-card")
+          .("feature-icon") "🎯"
+          .("feature-name") "Fine-Grained Rendering"
+          .("feature-desc") "No virtual DOM. Direct DOM updates via reactive effects."
 
 Home.new().mount "#app"

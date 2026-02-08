@@ -3,11 +3,11 @@
 Layout = component
 
   render
-    div.("app-layout")
+    .("app-layout")
       nav.("app-nav")
-        div.("nav-inner")
+        .("nav-inner")
           a.("nav-brand") "Rip UI"
-          div.("nav-links")
+          .("nav-links")
             a.("nav-link") href: "/", "Home"
             a.("nav-link") href: "/counter", "Counter"
             a.("nav-link") href: "/todos", "Todos"

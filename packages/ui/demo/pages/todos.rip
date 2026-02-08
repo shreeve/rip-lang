@@ -30,12 +30,12 @@ Todos = component
 
   render
     div
-      div.("page-header")
+      .("page-header")
         h1.("page-title") "Todos"
         p.("page-subtitle") "List rendering and state management"
 
-      div.card
-        div.("todo-input-row")
+      .card
+        .("todo-input-row")
           input.input type: "text", placeholder: "What needs to be done?", @input: ((e) -> newTodo = e.target.value), @keydown: @handleKey
           button.btn.("btn-primary") @click: @addTodo, "Add"
 
@@ -45,7 +45,7 @@ Todos = component
               span.("todo-text") todo.text
               button.("todo-delete") @click: (=> @deleteTodo(todo.id)), "x"
 
-        div.("todo-stats")
+        .("todo-stats")
           span "#{remaining} remaining"
           button.btn.("btn-sm") @click: @clearDone, "Clear done"
 

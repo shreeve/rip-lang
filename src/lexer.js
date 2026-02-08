@@ -300,6 +300,8 @@ export class Lexer {
     this.seenExport = false;
     this.importSpecifierList = false;
     this.exportSpecifierList = false;
+    this.inRenderBlock = false;
+    this.renderIndent  = 0;
 
     // Clean source
     code = this.clean(code);
@@ -554,6 +556,12 @@ export class Lexer {
     // --- Emit ---
     let t = this.emit(tag, id, {len: idLen, data: Object.keys(data).length ? data : null});
 
+    // Track render block context for line continuation suppression
+    if (tag === 'RENDER') {
+      this.inRenderBlock = true;
+      this.renderIndent = this.indent;
+    }
+
     if (colon) {
       this.emit(':', ':', {len: 1});
       return idLen + colon.length;
@@ -690,6 +698,10 @@ export class Lexer {
 
   // Emit OUTDENT tokens to reach target indent level
   outdentTo(targetSize, outdentLength = 0) {
+    // Exit render block when outdenting past its level
+    if (this.inRenderBlock && targetSize <= this.renderIndent) {
+      this.inRenderBlock = false;
+    }
     let moveOut = this.indent - targetSize;
     while (moveOut > 0) {
       let lastIndent = this.indents[this.indents.length - 1];
@@ -720,6 +732,10 @@ export class Lexer {
 
   // Check if the current line is unfinished (continuation)
   isUnfinished() {
+    // Inside render blocks, a line starting with . is a new element, not method chaining
+    if (this.inRenderBlock && LINE_CONTINUER_RE.test(this.chunk) && /^\s*\./.test(this.chunk)) {
+      return false;
+    }
     return LINE_CONTINUER_RE.test(this.chunk) || UNFINISHED.has(this.prevTag());
   }
 
