@@ -46,29 +46,15 @@ export function installTypeSupport(Lexer) {
     this.scanTokens((token, i, tokens) => {
       let tag = token[0];
 
-      // ── Generic type parameters: DEF IDENTIFIER<T> ──────────────────────
-      // Detect unspaced < after IDENTIFIER preceded by DEF
-      if (tag === 'IDENTIFIER' && i >= 1 && tokens[i - 1]?.[0] === 'DEF') {
+      // ── Generic type parameters: DEF name<T>(...) or Name<T> ::= ───────
+      if (tag === 'IDENTIFIER') {
         let next = tokens[i + 1];
         if (next && next[0] === 'COMPARE' && next[1] === '<' && !next.spaced) {
+          let isDef = tokens[i - 1]?.[0] === 'DEF';
           let genTokens = collectBalancedAngles(tokens, i + 1);
           if (genTokens) {
-            if (!token.data) token.data = {};
-            token.data.typeParams = genTokens.map(t => t[1]).join('');
-            tokens.splice(i + 1, genTokens.length);
-          }
-        }
-      }
-
-      // ── Generic type parameters on type aliases: Name<T> ::= ────────────
-      // Only scan if next token is unspaced < and a TYPE_ALIAS follows
-      if (tag === 'IDENTIFIER' && i >= 0 && tokens[i - 1]?.[0] !== 'DEF') {
-        let next = tokens[i + 1];
-        if (next && next[0] === 'COMPARE' && next[1] === '<' && !next.spaced) {
-          let genTokens = collectBalancedAngles(tokens, i + 1);
-          if (genTokens) {
-            let afterIdx = i + 1 + genTokens.length;
-            if (afterIdx < tokens.length && tokens[afterIdx][0] === 'TYPE_ALIAS') {
+            let isAlias = !isDef && tokens[i + 1 + genTokens.length]?.[0] === 'TYPE_ALIAS';
+            if (isDef || isAlias) {
               if (!token.data) token.data = {};
               token.data.typeParams = genTokens.map(t => t[1]).join('');
               tokens.splice(i + 1, genTokens.length);
@@ -261,10 +247,9 @@ function collectTypeExpression(tokens, j) {
           tTag === 'COMPUTED_ASSIGN' || tTag === 'READONLY_ASSIGN' ||
           tTag === 'REACT_ASSIGN' || tTag === 'TERMINATOR' ||
           tTag === 'INDENT' || tTag === 'OUTDENT' ||
-          tTag === '->') {
+          tTag === '->' || tTag === ',') {
         break;
       }
-      if (tTag === ',') break;
     }
 
     // => at depth 0: function type arrow, continue collecting
