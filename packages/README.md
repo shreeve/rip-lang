@@ -11,6 +11,7 @@ All packages are written in Rip, have zero dependencies, and run on Bun.
 ```bash
 bun add rip-lang                 # Core language (required)
 bun add @rip-lang/api            # Web framework
+bun add @rip-lang/ui             # Reactive web UI framework
 bun add @rip-lang/server         # Process manager
 bun add @rip-lang/db             # DuckDB server
 bun add @rip-lang/schema         # ORM + validation
@@ -24,23 +25,24 @@ bun add @rip-lang/csv            # CSV parser + writer
 
 ### [@rip-lang/api](api/) — Web Framework
 
-Hono-compatible web framework with Sinatra-style routing, AsyncLocalStorage context, built-in validators, and smart response handling. ~595 lines.
+Hono-compatible web framework with Sinatra-style routing, AsyncLocalStorage context, built-in validators, file serving (`@send`), and smart response handling. ~640 lines.
 
 ```coffee
 import { get, post, start } from '@rip-lang/api'
 
 get '/', -> { message: 'Hello, Rip!' }
 get '/users/:id', -> User.find!(read 'id')
+get '/css/*', -> @send "public/#{@req.path.slice(5)}"
 
 start port: 3000
 ```
 
 ### [@rip-lang/server](server/) — Process Manager
 
-Multi-worker process manager with hot reloading, automatic HTTPS, mDNS service discovery, and request queueing. ~1,110 lines.
+Multi-worker process manager with hot reloading, automatic HTTPS, mDNS service discovery, and request queueing. Serves Rip UI apps with SSE hot-reload out of the box. ~1,210 lines.
 
 ```bash
-rip-server http app.rip          # Start with workers + hot-reload
+rip-server -w                    # Start with workers + hot-reload
 ```
 
 ### [@rip-lang/db](db/) — DuckDB Server
@@ -102,6 +104,21 @@ CSV.save! 'out.csv', rows
 
 SLR(1) parser generator for building DSLs. The same engine (`solar.rip`) that powers the Rip compiler itself, extracted as a standalone package. Coming soon.
 
-### [@rip-lang/ui](ui/) — UI Components
+### [@rip-lang/ui](ui/) — Reactive Web Framework
 
-Pre-built component library for building web applications with Rip's reactive system. Buttons, cards, modals, inputs, layout primitives, and theming via CSS custom properties. Early.
+Zero-build reactive web framework. Ships the 40KB Rip compiler to the browser, compiles `.rip` components on demand, and renders with fine-grained DOM updates. Includes a Virtual File System, file-based router, reactive stash, server middleware (`ripUI`), and SSE hot-reload. ~1,300 lines.
+
+```coffee
+import { get, use, start, notFound } from '@rip-lang/api'
+import { ripUI } from '@rip-lang/ui/serve'
+
+dir = import.meta.dir
+
+use ripUI pages: "#{dir}/pages", watch: true
+
+get '/css/*', -> @send "#{dir}/css/#{@req.path.slice(5)}"
+
+notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
+
+start port: 3000
+```

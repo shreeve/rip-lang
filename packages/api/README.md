@@ -18,11 +18,12 @@ and is designed for APIs that are clear, concise, and correct.
 - **37 built-in validators** — Elegant `read()` function for parsing and validation
 - **Lifecycle filters** — `raw` → `before` → handler → `after` hooks
 - **AsyncLocalStorage context** — `read()` and `session` work anywhere, no prop drilling
+- **File serving** — `@send` with auto-detected MIME types and `Bun.file()` streaming
 - **Hono-compatible API** — Easy migration from existing Hono apps
 
 | File | Lines | Role |
 |------|-------|------|
-| `api.rip` | ~590 | Core framework: routing, validation, `read()`, `session`, server |
+| `api.rip` | ~640 | Core framework: routing, validation, `read()`, `session`, file serving, server |
 | `middleware.rip` | ~465 | Built-in middleware: cors, logger, sessions, compression, security |
 
 > **See Also**: For Rip language documentation, see the [main rip-lang repository](https://github.com/shreeve/rip-lang) and [docs/RIP-LANG.md](https://github.com/shreeve/rip-lang/blob/main/docs/RIP-LANG.md).
@@ -481,7 +482,7 @@ after ->
 
 **How `@` works:** Handlers are called with `this` bound to the context, so `@foo` is `this.foo`. This gives you Sinatra-like magic access to:
 - `@req` — Request object
-- `@json()`, `@text()`, `@html()`, `@redirect()` — Response helpers
+- `@json()`, `@text()`, `@html()`, `@redirect()`, `@send()` — Response helpers
 - `@header()` — Response header modifier
 - `@anything` — Custom per-request state
 
@@ -534,6 +535,10 @@ get '/demo' ->
 
   # Raw body
   @body data, 200, { 'Content-Type': 'application/octet-stream' }
+
+  # File serving (auto-detected MIME type via Bun.file)
+  @send 'public/style.css'                    # text/css
+  @send 'data/export.json', 'application/json' # explicit type
 ```
 
 ### Request Helpers
@@ -575,6 +580,44 @@ use (c, next) ->
 get '/profile' ->
   @json @user
 ```
+
+## File Serving
+
+### `@send(path, type?)`
+
+Serve a file with auto-detected MIME type. Uses `Bun.file()` internally for
+efficient streaming — the file is never buffered in memory. Works correctly
+when proxied through `@rip-lang/server`.
+
+```coffee
+# Auto-detected content type (30+ extensions supported)
+get '/css/*', -> @send "css/#{@req.path.slice(5)}"
+
+# Explicit content type
+get '/files/*', -> @send "uploads/#{@req.path.slice(7)}", 'application/octet-stream'
+
+# SPA fallback — serve index.html for all unmatched routes
+notFound -> @send 'index.html', 'text/html; charset=UTF-8'
+```
+
+### `mimeType(path)`
+
+Exported utility that returns the MIME type for a file path based on its
+extension. Falls back to `application/octet-stream` for unknown extensions.
+
+```coffee
+import { mimeType } from '@rip-lang/api'
+
+mimeType 'style.css'    # 'text/css; charset=UTF-8'
+mimeType 'app.js'       # 'application/javascript'
+mimeType 'photo.png'    # 'image/png'
+mimeType 'data.xyz'     # 'application/octet-stream'
+```
+
+Supported extensions: `.html`, `.css`, `.js`, `.mjs`, `.json`, `.txt`, `.csv`,
+`.xml`, `.svg`, `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.avif`, `.ico`,
+`.woff`, `.woff2`, `.ttf`, `.otf`, `.mp3`, `.mp4`, `.webm`, `.ogg`, `.pdf`,
+`.zip`, `.gz`, `.wasm`, `.rip`.
 
 ## Error Handling
 
@@ -691,6 +734,19 @@ toName 'JANE SMITH'         # 'Jane Smith'
 toName "o'brien"            # "O'Brien"
 toName 'mcdonald'           # 'McDonald'
 toName 'los angeles', 'address'  # 'Los Angeles'
+```
+
+### mimeType
+
+Auto-detect content type from file extension:
+
+```coffee
+import { mimeType } from '@rip-lang/api'
+
+mimeType 'style.css'    # 'text/css; charset=UTF-8'
+mimeType 'app.js'       # 'application/javascript'
+mimeType 'data.json'    # 'application/json'
+mimeType 'unknown.xyz'  # 'application/octet-stream'
 ```
 
 ### toPhone

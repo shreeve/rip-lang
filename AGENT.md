@@ -1,6 +1,6 @@
 # AI Agent Guide for Rip
 
-**Purpose:** This document helps AI assistants understand and work with the Rip language compiler.
+**Purpose:** This document helps AI assistants understand and work with the Rip language compiler and its ecosystem of packages.
 
 **What is Rip:** An elegant reactive language that compiles to modern JavaScript (ES2022), featuring zero dependencies, self-hosting capability, and built-in reactivity primitives.
 
@@ -31,7 +31,7 @@ bun run browser
 
 | Metric | Value |
 |--------|-------|
-| Version | 3.0.2 |
+| Version | 3.1.1 |
 | Tests | 1,073/1,073 (100%) |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
@@ -43,14 +43,22 @@ bun run browser
 ```
 rip-lang/
 ├── src/
-│   ├── lexer.js         # Lexer + Rewriter (1,542 LOC)
-│   ├── compiler.js      # Compiler + Code Generator (3,148 LOC)
-│   ├── parser.js        # Generated parser (352 LOC) — Don't edit!
-│   ├── repl.js          # Terminal REPL (654 LOC)
+│   ├── lexer.js         # Lexer + Rewriter (1,854 LOC)
+│   ├── compiler.js      # Compiler + Code Generator (3,189 LOC)
+│   ├── parser.js        # Generated parser (355 LOC) — Don't edit!
+│   ├── repl.js          # Terminal REPL (706 LOC)
 │   ├── browser.js       # Browser integration (79 LOC)
 │   └── grammar/
-│       ├── grammar.rip  # Grammar specification (887 LOC)
+│       ├── grammar.rip  # Grammar specification (924 LOC)
 │       └── solar.rip    # Parser generator (1,001 LOC) — Don't edit!
+├── packages/            # Optional packages (see Packages section below)
+│   ├── api/             # @rip-lang/api — Web framework
+│   ├── ui/              # @rip-lang/ui — Reactive web UI framework
+│   ├── server/          # @rip-lang/server — Production server
+│   ├── db/              # @rip-lang/db — DuckDB server
+│   ├── schema/          # @rip-lang/schema — ORM + validation
+│   ├── swarm/           # @rip-lang/swarm — Parallel job runner
+│   └── csv/             # @rip-lang/csv — CSV parser + writer
 ├── docs/
 │   ├── RIP-LANG.md      # Language reference
 │   └── RIP-INTERNALS.md # Compiler architecture & design decisions
@@ -75,7 +83,7 @@ rip-lang/
 
 ```
 Rip Source  ->  Lexer  ->  Parser  ->  S-Expressions  ->  Codegen  ->  JavaScript
-               (1,542)    (352)       (simple arrays)     (3,148)      (ES2022)
+               (1,854)    (355)       (simple arrays)     (3,189)      (ES2022)
 ```
 
 **Key insight:** S-expressions are simple arrays like `["=", "x", 42]`, not complex AST nodes. This makes the compiler dramatically smaller than CoffeeScript.
@@ -255,6 +263,108 @@ test/rip/
 | **CONTRIBUTING.md** | GitHub workflow, development process |
 | **docs/RIP-LANG.md** | Language reference |
 | **docs/RIP-INTERNALS.md** | Compiler architecture, design decisions, S-expressions |
+| **packages/README.md** | Package overview, install commands, quick examples |
+
+---
+
+## Packages
+
+The `packages/` directory contains optional packages that extend Rip for
+full-stack development. All are written in Rip, have zero dependencies, and
+run on Bun.
+
+### @rip-lang/api (v1.1.4) — Web Framework
+
+Hono-compatible web framework with Sinatra-style routing, magic `@` context,
+37 built-in validators, file serving (`@send`), and middleware composition.
+
+| File | Lines | Role |
+|------|-------|------|
+| `api.rip` | ~647 | Core framework: routing, validation, `read()`, `session`, `@send`, server |
+| `middleware.rip` | ~463 | Built-in middleware: cors, logger, sessions, compression, security |
+
+Key concepts:
+- **`@` magic** — Handlers use `@req`, `@json()`, `@send()`, `@session` (bound via `this`)
+- **`read()`** — Validates params/body with 37 built-in validators
+- **`@send(path, type?)`** — Serve files with auto-detected MIME types via `Bun.file()`
+- **`use()`** — Koa-style middleware composition with `next()`
+
+```coffee
+import { get, use, start, notFound } from '@rip-lang/api'
+
+get '/', -> { message: 'Hello!' }
+get '/css/*', -> @send "public/#{@req.path.slice(5)}"
+notFound -> @send 'index.html', 'text/html; charset=UTF-8'
+start port: 3000
+```
+
+### @rip-lang/ui (v0.1.1) — Reactive Web Framework
+
+Zero-build reactive web framework. Ships the 40KB Rip compiler to the browser,
+compiles `.rip` components on demand, and renders with fine-grained DOM updates.
+
+| File | Lines | Role |
+|------|-------|------|
+| `ui.js` | ~208 | `createApp` entry point with `loadBundle`, `watch` |
+| `stash.js` | ~413 | Deep reactive state tree with path-based navigation |
+| `vfs.js` | ~215 | Browser-local Virtual File System with watchers |
+| `router.js` | ~325 | File-based router (URL ↔ VFS paths, History API) |
+| `renderer.js` | ~397 | Component lifecycle, layouts, transitions, `remount` |
+| `serve.rip` | ~140 | Server middleware: framework files, manifest, SSE hot-reload |
+
+Key concepts:
+- **`ripUI` middleware** — `use ripUI pages: 'pages', watch: true` registers routes for framework files (`/rip-ui/*`), auto-generated page manifest (`/rip-ui/manifest.json`), and SSE hot-reload (`/rip-ui/watch`)
+- **`loadBundle(url)`** — Client-side: fetches manifest JSON and bulk-loads all pages into VFS
+- **`watch(url)`** — Client-side: connects to SSE endpoint, invalidates VFS entries on change, smart-refetches current route, and calls `renderer.remount()`
+- **`component` / `render`** — Two keywords added to Rip for defining components with reactive state (`:=`), computed (`~=`), effects (`~>`)
+- **File-based routing** — `pages/users/[id].rip` → `/users/:id` (Next.js-style)
+- **Hot reload architecture** — Server sends notify-only SSE events (changed paths), browser invalidates + refetches + remounts
+
+```coffee
+# Server (index.rip)
+import { get, use, start, notFound } from '@rip-lang/api'
+import { ripUI } from '@rip-lang/ui/serve'
+
+dir = import.meta.dir
+use ripUI pages: "#{dir}/pages", watch: true
+notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
+start port: 3000
+```
+
+### @rip-lang/server (v1.1.3) — Production Server
+
+Multi-worker process manager with hot reloading, automatic HTTPS, mDNS service
+discovery, and request queueing. Serves any `@rip-lang/api` app (including
+Rip UI apps with SSE hot-reload).
+
+| File | Lines | Role |
+|------|-------|------|
+| `server.rip` | ~1,211 | CLI, workers, load balancing, TLS, mDNS |
+| `server.html` | ~420 | Built-in dashboard UI |
+
+```bash
+rip-server -w    # Start with file watching + hot-reload
+```
+
+### Other Packages
+
+- **@rip-lang/db** — HTTP server for DuckDB queries (~225 lines)
+- **@rip-lang/schema** — ORM + validation with declarative syntax (~420 lines)
+- **@rip-lang/swarm** — Parallel job runner with worker threads (~330 lines)
+- **@rip-lang/csv** — CSV parser + writer with indexOf ratchet engine (~300 lines)
+
+### Package Development
+
+Packages use `workspace:*` linking in the root `package.json`. After modifying
+a package locally, run `bun install` from the project root to ensure symlinks
+are correct. Key patterns:
+
+- Packages written in Rip (`.rip` files) need the Rip loader — run from the
+  project root where `bunfig.toml` is located, or use `rip-server`
+- `import.meta.dir` resolves to the package's actual filesystem path (important
+  for serving files)
+- `@rip-lang/api` handlers bind `this` to the context object — use `@send`,
+  `@json`, `@req`, etc.
 
 ---
 
@@ -350,4 +460,4 @@ bun run serve     # Start dev server (localhost:3000)
 
 ---
 
-**For AI Assistants:** The code is well-tested and the architecture is clear. Trust the tests, use the debug tools (`-s`, `-t`, `-c`), and follow existing patterns. Most work happens in `src/compiler.js` — find the generator method for the node type you're working with and modify it.
+**For AI Assistants:** The code is well-tested and the architecture is clear. Trust the tests, use the debug tools (`-s`, `-t`, `-c`), and follow existing patterns. Most compiler work happens in `src/compiler.js` — find the generator method for the node type you're working with and modify it. For package work, each package has its own README with detailed documentation — see `packages/README.md` for the overview.

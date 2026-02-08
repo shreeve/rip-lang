@@ -455,6 +455,61 @@ The dashboard uses the same mDNS infrastructure as your app, so it's always avai
 
 **Changes not triggering reload**: Make sure you're using `-w` flag for directory watching, or touch your entry file manually.
 
+## Serving Rip UI Apps
+
+Rip Server works seamlessly with [@rip-lang/ui](../ui/README.md) for serving
+reactive web applications with hot reload. The `ripUI` middleware handles
+framework files, page manifests, and SSE hot-reload — rip-server adds HTTPS,
+mDNS, multi-worker load balancing, and rolling restarts on top.
+
+### Example: Rip UI App
+
+Create `index.rip`:
+
+```coffee
+import { get, use, start, notFound } from '@rip-lang/api'
+import { ripUI } from '@rip-lang/ui/serve'
+
+dir = import.meta.dir
+
+use ripUI pages: "#{dir}/pages", watch: true
+
+get '/css/*', -> @send "#{dir}/css/#{@req.path.slice(5)}"
+
+notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
+
+start()
+```
+
+Run it:
+
+```bash
+rip-server -w
+```
+
+This gives you:
+
+- **Framework files** served from `/rip-ui/*` (compiler, UI modules)
+- **Page manifest** auto-generated at `/rip-ui/manifest.json`
+- **Hot reload** via SSE at `/rip-ui/watch` — save a `.rip` file and the browser
+  updates instantly
+- **HTTPS + mDNS** — access at `https://myapp.local`
+- **Multi-worker** — load balanced across CPU cores
+- **Rolling restarts** — zero-downtime file-watch reloading
+
+### How Hot Reload Works with rip-server
+
+When running with `-w`, two layers of hot reload work together:
+
+1. **rip-server file watching** (`-w` flag) — watches for `.rip` file changes
+   and triggers rolling worker restarts (server-side reload)
+2. **ripUI SSE watching** (`watch: true`) — watches the pages directory and
+   notifies connected browsers via SSE (client-side reload)
+
+For development, the SSE hot-reload is usually sufficient — it recompiles
+components in the browser without restarting workers. The `-w` flag is useful
+when server-side code changes (routes, middleware, etc.).
+
 ## Comparison with Other Servers
 
 | Feature | rip-server | PM2 | Nginx |
@@ -486,5 +541,6 @@ MIT
 ## Links
 
 - [Rip Language](https://github.com/shreeve/rip-lang)
-- [@rip-lang/api](../api/README.md)
+- [@rip-lang/api](../api/README.md) — API framework (routing, middleware, `@send`)
+- [@rip-lang/ui](../ui/README.md) — Zero-build reactive web framework
 - [Report Issues](https://github.com/shreeve/rip-lang/issues)

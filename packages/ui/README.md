@@ -18,28 +18,43 @@ functions, methods) that Rip already provides.
 ## Architecture
 
 ```
-Browser loads:  rip.browser.js (40KB) + @rip-lang/ui (~8KB)
-                         │
-        ┌────────────────┼────────────────┐
-        │                │                │
-   Reactive Stash   Virtual FS       Router
-   (app state)     (file storage)  (URL → VFS)
-        │                │                │
-        └────────────────┼────────────────┘
-                         │
-                    Renderer
-              (compiles + mounts)
-                         │
-                       DOM
+                     ┌─────────────────────────────────────────┐
+                     │  Server (Bun + @rip-lang/api)           │
+                     │                                         │
+                     │  serve.rip (ripUI middleware)           │
+                     │  ├── /rip-ui/*.js   → framework files   │
+                     │  ├── /rip-ui/manifest.json → all pages  │
+                     │  ├── /rip-ui/watch  → SSE hot-reload    │
+                     │  └── /pages/*.rip   → individual pages  │
+                     └──────────────┬──────────────────────────┘
+                                    │
+         ┌──────────────────────────┼──────────────────────────┐
+         │                          │                          │
+         ▼                          ▼                          ▼
+   rip.browser.js (40KB)    @rip-lang/ui (~8KB)         SSE EventSource
+   (Rip compiler)           (framework modules)        (hot-reload channel)
+         │                          │                          │
+         │         ┌────────────────┼────────────────┐         │
+         │         │                │                │         │
+         │    Reactive Stash   Virtual FS       Router         │
+         │    (app state)     (file storage)  (URL → VFS)      │
+         │         │                │                │         │
+         │         └────────────────┼────────────────┘         │
+         │                          │                          │
+         └─────────────────►   Renderer   ◄────────────────────┘
+                          (compiles + mounts)
+                                    │
+                                  DOM
 ```
 
 | Module | Size | Role |
 |--------|------|------|
-| `ui.js` | ~150 lines | `createApp` entry point, re-exports everything |
+| `ui.js` | ~175 lines | `createApp` entry point with `loadBundle`, `watch`, re-exports |
 | `stash.js` | ~400 lines | Deep reactive state tree with path-based navigation |
 | `vfs.js` | ~200 lines | Browser-local Virtual File System with watchers |
 | `router.js` | ~300 lines | File-based router (URL ↔ VFS paths, History API) |
-| `renderer.js` | ~250 lines | Component lifecycle, layouts, transitions |
+| `renderer.js` | ~250 lines | Component lifecycle, layouts, transitions, `remount` |
+| `serve.rip` | ~140 lines | Server middleware: framework files, manifest, SSE hot-reload |
 
 ## The Idea
 
@@ -70,7 +85,7 @@ with fine-grained DOM manipulation — no virtual DOM diffing.
 |---|---|---|
 | **Build step** | Required (Vite, Webpack, etc.) | None — compiler runs in browser |
 | **Bundle size** | 40-100KB+ framework + app bundle | 40KB compiler + ~8KB framework + raw source |
-| **HMR** | Dev server ↔ browser WebSocket | Not needed — recompile in-place |
+| **HMR** | Dev server ↔ browser WebSocket | SSE notify + VFS invalidation + recompile |
 | **Deployment** | Build artifacts (`dist/`) | Source files served as-is |
 | **Component format** | JSX, SFC, templates | Rip source (`.rip` files) |
 | **Reactivity** | Library-specific (hooks, refs, signals) | Language-native (`:=`, `~=`, `~>`) |
@@ -465,9 +480,158 @@ Compiled components are cached by VFS path. A file is only recompiled when it
 changes. The VFS watcher triggers cache invalidation, so updating a file in the
 VFS automatically causes the next render to use the new version.
 
+## Server Integration
+
+### `ripUI` Middleware
+
+The `ripUI` export from `@rip-lang/ui/serve` is a setup function that registers
+routes for serving framework files, auto-generated page manifests, and an SSE
+hot-reload channel. It works with `@rip-lang/api`'s `use()`:
+
+```coffee
+import { use } from '@rip-lang/api'
+import { ripUI } from '@rip-lang/ui/serve'
+
+use ripUI pages: 'pages', watch: true
+```
+
+When called, `ripUI` registers the following routes:
+
+| Route | Description |
+|-------|-------------|
+| `GET /rip-ui/ui.js` | Framework entry point |
+| `GET /rip-ui/stash.js` | Reactive state module |
+| `GET /rip-ui/vfs.js` | Virtual File System |
+| `GET /rip-ui/router.js` | File-based router |
+| `GET /rip-ui/renderer.js` | Component renderer |
+| `GET /rip-ui/compiler.js` | Rip compiler (40KB) |
+| `GET /rip-ui/manifest.json` | Auto-generated manifest of all `.rip` pages |
+| `GET /rip-ui/watch` | SSE hot-reload endpoint (when `watch: true`) |
+| `GET /pages/*` | Individual `.rip` page files (for hot-reload refetch) |
+
+### Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `pages` | `string` | `'pages'` | Directory containing `.rip` page files |
+| `base` | `string` | `'/rip-ui'` | URL prefix for framework files |
+| `watch` | `boolean` | `false` | Enable SSE hot-reload endpoint |
+| `debounce` | `number` | `250` | Milliseconds to batch filesystem change events |
+
+### Page Manifest
+
+The manifest endpoint (`/rip-ui/manifest.json`) auto-discovers every `.rip` file
+in the `pages` directory and bundles them into a single JSON response:
+
+```json
+{
+  "pages/index.rip": "Home = component\n  render\n    h1 \"Hello\"",
+  "pages/about.rip": "About = component\n  render\n    h1 \"About\"",
+  "pages/counter.rip": "..."
+}
+```
+
+The client loads this with `app.loadBundle('/rip-ui/manifest.json')`, which
+populates the VFS in a single request — no need to list pages manually.
+
+## Hot Reload
+
+The hot-reload system uses a **notify-only** architecture — the server tells the
+browser *which files changed*, then the browser decides what to refetch.
+
+### How It Works
+
+```
+  Developer saves a .rip file
+           │
+           ▼
+  Server (fs.watch)
+  ├── Debounce (250ms, batches rapid saves)
+  └── SSE "changed" event: { paths: ["pages/counter.rip"] }
+           │
+           ▼
+  Browser (EventSource)
+  ├── Invalidate VFS entries (fs.delete)
+  ├── Rebuild router (router.rebuild)
+  ├── Smart refetch:
+  │   ├── Current page file? → fetch immediately
+  │   ├── Active layout?     → fetch immediately
+  │   ├── Eager file?        → fetch immediately
+  │   └── Other pages?       → fetch lazily on next navigation
+  └── Re-render (renderer.remount)
+```
+
+### Server Side
+
+The `watch` option enables filesystem monitoring with debounced SSE
+notifications. A heartbeat every 5 seconds keeps the connection alive:
+
+```coffee
+use ripUI pages: "#{dir}/pages", watch: true, debounce: 250
+```
+
+### Client Side
+
+Connect to the SSE endpoint after starting the app:
+
+```javascript
+app.watch('/rip-ui/watch');
+```
+
+The `watch()` method accepts an optional `eager` array — files that should always
+be refetched immediately, even if they're not the current route:
+
+```javascript
+app.watch('/rip-ui/watch', {
+  eager: ['pages/_layout.rip']
+});
+```
+
+### `loadBundle(url)`
+
+Fetches a JSON manifest containing all page sources and loads them into the VFS
+in a single request. Returns the app instance (chainable).
+
+```javascript
+await app.loadBundle('/rip-ui/manifest.json');
+```
+
+### `remount()`
+
+The renderer's `remount()` method re-renders the current route. This is called
+automatically by `watch()` after refetching changed files, but it can also be
+called manually:
+
+```javascript
+app.renderer.remount();
+```
+
 ## Quick Start
 
-### Minimal HTML Shell
+### With Server Integration (Recommended)
+
+The fastest way to get started is with `@rip-lang/api` and the `ripUI` middleware.
+The middleware serves all framework files, auto-generates a page manifest, and
+provides hot-reload — your server is just a few lines:
+
+**`index.rip`** — The complete server:
+
+```coffee
+import { get, use, start, notFound } from '@rip-lang/api'
+import { ripUI } from '@rip-lang/ui/serve'
+
+dir = import.meta.dir
+
+use ripUI pages: "#{dir}/pages", watch: true
+
+get '/css/*', -> @send "#{dir}/css/#{@req.path.slice(5)}"
+
+notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
+
+start port: 3000
+```
+
+**`index.html`** — The HTML shell:
 
 ```html
 <!DOCTYPE html>
@@ -476,30 +640,30 @@ VFS automatically causes the next render to use the new version.
 <body>
   <div id="app"></div>
   <script type="module">
-    import { compileToJS } from './rip.browser.js'
-    import { createApp } from './ui.js'
+    import { compileToJS } from '/rip-ui/compiler.js';
+    import { createApp } from '/rip-ui/ui.js';
 
     const app = createApp({
       target: '#app',
       compile: compileToJS,
       state: { theme: 'light' }
-    })
+    });
 
-    // Load pages into the VFS
-    await app.load([
-      'pages/_layout.rip',
-      'pages/index.rip',
-      'pages/about.rip'
-    ])
-
-    // Start routing and rendering
-    app.start()
+    await app.loadBundle('/rip-ui/manifest.json');
+    app.start();
+    app.watch('/rip-ui/watch');
   </script>
 </body>
 </html>
 ```
 
-### Inline Components (No Server)
+That's it. Run `bun index.rip` and open `http://localhost:3000`. Every `.rip`
+file in the `pages/` directory is auto-discovered, served as a manifest, and
+hot-reloaded on save.
+
+### Standalone (No Server)
+
+For static deployments or quick prototyping, you can inline components directly:
 
 ```html
 <script type="module">
@@ -525,13 +689,8 @@ VFS automatically causes the next render to use the new version.
 
 ```
 my-app/
-├── index.html               # HTML shell (the only "build" artifact)
-├── rip.browser.js           # Rip compiler (40KB)
-├── ui.js                    # Framework entry point
-├── stash.js                 # Reactive state
-├── vfs.js                   # Virtual File System
-├── router.js                # File-based router
-├── renderer.js              # Component renderer
+├── index.rip                # Server (uses @rip-lang/api + ripUI middleware)
+├── index.html               # HTML shell
 ├── pages/
 │   ├── _layout.rip          # Root layout (nav, footer)
 │   ├── index.rip            # Home page       → /
@@ -543,6 +702,10 @@ my-app/
 └── css/
     └── styles.css           # Tailwind or plain CSS
 ```
+
+> **Note:** Framework files (`ui.js`, `stash.js`, `router.js`, etc.) are served
+> automatically by the `ripUI` middleware from the installed `@rip-lang/ui`
+> package — you don't need to copy them into your project.
 
 ## Render Template Syntax
 
@@ -641,7 +804,21 @@ render
 | `onError` | `function` | — | Error handler |
 | `onNavigate` | `function` | — | Navigation callback |
 
-Returns: `{ app, fs, router, renderer, start, stop, load, go, addPage, get, set }`
+Returns an instance with these methods:
+
+| Method | Description |
+|--------|-------------|
+| `start()` | Start routing and rendering |
+| `stop()` | Unmount components, close SSE connection, clean up |
+| `load(paths)` | Fetch `.rip` files from server into VFS |
+| `loadBundle(url)` | Fetch a JSON manifest and bulk-load all pages into VFS |
+| `watch(url, opts?)` | Connect to SSE hot-reload endpoint |
+| `go(path)` | Navigate to a route |
+| `addPage(path, source)` | Add a page to the VFS |
+| `get(key)` | Get app state value |
+| `set(key, value)` | Set app state value |
+
+Also exposes: `app` (stash), `fs` (VFS), `router`, `renderer`
 
 ### `stash(data)`
 
@@ -686,9 +863,15 @@ API.
 
 MIT
 
+## Requirements
+
+- [Bun](https://bun.sh) runtime
+- `@rip-lang/api` ≥ 1.1.4 (for `@send` file serving used by `ripUI` middleware)
+- `rip-lang` ≥ 3.1.1 (Rip compiler with browser build)
+
 ## Links
 
 - [Rip Language](https://github.com/shreeve/rip-lang)
-- [@rip-lang/api](../api/README.md)
-- [@rip-lang/server](../server/README.md)
+- [@rip-lang/api](../api/README.md) — API framework (routing, middleware, `@send`)
+- [@rip-lang/server](../server/README.md) — Production server (HTTPS, mDNS, multi-worker)
 - [Report Issues](https://github.com/shreeve/rip-lang/issues)
