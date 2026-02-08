@@ -23,7 +23,6 @@
 # ==============================================================================
 
 import { get } from '@rip-lang/api'
-import { brotliCompressSync } from 'node:zlib'
 import { watch as fsWatch } from 'node:fs'
 
 export ripUI = (opts = {}) ->
@@ -68,19 +67,14 @@ export ripUI = (opts = {}) ->
     if files[name]
       return c.send files[name], 'application/javascript'
 
-    # Auto-generated manifest — bundles all .rip sources as JSON (brotli compressed)
+    # Auto-generated manifest — bundles all .rip page sources as JSON
     if name is 'manifest.json'
       glob = new Bun.Glob("**/*.rip")
       bundle = {}
       paths = Array.from(glob.scanSync(pagesDir))
       for path in paths
         bundle["pages/#{path}"] = Bun.file("#{pagesDir}/#{path}").text!
-      json = JSON.stringify(bundle)
-      compressed = brotliCompressSync(Buffer.from(json))
-      return new Response compressed,
-        headers:
-          'Content-Type': 'application/json'
-          'Content-Encoding': 'br'
+      return c.json(bundle)
 
     # SSE watch endpoint — debounced, notify-only, with heartbeat
     if name is 'watch' and enableWatch
