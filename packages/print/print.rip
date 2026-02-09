@@ -270,7 +270,8 @@ for section, i in sections
 
 # Read highlight.js CSS theme
 hljsTheme = if dark then 'github-dark' else 'github'
-hljsDir = join import.meta.dir, 'node_modules', 'highlight.js', 'styles'
+hljsMain = import.meta.resolve 'highlight.js'
+hljsDir = join hljsMain.replace('file://', '').replace(/\/[^/]+$/, ''), '..', 'styles'
 hljsCss = readFileSync join(hljsDir, "#{hljsTheme}.css"), 'utf-8'
 
 html = """
