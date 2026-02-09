@@ -372,12 +372,6 @@ html = """
       var themes = {
         #{themeData}
       };
-      // Restore saved theme
-      var saved = localStorage.getItem('rip-print-theme');
-      if (saved && themes[saved]) {
-        document.getElementById('theme-picker').value = saved;
-        document.getElementById('theme-picker').dispatchEvent(new Event('change'));
-      }
       document.getElementById('theme-picker').addEventListener('change', function(e) {
         var id = e.target.value;
         localStorage.setItem('rip-print-theme', id);
@@ -400,6 +394,12 @@ html = """
         document.querySelectorAll('.code-container').forEach(function(e) { e.style.borderColor = brd; });
         document.querySelectorAll('.toc a').forEach(function(e) { e.style.color = fg; });
       });
+      // Restore saved theme
+      var saved = localStorage.getItem('rip-print-theme');
+      if (saved && themes[saved]) {
+        document.getElementById('theme-picker').value = saved;
+        document.getElementById('theme-picker').dispatchEvent(new Event('change'));
+      }
     </script>
   </body>
   </html>
