@@ -204,7 +204,8 @@ def highlightCode(code, lang)
   lines = highlighted.split('\n')
   numbered = lines.map (line, i) ->
     num = String(i + 1).padStart(4)
-    "<span class=\"line-num\">#{num}</span>  #{line}"
+    cls = if i is 0 then 'line-num first' else 'line-num'
+    "<span class=\"#{cls}\">#{num}</span>  #{line}"
   numbered.join('\n')
 
 sections = []
@@ -345,6 +346,7 @@ html = """
       .code-container pre { margin: 0; border-radius: 0; }
       .code-container code { font-size: 13px; line-height: 1.5; padding: 0 !important; display: block; }
       .line-num { color: #aaa; background: #{if dark then '#161b22' else '#f4f4f4'}; user-select: none; display: inline-block; min-width: 2em; text-align: right; padding: 0 0.7em; margin-right: 0.7em; border-right: 1px solid #{borderColor}; }
+      .line-num.first { padding-top: 4px; }
 
       @media print {
         .toc { page-break-after: always; }
