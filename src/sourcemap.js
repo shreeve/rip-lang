@@ -26,7 +26,8 @@ class SourceMapGenerator {
     this.sourceContent = sourceContent;
     this.names = [];
     this.nameIndex = new Map();
-    this.lines = [];  // array of arrays (one per generated line)
+    this.lines = [];    // array of arrays (one per generated line)
+    this.mappings = [];  // raw mapping pairs for reverse lookup
 
     // Running state for relative VLQ encoding
     this.prevGenCol = 0;
@@ -70,6 +71,9 @@ class SourceMapGenerator {
       return;
     }
 
+    // Store raw pair for reverse lookup
+    this.mappings.push({ genLine, genCol, origLine, origCol });
+
     // Mapped segment (4 or 5 fields)
     let segment = vlqEncode(genCol - this.prevGenCol);
     this.prevGenCol = genCol;
@@ -90,6 +94,19 @@ class SourceMapGenerator {
     }
 
     this.lines[genLine].push(segment);
+  }
+
+  // Build reverse lookup: original position → generated position.
+  // Returns a Map keyed by original line number, each value is { genLine, genCol }.
+  // For lines with multiple mappings, uses the first (leftmost) one.
+  toReverseMap() {
+    let reverse = new Map();
+    for (let m of this.mappings) {
+      if (!reverse.has(m.origLine)) {
+        reverse.set(m.origLine, { genLine: m.genLine, genCol: m.genCol });
+      }
+    }
+    return reverse;
   }
 
   // Generate the Source Map V3 JSON

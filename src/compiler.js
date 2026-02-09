@@ -3237,13 +3237,14 @@ export class Compiler {
     let code = generator.compile(sexpr);
 
     let map = sourceMap ? sourceMap.toJSON() : null;
+    let reverseMap = sourceMap ? sourceMap.toReverseMap() : null;
     if (map && this.options.sourceMap === 'inline') {
       code += `\n//# sourceMappingURL=data:application/json;base64,${btoa(map)}`;
     } else if (map && this.options.filename) {
       code += `\n//# sourceMappingURL=${this.options.filename}.js.map`;
     }
 
-    return { tokens, sexpr, code, dts, map, data: dataSection, reactiveVars: generator.reactiveVars };
+    return { tokens, sexpr, code, dts, map, reverseMap, data: dataSection, reactiveVars: generator.reactiveVars };
   }
 
   compileToJS(source) { return this.compile(source).code; }
