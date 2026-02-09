@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/shreeve/rip-lang/main/docs/rip.png" style="width:50px" /> <br>
+
 # Rip Types
 
 > **Types describe what you mean. Code does what you say.**

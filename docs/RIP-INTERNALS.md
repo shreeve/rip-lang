@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/shreeve/rip-lang/main/docs/rip.png" style="width:50px" /> <br>
+
 # Rip Internals
 
 > Architecture, design decisions, and technical reference for the Rip compiler.

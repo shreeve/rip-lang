@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/shreeve/rip-lang/main/docs/rip.png" style="width:50px" /> <br>
+
 # Rip Guide
 
 A practical guide for using Rip in your projects. Rip is a modern language that compiles to ES2022 JavaScript. It runs on [Bun](https://bun.sh) and has zero dependencies.
