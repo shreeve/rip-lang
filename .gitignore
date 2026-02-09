@@ -34,3 +34,4 @@ yarn-error.log*
 .tool-versions
 notes.txt
 *.lock
+/linguist
