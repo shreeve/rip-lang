@@ -1,0 +1,44 @@
+{
+  "name": "@rip-lang/x12",
+  "version": "0.1.0",
+  "description": "X12 EDI parser, editor, and query engine — path-based addressing, separator auto-detection, zero dependencies",
+  "type": "module",
+  "main": "x12.rip",
+  "bin": {
+    "rip-x12": "./bin/rip-x12"
+  },
+  "exports": {
+    ".": "./x12.rip"
+  },
+  "keywords": [
+    "x12",
+    "edi",
+    "healthcare",
+    "parser",
+    "270",
+    "271",
+    "835",
+    "837",
+    "bun",
+    "rip"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreeve/rip-lang.git",
+    "directory": "packages/x12"
+  },
+  "homepage": "https://github.com/shreeve/rip-lang/tree/main/packages/x12#readme",
+  "bugs": {
+    "url": "https://github.com/shreeve/rip-lang/issues"
+  },
+  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "rip-lang": "^3.4.4"
+  },
+  "files": [
+    "x12.rip",
+    "bin/rip-x12",
+    "README.md"
+  ]
+}
