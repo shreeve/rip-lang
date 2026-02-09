@@ -93,5 +93,4 @@ console.log(`🚀 Server running at http://localhost:${actualPort}`);
 console.log(`📁 Serving from: ${ROOT}/`);
 console.log(`🗜️  Brotli compression: enabled`);
 console.log('');
-console.log(`✨ Rip REPL:   http://localhost:${actualPort}/`);
-console.log(`📚 Examples:   http://localhost:${actualPort}/examples/`);
+console.log(`✨ Rip Playground: http://localhost:${actualPort}/`);
