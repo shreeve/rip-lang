@@ -302,7 +302,13 @@
       background: #005a9e;
     }
 
-    .editor, .output-code {
+    .editor-wrapper {
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .output-code {
       flex: 1;
       min-height: 0;
       padding: 15px;
@@ -315,6 +321,21 @@
       outline: none;
       resize: none;
       overflow: auto;
+    }
+
+    .theme-select {
+      background: #3c3c3c;
+      color: #cccccc;
+      border: 1px solid #5a5a5d;
+      padding: 4px 8px;
+      border-radius: 3px;
+      font-size: 12px;
+      cursor: pointer;
+      outline: none;
+    }
+
+    .theme-select:hover {
+      border-color: #007acc;
     }
 
     .output-code {
@@ -418,31 +439,17 @@
           <div class="pane-header">
             <span>Rip Source</span>
             <div class="pane-header-buttons">
+              <select id="theme-select" class="theme-select" title="Editor theme">
+                <option value="vs-dark">Dark+ (default)</option>
+                <option value="vs">Light+</option>
+                <option value="hc-black">High Contrast Dark</option>
+                <option value="hc-light">High Contrast Light</option>
+              </select>
               <button id="clear-btn" title="Clear the editor">Clear</button>
               <button class="active" id="run-btn" title="Execute code and output to browser console (F5, Cmd+Enter, Ctrl+Enter)">Run</button>
             </div>
           </div>
-          <textarea class="editor" id="editor" spellcheck="false"># Rip code - edit me!
-def fibonacci(n)
-  if n <= 1
-    n
-  else
-    fibonacci(n - 1) + fibonacci(n - 2)
-
-# Try heregex
-pattern = ///
-  ^ \\d+      # digits
-  \\s*        # space
-  [a-z]+     # letters
-  $
-///i
-
-# Try regex features
-email = "user@example.com"
-domain = email[/@(.+)$/, 1]
-
-console.log "Fib(10):", fibonacci(10)
-console.log "Domain:", domain</textarea>
+          <div class="editor-wrapper" id="editor-container"></div>
         </div>
 
         <div class="resizer" id="resizer"></div>
@@ -462,18 +469,280 @@ console.log "Domain:", domain</textarea>
   </div>
 
   <script type="module">
-    // Add timestamp to bust browser cache for ES modules
+    // ========================================================================
+    // Monaco Editor Setup
+    // ========================================================================
+
+    // Load Monaco from CDN
+    const MONACO_CDN = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0';
+
+    // Configure Monaco AMD loader
+    const loaderScript = document.createElement('script');
+    loaderScript.src = `${MONACO_CDN}/min/vs/loader.js`;
+    document.head.appendChild(loaderScript);
+
+    await new Promise(resolve => loaderScript.onload = resolve);
+
+    require.config({ paths: { vs: `${MONACO_CDN}/min/vs` } });
+
+    const monaco = await new Promise(resolve => {
+      require(['vs/editor/editor.main'], resolve);
+    });
+
+    // ========================================================================
+    // Rip Monarch Grammar (Monaco-native syntax highlighting)
+    // ========================================================================
+
+    monaco.languages.register({ id: 'rip', extensions: ['.rip'] });
+
+    monaco.languages.setMonarchTokensProvider('rip', {
+      defaultToken: '',
+      tokenPostfix: '.rip',
+
+      keywords: [
+        'if', 'else', 'unless', 'then', 'switch', 'when', 'for', 'while', 'until',
+        'loop', 'do', 'return', 'break', 'continue', 'throw', 'try', 'catch', 'finally',
+        'yield', 'await', 'import', 'export', 'from', 'default', 'delete', 'typeof',
+        'instanceof', 'new', 'super', 'debugger', 'use', 'own', 'extends', 'in', 'of',
+        'by', 'as', 'class', 'def', 'enum', 'interface', 'component', 'render',
+      ],
+
+      logicalWords: ['and', 'or', 'not', 'is', 'isnt'],
+
+      booleans: ['true', 'false', 'yes', 'no', 'on', 'off'],
+
+      constants: ['null', 'undefined', 'NaN', 'Infinity', 'this'],
+
+      typeKeywords: ['number', 'string', 'boolean', 'void', 'any', 'never', 'unknown', 'object', 'symbol', 'bigint'],
+
+      operators: [
+        '::=', '::', ':=', '~=', '~>', '<=>', '=!', '!?', '=~', '??', '?.', '...',
+        '..', '**', '//', '%%', '++', '--', '&&', '||', '===', '!==', '==', '!=',
+        '<=', '>=', '=>', '->', '+=', '-=', '*=', '/=', '%=', '**=', '&&=', '||=',
+        '??=', '<<=', '>>=', '>>>=', '&=', '|=', '^=', '>>>', '>>', '<<',
+        '+', '-', '*', '/', '%', '&', '|', '^', '~', '<', '>', '=', '!', '?',
+      ],
+
+      symbols: /[=><!~?:&|+\-*\/\^%\.#]+/,
+
+      escapes: /\\(?:[abfnrtv\\"']|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
+
+      tokenizer: {
+        root: [
+          // Block comments ###...###
+          [/###/, 'comment', '@blockComment'],
+
+          // Line comments
+          [/#(?!\{).*$/, 'comment'],
+
+          // Heredocs (before regular strings)
+          [/"""/, 'string', '@heredocDouble'],
+          [/'''/, 'string', '@heredocSingle'],
+
+          // Strings
+          [/"/, 'string', '@stringDouble'],
+          [/'/, 'string', '@stringSingle'],
+
+          // Heregex
+          [/\/\/\//, 'regexp', '@heregex'],
+
+          // Regex (after operator context)
+          [/\/(?![/*])(?:[^\/\\]|\\.)*\/[gimsuy]*/, 'regexp'],
+
+          // Inline JavaScript
+          [/`[^`]*`/, 'string.other'],
+
+          // Instance variables @name
+          [/@[a-zA-Z_$][\w$]*/, 'variable.instance'],
+          [/@/, 'variable.instance'],
+
+          // Type names (PascalCase) — before identifiers
+          [/[A-Z][\w]*/, 'type.identifier'],
+
+          // Identifiers and keywords
+          [/[a-zA-Z_$][\w$]*[!?]?/, {
+            cases: {
+              '@keywords': 'keyword',
+              '@logicalWords': 'keyword.operator',
+              '@booleans': 'constant.language',
+              '@constants': 'constant.language',
+              '@typeKeywords': 'support.type',
+              '@default': 'identifier',
+            }
+          }],
+
+          // Numbers
+          [/0x[0-9a-fA-F](?:_?[0-9a-fA-F])*n?/, 'number.hex'],
+          [/0o[0-7](?:_?[0-7])*n?/, 'number.octal'],
+          [/0b[01](?:_?[01])*n?/, 'number.binary'],
+          [/\d[\d_]*(?:\.[\d][\d_]*)?(?:[eE][+-]?\d+)?n?/, 'number'],
+
+          // Operators (multi-char first)
+          [/::=/, 'keyword.operator.type'],
+          [/::(?!=)/, 'keyword.operator.type'],
+          [/~=|:=|~>|<=>/, 'keyword.operator.reactive'],
+          [/=!/, 'keyword.operator.readonly'],
+          [/!\?/, 'keyword.operator'],
+          [/=~/, 'keyword.operator'],
+          [/\?\?/, 'keyword.operator'],
+          [/\?\./, 'keyword.operator'],
+          [/\.\.\./, 'keyword.operator'],
+          [/\.\./, 'keyword.operator'],
+          [/===|!==|==|!=|<=|>=/, 'keyword.operator.comparison'],
+          [/=>|->/, 'keyword.operator.arrow'],
+          [/\*\*|\/\/|%%/, 'keyword.operator.arithmetic'],
+          [/&&=|\|\|=|\?\?=|\+=|-=|\*=|\/=|%=/, 'keyword.operator.assignment'],
+          [/&&|\|\|/, 'keyword.operator.logical'],
+          [/>>>|>>|<</, 'keyword.operator.bitwise'],
+          [/[+\-*\/%]/, 'keyword.operator.arithmetic'],
+          [/[&|^~]/, 'keyword.operator.bitwise'],
+          [/[<>]/, 'keyword.operator.comparison'],
+          [/=/, 'keyword.operator.assignment'],
+          [/!/, 'keyword.operator'],
+          [/\?/, 'keyword.operator'],
+
+          // Brackets
+          [/[{}()\[\]]/, '@brackets'],
+
+          // Delimiters
+          [/[;,.]/, 'delimiter'],
+        ],
+
+        blockComment: [
+          [/###/, 'comment', '@pop'],
+          [/./, 'comment'],
+        ],
+
+        heredocDouble: [
+          [/"""/, 'string', '@pop'],
+          [/#\{/, { token: 'string.interpolation', next: '@interpolation' }],
+          [/@escapes/, 'string.escape'],
+          [/./, 'string'],
+        ],
+
+        heredocSingle: [
+          [/'''/, 'string', '@pop'],
+          [/@escapes/, 'string.escape'],
+          [/./, 'string'],
+        ],
+
+        stringDouble: [
+          [/"/, 'string', '@pop'],
+          [/#\{/, { token: 'string.interpolation', next: '@interpolation' }],
+          [/@escapes/, 'string.escape'],
+          [/[^"\\#]+/, 'string'],
+          [/./, 'string'],
+        ],
+
+        stringSingle: [
+          [/'/, 'string', '@pop'],
+          [/@escapes/, 'string.escape'],
+          [/[^'\\]+/, 'string'],
+          [/./, 'string'],
+        ],
+
+        interpolation: [
+          [/\}/, { token: 'string.interpolation', next: '@pop' }],
+          { include: 'root' },
+        ],
+
+        heregex: [
+          [/\/\/\/[gimsuy]*/, 'regexp', '@pop'],
+          [/#.*$/, 'comment'],
+          [/@escapes/, 'regexp.escape'],
+          [/#\{/, { token: 'string.interpolation', next: '@interpolation' }],
+          [/./, 'regexp'],
+        ],
+      },
+    });
+
+    // Language configuration (brackets, comments, etc.)
+    monaco.languages.setLanguageConfiguration('rip', {
+      comments: { lineComment: '#', blockComment: ['###', '###'] },
+      brackets: [['{', '}'], ['[', ']'], ['(', ')']],
+      autoClosingPairs: [
+        { open: '{', close: '}' },
+        { open: '[', close: ']' },
+        { open: '(', close: ')' },
+        { open: '"', close: '"', notIn: ['string'] },
+        { open: "'", close: "'", notIn: ['string'] },
+      ],
+      surroundingPairs: [
+        { open: '{', close: '}' },
+        { open: '[', close: ']' },
+        { open: '(', close: ')' },
+        { open: '"', close: '"' },
+        { open: "'", close: "'" },
+      ],
+      indentationRules: {
+        increaseIndentPattern: /^\s*(?:def|class|component|render|if|unless|else|for|while|until|loop|switch|when|try|catch|finally|enum|interface)\b.*$|[-=]>\s*$/,
+        decreaseIndentPattern: /^\s*(else|catch|finally)\b/,
+      },
+      folding: { offSide: true },
+    });
+
+    // ========================================================================
+    // Create Monaco Editor Instance
+    // ========================================================================
+
+    const defaultCode = `# Rip code - edit me!
+def fibonacci(n)
+  if n <= 1
+    n
+  else
+    fibonacci(n - 1) + fibonacci(n - 2)
+
+# Try heregex
+pattern = ///
+  ^ \\\\d+      # digits
+  \\\\s*        # space
+  [a-z]+     # letters
+  $
+///i
+
+# Try regex features
+email = "user@example.com"
+domain = email[/@(.+)$/, 1]
+
+console.log "Fib(10):", fibonacci(10)
+console.log "Domain:", domain`;
+
+    const monacoEditor = monaco.editor.create(document.getElementById('editor-container'), {
+      value: defaultCode,
+      language: 'rip',
+      theme: 'vs-dark',
+      fontSize: 14,
+      fontFamily: "'Monaco', 'Menlo', 'Consolas', monospace",
+      lineHeight: 22,
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      automaticLayout: true,
+      tabSize: 2,
+      insertSpaces: true,
+      renderWhitespace: 'none',
+      overviewRulerLanes: 0,
+      hideCursorInOverviewRuler: true,
+      scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
+      padding: { top: 10 },
+    });
+
+    // Theme selector
+    document.getElementById('theme-select').addEventListener('change', (e) => {
+      monaco.editor.setTheme(e.target.value);
+    });
+
+    // ========================================================================
+    // Load Rip Compiler
+    // ========================================================================
+
     const timestamp = Date.now();
     const module = await import(`./dist/rip.browser.min.js?v=${timestamp}`);
     const { compile, formatSExpr, VERSION, BUILD_DATE } = module;
 
-    // Make compile and formatSExpr available globally for the script
     window.compile = compile;
     window.toSexpr = formatSExpr;
 
-    // Update subtitle with version and build time
-    // Convert GMT timestamp to local time for display
-    const buildDate = BUILD_DATE; // GMT timestamp from build
+    const buildDate = BUILD_DATE;
     const localBuildDate = new Date(buildDate.replace('@', 'T').replace('GMT', 'Z'))
       .toLocaleString(undefined, {
         year: 'numeric', month: 'short', day: 'numeric',
@@ -484,10 +753,9 @@ console.log "Domain:", domain</textarea>
       `Interactive environment • Version ${VERSION} • Built ${localBuildDate}`;
 
     // ========================================================================
-    // DOM Element References (must be before functions that use them)
+    // DOM Element References
     // ========================================================================
 
-    const editor = document.getElementById('editor');
     const output = document.getElementById('output');
     const showSexpBtn = document.getElementById('show-sexp');
     const showTokensBtn = document.getElementById('show-tokens');
@@ -499,49 +767,37 @@ console.log "Domain:", domain</textarea>
     const rightPane = document.getElementById('editor-right');
 
     // ========================================================================
-    // Compiler Implementation (must be before tab switching)
+    // Compiler Implementation
     // ========================================================================
 
-    // Track toggle state
     let showSexp = false;
     let showTokens = false;
 
-    // Strip utility helper functions for cleaner display
     function stripHelpers(code) {
-      // Remove helper function definitions (slice, modulo, toSearchable)
       code = code.replace(/^const slice = \[\]\.slice;\n/m, '');
       code = code.replace(/^const modulo = \(n, d\) => \{[^}]+\};\n/m, '');
       code = code.replace(/^const toSearchable = \(v, allowNewlines\) => \{[\s\S]+?\n\};\n/m, '');
-
-      // Remove empty lines at the start
       code = code.replace(/^\n+/, '');
-
       return code;
     }
 
-    // Simple syntax highlighter for JavaScript
     function highlightJS(code) {
       return code
-        // Keywords
         .replace(/\\b(def|function|async|const|let|var|if|else|return|while|for|class|extends|super|new|this|try|catch|finally|throw|switch|case|default|break|continue)\\b/g,
           '<span class="hl-keyword">$1</span>')
-        // Strings
         .replace(/("(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*'|`(?:[^`\\\\]|\\\\.)*`)/g,
           '<span class="hl-string">$1</span>')
-        // Numbers
         .replace(/\\b(\\d+\\.?\\d*|0x[0-9a-fA-F]+|0b[01]+|0o[0-7]+)\\b/g,
           '<span class="hl-number">$1</span>')
-        // Comments
         .replace(/(\/\/.*$|\/\*[\s\S]*?\*\/)/gm,
           '<span class="hl-comment">$1</span>')
-        // Function names (simple: word before parenthesis)
         .replace(/\b([a-zA-Z_$][a-zA-Z0-9_$]*)(?=\s*\()/g,
           '<span class="hl-function">$1</span>');
     }
 
     function compileCode() {
       try {
-        const source = editor.value;
+        const source = monacoEditor.getValue();
         const result = compile(source);
 
         let outputText = '';
@@ -558,7 +814,6 @@ console.log "Domain:", domain</textarea>
           outputText += '\n\n';
         }
 
-        // JavaScript output with syntax highlighting (strip helpers for cleaner display)
         const cleanCode = stripHelpers(result.code);
         const highlightedCode = highlightJS(cleanCode);
         output.innerHTML = outputText.replace(/</g, '&lt;').replace(/>/g, '&gt;') + highlightedCode;
@@ -1012,8 +1267,8 @@ console.log "Domain:", domain</textarea>
     // Compiler Event Handlers
     // ========================================================================
 
-    // Auto-compile on changes
-    editor.addEventListener('input', compileCode);
+    // Auto-compile on changes (Monaco fires onDidChangeModelContent)
+    monacoEditor.onDidChangeModelContent(compileCode);
 
     // Toggle buttons for S-Expressions and Tokens
     showSexpBtn.addEventListener('click', () => {
@@ -1030,15 +1285,15 @@ console.log "Domain:", domain</textarea>
 
     // Clear button - clears the Rip source editor
     document.getElementById('clear-btn').addEventListener('click', () => {
-      editor.value = '';
+      monacoEditor.setValue('');
       compileCode();
-      editor.focus();
+      monacoEditor.focus();
     });
 
     // Run button - executes the Rip code and outputs to console
     function runCode() {
       try {
-        const source = editor.value;
+        const source = monacoEditor.getValue();
         const result = compile(source);
         const js = result.code;
 
