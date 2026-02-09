@@ -200,11 +200,10 @@ def highlightCode(code, lang)
     # fall through
   highlighted ?= escapeHtml code
 
-  # Add line numbers
+  # Add line numbers (fixed 4-digit width for consistent gutter)
   lines = highlighted.split('\n')
-  width = String(lines.length).length
   numbered = lines.map (line, i) ->
-    num = String(i + 1).padStart(width)
+    num = String(i + 1).padStart(4)
     "<span class=\"line-num\">#{num}</span>  #{line}"
   numbered.join('\n')
 
@@ -300,17 +299,17 @@ html = """
       .toc a:hover { text-decoration: underline; }
       .meta { color: #888; font-size: 12px; }
 
-      .file-section { margin-bottom: 0; }
+      .file-section { margin-bottom: 0; margin-top: -1px; }
       .file-header {
-        background: #{headerBg}; padding: 14px 16px 14px 5.2em; font-size: 13px; font-weight: 600;
-        border-top: 1px solid #{borderColor}; border-bottom: 1px solid #{borderColor}; margin-top: -1px;
+        background: #{headerBg}; padding: 10px 16px 10px 5.85em; font-size: 13px; font-weight: 600;
+        border-top: 1px solid #{borderColor}; border-bottom: 1px solid #{borderColor};
         display: flex; justify-content: space-between; align-items: center;
       }
       .nav { font-weight: normal; font-size: 12px; }
-      .nav a { color: #888; text-decoration: none; margin-left: 12px; }
-      .nav a:hover { color: #{textColor}; }
+      .nav a { color: #888; text-decoration: none; padding: 6px 10px; border-radius: 3px; }
+      .nav a:hover { color: #{textColor}; background: #{if dark then '#30363d' else '#e0e0e0'}; }
 
-      .code-container { overflow-x: auto; }
+      .code-container { overflow-x: auto; border-bottom: 1px solid #{borderColor}; }
       .code-container pre { margin: 0; border-radius: 0; }
       .code-container code { font-size: 13px; line-height: 1.5; padding: 0 !important; display: block; }
       .line-num { color: #aaa; background: #{if dark then '#161b22' else '#f4f4f4'}; user-select: none; display: inline-block; min-width: 2em; text-align: right; padding: 0 0.7em; margin-right: 0.7em; border-right: 1px solid #{borderColor}; }
