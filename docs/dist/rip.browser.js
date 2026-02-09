@@ -7505,8 +7505,9 @@ class Compiler {
     let map = sourceMap ? sourceMap.toJSON() : null;
     let reverseMap = sourceMap ? sourceMap.toReverseMap() : null;
     if (map && this.options.sourceMap === "inline") {
+      let b64 = typeof Buffer !== "undefined" ? Buffer.from(map).toString("base64") : btoa(map);
       code += `
-//# sourceMappingURL=data:application/json;base64,${btoa(map)}`;
+//# sourceMappingURL=data:application/json;base64,${b64}`;
     } else if (map && this.options.filename) {
       code += `
 //# sourceMappingURL=${this.options.filename}.js.map`;
@@ -7535,8 +7536,8 @@ function getComponentRuntime() {
   return new CodeGenerator({}).getComponentRuntime();
 }
 // src/browser.js
-var VERSION = "3.4.2";
-var BUILD_DATE = "2026-02-09@07:09:22GMT";
+var VERSION = "3.4.3";
+var BUILD_DATE = "2026-02-09@07:17:43GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
