@@ -17,6 +17,10 @@ bun add @rip-lang/db             # DuckDB server
 bun add @rip-lang/schema         # ORM + validation
 bun add @rip-lang/swarm          # Parallel job runner
 bun add @rip-lang/csv            # CSV parser + writer
+
+# VS Code / Cursor extension (install from Marketplace)
+# Search "Rip" in Extensions, or:
+cursor --install-extension rip-lang.rip
 ```
 
 ---
@@ -117,4 +121,18 @@ get '/css/*', -> @send "#{dir}/css/#{@req.path.slice(5)}"
 notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 
 start port: 3000
+```
+
+### [rip](vscode/) — VS Code / Cursor Extension
+
+IDE support with syntax highlighting, auto `.d.ts` generation on save, and type intelligence (autocomplete, hover, go-to-definition) from third-party TypeScript types. Published to the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=rip-lang.rip).
+
+```bash
+# Install from Marketplace
+cursor --install-extension rip-lang.rip
+
+# Or install locally from source
+cd packages/vscode
+npx @vscode/vsce package --no-dependencies
+cursor --install-extension rip-0.3.1.vsix --force
 ```
