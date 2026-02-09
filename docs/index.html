@@ -25,6 +25,7 @@
 
     body.ready {
       opacity: 1;
+      transition: opacity 0.15s ease-in;
     }
 
     .header {
@@ -80,7 +81,6 @@
 
     .tabs {
       display: flex;
-      gap: 0;
       background: #2d2d30;
       border-bottom: 1px solid #3e3e42;
     }
@@ -114,7 +114,6 @@
       flex-direction: column;
       overflow: hidden;
     }
-
 
     .pane {
       display: none;
@@ -204,7 +203,7 @@
       font-weight: 600;
       font-size: 14px;
       line-height: 24px;
-      margin-top: 0px;
+      margin-top: 0;
     }
 
     #repl-editor-container {
@@ -234,7 +233,6 @@
       flex: 1;
       min-height: 0;
       display: flex;
-      gap: 0;
       background: #3e3e42;
       padding: 20px;
       position: relative;
@@ -332,7 +330,6 @@
       overflow: hidden;
     }
 
-
     .theme-select {
       background: #3c3c3c;
       color: #cccccc;
@@ -399,7 +396,6 @@
       color: #ce9178;
     }
 
-
     /* Light/Dark mode toggle */
     .mode-toggle {
       background: none;
@@ -455,7 +451,9 @@
     body.light .tab:hover { color: #333333; background: #e8e8e8; }
     body.light .tab.active { color: #333333; border-bottom-color: #007acc; background: #ffffff; }
 
-    body.light .editor-pane { background: #ffffff; }
+    body.light .compiler-container { background: #e0e0e0; }
+    body.light .editor-pane { background: #ffffff; border-color: #d4d4d4; }
+    body.light .content { background: #ffffff; }
 
     body.light .pane-header {
       background: #f3f3f3;
@@ -468,15 +466,8 @@
     body.light .pane-header button.active { background: #007acc; color: #ffffff; }
     body.light .theme-select { background: #f3f3f3; color: #333333; border-color: #cccccc; }
 
-    body.light .resizer { background: #d4d4d4; }
-    body.light .resizer:hover { background: #007acc; }
-
-
-    body.light .compiler-container { background: #e0e0e0; }
-    body.light .editor-pane { background: #ffffff; border-color: #d4d4d4; }
-    body.light .pane-header { border-bottom-color: #d4d4d4; }
     body.light .resizer { background: #e0e0e0; }
-    body.light .content { background: #ffffff; }
+    body.light .resizer:hover { background: #007acc; }
 
     body.light ::-webkit-scrollbar-track { background: #f3f3f3; }
     body.light ::-webkit-scrollbar-thumb { background: #c1c1c1; }
@@ -576,7 +567,7 @@
               <button id="show-tokens" title="Toggle token stream display">Tokens</button>
               <button id="show-sexp" title="Toggle S-expression display">S-Expressions</button>
               <button id="show-runtime" title="Toggle runtime code display">Runtime</button>
-              <button id="show-js" class="active" title="Toggle JavaScript output">JS</button>
+              <button id="show-js" title="Toggle JavaScript output">JS</button>
             </div>
           </div>
           <div class="editor-wrapper" id="output-container"></div>
@@ -824,9 +815,8 @@ domain = email[/@(.+)$/, 1]
 console.log "Fib(10):", fibonacci(10)
 console.log "Domain:", domain`;
 
-    const monacoEditor = monaco.editor.create(document.getElementById('editor-container'), {
-      value: defaultCode,
-      language: 'rip',
+    // Shared editor configuration
+    const sharedConfig = {
       theme: 'vs-dark',
       fontSize: 14,
       fontFamily: "'Monaco', 'Menlo', 'Consolas', monospace",
@@ -834,34 +824,29 @@ console.log "Domain:", domain`;
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
       automaticLayout: true,
-      tabSize: 2,
-      insertSpaces: true,
-      renderWhitespace: 'none',
       overviewRulerLanes: 0,
       hideCursorInOverviewRuler: true,
+      renderWhitespace: 'none',
       scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10, verticalSliderSize: 10, horizontalSliderSize: 10 },
       padding: { top: 10 },
+    };
+
+    const monacoEditor = monaco.editor.create(document.getElementById('editor-container'), {
+      ...sharedConfig,
+      value: defaultCode,
+      language: 'rip',
+      tabSize: 2,
+      insertSpaces: true,
     });
 
     // Output editor (read-only JavaScript display)
     const outputEditor = monaco.editor.create(document.getElementById('output-container'), {
+      ...sharedConfig,
       value: '',
       language: 'javascript',
-      theme: 'vs-dark',
-      fontSize: 14,
-      fontFamily: "'Monaco', 'Menlo', 'Consolas', monospace",
-      lineHeight: 22,
-      minimap: { enabled: false },
-      scrollBeyondLastLine: false,
-      automaticLayout: true,
       readOnly: true,
       domReadOnly: true,
       lineNumbers: 'off',
-      renderWhitespace: 'none',
-      overviewRulerLanes: 0,
-      hideCursorInOverviewRuler: true,
-      scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10, verticalSliderSize: 10, horizontalSliderSize: 10 },
-      padding: { top: 10 },
       folding: false,
       glyphMargin: false,
       contextmenu: false,
@@ -873,9 +858,11 @@ console.log "Domain:", domain`;
     const loadedThemes = new Set(['vs', 'vs-dark', 'hc-black', 'hc-light']);
 
     async function setTheme(value) {
+      let themeId = value;
+
       if (value.startsWith('cdn:')) {
         const themeName = value.slice(4);
-        const themeId = themeName.toLowerCase().replace(/[\s_]+/g, '-');
+        themeId = themeName.toLowerCase().replace(/[\s_]+/g, '-');
 
         if (!loadedThemes.has(themeId)) {
           try {
@@ -888,12 +875,10 @@ console.log "Domain:", domain`;
             return;
           }
         }
-        monaco.editor.setTheme(themeId);
-        localStorage.setItem('rip-repl-theme', value);
-      } else {
-        monaco.editor.setTheme(value);
-        localStorage.setItem('rip-repl-theme', value);
       }
+
+      monaco.editor.setTheme(themeId);
+      localStorage.setItem('rip-repl-theme', value);
     }
 
     themeSelect.addEventListener('change', async (e) => await setTheme(e.target.value));
@@ -939,8 +924,7 @@ console.log "Domain:", domain`;
     window.compile = compile;
     window.toSexpr = formatSExpr;
 
-    const buildDate = BUILD_DATE;
-    const localBuildDate = new Date(buildDate.replace('@', 'T').replace('GMT', 'Z'))
+    const localBuildDate = new Date(BUILD_DATE.replace('@', 'T').replace('GMT', 'Z'))
       .toLocaleString(undefined, {
         year: 'numeric', month: 'short', day: 'numeric',
         hour: '2-digit', minute: '2-digit', timeZoneName: 'short'
@@ -961,12 +945,10 @@ console.log "Domain:", domain`;
     const promptSpan = document.getElementById('prompt');
 
     // REPL input editor (single-line Monaco)
-    const savedMode = localStorage.getItem('rip-repl-mode');
-    const initialTheme = savedMode === 'light' ? 'vs' : 'vs-dark';
     const replEditor = monaco.editor.create(document.getElementById('repl-editor-container'), {
       value: '',
       language: 'rip',
-      theme: initialTheme,
+      theme: isDark ? 'vs-dark' : 'vs',
       fontSize: 14,
       fontFamily: "'Monaco', 'Menlo', 'Consolas', monospace",
       lineHeight: 24,
@@ -1022,7 +1004,6 @@ console.log "Domain:", domain`;
         const result = compile(source);
 
         let parts = [];
-        let lang = 'javascript';
 
         if (showTokens) {
           let tokenText = '';
@@ -1030,12 +1011,10 @@ console.log "Domain:", domain`;
             tokenText += `${t[0].padEnd(12)} ${JSON.stringify(t[1])}\n`;
           });
           parts.push(tokenText);
-          lang = 'plaintext';
         }
 
         if (showSexp) {
           parts.push(window.toSexpr ? window.toSexpr(result.sexpr, 0, true) : JSON.stringify(result.sexpr, null, 1));
-          lang = 'plaintext';
         }
 
         if (showJS) {
@@ -1095,6 +1074,12 @@ console.log "Domain:", domain`;
         switchToTab(hash);
       }
     });
+
+    // Restore toggle button states from localStorage (before page reveal)
+    showTokensBtn.classList.toggle('active', showTokens);
+    showSexpBtn.classList.toggle('active', showSexp);
+    showRuntimeBtn.classList.toggle('active', showRuntime);
+    showJSBtn.classList.toggle('active', showJS);
 
     // Initialize from URL hash on page load (default to compiler)
     const initialTab = window.location.hash.slice(1);
@@ -1303,11 +1288,16 @@ console.log "Domain:", domain`;
       }
     }
 
+    // Built-in properties to preserve when clearing REPL context
+    const replBuiltins = ['console', 'showSexp', 'showTokens', 'eval', 'window', 'document',
+      'location', 'navigator', 'self', 'top', 'parent', 'frames', '__state', '__computed',
+      '__effect', '__batch', '__readonly', '__currentEffect', '__pendingEffects', '__reactiveVars'];
+
     function handleCommand(cmd) {
       switch (cmd) {
         case '.help':
           addOutput(`
-<span class="help-text">Rip Browser REPL Commands:</span>
+<span class="help-text">Rip Playground Commands:</span>
 
 <span class="command">.help</span>     - Show this help
 <span class="command">.clear</span>    - Clear output
@@ -1318,7 +1308,7 @@ console.log "Domain:", domain`;
 <span class="help-text">Features:</span>
 - Variables persist across evaluations
 - Previous result in <span class="var-name">_</span> variable
-- Multi-line input (type incomplete expression)
+- Shift+Enter for multi-line input
 - All Rip features: heregex, regex+, classes, etc.
           `, 'command-output');
           break;
@@ -1329,11 +1319,8 @@ console.log "Domain:", domain`;
           reactiveVars.clear();
           replContext.__reactiveVars = {};
           // Clear all user-defined globals in iframe
-          const builtinsToKeep = ['console', 'showSexp', 'showTokens', 'eval', 'window', 'document',
-            'location', 'navigator', 'self', 'top', 'parent', 'frames', '__state', '__computed',
-            '__effect', '__batch', '__readonly', '__currentEffect', '__pendingEffects', '__reactiveVars'];
           for (const key of Object.keys(replContext)) {
-            if (!builtinsToKeep.includes(key) && !key.startsWith('__')) {
+            if (!replBuiltins.includes(key) && !key.startsWith('__')) {
               try { delete replContext[key]; } catch {}
             }
           }
@@ -1341,11 +1328,8 @@ console.log "Domain:", domain`;
           break;
 
         case '.vars':
-          const builtins = ['console', 'showSexp', 'showTokens', 'eval', 'window', 'document',
-            'location', 'navigator', 'self', 'top', 'parent', 'frames', '__state', '__computed',
-            '__effect', '__batch', '__readonly', '__currentEffect', '__pendingEffects', '__reactiveVars'];
           const vars = Object.keys(replContext).filter(k =>
-            !builtins.includes(k) && !k.startsWith('__') || k === '_'
+            !replBuiltins.includes(k) && !k.startsWith('__') || k === '_'
           );
           if (vars.length === 0 || (vars.length === 1 && vars[0] === '_' && replContext._ === undefined)) {
             addOutput('<span class="help-text">No variables defined</span>', 'command-output');
@@ -1486,13 +1470,13 @@ console.log "Domain:", domain`;
     }
 
     // Auto-resize REPL input as lines are added
-    const replContainer = document.getElementById('repl-editor-container');
+    const replEditorEl = document.getElementById('repl-editor-container');
     const replLineHeight = 24;
 
     function resizeReplInput() {
       const lineCount = replEditor.getModel().getLineCount();
       const newHeight = Math.max(replLineHeight, lineCount * replLineHeight);
-      replContainer.style.height = newHeight + 'px';
+      replEditorEl.style.height = newHeight + 'px';
       replEditor.layout();
     }
 
@@ -1540,40 +1524,21 @@ console.log "Domain:", domain`;
     // Auto-compile on changes (Monaco fires onDidChangeModelContent)
     monacoEditor.onDidChangeModelContent(compileCode);
 
-    // Toggle buttons for S-Expressions and Tokens
-    // Restore button states from localStorage
-    showTokensBtn.classList.toggle('active', showTokens);
-    showSexpBtn.classList.toggle('active', showSexp);
-    showRuntimeBtn.classList.toggle('active', showRuntime);
-    showJSBtn.classList.toggle('active', showJS);
+    const toggles = [
+      { btn: showTokensBtn, key: 'rip-repl-tokens',  get: () => showTokens,  set: v => showTokens = v },
+      { btn: showSexpBtn,   key: 'rip-repl-sexp',    get: () => showSexp,    set: v => showSexp = v },
+      { btn: showRuntimeBtn,key: 'rip-repl-runtime',  get: () => showRuntime, set: v => showRuntime = v },
+      { btn: showJSBtn,     key: 'rip-repl-js',       get: () => showJS,      set: v => showJS = v },
+    ];
 
-    showTokensBtn.addEventListener('click', () => {
-      showTokens = !showTokens;
-      showTokensBtn.classList.toggle('active', showTokens);
-      localStorage.setItem('rip-repl-tokens', showTokens);
-      compileCode();
-    });
-
-    showSexpBtn.addEventListener('click', () => {
-      showSexp = !showSexp;
-      showSexpBtn.classList.toggle('active', showSexp);
-      localStorage.setItem('rip-repl-sexp', showSexp);
-      compileCode();
-    });
-
-    showRuntimeBtn.addEventListener('click', () => {
-      showRuntime = !showRuntime;
-      showRuntimeBtn.classList.toggle('active', showRuntime);
-      localStorage.setItem('rip-repl-runtime', showRuntime);
-      compileCode();
-    });
-
-    showJSBtn.addEventListener('click', () => {
-      showJS = !showJS;
-      showJSBtn.classList.toggle('active', showJS);
-      localStorage.setItem('rip-repl-js', showJS);
-      compileCode();
-    });
+    for (const { btn, key, get, set } of toggles) {
+      btn.addEventListener('click', () => {
+        set(!get());
+        btn.classList.toggle('active', get());
+        localStorage.setItem(key, get());
+        compileCode();
+      });
+    }
 
     // Clear button - clears the Rip source editor
     document.getElementById('clear-btn').addEventListener('click', () => {
@@ -1601,26 +1566,13 @@ console.log "Domain:", domain`;
 
     document.getElementById('run-btn').addEventListener('click', runCode);
 
-    // Keyboard shortcuts for Run button
-    // F5, Cmd+Enter (Mac), Ctrl+Enter (Windows/Linux)
+    // Keyboard shortcuts: F5, Cmd+Enter (Mac), Ctrl+Enter (Windows/Linux)
     document.addEventListener('keydown', (e) => {
-      // F5 - Run code
-      if (e.key === 'F5') {
+      if (e.key === 'F5' || (e.key === 'Enter' && (e.metaKey || e.ctrlKey))) {
         e.preventDefault();
         runCode();
-        return;
-      }
-
-      // Cmd+Enter (Mac) or Ctrl+Enter (Windows/Linux) - Run code
-      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        runCode();
-        return;
       }
     });
-
-    // Initial compile
-    compileCode();
   </script>
 </body>
 </html>
