@@ -892,9 +892,9 @@ console.log "Domain:", domain`;
     // Compiler Implementation
     // ========================================================================
 
-    let showRuntime = false;
-    let showSexp = false;
-    let showTokens = false;
+    let showRuntime = localStorage.getItem('rip-repl-runtime') === 'true';
+    let showSexp = localStorage.getItem('rip-repl-sexp') === 'true';
+    let showTokens = localStorage.getItem('rip-repl-tokens') === 'true';
 
     function stripHelpers(code) {
       code = code.replace(/^const slice = \[\]\.slice;\n/m, '');
@@ -1394,21 +1394,29 @@ console.log "Domain:", domain`;
     monacoEditor.onDidChangeModelContent(compileCode);
 
     // Toggle buttons for S-Expressions and Tokens
+    // Restore button states from localStorage
+    showRuntimeBtn.classList.toggle('active', showRuntime);
+    showSexpBtn.classList.toggle('active', showSexp);
+    showTokensBtn.classList.toggle('active', showTokens);
+
     showRuntimeBtn.addEventListener('click', () => {
       showRuntime = !showRuntime;
       showRuntimeBtn.classList.toggle('active', showRuntime);
+      localStorage.setItem('rip-repl-runtime', showRuntime);
       compileCode();
     });
 
     showSexpBtn.addEventListener('click', () => {
       showSexp = !showSexp;
       showSexpBtn.classList.toggle('active', showSexp);
+      localStorage.setItem('rip-repl-sexp', showSexp);
       compileCode();
     });
 
     showTokensBtn.addEventListener('click', () => {
       showTokens = !showTokens;
       showTokensBtn.classList.toggle('active', showTokens);
+      localStorage.setItem('rip-repl-tokens', showTokens);
       compileCode();
     });
 
