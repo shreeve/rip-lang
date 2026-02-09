@@ -11,7 +11,7 @@
 #   Filters:    raw, before, after
 #   Handlers:   onError, notFound
 #   Validation: read, validators, registerValidator, getValidator
-#   Context:    ctx, session, env
+#   Context:    ctx, session, env, subrequest
 #   Utilities:  isBlank, toName, toPhone, mimeType
 #   Dev:        resetGlobals
 # ==============================================================================
@@ -396,6 +396,14 @@ export App = (fn) ->
 export ctx = ->
   store = requestContext.getStore()
   store?.env or null
+
+# Subrequest — run a function with new data but same @ context
+# Enables read() to work against a synthetic payload while preserving
+# all @ variables from the parent request (e.g., @token).
+export subrequest = (data, fn) ->
+  store = requestContext.getStore() or throw new Error 'no context for subrequest()'
+  requestContext.run! { env: store.env, data }, ->
+    fn.call!(store.env)
 
 # Session proxy — access session.foo anywhere (via AsyncLocalStorage)
 export session = new Proxy {},
