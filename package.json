@@ -1,6 +1,6 @@
 {
   "name": "rip-lang",
-  "version": "3.4.0",
+  "version": "3.4.1",
   "description": "A modern language that compiles to JavaScript",
   "type": "module",
   "main": "src/compiler.js",
@@ -68,7 +68,6 @@
   "license": "MIT",
   "devDependencies": {
     "@rip-lang/api": "workspace:*",
-    "@rip-lang/ui": "workspace:*",
-    "mitt": "3.0.1"
+    "@rip-lang/ui": "workspace:*"
   }
 }
