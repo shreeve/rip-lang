@@ -831,24 +831,24 @@ console.log "Domain:", domain`;
       monaco.editor.setTheme(e.target.value);
     });
 
-    // Light/dark mode toggle
-    let isDark = true;
+    // Light/dark mode toggle (persisted via localStorage)
+    let isDark = localStorage.getItem('rip-repl-mode') !== 'light';
     const modeToggle = document.getElementById('mode-toggle');
 
-    modeToggle.addEventListener('click', () => {
-      isDark = !isDark;
+    function applyMode() {
       document.body.classList.toggle('light', !isDark);
       modeToggle.innerHTML = isDark ? '&#9790;' : '&#9788;';
       modeToggle.title = isDark ? 'Switch to light mode' : 'Switch to dark mode';
+      themeSelect.value = isDark ? 'vs-dark' : 'vs';
+      monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs');
+      localStorage.setItem('rip-repl-mode', isDark ? 'dark' : 'light');
+    }
 
-      // Sync Monaco theme with mode
-      if (isDark) {
-        themeSelect.value = 'vs-dark';
-        monaco.editor.setTheme('vs-dark');
-      } else {
-        themeSelect.value = 'vs';
-        monaco.editor.setTheme('vs');
-      }
+    applyMode();
+
+    modeToggle.addEventListener('click', () => {
+      isDark = !isDark;
+      applyMode();
     });
 
     // ========================================================================
