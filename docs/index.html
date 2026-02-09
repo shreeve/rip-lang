@@ -907,9 +907,13 @@ console.log "Domain:", domain`;
     modeToggle.addEventListener('click', () => {
       isDark = !isDark;
       applyMode();
-      const defaultTheme = isDark ? 'vs-dark' : 'vs';
-      themeSelect.value = defaultTheme;
-      setTheme(defaultTheme);
+      // Only reset theme if currently using a built-in default
+      const current = themeSelect.value;
+      if (current === 'vs' || current === 'vs-dark') {
+        const defaultTheme = isDark ? 'vs-dark' : 'vs';
+        themeSelect.value = defaultTheme;
+        setTheme(defaultTheme);
+      }
     });
 
     // ========================================================================
