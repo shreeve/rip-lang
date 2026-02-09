@@ -893,15 +893,6 @@ console.log "Domain:", domain`;
       localStorage.setItem('rip-repl-mode', isDark ? 'dark' : 'light');
     }
 
-    // Restore saved theme or apply default based on mode
-    const savedTheme = localStorage.getItem('rip-repl-theme');
-    if (savedTheme) {
-      themeSelect.value = savedTheme;
-      await setTheme(savedTheme);
-    } else {
-      setTheme(isDark ? 'vs-dark' : 'vs');
-    }
-
     applyMode();
 
     modeToggle.addEventListener('click', () => {
@@ -1091,6 +1082,15 @@ console.log "Domain:", domain`;
     } else {
       // No hash - compiler is default
       compileCode();
+    }
+
+    // Restore saved theme (after all editors are created and initialized)
+    const savedTheme = localStorage.getItem('rip-repl-theme');
+    if (savedTheme) {
+      themeSelect.value = savedTheme;
+      await setTheme(savedTheme);
+    } else {
+      await setTheme(isDark ? 'vs-dark' : 'vs');
     }
 
     // Show page now that everything is initialized (prevents flicker)
