@@ -574,13 +574,20 @@ bun run test               # Run test suite (1,140 tests)
 
 ---
 
+## Documentation
+
+| Document | Audience | Purpose |
+|----------|----------|---------|
+| **[RIP-GUIDE.md](RIP-GUIDE.md)** | Users / AI | Practical guide for using Rip in projects |
+| **[AGENT.md](../AGENT.md)** | AI agents | Get up to speed for working on the compiler |
+| **[RIP-LANG.md](RIP-LANG.md)** | Users | Full language reference |
+| **[RIP-TYPES.md](RIP-TYPES.md)** | Contributors | Type system specification |
+| **[RIP-REACTIVITY.md](RIP-REACTIVITY.md)** | Users | Reactivity deep dive |
+| **[RIP-INTERNALS.md](RIP-INTERNALS.md)** | Contributors | Compiler architecture |
+
 ## Resources
 
 - [Rip Playground](https://shreeve.github.io/rip-lang/) — Try Rip in the browser
-- [Language Reference](RIP-LANG.md) — Complete syntax documentation
-- [Type System](RIP-TYPES.md) — Type annotation specification
-- [Reactivity](RIP-REACTIVITY.md) — Reactivity deep dive
-- [Compiler Internals](RIP-INTERNALS.md) — How the compiler works
 - [VS Code Extension](https://marketplace.visualstudio.com/items?itemName=rip-lang.rip) — IDE support
 - [GitHub](https://github.com/shreeve/rip-lang) — Source code
 
