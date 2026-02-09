@@ -689,8 +689,6 @@ class Generator
     tokenLoc = lexer.loc
     locs.push tokenLoc
 
-    ranges = lexer.options?.ranges
-
     @parseError = if typeof sharedState.ctx.parseError is 'function'
       sharedState.ctx.parseError
     else
