@@ -1452,30 +1452,33 @@ console.log "Domain:", domain`;
     }
 
     // REPL input handling (Monaco keybindings)
-    replEditor.addCommand(monaco.KeyCode.Enter, () => {
-      const line = replEditor.getValue();
-      replEditor.setValue('');
-      handleLine(line);
-    });
-
-    replEditor.addCommand(monaco.KeyCode.UpArrow, () => {
-      if (historyIndex > 0) {
-        historyIndex--;
-        replEditor.setValue(replHistory[historyIndex] || '');
-        // Move cursor to end
-        const model = replEditor.getModel();
-        const lastCol = model.getLineMaxColumn(1);
-        replEditor.setPosition({ lineNumber: 1, column: lastCol });
-      }
-    });
-
-    replEditor.addCommand(monaco.KeyCode.DownArrow, () => {
-      if (historyIndex < replHistory.length) {
-        historyIndex++;
-        replEditor.setValue(replHistory[historyIndex] || '');
-        const model = replEditor.getModel();
-        const lastCol = model.getLineMaxColumn(1);
-        replEditor.setPosition({ lineNumber: 1, column: lastCol });
+    replEditor.onKeyDown((e) => {
+      if (e.keyCode === monaco.KeyCode.Enter) {
+        e.preventDefault();
+        e.stopPropagation();
+        const line = replEditor.getValue().replace(/\n/g, '');
+        replEditor.setValue('');
+        if (line.trim()) handleLine(line);
+      } else if (e.keyCode === monaco.KeyCode.UpArrow) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (historyIndex > 0) {
+          historyIndex--;
+          replEditor.setValue(replHistory[historyIndex] || '');
+          const model = replEditor.getModel();
+          const lastCol = model.getLineMaxColumn(1);
+          replEditor.setPosition({ lineNumber: 1, column: lastCol });
+        }
+      } else if (e.keyCode === monaco.KeyCode.DownArrow) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (historyIndex < replHistory.length) {
+          historyIndex++;
+          replEditor.setValue(replHistory[historyIndex] || '');
+          const model = replEditor.getModel();
+          const lastCol = model.getLineMaxColumn(1);
+          replEditor.setPosition({ lineNumber: 1, column: lastCol });
+        }
       }
     });
 
