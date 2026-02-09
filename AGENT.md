@@ -83,7 +83,7 @@ rip-lang/
 | `src/components.js` | Yes | Component system (compiler sidecar) |
 | `src/grammar/grammar.rip` | Carefully | Run `bun run parser` after changes |
 | `src/parser.js` | Never | Generated file |
-| `src/sourcemap.js` | Yes | Source map generator |
+| `src/sourcemaps.js` | Yes | Source map generator |
 | `src/tags.js` | Yes | HTML tag classification |
 | `src/grammar/solar.rip` | Never | Parser generator (given) |
 | `test/rip/*.rip` | Yes | Test files |
