@@ -205,14 +205,8 @@
       font-size: 14px;
     }
 
-    .repl-input {
+    #repl-editor-container {
       flex: 1;
-      background: transparent;
-      border: none;
-      outline: none;
-      color: #d4d4d4;
-      font-family: 'Monaco', 'Menlo', monospace;
-      font-size: 14px;
     }
 
     /* Compiler Styles */
@@ -472,7 +466,6 @@
     body.light .repl-container { background: #e8e8e8; }
     body.light .repl-output { border-color: #3e3e42; color: #d4d4d4; }
     body.light .repl-input-area { background: #252526; border-color: #3e3e42; }
-    body.light .repl-input { background: #252526; color: #d4d4d4; }
 
   </style>
 </head>
@@ -510,7 +503,7 @@
         </div>
         <div class="repl-input-area">
           <span class="repl-prompt-text" id="prompt">rip&gt;</span>
-          <input type="text" class="repl-input" id="repl-input" placeholder="Enter Rip code..." autofocus>
+          <div id="repl-editor-container" style="flex: 1; height: 24px;"></div>
         </div>
       </div>
     </div>
@@ -938,8 +931,40 @@ console.log "Domain:", domain`;
     const showRuntimeBtn = document.getElementById('show-runtime');
     const showJSBtn = document.getElementById('show-js');
     const replOutput = document.getElementById('repl-output');
-    const replInput = document.getElementById('repl-input');
     const promptSpan = document.getElementById('prompt');
+
+    // REPL input editor (single-line Monaco)
+    const replEditor = monaco.editor.create(document.getElementById('repl-editor-container'), {
+      value: '',
+      language: 'rip',
+      theme: 'vs-dark',
+      fontSize: 14,
+      fontFamily: "'Monaco', 'Menlo', 'Consolas', monospace",
+      lineHeight: 24,
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      automaticLayout: true,
+      lineNumbers: 'off',
+      glyphMargin: false,
+      folding: false,
+      lineDecorationsWidth: 0,
+      lineNumbersMinChars: 0,
+      overviewRulerLanes: 0,
+      hideCursorInOverviewRuler: true,
+      scrollbar: { vertical: 'hidden', horizontal: 'hidden' },
+      renderLineHighlight: 'none',
+      wordWrap: 'off',
+      contextmenu: false,
+      tabSize: 2,
+      insertSpaces: true,
+      padding: { top: 0, bottom: 0 },
+      quickSuggestions: false,
+      suggestOnTriggerCharacters: false,
+      acceptSuggestionOnEnter: 'off',
+      tabCompletion: 'off',
+      parameterHints: { enabled: false },
+      find: { addExtraSpaceOnTop: false, autoFindInSelection: 'never' },
+    });
     const resizer = document.getElementById('resizer');
     const leftPane = document.getElementById('editor-left');
     const rightPane = document.getElementById('editor-right');
@@ -1019,7 +1044,7 @@ console.log "Domain:", domain`;
 
       // Focus appropriate input and run setup
       if (tabName === 'repl') {
-        replInput.focus();
+        replEditor.focus();
       } else if (tabName === 'compiler') {
         compileCode();  // Update compiler output
       }
@@ -1426,24 +1451,31 @@ console.log "Domain:", domain`;
       return String(val);
     }
 
-    // REPL input handling
-    replInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        const line = e.target.value;
-        e.target.value = '';
-        handleLine(line);
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        if (historyIndex > 0) {
-          historyIndex--;
-          e.target.value = replHistory[historyIndex] || '';
-        }
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        if (historyIndex < replHistory.length) {
-          historyIndex++;
-          e.target.value = replHistory[historyIndex] || '';
-        }
+    // REPL input handling (Monaco keybindings)
+    replEditor.addCommand(monaco.KeyCode.Enter, () => {
+      const line = replEditor.getValue();
+      replEditor.setValue('');
+      handleLine(line);
+    });
+
+    replEditor.addCommand(monaco.KeyCode.UpArrow, () => {
+      if (historyIndex > 0) {
+        historyIndex--;
+        replEditor.setValue(replHistory[historyIndex] || '');
+        // Move cursor to end
+        const model = replEditor.getModel();
+        const lastCol = model.getLineMaxColumn(1);
+        replEditor.setPosition({ lineNumber: 1, column: lastCol });
+      }
+    });
+
+    replEditor.addCommand(monaco.KeyCode.DownArrow, () => {
+      if (historyIndex < replHistory.length) {
+        historyIndex++;
+        replEditor.setValue(replHistory[historyIndex] || '');
+        const model = replEditor.getModel();
+        const lastCol = model.getLineMaxColumn(1);
+        replEditor.setPosition({ lineNumber: 1, column: lastCol });
       }
     });
 
