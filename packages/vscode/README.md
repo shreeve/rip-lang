@@ -65,9 +65,10 @@ Open `packages/vscode/` as a workspace folder, then press **F5** to launch a new
 3. Click your profile icon (top right) -> **Personal Access Tokens**
 4. Click **New Token**
 5. Set:
-   - **Name**: `vscode-marketplace`
-   - **Organization**: All accessible organizations
-   - **Expiration**: 1 year
+   - **Name**: `Rip`
+   - **ID**: rip-lang
+   - **Description**: A modern reactive language that compiles to JavaScript
+   - **Logo**: Upload the Rip logo (the icon.png from packages/vscode/)
    - **Scopes**: Custom defined -> **Marketplace** -> check **Manage**
 6. Click **Create** and copy the token
 
