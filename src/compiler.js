@@ -3239,7 +3239,8 @@ export class Compiler {
     let map = sourceMap ? sourceMap.toJSON() : null;
     let reverseMap = sourceMap ? sourceMap.toReverseMap() : null;
     if (map && this.options.sourceMap === 'inline') {
-      code += `\n//# sourceMappingURL=data:application/json;base64,${btoa(map)}`;
+      let b64 = typeof Buffer !== 'undefined' ? Buffer.from(map).toString('base64') : btoa(map);
+      code += `\n//# sourceMappingURL=data:application/json;base64,${b64}`;
     } else if (map && this.options.filename) {
       code += `\n//# sourceMappingURL=${this.options.filename}.js.map`;
     }
