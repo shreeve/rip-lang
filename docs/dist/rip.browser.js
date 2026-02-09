@@ -2966,7 +2966,7 @@ var parserInstance = {
       return this.trace(str);
     else {
       line = (hash.line || 0) + 1;
-      col = hash.loc?.first_column || 0;
+      col = hash.loc?.c || 0;
       token = hash.token ? ` (token: ${hash.token})` : "";
       text = hash.text ? ` near '${hash.text}'` : "";
       location = `line ${line}, column ${col}`;
@@ -2977,7 +2977,7 @@ var parserInstance = {
     }
   },
   parse(input) {
-    let EOF, TERROR, action, errStr, expected, len, lex, lexer, locFirst, locLast, locs, newState, p, parseTable, preErrorSymbol, r, ranges, recovering, rv, sharedState, state, stk, symbol, tokenLen, tokenLine, tokenLoc, tokenText, vals;
+    let EOF, TERROR, action, errStr, expected, len, lex, lexer, loc, locs, newState, p, parseTable, preErrorSymbol, r, recovering, rv, sharedState, state, stk, symbol, tokenLen, tokenLine, tokenLoc, tokenText, vals;
     [stk, vals, locs] = [[0], [null], []];
     [parseTable, tokenText, tokenLine, tokenLen, recovering] = [this.parseTable, "", 0, 0, 0];
     [TERROR, EOF] = [2, 1];
@@ -2994,7 +2994,6 @@ var parserInstance = {
       lexer.loc = {};
     tokenLoc = lexer.loc;
     locs.push(tokenLoc);
-    ranges = lexer.options?.ranges;
     this.parseError = typeof sharedState.ctx.parseError === "function" ? sharedState.ctx.parseError : Object.getPrototypeOf(this).parseError;
     lex = () => {
       let token;
@@ -3049,13 +3048,13 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       } else if (action < 0) {
         len = this.ruleTable[-action * 2 + 1];
         rv.$ = vals[vals.length - len];
-        [locFirst, locLast] = [locs[locs.length - (len || 1)], locs[locs.length - 1]];
-        rv._$ = { first_line: locFirst.first_line, last_line: locLast.last_line, first_column: locFirst.first_column, last_column: locLast.last_column };
-        if (ranges)
-          rv._$.range = [locFirst.range[0], locLast.range[1]];
+        loc = locs[locs.length - (len || 1)];
+        rv._$ = { r: loc.r, c: loc.c };
         r = this.ruleActions.call(rv, -action, vals, locs, sharedState.ctx);
         if (r != null)
           rv.$ = r;
+        if (Array.isArray(rv.$))
+          rv.$.loc = rv._$;
         if (len) {
           stk.length -= len * 2;
           vals.length -= len;
@@ -3984,6 +3983,92 @@ if (typeof globalThis !== 'undefined') {
   };
 }
 
+// src/sourcemap.js
+var B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+function vlqEncode(value) {
+  let result = "";
+  let vlq = value < 0 ? -value << 1 | 1 : value << 1;
+  do {
+    let digit = vlq & 31;
+    vlq >>>= 5;
+    if (vlq > 0)
+      digit |= 32;
+    result += B64[digit];
+  } while (vlq > 0);
+  return result;
+}
+
+class SourceMapGenerator {
+  constructor(file, source, sourceContent = null) {
+    this.file = file;
+    this.source = source;
+    this.sourceContent = sourceContent;
+    this.names = [];
+    this.nameIndex = new Map;
+    this.lines = [];
+    this.mappings = [];
+    this.prevGenCol = 0;
+    this.prevOrigLine = 0;
+    this.prevOrigCol = 0;
+    this.prevNameIdx = 0;
+    this.currentLine = -1;
+  }
+  ensureLine(line) {
+    while (this.lines.length <= line)
+      this.lines.push([]);
+  }
+  addName(name) {
+    if (this.nameIndex.has(name))
+      return this.nameIndex.get(name);
+    let idx = this.names.length;
+    this.names.push(name);
+    this.nameIndex.set(name, idx);
+    return idx;
+  }
+  addMapping(genLine, genCol, origLine, origCol, name) {
+    this.ensureLine(genLine);
+    if (this.currentLine !== genLine) {
+      this.prevGenCol = 0;
+      this.currentLine = genLine;
+    }
+    if (origLine == null) {
+      this.lines[genLine].push(vlqEncode(genCol - this.prevGenCol));
+      this.prevGenCol = genCol;
+      return;
+    }
+    this.mappings.push({ genLine, genCol, origLine, origCol });
+    let segment = vlqEncode(genCol - this.prevGenCol);
+    this.prevGenCol = genCol;
+    segment += vlqEncode(0);
+    segment += vlqEncode(origLine - this.prevOrigLine);
+    this.prevOrigLine = origLine;
+    segment += vlqEncode(origCol - this.prevOrigCol);
+    this.prevOrigCol = origCol;
+    if (name != null) {
+      let idx = this.addName(name);
+      segment += vlqEncode(idx - this.prevNameIdx);
+      this.prevNameIdx = idx;
+    }
+    this.lines[genLine].push(segment);
+  }
+  toReverseMap() {
+    let reverse = new Map;
+    for (let m of this.mappings) {
+      if (!reverse.has(m.origLine)) {
+        reverse.set(m.origLine, { genLine: m.genLine, genCol: m.genCol });
+      }
+    }
+    return reverse;
+  }
+  toJSON() {
+    let mappings = this.lines.map((segs) => segs.join(",")).join(";");
+    let map = { version: 3, file: this.file, sources: [this.source], names: this.names, mappings };
+    if (this.sourceContent != null)
+      map.sourcesContent = [this.sourceContent];
+    return JSON.stringify(map);
+  }
+}
+
 // src/compiler.js
 var meta = (node, key) => node instanceof String ? node[key] : undefined;
 var str = (node) => node instanceof String ? node.valueOf() : node;
@@ -4267,6 +4352,7 @@ class CodeGenerator {
     this.indentString = "  ";
     this.comprehensionDepth = 0;
     this.dataSection = options.dataSection;
+    this.sourceMap = options.sourceMap || null;
     if (options.reactiveVars) {
       this.reactiveVars = new Set(options.reactiveVars);
     }
@@ -4276,7 +4362,56 @@ class CodeGenerator {
     this.functionVars = new Map;
     this.helpers = new Set;
     this.collectProgramVariables(sexpr);
-    return this.generate(sexpr);
+    let code = this.generate(sexpr);
+    if (this.sourceMap)
+      this.buildMappings(code, sexpr);
+    return code;
+  }
+  buildMappings(code, sexpr) {
+    if (!sexpr || sexpr[0] !== "program")
+      return;
+    let locs = [];
+    let collect = (node) => {
+      if (!Array.isArray(node))
+        return;
+      let head = node[0];
+      if (head === "program" || head === "block") {
+        for (let i = 1;i < node.length; i++) {
+          let child = node[i];
+          if (Array.isArray(child) && child.loc)
+            locs.push(child.loc);
+          collect(child);
+        }
+      } else {
+        for (let i = 1;i < node.length; i++)
+          collect(node[i]);
+      }
+    };
+    collect(sexpr);
+    let lines = code.split(`
+`);
+    let locIdx = 0;
+    for (let outLine = 0;outLine < lines.length; outLine++) {
+      let line = lines[outLine];
+      let trimmed = line.trim();
+      if (!trimmed || trimmed === "}" || trimmed === "});")
+        continue;
+      if (trimmed.startsWith("let ") || trimmed.startsWith("var "))
+        continue;
+      if (trimmed.startsWith("const slice") || trimmed.startsWith("const modulo") || trimmed.startsWith("const toSearchable"))
+        continue;
+      if (trimmed.startsWith("const {") && trimmed.includes("__"))
+        continue;
+      if (trimmed.startsWith("} else"))
+        continue;
+      if (trimmed.startsWith("//# source"))
+        continue;
+      if (locIdx < locs.length) {
+        let indent = line.length - trimmed.length;
+        this.sourceMap.addMapping(outLine, indent, locs[locIdx].r, locs[locIdx].c);
+        locIdx++;
+      }
+    }
   }
   collectProgramVariables(sexpr) {
     if (!Array.isArray(sexpr))
@@ -7353,14 +7488,30 @@ class Compiler {
       console.log(formatSExpr(sexpr, 0, true));
       console.log();
     }
+    let sourceMap = null;
+    if (this.options.sourceMap) {
+      let file = (this.options.filename || "output") + ".js";
+      let sourceFile = this.options.filename || "input.rip";
+      sourceMap = new SourceMapGenerator(file, sourceFile, source);
+    }
     let generator = new CodeGenerator({
       dataSection,
       skipReactiveRuntime: this.options.skipReactiveRuntime,
       skipComponentRuntime: this.options.skipComponentRuntime,
-      reactiveVars: this.options.reactiveVars
+      reactiveVars: this.options.reactiveVars,
+      sourceMap
     });
     let code = generator.compile(sexpr);
-    return { tokens, sexpr, code, dts, data: dataSection, reactiveVars: generator.reactiveVars };
+    let map = sourceMap ? sourceMap.toJSON() : null;
+    let reverseMap = sourceMap ? sourceMap.toReverseMap() : null;
+    if (map && this.options.sourceMap === "inline") {
+      code += `
+//# sourceMappingURL=data:application/json;base64,${btoa(map)}`;
+    } else if (map && this.options.filename) {
+      code += `
+//# sourceMappingURL=${this.options.filename}.js.map`;
+    }
+    return { tokens, sexpr, code, dts, map, reverseMap, data: dataSection, reactiveVars: generator.reactiveVars };
   }
   compileToJS(source) {
     return this.compile(source).code;
@@ -7384,8 +7535,8 @@ function getComponentRuntime() {
   return new CodeGenerator({}).getComponentRuntime();
 }
 // src/browser.js
-var VERSION = "3.3.1";
-var BUILD_DATE = "2026-02-09@04:41:44GMT";
+var VERSION = "3.4.0";
+var BUILD_DATE = "2026-02-09@07:03:58GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
