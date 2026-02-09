@@ -1,0 +1,40 @@
+{
+  "name": "@rip-lang/print",
+  "version": "0.1.0",
+  "description": "Syntax-highlighted source code printer — Shiki-powered, serves once, auto-opens browser",
+  "type": "module",
+  "main": "print.rip",
+  "bin": {
+    "rip-print": "./bin/rip-print"
+  },
+  "keywords": [
+    "print",
+    "syntax",
+    "highlighting",
+    "highlight.js",
+    "source",
+    "code",
+    "bun",
+    "rip"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreeve/rip-lang.git",
+    "directory": "packages/print"
+  },
+  "homepage": "https://github.com/shreeve/rip-lang/tree/main/packages/print#readme",
+  "bugs": {
+    "url": "https://github.com/shreeve/rip-lang/issues"
+  },
+  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "rip-lang": "^3.4.4",
+    "highlight.js": "^11.11.1"
+  },
+  "files": [
+    "print.rip",
+    "bin/rip-print",
+    "README.md"
+  ]
+}
