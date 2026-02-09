@@ -308,20 +308,6 @@
       overflow: hidden;
     }
 
-    .output-code {
-      flex: 1;
-      min-height: 0;
-      padding: 15px;
-      font-family: 'Monaco', 'Menlo', monospace;
-      font-size: 14px;
-      line-height: 1.6;
-      background: #1e1e1e;
-      color: #d4d4d4;
-      border: none;
-      outline: none;
-      resize: none;
-      overflow: auto;
-    }
 
     .theme-select {
       background: #3c3c3c;
@@ -337,13 +323,6 @@
     .theme-select:hover {
       border-color: #007acc;
     }
-
-    .output-code {
-      background: #1e1e1e;
-      white-space: pre;
-      overflow: auto;
-    }
-
 
     /* Scrollbar styling */
     ::-webkit-scrollbar {
@@ -396,13 +375,6 @@
       color: #ce9178;
     }
 
-    /* Syntax highlighting for JavaScript output */
-    .output-code .hl-keyword { color: #569cd6; }
-    .output-code .hl-string { color: #ce9178; }
-    .output-code .hl-number { color: #b5cea8; }
-    .output-code .hl-comment { color: #6a9955; font-style: italic; }
-    .output-code .hl-function { color: #dcdcaa; }
-    .output-code .hl-operator { color: #d4d4d4; }
 
     /* Light/Dark mode toggle */
     .mode-toggle {
@@ -472,11 +444,6 @@
     body.light .pane-header button.active { background: #007acc; color: #ffffff; }
     body.light .theme-select { background: #f3f3f3; color: #333333; border-color: #cccccc; }
 
-    body.light .output-code {
-      background: #ffffff;
-      color: #1e1e1e;
-    }
-
     body.light .resizer { background: #d4d4d4; }
     body.light .resizer:hover { background: #007acc; }
 
@@ -497,11 +464,6 @@
     body.light .repl-input-area { background: #252526; border-color: #3e3e42; }
     body.light .repl-input { background: #252526; color: #d4d4d4; }
 
-    body.light .output-code .hl-keyword { color: #0000ff; }
-    body.light .output-code .hl-string { color: #a31515; }
-    body.light .output-code .hl-number { color: #098658; }
-    body.light .output-code .hl-comment { color: #008000; }
-    body.light .output-code .hl-function { color: #795e26; }
   </style>
 </head>
 <body>
@@ -587,7 +549,7 @@
               <button id="show-js" class="active" title="Toggle JavaScript output">JS</button>
             </div>
           </div>
-          <pre class="output-code" id="output"></pre>
+          <div class="editor-wrapper" id="output-container"></div>
         </div>
       </div>
     </div>
@@ -851,7 +813,30 @@ console.log "Domain:", domain`;
       padding: { top: 10 },
     });
 
-    // Theme selector
+    // Output editor (read-only JavaScript display)
+    const outputEditor = monaco.editor.create(document.getElementById('output-container'), {
+      value: '',
+      language: 'javascript',
+      theme: 'vs-dark',
+      fontSize: 14,
+      fontFamily: "'Monaco', 'Menlo', 'Consolas', monospace",
+      lineHeight: 22,
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      automaticLayout: true,
+      readOnly: true,
+      domReadOnly: true,
+      lineNumbers: 'off',
+      renderWhitespace: 'none',
+      overviewRulerLanes: 0,
+      hideCursorInOverviewRuler: true,
+      scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10, verticalSliderSize: 10, horizontalSliderSize: 10 },
+      padding: { top: 10 },
+      folding: false,
+      glyphMargin: false,
+      contextmenu: false,
+    });
+
     // Theme selector (dropdown) with lazy CDN loading
     const themeSelect = document.getElementById('theme-select');
     const THEME_CDN = 'https://cdn.jsdelivr.net/npm/monaco-themes@0.4.4/themes';
@@ -938,7 +923,6 @@ console.log "Domain:", domain`;
     // DOM Element References
     // ========================================================================
 
-    const output = document.getElementById('output');
     const showTokensBtn = document.getElementById('show-tokens');
     const showSexpBtn = document.getElementById('show-sexp');
     const showRuntimeBtn = document.getElementById('show-runtime');
@@ -967,48 +951,43 @@ console.log "Domain:", domain`;
       return code;
     }
 
-    function highlightJS(code) {
-      return code
-        .replace(/\\b(def|function|async|const|let|var|if|else|return|while|for|class|extends|super|new|this|try|catch|finally|throw|switch|case|default|break|continue)\\b/g,
-          '<span class="hl-keyword">$1</span>')
-        .replace(/("(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*'|`(?:[^`\\\\]|\\\\.)*`)/g,
-          '<span class="hl-string">$1</span>')
-        .replace(/\\b(\\d+\\.?\\d*|0x[0-9a-fA-F]+|0b[01]+|0o[0-7]+)\\b/g,
-          '<span class="hl-number">$1</span>')
-        .replace(/(\/\/.*$|\/\*[\s\S]*?\*\/)/gm,
-          '<span class="hl-comment">$1</span>')
-        .replace(/\b([a-zA-Z_$][a-zA-Z0-9_$]*)(?=\s*\()/g,
-          '<span class="hl-function">$1</span>');
-    }
-
     function compileCode() {
       try {
         const source = monacoEditor.getValue();
         const result = compile(source);
 
-        let outputText = '';
+        let parts = [];
+        let lang = 'javascript';
 
         if (showTokens) {
+          let tokenText = '';
           result.tokens.forEach(t => {
-            outputText += `${t[0].padEnd(12)} ${JSON.stringify(t[1])}\n`;
+            tokenText += `${t[0].padEnd(12)} ${JSON.stringify(t[1])}\n`;
           });
-          outputText += '\n';
+          parts.push(tokenText);
+          lang = 'plaintext';
         }
 
         if (showSexp) {
-          outputText += window.toSexpr ? window.toSexpr(result.sexpr, 0, true) : JSON.stringify(result.sexpr, null, 1);
-          outputText += '\n\n';
+          parts.push(window.toSexpr ? window.toSexpr(result.sexpr, 0, true) : JSON.stringify(result.sexpr, null, 1));
+          lang = 'plaintext';
         }
 
-        let jsOutput = '';
         if (showJS) {
           const cleanCode = showRuntime ? result.code : stripHelpers(result.code);
-          jsOutput = highlightJS(cleanCode);
+          parts.push(cleanCode);
         }
 
-        output.innerHTML = outputText.replace(/</g, '&lt;').replace(/>/g, '&gt;') + jsOutput;
+        const outputText = parts.join('\n\n');
+
+        // Update output editor language and content
+        const model = outputEditor.getModel();
+        monaco.editor.setModelLanguage(model, (showTokens || showSexp) ? 'plaintext' : 'javascript');
+        outputEditor.setValue(outputText);
       } catch (error) {
-        output.textContent = `Error: ${error.message}`;
+        const model = outputEditor.getModel();
+        monaco.editor.setModelLanguage(model, 'plaintext');
+        outputEditor.setValue(`Error: ${error.message}`);
       }
     }
 
