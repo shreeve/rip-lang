@@ -1,4 +1,4 @@
-<img src="https://raw.githubusercontent.com/shreeve/rip-lang/main/docs/rip.svg" style="width:50px" /> <br>
+<img src="https://raw.githubusercontent.com/shreeve/rip-lang/main/docs/rip-square.png" style="width:50px" /> <br>
 
 # Rip - VS Code Extension
 
