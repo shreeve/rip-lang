@@ -545,10 +545,28 @@
             <span>Rip Source</span>
             <div class="pane-header-buttons">
               <select id="theme-select" class="theme-select" title="Editor theme">
-                <option value="vs-dark">Dark+ (default)</option>
-                <option value="vs">Light+</option>
-                <option value="hc-black">High Contrast Dark</option>
-                <option value="hc-light">High Contrast Light</option>
+                <optgroup label="Built-in">
+                  <option value="vs-dark">Dark+ (default)</option>
+                  <option value="vs">Light+</option>
+                  <option value="hc-black">High Contrast Dark</option>
+                  <option value="hc-light">High Contrast Light</option>
+                </optgroup>
+                <optgroup label="Dark">
+                  <option value="cdn:Monokai">Monokai</option>
+                  <option value="cdn:Dracula">Dracula</option>
+                  <option value="cdn:Nord">Nord</option>
+                  <option value="cdn:One Dark">One Dark</option>
+                  <option value="cdn:Tomorrow-Night">Tomorrow Night</option>
+                  <option value="cdn:Twilight">Twilight</option>
+                  <option value="cdn:Cobalt">Cobalt</option>
+                  <option value="cdn:Night Owl">Night Owl</option>
+                </optgroup>
+                <optgroup label="Light">
+                  <option value="cdn:GitHub Light">GitHub Light</option>
+                  <option value="cdn:Solarized-light">Solarized Light</option>
+                  <option value="cdn:Quiet Light">Quiet Light</option>
+                  <option value="cdn:IDLE">IDLE</option>
+                </optgroup>
               </select>
               <button id="clear-btn" title="Clear the editor">Clear</button>
               <button class="active" id="run-btn" title="Execute code and output to browser console (F5, Cmd+Enter, Ctrl+Enter)">Run</button>
@@ -833,11 +851,36 @@ console.log "Domain:", domain`;
     });
 
     // Theme selector
-    // Theme selector (dropdown)
+    // Theme selector (dropdown) with lazy CDN loading
     const themeSelect = document.getElementById('theme-select');
-    themeSelect.addEventListener('change', (e) => {
-      monaco.editor.setTheme(e.target.value);
-    });
+    const THEME_CDN = 'https://cdn.jsdelivr.net/npm/monaco-themes@0.4.4/themes';
+    const loadedThemes = new Set(['vs', 'vs-dark', 'hc-black', 'hc-light']);
+
+    async function setTheme(value) {
+      if (value.startsWith('cdn:')) {
+        const themeName = value.slice(4);
+        const themeId = themeName.toLowerCase().replace(/\s+/g, '-');
+
+        if (!loadedThemes.has(themeId)) {
+          try {
+            const res = await fetch(`${THEME_CDN}/${encodeURIComponent(themeName)}.json`);
+            const data = await res.json();
+            monaco.editor.defineTheme(themeId, data);
+            loadedThemes.add(themeId);
+          } catch (err) {
+            console.error(`Failed to load theme: ${themeName}`, err);
+            return;
+          }
+        }
+        monaco.editor.setTheme(themeId);
+        localStorage.setItem('rip-repl-theme', value);
+      } else {
+        monaco.editor.setTheme(value);
+        localStorage.setItem('rip-repl-theme', value);
+      }
+    }
+
+    themeSelect.addEventListener('change', (e) => setTheme(e.target.value));
 
     // Light/dark mode toggle (persisted via localStorage)
     let isDark = localStorage.getItem('rip-repl-mode') !== 'light';
@@ -847,9 +890,16 @@ console.log "Domain:", domain`;
       document.body.classList.toggle('light', !isDark);
       modeToggle.innerHTML = isDark ? '&#9790;' : '&#9788;';
       modeToggle.title = isDark ? 'Switch to light mode' : 'Switch to dark mode';
-      themeSelect.value = isDark ? 'vs-dark' : 'vs';
-      monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs');
       localStorage.setItem('rip-repl-mode', isDark ? 'dark' : 'light');
+    }
+
+    // Restore saved theme or apply default based on mode
+    const savedTheme = localStorage.getItem('rip-repl-theme');
+    if (savedTheme) {
+      themeSelect.value = savedTheme;
+      await setTheme(savedTheme);
+    } else {
+      setTheme(isDark ? 'vs-dark' : 'vs');
     }
 
     applyMode();
@@ -857,6 +907,9 @@ console.log "Domain:", domain`;
     modeToggle.addEventListener('click', () => {
       isDark = !isDark;
       applyMode();
+      const defaultTheme = isDark ? 'vs-dark' : 'vs';
+      themeSelect.value = defaultTheme;
+      setTheme(defaultTheme);
     });
 
     // ========================================================================
