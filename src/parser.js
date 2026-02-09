@@ -231,7 +231,7 @@ const parserInstance = {
       return this.trace(str);
     else {
       line = (hash.line || 0) + 1;
-      col = hash.loc?.first_column || 0;
+      col = hash.loc?.c || 0;
       token = hash.token ? ` (token: ${hash.token})` : "";
       text = hash.text ? ` near '${hash.text}'` : "";
       location = `line ${line}, column ${col}`;
@@ -315,12 +315,12 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         len = this.ruleTable[-action * 2 + 1];
         rv.$ = vals[vals.length - len];
         [locFirst, locLast] = [locs[locs.length - (len || 1)], locs[locs.length - 1]];
-        rv._$ = { first_line: locFirst.first_line, last_line: locLast.last_line, first_column: locFirst.first_column, last_column: locLast.last_column };
-        if (ranges)
-          rv._$.range = [locFirst.range[0], locLast.range[1]];
+        rv._$ = { r: locFirst.r, c: locFirst.c };
         r = this.ruleActions.call(rv, -action, vals, locs, sharedState.ctx);
         if (r != null)
           rv.$ = r;
+        if (Array.isArray(rv.$))
+          rv.$.loc = rv._$;
         if (len) {
           stk.length -= len * 2;
           vals.length -= len;

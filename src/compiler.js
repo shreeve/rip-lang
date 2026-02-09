@@ -12,6 +12,7 @@ import { Lexer } from './lexer.js';
 import { parser } from './parser.js';
 import { installComponentSupport } from './components.js';
 import { emitTypes, generateEnum } from './types.js';
+import { SourceMapGenerator } from './sourcemap.js';
 
 // =============================================================================
 // Metadata helpers — isolate all new String() awareness here
@@ -259,6 +260,7 @@ export class CodeGenerator {
     this.indentString = '  ';
     this.comprehensionDepth = 0;
     this.dataSection = options.dataSection;
+    this.sourceMap = options.sourceMap || null;
     if (options.reactiveVars) {
       this.reactiveVars = new Set(options.reactiveVars);
     }
@@ -273,7 +275,70 @@ export class CodeGenerator {
     this.functionVars = new Map();
     this.helpers = new Set();
     this.collectProgramVariables(sexpr);
-    return this.generate(sexpr);
+    let code = this.generate(sexpr);
+
+    // Build source map mappings from generated code + S-expression locations
+    if (this.sourceMap) this.buildMappings(code, sexpr);
+
+    return code;
+  }
+
+  // Build source map by walking generated output lines and S-expression nodes
+  buildMappings(code, sexpr) {
+    if (!sexpr || sexpr[0] !== 'program') return;
+
+    let lines = code.split('\n');
+    let stmts = sexpr.slice(1);
+
+    // Collect statement locations in source order
+    let stmtLocs = [];
+    for (let stmt of stmts) {
+      if (Array.isArray(stmt) && stmt.loc) {
+        stmtLocs.push(stmt.loc);
+      }
+    }
+
+    // Count prefix lines (let declarations, helpers, runtime) — these have no source mapping
+    let prefixLines = 0;
+    for (let i = 0; i < lines.length; i++) {
+      let line = lines[i].trim();
+      // Skip empty lines, let declarations, const helpers, runtime code, comments
+      if (line === '' || line.startsWith('let ') || line.startsWith('const slice') ||
+          line.startsWith('const modulo') || line.startsWith('const toSearchable') ||
+          line.startsWith('const {') || line.startsWith('import ')) {
+        prefixLines = i + 1;
+      } else {
+        break;
+      }
+    }
+    // Account for blank line separator after prefix
+    if (prefixLines > 0 && prefixLines < lines.length && lines[prefixLines].trim() === '') {
+      prefixLines++;
+    }
+
+    // Map output lines to source locations
+    // Walk the remaining output lines and match them to statements by order
+    let stmtIdx = 0;
+    for (let outLine = prefixLines; outLine < lines.length; outLine++) {
+      let line = lines[outLine];
+      if (line.trim() === '') continue;  // skip blank lines
+
+      // Find the best matching statement
+      if (stmtIdx < stmtLocs.length) {
+        let loc = stmtLocs[stmtIdx];
+        let indent = line.length - line.trimStart().length;
+        this.sourceMap.addMapping(outLine, indent, loc.r, loc.c);
+
+        // Advance to next statement when we hit a top-level line (not indented continuation)
+        if (indent === 0 && outLine > prefixLines) {
+          stmtIdx++;
+          if (stmtIdx < stmtLocs.length) {
+            loc = stmtLocs[stmtIdx];
+            this.sourceMap.addMapping(outLine, indent, loc.r, loc.c);
+          }
+        }
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -3165,15 +3230,30 @@ export class Compiler {
     }
 
     // Step 4: Generate JavaScript
+    let sourceMap = null;
+    if (this.options.sourceMap) {
+      let file = (this.options.filename || 'output') + '.js';
+      let sourceFile = this.options.filename || 'input.rip';
+      sourceMap = new SourceMapGenerator(file, sourceFile, source);
+    }
+
     let generator = new CodeGenerator({
       dataSection,
       skipReactiveRuntime: this.options.skipReactiveRuntime,
       skipComponentRuntime: this.options.skipComponentRuntime,
-      reactiveVars: this.options.reactiveVars
+      reactiveVars: this.options.reactiveVars,
+      sourceMap,
     });
     let code = generator.compile(sexpr);
 
-    return { tokens, sexpr, code, dts, data: dataSection, reactiveVars: generator.reactiveVars };
+    let map = sourceMap ? sourceMap.toJSON() : null;
+    if (map && this.options.sourceMap === 'inline') {
+      code += `\n//# sourceMappingURL=data:application/json;base64,${btoa(map)}`;
+    } else if (map && this.options.filename) {
+      code += `\n//# sourceMappingURL=${this.options.filename}.js.map`;
+    }
+
+    return { tokens, sexpr, code, dts, map, data: dataSection, reactiveVars: generator.reactiveVars };
   }
 
   compileToJS(source) { return this.compile(source).code; }
