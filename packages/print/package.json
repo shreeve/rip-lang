@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/print",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Syntax-highlighted source code printer — Shiki-powered, serves once, auto-opens browser",
   "type": "module",
   "main": "print.rip",

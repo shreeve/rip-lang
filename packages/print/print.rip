@@ -23,6 +23,10 @@ hljs.registerLanguage 'rip', ripLanguage
 
 args = process.argv.slice(2)
 
+if args.includes('-v') or args.includes('--version')
+  console.log "rip-print 0.1.8"
+  process.exit(0)
+
 if args.includes('-h') or args.includes('--help')
   console.log """
     usage: rip-print [options] <paths ...>
@@ -31,6 +35,7 @@ if args.includes('-h') or args.includes('--help')
       -b, --bypass     Strip leading comment blocks from files
       -d, --dark       Use dark theme (default: light)
       -h, --help       Show this help message
+      -v, --version    Show version and quit
       -x <exts>        Comma list of extensions to exclude
 
     Examples:
@@ -412,7 +417,7 @@ html = """
 served = false
 
 server = Bun.serve
-  port: 0
+  port: 9111
   fetch: (req) ->
     served = true
     new Response html, headers: { 'Content-Type': 'text/html; charset=utf-8' }
