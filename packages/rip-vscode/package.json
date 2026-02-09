@@ -1,0 +1,55 @@
+{
+  "name": "rip-lang",
+  "displayName": "Rip",
+  "description": "Rip language support — syntax highlighting, types, and editor integration",
+  "version": "0.1.0",
+  "publisher": "rip-lang",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shreeve/rip-lang.git",
+    "directory": "packages/rip-vscode"
+  },
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "rip",
+    "coffeescript",
+    "reactive",
+    "types",
+    "compiler"
+  ],
+  "icon": "icon.png",
+  "contributes": {
+    "languages": [
+      {
+        "id": "rip",
+        "extensions": [".rip"],
+        "aliases": ["Rip", "rip"],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icon.png",
+          "dark": "./icon.png"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "rip",
+        "scopeName": "source.rip",
+        "path": "./syntaxes/rip.tmLanguage.json"
+      }
+    ],
+    "configurationDefaults": {
+      "[rip]": {
+        "editor.tabSize": 2,
+        "editor.insertSpaces": true,
+        "diffEditor.ignoreTrimWhitespace": false
+      }
+    }
+  }
+}

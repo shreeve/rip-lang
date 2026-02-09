@@ -1,0 +1,294 @@
+# ==========================================================================
+# Rip Syntax Highlighting Test File
+# ==========================================================================
+#
+# Open this file in the Extension Development Host to verify all syntax
+# elements are correctly highlighted.
+
+# --------------------------------------------------------------------------
+# Variables and Constants
+# --------------------------------------------------------------------------
+
+count = 0
+name = "Rip"
+MAX =! 100
+items = [1, 2, 3]
+config = { host: "localhost", port: 3000 }
+
+# --------------------------------------------------------------------------
+# Type Annotations
+# --------------------------------------------------------------------------
+
+count:: number = 0
+name:: string = "Rip"
+MAX:: number =! 100
+items:: number[] = []
+cache:: Map<string, User> = new Map()
+
+# --------------------------------------------------------------------------
+# Type Aliases and Structural Types
+# --------------------------------------------------------------------------
+
+ID ::= number
+UserID ::= number | string
+
+User ::= type
+  id: number
+  name: string
+  email?: string
+
+Status ::=
+  | "active"
+  | "inactive"
+  | "pending"
+
+# --------------------------------------------------------------------------
+# Interfaces and Enums
+# --------------------------------------------------------------------------
+
+interface Animal
+  name: string
+  age: number
+
+interface Dog extends Animal
+  breed: string
+  bark: () => void
+
+enum HttpCode
+  ok = 200
+  created = 201
+  notFound = 404
+
+# --------------------------------------------------------------------------
+# Functions
+# --------------------------------------------------------------------------
+
+def greet(name:: string):: string
+  "Hello, #{name}!"
+
+def add(a:: number, b:: number):: number
+  a + b
+
+def processUser!(id:: number):: User
+  user = db.find!(id)
+  transform(user)
+
+# --------------------------------------------------------------------------
+# Arrow Functions
+# --------------------------------------------------------------------------
+
+double = (x) -> x * 2
+handler = (e) => @process(e)
+greet = (name:: string):: string -> "Hello, #{name}!"
+
+# --------------------------------------------------------------------------
+# Classes
+# --------------------------------------------------------------------------
+
+class UserService extends BaseService
+  db:: Database
+  cache:: Map<string, User>
+
+  constructor: (@db, @cache) ->
+
+  find: (id:: number):: User ->
+    @cache.get(id) or @db.find!(id)
+
+  create: (data:: CreateUserInput):: User ->
+    user = @db.create!(data)
+    @cache.set(user.id, user)
+    user
+
+dog = Dog.new("Buddy")
+
+# --------------------------------------------------------------------------
+# Reactivity
+# --------------------------------------------------------------------------
+
+count := 0
+doubled ~= count * 2
+message ~= "Count is #{count}"
+~> console.log doubled
+logger ~> console.log count
+
+count <=> input.value
+
+# --------------------------------------------------------------------------
+# Control Flow
+# --------------------------------------------------------------------------
+
+if x > 0
+  log "positive"
+else if x is 0
+  log "zero"
+else
+  log "negative"
+
+result = if cond then "yes" else "no"
+
+unless error
+  proceed()
+
+log "done" if success
+return "error" unless valid
+
+switch status
+  when "active" then process()
+  when "pending" then queue()
+  else reject()
+
+# --------------------------------------------------------------------------
+# Loops and Comprehensions
+# --------------------------------------------------------------------------
+
+for item in items
+  log item
+
+for key, val of config
+  log "#{key}: #{val}"
+
+for x as iterable when x > 0
+  process(x)
+
+while running
+  tick()
+
+until done
+  step()
+
+squares = (x * x for x in [1..10])
+evens = (x for x in [1..20] when x % 2 is 0)
+
+for item in items by -1
+  log item
+
+# --------------------------------------------------------------------------
+# Strings and Interpolation
+# --------------------------------------------------------------------------
+
+simple = 'hello'
+interpolated = "Hello, #{name}!"
+dollar = "Hello, ${name}!"
+template = "Result: #{1 + 2}"
+
+heredoc_single = '''
+  This is a literal
+  multi-line string
+  '''
+
+heredoc_double = """
+  Hello, #{name}!
+  Welcome to Rip.
+  """
+
+# --------------------------------------------------------------------------
+# Regex
+# --------------------------------------------------------------------------
+
+pattern = /^hello\s+(\w+)/i
+str =~ /Hello, (\w+)/
+match = str[/\d+/]
+
+heregex = ///
+  ^                # Start
+  (\d{3})          # Area code
+  [-.\s]?          # Separator
+  (\d{3})          # Exchange
+  [-.\s]?          # Separator
+  (\d{4})          # Subscriber
+  $                # End
+///
+
+# --------------------------------------------------------------------------
+# Async / Dammit Operator
+# --------------------------------------------------------------------------
+
+data = fetchUsers!
+user = db.find!(id)
+result = api.post!(url, body)
+
+def loadData!()
+  users = fetchUsers!
+  posts = fetchPosts!
+  {users, posts}
+
+# --------------------------------------------------------------------------
+# Operators
+# --------------------------------------------------------------------------
+
+x = a + b * c
+y = a // b          # Floor division
+z = a %% b          # Modulo (always positive)
+p = a ** b           # Exponentiation
+q = a !? "default"   # Otherwise operator
+r = x ?? y           # Nullish coalescing
+s = a?.b?.c          # Optional chaining
+t = arr?[0]          # Optional indexing
+
+# --------------------------------------------------------------------------
+# Modules
+# --------------------------------------------------------------------------
+
+import { get, post, start } from '@rip-lang/api'
+import fs from 'fs'
+import * as path from 'path'
+
+export def handler(req)
+  { status: 200 }
+
+export default config
+
+# --------------------------------------------------------------------------
+# Inline JavaScript
+# --------------------------------------------------------------------------
+
+`console.log("raw javascript")`
+
+# --------------------------------------------------------------------------
+# Guards and Existence
+# --------------------------------------------------------------------------
+
+user or return "not found"
+data ?? throw new Error "no data"
+
+exists = user?
+value = obj?.prop?.nested
+
+# --------------------------------------------------------------------------
+# Constants and Special Values
+# --------------------------------------------------------------------------
+
+a = true
+b = false
+c = null
+d = undefined
+e = Infinity
+f = NaN
+g = yes
+h = no
+i = on
+j = off
+k = this
+l = @
+
+# --------------------------------------------------------------------------
+# Numbers
+# --------------------------------------------------------------------------
+
+dec = 42
+float = 3.14
+sci = 1.5e10
+hex = 0xFF
+oct = 0o77
+bin = 0b1010
+big = 100n
+underscore = 1_000_000
+
+# --------------------------------------------------------------------------
+# Components (Rip UI)
+# --------------------------------------------------------------------------
+
+Counter = component
+  @count := 0
+  render
+    div "Count: {@count}"
