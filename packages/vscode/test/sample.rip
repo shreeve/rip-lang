@@ -217,8 +217,8 @@ def loadData!()
 # --------------------------------------------------------------------------
 
 x = a + b * c
-y = a // b          # Floor division
-z = a %% b          # Modulo (always positive)
+y = a // b           # Floor division
+z = a %% b           # Modulo (always positive)
 p = a ** b           # Exponentiation
 q = a !? "default"   # Otherwise operator
 r = x ?? y           # Nullish coalescing

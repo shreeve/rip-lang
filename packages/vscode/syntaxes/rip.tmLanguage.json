@@ -1,550 +1,383 @@
 {
-  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "information_for_contributors": [
+    "Adapted from VS Code's built-in CoffeeScript grammar (MIT licensed).",
+    "Original: https://github.com/atom/language-coffee-script",
+    "Extended for Rip: type annotations, reactive operators, enums, interfaces, components."
+  ],
   "name": "Rip",
   "scopeName": "source.rip",
   "fileTypes": ["rip"],
   "patterns": [
-    { "include": "#comments" },
-    { "include": "#heredocs" },
-    { "include": "#strings" },
-    { "include": "#heregex" },
-    { "include": "#regex" },
-    { "include": "#inline-javascript" },
-    { "include": "#class-definition" },
-    { "include": "#function-definition" },
-    { "include": "#enum-definition" },
-    { "include": "#interface-definition" },
-    { "include": "#import-export" },
-    { "include": "#function-assignments" },
-    { "include": "#keywords" },
-    { "include": "#type-operators" },
-    { "include": "#reactive-operators" },
-    { "include": "#arrow-operators" },
-    { "include": "#special-operators" },
-    { "include": "#comparison-operators" },
-    { "include": "#assignment-operators" },
-    { "include": "#logical-operators" },
-    { "include": "#math-operators" },
-    { "include": "#constants" },
-    { "include": "#numbers" },
-    { "include": "#instance-properties" },
-    { "include": "#support-objects" },
-    { "include": "#function-calls" },
-    { "include": "#type-names" },
-    { "include": "#properties" },
-    { "include": "#identifiers" },
-    { "include": "#punctuation" }
+    {
+      "match": "(new)\\s+(?:(?:(class)\\s+(\\w+(?:\\.\\w*)*)?)|(\\w+(?:\\.\\w*)*))",
+      "name": "meta.class.instance.constructor.rip",
+      "captures": {
+        "1": { "name": "keyword.operator.new.rip" },
+        "2": { "name": "storage.type.class.rip" },
+        "3": { "name": "entity.name.type.instance.rip" },
+        "4": { "name": "entity.name.type.instance.rip" }
+      }
+    },
+    {
+      "begin": "'''",
+      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.rip" } },
+      "end": "'''",
+      "endCaptures": { "0": { "name": "punctuation.definition.string.end.rip" } },
+      "name": "string.quoted.single.heredoc.rip",
+      "patterns": [
+        {
+          "captures": { "1": { "name": "punctuation.definition.escape.backslash.rip" } },
+          "match": "(\\\\).",
+          "name": "constant.character.escape.backslash.rip"
+        }
+      ]
+    },
+    {
+      "begin": "\"\"\"",
+      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.rip" } },
+      "end": "\"\"\"",
+      "endCaptures": { "0": { "name": "punctuation.definition.string.end.rip" } },
+      "name": "string.quoted.double.heredoc.rip",
+      "patterns": [
+        {
+          "captures": { "1": { "name": "punctuation.definition.escape.backslash.rip" } },
+          "match": "(\\\\).",
+          "name": "constant.character.escape.backslash.rip"
+        },
+        { "include": "#interpolated_rip" }
+      ]
+    },
+    {
+      "match": "(`)(.*)(`)",
+      "name": "string.quoted.script.rip",
+      "captures": {
+        "1": { "name": "punctuation.definition.string.begin.rip" },
+        "2": { "name": "source.js.embedded.rip", "patterns": [{ "include": "source.js" }] },
+        "3": { "name": "punctuation.definition.string.end.rip" }
+      }
+    },
+    {
+      "begin": "(?<!#)###(?!#)",
+      "beginCaptures": { "0": { "name": "punctuation.definition.comment.rip" } },
+      "end": "###",
+      "endCaptures": { "0": { "name": "punctuation.definition.comment.rip" } },
+      "name": "comment.block.rip",
+      "patterns": [
+        { "match": "(?<=^|\\s)@\\w*(?=\\s)", "name": "storage.type.annotation.rip" }
+      ]
+    },
+    {
+      "captures": { "1": { "name": "punctuation.definition.comment.rip" } },
+      "match": "(#)(?!\\{).*$\\n?",
+      "name": "comment.line.number-sign.rip"
+    },
+    {
+      "begin": "///",
+      "end": "(///)[gimuy]*",
+      "name": "string.regexp.multiline.rip",
+      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.rip" } },
+      "endCaptures": { "1": { "name": "punctuation.definition.string.end.rip" } },
+      "patterns": [
+        { "include": "#interpolated_rip" },
+        { "match": "\\\\.", "name": "constant.character.escape.backslash.rip" },
+        { "match": "#.*$", "name": "comment.line.number-sign.rip" }
+      ]
+    },
+    {
+      "begin": "(?<![\\w$])(/)(?=(?![/*+?])([^/\\\\]|\\\\.)*?/[gimuy]*(?!\\s*[\\w$/(]))",
+      "beginCaptures": { "1": { "name": "punctuation.definition.string.begin.rip" } },
+      "end": "(/)[gimuy]*",
+      "endCaptures": { "1": { "name": "punctuation.definition.string.end.rip" } },
+      "name": "string.regexp.rip",
+      "patterns": [
+        { "match": "\\\\.", "name": "constant.character.escape.backslash.rip" }
+      ]
+    },
+    {
+      "match": "\\b(enum)\\s+([A-Z]\\w*)",
+      "captures": {
+        "1": { "name": "storage.type.enum.rip" },
+        "2": { "name": "entity.name.type.enum.rip" }
+      }
+    },
+    {
+      "match": "\\b(interface)\\s+([A-Z]\\w*)(?:\\s+(extends)\\s+([A-Z]\\w*))?",
+      "captures": {
+        "1": { "name": "storage.type.interface.rip" },
+        "2": { "name": "entity.name.type.interface.rip" },
+        "3": { "name": "storage.modifier.extends.rip" },
+        "4": { "name": "entity.other.inherited-class.rip" }
+      }
+    },
+    {
+      "match": "\\b(component)\\b",
+      "name": "storage.type.component.rip"
+    },
+    {
+      "match": "\\b(render)\\b",
+      "name": "keyword.control.render.rip"
+    },
+    {
+      "match": "\\b(def)\\s+([a-zA-Z_$]\\w*[!?]?)",
+      "captures": {
+        "1": { "name": "storage.type.function.rip" },
+        "2": { "name": "entity.name.function.rip" }
+      }
+    },
+    {
+      "begin": "(?=\\s|^)(([a-zA-Z_$][\\w$]*)?\\s*(?:[:.])\\s*([a-zA-Z_$][\\w$]*)?\\s*(=)(?!([>=]))\\s*(?=(\\([^()]*\\)\\s*)?[=-]>))",
+      "beginCaptures": {
+        "2": { "name": "entity.name.function.rip" },
+        "3": { "name": "entity.name.function.rip" },
+        "4": { "name": "keyword.operator.assignment.rip" }
+      },
+      "end": "[=-]>",
+      "endCaptures": { "0": { "name": "storage.type.function.rip" } },
+      "name": "meta.function.rip",
+      "patterns": [{ "include": "#function_params" }]
+    },
+    {
+      "begin": "(?=\\s|^)((@)?([a-zA-Z_$][\\w$]*)\\s*(=)(?!([>=]))\\s*(?=(\\([^()]*\\)\\s*)?[=-]>))",
+      "beginCaptures": {
+        "2": { "name": "variable.other.readwrite.instance.rip" },
+        "3": { "name": "entity.name.function.rip" },
+        "4": { "name": "keyword.operator.assignment.rip" }
+      },
+      "end": "[=-]>",
+      "endCaptures": { "0": { "name": "storage.type.function.rip" } },
+      "name": "meta.function.rip",
+      "patterns": [{ "include": "#function_params" }]
+    },
+    {
+      "begin": "(?=(\\([^()]*\\)\\s*)?[=-]>)",
+      "end": "[=-]>",
+      "endCaptures": { "0": { "name": "storage.type.function.rip" } },
+      "name": "meta.function.inline.rip",
+      "patterns": [{ "include": "#function_params" }]
+    },
+    {
+      "match": "\\b(?<!\\.)(?:class)\\s+(\\w+(?:\\.\\w*)*)(?:\\s+(extends)\\s+(\\w+(?:\\.\\w*)*))?",
+      "captures": {
+        "1": { "name": "entity.name.type.class.rip" },
+        "2": { "name": "keyword.control.inheritance.rip" },
+        "3": { "name": "entity.other.inherited-class.rip" }
+      },
+      "name": "meta.class.rip"
+    },
+    {
+      "match": "\\b(?<!\\.|::)(true|on|yes)(?!\\s*[:=][^=])\\b",
+      "name": "constant.language.boolean.true.rip"
+    },
+    {
+      "match": "\\b(?<!\\.|::)(false|off|no)(?!\\s*[:=][^=])\\b",
+      "name": "constant.language.boolean.false.rip"
+    },
+    {
+      "match": "\\b(?<!\\.|::)null(?!\\s*[:=][^=])\\b",
+      "name": "constant.language.null.rip"
+    },
+    {
+      "match": "\\b(?<!\\.|::)undefined(?!\\s*[:=][^=])\\b",
+      "name": "constant.language.undefined.rip"
+    },
+    {
+      "match": "\\b(?<!\\.|::)(NaN|Infinity)(?!\\s*[:=][^=])\\b",
+      "name": "constant.language.rip"
+    },
+    {
+      "match": "\\b(?<!\\.|::)this(?!\\s*[:=][^=])\\b",
+      "name": "variable.language.this.rip"
+    },
+    {
+      "captures": { "1": { "name": "variable.other.readwrite.instance.rip" } },
+      "match": "(?<!\\w)(@)([a-zA-Z_$]\\w*)?",
+      "name": "variable.other.readwrite.instance.rip"
+    },
+    {
+      "match": "\\b(?<!\\.|::)(class|extends|return|throw|break|continue|switch|when|then|if|else|unless|for|in|of|by|as|while|until|loop|do|try|catch|finally|yield|await|import|export|from|default|delete|typeof|instanceof|new|super|debugger|use|own|not|and|or|is|isnt)(?!\\s*[:=][^=])\\b",
+      "name": "keyword.control.rip"
+    },
+    {
+      "match": "::=",
+      "name": "keyword.operator.type-alias.rip"
+    },
+    {
+      "match": "::(?!=)",
+      "name": "keyword.operator.type-annotation.rip"
+    },
+    {
+      "match": "~=|:=|~>|<=>",
+      "name": "keyword.operator.assignment.reactive.rip"
+    },
+    {
+      "match": "=!",
+      "name": "keyword.operator.assignment.readonly.rip"
+    },
+    {
+      "match": "!\\?",
+      "name": "keyword.operator.otherwise.rip"
+    },
+    {
+      "match": "=~",
+      "name": "keyword.operator.regex-match.rip"
+    },
+    {
+      "match": "\\?\\?=",
+      "name": "keyword.operator.assignment.compound.rip"
+    },
+    {
+      "match": "\\?\\?",
+      "name": "keyword.operator.nullish.rip"
+    },
+    {
+      "match": "\\?\\.(?![0-9])",
+      "name": "keyword.operator.optional-chaining.rip"
+    },
+    {
+      "match": "(?<=[a-zA-Z0-9_$)])!(?!=)",
+      "name": "keyword.operator.dammit.rip"
+    },
+    {
+      "match": "([a-zA-Z$_][\\w$]*)?\\s*(=|:(?!:))(?![>=])",
+      "captures": {
+        "1": { "name": "variable.assignment.rip" },
+        "2": { "name": "keyword.operator.assignment.rip" }
+      }
+    },
+    {
+      "match": "&&=|\\|\\|=|\\?\\?=|\\+=|-=|\\*=|/=|%=|\\*\\*=|<<=|>>=|>>>=|&=|\\|=|\\^=",
+      "name": "keyword.operator.assignment.compound.rip"
+    },
+    {
+      "match": "===|!==|==|!=|<=|>=|<=>",
+      "name": "keyword.operator.comparison.rip"
+    },
+    {
+      "match": "&&|!|\\|\\|",
+      "name": "keyword.operator.logical.rip"
+    },
+    {
+      "match": "&|\\||\\^|~",
+      "name": "keyword.operator.bitwise.rip"
+    },
+    {
+      "match": "<<|>>>|>>",
+      "name": "keyword.operator.bitwise.shift.rip"
+    },
+    {
+      "match": "--",
+      "name": "keyword.operator.decrement.rip"
+    },
+    {
+      "match": "\\+\\+",
+      "name": "keyword.operator.increment.rip"
+    },
+    {
+      "match": "\\.\\.\\.",
+      "name": "keyword.operator.splat.rip"
+    },
+    {
+      "match": "\\.\\.",
+      "name": "keyword.operator.range.rip"
+    },
+    {
+      "match": "\\?",
+      "name": "keyword.operator.existential.rip"
+    },
+    {
+      "match": "\\*\\*|//|%%",
+      "name": "keyword.operator.arithmetic.special.rip"
+    },
+    {
+      "match": "%|\\*|/|-|\\+",
+      "name": "keyword.operator.rip"
+    },
+    {
+      "match": "\\b0x[0-9a-fA-F](?:_?[0-9a-fA-F])*n?\\b",
+      "name": "constant.numeric.hex.rip"
+    },
+    {
+      "match": "\\b0o[0-7](?:_?[0-7])*n?\\b",
+      "name": "constant.numeric.octal.rip"
+    },
+    {
+      "match": "\\b0b[01](?:_?[01])*n?\\b",
+      "name": "constant.numeric.binary.rip"
+    },
+    {
+      "match": "\\b[0-9][0-9_]*(?:\\.[0-9][0-9_]*)?(?:[eE][+-]?[0-9]+)?n?\\b",
+      "name": "constant.numeric.decimal.rip"
+    },
+    {
+      "begin": "'",
+      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.rip" } },
+      "end": "'",
+      "endCaptures": { "0": { "name": "punctuation.definition.string.end.rip" } },
+      "name": "string.quoted.single.rip",
+      "patterns": [
+        {
+          "captures": { "1": { "name": "punctuation.definition.escape.backslash.rip" } },
+          "match": "(\\\\).",
+          "name": "constant.character.escape.backslash.rip"
+        }
+      ]
+    },
+    {
+      "begin": "\"",
+      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.rip" } },
+      "end": "\"",
+      "endCaptures": { "0": { "name": "punctuation.definition.string.end.rip" } },
+      "name": "string.quoted.double.rip",
+      "patterns": [
+        {
+          "captures": { "1": { "name": "punctuation.definition.escape.backslash.rip" } },
+          "match": "(\\\\).",
+          "name": "constant.character.escape.backslash.rip"
+        },
+        { "include": "#interpolated_rip" }
+      ]
+    }
   ],
   "repository": {
-
-    "comments": {
+    "interpolated_rip": {
       "patterns": [
         {
-          "name": "comment.block.rip",
-          "begin": "###(?!#)",
-          "end": "###"
-        },
-        {
-          "name": "comment.line.number-sign.rip",
-          "match": "#(?!\\{).*$"
-        }
-      ]
-    },
-
-    "heredocs": {
-      "patterns": [
-        {
-          "name": "string.quoted.double.heredoc.rip",
-          "begin": "\"\"\"",
-          "end": "\"\"\"",
-          "patterns": [
-            { "include": "#interpolation" },
-            { "include": "#string-escapes" }
-          ]
-        },
-        {
-          "name": "string.quoted.single.heredoc.rip",
-          "begin": "'''",
-          "end": "'''"
-        }
-      ]
-    },
-
-    "strings": {
-      "patterns": [
-        {
-          "name": "string.quoted.double.rip",
-          "begin": "\"",
-          "end": "\"",
-          "patterns": [
-            { "include": "#interpolation" },
-            { "include": "#string-escapes" }
-          ]
-        },
-        {
-          "name": "string.quoted.single.rip",
-          "begin": "'",
-          "end": "'",
-          "patterns": [
-            {
-              "name": "constant.character.escape.rip",
-              "match": "\\\\."
-            }
-          ]
-        }
-      ]
-    },
-
-    "interpolation": {
-      "patterns": [
-        {
-          "begin": "#\\{",
-          "end": "\\}",
+          "begin": "\\#\\{",
           "beginCaptures": { "0": { "name": "punctuation.section.embedded.begin.rip" } },
+          "end": "\\}",
           "endCaptures": { "0": { "name": "punctuation.section.embedded.end.rip" } },
-          "name": "meta.embedded.line.rip",
-          "contentName": "source.rip",
-          "patterns": [
-            { "include": "source.rip" }
-          ]
+          "name": "source.rip.embedded.source",
+          "patterns": [{ "include": "$self" }]
         },
         {
           "begin": "\\$\\{",
-          "end": "\\}",
           "beginCaptures": { "0": { "name": "punctuation.section.embedded.begin.rip" } },
+          "end": "\\}",
           "endCaptures": { "0": { "name": "punctuation.section.embedded.end.rip" } },
-          "name": "meta.embedded.line.rip",
-          "contentName": "source.rip",
-          "patterns": [
-            { "include": "source.rip" }
-          ]
+          "name": "source.rip.embedded.source",
+          "patterns": [{ "include": "$self" }]
         }
       ]
     },
-
-    "string-escapes": {
+    "function_params": {
       "patterns": [
         {
-          "name": "constant.character.escape.rip",
-          "match": "\\\\(?:[0-7]{1,3}|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|u\\{[0-9a-fA-F]+\\}|[bfnrtv0'\"\\\\])"
-        }
-      ]
-    },
-
-    "regex": {
-      "patterns": [
-        {
-          "name": "string.regexp.rip",
-          "begin": "(?<=[=(:,\\[!&|?{;~>]|^|return|when|and|or|is|isnt|not|by)\\s*(/)",
-          "end": "(/)[gimsuy]*",
-          "beginCaptures": { "1": { "name": "punctuation.definition.string.begin.rip" } },
-          "endCaptures": { "1": { "name": "punctuation.definition.string.end.rip" } },
+          "begin": "\\(",
+          "beginCaptures": { "0": { "name": "punctuation.definition.parameters.begin.bracket.round.rip" } },
+          "end": "\\)",
+          "endCaptures": { "0": { "name": "punctuation.definition.parameters.end.bracket.round.rip" } },
+          "name": "meta.parameters.rip",
           "patterns": [
             {
-              "name": "constant.character.escape.rip",
-              "match": "\\\\."
-            }
+              "match": "([a-zA-Z_$][\\w$]*)(\\.\\.\\.)?",
+              "captures": {
+                "1": { "name": "variable.parameter.function.rip" },
+                "2": { "name": "keyword.operator.splat.rip" }
+              }
+            },
+            { "include": "#interpolated_rip" },
+            { "include": "$self" }
           ]
-        }
-      ]
-    },
-
-    "heregex": {
-      "patterns": [
-        {
-          "name": "string.regexp.extended.rip",
-          "begin": "///",
-          "end": "///[gimsuy]*",
-          "patterns": [
-            { "include": "#interpolation" },
-            {
-              "name": "comment.line.number-sign.rip",
-              "match": "#.*$"
-            }
-          ]
-        }
-      ]
-    },
-
-    "inline-javascript": {
-      "patterns": [
-        {
-          "name": "string.other.inline-js.rip",
-          "begin": "`",
-          "end": "`"
-        }
-      ]
-    },
-
-    "import-export": {
-      "patterns": [
-        {
-          "match": "\\b(import|export|from|default|as)\\b",
-          "name": "keyword.control.module.rip"
-        }
-      ]
-    },
-
-    "class-definition": {
-      "patterns": [
-        {
-          "match": "\\b(class)\\s+([A-Z][a-zA-Z0-9_]*)(?:\\s+(extends)\\s+([A-Z][a-zA-Z0-9_.]*))?",
-          "captures": {
-            "1": { "name": "keyword.other.class.rip" },
-            "2": { "name": "entity.name.type.class.rip" },
-            "3": { "name": "keyword.other.extends.rip" },
-            "4": { "name": "entity.other.inherited-class.rip" }
-          }
-        }
-      ]
-    },
-
-    "function-definition": {
-      "patterns": [
-        {
-          "match": "\\b(def)\\s+([a-zA-Z_$][a-zA-Z0-9_$]*[!?]?)",
-          "captures": {
-            "1": { "name": "keyword.other.def.rip" },
-            "2": { "name": "entity.name.function.rip" }
-          }
-        }
-      ]
-    },
-
-    "enum-definition": {
-      "patterns": [
-        {
-          "match": "\\b(enum)\\s+([A-Z][a-zA-Z0-9_]*)",
-          "captures": {
-            "1": { "name": "keyword.other.enum.rip" },
-            "2": { "name": "entity.name.type.enum.rip" }
-          }
-        }
-      ]
-    },
-
-    "interface-definition": {
-      "patterns": [
-        {
-          "match": "\\b(interface)\\s+([A-Z][a-zA-Z0-9_]*)(?:\\s+(extends)\\s+([A-Z][a-zA-Z0-9_.]*))?",
-          "captures": {
-            "1": { "name": "keyword.other.interface.rip" },
-            "2": { "name": "entity.name.type.interface.rip" },
-            "3": { "name": "keyword.other.extends.rip" },
-            "4": { "name": "entity.other.inherited-class.rip" }
-          }
-        }
-      ]
-    },
-
-    "keywords": {
-      "patterns": [
-        {
-          "name": "keyword.control.rip",
-          "match": "\\b(if|else|unless|then|switch|when|for|while|until|loop|do|return|break|continue|throw|try|catch|finally|of|in|by|as|new|delete|typeof|instanceof|yield|await|debugger|super|extends|own|use|component|render)\\b"
-        },
-        {
-          "name": "keyword.operator.logical.word.rip",
-          "match": "\\b(and|or|not|is|isnt)\\b"
-        }
-      ]
-    },
-
-    "type-operators": {
-      "patterns": [
-        {
-          "name": "keyword.operator.type.rip",
-          "match": "::=|::"
-        }
-      ]
-    },
-
-    "reactive-operators": {
-      "patterns": [
-        {
-          "name": "keyword.operator.assignment.reactive.rip",
-          "match": "~=|:=|~>|<=>"
-        },
-        {
-          "name": "keyword.operator.assignment.readonly.rip",
-          "match": "=!"
-        }
-      ]
-    },
-
-    "arrow-operators": {
-      "patterns": [
-        {
-          "name": "keyword.operator.arrow.rip",
-          "match": "->|=>"
-        }
-      ]
-    },
-
-    "special-operators": {
-      "patterns": [
-        {
-          "comment": "Dammit operator (call + await): identifier! or )",
-          "name": "keyword.operator.dammit.rip",
-          "match": "(?<=[a-zA-Z0-9_$)])!"
-        },
-        {
-          "name": "keyword.operator.otherwise.rip",
-          "match": "!\\?"
-        },
-        {
-          "name": "keyword.operator.regex-match.rip",
-          "match": "=~"
-        },
-        {
-          "name": "keyword.operator.nullish.rip",
-          "match": "\\?\\?"
-        },
-        {
-          "name": "keyword.operator.optional-chaining.rip",
-          "match": "\\?\\."
-        },
-        {
-          "name": "keyword.operator.spread.rip",
-          "match": "\\.\\.\\."
-        },
-        {
-          "name": "keyword.operator.range.rip",
-          "match": "\\.\\."
-        }
-      ]
-    },
-
-    "comparison-operators": {
-      "patterns": [
-        {
-          "name": "keyword.operator.comparison.rip",
-          "match": "===|!==|==|!=|<=|>=|<|>"
-        }
-      ]
-    },
-
-    "assignment-operators": {
-      "patterns": [
-        {
-          "name": "keyword.operator.assignment.compound.rip",
-          "match": "\\+=|-=|\\*=|/=|%=|\\*\\*=|&&=|\\|\\|=|\\?\\?=|<<=|>>=|>>>=|&=|\\|=|\\^="
-        },
-        {
-          "name": "keyword.operator.assignment.rip",
-          "match": "="
-        }
-      ]
-    },
-
-    "logical-operators": {
-      "patterns": [
-        {
-          "name": "keyword.operator.logical.rip",
-          "match": "&&|\\|\\|"
-        }
-      ]
-    },
-
-    "math-operators": {
-      "patterns": [
-        {
-          "name": "keyword.operator.arithmetic.rip",
-          "match": "\\*\\*|//|%%|\\+\\+|--|[+\\-*/%]"
-        },
-        {
-          "name": "keyword.operator.bitwise.rip",
-          "match": ">>>|>>|<<|[&|^~]"
-        }
-      ]
-    },
-
-    "constants": {
-      "patterns": [
-        {
-          "name": "constant.language.boolean.rip",
-          "match": "\\b(true|false|yes|no|on|off)\\b"
-        },
-        {
-          "name": "constant.language.null.rip",
-          "match": "\\b(null|undefined)\\b"
-        },
-        {
-          "name": "constant.language.numeric.rip",
-          "match": "\\b(Infinity|NaN)\\b"
-        },
-        {
-          "name": "variable.language.this.rip",
-          "match": "\\b(this)\\b"
-        }
-      ]
-    },
-
-    "numbers": {
-      "patterns": [
-        {
-          "name": "constant.numeric.hex.rip",
-          "match": "\\b0x[0-9a-fA-F](?:_?[0-9a-fA-F])*n?\\b"
-        },
-        {
-          "name": "constant.numeric.octal.rip",
-          "match": "\\b0o[0-7](?:_?[0-7])*n?\\b"
-        },
-        {
-          "name": "constant.numeric.binary.rip",
-          "match": "\\b0b[01](?:_?[01])*n?\\b"
-        },
-        {
-          "name": "constant.numeric.decimal.rip",
-          "match": "\\b(?:\\d+(?:_\\d+)*n|(?:\\d+(?:_\\d+)*)?(?:\\.\\d+(?:_\\d+)*)?(?:[eE][+-]?\\d+(?:_\\d+)*)?)\\b"
-        }
-      ]
-    },
-
-    "instance-properties": {
-      "patterns": [
-        {
-          "match": "(@)([a-zA-Z_$][a-zA-Z0-9_$]*)",
-          "captures": {
-            "1": { "name": "punctuation.definition.variable.rip" },
-            "2": { "name": "variable.other.readwrite.instance.rip" }
-          }
-        },
-        {
-          "name": "variable.language.this.rip",
-          "match": "@(?![a-zA-Z_$])"
-        }
-      ]
-    },
-
-    "function-assignments": {
-      "patterns": [
-        {
-          "comment": "Function assignment: name = (...) -> or name = ->",
-          "match": "\\b([a-zA-Z_$][a-zA-Z0-9_$]*)\\s*(=)\\s*(?=\\(.*\\)\\s*[-=]>|[-=]>)",
-          "captures": {
-            "1": { "name": "entity.name.function.rip" },
-            "2": { "name": "keyword.operator.assignment.rip" }
-          }
-        },
-        {
-          "comment": "Method in object: name: (...) -> or name: ->",
-          "match": "\\b([a-zA-Z_$][a-zA-Z0-9_$]*)\\s*(:)\\s*(?=\\(.*\\)\\s*[-=]>|[-=]>)",
-          "captures": {
-            "1": { "name": "entity.name.function.rip" },
-            "2": { "name": "punctuation.separator.key-value.rip" }
-          }
-        }
-      ]
-    },
-
-    "function-calls": {
-      "patterns": [
-        {
-          "comment": "Method call: .method()",
-          "match": "(\\.)([a-zA-Z_$][a-zA-Z0-9_$]*)\\s*(?=[(])",
-          "captures": {
-            "1": { "name": "punctuation.accessor.rip" },
-            "2": { "name": "entity.name.function.method.rip" }
-          }
-        },
-        {
-          "comment": "Function call: name()",
-          "match": "\\b([a-zA-Z_$][a-zA-Z0-9_$]*)\\s*(?=[(])",
-          "captures": {
-            "1": { "name": "entity.name.function.rip" }
-          }
-        },
-        {
-          "comment": "Dammit call: name!",
-          "match": "\\b([a-zA-Z_$][a-zA-Z0-9_$]*)(!)",
-          "captures": {
-            "1": { "name": "entity.name.function.rip" },
-            "2": { "name": "keyword.operator.dammit.rip" }
-          }
-        }
-      ]
-    },
-
-    "type-names": {
-      "patterns": [
-        {
-          "comment": "PascalCase identifiers as types (but not after dot)",
-          "match": "(?<!\\.)\\b([A-Z][a-zA-Z0-9_]*)\\b",
-          "captures": {
-            "1": { "name": "support.type.rip" }
-          }
-        }
-      ]
-    },
-
-    "support-objects": {
-      "patterns": [
-        {
-          "name": "support.class.builtin.rip",
-          "match": "\\b(console|Math|JSON|Object|Array|String|Number|Boolean|Date|RegExp|Error|Map|Set|WeakMap|WeakSet|Promise|Symbol|Proxy|Reflect|Buffer|process|global|globalThis|require|module|exports)\\b"
-        }
-      ]
-    },
-
-    "properties": {
-      "patterns": [
-        {
-          "comment": "Method call after dot: .name(",
-          "match": "(\\.)([a-zA-Z_$][a-zA-Z0-9_$]*)\\s*(?=[(])",
-          "captures": {
-            "1": { "name": "punctuation.accessor.rip" },
-            "2": { "name": "entity.name.function.method.rip" }
-          }
-        },
-        {
-          "comment": "Property access after dot",
-          "match": "(\\.)([a-zA-Z_$][a-zA-Z0-9_$]*)",
-          "captures": {
-            "1": { "name": "punctuation.accessor.rip" },
-            "2": { "name": "variable.other.property.rip" }
-          }
-        },
-        {
-          "comment": "Object key before colon",
-          "match": "\\b([a-zA-Z_$][a-zA-Z0-9_$]*)\\s*(?=:(?![:=]))",
-          "captures": {
-            "1": { "name": "variable.other.property.rip" }
-          }
-        }
-      ]
-    },
-
-    "identifiers": {
-      "patterns": [
-        {
-          "name": "variable.other.rip",
-          "match": "\\b[a-z_$][a-zA-Z0-9_$]*\\b"
-        }
-      ]
-    },
-
-    "punctuation": {
-      "patterns": [
-        {
-          "name": "punctuation.bracket.round.rip",
-          "match": "[()]"
-        },
-        {
-          "name": "punctuation.bracket.square.rip",
-          "match": "[\\[\\]]"
-        },
-        {
-          "name": "punctuation.bracket.curly.rip",
-          "match": "[{}]"
-        },
-        {
-          "name": "punctuation.separator.comma.rip",
-          "match": ","
-        },
-        {
-          "name": "punctuation.terminator.semicolon.rip",
-          "match": ";"
         }
       ]
     }
