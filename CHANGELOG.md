@@ -641,7 +641,7 @@ All 962 tests passing (100%) ✅
   - Zero performance impact, much more maintainable
 
 - **Added inline SVG favicon to HTML files**
-  - repl.html, index.html, example.html now have embedded favicon
+  - index.html now has embedded favicon
   - No HTTP request needed for favicon
   - Works in all contexts (local, GitHub Pages, offline)
 
