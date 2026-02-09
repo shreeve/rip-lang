@@ -9,9 +9,13 @@
 # ============================================================================
 
 import hljs from 'highlight.js'
+import ripLanguage from './hljs-rip.js'
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs'
 import { basename, extname, join, relative } from 'path'
 import { execSync } from 'child_process'
+
+# Register Rip language with highlight.js
+hljs.registerLanguage 'rip', ripLanguage
 
 # ============================================================================
 # CLI argument parsing
@@ -117,7 +121,7 @@ console.log "#{allFiles.length} file#{if allFiles.length > 1 then 's' else ''}"
 # ============================================================================
 
 extToLang =
-  rip:    'coffeescript'
+  rip:    'rip'
   coffee: 'coffeescript'
   js:     'javascript'
   mjs:    'javascript'
@@ -298,8 +302,8 @@ html = """
 
       .file-section { margin-bottom: 0; }
       .file-header {
-        background: #{headerBg}; padding: 8px 16px; font-size: 13px; font-weight: 600;
-        border-top: 1px solid #{borderColor}; border-bottom: 1px solid #{borderColor};
+        background: #{headerBg}; padding: 14px 16px 14px 5.2em; font-size: 13px; font-weight: 600;
+        border-top: 1px solid #{borderColor}; border-bottom: 1px solid #{borderColor}; margin-top: -1px;
         display: flex; justify-content: space-between; align-items: center;
       }
       .nav { font-weight: normal; font-size: 12px; }
@@ -309,7 +313,7 @@ html = """
       .code-container { overflow-x: auto; }
       .code-container pre { margin: 0; border-radius: 0; }
       .code-container code { font-size: 13px; line-height: 1.5; padding: 0 !important; display: block; }
-      .line-num { color: #aaa; background: #{if dark then '#161b22' else '#f4f4f4'}; user-select: none; display: inline-block; min-width: 2em; text-align: right; padding: 0 0.7em; margin-right: 0.7em; border-left: 1px solid #{borderColor}; border-right: 1px solid #{borderColor}; }
+      .line-num { color: #aaa; background: #{if dark then '#161b22' else '#f4f4f4'}; user-select: none; display: inline-block; min-width: 2em; text-align: right; padding: 0 0.7em; margin-right: 0.7em; border-right: 1px solid #{borderColor}; }
 
       @media print {
         .toc { page-break-after: always; }

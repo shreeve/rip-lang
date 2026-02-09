@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/print",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Syntax-highlighted source code printer — Shiki-powered, serves once, auto-opens browser",
   "type": "module",
   "main": "print.rip",
@@ -34,6 +34,7 @@
   },
   "files": [
     "print.rip",
+    "hljs-rip.js",
     "bin/rip-print",
     "README.md"
   ]
