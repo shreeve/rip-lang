@@ -865,7 +865,7 @@ console.log "Domain:", domain`;
     async function setTheme(value) {
       if (value.startsWith('cdn:')) {
         const themeName = value.slice(4);
-        const themeId = themeName.toLowerCase().replace(/\s+/g, '-');
+        const themeId = themeName.toLowerCase().replace(/[\s_]+/g, '-');
 
         if (!loadedThemes.has(themeId)) {
           try {
