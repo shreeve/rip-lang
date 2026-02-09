@@ -309,16 +309,17 @@ Simple arrays (with `.loc`) instead of AST node classes. The compiler is self-ho
 
 Rip includes optional packages for full-stack development:
 
-| Package | Purpose |
-|---------|---------|
-| [@rip-lang/ui](packages/ui/) | Zero-build reactive web framework (VFS, router, components) |
-| [@rip-lang/api](packages/api/) | HTTP framework (Sinatra-style routing, 37 validators) |
-| [@rip-lang/server](packages/server/) | Multi-worker app server (hot reload, HTTPS, mDNS) |
-| [@rip-lang/db](packages/db/) | DuckDB server with official UI (pure Bun FFI) |
-| [@rip-lang/swarm](packages/swarm/) | Parallel job runner with worker pool |
-| [@rip-lang/csv](packages/csv/) | CSV parser + writer |
-| [@rip-lang/schema](packages/schema/) | ORM + validation |
-| [VS Code Extension](packages/vscode/) | Syntax highlighting, type intelligence, source maps |
+| Package | Version | Purpose |
+|---------|---------|---------|
+| [rip-lang](https://www.npmjs.com/package/rip-lang) | 3.4.4 | Core language compiler |
+| [@rip-lang/api](packages/api/) | 1.1.4 | HTTP framework (Sinatra-style routing, 37 validators) |
+| [@rip-lang/server](packages/server/) | 1.1.3 | Multi-worker app server (hot reload, HTTPS, mDNS) |
+| [@rip-lang/db](packages/db/) | 1.1.2 | DuckDB server with official UI (pure Bun FFI) |
+| [@rip-lang/ui](packages/ui/) | 0.1.2 | Zero-build reactive web framework (VFS, router, components) |
+| [@rip-lang/swarm](packages/swarm/) | 1.1.1 | Parallel job runner with worker pool |
+| [@rip-lang/csv](packages/csv/) | 1.1.1 | CSV parser + writer |
+| [@rip-lang/schema](packages/schema/) | 0.1.0 | ORM + validation |
+| [VS Code Extension](packages/vscode/) | 0.3.1 | Syntax highlighting, type intelligence, source maps |
 
 ```bash
 bun add -g @rip-lang/db    # Installs everything (rip-lang + api + db)
