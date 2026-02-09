@@ -1451,14 +1451,31 @@ console.log "Domain:", domain`;
       return String(val);
     }
 
+    // Auto-resize REPL input as lines are added
+    const replContainer = document.getElementById('repl-editor-container');
+    const replLineHeight = 24;
+
+    function resizeReplInput() {
+      const lineCount = replEditor.getModel().getLineCount();
+      const newHeight = Math.max(replLineHeight, lineCount * replLineHeight);
+      replContainer.style.height = newHeight + 'px';
+      replEditor.layout();
+    }
+
+    replEditor.onDidChangeModelContent(() => resizeReplInput());
+
     // REPL input handling (Monaco keybindings)
     replEditor.onKeyDown((e) => {
-      if (e.keyCode === monaco.KeyCode.Enter) {
+      if (e.keyCode === monaco.KeyCode.Enter && !e.shiftKey) {
         e.preventDefault();
         e.stopPropagation();
-        const line = replEditor.getValue().replace(/\n/g, '');
+        const line = replEditor.getValue();
         replEditor.setValue('');
+        resizeReplInput();
         if (line.trim()) handleLine(line);
+      } else if (e.keyCode === monaco.KeyCode.Enter && e.shiftKey) {
+        // Allow Shift+Enter to insert newline (Monaco default)
+        return;
       } else if (e.keyCode === monaco.KeyCode.UpArrow) {
         e.preventDefault();
         e.stopPropagation();
