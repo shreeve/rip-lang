@@ -3,6 +3,7 @@
 !package.json
 !README.md
 !icon.png
+!src/**
 !syntaxes/**
 !test/**
 .vscode/**

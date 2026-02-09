@@ -2,9 +2,10 @@
   "name": "rip",
   "displayName": "Rip",
   "description": "Rip language support — syntax highlighting, types, and editor integration",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "rip-lang",
   "license": "MIT",
+  "main": "./src/extension.js",
   "repository": {
     "type": "git",
     "url": "https://github.com/shreeve/rip-lang.git",
@@ -13,12 +14,14 @@
   "engines": {
     "vscode": "^1.80.0"
   },
+  "activationEvents": [
+    "onLanguage:rip"
+  ],
   "categories": [
     "Programming Languages"
   ],
   "keywords": [
     "rip",
-    "coffeescript",
     "reactive",
     "types",
     "compiler"
@@ -49,6 +52,31 @@
         "editor.tabSize": 2,
         "editor.insertSpaces": true,
         "diffEditor.ignoreTrimWhitespace": false
+      }
+    },
+    "commands": [
+      {
+        "command": "rip.generateDts",
+        "title": "Rip: Generate .d.ts for Current File"
+      },
+      {
+        "command": "rip.generateAllDts",
+        "title": "Rip: Generate .d.ts for All Files"
+      }
+    ],
+    "configuration": {
+      "title": "Rip",
+      "properties": {
+        "rip.types.generateOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically generate .d.ts files when saving .rip files"
+        },
+        "rip.compiler.path": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the rip compiler binary (auto-detected if empty)"
+        }
       }
     }
   }

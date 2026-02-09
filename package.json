@@ -68,6 +68,7 @@
   "license": "MIT",
   "devDependencies": {
     "@rip-lang/api": "workspace:*",
-    "@rip-lang/ui": "workspace:*"
+    "@rip-lang/ui": "workspace:*",
+    "mitt": "3.0.1"
   }
 }

@@ -2,9 +2,9 @@
 
 # Rip - VS Code Extension
 
-> **Syntax highlighting and editor integration for Rip**
+> **Syntax highlighting, type generation, and editor integration for Rip**
 
-Full language support for [Rip](https://github.com/shreeve/rip-lang), a modern reactive language that compiles to JavaScript. Provides syntax highlighting, comment toggling, bracket matching, code folding, and type annotation support.
+Full language support for [Rip](https://github.com/shreeve/rip-lang), a modern reactive language that compiles to JavaScript. Provides syntax highlighting, comment toggling, bracket matching, code folding, type annotation support, and automatic `.d.ts` generation.
 
 ## Features
 
@@ -14,6 +14,56 @@ Full language support for [Rip](https://github.com/shreeve/rip-lang), a modern r
 - Indentation-based code folding
 - Type annotation highlighting (`::`, `::=`)
 - Reactive operator highlighting (`:=`, `~=`, `~>`)
+- Auto-generate `.d.ts` files on save
+- Commands: generate types for current file or entire workspace
+
+## Type Generation
+
+Rip's optional type system emits `.d.ts` files for TypeScript interoperability. The extension automatically generates these files when you save a `.rip` file with type annotations.
+
+### How It Works
+
+1. Add type annotations to your Rip code using `::` and `::=`
+2. Save the file — the extension runs `rip -d` to generate a `.d.ts` alongside it
+3. TypeScript/JavaScript consumers of your package get full autocomplete and type checking
+
+### Example
+
+```coffee
+# greet.rip — types are optional, compile-time only
+def greet(name:: string):: string
+  "Hello, #{name}!"
+
+User ::= type
+  id: number
+  name: string
+  email?: string
+
+export { greet, User }
+```
+
+Saving generates `greet.d.ts`:
+
+```typescript
+export declare function greet(name: string): string;
+export interface User {
+  id: number;
+  name: string;
+  email?: string;
+}
+```
+
+### Commands
+
+- **Rip: Generate .d.ts for Current File** — generate types for the active `.rip` file
+- **Rip: Generate .d.ts for All Files** — generate types for all `.rip` files in the workspace
+
+### Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `rip.types.generateOnSave` | `true` | Auto-generate `.d.ts` on save |
+| `rip.compiler.path` | (auto) | Path to the `rip` compiler binary |
 
 ## Rip at a Glance
 
@@ -39,7 +89,13 @@ str =~ /Hello, (\w+)/              # Regex match
 
 ## Requirements
 
-No additional dependencies required. This extension provides syntax highlighting out of the box.
+The Rip compiler (`rip-lang` npm package) must be installed for type generation. Syntax highlighting works without it.
+
+```bash
+npm install -g rip-lang    # global install
+# or
+npm install rip-lang       # local install (auto-detected)
+```
 
 ## Development
 
@@ -48,7 +104,7 @@ No additional dependencies required. This extension provides syntax highlighting
 ```bash
 cd packages/vscode
 npx @vscode/vsce package --no-dependencies
-cursor --install-extension rip-0.1.0.vsix --force
+cursor --install-extension rip-0.2.0.vsix --force
 # Then: Cmd+Shift+P -> "Developer: Reload Window"
 ```
 
@@ -58,38 +114,13 @@ Open `packages/vscode/` as a workspace folder, then press **F5** to launch a new
 
 ### Publishing
 
-#### 1. Create a Personal Access Token
-
-1. Go to https://dev.azure.com
-2. Sign in with your Microsoft account (or create one)
-3. Click your profile icon (top right) -> **Personal Access Tokens**
-4. Click **New Token**
-5. Set:
-   - **Name**: `Rip`
-   - **ID**: rip-lang
-   - **Description**: A modern reactive language that compiles to JavaScript
-   - **Logo**: Upload the Rip logo (the icon.png from packages/vscode/)
-   - **Scopes**: Custom defined -> **Marketplace** -> check **Manage**
-6. Click **Create** and copy the token
-
-#### 2. Create the Publisher (one-time)
-
-```bash
-npx @vscode/vsce create-publisher rip-lang
-# Display name: Rip
-# Personal Access Token: <paste token>
-```
-
-#### 3. Publish
-
 ```bash
 cd packages/vscode
-npx @vscode/vsce publish
+npx @vscode/vsce login rip-lang    # login with PAT (one-time)
+npx @vscode/vsce publish           # publish to Marketplace
 ```
 
-#### 4. Update
-
-Bump `version` in `package.json`, then run `npx @vscode/vsce publish` again.
+Bump `version` in `package.json` before each publish.
 
 ## Links
 

@@ -1,0 +1,14 @@
+# demo.rip — standalone type annotation demo
+
+User ::= type
+  id: number
+  name: string
+  email?: string
+
+def greet(name:: string):: string
+  "Hello, #{name}!"
+
+def add(a:: number, b:: number):: number
+  a + b
+
+export { greet, add, User }

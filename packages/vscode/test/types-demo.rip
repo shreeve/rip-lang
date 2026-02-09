@@ -1,0 +1,28 @@
+# Type Intelligence Demo — using mitt event emitter
+#
+# This file demonstrates Rip's type system working with
+# third-party TypeScript types from npm packages.
+
+import mitt from 'mitt'
+
+# Define event types
+Events ::= type
+  greet: string
+  count: number
+
+# Create a typed emitter
+emitter = mitt()
+
+# Register event handlers
+emitter.on 'greet', (name) ->
+  console.log "Hello, #{name}!"
+
+emitter.on 'count', (n) ->
+  console.log "Count: #{n}"
+
+# Emit events
+emitter.emit 'greet', 'World'
+emitter.emit 'count', 42
+
+# Export for consumers
+export { emitter }
