@@ -556,6 +556,7 @@
           <div class="pane-header">
             <span>Generated JavaScript</span>
             <div class="pane-header-buttons">
+              <button id="show-runtime" title="Toggle runtime code display">Runtime</button>
               <button id="show-sexp" title="Toggle S-expression display">S-Expressions</button>
               <button id="show-tokens" title="Toggle token stream display">Tokens</button>
             </div>
@@ -877,6 +878,7 @@ console.log "Domain:", domain`;
     // ========================================================================
 
     const output = document.getElementById('output');
+    const showRuntimeBtn = document.getElementById('show-runtime');
     const showSexpBtn = document.getElementById('show-sexp');
     const showTokensBtn = document.getElementById('show-tokens');
     const replOutput = document.getElementById('repl-output');
@@ -890,6 +892,7 @@ console.log "Domain:", domain`;
     // Compiler Implementation
     // ========================================================================
 
+    let showRuntime = false;
     let showSexp = false;
     let showTokens = false;
 
@@ -934,7 +937,7 @@ console.log "Domain:", domain`;
           outputText += '\n\n';
         }
 
-        const cleanCode = stripHelpers(result.code);
+        const cleanCode = showRuntime ? result.code : stripHelpers(result.code);
         const highlightedCode = highlightJS(cleanCode);
         output.innerHTML = outputText.replace(/</g, '&lt;').replace(/>/g, '&gt;') + highlightedCode;
       } catch (error) {
@@ -1391,6 +1394,12 @@ console.log "Domain:", domain`;
     monacoEditor.onDidChangeModelContent(compileCode);
 
     // Toggle buttons for S-Expressions and Tokens
+    showRuntimeBtn.addEventListener('click', () => {
+      showRuntime = !showRuntime;
+      showRuntimeBtn.classList.toggle('active', showRuntime);
+      compileCode();
+    });
+
     showSexpBtn.addEventListener('click', () => {
       showSexp = !showSexp;
       showSexpBtn.classList.toggle('active', showSexp);
