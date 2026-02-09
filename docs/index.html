@@ -1067,9 +1067,13 @@ console.log "Domain:", domain`;
 
       // Focus appropriate input and run setup
       if (tabName === 'repl') {
+        // REPL uses simple light/dark based on page mode
+        monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs');
         replEditor.focus();
       } else if (tabName === 'compiler') {
-        compileCode();  // Update compiler output
+        // Compiler restores user's selected theme
+        setTheme(themeSelect.value);
+        compileCode();
       }
     }
 
