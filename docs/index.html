@@ -947,10 +947,12 @@ console.log "Domain:", domain`;
     const promptSpan = document.getElementById('prompt');
 
     // REPL input editor (single-line Monaco)
+    const savedMode = localStorage.getItem('rip-repl-mode');
+    const initialTheme = savedMode === 'light' ? 'vs' : 'vs-dark';
     const replEditor = monaco.editor.create(document.getElementById('repl-editor-container'), {
       value: '',
       language: 'rip',
-      theme: 'vs-dark',
+      theme: initialTheme,
       fontSize: 14,
       fontFamily: "'Monaco', 'Menlo', 'Consolas', monospace",
       lineHeight: 24,
