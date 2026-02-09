@@ -367,11 +367,11 @@ bun run browser        # Build browser bundle
 
 | Guide | Description |
 |-------|-------------|
-| [docs/RIP-LANG.md](docs/RIP-LANG.md) | Language reference |
-| [docs/RIP-REACTIVITY.md](docs/RIP-REACTIVITY.md) | Reactivity deep dive |
-| [docs/RIP-INTERNALS.md](docs/RIP-INTERNALS.md) | Compiler internals |
-| [packages/](packages/README.md) | Full-stack packages |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |
+| [AGENT.md](AGENT.md) | AI agents — get up to speed and start working |
+| [docs/RIP-LANG.md](docs/RIP-LANG.md) | Users — full language reference |
+| [docs/RIP-TYPES.md](docs/RIP-TYPES.md) | Contributors — type system specification |
+| [docs/RIP-REACTIVITY.md](docs/RIP-REACTIVITY.md) | Users — reactivity deep dive |
+| [docs/RIP-INTERNALS.md](docs/RIP-INTERNALS.md) | Contributors — compiler architecture |
 
 ---
 
