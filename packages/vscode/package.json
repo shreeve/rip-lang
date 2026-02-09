@@ -1,5 +1,5 @@
 {
-  "name": "rip-lang",
+  "name": "rip",
   "displayName": "Rip",
   "description": "Rip language support — syntax highlighting, types, and editor integration",
   "version": "0.1.0",
@@ -8,7 +8,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/shreeve/rip-lang.git",
-    "directory": "packages/rip-vscode"
+    "directory": "packages/vscode"
   },
   "engines": {
     "vscode": "^1.80.0"
