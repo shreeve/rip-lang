@@ -3,7 +3,6 @@ node_modules/
 bun.lockb
 
 # Build output
-# dist/
 zig-out/
 .zig-cache/
 .rip-cache/

@@ -39,7 +39,7 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": "^3.1.1"
+    "rip-lang": "^3.4.4"
   },
   "files": [
     "ui.js",

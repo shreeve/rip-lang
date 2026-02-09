@@ -38,8 +38,8 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": "^3.0.2",
-    "@rip-lang/api": "^1.1.2"
+    "rip-lang": "^3.4.4",
+    "@rip-lang/api": "^1.1.4"
   },
   "files": [
     "bin/",
