@@ -1810,7 +1810,7 @@ class Lexer {
     let indent = null;
     let outdent = null;
     let condition = (token, i) => {
-      return token[1] !== ";" && SINGLE_CLOSERS.has(token[0]) && !(token[0] === "TERMINATOR" && EXPRESSION_CLOSE.has(this.tokens[i + 1]?.[0])) && !(token[0] === "ELSE" && starter !== "THEN") || token[0] === "INDENT" && !token.generated && (starter === "->" || starter === "=>") || token[0] === "," && (starter === "->" || starter === "=>") && !this.commaInImplicitCall(i) || CALL_CLOSERS.has(token[0]) && (this.tokens[i - 1]?.newLine || this.tokens[i - 1]?.[0] === "OUTDENT");
+      return token[1] !== ";" && SINGLE_CLOSERS.has(token[0]) && !(token[0] === "TERMINATOR" && EXPRESSION_CLOSE.has(this.tokens[i + 1]?.[0])) && !(token[0] === "ELSE" && starter !== "THEN") || token[0] === "INDENT" && !token.generated && (starter === "->" || starter === "=>") || token[0] === "," && (starter === "->" || starter === "=>") && !this.commaInImplicitCall(i) && !this.commaInImplicitObject(i) || CALL_CLOSERS.has(token[0]) && (this.tokens[i - 1]?.newLine || this.tokens[i - 1]?.[0] === "OUTDENT");
     };
     let action = (token, i) => {
       let idx = this.tokens[i - 1]?.[0] === "," ? i - 1 : i;
@@ -2272,6 +2272,30 @@ class Lexer {
         let nt = this.tokens[j + 1]?.[0];
         return IMPLICIT_CALL.has(nt) || nt === "..." && IMPLICIT_CALL.has(this.tokens[j + 2]?.[0]);
       }
+    }
+    return false;
+  }
+  commaInImplicitObject(i) {
+    let levels = 0;
+    for (let j = i - 1;j >= 0; j--) {
+      let tag = this.tokens[j][0];
+      if (EXPRESSION_END.has(tag)) {
+        levels++;
+        continue;
+      }
+      if (EXPRESSION_START.has(tag)) {
+        levels--;
+        if (levels < 0)
+          return false;
+        continue;
+      }
+      if (levels > 0)
+        continue;
+      if (tag === ":" && j > 0 && this.tokens[j - 1][0] === "PROPERTY") {
+        return this.looksObjectish(i + 1);
+      }
+      if (LINE_BREAK.has(tag))
+        return false;
     }
     return false;
   }
@@ -7536,8 +7560,8 @@ function getComponentRuntime() {
   return new CodeGenerator({}).getComponentRuntime();
 }
 // src/browser.js
-var VERSION = "3.4.5";
-var BUILD_DATE = "2026-02-09@14:23:53GMT";
+var VERSION = "3.4.6";
+var BUILD_DATE = "2026-02-09@15:39:27GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

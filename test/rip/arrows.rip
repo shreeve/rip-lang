@@ -23,3 +23,87 @@ code "arrow two params", "f = (x, y) => x + y", "let f;\n\nf = (x, y) => (x + y)
 code "arrow destructuring", "f = ({x, y}) => x + y", "let f;\n\nf = ({x, y}) => (x + y);"
 code "arrow default param", "f = (x = 5) => x", "let f;\n\nf = (x = 5) => x;"
 code "arrow rest param", "f = (...args) => args", "let f;\n\nf = (...args) => args;"
+
+# ============================================================================
+# Implicit Objects in Single-Line Arrow Bodies
+# ============================================================================
+
+# Throw with implicit object — comma should not end the arrow body
+code "arrow throw implicit object", """
+  f = -> throw status: 400, error: "oops"
+  """, """
+  let f;
+  f = function() {
+    throw {status: 400, error: "oops"};
+  };
+"""
+
+test "arrow throw implicit object runtime", """
+  f = ->
+    try
+      g = -> throw status: 400, error: "oops"
+      g()
+    catch e
+      e
+  result = f()
+  [result.status, result.error]
+  """, [400, "oops"]
+
+# Return with implicit object
+code "arrow return implicit object", """
+  f = -> return status: 200, data: "ok"
+  """, """
+  let f;
+  f = function() {
+    return {status: 200, data: "ok"};
+  };
+"""
+
+test "arrow return implicit object runtime", """
+  f = -> return status: 200, data: "ok"
+  result = f()
+  [result.status, result.data]
+  """, [200, "ok"]
+
+# Implicit object as arrow body (implicit return)
+code "arrow implicit object body", """
+  f = -> status: 200, data: "ok"
+  """, """
+  let f;
+  f = function() {
+    return {status: 200, data: "ok"};
+  };
+"""
+
+test "arrow implicit object body runtime", """
+  f = -> status: 200, data: "ok"
+  result = f()
+  [result.status, result.data]
+  """, [200, "ok"]
+
+# Arrow with params and throw implicit object
+code "arrow params throw implicit object", """
+  error = (note = "oops!", code = 400) -> throw status: code, error: note
+  """, """
+  let error;
+  error = function(note = "oops!", code = 400) {
+    throw {status: code, error: note};
+  };
+"""
+
+# Fat arrow with implicit object
+code "fat arrow implicit object", """
+  f = => status: 200, data: "ok"
+  """, """
+  let f;
+  f = () => {status: 200, data: "ok"};
+"""
+
+# Comma that SHOULD end arrow body (not an implicit object)
+code "arrow comma ends body not object", """
+  fn 1, -> 42, 99
+  """, """
+  fn(1, function() {
+    return 42;
+  }, 99);
+"""

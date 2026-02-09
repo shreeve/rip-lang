@@ -1236,7 +1236,7 @@ export class Lexer {
         !(token[0] === 'TERMINATOR' && EXPRESSION_CLOSE.has(this.tokens[i + 1]?.[0])) &&
         !(token[0] === 'ELSE' && starter !== 'THEN') ||
         token[0] === 'INDENT' && !token.generated && (starter === '->' || starter === '=>') ||
-        token[0] === ',' && (starter === '->' || starter === '=>') && !this.commaInImplicitCall(i) ||
+        token[0] === ',' && (starter === '->' || starter === '=>') && !this.commaInImplicitCall(i) && !this.commaInImplicitObject(i) ||
         CALL_CLOSERS.has(token[0]) && (this.tokens[i - 1]?.newLine || this.tokens[i - 1]?.[0] === 'OUTDENT');
     };
 
@@ -1805,6 +1805,26 @@ export class Lexer {
         let nt = this.tokens[j + 1]?.[0];
         return IMPLICIT_CALL.has(nt) || (nt === '...' && IMPLICIT_CALL.has(this.tokens[j + 2]?.[0]));
       }
+    }
+    return false;
+  }
+
+  // Scan backward from comma to see if it's inside an implicit object (key: value, key: value)
+  commaInImplicitObject(i) {
+    let levels = 0;
+    for (let j = i - 1; j >= 0; j--) {
+      let tag = this.tokens[j][0];
+      if (EXPRESSION_END.has(tag)) { levels++; continue; }
+      if (EXPRESSION_START.has(tag)) {
+        levels--;
+        if (levels < 0) return false;
+        continue;
+      }
+      if (levels > 0) continue;
+      if (tag === ':' && j > 0 && this.tokens[j - 1][0] === 'PROPERTY') {
+        return this.looksObjectish(i + 1);
+      }
+      if (LINE_BREAK.has(tag)) return false;
     }
     return false;
   }
