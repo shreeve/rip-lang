@@ -21,7 +21,7 @@
       ]
     },
     {
-      "match": "(#)(?!\\{).*$\\n?",
+      "match": "(#)(?!\\{).*$",
       "name": "comment.line.number-sign.rip",
       "captures": { "1": { "name": "punctuation.definition.comment.rip" } }
     },
@@ -204,7 +204,7 @@
     },
 
     {"comment": "=== CONSTANTS ==="},
-    { "match": "\\b(true|yes|on)\\b",   "name": "constant.language.boolean.true.rip" },
+    { "match": "\\b(true|yes|on)\\b",    "name": "constant.language.boolean.true.rip" },
     { "match": "\\b(false|no|off)\\b",  "name": "constant.language.boolean.false.rip" },
     { "match": "\\b(null)\\b",          "name": "constant.language.null.rip" },
     { "match": "\\b(undefined)\\b",     "name": "constant.language.undefined.rip" },
@@ -232,18 +232,18 @@
 
     {"comment": "=== TYPE DECLARATIONS AND ANNOTATIONS ==="},
     {
-      "comment": "Type alias: Name ::= type-expression",
+      "comment": "Type alias: Name ::= type-expression (single line or 'type' keyword)",
       "begin": "(::=)\\s*",
       "beginCaptures": { "1": { "name": "keyword.operator.type-alias.rip" } },
-      "end": "(?=$|#|\\b(?:if|else|unless|then|for|while|until|switch|when|return|throw|break|continue|try|catch|finally|import|export|class|def|enum|interface|component|render)\\b)",
+      "end": "$|(?=#)",
       "contentName": "meta.type.rip",
       "patterns": [{ "include": "#type_expression" }]
     },
     {
-      "comment": "Type annotation: name:: Type = value",
+      "comment": "Type annotation: name:: Type",
       "begin": "(::)(?!=)",
       "beginCaptures": { "1": { "name": "keyword.operator.type-annotation.rip" } },
-      "end": "(?=\\s*(?:=(?![>=])|:=|~=|~>|=!|<=>|$|#|\\)|,|->|=>))",
+      "end": "(?=\\s*(?:=(?![>=])|:=|~=|~>|=!|<=>|\\)|,|->))|$|(?=#)",
       "contentName": "meta.type.rip",
       "patterns": [{ "include": "#type_expression" }]
     },
@@ -257,10 +257,12 @@
 
     {"comment": "=== SPECIAL OPERATORS (before general operators) ==="},
     { "match": "!\\?",            "name": "keyword.operator.otherwise.rip" },
-    { "match": "=~",              "name": "keyword.operator.regex-match.rip" },
     { "match": "\\?\\?",          "name": "keyword.operator.nullish.rip" },
     { "match": "\\?\\.(?![0-9])", "name": "keyword.operator.optional-chaining.rip" },
     { "match": "(?<=[a-zA-Z0-9_$)])!(?![=?])", "name": "keyword.operator.dammit.rip" },
+
+    {"comment": "=== REGEX MATCH (before comparison) ==="},
+    { "match": "=~", "name": "keyword.operator.regex-match.rip" },
 
     {"comment": "=== COMPARISON (before assignment to prevent == matching =) ==="},
     { "match": "===|!==|==|!=|<=|>=", "name": "keyword.operator.comparison.rip" },
