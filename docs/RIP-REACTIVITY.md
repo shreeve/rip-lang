@@ -1,4 +1,4 @@
-# Rip Reactivity System
+# Rip Reactivity
 
 Rip implements a **fine-grained reactive system** that rivals and often exceeds the capabilities of major frameworks like Vue, Svelte, Solid, and React — in just ~200 lines of runtime code.
 

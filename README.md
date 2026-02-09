@@ -367,7 +367,8 @@ bun run browser        # Build browser bundle
 
 | Guide | Description |
 |-------|-------------|
-| [AGENT.md](AGENT.md) | AI agents — get up to speed and start working |
+| [docs/RIP-GUIDE.md](docs/RIP-GUIDE.md) | Users / AI — practical guide for using Rip in projects |
+| [AGENT.md](AGENT.md) | AI agents — get up to speed for working on the compiler |
 | [docs/RIP-LANG.md](docs/RIP-LANG.md) | Users — full language reference |
 | [docs/RIP-TYPES.md](docs/RIP-TYPES.md) | Contributors — type system specification |
 | [docs/RIP-REACTIVITY.md](docs/RIP-REACTIVITY.md) | Users — reactivity deep dive |

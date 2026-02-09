@@ -377,7 +377,8 @@ test/rip/
 | File | Purpose |
 |------|---------|
 | **README.md** | User guide, features, installation |
-| **docs/RIP-LANG.md** | Language reference |
+| **docs/RIP-GUIDE.md** | Practical guide for USING Rip in projects (for AI and users) |
+| **docs/RIP-LANG.md** | Full language reference |
 | **docs/RIP-TYPES.md** | Type system specification |
 | **docs/RIP-REACTIVITY.md** | Reactivity deep dive |
 | **docs/RIP-INTERNALS.md** | Compiler architecture, design decisions, S-expressions |

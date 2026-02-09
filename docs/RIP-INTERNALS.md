@@ -1,4 +1,4 @@
-# Rip Compiler Internals
+# Rip Internals
 
 > Architecture, design decisions, and technical reference for the Rip compiler.
 
@@ -570,6 +570,7 @@ rip> .js      # Toggle JS display
 ---
 
 **See Also:**
+- [RIP-GUIDE.md](RIP-GUIDE.md) — Practical guide for using Rip
 - [RIP-LANG.md](RIP-LANG.md) — Language reference
 - [RIP-TYPES.md](RIP-TYPES.md) — Type system specification
 - [RIP-REACTIVITY.md](RIP-REACTIVITY.md) — Reactivity deep dive
