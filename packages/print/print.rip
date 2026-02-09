@@ -313,7 +313,7 @@ html = """
   <html lang="en">
   <head>
     <meta charset="utf-8">
-    <title>rip-print</title>
+    <title>Rip Print - #{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })} at #{new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}</title>
     <link rel="icon" href="data:,">
     <style id="hljs-theme">#{defaultCss}</style>
     <style>
@@ -370,8 +370,15 @@ html = """
       var themes = {
         #{themeData}
       };
+      // Restore saved theme
+      var saved = localStorage.getItem('rip-print-theme');
+      if (saved && themes[saved]) {
+        document.getElementById('theme-picker').value = saved;
+        document.getElementById('theme-picker').dispatchEvent(new Event('change'));
+      }
       document.getElementById('theme-picker').addEventListener('change', function(e) {
         var id = e.target.value;
+        localStorage.setItem('rip-print-theme', id);
         var t = themes[id];
         if (!t) return;
         document.getElementById('hljs-theme').textContent = t.c;
