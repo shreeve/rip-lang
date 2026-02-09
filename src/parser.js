@@ -242,7 +242,7 @@ const parserInstance = {
     }
   },
   parse(input) {
-    let EOF, TERROR, action, errStr, expected, len, lex, lexer, locFirst, locLast, locs, newState, p, parseTable, preErrorSymbol, r, ranges, recovering, rv, sharedState, state, stk, symbol, tokenLen, tokenLine, tokenLoc, tokenText, vals;
+    let EOF, TERROR, action, errStr, expected, len, lex, lexer, loc, locs, newState, p, parseTable, preErrorSymbol, r, ranges, recovering, rv, sharedState, state, stk, symbol, tokenLen, tokenLine, tokenLoc, tokenText, vals;
     [stk, vals, locs] = [[0], [null], []];
     [parseTable, tokenText, tokenLine, tokenLen, recovering] = [this.parseTable, "", 0, 0, 0];
     [TERROR, EOF] = [2, 1];
@@ -314,8 +314,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       } else if (action < 0) {
         len = this.ruleTable[-action * 2 + 1];
         rv.$ = vals[vals.length - len];
-        [locFirst, locLast] = [locs[locs.length - (len || 1)], locs[locs.length - 1]];
-        rv._$ = { r: locFirst.r, c: locFirst.c };
+        loc = locs[locs.length - (len || 1)];
+        rv._$ = { r: loc.r, c: loc.c };
         r = this.ruleActions.call(rv, -action, vals, locs, sharedState.ctx);
         if (r != null)
           rv.$ = r;

@@ -741,8 +741,8 @@ class Generator
       else if action < 0  # REDUCE
         len = @ruleTable[(-action) * 2 + 1]
         rv.$ = vals[vals.length - len]
-        [locFirst, locLast] = [locs[locs.length - (len or 1)], locs[locs.length - 1]]
-        rv._$ = { r: locFirst.r, c: locFirst.c }
+        loc = locs[locs.length - (len or 1)]
+        rv._$ = { r: loc.r, c: loc.c }
 
         r = @ruleActions.call rv, -action, vals, locs, sharedState.ctx
         rv.$ = r if r?

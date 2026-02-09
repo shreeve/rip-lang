@@ -283,60 +283,50 @@ export class CodeGenerator {
     return code;
   }
 
-  // Build source map by walking generated output lines and S-expression nodes
+  // Build source map by walking generated output lines and S-expression nodes.
+  // Collects locations from STATEMENT-level nodes only (direct children of
+  // program/block containers), then matches them to output lines in order.
   buildMappings(code, sexpr) {
     if (!sexpr || sexpr[0] !== 'program') return;
 
-    let lines = code.split('\n');
-    let stmts = sexpr.slice(1);
-
-    // Collect statement locations in source order
-    let stmtLocs = [];
-    for (let stmt of stmts) {
-      if (Array.isArray(stmt) && stmt.loc) {
-        stmtLocs.push(stmt.loc);
-      }
-    }
-
-    // Count prefix lines (let declarations, helpers, runtime) — these have no source mapping
-    let prefixLines = 0;
-    for (let i = 0; i < lines.length; i++) {
-      let line = lines[i].trim();
-      // Skip empty lines, let declarations, const helpers, runtime code, comments
-      if (line === '' || line.startsWith('let ') || line.startsWith('const slice') ||
-          line.startsWith('const modulo') || line.startsWith('const toSearchable') ||
-          line.startsWith('const {') || line.startsWith('import ')) {
-        prefixLines = i + 1;
-      } else {
-        break;
-      }
-    }
-    // Account for blank line separator after prefix
-    if (prefixLines > 0 && prefixLines < lines.length && lines[prefixLines].trim() === '') {
-      prefixLines++;
-    }
-
-    // Map output lines to source locations
-    // Walk the remaining output lines and match them to statements by order
-    let stmtIdx = 0;
-    for (let outLine = prefixLines; outLine < lines.length; outLine++) {
-      let line = lines[outLine];
-      if (line.trim() === '') continue;  // skip blank lines
-
-      // Find the best matching statement
-      if (stmtIdx < stmtLocs.length) {
-        let loc = stmtLocs[stmtIdx];
-        let indent = line.length - line.trimStart().length;
-        this.sourceMap.addMapping(outLine, indent, loc.r, loc.c);
-
-        // Advance to next statement when we hit a top-level line (not indented continuation)
-        if (indent === 0 && outLine > prefixLines) {
-          stmtIdx++;
-          if (stmtIdx < stmtLocs.length) {
-            loc = stmtLocs[stmtIdx];
-            this.sourceMap.addMapping(outLine, indent, loc.r, loc.c);
-          }
+    // Collect statement locations: only direct children of program/block nodes.
+    // This gives exactly one loc per output statement line, in source order.
+    let locs = [];
+    let collect = (node) => {
+      if (!Array.isArray(node)) return;
+      let head = node[0];
+      if (head === 'program' || head === 'block') {
+        for (let i = 1; i < node.length; i++) {
+          let child = node[i];
+          if (Array.isArray(child) && child.loc) locs.push(child.loc);
+          collect(child);
         }
+      } else {
+        for (let i = 1; i < node.length; i++) collect(node[i]);
+      }
+    };
+    collect(sexpr);
+
+    // Match output lines to collected statement locations in parallel.
+    // Skip generated lines that have no source correspondence.
+    let lines = code.split('\n');
+    let locIdx = 0;
+    for (let outLine = 0; outLine < lines.length; outLine++) {
+      let line = lines[outLine];
+      let trimmed = line.trim();
+
+      // Skip lines with no source correspondence
+      if (!trimmed || trimmed === '}' || trimmed === '});') continue;
+      if (trimmed.startsWith('let ') || trimmed.startsWith('var ')) continue;
+      if (trimmed.startsWith('const slice') || trimmed.startsWith('const modulo') || trimmed.startsWith('const toSearchable')) continue;
+      if (trimmed.startsWith('const {') && trimmed.includes('__')) continue;
+      if (trimmed.startsWith('} else')) continue;
+      if (trimmed.startsWith('//# source')) continue;
+
+      if (locIdx < locs.length) {
+        let indent = line.length - trimmed.length;
+        this.sourceMap.addMapping(outLine, indent, locs[locIdx].r, locs[locIdx].c);
+        locIdx++;
       }
     }
   }
