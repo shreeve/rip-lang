@@ -701,8 +701,8 @@ class Generator
       token = @symbolIds[token] or token unless typeof token is 'number'
       token
 
-    [symbol, preErrorSymbol, state, action, r, rv, p, len, newState, expected] =
-      [null,   null,           null,  null,   null, {}, null, null, null, null]
+    symbol = preErrorSymbol = state = action = r = p = len = newState = expected = null
+    rv = {}
 
     loop
       state = stk[stk.length - 1]

@@ -268,7 +268,8 @@ const parserInstance = {
         token = this.symbolIds[token] || token;
       return token;
     };
-    [symbol, preErrorSymbol, state, action, r, rv, p, len, newState, expected] = [null, null, null, null, null, {}, null, null, null, null];
+    symbol = preErrorSymbol = state = action = r = p = len = newState = expected = null;
+    rv = {};
     while (!0) {
       state = stk[stk.length - 1];
       if (symbol == null)
