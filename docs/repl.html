@@ -394,6 +394,91 @@
     .output-code .hl-comment { color: #6a9955; font-style: italic; }
     .output-code .hl-function { color: #dcdcaa; }
     .output-code .hl-operator { color: #d4d4d4; }
+
+    /* Light/Dark mode toggle */
+    .mode-toggle {
+      background: none;
+      border: 1px solid #5a5a5d;
+      border-radius: 4px;
+      color: #858585;
+      cursor: pointer;
+      padding: 4px 8px;
+      font-size: 16px;
+      line-height: 1;
+      transition: all 0.2s;
+      margin-right: 8px;
+    }
+
+    .mode-toggle:hover {
+      color: #ffffff;
+      border-color: #007acc;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* Light mode overrides */
+    body.light {
+      background: #ffffff;
+      color: #1e1e1e;
+    }
+
+    body.light .header {
+      background: #f3f3f3;
+      border-bottom-color: #d4d4d4;
+    }
+
+    body.light h1 { color: #333333; }
+    body.light .subtitle { color: #666666; }
+    body.light .github-link { color: #666666; }
+    body.light .github-link:hover { color: #000000; }
+    body.light .mode-toggle { color: #666666; border-color: #cccccc; }
+    body.light .mode-toggle:hover { color: #000000; border-color: #007acc; }
+
+    body.light .tabs {
+      background: #f3f3f3;
+      border-bottom-color: #d4d4d4;
+    }
+
+    body.light .tab { color: #666666; }
+    body.light .tab:hover { color: #333333; background: #e8e8e8; }
+    body.light .tab.active { color: #333333; border-bottom-color: #007acc; background: #ffffff; }
+
+    body.light .editor-pane { background: #ffffff; }
+
+    body.light .pane-header {
+      background: #f3f3f3;
+      border-bottom-color: #d4d4d4;
+      color: #333333;
+    }
+
+    body.light .pane-header button { background: #cccccc; color: #333333; }
+    body.light .pane-header button:hover { background: #bbbbbb; }
+    body.light .pane-header button.active { background: #007acc; color: #ffffff; }
+    body.light .theme-select { background: #f3f3f3; color: #333333; border-color: #cccccc; }
+
+    body.light .output-code {
+      background: #ffffff;
+      color: #1e1e1e;
+    }
+
+    body.light .resizer { background: #d4d4d4; }
+    body.light .resizer:hover { background: #007acc; }
+
+    body.light .repl-container { background: #ffffff; }
+    body.light .repl-output { color: #1e1e1e; }
+    body.light .repl-input-area { border-top-color: #d4d4d4; }
+    body.light .repl-input { background: #ffffff; color: #1e1e1e; }
+    body.light .repl-prompt-text { color: #007acc; }
+
+    body.light .output-code .hl-keyword { color: #0000ff; }
+    body.light .output-code .hl-string { color: #a31515; }
+    body.light .output-code .hl-number { color: #098658; }
+    body.light .output-code .hl-comment { color: #008000; }
+    body.light .output-code .hl-function { color: #795e26; }
   </style>
 </head>
 <body>
@@ -405,9 +490,12 @@
       </h1>
       <div class="subtitle">Interactive environment with REPL console and live compiler</div>
     </div>
-    <a href="https://github.com/shreeve/rip-lang" target="_blank" class="github-link" title="View on GitHub">
-      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>
-    </a>
+    <div class="header-right">
+      <button id="mode-toggle" class="mode-toggle" title="Toggle light/dark mode">&#9790;</button>
+      <a href="https://github.com/shreeve/rip-lang" target="_blank" class="github-link" title="View on GitHub">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>
+      </a>
+    </div>
   </div>
 
   <div class="tabs">
@@ -727,8 +815,30 @@ console.log "Domain:", domain`;
     });
 
     // Theme selector
-    document.getElementById('theme-select').addEventListener('change', (e) => {
+    // Theme selector (dropdown)
+    const themeSelect = document.getElementById('theme-select');
+    themeSelect.addEventListener('change', (e) => {
       monaco.editor.setTheme(e.target.value);
+    });
+
+    // Light/dark mode toggle
+    let isDark = true;
+    const modeToggle = document.getElementById('mode-toggle');
+
+    modeToggle.addEventListener('click', () => {
+      isDark = !isDark;
+      document.body.classList.toggle('light', !isDark);
+      modeToggle.innerHTML = isDark ? '&#9790;' : '&#9788;';
+      modeToggle.title = isDark ? 'Switch to light mode' : 'Switch to dark mode';
+
+      // Sync Monaco theme with mode
+      if (isDark) {
+        themeSelect.value = 'vs-dark';
+        monaco.editor.setTheme('vs-dark');
+      } else {
+        themeSelect.value = 'vs';
+        monaco.editor.setTheme('vs');
+      }
     });
 
     // ========================================================================
