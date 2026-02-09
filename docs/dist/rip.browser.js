@@ -2977,25 +2977,25 @@ var parserInstance = {
     }
   },
   parse(input) {
-    let EOF, TERROR, action, errStr, expected, len, lex, lexer, loc, locFirst, locLast, newState, p, parseTable, preErrorSymbol, r, ranges, recovering, sharedState, state, stk, symbol, val, yyleng, yylineno, yyloc, yytext, yyval;
-    [stk, val, loc] = [[0], [null], []];
-    [parseTable, yytext, yylineno, yyleng, recovering] = [this.parseTable, "", 0, 0, 0];
+    let EOF, TERROR, action, errStr, expected, len, lex, lexer, locFirst, locLast, locs, newState, p, parseTable, preErrorSymbol, r, ranges, recovering, rv, sharedState, state, stk, symbol, tokenLen, tokenLine, tokenLoc, tokenText, vals;
+    [stk, vals, locs] = [[0], [null], []];
+    [parseTable, tokenText, tokenLine, tokenLen, recovering] = [this.parseTable, "", 0, 0, 0];
     [TERROR, EOF] = [2, 1];
     lexer = Object.create(this.lexer);
-    sharedState = { yy: {} };
-    for (const k in this.yy)
-      if (Object.hasOwn(this.yy, k)) {
-        const v = this.yy[k];
-        sharedState.yy[k] = v;
+    sharedState = { ctx: {} };
+    for (const k in this.ctx)
+      if (Object.hasOwn(this.ctx, k)) {
+        const v = this.ctx[k];
+        sharedState.ctx[k] = v;
       }
-    lexer.setInput(input, sharedState.yy);
-    [sharedState.yy.lexer, sharedState.yy.parser] = [lexer, this];
-    if (lexer.yylloc == null)
-      lexer.yylloc = {};
-    yyloc = lexer.yylloc;
-    loc.push(yyloc);
+    lexer.setInput(input, sharedState.ctx);
+    [sharedState.ctx.lexer, sharedState.ctx.parser] = [lexer, this];
+    if (lexer.loc == null)
+      lexer.loc = {};
+    tokenLoc = lexer.loc;
+    locs.push(tokenLoc);
     ranges = lexer.options?.ranges;
-    this.parseError = typeof sharedState.yy.parseError === "function" ? sharedState.yy.parseError : Object.getPrototypeOf(this).parseError;
+    this.parseError = typeof sharedState.ctx.parseError === "function" ? sharedState.ctx.parseError : Object.getPrototypeOf(this).parseError;
     lex = () => {
       let token;
       token = lexer.lex() || EOF;
@@ -3003,7 +3003,8 @@ var parserInstance = {
         token = this.symbolIds[token] || token;
       return token;
     };
-    [symbol, preErrorSymbol, state, action, r, yyval, p, len, newState, expected] = [null, null, null, null, null, {}, null, null, null, null];
+    symbol = preErrorSymbol = state = action = r = p = len = newState = expected = null;
+    rv = {};
     while (true) {
       state = stk[stk.length - 1];
       if (symbol == null)
@@ -3024,58 +3025,58 @@ var parserInstance = {
           })();
         errStr = (() => {
           if (lexer.showPosition)
-            return `Parse error on line ${yylineno + 1}:
+            return `Parse error on line ${tokenLine + 1}:
 ${lexer.showPosition()}
 Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           else {
-            `Parse error on line ${yylineno + 1}: Unexpected ${symbol === EOF ? "end of input" : `'${this.tokenNames[symbol] || symbol}'`}`;
-            return this.parseError(errStr, { text: lexer.match, token: this.tokenNames[symbol] || symbol, line: lexer.yylineno, loc: yyloc, expected });
+            `Parse error on line ${tokenLine + 1}: Unexpected ${symbol === EOF ? "end of input" : `'${this.tokenNames[symbol] || symbol}'`}`;
+            return this.parseError(errStr, { text: lexer.match, token: this.tokenNames[symbol] || symbol, line: lexer.line, loc: tokenLoc, expected });
           }
         })();
         throw Error(errStr);
       }
       if (action > 0) {
         stk.push(symbol, action);
-        val.push(lexer.yytext);
-        loc.push(lexer.yylloc);
+        vals.push(lexer.text);
+        locs.push(lexer.loc);
         symbol = null;
         if (!preErrorSymbol) {
-          [yyleng, yytext, yylineno, yyloc] = [lexer.yyleng, lexer.yytext, lexer.yylineno, lexer.yylloc];
+          [tokenLen, tokenText, tokenLine, tokenLoc] = [lexer.len, lexer.text, lexer.line, lexer.loc];
           if (recovering > 0)
             recovering--;
         } else
           [symbol, preErrorSymbol] = [preErrorSymbol, null];
       } else if (action < 0) {
         len = this.ruleTable[-action * 2 + 1];
-        yyval.$ = val[val.length - len];
-        [locFirst, locLast] = [loc[loc.length - (len || 1)], loc[loc.length - 1]];
-        yyval._$ = { first_line: locFirst.first_line, last_line: locLast.last_line, first_column: locFirst.first_column, last_column: locLast.last_column };
+        rv.$ = vals[vals.length - len];
+        [locFirst, locLast] = [locs[locs.length - (len || 1)], locs[locs.length - 1]];
+        rv._$ = { first_line: locFirst.first_line, last_line: locLast.last_line, first_column: locFirst.first_column, last_column: locLast.last_column };
         if (ranges)
-          yyval._$.range = [locFirst.range[0], locLast.range[1]];
-        r = this.ruleActions.apply(yyval, [-action, val, loc, sharedState.yy]);
+          rv._$.range = [locFirst.range[0], locLast.range[1]];
+        r = this.ruleActions.call(rv, -action, vals, locs, sharedState.ctx);
         if (r != null)
-          yyval.$ = r;
+          rv.$ = r;
         if (len) {
           stk.length -= len * 2;
-          val.length -= len;
-          loc.length -= len;
+          vals.length -= len;
+          locs.length -= len;
         }
         stk.push(this.ruleTable[-action * 2]);
-        val.push(yyval.$);
-        loc.push(yyval._$);
+        vals.push(rv.$);
+        locs.push(rv._$);
         newState = parseTable[stk[stk.length - 2]][stk[stk.length - 1]];
         stk.push(newState);
       } else if (action === 0)
-        return val[val.length - 1];
+        return vals[vals.length - 1];
     }
   },
   trace() {},
-  yy: {}
+  ctx: {}
 };
-var createParser = (yyInit = {}) => {
+var createParser = (init = {}) => {
   const p = Object.create(parserInstance);
-  Object.defineProperty(p, "yy", {
-    value: { ...yyInit },
+  Object.defineProperty(p, "ctx", {
+    value: { ...init },
     enumerable: false,
     writable: true,
     configurable: true
@@ -7334,8 +7335,8 @@ class Compiler {
           val = new String(val);
           Object.assign(val, token.data);
         }
-        this.yytext = val;
-        this.yylloc = token.loc;
+        this.text = val;
+        this.loc = token.loc;
         return token[0];
       }
     };
@@ -7383,8 +7384,8 @@ function getComponentRuntime() {
   return new CodeGenerator({}).getComponentRuntime();
 }
 // src/browser.js
-var VERSION = "3.2.0";
-var BUILD_DATE = "2026-02-08@23:28:53GMT";
+var VERSION = "3.2.1";
+var BUILD_DATE = "2026-02-09@00:28:44GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
