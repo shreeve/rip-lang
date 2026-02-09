@@ -886,7 +886,7 @@ console.log "Domain:", domain`;
       }
     }
 
-    themeSelect.addEventListener('change', (e) => setTheme(e.target.value));
+    themeSelect.addEventListener('change', async (e) => await setTheme(e.target.value));
 
     // Light/dark mode toggle (persisted via localStorage)
     let isDark = localStorage.getItem('rip-repl-mode') !== 'light';
