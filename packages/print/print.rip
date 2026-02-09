@@ -273,11 +273,40 @@ for section, i in sections
 
     """
 
-# Read highlight.js CSS theme
-hljsTheme = if dark then 'github-dark' else 'github'
+# Load highlight.js theme CSS files
 hljsMain = import.meta.resolve 'highlight.js'
 hljsDir = join hljsMain.replace('file://', '').replace(/\/[^/]+$/, ''), '..', 'styles'
-hljsCss = readFileSync join(hljsDir, "#{hljsTheme}.css"), 'utf-8'
+
+themes = [
+  { id: 'github',              name: 'GitHub Light',       dark: false }
+  { id: 'atom-one-light',      name: 'Atom One Light',     dark: false }
+  { id: 'vs',                  name: 'Visual Studio',      dark: false }
+  { id: 'xcode',               name: 'Xcode',              dark: false }
+  { id: 'intellij-light',      name: 'IntelliJ Light',     dark: false }
+  { id: 'stackoverflow-light', name: 'Stack Overflow',     dark: false }
+  { id: 'default',             name: 'Default Light',      dark: false }
+  { id: 'github-dark',         name: 'GitHub Dark',        dark: true }
+  { id: 'atom-one-dark',       name: 'Atom One Dark',      dark: true }
+  { id: 'monokai',             name: 'Monokai',            dark: true }
+  { id: 'nord',                name: 'Nord',               dark: true }
+  { id: 'vs2015',              name: 'VS 2015 Dark',       dark: true }
+  { id: 'tokyo-night-dark',    name: 'Tokyo Night',        dark: true }
+  { id: 'night-owl',           name: 'Night Owl',          dark: true }
+]
+
+defaultTheme = if dark then 'github-dark' else 'github'
+
+# Load all theme CSS into a JS object for runtime switching
+defaultCss = readFileSync join(hljsDir, "#{defaultTheme}.css"), 'utf-8'
+themeEntries = []
+themeOptions = ''
+for theme in themes
+  css = readFileSync join(hljsDir, "#{theme.id}.css"), 'utf-8'
+  encoded = Buffer.from(css).toString('base64')
+  themeEntries.push "'#{theme.id}':{d:#{theme.dark},c:atob('#{encoded}')}"
+  selected = if theme.id is defaultTheme then ' selected' else ''
+  themeOptions += "<option value=\"#{theme.id}\" data-dark=\"#{theme.dark}\"#{selected}>#{theme.name}</option>\n"
+themeData = themeEntries.join(",\n    ")
 
 html = """
   <!DOCTYPE html>
@@ -286,11 +315,14 @@ html = """
     <meta charset="utf-8">
     <title>rip-print</title>
     <link rel="icon" href="data:,">
-    <style>#{hljsCss}</style>
+    <style id="hljs-theme">#{defaultCss}</style>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #{bgColor}; color: #{textColor}; }
 
+      .toolbar { padding: 8px 16px; border-bottom: 1px solid #{borderColor}; text-align: right; font-size: 13px; }
+      .toolbar select { font-size: 13px; padding: 4px 8px; border-radius: 3px; border: 1px solid #{borderColor}; background: #{bgColor}; color: #{textColor}; }
+      .toolbar label { color: #888; margin-left: 16px; }
       .toc { padding: 20px 30px; border-bottom: 1px solid #{borderColor}; }
       .toc h2 { font-size: 18px; margin-bottom: 10px; }
       .toc ol { padding-left: 24px; columns: 2; column-gap: 40px; }
@@ -317,18 +349,49 @@ html = """
       @media print {
         .toc { page-break-after: always; }
         .file-header { background: #f0f0f0 !important; color: #000 !important; }
+        .toolbar { display: none; }
         .nav { display: none; }
-        .file-section { page-break-before: always; }
-        .file-section:first-of-type { page-break-before: avoid; }
         body { background: white !important; color: black !important; }
         code { font-size: 11px !important; }
       }
     </style>
   </head>
   <body>
+    <div class="toolbar">
+      <label>Theme: <select id="theme-picker">
+        <optgroup label="Light">#{themeOptions.split('\n').filter((o) -> o.includes('data-dark="false"')).join('')}</optgroup>
+        <optgroup label="Dark">#{themeOptions.split('\n').filter((o) -> o.includes('data-dark="true"')).join('')}</optgroup>
+      </select></label>
+    </div>
     <a name="top"></a>
     #{toc}
     #{fileSections}
+    <script>
+      var themes = {
+        #{themeData}
+      };
+      document.getElementById('theme-picker').addEventListener('change', function(e) {
+        var id = e.target.value;
+        var t = themes[id];
+        if (!t) return;
+        document.getElementById('hljs-theme').textContent = t.c;
+        var d = t.d;
+        var bg = d ? '#0d1117' : '#ffffff';
+        var fg = d ? '#e6edf3' : '#1f2328';
+        var hdr = d ? '#161b22' : '#f6f8fa';
+        var brd = d ? '#30363d' : '#d0d7de';
+        var gut = d ? '#161b22' : '#f4f4f4';
+        document.body.style.background = bg;
+        document.body.style.color = fg;
+        document.querySelectorAll('.toolbar').forEach(function(e) { e.style.borderColor = brd; });
+        document.querySelectorAll('.toolbar select').forEach(function(e) { e.style.background = bg; e.style.color = fg; e.style.borderColor = brd; });
+        document.querySelectorAll('.toc').forEach(function(e) { e.style.borderColor = brd; });
+        document.querySelectorAll('.file-header').forEach(function(e) { e.style.background = hdr; e.style.borderColor = brd; e.style.color = fg; });
+        document.querySelectorAll('.line-num').forEach(function(e) { e.style.background = gut; e.style.borderColor = brd; });
+        document.querySelectorAll('.code-container').forEach(function(e) { e.style.borderColor = brd; });
+        document.querySelectorAll('.toc a').forEach(function(e) { e.style.color = fg; });
+      });
+    </script>
   </body>
   </html>
   """
