@@ -1401,12 +1401,12 @@ console.log "Domain:", domain`;
 
       // Show input with syntax highlighting
       const promptText = replBuffer ? '....>' : 'rip>';
+      const codeId = `repl-code-${Date.now()}`;
+      addOutput(`<span class="prompt">${promptText}</span> <span class="repl-code" id="${codeId}">${escapeHtml(line)}</span>`);
       monaco.editor.colorize(line, 'rip', {}).then(highlighted => {
-        // Find the last added line and update it with highlighted code
-        const lastLine = replOutput.querySelector('.repl-line:last-child .repl-code');
-        if (lastLine) lastLine.innerHTML = highlighted;
+        const el = document.getElementById(codeId);
+        if (el) el.innerHTML = highlighted;
       });
-      addOutput(`<span class="prompt">${promptText}</span> <span class="repl-code">${escapeHtml(line)}</span>`);
 
       // Handle commands
       if (line.startsWith('.')) {
