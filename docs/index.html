@@ -212,6 +212,14 @@
       overflow: hidden;
     }
 
+    #repl-editor-container .monaco-editor .overflow-guard {
+      border-radius: 3px;
+    }
+
+    #repl-editor-container .monaco-editor .lines-content {
+      padding-right: 0 !important;
+    }
+
     /* Compiler Styles */
     .compiler-container {
       flex: 1;
@@ -951,11 +959,11 @@ console.log "Domain:", domain`;
       lineNumbers: 'off',
       glyphMargin: false,
       folding: false,
-      lineDecorationsWidth: 4,
+      lineDecorationsWidth: 6,
       lineNumbersMinChars: 0,
       overviewRulerLanes: 0,
       hideCursorInOverviewRuler: true,
-      scrollbar: { vertical: 'hidden', horizontal: 'hidden', handleMouseWheel: false },
+      scrollbar: { vertical: 'hidden', horizontal: 'hidden', handleMouseWheel: false, verticalScrollbarSize: 0, horizontalScrollbarSize: 0 },
       overviewRulerBorder: false,
       renderLineHighlight: 'none',
       wordWrap: 'off',
