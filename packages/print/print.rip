@@ -216,10 +216,12 @@ for file in allFiles
   code = stripTopComments(code) if bypass
   lang = getLang file
   lineCount = code.split('\n').length
+  mtime = statSync(file).mtime
+  timestamp = mtime.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) + ' at ' + mtime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()
   console.log "  #{file} (#{lineCount} lines) [#{lang}]"
   highlighted = highlightCode code, lang
   html = "<pre><code class=\"hljs\">#{highlighted}</code></pre>"
-  sections.push { file, lineCount, lang, html }
+  sections.push { file, lineCount, lang, timestamp, html }
 
 # ============================================================================
 # HTML template
@@ -258,7 +260,7 @@ for section, i in sections
   fileSections += """
     <div class="file-section">
       <div class="file-header" id="#{section.file}">
-        <span>#{section.file} <span class="meta">(#{section.lineCount} lines) [#{section.lang}]</span></span>
+        <span>#{section.file} <span class="meta">(#{section.lineCount} lines) [#{section.lang}] on #{section.timestamp}</span></span>
         <span class="nav">#{nav}</span>
       </div>
       <div class="code-container">
@@ -306,8 +308,8 @@ html = """
 
       .code-container { overflow-x: auto; }
       .code-container pre { margin: 0; border-radius: 0; }
-      .code-container code { font-size: 13px; line-height: 1.5; padding: 16px !important; display: block; }
-      .line-num { color: #aaa; user-select: none; display: inline-block; min-width: 2em; text-align: right; }
+      .code-container code { font-size: 13px; line-height: 1.5; padding: 0 !important; display: block; }
+      .line-num { color: #aaa; background: #{if dark then '#161b22' else '#f4f4f4'}; user-select: none; display: inline-block; min-width: 2em; text-align: right; padding: 0 0.7em; margin-right: 0.7em; border-left: 1px solid #{borderColor}; border-right: 1px solid #{borderColor}; }
 
       @media print {
         .toc { page-break-after: always; }
