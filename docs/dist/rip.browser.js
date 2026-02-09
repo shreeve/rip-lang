@@ -3983,7 +3983,7 @@ if (typeof globalThis !== 'undefined') {
   };
 }
 
-// src/sourcemap.js
+// src/sourcemaps.js
 var B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 function vlqEncode(value) {
   let result = "";
@@ -7536,8 +7536,8 @@ function getComponentRuntime() {
   return new CodeGenerator({}).getComponentRuntime();
 }
 // src/browser.js
-var VERSION = "3.4.3";
-var BUILD_DATE = "2026-02-09@07:17:43GMT";
+var VERSION = "3.4.4";
+var BUILD_DATE = "2026-02-09@07:32:49GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));

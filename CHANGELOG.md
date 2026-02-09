@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Source Maps & IDE Intelligence
 
-- **Source Map V3 support** — New `src/sourcemap.js` implements ECMA-426 source maps with zero dependencies. VLQ encoder + SourceMapGenerator class in ~120 lines.
+- **Source Map V3 support** — New `src/sourcemaps.js` implements ECMA-426 source maps with zero dependencies. VLQ encoder + SourceMapGenerator class in ~120 lines.
 - **Inline source maps** — `-m` flag embeds source maps as base64 data URLs in compiled output. One file for everything — debuggers read them natively.
 - **Reverse source maps** — `toReverseMap()` provides O(1) source→generated position lookup for IDE type intelligence.
 - **S-expression locations** — Parser now attaches `.loc = {r, c}` on every S-expression node. Locations flow from lexer through parser to code generator using consistent `{r, c}` naming.

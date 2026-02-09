@@ -104,7 +104,7 @@ Source Code  →  Lexer  →  emitTypes  →  Parser  →  S-Expressions  →  C
 | `src/compiler.js` | Compiler + Code Generator | 3,292 | Yes |
 | `src/types.js` | Type System (lexer sidecar) | 719 | Yes |
 | `src/components.js` | Component System (compiler sidecar) | 1,240 | Yes |
-| `src/sourcemap.js` | Source Map V3 Generator | 122 | Yes |
+| `src/sourcemaps.js` | Source Map V3 Generator | 122 | Yes |
 | `src/tags.js` | HTML Tag Classification | 63 | Yes |
 | `src/parser.js` | Generated parser | 357 | No (auto-gen) |
 | `src/grammar/grammar.rip` | Grammar specification | 935 | Yes (carefully) |

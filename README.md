@@ -294,7 +294,7 @@ Simple arrays (with `.loc`) instead of AST node classes. The compiler is self-ho
 | Compiler + Codegen | `src/compiler.js` | 3,292 |
 | Type System | `src/types.js` | 719 |
 | Component System | `src/components.js` | 1,240 |
-| Source Maps | `src/sourcemap.js` | 122 |
+| Source Maps | `src/sourcemaps.js` | 122 |
 | Parser (generated) | `src/parser.js` | 357 |
 | Grammar | `src/grammar/grammar.rip` | 935 |
 | Parser Generator | `src/grammar/solar.rip` | 916 |

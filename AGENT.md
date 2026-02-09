@@ -47,7 +47,7 @@ rip-lang/
 │   ├── compiler.js      # Compiler + Code Generator (3,292 LOC)
 │   ├── types.js         # Type System — sidecar for lexer (719 LOC)
 │   ├── components.js    # Component System — sidecar for compiler (1,240 LOC)
-│   ├── sourcemap.js     # Source Map V3 generator (122 LOC)
+│   ├── sourcemaps.js    # Source Map V3 generator (122 LOC)
 │   ├── tags.js          # HTML tag classification (63 LOC)
 │   ├── parser.js        # Generated parser (357 LOC) — Don't edit!
 │   ├── repl.js          # Terminal REPL (707 LOC)

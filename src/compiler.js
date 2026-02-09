@@ -12,7 +12,7 @@ import { Lexer } from './lexer.js';
 import { parser } from './parser.js';
 import { installComponentSupport } from './components.js';
 import { emitTypes, generateEnum } from './types.js';
-import { SourceMapGenerator } from './sourcemap.js';
+import { SourceMapGenerator } from './sourcemaps.js';
 
 // =============================================================================
 // Metadata helpers — isolate all new String() awareness here
