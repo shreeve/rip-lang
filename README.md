@@ -82,7 +82,7 @@ dog = Dog.new("Buddy")         # Ruby-style constructor
 ```coffee
 "Hello, #{name}!"              # CoffeeScript-style
 "Hello, ${name}!"              # JavaScript-style
-"#{a} + #{b} = #{a + b}"      # Expressions work in both
+"#{a} + #{b} = #{a + b}"       # Expressions work in both
 ```
 
 Both `#{}` and `${}` compile to JavaScript template literals. Use whichever you prefer.
