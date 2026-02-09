@@ -158,6 +158,16 @@
       font-weight: 600;
     }
 
+    .repl-code {
+      display: inline;
+    }
+
+    .repl-code > span {
+      display: inline !important;
+      background: none !important;
+      padding: 0 !important;
+    }
+
     .prompt-continuation {
       color: #666;
     }
@@ -1330,9 +1340,14 @@ console.log "Domain:", domain`;
       }
       historyIndex = replHistory.length;
 
-      // Show input
+      // Show input with syntax highlighting
       const promptText = replBuffer ? '....>' : 'rip>';
-      addOutput(`<span class="prompt">${promptText}</span> ${escapeHtml(line)}`);
+      monaco.editor.colorize(line, 'rip', {}).then(highlighted => {
+        // Find the last added line and update it with highlighted code
+        const lastLine = replOutput.querySelector('.repl-line:last-child .repl-code');
+        if (lastLine) lastLine.innerHTML = highlighted;
+      });
+      addOutput(`<span class="prompt">${promptText}</span> <span class="repl-code">${escapeHtml(line)}</span>`);
 
       // Handle commands
       if (line.startsWith('.')) {
