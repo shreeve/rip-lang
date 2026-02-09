@@ -199,6 +199,110 @@ The reactive runtime is embedded in compiler.js and only included when needed.
 
 ---
 
+## Type System (Rip Types)
+
+Rip's optional type system adds compile-time type annotations that emit `.d.ts` files for TypeScript interoperability. Types are **erased** from JavaScript output — they exist only for IDE intelligence and documentation.
+
+### Syntax
+
+```coffee
+# Type annotations (::)
+def greet(name:: string):: string
+  "Hello, #{name}!"
+
+# Type aliases (::=)
+User ::= type
+  id: number
+  name: string
+  email?: string
+
+# Interfaces
+interface Animal
+  name: string
+  speak: => void
+
+# Enums (emit runtime JS + .d.ts)
+enum Status
+  Active
+  Inactive
+```
+
+### Architecture
+
+All type logic lives in `src/types.js` (lexer sidecar):
+- `installTypeSupport(Lexer)` — adds `rewriteTypes()` to the lexer
+- `emitTypes(tokens)` — generates `.d.ts` from annotated tokens
+- `generateEnum()` — generates runtime JS for enums
+
+Types are processed at the **token level** before parsing. The parser never sees type annotations — they're stripped during token rewriting with metadata stored on tokens for `.d.ts` emission.
+
+### CLI
+
+```bash
+rip -d example.rip     # Generate example.d.ts
+rip -cd example.rip    # Compile JS + generate .d.ts
+```
+
+---
+
+## Source Maps
+
+Rip generates Source Map V3 (ECMA-426) for debugging support. Source maps are embedded inline as base64 data URLs — one file, no separate `.map` file needed.
+
+### How It Works
+
+- Every S-expression node carries `.loc = {r, c}` from its original source position
+- The code generator builds line-level mappings between output JS and source Rip
+- `SourceMapGenerator` (in `src/sourcemaps.js`) produces VLQ-encoded mappings
+- `toReverseMap()` provides O(1) source→generated position lookup (used by VS Code extension)
+
+### CLI
+
+```bash
+rip -m example.rip     # Compile with inline source map
+rip -cm example.rip    # Show compiled JS with source map
+```
+
+Debuggers (Node.js, Bun, Chrome DevTools) read inline source maps natively — breakpoints and stack traces point back to `.rip` source lines.
+
+---
+
+## VS Code Extension
+
+The Rip extension (`packages/vscode/`) provides IDE support for VS Code and Cursor.
+
+### Features
+
+- **Syntax highlighting** — TextMate grammar for all Rip syntax
+- **Auto .d.ts generation** — generates type declarations on save (Level 1)
+- **Type intelligence** — autocomplete, hover, go-to-definition from third-party `.d.ts` files (Level 2)
+- **Commands** — "Generate .d.ts for Current File" and "Generate .d.ts for All Files"
+
+### How Type Intelligence Works
+
+1. On each edit (300ms debounce), the extension compiles `.rip` to a shadow `.ts` file in `.rip-cache/`
+2. VS Code's built-in TypeScript extension analyzes the shadow file and resolves `node_modules` types
+3. Completion/hover/definition requests are proxied from `.rip` → shadow `.ts` using the reverse source map
+4. TypeScript's results are returned to the `.rip` editor
+
+### Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `rip.types.generateOnSave` | `true` | Auto-generate `.d.ts` on save |
+| `rip.types.intellisense` | `true` | Enable autocomplete/hover/go-to-definition |
+| `rip.compiler.path` | (auto) | Path to the `rip` compiler binary |
+
+### Publishing
+
+```bash
+cd packages/vscode
+npx @vscode/vsce login rip-lang    # Login with PAT (one-time)
+npx @vscode/vsce publish           # Publish to Marketplace
+```
+
+---
+
 ## Common Tasks
 
 ### Fix a Bug in Codegen
