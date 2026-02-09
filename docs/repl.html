@@ -582,11 +582,12 @@
 
         <div class="editor-pane" id="editor-right">
           <div class="pane-header">
-            <span>Generated JavaScript</span>
+            <span>Output</span>
             <div class="pane-header-buttons">
-              <button id="show-runtime" title="Toggle runtime code display">Runtime</button>
-              <button id="show-sexp" title="Toggle S-expression display">S-Expressions</button>
               <button id="show-tokens" title="Toggle token stream display">Tokens</button>
+              <button id="show-sexp" title="Toggle S-expression display">S-Expressions</button>
+              <button id="show-runtime" title="Toggle runtime code display">Runtime</button>
+              <button id="show-js" class="active" title="Toggle JavaScript output">JS</button>
             </div>
           </div>
           <pre class="output-code" id="output"></pre>
@@ -941,9 +942,10 @@ console.log "Domain:", domain`;
     // ========================================================================
 
     const output = document.getElementById('output');
-    const showRuntimeBtn = document.getElementById('show-runtime');
-    const showSexpBtn = document.getElementById('show-sexp');
     const showTokensBtn = document.getElementById('show-tokens');
+    const showSexpBtn = document.getElementById('show-sexp');
+    const showRuntimeBtn = document.getElementById('show-runtime');
+    const showJSBtn = document.getElementById('show-js');
     const replOutput = document.getElementById('repl-output');
     const replInput = document.getElementById('repl-input');
     const promptSpan = document.getElementById('prompt');
@@ -955,9 +957,10 @@ console.log "Domain:", domain`;
     // Compiler Implementation
     // ========================================================================
 
-    let showRuntime = localStorage.getItem('rip-repl-runtime') === 'true';
-    let showSexp = localStorage.getItem('rip-repl-sexp') === 'true';
     let showTokens = localStorage.getItem('rip-repl-tokens') === 'true';
+    let showSexp = localStorage.getItem('rip-repl-sexp') === 'true';
+    let showRuntime = localStorage.getItem('rip-repl-runtime') === 'true';
+    let showJS = localStorage.getItem('rip-repl-js') !== 'false';  // default true
 
     function stripHelpers(code) {
       code = code.replace(/^const slice = \[\]\.slice;\n/m, '');
@@ -1000,9 +1003,13 @@ console.log "Domain:", domain`;
           outputText += '\n\n';
         }
 
-        const cleanCode = showRuntime ? result.code : stripHelpers(result.code);
-        const highlightedCode = highlightJS(cleanCode);
-        output.innerHTML = outputText.replace(/</g, '&lt;').replace(/>/g, '&gt;') + highlightedCode;
+        let jsOutput = '';
+        if (showJS) {
+          const cleanCode = showRuntime ? result.code : stripHelpers(result.code);
+          jsOutput = highlightJS(cleanCode);
+        }
+
+        output.innerHTML = outputText.replace(/</g, '&lt;').replace(/>/g, '&gt;') + jsOutput;
       } catch (error) {
         output.textContent = `Error: ${error.message}`;
       }
@@ -1458,14 +1465,15 @@ console.log "Domain:", domain`;
 
     // Toggle buttons for S-Expressions and Tokens
     // Restore button states from localStorage
-    showRuntimeBtn.classList.toggle('active', showRuntime);
-    showSexpBtn.classList.toggle('active', showSexp);
     showTokensBtn.classList.toggle('active', showTokens);
+    showSexpBtn.classList.toggle('active', showSexp);
+    showRuntimeBtn.classList.toggle('active', showRuntime);
+    showJSBtn.classList.toggle('active', showJS);
 
-    showRuntimeBtn.addEventListener('click', () => {
-      showRuntime = !showRuntime;
-      showRuntimeBtn.classList.toggle('active', showRuntime);
-      localStorage.setItem('rip-repl-runtime', showRuntime);
+    showTokensBtn.addEventListener('click', () => {
+      showTokens = !showTokens;
+      showTokensBtn.classList.toggle('active', showTokens);
+      localStorage.setItem('rip-repl-tokens', showTokens);
       compileCode();
     });
 
@@ -1476,10 +1484,17 @@ console.log "Domain:", domain`;
       compileCode();
     });
 
-    showTokensBtn.addEventListener('click', () => {
-      showTokens = !showTokens;
-      showTokensBtn.classList.toggle('active', showTokens);
-      localStorage.setItem('rip-repl-tokens', showTokens);
+    showRuntimeBtn.addEventListener('click', () => {
+      showRuntime = !showRuntime;
+      showRuntimeBtn.classList.toggle('active', showRuntime);
+      localStorage.setItem('rip-repl-runtime', showRuntime);
+      compileCode();
+    });
+
+    showJSBtn.addEventListener('click', () => {
+      showJS = !showJS;
+      showJSBtn.classList.toggle('active', showJS);
+      localStorage.setItem('rip-repl-js', showJS);
       compileCode();
     });
 
