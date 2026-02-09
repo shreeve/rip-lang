@@ -1042,7 +1042,7 @@ console.log "Domain:", domain`;
     // Tab Switching
     // ========================================================================
 
-    function switchToTab(tabName) {
+    async function switchToTab(tabName) {
       // Update URL hash
       window.location.hash = tabName;
 
@@ -1061,7 +1061,7 @@ console.log "Domain:", domain`;
         replEditor.focus();
       } else if (tabName === 'compiler') {
         // Compiler restores user's selected theme
-        setTheme(themeSelect.value);
+        await setTheme(themeSelect.value);
         compileCode();
       }
     }
@@ -1087,7 +1087,7 @@ console.log "Domain:", domain`;
     // Initialize from URL hash on page load (default to compiler)
     const initialTab = window.location.hash.slice(1);
     if (['compiler', 'repl'].includes(initialTab)) {
-      switchToTab(initialTab);
+      await switchToTab(initialTab);
     } else {
       // No hash - compiler is default
       compileCode();

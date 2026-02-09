@@ -7536,8 +7536,8 @@ function getComponentRuntime() {
   return new CodeGenerator({}).getComponentRuntime();
 }
 // src/browser.js
-var VERSION = "3.4.4";
-var BUILD_DATE = "2026-02-09@07:32:49GMT";
+var VERSION = "3.4.5";
+var BUILD_DATE = "2026-02-09@14:23:53GMT";
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
