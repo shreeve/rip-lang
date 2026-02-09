@@ -1,6 +1,10 @@
-# Rip Language Support
+<img src="https://raw.githubusercontent.com/shreeve/rip-lang/main/docs/rip.svg" style="width:50px" /> <br>
 
-Syntax highlighting and editor integration for [Rip](https://github.com/shreeve/rip-lang), a modern reactive language that compiles to JavaScript.
+# Rip - VS Code Extension
+
+> **Syntax highlighting and editor integration for Rip**
+
+Full language support for [Rip](https://github.com/shreeve/rip-lang), a modern reactive language that compiles to JavaScript. Provides syntax highlighting, comment toggling, bracket matching, code folding, and type annotation support.
 
 ## Features
 
