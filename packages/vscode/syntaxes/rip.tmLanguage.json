@@ -344,12 +344,13 @@
       }
     },
 
-    {"comment": "=== OBJECT KEYS (name: value) ==="},
+    {"comment": "=== OBJECT KEYS (name: value, name?: optional) ==="},
     {
-      "match": "\\b([a-zA-Z_$]\\w*)\\s*(:)(?![:=])",
+      "match": "\\b([a-zA-Z_$]\\w*)(\\?)?([:])(?![:=])",
       "captures": {
         "1": { "name": "variable.other.property.rip" },
-        "2": { "name": "punctuation.separator.key-value.rip" }
+        "2": { "name": "keyword.operator.type.optional.rip" },
+        "3": { "name": "punctuation.separator.key-value.rip" }
       }
     }
   ],
