@@ -68,7 +68,7 @@ class Generator
     # Configuration
     @options     = { ...grammar.options, ...options }
     @parseParams = grammar.parseParams
-    @yy          = {}
+    @ctx         = {}
     @indent      = '  '
     @double      = @indent.repeat 2
     @triple      = @indent.repeat 3
@@ -590,10 +590,10 @@ class Generator
 
     const parserInstance = #{parserInstance}
 
-    const createParser = (yyInit = {}) => {
+    const createParser = (init = {}) => {
       const p = Object.create(parserInstance);
-      Object.defineProperty(p, "yy", {
-        value: { ...yyInit },
+      Object.defineProperty(p, "ctx", {
+        value: { ...init },
         enumerable: false,
         writable: true,
         configurable: true,
@@ -621,7 +621,7 @@ class Generator
       #{String(@parseError).replace(/^function /, '')},
       #{String(@parse     ).replace(/^function /, '')},
       trace() {},
-      yy: {},
+      ctx: {},
     }"""
 
   _generateTableCode: (stateTable) ->
@@ -674,25 +674,25 @@ class Generator
       throw error
 
   parse: (input) ->
-    [stk, val, loc] = [[0], [null], []]
-    [parseTable, yytext, yylineno, yyleng, recovering] = [@parseTable, '', 0, 0, 0]
+    [stk, vals, locs] = [[0], [null], []]
+    [parseTable, tokenText, tokenLine, tokenLen, recovering] = [@parseTable, '', 0, 0, 0]
     [TERROR, EOF] = [2, 1]
 
     lexer = Object.create @lexer
-    sharedState = {yy: {}}
-    sharedState.yy[k] = v for own k, v of @yy
+    sharedState = {ctx: {}}
+    sharedState.ctx[k] = v for own k, v of @ctx
 
-    lexer.setInput input, sharedState.yy
-    [sharedState.yy.lexer, sharedState.yy.parser] = [lexer, this]
+    lexer.setInput input, sharedState.ctx
+    [sharedState.ctx.lexer, sharedState.ctx.parser] = [lexer, this]
 
-    lexer.yylloc = {} unless lexer.yylloc?
-    yyloc = lexer.yylloc
-    loc.push yyloc
+    lexer.loc = {} unless lexer.loc?
+    tokenLoc = lexer.loc
+    locs.push tokenLoc
 
     ranges = lexer.options?.ranges
 
-    @parseError = if typeof sharedState.yy.parseError is 'function'
-      sharedState.yy.parseError
+    @parseError = if typeof sharedState.ctx.parseError is 'function'
+      sharedState.ctx.parseError
     else
       Object.getPrototypeOf(this).parseError
 
@@ -701,8 +701,8 @@ class Generator
       token = @symbolIds[token] or token unless typeof token is 'number'
       token
 
-    [symbol, preErrorSymbol, state, action, r, yyval, p, len, newState, expected] =
-      [null, null, null, null, null, {}, null, null, null, null]
+    [symbol, preErrorSymbol, state, action, r, rv, p, len, newState, expected] =
+      [null,   null,           null,  null,   null, {}, null, null, null, null]
 
     loop
       state = stk[stk.length - 1]
@@ -714,56 +714,56 @@ class Generator
         unless recovering
           expected = ("'#{@tokenNames[p]}'" for own p of parseTable[state] when @tokenNames[p] and p > TERROR)
         errStr = if lexer.showPosition
-          "Parse error on line #{yylineno + 1}:\n#{lexer.showPosition()}\nExpecting #{expected.join(', ')}, got '#{@tokenNames[symbol] or symbol}'"
+          "Parse error on line #{tokenLine + 1}:\n#{lexer.showPosition()}\nExpecting #{expected.join(', ')}, got '#{@tokenNames[symbol] or symbol}'"
         else
-          "Parse error on line #{yylineno + 1}: Unexpected #{if symbol is EOF then "end of input" else "'#{@tokenNames[symbol] or symbol}'"}"
+          "Parse error on line #{tokenLine + 1}: Unexpected #{if symbol is EOF then "end of input" else "'#{@tokenNames[symbol] or symbol}'"}"
 
           @parseError errStr, {
-            text: lexer.match
+            text:  lexer.match
             token: @tokenNames[symbol] or symbol
-            line: lexer.yylineno
-            loc: yyloc
+            line:  lexer.line
+            loc:   tokenLoc
             expected
           }
         throw new Error errStr
 
       if action > 0  # SHIFT or GOTO
         stk.push symbol, action
-        val.push lexer.yytext
-        loc.push lexer.yylloc
+        vals.push lexer.text
+        locs.push lexer.loc
         symbol = null
         unless preErrorSymbol
-          [yyleng, yytext, yylineno, yyloc] = [lexer.yyleng, lexer.yytext, lexer.yylineno, lexer.yylloc]
+          [tokenLen, tokenText, tokenLine, tokenLoc] = [lexer.len, lexer.text, lexer.line, lexer.loc]
           recovering-- if recovering > 0
         else
           [symbol, preErrorSymbol] = [preErrorSymbol, null]
 
       else if action < 0  # REDUCE
         len = @ruleTable[(-action) * 2 + 1]
-        yyval.$ = val[val.length - len]
-        [locFirst, locLast] = [loc[loc.length - (len or 1)], loc[loc.length - 1]]
-        yyval._$ = {
+        rv.$ = vals[vals.length - len]
+        [locFirst, locLast] = [locs[locs.length - (len or 1)], locs[locs.length - 1]]
+        rv._$ = {
           first_line: locFirst.first_line, last_line: locLast.last_line
           first_column: locFirst.first_column, last_column: locLast.last_column
         }
-        yyval._$.range = [locFirst.range[0], locLast.range[1]] if ranges
+        rv._$.range = [locFirst.range[0], locLast.range[1]] if ranges
 
-        r = @ruleActions.call yyval, -action, val, loc, sharedState.yy
-        yyval.$ = r if r?
+        r = @ruleActions.call rv, -action, vals, locs, sharedState.ctx
+        rv.$ = r if r?
 
         if len
-          stk.length -= len * 2
-          val.length -= len
-          loc.length -= len
+          stk.length  -= len * 2
+          vals.length -= len
+          locs.length -= len
 
         stk.push @ruleTable[(-action) * 2]
-        val.push yyval.$
-        loc.push yyval._$
+        vals.push rv.$
+        locs.push rv._$
         newState = parseTable[stk[stk.length - 2]][stk[stk.length - 1]]
         stk.push newState
 
       else if action is 0  # ACCEPT
-        return val[val.length - 1]
+        return vals[vals.length - 1]
 
   trace!: (msg) -> # Debug output (no-op by default)
     console.log msg if @options?.debug

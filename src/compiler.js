@@ -3143,8 +3143,8 @@ export class Compiler {
           val = new String(val);
           Object.assign(val, token.data);
         }
-        this.yytext = val;
-        this.yylloc = token.loc;
+        this.text = val;
+        this.loc  = token.loc;
         return token[0];
       }
     };
