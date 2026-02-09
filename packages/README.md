@@ -100,10 +100,6 @@ rows = CSV.read "name,age\nAlice,30\nBob,25\n", headers: true
 CSV.save! 'out.csv', rows
 ```
 
-### [@rip-lang/parser](parser/) — Parser Generator
-
-SLR(1) parser generator for building DSLs. The same engine (`solar.rip`) that powers the Rip compiler itself, extracted as a standalone package. Coming soon.
-
 ### [@rip-lang/ui](ui/) — Reactive Web Framework
 
 Zero-build reactive web framework. Ships the 40KB Rip compiler to the browser, compiles `.rip` components on demand, and renders with fine-grained DOM updates. Includes a Virtual File System, file-based router, reactive stash, server middleware (`ripUI`), and SSE hot-reload. ~1,300 lines.
