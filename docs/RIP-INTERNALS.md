@@ -43,7 +43,7 @@ class BinaryOp {
 ["+", left, right]  // That's it!
 ```
 
-**Result:** CoffeeScript's compiler is 17,760 LOC. Rip's is ~7,700 LOC — smaller, yet includes a complete reactive runtime.
+**Result:** CoffeeScript's compiler is 17,760 LOC. Rip's is ~10,300 LOC — smaller, yet includes a complete reactive runtime, type system, component system, and source maps.
 
 > **Transform the IR (s-expressions), not the output (strings).**
 
@@ -75,7 +75,7 @@ console.log(code);
 | Dependencies | Multiple | **Zero** |
 | Parser generator | External (Jison) | **Built-in (Solar)** |
 | Self-hosting | No | **Yes** |
-| Total LOC | 17,760 | ~7,700 |
+| Total LOC | 17,760 | ~10,300 |
 
 ## Design Principles
 
@@ -91,7 +91,7 @@ console.log(code);
 
 ```
 Source Code  →  Lexer  →  emitTypes  →  Parser  →  S-Expressions  →  Codegen  →  JavaScript
-                (1,866)    (types.js)    (356)       (simple arrays)     (3,219)      (ES2022)
+                (1,867)    (types.js)    (357)       (arrays + .loc)     (3,292)      + source map
                               ↓
                            file.d.ts (when types: "emit")
 ```
@@ -100,13 +100,15 @@ Source Code  →  Lexer  →  emitTypes  →  Parser  →  S-Expressions  →  C
 
 | File | Purpose | Lines | Modify? |
 |------|---------|-------|---------|
-| `src/lexer.js` | Lexer + Rewriter | 1,866 | Yes |
-| `src/compiler.js` | Compiler + Code Generator | 3,219 | Yes |
-| `src/types.js` | Type System (lexer sidecar) | 718 | Yes |
-| `src/components.js` | Component System (compiler sidecar) | ~1,240 | Yes |
-| `src/parser.js` | Generated parser | 356 | No (auto-gen) |
-| `src/grammar/grammar.rip` | Grammar specification | 934 | Yes (carefully) |
-| `src/grammar/solar.rip` | Parser generator | 1,001 | No |
+| `src/lexer.js` | Lexer + Rewriter | 1,867 | Yes |
+| `src/compiler.js` | Compiler + Code Generator | 3,292 | Yes |
+| `src/types.js` | Type System (lexer sidecar) | 719 | Yes |
+| `src/components.js` | Component System (compiler sidecar) | 1,240 | Yes |
+| `src/sourcemap.js` | Source Map V3 Generator | 122 | Yes |
+| `src/tags.js` | HTML Tag Classification | 63 | Yes |
+| `src/parser.js` | Generated parser | 357 | No (auto-gen) |
+| `src/grammar/grammar.rip` | Grammar specification | 935 | Yes (carefully) |
+| `src/grammar/solar.rip` | Parser generator | 916 | No |
 
 ## Example Flow
 
@@ -271,7 +273,7 @@ S-expressions are simple arrays that serve as Rip's intermediate representation 
 
 # 4. Lexer & Rewriter
 
-The lexer (`src/lexer.js`) is a clean reimplementation that replaces the old lexer (3,260 lines) with ~1,550 lines producing the same token vocabulary the parser expects.
+The lexer (`src/lexer.js`) is a clean reimplementation that replaces the old lexer (3,260 lines) with ~1,870 lines producing the same token vocabulary the parser expects.
 
 ## Architecture
 
@@ -435,7 +437,7 @@ REGEX tokens store `delimiter` and optional `heregex` flags in `token.data`.
 
 # 6. Compiler
 
-The compiler (`src/compiler.js`) is a clean reimplementation replacing the old compiler (6,016 lines) with ~3,150 lines producing identical JavaScript output.
+The compiler (`src/compiler.js`) is a clean reimplementation replacing the old compiler (6,016 lines) with ~3,290 lines producing identical JavaScript output.
 
 ## Structure
 
@@ -479,7 +481,7 @@ The `Compiler` class's lexer adapter reconstructs `new String()` wrapping from t
 
 | Area | Old lines | New lines | Reduction |
 |------|-----------|-----------|-----------|
-| Total file | 6,016 | ~3,150 | **48%** |
+| Total file | 6,016 | ~3,290 | **45%** |
 | Body generation | ~500 | ~200 | 60% |
 | Variable collection | ~230 | ~100 | 57% |
 | Helper methods | ~600 | ~250 | 58% |
@@ -490,7 +492,7 @@ The `Compiler` class's lexer adapter reconstructs `new String()` wrapping from t
 
 **Solar** is a complete SLR(1) parser generator included with Rip — written in Rip, compiled by Rip, zero external dependencies.
 
-**Location:** `src/grammar/solar.rip` (1,001 lines)
+**Location:** `src/grammar/solar.rip` (916 lines)
 
 ## Grammar Syntax
 
@@ -529,7 +531,7 @@ Parenthetical: [
 | Parse time | 12,500ms | ~50ms |
 | Dependencies | Many | Zero |
 | Self-hosting | No | Yes |
-| Code size | 2,285 LOC | 1,001 LOC |
+| Code size | 2,285 LOC | 916 LOC |
 
 After modifying `src/grammar/grammar.rip`:
 
@@ -558,17 +560,10 @@ rip> .sexp    # Toggle s-expression display
 rip> .js      # Toggle JS display
 ```
 
-Compare old and new compilers across all test suites:
-
-```bash
-bun src/compare-compilers.js
-```
-
 ---
 
 # 9. Future Work
 
-- Comment preservation for source maps
 - Parser update to read `.data` directly instead of `new String()` properties
 - Once parser supports `.data`, the `meta()`/`str()` helpers become trivial to update
 
@@ -581,4 +576,4 @@ bun src/compare-compilers.js
 
 ---
 
-*Rip 3.0 — 1,130 tests passing — Zero dependencies — Self-hosting — ~8,800 LOC*
+*Rip 3.4 — 1,140 tests passing — Zero dependencies — Self-hosting — ~10,300 LOC*

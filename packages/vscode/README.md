@@ -104,7 +104,7 @@ npm install rip-lang       # local install (auto-detected)
 ```bash
 cd packages/vscode
 npx @vscode/vsce package --no-dependencies
-cursor --install-extension rip-0.2.0.vsix --force
+cursor --install-extension rip-0.3.1.vsix --force
 # Then: Cmd+Shift+P -> "Developer: Reload Window"
 ```
 

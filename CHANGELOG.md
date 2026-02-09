@@ -7,6 +7,45 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.3] - 2026-02-09
+
+### Source Maps & IDE Intelligence
+
+- **Source Map V3 support** — New `src/sourcemap.js` implements ECMA-426 source maps with zero dependencies. VLQ encoder + SourceMapGenerator class in ~120 lines.
+- **Inline source maps** — `-m` flag embeds source maps as base64 data URLs in compiled output. One file for everything — debuggers read them natively.
+- **Reverse source maps** — `toReverseMap()` provides O(1) source→generated position lookup for IDE type intelligence.
+- **S-expression locations** — Parser now attaches `.loc = {r, c}` on every S-expression node. Locations flow from lexer through parser to code generator using consistent `{r, c}` naming.
+- **Parser cleanup** — Removed legacy Jison location format (`first_line`/`first_column`), dead `ranges` variable, and `locFirst`/`locLast` extraction. Parser uses `{r, c}` natively.
+- **VS Code Extension v0.3.1** — Level 2 type intelligence: autocomplete, hover, and go-to-definition from third-party `.d.ts` files inside `.rip` files. Shadow `.ts` compilation with 300ms debounce. Configurable via `rip.types.intellisense` setting.
+
+## [3.3.1] - 2026-02-09
+
+### Playground & Extension
+
+- **Playground cleanup** — Eliminated dead CSS rules, extracted shared Monaco config, DRYed up toggle handlers, fixed flicker by restoring button states before page reveal, added smooth fade-in transition, defaulted light/dark mode to system `prefers-color-scheme`.
+- **VS Code Extension v0.2.0** — Auto-generate `.d.ts` files on save, commands for single-file and workspace-wide type generation, auto-detect compiler binary, configurable settings.
+- **Extension published** to VS Code Marketplace as `rip-lang.rip`.
+
+## [3.2.1] - 2026-02-08
+
+### Test Suite & Solar Cleanup
+
+- **Test suite overhaul** — Redistributed tests from `stabilization.rip` and `compatibility.rip` into proper files, removed duplicates, added `reactivity.rip` and `types.rip` test files, added `for-as` guard tests. Now 1,140 tests.
+- **Solar parser generator cleanup** — Removed ~79 lines of dead Jison compatibility code, optimized runtime parser with `.call` instead of `.apply`, modernized variable naming from `yy` prefixes.
+
+## [3.2.0] - 2026-02-08
+
+### Rip Types — Optional Type System
+
+- **Type annotations** (`::`) on variables, parameters, and return types — compile-time only, stripped from JS output.
+- **Type aliases** (`::=`) for named types, structural types, union types.
+- **Interfaces** with `extends` support.
+- **Enums** with runtime JS generation and `.d.ts` emission.
+- **Generics** (`<T>`) for reusable type definitions.
+- **`.d.ts` emission** — `emitTypes()` generates TypeScript declaration files directly from annotated token stream.
+- **CLI flag** — `-d`/`--dts` generates `.d.ts` files alongside compiled JS.
+- **Architecture** — All type logic consolidated in `src/types.js` (lexer sidecar), minimal changes to lexer and compiler. Added `::` and `::=` operators to lexer.
+
 ## [3.1.0] - 2026-02-08
 
 ### Rip UI — Zero-Build Reactive Web Framework

@@ -9,15 +9,15 @@
 </p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.1.0-blue.svg" alt="Version"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.4.3-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
-  <a href="#"><img src="https://img.shields.io/badge/tests-1130%2F1130-brightgreen.svg" alt="Tests"></a>
+  <a href="#"><img src="https://img.shields.io/badge/tests-1140%2F1140-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
 </p>
 
 ---
 
-Rip is a modern language inspired by CoffeeScript. It compiles to **ES2022** (classes, `?.`, `??`, modules), adds about a **dozen new operators**, includes **built-in reactivity**, and sports a self-hosting compiler with **zero dependencies** — all in about 7,700 lines of code.
+Rip is a modern language inspired by CoffeeScript. It compiles to **ES2022** (classes, `?.`, `??`, modules), adds about a **dozen new operators**, includes **built-in reactivity**, and sports a self-hosting compiler with **zero dependencies** — all in about 10,300 lines of code.
 
 > **No imports. No hooks. No dependency arrays. Just write code.**
 
@@ -254,9 +254,9 @@ See [@rip-lang/ui](packages/ui/) for the full framework: Virtual File System, fi
 | **Reactivity** | None | Built-in |
 | **Dependencies** | Multiple | Zero |
 | **Self-hosting** | No | Yes |
-| **Lexer** | 3,558 LOC | 1,542 LOC |
-| **Compiler** | 10,346 LOC | 3,148 LOC |
-| **Total** | 17,760 LOC | ~7,700 LOC |
+| **Lexer** | 3,558 LOC | 1,867 LOC |
+| **Compiler** | 10,346 LOC | 3,292 LOC |
+| **Total** | 17,760 LOC | ~10,300 LOC |
 
 Smaller codebase, modern output, built-in reactivity.
 
@@ -282,22 +282,26 @@ Run Rip directly in the browser:
 ## Architecture
 
 ```
-Source  ->  Lexer  ->  Parser  ->  S-Expressions  ->  Codegen  ->  JavaScript
-           (1,542)    (352)       ["=", "x", 42]     (3,148)
+Source  ->  Lexer  ->  emitTypes  ->  Parser  ->  S-Expressions  ->  Codegen  ->  JavaScript
+           (1,867)    (types.js)     (357)       ["=", "x", 42]     (3,292)      + source map
 ```
 
-Simple arrays instead of AST node classes. The compiler is self-hosting — `bun run parser` rebuilds from source.
+Simple arrays (with `.loc`) instead of AST node classes. The compiler is self-hosting — `bun run parser` rebuilds from source.
 
 | Component | File | Lines |
 |-----------|------|-------|
-| Lexer + Rewriter | `src/lexer.js` | 1,542 |
-| Compiler + Codegen | `src/compiler.js` | 3,148 |
-| Parser (generated) | `src/parser.js` | 352 |
-| Grammar | `src/grammar/grammar.rip` | 887 |
-| Parser Generator | `src/grammar/solar.rip` | 1,001 |
-| REPL | `src/repl.js` | 654 |
-| Browser Entry | `src/browser.js` | 79 |
-| **Total** | | **7,663** |
+| Lexer + Rewriter | `src/lexer.js` | 1,867 |
+| Compiler + Codegen | `src/compiler.js` | 3,292 |
+| Type System | `src/types.js` | 719 |
+| Component System | `src/components.js` | 1,240 |
+| Source Maps | `src/sourcemap.js` | 122 |
+| Parser (generated) | `src/parser.js` | 357 |
+| Grammar | `src/grammar/grammar.rip` | 935 |
+| Parser Generator | `src/grammar/solar.rip` | 916 |
+| REPL | `src/repl.js` | 707 |
+| Browser Entry | `src/browser.js` | 80 |
+| Tags | `src/tags.js` | 63 |
+| **Total** | | **10,298** |
 
 ---
 
@@ -305,12 +309,16 @@ Simple arrays instead of AST node classes. The compiler is self-hosting — `bun
 
 Rip includes optional packages for full-stack development:
 
-| Package | Purpose | Lines |
-|---------|---------|-------|
-| [@rip-lang/ui](packages/ui/) | Zero-build reactive web framework (VFS, router, components) | ~1,300 |
-| [@rip-lang/api](packages/api/) | HTTP framework (Sinatra-style routing, 37 validators) | ~1,050 |
-| [@rip-lang/server](packages/server/) | Multi-worker app server (hot reload, HTTPS, mDNS) | ~1,210 |
-| [@rip-lang/db](packages/db/) | DuckDB server with official UI (pure Bun FFI) | ~1,740 |
+| Package | Purpose |
+|---------|---------|
+| [@rip-lang/ui](packages/ui/) | Zero-build reactive web framework (VFS, router, components) |
+| [@rip-lang/api](packages/api/) | HTTP framework (Sinatra-style routing, 37 validators) |
+| [@rip-lang/server](packages/server/) | Multi-worker app server (hot reload, HTTPS, mDNS) |
+| [@rip-lang/db](packages/db/) | DuckDB server with official UI (pure Bun FFI) |
+| [@rip-lang/swarm](packages/swarm/) | Parallel job runner with worker pool |
+| [@rip-lang/csv](packages/csv/) | CSV parser + writer |
+| [@rip-lang/schema](packages/schema/) | ORM + validation |
+| [VS Code Extension](packages/vscode/) | Syntax highlighting, type intelligence, source maps |
 
 ```bash
 bun add -g @rip-lang/db    # Installs everything (rip-lang + api + db)
@@ -348,7 +356,7 @@ rip file.rip           # Run
 rip -c file.rip        # Compile
 rip -t file.rip        # Tokens
 rip -s file.rip        # S-expressions
-bun run test           # 1073 tests
+bun run test           # 1140 tests
 bun run parser         # Rebuild parser
 bun run browser        # Build browser bundle
 ```

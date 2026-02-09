@@ -17,7 +17,7 @@ echo 'your code' | ./bin/rip -s  # S-expressions (parser)
 echo 'your code' | ./bin/rip -c  # JavaScript (codegen)
 
 # Run tests
-bun run test                              # All tests (1130)
+bun run test                              # All tests (1140)
 bun test/runner.js test/rip/FILE.rip     # Specific file
 
 # Rebuild parser (after grammar changes)
@@ -31,8 +31,8 @@ bun run browser
 
 | Metric | Value |
 |--------|-------|
-| Version | 3.1.1 |
-| Tests | 1,130/1,130 (100%) |
+| Version | 3.4.3 |
+| Tests | 1,140/1,140 (100%) |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
 
@@ -43,16 +43,18 @@ bun run browser
 ```
 rip-lang/
 ├── src/
-│   ├── lexer.js         # Lexer + Rewriter (1,866 LOC)
-│   ├── compiler.js      # Compiler + Code Generator (3,219 LOC)
-│   ├── types.js         # Type System — sidecar for lexer (718 LOC)
-│   ├── components.js    # Component System — sidecar for compiler
-│   ├── parser.js        # Generated parser (356 LOC) — Don't edit!
-│   ├── repl.js          # Terminal REPL (706 LOC)
-│   ├── browser.js       # Browser integration (79 LOC)
+│   ├── lexer.js         # Lexer + Rewriter (1,867 LOC)
+│   ├── compiler.js      # Compiler + Code Generator (3,292 LOC)
+│   ├── types.js         # Type System — sidecar for lexer (719 LOC)
+│   ├── components.js    # Component System — sidecar for compiler (1,240 LOC)
+│   ├── sourcemap.js     # Source Map V3 generator (122 LOC)
+│   ├── tags.js          # HTML tag classification (63 LOC)
+│   ├── parser.js        # Generated parser (357 LOC) — Don't edit!
+│   ├── repl.js          # Terminal REPL (707 LOC)
+│   ├── browser.js       # Browser integration (80 LOC)
 │   └── grammar/
-│       ├── grammar.rip  # Grammar specification (934 LOC)
-│       └── solar.rip    # Parser generator (1,001 LOC) — Don't edit!
+│       ├── grammar.rip  # Grammar specification (935 LOC)
+│       └── solar.rip    # Parser generator (916 LOC) — Don't edit!
 ├── packages/            # Optional packages (see Packages section below)
 │   ├── api/             # @rip-lang/api — Web framework
 │   ├── ui/              # @rip-lang/ui — Reactive web UI framework
@@ -60,13 +62,14 @@ rip-lang/
 │   ├── db/              # @rip-lang/db — DuckDB server
 │   ├── schema/          # @rip-lang/schema — ORM + validation
 │   ├── swarm/           # @rip-lang/swarm — Parallel job runner
-│   └── csv/             # @rip-lang/csv — CSV parser + writer
+│   ├── csv/             # @rip-lang/csv — CSV parser + writer
+│   └── vscode/          # VS Code/Cursor extension
 ├── docs/
 │   ├── RIP-LANG.md      # Language reference
 │   ├── RIP-TYPES.md     # Type system specification
 │   ├── RIP-REACTIVITY.md # Reactivity deep dive
 │   └── RIP-INTERNALS.md # Compiler architecture & design decisions
-├── test/rip/            # 26 test files (1,130 tests)
+├── test/rip/            # 25 test files (1,140 tests)
 └── scripts/             # Build utilities
 ```
 
@@ -80,6 +83,8 @@ rip-lang/
 | `src/components.js` | Yes | Component system (compiler sidecar) |
 | `src/grammar/grammar.rip` | Carefully | Run `bun run parser` after changes |
 | `src/parser.js` | Never | Generated file |
+| `src/sourcemap.js` | Yes | Source map generator |
+| `src/tags.js` | Yes | HTML tag classification |
 | `src/grammar/solar.rip` | Never | Parser generator (given) |
 | `test/rip/*.rip` | Yes | Test files |
 
@@ -89,7 +94,7 @@ rip-lang/
 
 ```
 Rip Source  ->  Lexer  ->  emitTypes  ->  Parser  ->  S-Expressions  ->  Codegen  ->  JavaScript
-               (1,866)     (types.js)     (356)       (simple arrays)     (3,219)      (ES2022)
+               (1,867)     (types.js)     (357)       (arrays + .loc)     (3,292)      + source map
                               ↓
                            file.d.ts (when types: "emit")
 ```
@@ -242,7 +247,7 @@ code "name", "x + y", "(x + y)"
 fail "name", "invalid syntax"
 ```
 
-### Test Files (25 files, 1,073 tests)
+### Test Files (25 files, 1,140 tests)
 
 ```
 test/rip/
@@ -252,13 +257,12 @@ test/rip/
 ├── basic.rip         ├── optional.rip
 ├── classes.rip       ├── parens.rip
 ├── commaless.rip     ├── precedence.rip
-├── compatibility.rip ├── properties.rip
-├── comprehensions.rip├── regex.rip
-├── control.rip       ├── semicolons.rip
-├── data.rip          ├── stabilization.rip
-├── errors.rip        ├── strings.rip
-├── functions.rip
-├── guards.rip
+├── comprehensions.rip├── properties.rip
+├── control.rip       ├── reactivity.rip
+├── data.rip          ├── regex.rip
+├── errors.rip        ├── semicolons.rip
+├── functions.rip     ├── strings.rip
+├── guards.rip        └── types.rip
 └── literals.rip
 ```
 
@@ -269,10 +273,10 @@ test/rip/
 | File | Purpose |
 |------|---------|
 | **README.md** | User guide, features, installation |
-| **CONTRIBUTING.md** | GitHub workflow, development process |
 | **docs/RIP-LANG.md** | Language reference |
+| **docs/RIP-TYPES.md** | Type system specification |
+| **docs/RIP-REACTIVITY.md** | Reactivity deep dive |
 | **docs/RIP-INTERNALS.md** | Compiler architecture, design decisions, S-expressions |
-| **packages/README.md** | Package overview, install commands, quick examples |
 
 ---
 
