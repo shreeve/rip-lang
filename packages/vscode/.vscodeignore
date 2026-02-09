@@ -1,8 +1,8 @@
+**/*
+!language-configuration.json
+!package.json
+!README.md
+!icon.png
+!syntaxes/**
+!test/**
 .vscode/**
-.gitignore
-src/**
-server/**
-tsconfig.json
-**/*.ts
-**/*.map
-node_modules/**
