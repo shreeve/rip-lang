@@ -2,7 +2,7 @@
 description: Load Rip project context
 ---
 
-Read `AGENT.md` for compiler overview, architecture, and debugging commands.
+Read `AGENT.md` for project overview, structure, and quick start commands.
 
 For packages work, also read `packages/README.md` for package overview.
 
