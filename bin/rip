@@ -26,6 +26,7 @@ Usage:
 Options:
   -c, --compile       Show compiled JavaScript output
   -d, --dts           Generate .d.ts type declaration file
+  -m, --map           Generate .js.map source map file
   -h, --help          Show this help message
   -o, --output <file> Write JavaScript to file
   -q, --quiet         Suppress headers
@@ -46,6 +47,7 @@ Examples:
   rip -s -c example.rip         # Show s-expressions AND JavaScript
   rip -s -t -c example.rip      # Show everything (full debug mode)
   rip -d example.rip            # Generate example.d.ts
+  rip -m example.rip            # Generate example.js.map
   rip -cd example.rip           # Compile JS and generate .d.ts
   rip -q -c example.rip         # Just the JS, no headers (for piping)
   rip -w                        # Launch browser REPL (auto-opens)
@@ -146,13 +148,16 @@ async function main() {
   const showSExpr = ripOptions.includes('-s') || ripOptions.includes('--sexpr');
   const showCompiled = ripOptions.includes('-c') || ripOptions.includes('--compile');
   const generateDts = ripOptions.includes('-d') || ripOptions.includes('--dts');
+  const generateMap = ripOptions.includes('-m') || ripOptions.includes('--map');
   const quiet = ripOptions.includes('-q') || ripOptions.includes('--quiet');
 
   const options = {
     showTokens,
     showSExpr,
     quiet,
-    types: generateDts ? 'emit' : undefined
+    types: generateDts ? 'emit' : undefined,
+    sourceMap: generateMap ? true : undefined,
+    filename: null, // set below after determining input file
   };
 
   // Find input file and output file from ripOptions only
@@ -167,7 +172,7 @@ async function main() {
   }
 
   // If .rip file without compile flags → execute instead of compile
-  const hasCompileFlag = showCompiled || showTokens || showSExpr || generateDts || outputFile;
+  const hasCompileFlag = showCompiled || showTokens || showSExpr || generateDts || generateMap || outputFile;
   if (inputFile && inputFile.endsWith('.rip') && !hasCompileFlag) {
     // Check if file exists
     if (!existsSync(inputFile)) {
@@ -238,6 +243,11 @@ async function main() {
       source = readFileSync(inputFile, 'utf-8');
     }
 
+    // Set filename for source map generation
+    if (inputFile) {
+      options.filename = inputFile.replace(/\.rip$/, '');
+    }
+
     // Compile
     const compiler = new Compiler(options);
     const result = compiler.compile(source);
@@ -275,6 +285,23 @@ async function main() {
           console.log(`// == Type declarations == //\n`);
         }
         console.log(result.dts);
+      }
+    }
+
+    // Write .js.map file
+    if (generateMap && result.map) {
+      if (inputFile) {
+        let mapFile = inputFile.replace(/\.rip$/, '.js.map');
+        writeFileSync(mapFile, result.map, 'utf-8');
+        if (!options.quiet) {
+          console.log(`Generated ${mapFile}`);
+        }
+      } else {
+        // stdin — print source map to stdout
+        if (!options.quiet) {
+          console.log(`// == Source map == //\n`);
+        }
+        console.log(result.map);
       }
     }
   } catch (error) {

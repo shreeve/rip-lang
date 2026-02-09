@@ -12,6 +12,7 @@ import { Lexer } from './lexer.js';
 import { parser } from './parser.js';
 import { installComponentSupport } from './components.js';
 import { emitTypes, generateEnum } from './types.js';
+import { SourceMapGenerator } from './sourcemap.js';
 
 // =============================================================================
 // Metadata helpers — isolate all new String() awareness here
@@ -259,6 +260,7 @@ export class CodeGenerator {
     this.indentString = '  ';
     this.comprehensionDepth = 0;
     this.dataSection = options.dataSection;
+    this.sourceMap = options.sourceMap || null;
     if (options.reactiveVars) {
       this.reactiveVars = new Set(options.reactiveVars);
     }
@@ -273,7 +275,60 @@ export class CodeGenerator {
     this.functionVars = new Map();
     this.helpers = new Set();
     this.collectProgramVariables(sexpr);
-    return this.generate(sexpr);
+    let code = this.generate(sexpr);
+
+    // Build source map mappings from generated code + S-expression locations
+    if (this.sourceMap) this.buildMappings(code, sexpr);
+
+    return code;
+  }
+
+  // Build source map by walking generated output lines and S-expression nodes.
+  // Collects locations from STATEMENT-level nodes only (direct children of
+  // program/block containers), then matches them to output lines in order.
+  buildMappings(code, sexpr) {
+    if (!sexpr || sexpr[0] !== 'program') return;
+
+    // Collect statement locations: only direct children of program/block nodes.
+    // This gives exactly one loc per output statement line, in source order.
+    let locs = [];
+    let collect = (node) => {
+      if (!Array.isArray(node)) return;
+      let head = node[0];
+      if (head === 'program' || head === 'block') {
+        for (let i = 1; i < node.length; i++) {
+          let child = node[i];
+          if (Array.isArray(child) && child.loc) locs.push(child.loc);
+          collect(child);
+        }
+      } else {
+        for (let i = 1; i < node.length; i++) collect(node[i]);
+      }
+    };
+    collect(sexpr);
+
+    // Match output lines to collected statement locations in parallel.
+    // Skip generated lines that have no source correspondence.
+    let lines = code.split('\n');
+    let locIdx = 0;
+    for (let outLine = 0; outLine < lines.length; outLine++) {
+      let line = lines[outLine];
+      let trimmed = line.trim();
+
+      // Skip lines with no source correspondence
+      if (!trimmed || trimmed === '}' || trimmed === '});') continue;
+      if (trimmed.startsWith('let ') || trimmed.startsWith('var ')) continue;
+      if (trimmed.startsWith('const slice') || trimmed.startsWith('const modulo') || trimmed.startsWith('const toSearchable')) continue;
+      if (trimmed.startsWith('const {') && trimmed.includes('__')) continue;
+      if (trimmed.startsWith('} else')) continue;
+      if (trimmed.startsWith('//# source')) continue;
+
+      if (locIdx < locs.length) {
+        let indent = line.length - trimmed.length;
+        this.sourceMap.addMapping(outLine, indent, locs[locIdx].r, locs[locIdx].c);
+        locIdx++;
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -3165,15 +3220,30 @@ export class Compiler {
     }
 
     // Step 4: Generate JavaScript
+    let sourceMap = null;
+    if (this.options.sourceMap) {
+      let file = (this.options.filename || 'output') + '.js';
+      let sourceFile = this.options.filename || 'input.rip';
+      sourceMap = new SourceMapGenerator(file, sourceFile, source);
+    }
+
     let generator = new CodeGenerator({
       dataSection,
       skipReactiveRuntime: this.options.skipReactiveRuntime,
       skipComponentRuntime: this.options.skipComponentRuntime,
-      reactiveVars: this.options.reactiveVars
+      reactiveVars: this.options.reactiveVars,
+      sourceMap,
     });
     let code = generator.compile(sexpr);
 
-    return { tokens, sexpr, code, dts, data: dataSection, reactiveVars: generator.reactiveVars };
+    let map = sourceMap ? sourceMap.toJSON() : null;
+    if (map && this.options.sourceMap === 'inline') {
+      code += `\n//# sourceMappingURL=data:application/json;base64,${btoa(map)}`;
+    } else if (map && this.options.filename) {
+      code += `\n//# sourceMappingURL=${this.options.filename}.js.map`;
+    }
+
+    return { tokens, sexpr, code, dts, map, data: dataSection, reactiveVars: generator.reactiveVars };
   }
 
   compileToJS(source) { return this.compile(source).code; }

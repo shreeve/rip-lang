@@ -231,7 +231,7 @@ const parserInstance = {
       return this.trace(str);
     else {
       line = (hash.line || 0) + 1;
-      col = hash.loc?.first_column || 0;
+      col = hash.loc?.c || 0;
       token = hash.token ? ` (token: ${hash.token})` : "";
       text = hash.text ? ` near '${hash.text}'` : "";
       location = `line ${line}, column ${col}`;
@@ -242,7 +242,7 @@ const parserInstance = {
     }
   },
   parse(input) {
-    let EOF, TERROR, action, errStr, expected, len, lex, lexer, locFirst, locLast, locs, newState, p, parseTable, preErrorSymbol, r, ranges, recovering, rv, sharedState, state, stk, symbol, tokenLen, tokenLine, tokenLoc, tokenText, vals;
+    let EOF, TERROR, action, errStr, expected, len, lex, lexer, loc, locs, newState, p, parseTable, preErrorSymbol, r, recovering, rv, sharedState, state, stk, symbol, tokenLen, tokenLine, tokenLoc, tokenText, vals;
     [stk, vals, locs] = [[0], [null], []];
     [parseTable, tokenText, tokenLine, tokenLen, recovering] = [this.parseTable, "", 0, 0, 0];
     [TERROR, EOF] = [2, 1];
@@ -259,7 +259,6 @@ const parserInstance = {
       lexer.loc = {};
     tokenLoc = lexer.loc;
     locs.push(tokenLoc);
-    ranges = lexer.options?.ranges;
     this.parseError = typeof sharedState.ctx.parseError === "function" ? sharedState.ctx.parseError : Object.getPrototypeOf(this).parseError;
     lex = () => {
       let token;
@@ -314,13 +313,13 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       } else if (action < 0) {
         len = this.ruleTable[-action * 2 + 1];
         rv.$ = vals[vals.length - len];
-        [locFirst, locLast] = [locs[locs.length - (len || 1)], locs[locs.length - 1]];
-        rv._$ = { first_line: locFirst.first_line, last_line: locLast.last_line, first_column: locFirst.first_column, last_column: locLast.last_column };
-        if (ranges)
-          rv._$.range = [locFirst.range[0], locLast.range[1]];
+        loc = locs[locs.length - (len || 1)];
+        rv._$ = { r: loc.r, c: loc.c };
         r = this.ruleActions.call(rv, -action, vals, locs, sharedState.ctx);
         if (r != null)
           rv.$ = r;
+        if (Array.isArray(rv.$))
+          rv.$.loc = rv._$;
         if (len) {
           stk.length -= len * 2;
           vals.length -= len;

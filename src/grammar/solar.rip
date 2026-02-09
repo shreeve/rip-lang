@@ -663,7 +663,7 @@ class Generator
     else
       # Format error with line/column information
       line = (hash.line or 0) + 1  # Convert 0-based to 1-based
-      col = hash.loc?.first_column or 0
+      col = hash.loc?.c or 0
       token = if hash.token then " (token: #{hash.token})" else ''
       text = if hash.text then " near '#{hash.text}'" else ''
       location = "line #{line}, column #{col}"
@@ -688,8 +688,6 @@ class Generator
     lexer.loc = {} unless lexer.loc?
     tokenLoc = lexer.loc
     locs.push tokenLoc
-
-    ranges = lexer.options?.ranges
 
     @parseError = if typeof sharedState.ctx.parseError is 'function'
       sharedState.ctx.parseError
@@ -741,15 +739,12 @@ class Generator
       else if action < 0  # REDUCE
         len = @ruleTable[(-action) * 2 + 1]
         rv.$ = vals[vals.length - len]
-        [locFirst, locLast] = [locs[locs.length - (len or 1)], locs[locs.length - 1]]
-        rv._$ = {
-          first_line: locFirst.first_line, last_line: locLast.last_line
-          first_column: locFirst.first_column, last_column: locLast.last_column
-        }
-        rv._$.range = [locFirst.range[0], locLast.range[1]] if ranges
+        loc = locs[locs.length - (len or 1)]
+        rv._$ = { r: loc.r, c: loc.c }
 
         r = @ruleActions.call rv, -action, vals, locs, sharedState.ctx
         rv.$ = r if r?
+        rv.$.loc = rv._$ if Array.isArray rv.$
 
         if len
           stk.length  -= len * 2
