@@ -90,7 +90,14 @@ export async function rip(code) {
     let persistentJs = js.replace(/^let\s+[^;]+;\s*\n\s*/m, '');
     persistentJs = persistentJs.replace(/^const\s+/gm, 'var ');
 
-    const result = await (0, eval)(`(async()=>{return eval(${JSON.stringify(persistentJs)});})()`);
+    // Async code runs in an async IIFE; sync code uses indirect eval
+    // for return values and global variable persistence
+    let result;
+    if (persistentJs.includes('await ')) {
+      result = await (0, eval)(`(async()=>{\n${persistentJs}\n})()`);
+    } else {
+      result = (1, eval)(persistentJs);
+    }
 
     if (result !== undefined) globalThis._ = result;
     return result;
