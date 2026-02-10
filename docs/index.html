@@ -1551,7 +1551,7 @@ console.log "Domain:", domain`;
     });
 
     // Run button - executes the Rip code and outputs to console
-    function runCode() {
+    async function runCode() {
       try {
         const source = monacoEditor.getValue();
         const result = compile(source);
@@ -1560,7 +1560,7 @@ console.log "Domain:", domain`;
         // Execute the compiled JavaScript and log to console
         console.clear();
         console.log('%c=== Rip Code Execution ===', 'color: #007acc; font-weight: bold');
-        eval(js);
+        await (0, eval)(`(async()=>{\n${js}\n})()`);
         console.log('%c=== Execution Complete ===', 'color: #4ec9b0; font-weight: bold');
       } catch (error) {
         console.error('Execution Error:', error);
