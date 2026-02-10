@@ -620,31 +620,39 @@ export launch = (appBase = '', opts = {}) ->
 # =============================================================================
 
 connectWatch = (parts, router, renderer, url, base = '') ->
-  es = new EventSource(url)
+  delay = 1000
+  maxDelay = 30000
 
-  es.addEventListener 'changed', (e) ->
-    { paths } = JSON.parse(e.data)
-    parts.del(path) for path in paths
-    router.rebuild()
+  connect = ->
+    es = new EventSource(url)
 
-    current = router.current
-    toFetch = paths.filter (p) ->
-      p is current.route?.file or current.layouts?.includes(p)
+    es.addEventListener 'connected', ->
+      delay = 1000  # reset backoff on successful connection
+      console.log '[Rip] Hot reload connected'
 
-    if toFetch.length > 0
-      try
-        for path in toFetch
+    es.addEventListener 'changed', (e) ->
+      { paths } = JSON.parse(e.data)
+      parts.del(path) for path in paths
+      router.rebuild()
+
+      current = router.current
+      toFetch = paths.filter (p) ->
+        p is current.route?.file or current.layouts?.includes(p)
+
+      if toFetch.length > 0
+        results = await Promise.allSettled(toFetch.map (path) ->
           res = await fetch(base + '/' + path)
           content = res.text!
           parts.write path, content
+        )
+        failed = results.filter (r) -> r.status is 'rejected'
+        console.error '[Rip] Hot reload fetch error:', r.reason for r in failed
         renderer.remount()
-      catch err
-        console.error '[Rip] Hot reload fetch error:', err
 
-  es.addEventListener 'connected', ->
-    console.log '[Rip] Hot reload connected'
+    es.onerror = ->
+      es.close()
+      console.log "[Rip] Hot reload reconnecting in #{delay / 1000}s..."
+      setTimeout connect, delay
+      delay = Math.min(delay * 2, maxDelay)
 
-  es.onerror = ->
-    console.log '[Rip] Hot reload reconnecting...'
-
-  es
+  connect()
