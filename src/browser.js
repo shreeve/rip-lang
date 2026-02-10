@@ -82,7 +82,7 @@ export async function importRip(url) {
  * Browser Console REPL
  * Usage: rip('x = 42')  → evaluates and returns result
  */
-export function rip(code) {
+export async function rip(code) {
   try {
     const js = compileToJS(code);
 
@@ -90,7 +90,7 @@ export function rip(code) {
     let persistentJs = js.replace(/^let\s+[^;]+;\s*\n\s*/m, '');
     persistentJs = persistentJs.replace(/^const\s+/gm, 'var ');
 
-    const result = (1, eval)(persistentJs);
+    const result = await (0, eval)(`(async()=>{\n${persistentJs}\n})()`);
 
     if (result !== undefined) globalThis._ = result;
     return result;
