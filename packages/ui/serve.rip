@@ -41,11 +41,13 @@ export ripUI = (opts = {}) ->
     compilerPath = "#{uiDir}/../../docs/dist/rip.browser.js"
 
   # ---------------------------------------------------------------------------
-  # Route: /rip/* — framework files (compiler + ui.rip)
+  # Route: /rip/* — framework files (compiler + ui.rip), registered once
   # ---------------------------------------------------------------------------
 
-  get "/rip/browser.js", (c) -> c.send compilerPath, 'application/javascript'
-  get "/rip/ui.rip", (c) -> c.send "#{uiDir}/ui.rip", 'text/plain; charset=UTF-8'
+  unless ripUI._registered
+    get "/rip/browser.js", (c) -> c.send compilerPath, 'application/javascript'
+    get "/rip/ui.rip", (c) -> c.send "#{uiDir}/ui.rip", 'text/plain; charset=UTF-8'
+    ripUI._registered = true
 
   # ---------------------------------------------------------------------------
   # Route: {prefix}/parts/* — individual .rip part files (for hot-reload)
