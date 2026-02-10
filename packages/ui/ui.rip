@@ -29,6 +29,7 @@
 STASH   = Symbol('stash')
 SIGNALS = Symbol('signals')
 RAW     = Symbol('raw')
+PROXIES = new WeakMap()
 
 getSignal = (target, prop) ->
   unless target[SIGNALS]
@@ -45,6 +46,8 @@ wrapDeep = (value) ->
   return value unless value? and typeof value is 'object'
   return value if value[STASH]
   return value if value instanceof Date or value instanceof RegExp or value instanceof Map or value instanceof Set or value instanceof Promise
+  existing = PROXIES.get(value)
+  return existing if existing
   makeProxy(value)
 
 makeProxy = (target) ->
@@ -93,6 +96,7 @@ makeProxy = (target) ->
       Reflect.ownKeys(target)
 
   proxy = new Proxy(target, handler)
+  PROXIES.set(target, proxy)
   proxy
 
 # Path navigation
