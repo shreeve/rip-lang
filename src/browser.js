@@ -82,24 +82,22 @@ export async function importRip(url) {
  * Browser Console REPL
  * Usage: rip('x = 42')  → evaluates and returns result
  */
-export async function rip(code) {
+export function rip(code) {
   try {
     const js = compileToJS(code);
 
     // Strip let declarations so variables become implicit globals
     let persistentJs = js.replace(/^let\s+[^;]+;\s*\n\s*/m, '');
 
-    let result;
     if (persistentJs.includes('await ')) {
       // Async: run in async IIFE, hoist const to globalThis
       persistentJs = persistentJs.replace(/^const\s+(\w+)\s*=/gm, 'globalThis.$1 =');
-      result = await (0, eval)(`(async()=>{\n${persistentJs}\n})()`);
-    } else {
-      // Sync: indirect eval for return values and variable persistence
-      persistentJs = persistentJs.replace(/^const\s+/gm, 'var ');
-      result = (1, eval)(persistentJs);
+      return (0, eval)(`(async()=>{\n${persistentJs}\n})()`);
     }
 
+    // Sync: indirect eval for return values and variable persistence
+    persistentJs = persistentJs.replace(/^const\s+/gm, 'var ');
+    const result = (1, eval)(persistentJs);
     if (result !== undefined) globalThis._ = result;
     return result;
   } catch (error) {
