@@ -32,7 +32,7 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": "^3.4.6"
+    "rip-lang": "^3.5.0"
   },
   "files": [
     "ui.rip",

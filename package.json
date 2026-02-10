@@ -1,6 +1,6 @@
 {
   "name": "rip-lang",
-  "version": "3.4.6",
+  "version": "3.5.0",
   "description": "A modern language that compiles to JavaScript",
   "type": "module",
   "main": "src/compiler.js",

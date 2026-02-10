@@ -7,6 +7,15 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.0] - 2026-02-10
+
+### Browser Runtime Enhancements
+
+- **`importRip(url)`** — New function to fetch, compile, and import `.rip` files as ES modules via blob URL. Registered on `globalThis` for use in `<script type="text/rip">` blocks.
+- **Async `<script type="text/rip">`** — `processRipScripts` now wraps compiled code in an async IIFE, enabling `await` (Rip's `!` operator) in inline scripts.
+- **Eager reactive runtime** — `globalThis.__rip` is registered when `rip.browser.js` loads, making reactive primitives available to framework code without the compiler needing to detect reactive operators.
+- **`compileToJS` on globalThis** — The compiler function is now globally accessible, enabling auto-detection by framework code like `launch()`.
+
 ## [3.4.3] - 2026-02-09
 
 ### Source Maps & IDE Intelligence
