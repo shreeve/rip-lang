@@ -526,7 +526,11 @@ export createRenderer = (opts = {}) ->
     catch err
       console.error "Renderer: error mounting #{route.file}:", err
       onError({ status: 500, message: err.message, error: err }) if onError
-      container.innerHTML = "<pre style=\"color:red;padding:1em\">#{err.stack or err.message}</pre>"
+      pre = document.createElement('pre')
+      pre.style.cssText = 'color:red;padding:1em'
+      pre.textContent = err.stack or err.message
+      container.innerHTML = ''
+      container.appendChild pre
 
   renderer =
     start: ->
