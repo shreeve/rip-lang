@@ -7560,8 +7560,8 @@ function getComponentRuntime() {
   return new CodeGenerator({}).getComponentRuntime();
 }
 // src/browser.js
-var VERSION = "3.5.8";
-var BUILD_DATE = "2026-02-10@21:26:45GMT";
+var VERSION = "3.5.9";
+var BUILD_DATE = "2026-02-10@21:29:02GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }
@@ -7612,26 +7612,19 @@ async function importRip(url) {
 }
 function rip(code) {
   try {
-    const js = compileToJS(code);
-    let persistentJs = js.replace(/^let\s+[^;]+;\s*\n\s*/m, "");
-    if (persistentJs.includes("await ")) {
-      persistentJs = persistentJs.replace(/^const\s+(\w+)\s*=/gm, "globalThis.$1 =");
-      const lines = persistentJs.trimEnd().split(`
-`);
-      const last = lines.length - 1;
-      if (!/^return\s/.test(lines[last]))
-        lines[last] = "return " + lines[last];
-      return (0, eval)(`(async()=>{
-${lines.join(`
-`)}
-})()`).then((v) => {
+    const indented = code.replace(/^/gm, "  ");
+    const wrapped = compileToJS(`do
+${indented}`);
+    let js = wrapped.replace(/^let\s+[^;]+;\s*\n\s*/m, "");
+    js = js.replace(/^const\s+(\w+)\s*=/gm, "globalThis.$1 =");
+    const result = (0, eval)(js);
+    if (result && typeof result.then === "function") {
+      return result.then((v) => {
         if (v !== undefined)
           globalThis._ = v;
         return v;
       });
     }
-    persistentJs = persistentJs.replace(/^const\s+/gm, "var ");
-    const result = (1, eval)(persistentJs);
     if (result !== undefined)
       globalThis._ = result;
     return result;

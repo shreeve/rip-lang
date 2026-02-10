@@ -84,26 +84,25 @@ export async function importRip(url) {
  */
 export function rip(code) {
   try {
-    const js = compileToJS(code);
+    // Wrap in a do block so Rip handles implicit return and auto-async
+    const indented = code.replace(/^/gm, '  ');
+    const wrapped = compileToJS(`do\n${indented}`);
 
     // Strip let declarations so variables become implicit globals
-    let persistentJs = js.replace(/^let\s+[^;]+;\s*\n\s*/m, '');
+    let js = wrapped.replace(/^let\s+[^;]+;\s*\n\s*/m, '');
+    js = js.replace(/^const\s+(\w+)\s*=/gm, 'globalThis.$1 =');
 
-    if (persistentJs.includes('await ')) {
-      // Async: run in async IIFE, hoist const to globalThis, return last expression
-      persistentJs = persistentJs.replace(/^const\s+(\w+)\s*=/gm, 'globalThis.$1 =');
-      const lines = persistentJs.trimEnd().split('\n');
-      const last = lines.length - 1;
-      if (!/^return\s/.test(lines[last])) lines[last] = 'return ' + lines[last];
-      return (0, eval)(`(async()=>{\n${lines.join('\n')}\n})()`).then(v => {
+    // Eval — the do block compiles to an IIFE (async if code uses !)
+    const result = (0, eval)(js);
+
+    // If async (returns a Promise), persist the resolved value
+    if (result && typeof result.then === 'function') {
+      return result.then(v => {
         if (v !== undefined) globalThis._ = v;
         return v;
       });
     }
 
-    // Sync: indirect eval for return values and variable persistence
-    persistentJs = persistentJs.replace(/^const\s+/gm, 'var ');
-    const result = (1, eval)(persistentJs);
     if (result !== undefined) globalThis._ = result;
     return result;
   } catch (error) {
