@@ -403,7 +403,12 @@ findComponent = (mod) ->
     return val if typeof val is 'function' and (val.prototype?.mount or val.prototype?._create)
   mod.default if typeof mod.default is 'function'
 
-compileAndImport = (source, compile) ->
+compileAndImport = (source, compile, parts = null, path = null) ->
+  # Check compilation cache
+  if parts and path
+    cached = parts.getCompiled(path)
+    return cached if cached
+
   js = compile(source)
   blob = new Blob([js], { type: 'application/javascript' })
   url = URL.createObjectURL(blob)
@@ -411,6 +416,9 @@ compileAndImport = (source, compile) ->
     mod = await import(url)
   finally
     URL.revokeObjectURL url
+
+  # Store in cache
+  parts.setCompiled(path, mod) if parts and path
   mod
 
 export createRenderer = (opts = {}) ->
@@ -456,7 +464,7 @@ export createRenderer = (opts = {}) ->
         onError({ status: 404, message: "File not found: #{route.file}" }) if onError
         return
 
-      mod = compileAndImport! source, compile
+      mod = compileAndImport! source, compile, parts, route.file
       return if gen isnt generation
 
       Component = findComponent(mod)
@@ -482,7 +490,7 @@ export createRenderer = (opts = {}) ->
         for layoutFile in layoutFiles
           layoutSource = parts.read(layoutFile)
           continue unless layoutSource
-          layoutMod = compileAndImport! layoutSource, compile
+          layoutMod = compileAndImport! layoutSource, compile, parts, layoutFile
           return if gen isnt generation
 
           LayoutClass = findComponent(layoutMod)
