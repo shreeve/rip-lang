@@ -30,6 +30,7 @@ STASH   = Symbol('stash')
 SIGNALS = Symbol('signals')
 RAW     = Symbol('raw')
 PROXIES = new WeakMap()
+_keysVersion = 0
 
 getSignal = (target, prop) ->
   unless target[SIGNALS]
@@ -80,7 +81,7 @@ makeProxy = (target) ->
       if target[SIGNALS]?.has(prop)
         target[SIGNALS].get(prop).value = r
       if old is undefined and r isnt undefined
-        keysSignal(target).value = Date.now()
+        keysSignal(target).value = ++_keysVersion
 
       true
 
@@ -88,7 +89,7 @@ makeProxy = (target) ->
       delete target[prop]
       sig = target[SIGNALS]?.get(prop)
       sig.value = undefined if sig
-      keysSignal(target).value = Date.now()
+      keysSignal(target).value = ++_keysVersion
       true
 
     ownKeys: (target) ->
