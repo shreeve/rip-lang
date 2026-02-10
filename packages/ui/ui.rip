@@ -444,11 +444,11 @@ export createRenderer = (opts = {}) ->
   unmount = ->
     if currentComponent
       currentComponent.unmounted() if currentComponent.unmounted
-      currentComponent._root.parentNode.removeChild(currentComponent._root) if currentComponent._root?.parentNode
+      currentComponent._root?.remove()
       currentComponent = null
     for inst in layoutInstances by -1
       inst.unmounted() if inst.unmounted
-      inst._root.parentNode.removeChild(inst._root) if inst._root?.parentNode
+      inst._root?.remove()
     layoutInstances = []
     mountPoint = container
 
@@ -478,7 +478,7 @@ export createRenderer = (opts = {}) ->
         unmount()
       else if currentComponent
         currentComponent.unmounted() if currentComponent.unmounted
-        currentComponent._root.parentNode.removeChild(currentComponent._root) if currentComponent._root?.parentNode
+        currentComponent._root?.remove()
         currentComponent = null
 
       mp = if layoutsChanged then container else mountPoint
