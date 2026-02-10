@@ -86,7 +86,7 @@ export function rip(code) {
   try {
     // Wrap in a do block so Rip handles implicit return and auto-async
     const indented = code.replace(/^/gm, '  ');
-    const wrapped = compileToJS(`do\n${indented}`);
+    const wrapped = compileToJS(`do ->\n${indented}`);
 
     // Strip let declarations so variables become implicit globals
     let js = wrapped.replace(/^let\s+[^;]+;\s*\n\s*/m, '');

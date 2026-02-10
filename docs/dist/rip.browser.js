@@ -7560,8 +7560,8 @@ function getComponentRuntime() {
   return new CodeGenerator({}).getComponentRuntime();
 }
 // src/browser.js
-var VERSION = "3.5.9";
-var BUILD_DATE = "2026-02-10@21:29:02GMT";
+var VERSION = "3.6.0";
+var BUILD_DATE = "2026-02-10@22:03:34GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }
@@ -7613,7 +7613,7 @@ async function importRip(url) {
 function rip(code) {
   try {
     const indented = code.replace(/^/gm, "  ");
-    const wrapped = compileToJS(`do
+    const wrapped = compileToJS(`do ->
 ${indented}`);
     let js = wrapped.replace(/^let\s+[^;]+;\s*\n\s*/m, "");
     js = js.replace(/^const\s+(\w+)\s*=/gm, "globalThis.$1 =");

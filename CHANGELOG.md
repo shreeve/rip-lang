@@ -7,14 +7,16 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.5.0] - 2026-02-10
+## [3.6.0] - 2026-02-10
 
-### Browser Runtime Enhancements
+### Browser Runtime — Full Async/Await Support
 
-- **`importRip(url)`** — New function to fetch, compile, and import `.rip` files as ES modules via blob URL. Registered on `globalThis` for use in `<script type="text/rip">` blocks.
-- **Async `<script type="text/rip">`** — `processRipScripts` now wraps compiled code in an async IIFE, enabling `await` (Rip's `!` operator) in inline scripts.
-- **Eager reactive runtime** — `globalThis.__rip` is registered when `rip.browser.js` loads, making reactive primitives available to framework code without the compiler needing to detect reactive operators.
-- **`compileToJS` on globalThis** — The compiler function is now globally accessible, enabling auto-detection by framework code like `launch()`.
+- **`rip()` console REPL** — Wraps user code in a Rip `do ->` block, so the compiler handles implicit return and auto-async natively. Sync code returns values directly; async code returns a Promise (use `await rip("...")` in the console). Variables persist on `globalThis` across calls.
+- **`importRip(url)`** — Fetch, compile, and import `.rip` files as ES modules via blob URL. Registered on `globalThis` for use in `<script type="text/rip">` blocks.
+- **Async `<script type="text/rip">`** — `processRipScripts` wraps compiled code in an async IIFE, enabling `await` (Rip's `!` operator) in inline scripts.
+- **Playground** — Run button uses async IIFE for `await` support. Cmd+Enter shortcut registered on Monaco editor.
+- **Eager reactive runtime** — `globalThis.__rip` is registered when `rip.browser.js` loads, making reactive primitives available to framework code.
+- **`compileToJS` on globalThis** — The compiler function is globally accessible for framework auto-detection.
 
 ## [3.4.3] - 2026-02-09
 
