@@ -7560,8 +7560,8 @@ function getComponentRuntime() {
   return new CodeGenerator({}).getComponentRuntime();
 }
 // src/browser.js
-var VERSION = "3.5.3";
-var BUILD_DATE = "2026-02-10@20:34:50GMT";
+var VERSION = "3.5.4";
+var BUILD_DATE = "2026-02-10@20:39:40GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }
@@ -7615,9 +7615,7 @@ async function rip(code) {
     const js = compileToJS(code);
     let persistentJs = js.replace(/^let\s+[^;]+;\s*\n\s*/m, "");
     persistentJs = persistentJs.replace(/^const\s+/gm, "var ");
-    const result = await (0, eval)(`(async()=>{
-${persistentJs}
-})()`);
+    const result = await (0, eval)(`(async()=>{return eval(${JSON.stringify(persistentJs)});})()`);
     if (result !== undefined)
       globalThis._ = result;
     return result;

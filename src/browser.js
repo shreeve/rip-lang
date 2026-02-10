@@ -90,7 +90,7 @@ export async function rip(code) {
     let persistentJs = js.replace(/^let\s+[^;]+;\s*\n\s*/m, '');
     persistentJs = persistentJs.replace(/^const\s+/gm, 'var ');
 
-    const result = await (0, eval)(`(async()=>{\n${persistentJs}\n})()`);
+    const result = await (0, eval)(`(async()=>{return eval(${JSON.stringify(persistentJs)});})()`);
 
     if (result !== undefined) globalThis._ = result;
     return result;
