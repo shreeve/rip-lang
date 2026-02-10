@@ -448,22 +448,33 @@ start port: 3000
 
 ### @rip-lang/ui — Reactive Web Framework
 
-Zero-build framework. Ships the 40KB compiler to the browser and compiles `.rip` components on demand.
+Zero-build framework. The browser loads the Rip compiler, compiles the UI
+framework, fetches an app bundle, and renders. No build step, no bundler.
 
 ```coffee
-# Server setup (index.rip)
+# Server (index.rip)
 import { get, use, start, notFound } from '@rip-lang/api'
 import { ripUI } from '@rip-lang/ui/serve'
 
 dir = import.meta.dir
-use ripUI pages: "#{dir}/pages", watch: true
+use ripUI dir: dir, watch: true, title: 'My App'
+get '/css/*', -> @send "#{dir}/css/#{@req.path.slice(5)}"
 notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 start port: 3000
 ```
 
+```html
+<!-- index.html -->
+<script type="module" src="/rip/browser.js"></script>
+<script type="text/rip">
+  { launch } = importRip! '/rip/ui.rip'
+  launch()
+</script>
+```
+
 ```coffee
-# Component (pages/counter.rip)
-Counter = component
+# Component (parts/counter.rip)
+export Counter = component
   @count := 0
   doubled ~= @count * 2
 

@@ -242,7 +242,7 @@ Counter = component
 
 Two keywords — `component` and `render` — are all the language adds. Everything else (`:=` state, `~=` computed, methods, lifecycle) is standard Rip.
 
-See [@rip-lang/ui](packages/ui/) for the full framework: Virtual File System, file-based router, reactive stash, and component renderer.
+See [@rip-lang/ui](packages/ui/) for the full framework: file-based router, reactive stash, parts system, and component renderer.
 
 ---
 
@@ -299,9 +299,9 @@ Simple arrays (with `.loc`) instead of AST node classes. The compiler is self-ho
 | Grammar | `src/grammar/grammar.rip` | 935 |
 | Parser Generator | `src/grammar/solar.rip` | 916 |
 | REPL | `src/repl.js` | 707 |
-| Browser Entry | `src/browser.js` | 80 |
+| Browser Entry | `src/browser.js` | 107 |
 | Tags | `src/tags.js` | 63 |
-| **Total** | | **10,298** |
+| **Total** | | **~10,325** |
 
 ---
 
@@ -311,11 +311,11 @@ Rip includes optional packages for full-stack development:
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| [rip-lang](https://www.npmjs.com/package/rip-lang) | 3.4.4 | Core language compiler |
+| [rip-lang](https://www.npmjs.com/package/rip-lang) | 3.4.6 | Core language compiler |
 | [@rip-lang/api](packages/api/) | 1.1.4 | HTTP framework (Sinatra-style routing, 37 validators) |
 | [@rip-lang/server](packages/server/) | 1.1.3 | Multi-worker app server (hot reload, HTTPS, mDNS) |
 | [@rip-lang/db](packages/db/) | 1.1.2 | DuckDB server with official UI (pure Bun FFI) |
-| [@rip-lang/ui](packages/ui/) | 0.1.2 | Zero-build reactive web framework (VFS, router, components) |
+| [@rip-lang/ui](packages/ui/) | 0.2.0 | Zero-build reactive web framework (stash, router, components) |
 | [@rip-lang/swarm](packages/swarm/) | 1.1.1 | Parallel job runner with worker pool |
 | [@rip-lang/csv](packages/csv/) | 1.1.1 | CSV parser + writer |
 | [@rip-lang/schema](packages/schema/) | 0.1.0 | ORM + validation |

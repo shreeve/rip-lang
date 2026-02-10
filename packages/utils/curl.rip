@@ -1,0 +1,81 @@
+#!/usr/bin/env rip
+
+# curl.rip — HTTP client with variable interpolation
+#
+#   rip curl.rip [key=val ...] '
+#   POST https://api.example.com/endpoint
+#   Authorization: Bearer ${token}
+#   Content-Type: application/json
+#   { "body": "${key}" }
+#   '
+#
+# Variables (${name} or #{name}) resolve as: CLI args > .auth > .env
+
+# Load key=value file into an object (skips comments and blank lines)
+load = (path) ->
+  file = Bun.file(path)
+  return {} unless file.exists!
+  content = file.text!
+  obj = {}
+  for raw in content.split('\n')
+    line = raw.trim()
+    continue unless line and not line.startsWith('#')
+    eq = line.indexOf('=')
+    obj[line.slice(0, eq)] = line.slice(eq + 1) if eq > 0
+  obj
+
+# Parse args: key=value pairs are vars, last arg is the payload
+argv = Bun.argv.slice(2)
+payload = argv.pop()?.trim()
+
+unless payload
+  console.error "Usage: rip curl.rip [key=val ...] 'payload'"
+  process.exit(1)
+
+cli = {}
+for arg in argv
+  eq = arg.indexOf('=')
+  cli[arg.slice(0, eq)] = arg.slice(eq + 1) if eq > 0
+
+auth = load! '.auth'
+
+# Interpolate ${VAR} and #{VAR}
+text = payload.replace /[#$]\{([^}]+)\}/g, (_, name) ->
+  val = cli[name] ?? auth[name] ?? Bun.env[name]
+  unless val?
+    console.error "curl.rip: undefined '#{name}'"
+    process.exit(1)
+  val
+
+# Parse: first line is [METHOD] URL, then headers until blank/{/[, then body
+lines = text.split('\n')
+first = lines[0].trim().split(/\s+/)
+
+METHODS = new Set ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
+
+if first.length >= 2 and METHODS.has(first[0].toUpperCase())
+  method = first[0].toUpperCase()
+  url = first[1]
+else
+  url = first[0]
+  method = null
+
+headers = {}
+i = 1
+while i < lines.length
+  line = lines[i].trim()
+  break if line is '' or line[0] is '{' or line[0] is '['
+  colon = lines[i].indexOf(':')
+  headers[lines[i].slice(0, colon).trim()] = lines[i].slice(colon + 1).trim() if colon > 0
+  i++
+
+body = lines.slice(if lines[i]?.trim() is '' then i + 1 else i).join('\n').trim() or undefined
+method ?= if body then 'POST' else 'GET'
+
+# Fire
+res = fetch! url, { method, headers, body }
+out = res.text!
+try
+  console.log JSON.stringify(JSON.parse(out), null, 2)
+catch
+  console.log out

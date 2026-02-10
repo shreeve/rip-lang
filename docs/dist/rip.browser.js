@@ -7561,7 +7561,10 @@ function getComponentRuntime() {
 }
 // src/browser.js
 var VERSION = "3.4.6";
-var BUILD_DATE = "2026-02-09@15:39:27GMT";
+var BUILD_DATE = "2026-02-10@20:03:48GMT";
+if (typeof globalThis !== "undefined" && !globalThis.__rip) {
+  new Function(getReactiveRuntime())();
+}
 var dedent = (s) => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
   const i = Math.min(...(m || []).map((x) => x.length));
@@ -7575,7 +7578,9 @@ async function processRipScripts() {
     try {
       const ripCode = dedent(script.textContent);
       const jsCode = compileToJS(ripCode);
-      (0, eval)(jsCode);
+      await (0, eval)(`(async()=>{
+${jsCode}
+})()`);
       script.setAttribute("data-rip-processed", "true");
     } catch (error) {
       console.error("Error compiling Rip script:", error);
@@ -7588,6 +7593,21 @@ if (typeof document !== "undefined") {
     document.addEventListener("DOMContentLoaded", processRipScripts);
   } else {
     processRipScripts();
+  }
+}
+async function importRip(url) {
+  const source = await fetch(url).then((r) => {
+    if (!r.ok)
+      throw new Error(`importRip: ${url} (${r.status})`);
+    return r.text();
+  });
+  const js = compileToJS(source);
+  const blob = new Blob([js], { type: "application/javascript" });
+  const blobUrl = URL.createObjectURL(blob);
+  try {
+    return await import(blobUrl);
+  } finally {
+    URL.revokeObjectURL(blobUrl);
   }
 }
 function rip(code) {
@@ -7606,11 +7626,14 @@ function rip(code) {
 }
 if (typeof globalThis !== "undefined") {
   globalThis.rip = rip;
+  globalThis.importRip = importRip;
+  globalThis.compileToJS = compileToJS;
 }
 export {
   rip,
   processRipScripts,
   parser,
+  importRip,
   getReactiveRuntime,
   getComponentRuntime,
   formatSExpr,

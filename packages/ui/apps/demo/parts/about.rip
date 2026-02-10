@@ -18,7 +18,7 @@ export About = component
 
       .card
         h3 "Architecture"
-        p "The Virtual File System stores page components in memory. The Router maps URLs to VFS paths using file-based conventions (like Next.js). When you navigate, the Renderer compiles the matching .rip file and mounts the resulting component. Each reactive binding creates a direct DOM effect — no virtual DOM diffing."
+        p "Components live as source files in the unified stash. The Router maps URLs to parts using file-based conventions (like Next.js). When you navigate, the Renderer compiles the matching .rip file and mounts the resulting component. Each reactive binding creates a direct DOM effect — no virtual DOM diffing."
 
       .card
         h3 "Stack"
@@ -38,4 +38,4 @@ export About = component
 
       .card
         h3 "Modules"
-        p "stash.js — Deep reactive state tree with path-based navigation. vfs.js — Browser-local Virtual File System with file watchers. router.js — File-based router mapping URLs to VFS paths. renderer.js — Compiles and mounts components, manages layouts and transitions. ui.js — createApp entry point that wires everything together."
+        p "The framework lives in one file: ui.rip. It uses Rip's built-in reactive primitives directly — the same signals that power := and ~= in components. Deep reactive stash with path navigation. Parts system for component storage. File-based router mapping URLs to parts. Renderer that compiles and mounts components with layout support."

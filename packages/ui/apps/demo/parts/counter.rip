@@ -2,16 +2,11 @@
 
 export Counter = component
   count := 0
-  step := 1
+  step  := 1
 
-  increment: ->
-    count += step
-
-  decrement: ->
-    count -= step
-
-  reset: ->
-    count = 0
+  increment: -> count += step
+  decrement: -> count -= step
+  reset:     -> count = 0
 
   render
     div

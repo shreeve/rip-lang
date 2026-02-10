@@ -10,7 +10,14 @@ export const VERSION = "0.0.0";
 export const BUILD_DATE = "0000-00-00@00:00:00GMT";
 
 // Import compileToJS for use in rip() function
-import { compileToJS } from './compiler.js';
+import { compileToJS, getReactiveRuntime } from './compiler.js';
+
+// Eagerly register Rip's reactive primitives on globalThis so that
+// framework code (ui.rip) can use them directly without the compiler
+// needing to detect reactive operators in the source
+if (typeof globalThis !== 'undefined' && !globalThis.__rip) {
+  new Function(getReactiveRuntime())();
+}
 
 const dedent = s => {
   const m = s.match(/^[ \t]*(?=\S)/gm);
@@ -29,8 +36,8 @@ async function processRipScripts() {
       const ripCode = dedent(script.textContent);
       const jsCode = compileToJS(ripCode);
 
-      // Execute in global scope using indirect eval
-      (0, eval)(jsCode);
+      // Execute as async to support await (importRip!, etc.)
+      await (0, eval)(`(async()=>{\n${jsCode}\n})()`);
 
       script.setAttribute('data-rip-processed', 'true');
     } catch (error) {
@@ -50,6 +57,26 @@ if (typeof document !== 'undefined') {
 }
 
 export { processRipScripts };
+
+/**
+ * Import a .rip file as an ES module
+ * Fetches the URL, compiles Rip→JS, dynamically imports via Blob URL
+ * Usage: const { launch } = await importRip('/ui.rip')
+ */
+export async function importRip(url) {
+  const source = await fetch(url).then(r => {
+    if (!r.ok) throw new Error(`importRip: ${url} (${r.status})`);
+    return r.text();
+  });
+  const js = compileToJS(source);
+  const blob = new Blob([js], { type: 'application/javascript' });
+  const blobUrl = URL.createObjectURL(blob);
+  try {
+    return await import(blobUrl);
+  } finally {
+    URL.revokeObjectURL(blobUrl);
+  }
+}
 
 /**
  * Browser Console REPL
@@ -73,7 +100,9 @@ export function rip(code) {
   }
 }
 
-// Make rip() available globally for console use
+// Make key functions available globally for console and <script type="text/rip"> use
 if (typeof globalThis !== 'undefined') {
   globalThis.rip = rip;
+  globalThis.importRip = importRip;
+  globalThis.compileToJS = compileToJS;
 }

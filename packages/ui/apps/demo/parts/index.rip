@@ -5,19 +5,19 @@ export Home = component
   render
     div
       .page-header
-        h1.page-title "Rip UI Framework"
+        h1.page-title "Rip UI Framework!"
         p.page-subtitle "Zero-build reactive web apps"
 
       .feature-grid
         .feature-card
           .feature-icon "🗂"
-          .feature-name "Virtual File System"
-          .feature-desc "Browser-local file storage. Components compiled on demand."
+          .feature-name "Parts System"
+          .feature-desc "Component source files in a unified stash. Compiled on demand."
 
         .feature-card
           .feature-icon "🔀"
           .feature-name "File-Based Router"
-          .feature-desc "URLs map to VFS paths. Dynamic segments and nested layouts."
+          .feature-desc "URLs map to parts. Dynamic segments and nested layouts."
 
         .feature-card
           .feature-icon "⚡"

@@ -329,6 +329,12 @@ html = """
       .toolbar { padding: 8px 16px; border-bottom: 1px solid #{borderColor}; text-align: right; font-size: 13px; }
       .toolbar select { font-size: 13px; padding: 4px 8px; border-radius: 3px; border: 1px solid #{borderColor}; background: #{bgColor}; color: #{textColor}; }
       .toolbar label { color: #888; margin-left: 16px; }
+      .size-group { display: inline-flex; vertical-align: middle; margin-left: 4px; }
+      .size-btn { font-size: 13px; width: 32px; height: 28px; border: 1px solid #{borderColor}; background: #{bgColor}; color: #888; cursor: pointer; margin: 0; padding: 0; }
+      .size-btn:first-child { border-radius: 3px 0 0 3px; }
+      .size-btn:last-child { border-radius: 0 3px 3px 0; }
+      .size-btn + .size-btn { margin-left: -1px; }
+      .size-btn.active { background: #{if dark then '#30363d' else '#e0e0e0'}; color: #{textColor}; font-weight: 600; }
       .toc { padding: 20px 30px; border-bottom: 1px solid #{borderColor}; }
       .toc h2 { font-size: 18px; margin-bottom: 10px; }
       .toc ol { padding-left: 24px; columns: 2; column-gap: 40px; }
@@ -354,17 +360,20 @@ html = """
       .line-num.first { padding-top: 4px; }
 
       @media print {
-        .toc { page-break-after: always; }
         .file-header { background: #f0f0f0 !important; color: #000 !important; }
         .toolbar { display: none; }
         .nav { display: none; }
         body { background: white !important; color: black !important; }
-        code { font-size: 11px !important; }
       }
     </style>
   </head>
   <body>
     <div class="toolbar">
+      <label>Size: <span class="size-group">
+        <button class="size-btn" data-size="11">S</button>
+        <button class="size-btn active" data-size="13">M</button>
+        <button class="size-btn" data-size="15">L</button>
+      </span></label>
       <label>Theme: <select id="theme-picker">
         <optgroup label="Light">#{themeOptions.split('\n').filter((o) -> o.includes('data-dark="false"')).join('')}</optgroup>
         <optgroup label="Dark">#{themeOptions.split('\n').filter((o) -> o.includes('data-dark="true"')).join('')}</optgroup>
@@ -404,6 +413,23 @@ html = """
       if (saved && themes[saved]) {
         document.getElementById('theme-picker').value = saved;
         document.getElementById('theme-picker').dispatchEvent(new Event('change'));
+      }
+
+      // Font size buttons
+      document.querySelectorAll('.size-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var size = btn.getAttribute('data-size') + 'px';
+          document.querySelectorAll('.code-container code').forEach(function(el) { el.style.fontSize = size; });
+          document.querySelectorAll('.size-btn').forEach(function(b) { b.classList.remove('active'); });
+          btn.classList.add('active');
+          localStorage.setItem('rip-print-size', btn.getAttribute('data-size'));
+        });
+      });
+      // Restore saved size
+      var savedSize = localStorage.getItem('rip-print-size');
+      if (savedSize) {
+        var sizeBtn = document.querySelector('.size-btn[data-size="' + savedSize + '"]');
+        if (sizeBtn) sizeBtn.click();
       }
     </script>
   </body>

@@ -489,9 +489,9 @@ rip-server -w
 
 This gives you:
 
-- **Framework files** served from `/rip-ui/*` (compiler, UI modules)
-- **Page manifest** auto-generated at `/rip-ui/manifest.json`
-- **Hot reload** via SSE at `/rip-ui/watch` — save a `.rip` file and the browser
+- **Framework files** served at `/rip/browser.js` and `/rip/ui.rip`
+- **App bundle** auto-generated at `/{app}/bundle`
+- **Hot reload** via SSE at `/{app}/watch` — save a `.rip` file and the browser
   updates instantly
 - **HTTPS + mDNS** — access at `https://myapp.local`
 - **Multi-worker** — load balanced across CPU cores

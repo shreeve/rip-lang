@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/shreeve/rip-lang/main/docs/rip.png" style="width:50px" /> <br>
+
 # AI Agent Guide for Rip
 
 **Purpose:** This document helps AI assistants understand and work with the Rip language compiler and its ecosystem of packages.
@@ -31,7 +33,7 @@ bun run browser
 
 | Metric | Value |
 |--------|-------|
-| Version | 3.4.3 |
+| Version | 3.4.6 |
 | Tests | 1,140/1,140 (100%) |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
@@ -51,7 +53,7 @@ rip-lang/
 │   ├── tags.js          # HTML tag classification (63 LOC)
 │   ├── parser.js        # Generated parser (357 LOC) — Don't edit!
 │   ├── repl.js          # Terminal REPL (707 LOC)
-│   ├── browser.js       # Browser integration (80 LOC)
+│   ├── browser.js       # Browser integration (107 LOC)
 │   └── grammar/
 │       ├── grammar.rip  # Grammar specification (935 LOC)
 │       └── solar.rip    # Parser generator (916 LOC) — Don't edit!
@@ -416,27 +418,25 @@ notFound -> @send 'index.html', 'text/html; charset=UTF-8'
 start port: 3000
 ```
 
-### @rip-lang/ui (v0.1.1) — Reactive Web Framework
+### @rip-lang/ui (v0.2.0) — Reactive Web Framework
 
-Zero-build reactive web framework. Ships the 40KB Rip compiler to the browser,
-compiles `.rip` components on demand, and renders with fine-grained DOM updates.
+Zero-build reactive web framework. The browser loads the Rip compiler,
+compiles the UI framework (`ui.rip`), fetches an app bundle, and renders
+with fine-grained DOM updates. Uses Rip's built-in reactive primitives
+directly — one signal graph shared between framework and components.
 
 | File | Lines | Role |
 |------|-------|------|
-| `ui.js` | ~208 | `createApp` entry point with `loadBundle`, `watch` |
-| `stash.js` | ~413 | Deep reactive state tree with path-based navigation |
-| `vfs.js` | ~215 | Browser-local Virtual File System with watchers |
-| `router.js` | ~325 | File-based router (URL ↔ VFS paths, History API) |
-| `renderer.js` | ~397 | Component lifecycle, layouts, transitions, `remount` |
-| `serve.rip` | ~140 | Server middleware: framework files, manifest, SSE hot-reload |
+| `ui.rip` | ~640 | Unified framework: stash, parts, router, renderer, launch |
+| `serve.rip` | ~130 | Server middleware: framework files, bundle, SSE hot-reload |
 
 Key concepts:
-- **`ripUI` middleware** — `use ripUI pages: 'pages', watch: true` registers routes for framework files (`/rip-ui/*`), auto-generated page manifest (`/rip-ui/manifest.json`), and SSE hot-reload (`/rip-ui/watch`)
-- **`loadBundle(url)`** — Client-side: fetches manifest JSON and bulk-loads all pages into VFS
-- **`watch(url)`** — Client-side: connects to SSE endpoint, invalidates VFS entries on change, smart-refetches current route, and calls `renderer.remount()`
+- **`ripUI` middleware** — `use ripUI app: '/demo', dir: dir` registers routes for framework files (`/rip/browser.js`, `/rip/ui.rip`), app bundle (`/{app}/bundle`), and SSE hot-reload (`/{app}/watch`)
+- **`launch(appBase)`** — Client-side: fetches the app bundle, hydrates the stash, starts the router and renderer
 - **`component` / `render`** — Two keywords added to Rip for defining components with reactive state (`:=`), computed (`~=`), effects (`~>`)
-- **File-based routing** — `pages/users/[id].rip` → `/users/:id` (Next.js-style)
-- **Hot reload architecture** — Server sends notify-only SSE events (changed paths), browser invalidates + refetches + remounts
+- **File-based routing** — `parts/users/[id].rip` → `/users/:id` (Next.js-style)
+- **Unified stash** — Deep reactive proxy with path navigation, uses `__state` from Rip's built-in reactive runtime
+- **Hot reload** — Server sends notify-only SSE events, browser invalidates + refetches + remounts
 
 ```coffee
 # Server (index.rip)
@@ -444,7 +444,8 @@ import { get, use, start, notFound } from '@rip-lang/api'
 import { ripUI } from '@rip-lang/ui/serve'
 
 dir = import.meta.dir
-use ripUI pages: "#{dir}/pages", watch: true
+use ripUI dir: dir, watch: true, title: 'My App'
+get '/css/*', -> @send "#{dir}/css/#{@req.path.slice(5)}"
 notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 start port: 3000
 ```

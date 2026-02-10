@@ -1,0 +1,26 @@
+# =============================================================================
+# Rip UI Apps — Multi-App Server
+# =============================================================================
+#
+# Mounts all Rip UI apps under one server. Each app lives in its own
+# subdirectory and is mounted at /<name>/.
+#
+# Run: bun packages/ui/apps/index.rip
+#
+# =============================================================================
+
+import { get, start, notFound } from '@rip-lang/api'
+import { mount as demo } from './demo/index.rip'
+import { mount as labs } from './labs/index.rip'
+
+# Mount apps
+demo '/demo'
+labs '/labs'
+
+# Root redirects to demo
+get '/', -> Response.redirect('/demo/', 302)
+
+# Fallback
+notFound -> new Response 'Not Found', status: 404
+
+start port: 3002
