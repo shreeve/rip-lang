@@ -534,6 +534,57 @@ user.save!()
 
 ---
 
+## Browser
+
+Rip runs directly in the browser with full async/await support — no build step.
+
+### Inline Scripts
+
+Load the compiler, then write Rip:
+
+```html
+<script type="module" src="/rip/browser.js"></script>
+<script type="text/rip">
+  res = fetch! 'https://api.example.com/data'
+  data = res.json!
+  console.log data
+</script>
+```
+
+The `!` operator works in inline scripts — `processRipScripts` wraps
+compiled code in an async IIFE transparently.
+
+### Console REPL
+
+The `rip()` function is available in any browser console where `rip.browser.js`
+is loaded:
+
+```javascript
+rip("42 * 10 + 8")                  // → 428
+rip("name = 'Alice'")               // → 'Alice' (persists on globalThis)
+rip("(x * x for x in [1..5])")      // → [1, 4, 9, 16, 25]
+
+// Async — use await, Chrome displays the resolved value
+await rip("res = fetch! 'https://jsonplaceholder.typicode.com/todos/1'; res.json!")
+// → {userId: 1, id: 1, title: 'delectus aut autem', completed: false}
+```
+
+Sync code returns values directly. Async code (using `!`) returns a Promise
+that Chrome auto-awaits. Variables persist between calls on `globalThis`.
+
+### `importRip(url)`
+
+Fetch, compile, and import a `.rip` file as an ES module:
+
+```html
+<script type="text/rip">
+  { launch } = importRip! '/rip/ui.rip'
+  launch '/demo'
+</script>
+```
+
+---
+
 ## Full-Stack Example
 
 A complete API server in Rip:

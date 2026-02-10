@@ -1,53 +1,84 @@
-# How `<script type="text/rip">` Works
+# How Rip Runs in the Browser
 
-## The Problem
+Rip provides full async/await support across every browser execution
+context — inline scripts, the Playground, and the console REPL. No other
+compile-to-JS language has this.
 
-When the browser sees `<script type="text/rip">`, it doesn't know what Rip
-is — it ignores the tag entirely. The content sits in the DOM as inert text.
-Our job is to find it, compile it to JavaScript, and execute it.
+## The Execution Contexts
 
-The naive approach is `eval(compiledJS)`. But that breaks the moment you use
-Rip's `!` operator (which compiles to `await`), because `eval` runs code in
-a plain script context where `await` is illegal.
+| Context | How async works | Returns value? |
+|---------|-----------------|----------------|
+| `<script type="text/rip">` | Async IIFE wrapper | No (fire-and-forget) |
+| Playground "Run" button | Async IIFE wrapper | No (use console.log) |
+| `rip()` console REPL | Rip `do ->` block | Yes (sync direct, async via Promise) |
+| `.rip` files via `importRip()` | ES module import | Yes (module exports) |
 
-## The Solution: Async IIFE
+## `<script type="text/rip">` — Inline Scripts
 
-**IIFE** stands for Immediately Invoked Function Expression — a function
-defined and called in one step:
+When the browser sees `<script type="text/rip">`, it ignores the tag.
+The `processRipScripts` handler finds these tags on `DOMContentLoaded`,
+compiles each one to JavaScript, wraps it in an async IIFE, and evals it:
+
+```
+Rip source:     { launch } = importRip! '/rip/ui.rip'
+Compiled JS:    const { launch } = await importRip('/rip/ui.rip');
+Wrapped:        (async () => { const { launch } = await importRip(...); })()
+Executed via:   await (0, eval)("(async()=>{...})()")
+```
+
+The `!` postfix compiles to `await`. The async IIFE provides the required
+async context. Indirect eval runs it in global scope. The outer `await`
+ensures scripts execute in order.
+
+## `rip()` — Browser Console REPL
+
+The `rip()` function wraps user code in a Rip `do ->` block before
+compiling. This lets the Rip compiler handle two things natively:
+
+1. **Implicit return** — the last expression is returned automatically
+2. **Auto-async detection** — if the code contains `!`, the `do ->` block
+   compiles to an async IIFE; otherwise it compiles to a sync IIFE
+
+```
+rip("42 * 10 + 8")
+
+  Rip wraps as:     do ->
+                      42 * 10 + 8
+
+  Compiled JS:      (() => { return 42 * 10 + 8; })();
+
+  Result:           428 (direct value)
+```
+
+```
+rip("res = fetch! 'https://api.example.com/data'; res.json!")
+
+  Rip wraps as:     do ->
+                      res = fetch! 'https://api.example.com/data'
+                      res.json!
+
+  Compiled JS:      (async () => {
+                      res = await fetch('https://...');
+                      return await res.json();
+                    })();
+
+  Result:           Promise → Chrome auto-awaits → {id: 1, ...}
+```
+
+### Variable Persistence
+
+Variables persist between `rip()` calls on `globalThis`:
+
+- `let` declarations are stripped — bare assignments create globals in
+  sloppy mode (e.g., `x = 42` creates `globalThis.x`)
+- `const` is replaced with `globalThis.` for explicit hoisting
+- After an async call resolves, the result is stored in `globalThis._`
 
 ```javascript
-(() => {
-  // code runs immediately
-  // variables here don't leak to global scope
-})();
-```
-
-The key insight: `await` is only valid inside an `async function`. So we
-wrap the compiled code in an **async** IIFE:
-
-```javascript
-(async () => {
-  const { launch } = await importRip('/rip/ui.rip');
-  launch('/demo');
-})();
-```
-
-Now `await` works. The `async` keyword makes the function return a Promise.
-The `()` at the end invokes it immediately. The code runs right away, but
-asynchronously — it can pause at each `await` and resume when the value
-resolves.
-
-## What `processRipScripts` Does
-
-When `rip.js` loads, it registers a handler for `DOMContentLoaded`. That
-handler is `processRipScripts`, which does this for each `<script type="text/rip">`:
-
-```
-1. Read the text content from the DOM
-2. Compile Rip source → JavaScript (using compileToJS)
-3. Wrap in an async IIFE: (async () => { <compiled JS> })()
-4. eval() the wrapper — this starts execution
-5. await the returned Promise — so scripts run in order
+rip("name = 'Alice'")           // name is now on globalThis
+rip("console.log name")         // → Alice
+await rip("data = fetch!('https://...').json!()")
+data.title                      // → accessible in plain JS too
 ```
 
 ## Why `(0, eval)` Instead of `eval`
@@ -58,41 +89,32 @@ JavaScript has two forms of eval:
   local variables. Rarely what you want.
 
 - **Indirect eval** — `(0, eval)(code)` — runs in the global scope. The
-  `(0, eval)` trick evaluates the expression `0, eval` (comma operator
-  returns the right side), which gives you a reference to `eval` that
-  JavaScript treats as indirect. This is the standard pattern.
+  `(0, eval)` trick evaluates `0, eval` (comma operator returns the right
+  side), producing a reference to `eval` that JavaScript treats as indirect.
 
-We use indirect eval so the compiled code runs in global scope, where
-`globalThis.importRip` and other globals are accessible.
+We use indirect eval so compiled code runs in global scope, where
+`globalThis.importRip`, `globalThis.rip`, and other globals are accessible.
 
-## The Full Chain
+## What `globalThis` Provides
 
-```
-Rip source:          { launch } = importRip! '/rip/ui.rip'
+When `rip.browser.js` loads, it registers these on `globalThis`:
 
-Compiled JS:         const { launch } = await importRip('/rip/ui.rip');
+| Function | Purpose |
+|----------|---------|
+| `rip(code)` | Console REPL — compile and execute Rip code |
+| `importRip(url)` | Fetch, compile, and import a `.rip` file as an ES module |
+| `compileToJS(code)` | Compile Rip source to JavaScript |
+| `__rip` | Reactive runtime — `__state`, `__computed`, `__effect`, `__batch` |
 
-Wrapped in IIFE:     (async () => {
-                       const { launch } = await importRip('/rip/ui.rip');
-                     })()
+These bridge the gap between ES module scope (where the functions are
+defined) and the global scope (where eval'd code and inline scripts run).
 
-Executed via:        await (0, eval)("(async()=>{\n...\n})()")
-```
+## Why This Matters
 
-The `!` postfix in Rip compiles to `await`. The async IIFE provides the
-required async context. Indirect eval runs it in global scope. And the
-outer `await` ensures scripts execute in order.
+CoffeeScript, TypeScript, LiveScript, Elm, PureScript — no compile-to-JS
+language has a browser REPL that handles async natively. Their `await`
+only works inside explicitly declared async functions.
 
-## Why `globalThis`
-
-Functions like `importRip` and `rip` are defined inside the `rip.js` ES
-module. Module exports are scoped — they're not visible to eval'd code.
-To bridge this gap, we register key functions on `globalThis`:
-
-```javascript
-globalThis.rip = rip;             // console REPL
-globalThis.importRip = importRip; // fetch + compile + import .rip files
-```
-
-Now eval'd code (including compiled `<script type="text/rip">` blocks)
-can call `importRip(...)` because it's a global.
+Rip's `!` operator works everywhere — in a component, in an inline script
+tag, in the browser console, in a `.rip` file. The async context is
+provided transparently, and the user never has to think about it.

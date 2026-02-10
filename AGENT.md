@@ -53,7 +53,7 @@ rip-lang/
 │   ├── tags.js          # HTML tag classification (63 LOC)
 │   ├── parser.js        # Generated parser (357 LOC) — Don't edit!
 │   ├── repl.js          # Terminal REPL (707 LOC)
-│   ├── browser.js       # Browser integration (107 LOC)
+│   ├── browser.js       # Browser integration (119 LOC)
 │   └── grammar/
 │       ├── grammar.rip  # Grammar specification (935 LOC)
 │       └── solar.rip    # Parser generator (916 LOC) — Don't edit!
@@ -484,6 +484,39 @@ are correct. Key patterns:
   for serving files)
 - `@rip-lang/api` handlers bind `this` to the context object — use `@send`,
   `@json`, `@req`, etc.
+
+---
+
+## Browser Runtime
+
+`src/browser.js` (~120 LOC) provides the browser entry point. When loaded,
+it registers key functions on `globalThis` and processes inline Rip scripts.
+
+### Key Features
+
+- **`<script type="text/rip">`** — Inline Rip code compiled and executed on
+  `DOMContentLoaded`. Uses an async IIFE wrapper so `!` (await) works.
+- **`rip()` console REPL** — Wraps code in a Rip `do ->` block before
+  compiling, so the compiler handles implicit return and auto-async natively.
+  Sync code returns values directly; async code returns a Promise.
+- **`importRip(url)`** — Fetches a `.rip` file, compiles it, imports as an
+  ES module via blob URL.
+- **`globalThis.__rip`** — Reactive runtime registered eagerly on load.
+
+### globalThis Registrations
+
+| Function | Purpose |
+|----------|---------|
+| `rip(code)` | Console REPL — compile and execute Rip code |
+| `importRip(url)` | Fetch, compile, and import a `.rip` file |
+| `compileToJS(code)` | Compile Rip source to JavaScript |
+| `__rip` | Reactive primitives (`__state`, `__computed`, `__effect`, `__batch`) |
+
+### Variable Persistence in `rip()`
+
+`let` declarations are stripped (bare assignments create globals in sloppy
+mode eval). `const` is hoisted to `globalThis.` explicitly. This allows
+variables to persist across `rip()` calls in the browser console.
 
 ---
 

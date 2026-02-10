@@ -307,7 +307,7 @@ Simple arrays (with `.loc`) instead of AST node classes. The compiler is self-ho
 | Grammar | `src/grammar/grammar.rip` | 935 |
 | Parser Generator | `src/grammar/solar.rip` | 916 |
 | REPL | `src/repl.js` | 707 |
-| Browser Entry | `src/browser.js` | 107 |
+| Browser Entry | `src/browser.js` | 119 |
 | Tags | `src/tags.js` | 63 |
 | **Total** | | **~10,325** |
 
