@@ -90,9 +90,15 @@ export function rip(code) {
     let persistentJs = js.replace(/^let\s+[^;]+;\s*\n\s*/m, '');
 
     if (persistentJs.includes('await ')) {
-      // Async: run in async IIFE, hoist const to globalThis
+      // Async: run in async IIFE, hoist const to globalThis, return last expression
       persistentJs = persistentJs.replace(/^const\s+(\w+)\s*=/gm, 'globalThis.$1 =');
-      return (0, eval)(`(async()=>{\n${persistentJs}\n})()`);
+      const lines = persistentJs.trimEnd().split('\n');
+      const last = lines.length - 1;
+      if (!/^return\s/.test(lines[last])) lines[last] = 'return ' + lines[last];
+      return (0, eval)(`(async()=>{\n${lines.join('\n')}\n})()`).then(v => {
+        if (v !== undefined) globalThis._ = v;
+        return v;
+      });
     }
 
     // Sync: indirect eval for return values and variable persistence
