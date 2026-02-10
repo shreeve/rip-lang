@@ -59,23 +59,32 @@ export ripUI = (opts = {}) ->
     name = c.req.path.slice("#{prefix}/parts/".length)
     c.send "#{partsDir}/#{name}", 'text/plain; charset=UTF-8'
 
+  bundleCache = null
+  bundleDirty = true
+
+  # Invalidate bundle cache when parts change
+  if enableWatch
+    fsWatch partsDir, { recursive: true }, (event, filename) ->
+      bundleDirty = true if filename?.endsWith('.rip')
+
   get "#{prefix}/bundle", (c) ->
-    glob = new Bun.Glob("**/*.rip")
-    parts = {}
-    paths = Array.from(glob.scanSync(partsDir))
-    for path in paths
-      parts["parts/#{path}"] = Bun.file("#{partsDir}/#{path}").text!
+    if bundleDirty or not bundleCache
+      glob = new Bun.Glob("**/*.rip")
+      parts = {}
+      paths = Array.from(glob.scanSync(partsDir))
+      for path in paths
+        parts["parts/#{path}"] = Bun.file("#{partsDir}/#{path}").text!
 
-    data = {}
-    data.title = appTitle if appTitle
-    data.watch = enableWatch
-    if appState
-      data[k] = v for k, v of appState
+      data = {}
+      data.title = appTitle if appTitle
+      data.watch = enableWatch
+      if appState
+        data[k] = v for k, v of appState
 
-    bundle = { parts, data }
-    bundlePath = "#{partsDir}/.bundle.json"
-    Bun.write bundlePath, JSON.stringify(bundle)
-    c.send bundlePath, 'application/json'
+      bundleCache = JSON.stringify({ parts, data })
+      bundleDirty = false
+
+    new Response bundleCache, headers: { 'Content-Type': 'application/json' }
 
   if enableWatch
     get "#{prefix}/watch", (c) ->
