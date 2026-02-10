@@ -1569,9 +1569,12 @@ console.log "Domain:", domain`;
 
     document.getElementById('run-btn').addEventListener('click', runCode);
 
-    // Keyboard shortcuts: F5, Cmd+Enter (Mac), Ctrl+Enter (Windows/Linux)
+    // Keyboard shortcuts: Cmd+Enter (Mac), Ctrl+Enter (Windows/Linux)
+    monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, runCode);
+
+    // F5 runs code from anywhere on the page
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'F5' || (e.key === 'Enter' && (e.metaKey || e.ctrlKey))) {
+      if (e.key === 'F5') {
         e.preventDefault();
         runCode();
       }
