@@ -147,6 +147,39 @@ export raw = (proxy) -> if proxy?[RAW] then proxy[RAW] else proxy
 export isStash = (obj) -> obj?[STASH] is true
 
 # =============================================================================
+# Resource — async data loading with reactive loading/error/data states
+# =============================================================================
+
+export createResource = (fn, opts = {}) ->
+  _data    = __state(opts.initial or null)
+  _loading = __state(false)
+  _error   = __state(null)
+
+  load = ->
+    _loading.value = true
+    _error.value = null
+    try
+      result = await fn()
+      _data.value = result
+    catch err
+      _error.value = err
+    finally
+      _loading.value = false
+
+  resource =
+    data:    undefined
+    loading: undefined
+    error:   undefined
+    refetch: load
+
+  Object.defineProperty resource, 'data', get: -> _data.value
+  Object.defineProperty resource, 'loading', get: -> _loading.value
+  Object.defineProperty resource, 'error', get: -> _error.value
+
+  load() unless opts.lazy
+  resource
+
+# =============================================================================
 # Parts — in-memory file storage with watchers
 # =============================================================================
 
