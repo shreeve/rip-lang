@@ -1126,6 +1126,31 @@ export class Lexer {
     else if (val === '<=>') tag = 'BIND';
     else if (val === '~>') tag = 'REACT_ASSIGN';
     else if (val === '=!') tag = 'READONLY_ASSIGN';
+    // Merge assignment: *config = {a: 1} → Object.assign(config, {a: 1})
+    else if (val === '*' && (!prev || prev[0] === 'TERMINATOR' || prev[0] === 'INDENT' || prev[0] === 'OUTDENT') &&
+             /^[a-zA-Z_$]/.test(this.chunk[1] || '')) {
+      // Scan ahead to find "IDENTIFIER =" pattern
+      let rest = this.chunk.slice(1);
+      let m = /^((?:(?!\s)[$\w\x7f-\uffff])+(?:\.[a-zA-Z_$][\w]*)*)(\s*)=(?!=)/.exec(rest);
+      if (m) {
+        let target = m[1], space = m[2];
+        this.emit('IDENTIFIER', 'Object');
+        this.emit('.', '.');
+        this.emit('PROPERTY', 'assign');
+        this.emit('CALL_START', '(');
+        // Emit target — handle dotted paths like el.style
+        let parts = target.split('.');
+        this.emit('IDENTIFIER', parts[0]);
+        for (let i = 1; i < parts.length; i++) {
+          this.emit('.', '.');
+          this.emit('PROPERTY', parts[i]);
+        }
+        this.emit(',', ',');
+        let comma = this.prev();
+        comma.mergeClose = true; // mark for rewriter to insert CALL_END
+        return 1 + target.length + space.length + 1; // consume *target =
+      }
+    }
     // Export all
     else if (val === '*' && prev?.[0] === 'EXPORT') tag = 'EXPORT_ALL';
     // Operator classification
@@ -1208,6 +1233,7 @@ export class Lexer {
     this.tagPostfixConditionals();
     this.addImplicitBracesAndParens();
     this.addImplicitCallCommas();
+    this.closeMergeAssignments();
     return this.tokens;
   }
 
@@ -1808,6 +1834,29 @@ export class Lexer {
         return action.call(this, token, i);
       }
       i++;
+    }
+  }
+
+  // Close merge assignments: find marked commas and insert CALL_END at expression end
+  closeMergeAssignments() {
+    let tokens = this.tokens;
+    for (let i = 0; i < tokens.length; i++) {
+      if (!tokens[i].mergeClose) continue;
+      // Scan forward to find where the value expression ends
+      let depth = 0;
+      for (let j = i + 1; j < tokens.length; j++) {
+        let tag = tokens[j][0];
+        if (tag === '(' || tag === '[' || tag === '{' || tag === 'CALL_START' || tag === 'INDEX_START' || tag === 'INDENT') depth++;
+        if (tag === ')' || tag === ']' || tag === '}' || tag === 'CALL_END' || tag === 'INDEX_END' || tag === 'OUTDENT') depth--;
+        if (depth < 0 || (depth === 0 && tag === 'TERMINATOR')) {
+          tokens.splice(j, 0, gen('CALL_END', ')', tokens[j - 1]));
+          break;
+        }
+        if (j === tokens.length - 1) {
+          tokens.splice(j + 1, 0, gen('CALL_END', ')', tokens[j]));
+          break;
+        }
+      }
     }
   }
 

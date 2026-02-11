@@ -377,3 +377,27 @@ test "method assign map", '''
   ''', [10, 20, 30]
 
 code "method assign compiles", "x .= trim()", "let x;\n\nx = x.trim();"
+
+# ============================================================================
+# Merge Assignment — *obj = { ... }
+# ============================================================================
+
+test "merge assign basic", '''
+  config = {host: "old"}
+  *config = {host: "localhost", port: 3000}
+  config
+  ''', {host: "localhost", port: 3000}
+
+test "merge assign preserves existing", '''
+  config = {host: "localhost", debug: false}
+  *config = {port: 3000}
+  config
+  ''', {host: "localhost", debug: false, port: 3000}
+
+test "merge assign inline", '''
+  opts = {}
+  *opts = {a: 1, b: 2}
+  opts.a + opts.b
+  ''', 3
+
+code "merge assign compiles to Object.assign", "*config = {a: 1}", "Object.assign(config, {a: 1})"
