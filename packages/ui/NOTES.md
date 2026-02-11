@@ -47,45 +47,78 @@
   Triggering it properly requires the compiler to call `this.updated()` after
   each reactive effect flush — a compiler-level change, not a renderer change.
 
-- **HMR doesn't preserve component state.** Hot reload destroys and recreates
-  the current component with fresh state. This matches React/Vue/Solid behavior
-  for JS changes (they only preserve state for CSS/template-only changes).
-  True state-preserving HMR would require diffing old and new component
-  instances and transferring reactive state.
-
 - **Context functions require `__ripComponent` on globalThis.** The
   `setContext`/`getContext`/`hasContext` exports from ui.rip depend on the
   compiler's component runtime being loaded. If ui.rip is loaded without a
   component being compiled first, these will be undefined. In practice this
   doesn't happen because launch() compiles components before context is used.
 
-- **`__RIP__` dev tools are console-only.** The `window.__RIP__` object
-  provides programmatic access to framework internals but has no visual panel.
-  A Chrome DevTools extension with a component tree, stash inspector, and
-  route viewer would be a significant developer experience improvement.
+- **Error boundaries only catch mount errors.** If a component throws during
+  a reactive update (e.g., a `~>` effect throws after the component is already
+  mounted), the error boundary doesn't catch it. Comprehensive error handling
+  would require the reactive runtime to route errors through `__handleError`
+  and bubble them to the nearest boundary.
 
-## Future Ideas
+## Roadmap — What's Needed to Compete
 
-- Code splitting / lazy route loading — currently the bundle sends all parts
-  in one JSON request. For small apps this is fine (Rip source compresses well
-  with Brotli). For large apps, could lazy-load per route. Low priority until
-  apps grow large enough for bundle size to matter.
-- `onActivate`/`onDeactivate` lifecycle hooks for keep-alive components
-- `updated` hook triggered after reactive effect flushes (compiler change)
-- State-preserving HMR for component code changes (state transfer)
-- Chrome DevTools extension with visual component tree and stash inspector
-- Route-level `loader` functions (data prefetching before component mounts)
-- `createResource` caching with stale-while-revalidate (TanStack Query-style)
-- Persistent VFS (IndexedDB/OPFS) for offline support and instant reloads
-- Compiled template optimization (ahead-of-time DOM operations)
-- SSR / streaming — server-side rendering for SEO and initial load performance.
-  Low priority: the initial HTML can be hydrated for SEO, and the bundle
-  downloads quickly. The app architecture already supports a two-phase load
-  (initial route inline, remainder on demand).
-- Form handling — validation, form state management, optimistic updates.
-  React Hook Form, TanStack Form, and Formik are entire ecosystems. This is
-  a large feature area that deserves dedicated design work.
-- Route transition animations — enter/exit animations for components during
-  navigation. Nice to have for polish. Vue's `<Transition>` and React's
-  Framer Motion are the reference implementations.
-- Scroll restoration on back/forward navigation
+These are the gaps between Rip UI and production-grade frameworks. Addressing
+these moves Rip UI from "impressive demo" to "serious contender."
+
+### Component Model
+- **Component composition from Rip source.** Currently components are "pages"
+  — you can't easily use `<Counter>` inside another `.rip` component. Need a
+  way to import and nest components within render blocks.
+- **Props validation.** No mechanism to declare expected props, default values,
+  or required props. Vue has `defineProps`, React has PropTypes/TypeScript.
+- **Scoped styles.** No CSS scoping per component. Vue has `<style scoped>`,
+  Svelte scopes by default. Components share a global CSS namespace.
+- **Slots / named slots.** Only `data-slot` exists for layouts. No general
+  slot mechanism for passing content into reusable components.
+
+### Data & State
+- **createResource caching.** Cache keys, stale-while-revalidate, background
+  refetching, query invalidation. The current createResource is a starting
+  point; TanStack Query is the target.
+- **Form handling.** Validation, form state management, dirty tracking,
+  optimistic updates. A large feature area that deserves dedicated design.
+
+### Type Safety
+- **TypeScript definitions for framework exports.** The stash, router,
+  createResource, and other exports have no `.d.ts` files. TypeScript users
+  get no autocomplete or type checking when using the framework API.
+
+### Developer Experience
+- **State-preserving HMR.** Hot reload currently remounts with fresh state.
+  Preserving reactive state across code changes (at least for template-only
+  changes) would match Vite's developer experience.
+- **Chrome DevTools extension.** A visual panel for inspecting the stash,
+  component tree, route state, and keep-alive cache. `window.__RIP__` is
+  the console-only foundation.
+- **In-browser editor.** Edit `.rip` components directly in the browser with
+  live preview. The compilation infrastructure already exists.
+
+### Error Handling
+- **Runtime error boundaries.** Catch errors from reactive effects and async
+  operations, not just mount-time errors. Route them to the nearest ancestor
+  with `onError`.
+
+### Performance & Scale
+- **Code splitting / lazy route loading.** Bundle all parts upfront vs
+  fetch per route. Low priority for small apps (Rip source compresses well).
+- **Compiled template optimization.** Ahead-of-time DOM operations instead
+  of runtime compilation. Svelte and Solid do this at build time.
+
+### Polish
+- **Route transition animations.** Enter/exit animations during navigation.
+  Vue's `<Transition>` and Framer Motion are references.
+- **Scroll restoration.** Preserve scroll position on back/forward navigation.
+- **`onActivate`/`onDeactivate` lifecycle hooks.** Let keep-alive components
+  know when they're cached/restored.
+- **`updated` lifecycle hook.** Fire after reactive effects flush (compiler change).
+
+### Infrastructure
+- **SSR / streaming.** Server-side rendering for SEO and initial load. The
+  architecture supports two-phase loading (initial route inline, rest on
+  demand). Low priority until SEO is a requirement.
+- **Persistent VFS.** IndexedDB/OPFS for offline support and instant reloads.
+  The current in-memory Map works but doesn't survive page reloads.
