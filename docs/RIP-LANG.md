@@ -312,6 +312,7 @@ Multiple lines
 | `*` | String repeat | `"-" * 40` | `"-".repeat(40)` |
 | `<` `<=` | Chained comparison | `1 < x < 10` | `(1 < x) && (x < 10)` |
 | `\|>` | Pipe | `x \|> fn` or `x \|> fn(y)` | `fn(x)` or `fn(x, y)` |
+| `.=` | Method assign | `x .= trim()` | `x = x.trim()` |
 | `not in` | Not in | `x not in arr` | Negated membership test |
 | `not of` | Not of | `k not of obj` | Negated key existence |
 
@@ -373,6 +374,44 @@ Handles both null/undefined AND thrown errors:
 result = riskyOperation() !? "default"
 # If riskyOperation() throws or returns null/undefined, result = "default"
 ```
+
+## Method Assignment (`.=`)
+
+A Rip original. Compound assignment for method calls — apply a method to a
+variable and assign the result back in one step:
+
+```coffee
+# Without .= — repeat the variable name every time
+items = items.filter -> it.active
+items = items.map -> it.name
+items = items.sort (a, b) -> a.localeCompare b
+str = str.trim()
+str = str.toLowerCase()
+
+# With .= — name it once, transform in place
+items .= filter -> it.active
+items .= map -> it.name
+items .= sort (a, b) -> a.localeCompare b
+str .= trim()
+str .= toLowerCase()
+```
+
+`x .= method(args)` compiles to `x = x.method(args)`. It's the method-call
+equivalent of `+=` — just as `x += 5` means `x = x + 5`, `x .= trim()`
+means `x = x.trim()`.
+
+This operator is unique to Rip. Other languages have `+=`, `-=`, `*=`, and
+other arithmetic compound assignments, but none extend the concept to method
+calls. Combined with implicit `it`, this enables remarkably concise data
+transformation pipelines:
+
+```coffee
+users .= filter -> it.active
+users .= map -> it.name
+users .= sort()
+```
+
+Works with any method — built-in or custom, with or without arguments.
 
 ## Prototype Operator (`::`)
 

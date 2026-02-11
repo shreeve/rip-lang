@@ -194,6 +194,7 @@ Rip extends JavaScript with powerful operators:
 | `[-n]` | Negative index | `arr[-1]` | `arr.at(-1)` |
 | `*` | String repeat | `"-" * 40` | `"-".repeat(40)` |
 | `<` `<=` | Chained | `1 < x < 10` | `(1 < x) && (x < 10)` |
+| `.=` | Method assign | `x .= trim()` | `x = x.trim()` |
 | `not in` | Not in | `x not in arr` | Negated membership |
 | `not of` | Not of | `k not of obj` | Negated key existence |
 | `if...else` | Postfix ternary | `"a" if x else "b"` | `x ? "a" : "b"` |

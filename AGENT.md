@@ -605,6 +605,7 @@ rip> .js      # Toggle JS display
 | `*` | String repeat | `"-" * 40` — string repetition |
 | `<` `<=` | Chained | `1 < x < 10` — chained comparisons |
 | `\|>` | Pipe | `x \|> fn` or `x \|> fn(y)` — first-arg pipe |
+| `.=` | Method assign | `x .= trim()` — `x = x.trim()` (Rip original) |
 | `not in` | Not in | `x not in arr` — negated membership |
 | `loop n` | Repeat N | `loop 5 -> body` — repeat N times |
 | `it` | Implicit param | `-> it > 5` — auto-injected parameter |

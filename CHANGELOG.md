@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Works with dotted references (`x |> Math.sqrt`, `x |> console.log`) and dotted calls (`x |> obj.method(y)` → `obj.method(x, y)`).
 - Implicit calls close at pipe boundaries — `x |> fn 1 |> bar 2` works correctly without parens.
 
+### Method Assignment (`.=`) — A Rip Original
+
+- **Compound method assignment** — `x .= trim()` compiles to `x = x.trim()`. The method-call equivalent of `+=`. No other language has this. Combined with implicit `it`, enables concise transformation pipelines: `items .= filter -> it.active` then `items .= map -> it.name`.
+
 ### Prototype Operator (`::`)
 
 - **CoffeeScript-style prototype access restored** — `String::trim` compiles to `String.prototype.trim`. Disambiguated from type annotations by spacing: `::` with no space is prototype, `::` with a space is a type annotation. Both coexist cleanly.
