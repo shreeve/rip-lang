@@ -143,12 +143,12 @@ input, button, textarea, select { font: inherit; }
     color: var(--text-secondary);
     font-size: 0.8125rem;
     font-weight: 500;
-    transition: all var(--transition);
+    transition: color var(--transition), background-color var(--transition);
 }
 
 .nav-link:hover {
     color: var(--text);
-    background: var(--gray-100);
+    background-color: var(--gray-100);
 }
 
 .nav-link.active {
@@ -223,16 +223,16 @@ input, button, textarea, select { font: inherit; }
     padding: 0.5rem 1rem;
     border: 1px solid var(--border);
     border-radius: 0.5rem;
-    background: var(--card);
+    background-color: var(--card);
     color: var(--text);
     font-size: 0.8125rem;
     font-weight: 500;
     cursor: pointer;
-    transition: all var(--transition);
+    transition: color var(--transition), background-color var(--transition), border-color var(--transition), transform var(--transition);
     user-select: none;
 }
 
-.btn:hover { background: var(--gray-50); border-color: var(--gray-300); }
+.btn:hover { background-color: var(--gray-50); border-color: var(--gray-300); }
 .btn:active { transform: scale(0.98); }
 
 .btn-primary {
@@ -294,10 +294,10 @@ input, button, textarea, select { font: inherit; }
     padding: 0.5rem 0.75rem;
     border: 1px solid var(--border);
     border-radius: 0.5rem;
-    background: var(--card);
+    background-color: var(--card);
     color: var(--text);
     font-size: 0.875rem;
-    transition: all var(--transition);
+    transition: border-color var(--transition), box-shadow var(--transition);
 }
 
 .input::placeholder { color: var(--text-muted); }
@@ -340,7 +340,7 @@ input, button, textarea, select { font: inherit; }
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all var(--transition);
+    transition: background-color var(--transition), border-color var(--transition);
     flex-shrink: 0;
 }
 
@@ -381,7 +381,7 @@ input, button, textarea, select { font: inherit; }
     cursor: pointer;
     border-radius: 0.25rem;
     font-size: 0.75rem;
-    transition: all var(--transition);
+    transition: opacity var(--transition), color var(--transition), background-color var(--transition);
 }
 
 .todo-item:hover .todo-delete { opacity: 1; }
@@ -411,11 +411,11 @@ input, button, textarea, select { font: inherit; }
 }
 
 .feature-card {
-    background: var(--card);
+    background-color: var(--card);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 1.25rem;
-    transition: all var(--transition);
+    transition: border-color var(--transition), box-shadow var(--transition);
 }
 
 .feature-card:hover {
