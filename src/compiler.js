@@ -745,6 +745,13 @@ export class CodeGenerator {
       return `(${op}${this.generate(rest[0], 'value')})`;
     }
     let [left, right] = rest;
+    // String repeat: "str" * n → "str".repeat(n)
+    if (op === '*') {
+      let leftStr = left?.valueOf?.() ?? left;
+      if (typeof leftStr === 'string' && /^["']/.test(leftStr)) {
+        return `${this.generate(left, 'value')}.repeat(${this.generate(right, 'value')})`;
+      }
+    }
     if (op === '!?') {
       let l = this.generate(left, 'value'), r = this.generate(right, 'value');
       return `(${l} !== undefined ? ${l} : ${r})`;

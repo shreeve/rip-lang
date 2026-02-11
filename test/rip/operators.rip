@@ -244,3 +244,14 @@ code "ternary with expression", "a ? b + 1 : c", "(a ? (b + 1) : c)"
 # The workaround is simple and explicit
 test "ternary subscript with parens", "arr = [1, 2, 3]\ntrue ? (arr[0]) : 0", 1
 code "ternary subscript with parens", "a ? (b[0]) : c", "(a ? b[0] : c)"
+
+# ============================================================================
+# String Repeat — "str" * n
+# ============================================================================
+
+test "string repeat", '"-" * 3', "---"
+test "string repeat longer", '"ha" * 4', "hahahaha"
+test "string repeat single char", '"=" * 5', "====="
+test "string repeat zero", '"x" * 0', ""
+test "string repeat one", '"abc" * 1', "abc"
+code "string repeat compiles to repeat", '"-" * 40', '"-".repeat(40)'
