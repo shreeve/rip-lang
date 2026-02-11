@@ -472,17 +472,30 @@ export createRenderer = (opts = {}) ->
     document.body.appendChild container
 
   currentComponent = null
+  currentRoute = null
   currentLayouts = []
   layoutInstances = []
   mountPoint = container
   generation = 0
   disposeEffect = null
+  componentCache = new Map()
+  maxCacheSize = opts.cacheSize or 10
+
+  cacheComponent = ->
+    if currentComponent and currentRoute
+      currentComponent._root?.remove()
+      componentCache.set currentRoute, currentComponent
+      # Evict oldest if over limit
+      if componentCache.size > maxCacheSize
+        oldest = componentCache.keys().next().value
+        evicted = componentCache.get(oldest)
+        evicted.unmounted() if evicted.unmounted
+        componentCache.delete oldest
+      currentComponent = null
+      currentRoute = null
 
   unmount = ->
-    if currentComponent
-      currentComponent.unmounted() if currentComponent.unmounted
-      currentComponent._root?.remove()
-      currentComponent = null
+    cacheComponent()
     for inst in layoutInstances by -1
       inst.unmounted() if inst.unmounted
       inst._root?.remove()
@@ -516,10 +529,8 @@ export createRenderer = (opts = {}) ->
 
       if layoutsChanged
         unmount()
-      else if currentComponent
-        currentComponent.unmounted() if currentComponent.unmounted
-        currentComponent._root?.remove()
-        currentComponent = null
+      else
+        cacheComponent()
 
       mp = if layoutsChanged then container else mountPoint
 
@@ -553,15 +564,24 @@ export createRenderer = (opts = {}) ->
         currentLayouts = []
         mountPoint = container
 
-      pageWrapper = document.createElement('div')
-      pageWrapper.setAttribute 'data-part', route.file
-      mp.appendChild pageWrapper
+      # Check component cache for a preserved instance
+      cached = componentCache.get(route.file)
+      if cached
+        componentCache.delete route.file
+        mp.appendChild cached._root
+        currentComponent = cached
+        currentRoute = route.file
+      else
+        pageWrapper = document.createElement('div')
+        pageWrapper.setAttribute 'data-part', route.file
+        mp.appendChild pageWrapper
 
-      instance = new Component { app: appStash, params, query, router }
-      instance.mount pageWrapper
-      currentComponent = instance
+        instance = new Component { app: appStash, params, query, router }
+        instance.mount pageWrapper
+        currentComponent = instance
+        currentRoute = route.file
 
-      instance.load!(params, query) if instance.load
+        instance.load!(params, query) if instance.load
       _navigating.value = false
 
     catch err
