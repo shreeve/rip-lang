@@ -47,15 +47,6 @@ async function processRipScripts() {
   }
 }
 
-// Auto-process scripts when this module loads
-if (typeof document !== 'undefined') {
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', processRipScripts);
-  } else {
-    processRipScripts();
-  }
-}
-
 export { processRipScripts };
 
 /**
@@ -111,9 +102,18 @@ export function rip(code) {
   }
 }
 
-// Make key functions available globally for console and <script type="text/rip"> use
+// Register globals BEFORE auto-processing scripts (order matters in bundled output)
 if (typeof globalThis !== 'undefined') {
   globalThis.rip = rip;
   globalThis.importRip = importRip;
   globalThis.compileToJS = compileToJS;
+}
+
+// Auto-process scripts when this module loads
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', processRipScripts);
+  } else {
+    processRipScripts();
+  }
 }

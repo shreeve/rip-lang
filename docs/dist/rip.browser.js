@@ -2366,7 +2366,7 @@ class Lexer {
         let prevToken = i > 0 ? tokens[i - 1] : null;
         let prevTag = prevToken ? prevToken[0] : null;
         let atLineStart = prevTag === "INDENT" || prevTag === "TERMINATOR";
-        let cxToken = gen("PROPERTY", "__cx__", token);
+        let cxToken = gen("PROPERTY", "__clsx", token);
         nextToken[0] = "CALL_START";
         let depth = 1;
         for (let j = i + 2;j < tokens.length && depth > 0; j++) {
@@ -2415,6 +2415,10 @@ class Lexer {
           pendingCallEnds.push(currentIndent + 1);
           return 3;
         }
+      }
+      if (tag === "IDENTIFIER" && isComponent(token[1]) && nextToken && (nextToken[0] === "OUTDENT" || nextToken[0] === "TERMINATOR")) {
+        tokens.splice(i + 1, 0, gen("CALL_START", "(", token), gen("CALL_END", ")", token));
+        return 3;
       }
       return 1;
     });
@@ -3579,6 +3583,9 @@ function installComponentSupport(CodeGenerator) {
       if (typeof sexpr === "string" && this.reactiveMembers && this.reactiveMembers.has(sexpr)) {
         return [".", [".", "this", sexpr], "value"];
       }
+      if (typeof sexpr === "string" && this.componentMembers && this.componentMembers.has(sexpr)) {
+        return [".", "this", sexpr];
+      }
       return sexpr;
     }
     if (sexpr[0] === "." && sexpr[1] === "this" && typeof sexpr[2] === "string") {
@@ -3673,17 +3680,15 @@ function installComponentSupport(CodeGenerator) {
     this.reactiveMembers = reactiveMembers;
     const lines = [];
     let blockFactoriesCode = "";
-    lines.push("class {");
-    lines.push("  constructor(props = {}) {");
-    lines.push("    const __prevComponent = __pushComponent(this);");
-    lines.push("");
+    lines.push("class extends __Component {");
+    lines.push("  _init(props) {");
     for (const { name, value } of readonlyVars) {
       const val = this.generateInComponent(value, "value");
       lines.push(`    this.${name} = props.${name} ?? ${val};`);
     }
     for (const { name, value } of stateVars) {
       const val = this.generateInComponent(value, "value");
-      lines.push(`    this.${name} = isSignal(props.${name}) ? props.${name} : __state(props.${name} ?? ${val});`);
+      lines.push(`    this.${name} = __state(props.${name} ?? ${val});`);
     }
     for (const { name, expr } of derivedVars) {
       const val = this.generateInComponent(expr, "value");
@@ -3694,8 +3699,6 @@ function installComponentSupport(CodeGenerator) {
       const effectCode = this.generateInComponent(effectBody, "value");
       lines.push(`    __effect(${effectCode});`);
     }
-    lines.push("");
-    lines.push("    __popComponent(__prevComponent);");
     lines.push("  }");
     for (const { name, func } of methods) {
       if (Array.isArray(func) && (func[0] === "->" || func[0] === "=>")) {
@@ -3736,21 +3739,6 @@ function installComponentSupport(CodeGenerator) {
         lines.push("  }");
       }
     }
-    lines.push("  mount(target) {");
-    lines.push('    if (typeof target === "string") target = document.querySelector(target);');
-    lines.push("    this._target = target;");
-    lines.push("    this._root = this._create();");
-    lines.push("    target.appendChild(this._root);");
-    lines.push("    if (this._setup) this._setup();");
-    lines.push("    if (this.mounted) this.mounted();");
-    lines.push("    return this;");
-    lines.push("  }");
-    lines.push("  unmount() {");
-    lines.push("    if (this.unmounted) this.unmounted();");
-    lines.push("    if (this._root && this._root.parentNode) {");
-    lines.push("      this._root.parentNode.removeChild(this._root);");
-    lines.push("    }");
-    lines.push("  }");
     lines.push("}");
     this.componentMembers = prevComponentMembers;
     this.reactiveMembers = prevReactiveMembers;
@@ -3766,6 +3754,9 @@ ${blockFactoriesCode}return ${lines.join(`
   proto.generateInComponent = function(sexpr, context) {
     if (typeof sexpr === "string" && this.reactiveMembers && this.reactiveMembers.has(sexpr)) {
       return `this.${sexpr}.value`;
+    }
+    if (typeof sexpr === "string" && this.componentMembers && this.componentMembers.has(sexpr)) {
+      return `this.${sexpr}`;
     }
     if (Array.isArray(sexpr) && this.reactiveMembers) {
       const transformed = this.transformComponentMembers(sexpr);
@@ -3853,11 +3844,9 @@ ${blockFactoriesCode}return ${lines.join(`
           this._setupLines.push(`__effect(() => { ${textVar3}.data = this.${prop}.value; });`);
           return textVar3;
         }
-        if (this.componentMembers && this.componentMembers.has(prop)) {
-          const slotVar = this.newElementVar("slot");
-          this._createLines.push(`${slotVar} = this.${prop} instanceof Node ? this.${prop} : (this.${prop} != null ? document.createTextNode(String(this.${prop})) : document.createComment(''));`);
-          return slotVar;
-        }
+        const slotVar = this.newElementVar("slot");
+        this._createLines.push(`${slotVar} = this.${prop} instanceof Node ? this.${prop} : (this.${prop} != null ? document.createTextNode(String(this.${prop})) : document.createComment(''));`);
+        return slotVar;
       }
       const { tag, classes } = this.collectTemplateClasses(sexpr);
       if (tag && this.isHtmlTag(tag)) {
@@ -3869,14 +3858,14 @@ ${blockFactoriesCode}return ${lines.join(`
       return textVar2;
     }
     if (Array.isArray(head)) {
-      if (Array.isArray(head[0]) && head[0][0] === "." && (head[0][2] === "__cx__" || head[0][2] instanceof String && head[0][2].valueOf() === "__cx__")) {
+      if (Array.isArray(head[0]) && head[0][0] === "." && (head[0][2] === "__clsx" || head[0][2] instanceof String && head[0][2].valueOf() === "__clsx")) {
         const tag2 = typeof head[0][1] === "string" ? head[0][1] : head[0][1].valueOf();
         const classExprs = head.slice(1);
         return this.generateDynamicTag(tag2, classExprs, rest);
       }
       const { tag, classes } = this.collectTemplateClasses(head);
       if (tag && this.isHtmlTag(tag)) {
-        if (classes.length === 1 && classes[0] === "__cx__") {
+        if (classes.length === 1 && classes[0] === "__clsx") {
           return this.generateDynamicTag(tag, rest, []);
         }
         return this.generateTag(tag, classes, rest);
@@ -3960,9 +3949,9 @@ ${blockFactoriesCode}return ${lines.join(`
       const classArgs = classExprs.map((e) => this.generateInComponent(e, "value")).join(", ");
       const hasReactive = classExprs.some((e) => this.hasReactiveDeps(e));
       if (hasReactive) {
-        this._setupLines.push(`__effect(() => { ${elVar}.className = __cx__(${classArgs}); });`);
+        this._setupLines.push(`__effect(() => { ${elVar}.className = __clsx(${classArgs}); });`);
       } else {
-        this._createLines.push(`${elVar}.className = __cx__(${classArgs});`);
+        this._createLines.push(`${elVar}.className = __clsx(${classArgs});`);
       }
     }
     for (const arg of children) {
@@ -4006,8 +3995,12 @@ ${blockFactoriesCode}return ${lines.join(`
       let [key, value] = objExpr[i];
       if (this.is(key, ".") && key[1] === "this") {
         const eventName = key[2];
-        const handlerCode = this.generateInComponent(value, "value");
-        this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => (${handlerCode})(e));`);
+        if (typeof value === "string" && this.componentMembers?.has(value)) {
+          this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => this.${value}(e));`);
+        } else {
+          const handlerCode = this.generateInComponent(value, "value");
+          this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => (${handlerCode})(e));`);
+        }
         continue;
       }
       if (typeof key === "string") {
@@ -4363,10 +4356,6 @@ ${blockFactoriesCode}return ${lines.join(`
 // Rip Component Runtime
 // ============================================================================
 
-function isSignal(v) {
-  return v != null && typeof v === 'object' && typeof v.read === 'function';
-}
-
 let __currentComponent = null;
 
 function __pushComponent(component) {
@@ -4404,13 +4393,37 @@ function hasContext(key) {
   return false;
 }
 
-function __cx__(...args) {
+function __clsx(...args) {
   return args.filter(Boolean).join(' ');
+}
+
+class __Component {
+  constructor(props = {}) {
+    const prev = __pushComponent(this);
+    this._init(props);
+    __popComponent(prev);
+  }
+  _init() {}
+  mount(target) {
+    if (typeof target === "string") target = document.querySelector(target);
+    this._target = target;
+    this._root = this._create();
+    target.appendChild(this._root);
+    if (this._setup) this._setup();
+    if (this.mounted) this.mounted();
+    return this;
+  }
+  unmount() {
+    if (this.unmounted) this.unmounted();
+    if (this._root && this._root.parentNode) {
+      this._root.parentNode.removeChild(this._root);
+    }
+  }
 }
 
 // Register on globalThis for runtime deduplication
 if (typeof globalThis !== 'undefined') {
-  globalThis.__ripComponent = { isSignal, __pushComponent, __popComponent, setContext, getContext, hasContext, __cx__ };
+  globalThis.__ripComponent = { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __Component };
 }
 
 `;
@@ -5226,7 +5239,7 @@ class CodeGenerator {
     }
     if (this.usesTemplates && !skip) {
       if (typeof globalThis !== "undefined" && globalThis.__ripComponent) {
-        code += `const { isSignal, __pushComponent, __popComponent, setContext, getContext, hasContext, __cx__ } = globalThis.__ripComponent;
+        code += `const { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __Component } = globalThis.__ripComponent;
 `;
       } else {
         code += this.getComponentRuntime();
@@ -7747,6 +7760,7 @@ const __primitiveCoercion = {
 };
 
 function __state(initialValue) {
+  if (initialValue != null && typeof initialValue === 'object' && typeof initialValue.read === 'function') return initialValue;
   let value = initialValue;
   const subscribers = new Set();
   let notifying = false;
@@ -8042,7 +8056,7 @@ function getComponentRuntime() {
 }
 // src/browser.js
 var VERSION = "3.7.3";
-var BUILD_DATE = "2026-02-11@10:29:15GMT";
+var BUILD_DATE = "2026-02-11@11:45:22GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }
@@ -8067,13 +8081,6 @@ ${jsCode}
       console.error("Error compiling Rip script:", error);
       console.error("Script content:", script.textContent);
     }
-  }
-}
-if (typeof document !== "undefined") {
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", processRipScripts);
-  } else {
-    processRipScripts();
   }
 }
 async function importRip(url) {
@@ -8118,6 +8125,13 @@ if (typeof globalThis !== "undefined") {
   globalThis.rip = rip;
   globalThis.importRip = importRip;
   globalThis.compileToJS = compileToJS;
+}
+if (typeof document !== "undefined") {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", processRipScripts);
+  } else {
+    processRipScripts();
+  }
 }
 export {
   rip,
