@@ -1072,15 +1072,21 @@ export class Lexer {
     if (CODE_RE.test(val)) this.tagParameters();
 
     // Method assignment: x .= trim() → x = x.trim()
+    // Also: obj.name .= toUpperCase() → obj.name = obj.name.toUpperCase()
     if (val === '=' && prev && prev[1] === '.' && !prev.spaced) {
-      let target = this.tokens[this.tokens.length - 2];
-      if (target && (target[0] === 'IDENTIFIER' || target[0] === 'PROPERTY' || target[0] === ')' || target[0] === ']')) {
+      // Walk back to collect the full dot chain
+      let tokens = this.tokens;
+      let j = tokens.length - 2; // skip the '.' (prev)
+      while (j >= 1 && tokens[j][0] === 'PROPERTY' && tokens[j - 1]?.[1] === '.') j -= 2;
+      if (j >= 0 && (tokens[j][0] === 'IDENTIFIER' || tokens[j][0] === ')' || tokens[j][0] === ']')) {
+        let chainTokens = tokens.slice(j, tokens.length - 1); // everything before the '.'
         prev[0] = '=';
         prev[1] = '=';
-        // Insert target clone + '.' after the '='
-        let targetClone = tok(target[0], target[1], { pre: 0, row: target[2], col: target[3], len: target[4] });
-        let dot = tok('.', '.', { pre: 0, row: this.row, col: this.col, len: 1 });
-        this.tokens.push(targetClone, dot);
+        // Clone chain + append '.'
+        for (let t of chainTokens) {
+          this.tokens.push(tok(t[0], t[1], { pre: 0, row: t[2], col: t[3], len: t[4] }));
+        }
+        this.tokens.push(tok('.', '.', { pre: 0, row: this.row, col: this.col, len: 1 }));
         return val.length;
       }
     }

@@ -376,7 +376,14 @@ test "method assign map", '''
   items
   ''', [10, 20, 30]
 
+test "method assign on property chain", '''
+  obj = {name: "  hello  "}
+  obj.name .= trim()
+  obj.name
+  ''', "hello"
+
 code "method assign compiles", "x .= trim()", "let x;\n\nx = x.trim();"
+code "method assign chain compiles", "a.b .= trim()", "a.b = a.b.trim();"
 
 # ============================================================================
 # Merge Assignment — *obj = { ... }
