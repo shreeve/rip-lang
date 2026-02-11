@@ -19,7 +19,7 @@ echo 'your code' | ./bin/rip -s  # S-expressions (parser)
 echo 'your code' | ./bin/rip -c  # JavaScript (codegen)
 
 # Run tests
-bun run test                              # All tests (1140)
+bun run test                              # All tests (1219)
 bun test/runner.js test/rip/FILE.rip     # Specific file
 
 # Rebuild parser (after grammar changes)
@@ -33,7 +33,7 @@ bun run browser
 
 | Metric | Value |
 |--------|-------|
-| Version | 3.6.0 |
+| Version | 3.7.0 |
 | Tests | 1,140/1,140 (100%) |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
@@ -45,17 +45,17 @@ bun run browser
 ```
 rip-lang/
 ├── src/
-│   ├── lexer.js         # Lexer + Rewriter (1,867 LOC)
-│   ├── compiler.js      # Compiler + Code Generator (3,292 LOC)
-│   ├── types.js         # Type System — sidecar for lexer (719 LOC)
+│   ├── lexer.js         # Lexer + Rewriter (1,958 LOC)
+│   ├── compiler.js      # Compiler + Code Generator (3,378 LOC)
+│   ├── types.js         # Type System — sidecar for lexer (1,099 LOC)
 │   ├── components.js    # Component System — sidecar for compiler (1,240 LOC)
 │   ├── sourcemaps.js    # Source Map V3 generator (122 LOC)
 │   ├── tags.js          # HTML tag classification (63 LOC)
 │   ├── parser.js        # Generated parser (357 LOC) — Don't edit!
-│   ├── repl.js          # Terminal REPL (707 LOC)
+│   ├── repl.js          # Terminal REPL (582 LOC)
 │   ├── browser.js       # Browser integration (119 LOC)
 │   └── grammar/
-│       ├── grammar.rip  # Grammar specification (935 LOC)
+│       ├── grammar.rip  # Grammar specification (945 LOC)
 │       └── solar.rip    # Parser generator (916 LOC) — Don't edit!
 ├── packages/            # Optional packages (see Packages section below)
 │   ├── api/             # @rip-lang/api — Web framework
@@ -71,7 +71,7 @@ rip-lang/
 │   ├── RIP-TYPES.md     # Type system specification
 │   ├── RIP-REACTIVITY.md # Reactivity deep dive
 │   └── RIP-INTERNALS.md # Compiler architecture & design decisions
-├── test/rip/            # 25 test files (1,140 tests)
+├── test/rip/            # 25 test files (1,219 tests)
 └── scripts/             # Build utilities
 ```
 
@@ -96,7 +96,7 @@ rip-lang/
 
 ```
 Rip Source  ->  Lexer  ->  emitTypes  ->  Parser  ->  S-Expressions  ->  Codegen  ->  JavaScript
-               (1,867)     (types.js)     (357)       (arrays + .loc)     (3,292)      + source map
+               (1,958)     (types.js)     (359)       (arrays + .loc)     (3,378)      + source map
                               ↓
                            file.d.ts (when types: "emit")
 ```
@@ -353,7 +353,7 @@ code "name", "x + y", "(x + y)"
 fail "name", "invalid syntax"
 ```
 
-### Test Files (25 files, 1,140 tests)
+### Test Files (25 files, 1,219 tests)
 
 ```
 test/rip/

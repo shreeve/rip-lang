@@ -2,7 +2,7 @@
 
 # Rip Language Reference
 
-Rip is a modern reactive language that compiles to ES2022 JavaScript. It combines CoffeeScript's elegant syntax with built-in reactivity primitives. Zero dependencies, self-hosting, ~10,300 LOC.
+Rip is a modern reactive language that compiles to ES2022 JavaScript. It combines CoffeeScript's elegant syntax with built-in reactivity primitives. Zero dependencies, self-hosting, ~10,800 LOC.
 
 ---
 
@@ -1376,4 +1376,4 @@ count = 10  # Logs: "Count: 10, Doubled: 20"
 
 ---
 
-*Rip 3.4 — 1,140 tests passing — Zero dependencies — Self-hosting — ~10,300 LOC*
+*Rip 3.7 — 1,219 tests passing — Zero dependencies — Self-hosting — ~10,800 LOC*

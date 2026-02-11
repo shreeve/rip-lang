@@ -9,15 +9,15 @@
 </p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.6.0-blue.svg" alt="Version"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.7.0-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
-  <a href="#"><img src="https://img.shields.io/badge/tests-1193%2F1193-brightgreen.svg" alt="Tests"></a>
+  <a href="#"><img src="https://img.shields.io/badge/tests-1219%2F1219-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
 </p>
 
 ---
 
-Rip is a modern language inspired by CoffeeScript. It compiles to **ES2022** (classes, `?.`, `??`, modules), adds about a **dozen new operators**, includes **built-in reactivity**, and sports a self-hosting compiler with **zero dependencies** — all in about 10,300 lines of code.
+Rip is a modern language inspired by CoffeeScript. It compiles to **ES2022** (classes, `?.`, `??`, modules), adds about a **dozen new operators**, includes **built-in reactivity**, and sports a self-hosting compiler with **zero dependencies** — all in about 10,800 lines of code.
 
 > **No imports. No hooks. No dependency arrays. Just write code.**
 
@@ -279,9 +279,9 @@ See [@rip-lang/ui](packages/ui/) for the full framework: file-based router, reac
 | **Reactivity** | None | Built-in |
 | **Dependencies** | Multiple | Zero |
 | **Self-hosting** | No | Yes |
-| **Lexer** | 3,558 LOC | 1,867 LOC |
-| **Compiler** | 10,346 LOC | 3,292 LOC |
-| **Total** | 17,760 LOC | ~10,300 LOC |
+| **Lexer** | 3,558 LOC | 1,958 LOC |
+| **Compiler** | 10,346 LOC | 3,378 LOC |
+| **Total** | 17,760 LOC | ~10,800 LOC |
 
 Smaller codebase, modern output, built-in reactivity.
 
@@ -316,25 +316,25 @@ await rip("res = fetch! 'https://api.example.com/todos/1'; res.json!")  // → {
 
 ```
 Source  ->  Lexer  ->  emitTypes  ->  Parser  ->  S-Expressions  ->  Codegen  ->  JavaScript
-           (1,867)    (types.js)     (357)       ["=", "x", 42]     (3,292)      + source map
+           (1,958)    (types.js)     (359)       ["=", "x", 42]     (3,378)      + source map
 ```
 
 Simple arrays (with `.loc`) instead of AST node classes. The compiler is self-hosting — `bun run parser` rebuilds from source.
 
 | Component | File | Lines |
 |-----------|------|-------|
-| Lexer + Rewriter | `src/lexer.js` | 1,867 |
-| Compiler + Codegen | `src/compiler.js` | 3,292 |
-| Type System | `src/types.js` | 719 |
+| Lexer + Rewriter | `src/lexer.js` | 1,958 |
+| Compiler + Codegen | `src/compiler.js` | 3,378 |
+| Type System | `src/types.js` | 1,099 |
 | Component System | `src/components.js` | 1,240 |
 | Source Maps | `src/sourcemaps.js` | 122 |
-| Parser (generated) | `src/parser.js` | 357 |
-| Grammar | `src/grammar/grammar.rip` | 944 |
+| Parser (generated) | `src/parser.js` | 359 |
+| Grammar | `src/grammar/grammar.rip` | 945 |
 | Parser Generator | `src/grammar/solar.rip` | 916 |
-| REPL | `src/repl.js` | 707 |
+| REPL | `src/repl.js` | 582 |
 | Browser Entry | `src/browser.js` | 119 |
 | Tags | `src/tags.js` | 63 |
-| **Total** | | **~10,325** |
+| **Total** | | **~10,774** |
 
 ---
 
@@ -344,7 +344,7 @@ Rip includes optional packages for full-stack development:
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| [rip-lang](https://www.npmjs.com/package/rip-lang) | 3.6.0 | Core language compiler |
+| [rip-lang](https://www.npmjs.com/package/rip-lang) | 3.7.0 | Core language compiler |
 | [@rip-lang/api](packages/api/) | 1.1.4 | HTTP framework (Sinatra-style routing, 37 validators) |
 | [@rip-lang/server](packages/server/) | 1.1.3 | Multi-worker app server (hot reload, HTTPS, mDNS) |
 | [@rip-lang/db](packages/db/) | 1.1.2 | DuckDB server with official UI (pure Bun FFI) |
@@ -390,7 +390,7 @@ rip file.rip           # Run
 rip -c file.rip        # Compile
 rip -t file.rip        # Tokens
 rip -s file.rip        # S-expressions
-bun run test           # 1193 tests
+bun run test           # 1219 tests
 bun run parser         # Rebuild parser
 bun run browser        # Build browser bundle
 ```
