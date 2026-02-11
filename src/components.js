@@ -118,6 +118,9 @@ export function installComponentSupport(CodeGenerator) {
       if (typeof sexpr === 'string' && this.reactiveMembers && this.reactiveMembers.has(sexpr)) {
         return ['.', ['.', 'this', sexpr], 'value'];
       }
+      if (typeof sexpr === 'string' && this.componentMembers && this.componentMembers.has(sexpr)) {
+        return ['.', 'this', sexpr];
+      }
       return sexpr;
     }
 
@@ -332,6 +335,9 @@ export function installComponentSupport(CodeGenerator) {
   proto.generateInComponent = function(sexpr, context) {
     if (typeof sexpr === 'string' && this.reactiveMembers && this.reactiveMembers.has(sexpr)) {
       return `this.${sexpr}.value`;
+    }
+    if (typeof sexpr === 'string' && this.componentMembers && this.componentMembers.has(sexpr)) {
+      return `this.${sexpr}`;
     }
     if (Array.isArray(sexpr) && this.reactiveMembers) {
       const transformed = this.transformComponentMembers(sexpr);
