@@ -268,3 +268,43 @@ test "chained less equal boundary", "x = 1; 1 <= x <= 10", true
 test "chained greater than", "x = 5; 10 > x > 1", true
 test "chained mixed", "x = 5; 0 <= x < 10", true
 code "chained compiles to conjunction", "1 < x < 10", "((1 < x) && (x < 10))"
+
+# ============================================================================
+# Pipe Operator — |>
+# ============================================================================
+
+test "pipe single arg", '''
+  double = (x) -> x * 2
+  5 |> double
+  ''', 10
+
+test "pipe chain", '''
+  double = (x) -> x * 2
+  add1 = (x) -> x + 1
+  5 |> double |> add1
+  ''', 11
+
+test "pipe with multi-arg function", '''
+  add = (a, b) -> a + b
+  5 |> add(3)
+  ''', 8
+
+test "pipe chain multi-arg", '''
+  mul = (a, b) -> a * b
+  add = (a, b) -> a + b
+  5 |> mul(2) |> add(1)
+  ''', 11
+
+test "pipe with method-style", '''
+  10 |> Math.sqrt
+  ''', Math.sqrt(10)
+
+test "pipe with dotted method and arg", '''
+  obj = { greet: (name, punct) -> "Hello #{name}#{punct}" }
+  "World" |> obj.greet("!")
+  ''', "Hello World!"
+
+code "pipe compiles to function call", "x |> fn", "fn(x)"
+code "pipe multi-arg compiles correctly", "x |> fn(y)", "fn(x, y)"
+code "pipe dotted reference compiles", "x |> console.log", "console.log(x)"
+code "pipe dotted call compiles", "x |> obj.method(y)", "obj.method(x, y)"

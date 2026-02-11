@@ -217,6 +217,19 @@ if text =~ /Hello, (\w+)/
 domain = "user@example.com"[/@(.+)$/, 1]  # "example.com"
 ```
 
+### Pipe Operator (`|>`)
+
+Pipes a value into a function as the first argument. Chains left-to-right:
+
+```coffee
+5 |> double                      # → double(5)
+5 |> add(3)                      # → add(5, 3)
+5 |> double |> add(1)            # → add(double(5), 1)
+data |> JSON.stringify(null, 2)  # → JSON.stringify(data, null, 2)
+```
+
+If the right side is a bare reference, it's called with the piped value. If the right side is already a call, the piped value is inserted as the first argument. This is the Elixir-style pipe — cleaner than F# (multi-arg works) and simpler than Hack (no placeholder needed).
+
 ### Guard Clauses
 
 ```coffee

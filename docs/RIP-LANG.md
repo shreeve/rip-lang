@@ -300,6 +300,7 @@ Multiple lines
 | `=~` | Match | `str =~ /pat/` | Ruby-style regex match, captures in `_` |
 | `*` | String repeat | `"-" * 40` | `"-".repeat(40)` |
 | `<` `<=` | Chained comparison | `1 < x < 10` | `(1 < x) && (x < 10)` |
+| `\|>` | Pipe | `x \|> fn` or `x \|> fn(y)` | `fn(x)` or `fn(x, y)` |
 | `not in` | Not in | `x not in arr` | Negated membership test |
 | `not of` | Not of | `k not of obj` | Negated key existence |
 
@@ -361,6 +362,32 @@ Handles both null/undefined AND thrown errors:
 result = riskyOperation() !? "default"
 # If riskyOperation() throws or returns null/undefined, result = "default"
 ```
+
+## Pipe Operator (`|>`)
+
+Pipes a value into a function as its first argument. Chains left-to-right:
+
+```coffee
+# Simple reference — value becomes the sole argument
+5 |> double                      # → double(5)
+10 |> Math.sqrt                  # → Math.sqrt(10)
+"hello" |> console.log           # → console.log("hello")
+
+# Multi-arg — value is inserted as the FIRST argument
+5 |> add(3)                      # → add(5, 3)
+data |> filter(isActive)         # → filter(data, isActive)
+"World" |> greet("!")            # → greet("World", "!")
+
+# Chaining — reads left-to-right like a pipeline
+5 |> double |> add(1) |> console.log
+# → console.log(add(double(5), 1))
+
+# Works with dotted methods
+users |> Array.from              # → Array.from(users)
+data |> JSON.stringify(null, 2)  # → JSON.stringify(data, null, 2)
+```
+
+This is the **Elixir-style** pipe — strictly better than F#'s (which only supports bare function references) and cleaner than Hack's (which requires a `%` placeholder). No special syntax to learn; if the right side is a call, the left value goes first.
 
 ---
 

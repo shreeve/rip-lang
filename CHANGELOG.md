@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.6.0] - 2026-02-10
 
+### Pipe Operator (`|>`)
+
+- **First-arg insertion pipe** — `x |> fn` compiles to `fn(x)`, and `x |> fn(y)` compiles to `fn(x, y)`. Combines the simplicity of F#-style pipes with multi-arg support like Elixir — no placeholder syntax needed. Left-associative, chains naturally: `5 |> double |> add(1)`.
+- Works with dotted references (`x |> Math.sqrt`, `x |> console.log`) and dotted calls (`x |> obj.method(y)` → `obj.method(x, y)`).
+
 ### Browser Runtime — Full Async/Await Support
 
 - **`rip()` console REPL** — Wraps user code in a Rip `do ->` block, so the compiler handles implicit return and auto-async natively. Sync code returns values directly; async code returns a Promise (use `await rip("...")` in the console). Variables persist on `globalThis` across calls.

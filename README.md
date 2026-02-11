@@ -11,7 +11,7 @@
 <p align="center">
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.6.0-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
-  <a href="#"><img src="https://img.shields.io/badge/tests-1140%2F1140-brightgreen.svg" alt="Tests"></a>
+  <a href="#"><img src="https://img.shields.io/badge/tests-1193%2F1193-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
 </p>
 
@@ -38,7 +38,7 @@ get '/users/:id' ->                 # RESTful API endpoint, comma-less
 
 **What makes Rip different:**
 - **Modern output** — ES2022 with native classes, `?.`, `??`, modules
-- **New operators** — `!`, `!?`, `//`, `%%`, `=~`, `.new()`, and more
+- **New operators** — `!`, `!?`, `//`, `%%`, `=~`, `|>`, `.new()`, and more
 - **Reactive operators** — `:=`, `~=`, `~>` as language syntax
 - **Optional types** — `::` annotations, `::=` aliases, `.d.ts` emission
 - **Zero dependencies** — everything included, even the parser generator
@@ -180,6 +180,7 @@ Compiles to `.js` (types erased) + `.d.ts` (types preserved) — full IDE suppor
 | `.new()` | `Dog.new()` | Ruby-style constructor |
 | `*` (string repeat) | `"-" * 40` | String repeat via `.repeat()` |
 | `<` `<=` (chained) | `1 < x < 10` | Chained comparisons |
+| `\|>` (pipe) | `x \|> fn` or `x \|> fn(y)` | Pipe operator (first-arg insertion) |
 | `not in` | `x not in arr` | Negated membership test |
 | `not of` | `k not of obj` | Negated key existence |
 | `or return` | `x = get() or return err` | Guard clause (Ruby-style) |
@@ -309,7 +310,7 @@ Simple arrays (with `.loc`) instead of AST node classes. The compiler is self-ho
 | Component System | `src/components.js` | 1,240 |
 | Source Maps | `src/sourcemaps.js` | 122 |
 | Parser (generated) | `src/parser.js` | 357 |
-| Grammar | `src/grammar/grammar.rip` | 935 |
+| Grammar | `src/grammar/grammar.rip` | 944 |
 | Parser Generator | `src/grammar/solar.rip` | 916 |
 | REPL | `src/repl.js` | 707 |
 | Browser Entry | `src/browser.js` | 119 |
@@ -370,7 +371,7 @@ rip file.rip           # Run
 rip -c file.rip        # Compile
 rip -t file.rip        # Tokens
 rip -s file.rip        # S-expressions
-bun run test           # 1140 tests
+bun run test           # 1193 tests
 bun run parser         # Rebuild parser
 bun run browser        # Build browser bundle
 ```

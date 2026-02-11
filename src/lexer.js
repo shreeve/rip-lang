@@ -214,7 +214,7 @@ let UNARY_MATH = new Set(['!', '~']);
 // conflict with ?. (optional chaining), ?? (nullish), ?.( and ?.[
 let IDENTIFIER_RE = /^(?!\d)((?:(?!\s)[$\w\x7f-\uffff])+(?:!|[?](?![.?[(]))?)([^\n\S]*:(?![=:]))?/;
 let NUMBER_RE     = /^0b[01](?:_?[01])*n?|^0o[0-7](?:_?[0-7])*n?|^0x[\da-f](?:_?[\da-f])*n?|^\d+(?:_\d+)*n|^(?:\d+(?:_\d+)*)?\.?\d+(?:_\d+)*(?:e[+-]?\d+(?:_\d+)*)?/i;
-let OPERATOR_RE   = /^(?:<=>|::=|::|[-=]>|~>|~=|:=|=!|===|!==|!\?|\?\?|=~|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?\.?|\.{2,3})/;
+let OPERATOR_RE   = /^(?:<=>|::=|::|[-=]>|~>|~=|:=|=!|===|!==|!\?|\?\?|=~|\|>|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?\.?|\.{2,3})/;
 let WHITESPACE_RE = /^[^\n\S]+/;
 let NEWLINE_RE    = /^(?:\n[^\n\S]*)+/;
 let COMMENT_RE    = /^(\s*)###([^#][\s\S]*?)(?:###([^\n\S]*)|###$)|^((?:\s*#(?!##[^#]).*)+)/;
@@ -1094,6 +1094,8 @@ export class Lexer {
       this.seenFor = this.seenImport = this.seenExport = false;
       tag = 'TERMINATOR';
     }
+    // Pipe operator
+    else if (val === '|>') tag = 'PIPE';
     // Type operators
     else if (val === '::=') tag = 'TYPE_ALIAS';
     else if (val === '::')  tag = 'TYPE_ANNOTATION';

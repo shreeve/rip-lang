@@ -602,6 +602,7 @@ rip> .js      # Toggle JS display
 | `if...else` | Postfix ternary | `"a" if cond else "b"` — Python-style |
 | `*` | String repeat | `"-" * 40` — string repetition |
 | `<` `<=` | Chained | `1 < x < 10` — chained comparisons |
+| `\|>` | Pipe | `x \|> fn` or `x \|> fn(y)` — first-arg pipe |
 | `not in` | Not in | `x not in arr` — negated membership |
 | `or return` | Guard | `x = get() or return err` — early return |
 | `?? throw` | Nullish guard | `x = get() ?? throw err` — throw if null |

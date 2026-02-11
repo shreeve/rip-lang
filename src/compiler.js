@@ -206,6 +206,7 @@ export class CodeGenerator {
     'continue-if': 'generateContinueIf',
     '?': 'generateExistential',
     '?:': 'generateTernary',
+    '|>': 'generatePipe',
     'loop': 'generateLoop',
     'await': 'generateAwait',
     'yield': 'generateYield',
@@ -1137,6 +1138,23 @@ export class CodeGenerator {
     }
 
     return `(${this.unwrap(this.generate(cond, 'value'))} ? ${this.generate(then_, 'value')} : ${this.generate(else_, 'value')})`;
+  }
+
+  generatePipe(head, rest) {
+    let [left, right] = rest;
+    let leftCode = this.generate(left, 'value');
+    // Detect function calls: [fn, ...args] where fn is an identifier or accessor
+    if (Array.isArray(right) && right.length > 1) {
+      let fn = right[0];
+      let isCall = Array.isArray(fn) || (typeof fn === 'string' && /^[a-zA-Z_$]/.test(fn));
+      if (isCall) {
+        let fnCode = this.generate(fn, 'value');
+        let args = right.slice(1).map(a => this.generate(a, 'value'));
+        return `${fnCode}(${leftCode}, ${args.join(', ')})`;
+      }
+    }
+    // Simple reference or property access — call with left as sole arg
+    return `${this.generate(right, 'value')}(${leftCode})`;
   }
 
   generateLoop(head, rest) {
