@@ -1,133 +1,105 @@
-# Rip UI — Notes & Known Issues
+# Rip UI — Notes
 
-## Keep in Mind
+## What's There
 
-- **Keep-alive doesn't pause effects.** Cached components continue running
-  reactive effects while off-screen. A counter with `~>` logging will still
-  fire. This is intentional (background data stays current), but differs from
-  Vue's `<KeepAlive>` which deactivates effects. May want an `onDeactivate`/
-  `onActivate` lifecycle pair in the future.
+- **Reactive primitives** — `:=` (state), `~=` (computed), `~>` (effects) as
+  language syntax. Fine-grained dependency tracking, batching, readonly.
+- **`__Component` base class** — mount, unmount, context push/pop, constructor
+  lifecycle all handled in the runtime. Components just override `_init`.
+- **`__state` signal passthrough** — if a value is already a signal, `__state`
+  returns it as-is. No separate `isSignal` check needed.
+- **Fine-grained DOM** — `_create` builds real DOM nodes, `_setup` wires
+  reactive effects that update individual text nodes and attributes.
+- **Event handling** — `@click: method` binds to `this.method` correctly.
+- **CSS classes** — `div.counter.active` compiles to static className.
+  Dynamic classes via `__clsx(...)`.
+- **Context** — `setContext`/`getContext`/`hasContext` for sharing data
+  between ancestor and descendant components without prop drilling.
+- **Lifecycle hooks** — `mounted`, `unmounted` work. `beforeMount`,
+  `beforeUnmount` are recognized.
+- **Reactive stash** — shared reactive store with proxy-based access.
+- **File-based router** — URL-to-component mapping with params, guards,
+  layouts, `_navigating` signal, keep-alive component cache.
+- **Parts system** — in-memory `.rip` file storage with compilation cache
+  and file watchers for hot reload via SSE.
+- **Error boundaries** — catch mount-time errors.
+- **Runtime deduplication** — both runtimes register on `globalThis.__rip`
+  and `globalThis.__ripComponent`. Multiple compilations share one runtime.
 
-- **`getCompiled`/`setCompiled` cache modules, not JS strings.** The compiled
-  module (ES module object) is cached. If the same source is written to two
-  different paths, each gets its own cached module. This is correct but means
-  no deduplication across paths.
+## What's Not There Yet
 
-- **Proxy `getOwnPropertyDescriptor` trap is missing.** The stash proxy has
-  `get`, `set`, `deleteProperty`, and `ownKeys`, but no `getOwnPropertyDescriptor`.
-  Some operations (`Object.keys`, `JSON.stringify`, spread) call both `ownKeys`
-  and `getOwnPropertyDescriptor`. Works in practice but could cause issues in
-  strict environments. Adding `getOwnPropertyDescriptor` that returns
-  `{ configurable: true, enumerable: true, value: ... }` would be more robust.
+### Component Model (highest priority)
+- **Component composition** — can't nest `Counter` inside another component's
+  render block. Components are pages, not reusable building blocks. This is
+  the #1 gap.
+- **Conditional rendering** — `if`/`else` in render blocks to show/hide
+  elements reactively.
+- **List rendering** — `for item in items` in render blocks with keyed
+  reconciliation for efficient updates.
+- **Props flow** — syntax for passing signals between parent and child
+  in render blocks.
+- **Slots / children** — passing content into reusable components. Only
+  `data-slot` exists for layouts.
+- **Props validation** — no mechanism for expected props, defaults, or
+  required props.
+- **Scoped styles** — no CSS scoping per component. Global namespace only.
 
-- **Router regex objects are recreated on every `buildRoutes` call.** Each
-  file-watcher event triggers `buildRoutes`, which recreates `RegExp` objects
-  for all routes even when routes haven't changed. Not a performance problem
-  with small route tables, but could be optimized with a route fingerprint
-  comparison.
-
-- **`router.current` creates a new object on every read.** Each access to
-  `router.current` constructs a fresh `{path, params, route, layouts, query,
-  hash}` object. The renderer's effect reads this on every reactive trigger.
-  A cached current object that updates only inside the batch would reduce
-  garbage.
-
-- **REPL reactive state doesn't persist across calls.** In the browser console,
-  `rip("count := 0")` followed by `rip("count = 5")` doesn't trigger reactivity
-  because each `rip()` call is a separate compilation — the compiler doesn't
-  know `count` was declared as `:=`. All reactive code must be in a single
-  `rip()` call.
-
-- **Bundle caching uses a separate fs.watch.** In `serve.rip`, the bundle
-  cache invalidation watcher is separate from the SSE change watcher. Both
-  watch the same directory. Could be unified into a single watcher.
-
-- **`updated` lifecycle hook is recognized but not triggered.** The compiler
-  accepts `updated` as a lifecycle hook, but the renderer doesn't call it.
-  Triggering it properly requires the compiler to call `this.updated()` after
-  each reactive effect flush — a compiler-level change, not a renderer change.
-
-- **Context functions require `__ripComponent` on globalThis.** The
-  `setContext`/`getContext`/`hasContext` exports from ui.rip depend on the
-  compiler's component runtime being loaded. If ui.rip is loaded without a
-  component being compiled first, these will be undefined. In practice this
-  doesn't happen because launch() compiles components before context is used.
-
-- **Error boundaries only catch mount errors.** If a component throws during
-  a reactive update (e.g., a `~>` effect throws after the component is already
-  mounted), the error boundary doesn't catch it. Comprehensive error handling
-  would require the reactive runtime to route errors through `__handleError`
-  and bubble them to the nearest boundary.
-
-## Roadmap — What's Needed to Compete
-
-These are the gaps between Rip UI and production-grade frameworks. Addressing
-these moves Rip UI from "impressive demo" to "serious contender."
-
-### Component Model
-- **Component composition from Rip source.** Currently components are "pages"
-  — you can't easily use `<Counter>` inside another `.rip` component. Need a
-  way to import and nest components within render blocks.
-- **Props validation.** No mechanism to declare expected props, default values,
-  or required props. Vue has `defineProps`, React has PropTypes/TypeScript.
-- **Scoped styles.** No CSS scoping per component. Vue has `<style scoped>`,
-  Svelte scopes by default. Components share a global CSS namespace.
-- **Slots / named slots.** Only `data-slot` exists for layouts. No general
-  slot mechanism for passing content into reusable components.
+### Lifecycle
+- **`updated` hook** — recognized but not triggered. Needs the compiler to
+  call `this.updated()` after reactive effect flushes.
+- **`onActivate`/`onDeactivate`** — for keep-alive components to know when
+  they're cached or restored.
+- **Keep-alive doesn't pause effects** — cached components continue running
+  effects off-screen. Intentional (data stays current) but differs from Vue.
 
 ### Data & State
-- **createResource caching.** Cache keys, stale-while-revalidate, background
-  refetching, query invalidation. The current createResource is a starting
-  point; TanStack Query is the target.
-- **Form handling.** Validation, form state management, dirty tracking,
-  optimistic updates. A large feature area that deserves dedicated design.
+- **Resource caching** — `createResource` exists but no cache keys,
+  stale-while-revalidate, background refetching, or query invalidation.
+  TanStack Query is the target.
+- **Form handling** — validation, form state, dirty tracking, optimistic
+  updates. Needs dedicated design.
 
 ### Type Safety
-- **TypeScript definitions for framework exports.** The stash, router,
-  createResource, and other exports have no `.d.ts` files. TypeScript users
-  get no autocomplete or type checking when using the framework API.
+- **Framework `.d.ts` files** — stash, router, createResource, and other
+  exports have no TypeScript definitions. No autocomplete for framework API.
 
 ### Developer Experience
-- **State-preserving HMR.** Hot reload currently remounts with fresh state.
-  Preserving reactive state across code changes (at least for template-only
-  changes) would match Vite's developer experience.
-- **Chrome DevTools extension.** A visual panel for inspecting the stash,
-  component tree, route state, and keep-alive cache. `window.__RIP__` is
-  the console-only foundation.
-- **In-browser editor.** Edit `.rip` components directly in the browser with
-  live preview. The compilation infrastructure already exists.
+- **State-preserving HMR** — hot reload remounts with fresh state. Template-
+  only changes should preserve reactive state.
+- **Chrome DevTools extension** — `window.__RIP__` is console-only. A visual
+  panel for component tree, stash, route state would help.
+- **In-browser editor** — edit `.rip` components with live preview. The
+  compilation infrastructure exists.
 
 ### Error Handling
-- **Runtime error boundaries.** Catch errors from reactive effects and async
-  operations, not just mount-time errors. Route them to the nearest ancestor
-  with `onError`.
+- **Runtime error boundaries** — errors from reactive effects and async
+  operations aren't caught. Only mount-time errors are handled.
 
 ### Performance & Scale
-- **Code splitting / lazy route loading.** Bundle all parts upfront vs
-  fetch per route. Low priority for small apps (Rip source compresses well).
-- **Compiled template optimization.** Ahead-of-time DOM operations instead
-  of runtime compilation. Svelte and Solid do this at build time.
+- **Code splitting** — bundle everything upfront vs. fetch per route.
+- **Compiled template optimization** — ahead-of-time DOM operations instead
+  of runtime compilation. Svelte/Solid do this.
 
 ### Polish
-- **Route transition animations.** Enter/exit animations during navigation.
-  Vue's `<Transition>` and Framer Motion are references.
-- **Scroll restoration.** Preserve scroll position on back/forward navigation.
-- **`onActivate`/`onDeactivate` lifecycle hooks.** Let keep-alive components
-  know when they're cached/restored.
-- **`updated` lifecycle hook.** Fire after reactive effects flush (compiler change).
-
-### Language Ideas
-- **Reactive resource operator (`~>?`).** A language-level operator that
-  combines `~>` (auto-tracking effect) with `createResource` (loading/error/data
-  states). `user ~>? fetch!("/api/users/#{userId}").json!` would give you
-  `user.loading`, `user.error`, `user.data` — all reactive. Essentially
-  `createResource` as syntax instead of a function call. Park until real-world
-  usage shows whether `createResource` is used frequently enough to warrant
-  an operator.
+- **Route transition animations** — enter/exit during navigation.
+- **Scroll restoration** — preserve scroll on back/forward.
 
 ### Infrastructure
-- **SSR / streaming.** Server-side rendering for SEO and initial load. The
-  architecture supports two-phase loading (initial route inline, rest on
-  demand). Low priority until SEO is a requirement.
-- **Persistent VFS.** IndexedDB/OPFS for offline support and instant reloads.
-  The current in-memory Map works but doesn't survive page reloads.
+- **SSR / streaming** — server-side rendering for SEO. Low priority until
+  SEO is a requirement.
+- **Persistent VFS** — IndexedDB/OPFS for offline support. Current in-memory
+  Map doesn't survive page reloads.
+
+## Known Caveats
+
+- **`getCompiled`/`setCompiled` cache modules, not JS strings.** Same source
+  at two paths = two cached modules. No deduplication across paths.
+- **Stash proxy missing `getOwnPropertyDescriptor` trap.** Works in practice
+  but could cause issues with `Object.keys`/spread in strict environments.
+- **Router regex recreated on every `buildRoutes` call.** Not a problem with
+  small route tables. Could optimize with fingerprint comparison.
+- **`router.current` creates a new object on every read.** A cached object
+  that updates inside batch would reduce garbage.
+- **REPL reactive state doesn't persist across `rip()` calls.** Each call is
+  a separate compilation. All reactive code must be in a single call.
+- **Bundle caching uses a separate `fs.watch`.** Could unify with SSE watcher.
