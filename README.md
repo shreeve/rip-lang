@@ -122,6 +122,21 @@ for x as iterable              # ES6 for-of on any iterable
 
 for x as! asyncIterable        # Async iteration shorthand
   console.log x                # Equivalent to: for await x as asyncIterable
+
+loop                           # Infinite loop (while true)
+  process!
+loop 5                         # Repeat N times
+  console.log "hi"
+```
+
+### Implicit `it`
+
+Arrow functions with no params that reference `it` auto-inject it as the parameter:
+
+```coffee
+users.filter -> it.active          # → users.filter(function(it) { ... })
+names = users.map -> it.name       # no need to name a throwaway variable
+orders.filter -> it.total > 100    # works with any expression
 ```
 
 ### Reactivity

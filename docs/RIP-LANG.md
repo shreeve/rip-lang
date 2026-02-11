@@ -231,6 +231,15 @@ until done
 loop
   data = fetch()
   break if data.complete
+
+# Loop N times
+loop 5
+  console.log "hi"
+# Compiles to: for (let _i = 0; _i < 5; _i++) { ... }
+
+# Loop with variable or expression
+loop retries
+  attempt!
 ```
 
 ## Comprehensions
@@ -479,6 +488,41 @@ def findUser(id)
   for user in users
     return user if user.id is id
   null
+```
+
+## Implicit `it` Parameter
+
+Arrow functions with no explicit parameters that reference `it` in the body automatically inject `it` as the parameter:
+
+```coffee
+# Without `it` — must name a throwaway variable
+users.filter (u) -> u.active
+names = users.map (u) -> u.name
+
+# With `it` — cleaner
+users.filter -> it.active
+names = users.map -> it.name
+orders.filter -> it.total > 100
+
+# Works with fat arrows too
+items.map => it.toUpperCase()
+
+# Nested arrows — each level gets its own `it`
+# Only the innermost param-less arrow with `it` is affected
+groups.map -> it.items.filter -> it.active
+
+# Explicit params still work normally
+items.sort (a, b) -> a - b
+```
+
+Compiles to standard JavaScript — `it` becomes a regular function parameter:
+
+```coffee
+arr.filter -> it > 5
+# → arr.filter(function(it) { return (it > 5); })
+
+arr.map => it.name
+# → arr.map(it => it.name)
 ```
 
 ## Calling Functions

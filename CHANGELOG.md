@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Works with dotted references (`x |> Math.sqrt`, `x |> console.log`) and dotted calls (`x |> obj.method(y)` → `obj.method(x, y)`).
 - Implicit calls close at pipe boundaries — `x |> fn 1 |> bar 2` works correctly without parens.
 
+### `loop n` — Repeat N Times
+
+- **Counted loop** — `loop 5 -> body` compiles to `for (let _i = 0; _i < 5; _i++) { body }`. Works with literals, variables, and expressions.
+
+### Implicit `it` Parameter
+
+- **Auto-injected parameter** — Arrow functions with no explicit params that reference `it` in the body automatically inject `it` as the parameter. `arr.filter -> it > 5` compiles to `arr.filter(function(it) { return (it > 5); })`. Works with both `->` and `=>`. Stops at nested function boundaries.
+
 ### Negative Indexing
 
 - **Python-style negative indexing** — `arr[-1]` compiles to `arr.at(-1)`, `arr[-2]` to `arr.at(-2)`, etc. Works on arrays and strings. Optional variant: `arr?[-1]` → `arr?.at(-1)`. Only literal negative numbers trigger the transform; variable indexes pass through unchanged.

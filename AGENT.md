@@ -605,6 +605,8 @@ rip> .js      # Toggle JS display
 | `<` `<=` | Chained | `1 < x < 10` — chained comparisons |
 | `\|>` | Pipe | `x \|> fn` or `x \|> fn(y)` — first-arg pipe |
 | `not in` | Not in | `x not in arr` — negated membership |
+| `loop n` | Repeat N | `loop 5 -> body` — repeat N times |
+| `it` | Implicit param | `-> it > 5` — auto-injected parameter |
 | `or return` | Guard | `x = get() or return err` — early return |
 | `?? throw` | Nullish guard | `x = get() ?? throw err` — throw if null |
 

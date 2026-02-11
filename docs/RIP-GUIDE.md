@@ -148,9 +148,24 @@ for key, value of object
 for i in [1..10]         # inclusive (1 to 10)
 for i in [1...10]        # exclusive (1 to 9)
 
+# Loop N times
+loop 5
+  console.log "hi"
+
 # Comprehensions
 squares = (x * x for x in [1..10])
 evens = (x for x in items when x % 2 is 0)
+```
+
+### Implicit `it`
+
+Arrow functions with no params that reference `it` auto-inject it as the parameter:
+
+```coffee
+users.filter -> it.active          # instead of (u) -> u.active
+names = users.map -> it.name       # instead of (u) -> u.name
+orders.filter -> it.total > 100    # works with any expression
+items.map => it.toUpperCase()      # works with fat arrows too
 ```
 
 ---
