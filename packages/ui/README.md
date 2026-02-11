@@ -118,6 +118,57 @@ Routes registered:
 /{app}/parts/*       — individual part files (for hot-reload refetch)
 ```
 
+## State Preservation (Keep-Alive)
+
+Components are cached when navigating away instead of destroyed. Navigate
+to `/counter`, increment the count, go to `/about`, come back — the count
+is preserved. Configurable via `cacheSize` (default 10).
+
+## Data Loading
+
+`createResource` manages async data with reactive `loading`, `error`, and
+`data` properties:
+
+```coffee
+export UserPage = component
+  user := createResource -> fetch!("/api/users/#{@params.id}").json!
+
+  render
+    if user.loading
+      p "Loading..."
+    else if user.error
+      p "Error: #{user.error.message}"
+    else
+      h1 user.data.name
+```
+
+## Error Boundaries
+
+Layouts with an `onError` method catch errors from child components:
+
+```coffee
+export Layout = component
+  errorMsg := null
+
+  onError: (err) -> errorMsg = err.message
+
+  render
+    .app-layout
+      if errorMsg
+        .error-banner "#{errorMsg}"
+      div data-slot: "true"
+```
+
+## Navigation Indicator
+
+`router.navigating` is a reactive signal — true while a route transition
+is in progress:
+
+```coffee
+if @router.navigating
+  span "Loading..."
+```
+
 ## Multi-App Hosting
 
 Mount multiple apps under one server:
