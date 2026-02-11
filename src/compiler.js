@@ -363,9 +363,9 @@ export class CodeGenerator {
       if (typeof target === 'string' || target instanceof String) {
         let varName = str(target);
         if (!this.reactiveVars?.has(varName)) this.programVars.add(varName);
-      } else if (Array.isArray(target) && target[0] === 'array') {
+      } else if (this.is(target, 'array')) {
         this.collectVarsFromArray(target, this.programVars);
-      } else if (Array.isArray(target) && target[0] === 'object') {
+      } else if (this.is(target, 'object')) {
         this.collectVarsFromObject(target, this.programVars);
       }
       this.collectProgramVariables(value);
@@ -393,13 +393,13 @@ export class CodeGenerator {
       this.collectProgramVariables(rest[0]);
       if (rest.length >= 2 && Array.isArray(rest[1]) && rest[1].length === 2 && rest[1][0] !== 'block') {
         let [param, catchBlock] = rest[1];
-        if (param && Array.isArray(param) && param[0] === 'object') {
+        if (param && this.is(param, 'object')) {
           param.slice(1).forEach(pair => {
             if (Array.isArray(pair) && pair.length === 2 && typeof pair[1] === 'string') {
               this.programVars.add(pair[1]);
             }
           });
-        } else if (param && Array.isArray(param) && param[0] === 'array') {
+        } else if (param && this.is(param, 'array')) {
           param.slice(1).forEach(item => {
             if (typeof item === 'string') this.programVars.add(item);
           });
@@ -426,8 +426,8 @@ export class CodeGenerator {
       if (CodeGenerator.ASSIGNMENT_OPS.has(head)) {
         let [target, value] = rest;
         if (typeof target === 'string') vars.add(target);
-        else if (Array.isArray(target) && target[0] === 'array') this.collectVarsFromArray(target, vars);
-        else if (Array.isArray(target) && target[0] === 'object') this.collectVarsFromObject(target, vars);
+        else if (this.is(target, 'array')) this.collectVarsFromArray(target, vars);
+        else if (this.is(target, 'object')) this.collectVarsFromObject(target, vars);
         collect(value);
         return;
       }
@@ -436,11 +436,11 @@ export class CodeGenerator {
         collect(rest[0]);
         if (rest.length >= 2 && Array.isArray(rest[1]) && rest[1].length === 2 && rest[1][0] !== 'block') {
           let [param, catchBlock] = rest[1];
-          if (param && Array.isArray(param) && param[0] === 'object') {
+          if (param && this.is(param, 'object')) {
             param.slice(1).forEach(pair => {
               if (Array.isArray(pair) && pair.length === 2 && typeof pair[1] === 'string') vars.add(pair[1]);
             });
-          } else if (param && Array.isArray(param) && param[0] === 'array') {
+          } else if (param && this.is(param, 'array')) {
             param.slice(1).forEach(item => { if (typeof item === 'string') vars.add(item); });
           }
           collect(catchBlock);
@@ -604,7 +604,7 @@ export class CodeGenerator {
         let [obj, prop] = head.slice(1);
         let objCode = this.generate(obj, 'value');
         let needsParens = CodeGenerator.NUMBER_LITERAL_RE.test(objCode) ||
-                          (Array.isArray(obj) && (obj[0] === 'object' || obj[0] === 'await' || obj[0] === 'yield'));
+                          ((this.is(obj, 'object') || this.is(obj, 'await') || this.is(obj, 'yield')));
         let base = needsParens ? `(${objCode})` : objCode;
         calleeCode = `${base}.${str(prop)}`;
       } else {
@@ -639,9 +639,9 @@ export class CodeGenerator {
     let blockStmts = ['def', 'class', 'if', 'unless', 'for-in', 'for-of', 'for-as', 'while', 'until', 'loop', 'switch', 'try'];
     let statementsCode = other.map((stmt, index) => {
       let isSingle = other.length === 1 && imports.length === 0 && exports.length === 0;
-      let isObj = Array.isArray(stmt) && stmt[0] === 'object';
+      let isObj = this.is(stmt, 'object');
       let isObjComp = isObj && stmt.length === 2 && Array.isArray(stmt[1]) && Array.isArray(stmt[1][1]) && stmt[1][1][0] === 'comprehension';
-      let isAlreadyExpr = Array.isArray(stmt) && (stmt[0] === 'comprehension' || stmt[0] === 'object-comprehension' || stmt[0] === 'do-iife');
+      let isAlreadyExpr = (this.is(stmt, 'comprehension') || this.is(stmt, 'object-comprehension') || this.is(stmt, 'do-iife'));
       let hasNoVars = this.programVars.size === 0;
       let needsParens = isSingle && isObj && hasNoVars && !isAlreadyExpr && !isObjComp;
       let isLast = index === other.length - 1;
@@ -799,7 +799,7 @@ export class CodeGenerator {
     let op = head === '?=' ? '??=' : head;
 
     // Validate: no sigils in assignment targets (except void function syntax)
-    let isFnValue = Array.isArray(value) && (value[0] === '->' || value[0] === '=>' || value[0] === 'def');
+    let isFnValue = (this.is(value, '->') || this.is(value, '=>') || this.is(value, 'def'));
     if (target instanceof String && meta(target, 'await') !== undefined && !isFnValue) {
       let sigil = meta(target, 'await') === true ? '!' : '&';
       throw new Error(`Cannot use ${sigil} sigil in variable declaration '${str(target)}'.`);
@@ -810,8 +810,8 @@ export class CodeGenerator {
     }
 
     // Empty destructuring — just evaluate RHS
-    let isEmptyArr = Array.isArray(target) && target[0] === 'array' && target.length === 1;
-    let isEmptyObj = Array.isArray(target) && target[0] === 'object' && target.length === 1;
+    let isEmptyArr = this.is(target, 'array', 0);
+    let isEmptyObj = this.is(target, 'object', 0);
     if (isEmptyArr || isEmptyObj) {
       let v = this.generate(value, 'value');
       return (isEmptyObj && context === 'statement') ? `(${v})` : v;
@@ -840,8 +840,8 @@ export class CodeGenerator {
     }
 
     // Middle/leading rest in array destructuring
-    if (Array.isArray(target) && target[0] === 'array') {
-      let restIdx = target.slice(1).findIndex(el => (Array.isArray(el) && el[0] === '...') || el === '...');
+    if (this.is(target, 'array')) {
+      let restIdx = target.slice(1).findIndex(el => (this.is(el, '...')) || el === '...');
       if (restIdx !== -1 && restIdx < target.length - 2) {
         let elements = target.slice(1);
         let afterRest = elements.slice(restIdx + 1);
@@ -855,10 +855,10 @@ export class CodeGenerator {
           elements.forEach(el => {
             if (el === ',' || el === '...') return;
             if (typeof el === 'string') this.programVars.add(el);
-            else if (Array.isArray(el) && el[0] === '...' && typeof el[1] === 'string') this.programVars.add(el[1]);
+            else if (this.is(el, '...') && typeof el[1] === 'string') this.programVars.add(el[1]);
           });
           let restEl = elements[restIdx];
-          let restVar = Array.isArray(restEl) && restEl[0] === '...' ? restEl[1] : null;
+          let restVar = this.is(restEl, '...') ? restEl[1] : null;
           let stmts = [];
           if (beforePattern) stmts.push(`[${beforePattern}] = ${valueCode}`);
           if (restVar) stmts.push(`[...${restVar}] = ${valueCode}.slice(${restIdx}, -${afterCount})`);
@@ -872,7 +872,7 @@ export class CodeGenerator {
     if (context === 'statement' && head === '=' && Array.isArray(value) &&
         (value[0] === '||' || value[0] === '&&') && value.length === 3) {
       let [binOp, left, right] = value;
-      if (Array.isArray(right) && (right[0] === 'unless' || right[0] === 'if') && right.length === 3) {
+      if ((this.is(right, 'unless') || this.is(right, 'if')) && right.length === 3) {
         let [condType, condition, wrappedValue] = right;
         let unwrapped = Array.isArray(wrappedValue) && wrappedValue.length === 1 ? wrappedValue[0] : wrappedValue;
         let fullValue = [binOp, left, unwrapped];
@@ -912,11 +912,11 @@ export class CodeGenerator {
     }
 
     let valueCode = this.generate(value, 'value');
-    let isObjLit = Array.isArray(value) && value[0] === 'object';
+    let isObjLit = this.is(value, 'object');
     if (!isObjLit) valueCode = this.unwrap(valueCode);
 
     let needsParensVal = context === 'value';
-    let needsParensObj = context === 'statement' && Array.isArray(target) && target[0] === 'object';
+    let needsParensObj = context === 'statement' && this.is(target, 'object');
     if (needsParensVal || needsParensObj) return `(${targetCode} ${op} ${valueCode})`;
     return `${targetCode} ${op} ${valueCode}`;
   }
@@ -931,7 +931,7 @@ export class CodeGenerator {
     let objCode = this.generate(obj, 'value');
     this.suppressReactiveUnwrap = false;
     let needsParens = CodeGenerator.NUMBER_LITERAL_RE.test(objCode) ||
-                      (Array.isArray(obj) && (obj[0] === 'object' || obj[0] === 'await' || obj[0] === 'yield'));
+                      ((this.is(obj, 'object') || this.is(obj, 'await') || this.is(obj, 'yield')));
     let base = needsParens ? `(${objCode})` : objCode;
     if (meta(prop, 'await') === true) return `await ${base}.${str(prop)}()`;
     if (meta(prop, 'predicate')) return `(${base}.${str(prop)} != null)`;
@@ -955,24 +955,24 @@ export class CodeGenerator {
 
   generateIndexAccess(head, rest) {
     let [arr, index] = rest;
-    if (Array.isArray(index) && (index[0] === '..' || index[0] === '...')) {
+    if ((this.is(index, '..') || this.is(index, '...'))) {
       let isIncl = index[0] === '..';
       let arrCode = this.generate(arr, 'value');
       let [start, end] = index.slice(1);
       if (start === null && end === null) return `${arrCode}.slice()`;
       if (start === null) {
-        if (isIncl && this.isNegativeOneLiteral(end)) return `${arrCode}.slice(0)`;
+        if (isIncl && this.is(end, '-', 1) && (str(end[1]) ?? end[1]) == 1) return `${arrCode}.slice(0)`;
         let e = this.generate(end, 'value');
         return isIncl ? `${arrCode}.slice(0, +${e} + 1 || 9e9)` : `${arrCode}.slice(0, ${e})`;
       }
       if (end === null) return `${arrCode}.slice(${this.generate(start, 'value')})`;
       let s = this.generate(start, 'value');
-      if (isIncl && this.isNegativeOneLiteral(end)) return `${arrCode}.slice(${s})`;
+      if (isIncl && this.is(end, '-', 1) && (str(end[1]) ?? end[1]) == 1) return `${arrCode}.slice(${s})`;
       let e = this.generate(end, 'value');
       return isIncl ? `${arrCode}.slice(${s}, +${e} + 1 || 9e9)` : `${arrCode}.slice(${s}, ${e})`;
     }
     // Negative literal index: arr[-1] → arr.at(-1)
-    if (Array.isArray(index) && index[0] === '-' && index.length === 2) {
+    if (this.is(index, '-', 1)) {
       let n = str(index[1]) ?? index[1];
       if (typeof n === 'number' || (typeof n === 'string' && /^\d+$/.test(n))) {
         return `${this.generate(arr, 'value')}.at(-${n})`;
@@ -984,7 +984,7 @@ export class CodeGenerator {
   generateOptIndex(head, rest) {
     let [arr, index] = rest;
     // Negative literal index: arr?[-1] → arr?.at(-1)
-    if (Array.isArray(index) && index[0] === '-' && index.length === 2) {
+    if (this.is(index, '-', 1)) {
       let n = str(index[1]) ?? index[1];
       if (typeof n === 'number' || (typeof n === 'string' && /^\d+$/.test(n))) {
         return `${this.generate(arr, 'value')}?.at(-${n})`;
@@ -1038,7 +1038,7 @@ export class CodeGenerator {
     let prefix = isAsync ? 'async ' : '';
 
     if (!sideEffectOnly) {
-      if (this.isBlock(body) && body.length === 2) {
+      if (this.is(body, 'block') && body.length === 2) {
         let expr = body[1];
         if (!Array.isArray(expr) || expr[0] !== 'return') {
           return `${prefix}${paramSyntax} => ${this.generate(expr, 'value')}`;
@@ -1058,19 +1058,19 @@ export class CodeGenerator {
     let [expr] = rest;
     if (this.sideEffectOnly) return 'return';
 
-    if (Array.isArray(expr) && expr[0] === 'unless') {
+    if (this.is(expr, 'unless')) {
       let [, condition, body] = expr;
       let val = Array.isArray(body) && body.length === 1 ? body[0] : body;
       return `if (!${this.generate(condition, 'value')}) return ${this.generate(val, 'value')}`;
     }
-    if (Array.isArray(expr) && expr[0] === 'if') {
+    if (this.is(expr, 'if')) {
       let [, condition, body, ...elseParts] = expr;
       if (elseParts.length === 0) {
         let val = Array.isArray(body) && body.length === 1 ? body[0] : body;
         return `if (${this.generate(condition, 'value')}) return ${this.generate(val, 'value')}`;
       }
     }
-    if (Array.isArray(expr) && expr[0] === 'new' && Array.isArray(expr[1]) && expr[1][0] === 'unless') {
+    if (this.is(expr, 'new') && Array.isArray(expr[1]) && expr[1][0] === 'unless') {
       let [, unlessNode] = expr;
       let [, condition, body] = unlessNode;
       let val = Array.isArray(body) && body.length === 1 ? body[0] : body;
@@ -1110,10 +1110,10 @@ export class CodeGenerator {
     let [target, body] = rest;
     this.usesReactivity = true;
     let bodyCode;
-    if (this.isBlock(body)) {
+    if (this.is(body, 'block')) {
       let stmts = this.withIndent(() => this.formatStatements(body.slice(1)));
       bodyCode = `{\n${stmts.join('\n')}\n${this.indent()}}`;
-    } else if (Array.isArray(body) && (body[0] === '->' || body[0] === '=>')) {
+    } else if ((this.is(body, '->') || this.is(body, '=>'))) {
       let fnCode = this.generate(body, 'value');
       if (target) return `const ${str(target) ?? this.generate(target, 'value')} = __effect(${fnCode})`;
       return `__effect(${fnCode})`;
@@ -1219,7 +1219,7 @@ export class CodeGenerator {
     let varsArray = Array.isArray(vars) ? vars : [vars];
     let noVar = varsArray.length === 0;
     let [itemVar, indexVar] = noVar ? ['_i', null] : varsArray;
-    let itemVarPattern = (Array.isArray(itemVar) && (itemVar[0] === 'array' || itemVar[0] === 'object'))
+    let itemVarPattern = ((this.is(itemVar, 'array') || this.is(itemVar, 'object')))
       ? this.generateDestructuringPattern(itemVar) : itemVar;
 
     // Stepped iteration
@@ -1227,7 +1227,7 @@ export class CodeGenerator {
       let iterCode = this.generate(iterable, 'value');
       let idxName = indexVar || '_i';
       let stepCode = this.generate(step, 'value');
-      let isNeg = this.isNegativeStep(step);
+      let isNeg = this.is(step, '-', 1);
       let isMinus1 = isNeg && (step[1] === '1' || step[1] === 1 || str(step[1]) === '1');
       let isPlus1 = !isNeg && (step === '1' || step === 1 || str(step) === '1');
 
@@ -1237,7 +1237,7 @@ export class CodeGenerator {
       else if (isNeg) loopHeader = `for (let ${idxName} = ${iterCode}.length - 1; ${idxName} >= 0; ${idxName} += ${stepCode}) `;
       else loopHeader = `for (let ${idxName} = 0; ${idxName} < ${iterCode}.length; ${idxName} += ${stepCode}) `;
 
-      if (this.isBlock(body)) {
+      if (this.is(body, 'block')) {
         let stmts = body.slice(1);
         this.indentLevel++;
         let lines = [];
@@ -1269,7 +1269,7 @@ export class CodeGenerator {
     if (indexVar) {
       let iterCode = this.generate(iterable, 'value');
       let code = `for (let ${indexVar} = 0; ${indexVar} < ${iterCode}.length; ${indexVar}++) `;
-      if (this.isBlock(body)) {
+      if (this.is(body, 'block')) {
         code += '{\n';
         this.indentLevel++;
         code += this.indent() + `const ${itemVarPattern} = ${iterCode}[${indexVar}];\n`;
@@ -1299,7 +1299,7 @@ export class CodeGenerator {
       let isExcl = iterHead === '...';
       let [start, end] = iterable.slice(1);
       let isSimple = (e) => typeof e === 'number' || typeof e === 'string' && !e.includes('(') ||
-                            (e instanceof String && !str(e).includes('(')) || (Array.isArray(e) && e[0] === '.');
+                            (e instanceof String && !str(e).includes('(')) || (this.is(e, '.'));
       if (isSimple(start) && isSimple(end)) {
         let s = this.generate(start, 'value'), e = this.generate(end, 'value');
         let cmp = isExcl ? '<' : '<=';
@@ -1323,7 +1323,7 @@ export class CodeGenerator {
     let code = `for (const ${keyVar} in ${objCode}) `;
 
     if (own && !valueVar && !guard) {
-      if (this.isBlock(body)) {
+      if (this.is(body, 'block')) {
         this.indentLevel++;
         let stmts = [`if (!Object.hasOwn(${objCode}, ${keyVar})) continue;`, ...body.slice(1).map(s => this.addSemicolon(s, this.generate(s, 'statement')))];
         this.indentLevel--;
@@ -1333,7 +1333,7 @@ export class CodeGenerator {
     }
 
     if (valueVar) {
-      if (this.isBlock(body)) {
+      if (this.is(body, 'block')) {
         let stmts = body.slice(1);
         this.indentLevel++;
         let lines = [];
@@ -1369,15 +1369,15 @@ export class CodeGenerator {
     let iterable = rest[1], isAwait = rest[2], guard = rest[3], body = rest[4];
 
     let needsTempVar = false, destructStmts = [];
-    if (Array.isArray(firstVar) && firstVar[0] === 'array') {
+    if (this.is(firstVar, 'array')) {
       let elements = firstVar.slice(1);
-      let restIdx = elements.findIndex(el => (Array.isArray(el) && el[0] === '...') || el === '...');
+      let restIdx = elements.findIndex(el => (this.is(el, '...')) || el === '...');
       if (restIdx !== -1 && restIdx < elements.length - 1) {
         needsTempVar = true;
         let afterRest = elements.slice(restIdx + 1), afterCount = afterRest.length;
         let beforeRest = elements.slice(0, restIdx);
         let restEl = elements[restIdx];
-        let restVar = Array.isArray(restEl) && restEl[0] === '...' ? restEl[1] : '_rest';
+        let restVar = this.is(restEl, '...') ? restEl[1] : '_rest';
         let beforePattern = beforeRest.map(el => el === ',' ? '' : typeof el === 'string' ? el : this.generate(el, 'value')).join(', ');
         let firstPattern = beforePattern ? `${beforePattern}, ...${restVar}` : `...${restVar}`;
         let afterPattern = afterRest.map(el => el === ',' ? '' : typeof el === 'string' ? el : this.generate(el, 'value')).join(', ');
@@ -1387,7 +1387,7 @@ export class CodeGenerator {
         elements.forEach(el => {
           if (el === ',' || el === '...') return;
           if (typeof el === 'string') this.programVars.add(el);
-          else if (Array.isArray(el) && el[0] === '...' && typeof el[1] === 'string') this.programVars.add(el[1]);
+          else if (this.is(el, '...') && typeof el[1] === 'string') this.programVars.add(el[1]);
         });
       }
     }
@@ -1396,7 +1396,7 @@ export class CodeGenerator {
     let awaitKw = isAwait ? 'await ' : '';
     let itemVarPattern;
     if (needsTempVar) itemVarPattern = '_item';
-    else if (Array.isArray(firstVar) && (firstVar[0] === 'array' || firstVar[0] === 'object'))
+    else if ((this.is(firstVar, 'array') || this.is(firstVar, 'object')))
       itemVarPattern = this.generateDestructuringPattern(firstVar);
     else itemVarPattern = firstVar;
 
@@ -1475,7 +1475,7 @@ export class CodeGenerator {
     let [key, container] = rest;
     let keyCode = this.generate(key, 'value');
     let isNeg = meta(sexpr[0], 'invert');
-    if (Array.isArray(container) && container[0] === 'object') {
+    if (this.is(container, 'object')) {
       let result = `(${keyCode} in ${this.generate(container, 'value')})`;
       return isNeg ? `(!${result})` : result;
     }
@@ -1503,7 +1503,7 @@ export class CodeGenerator {
 
   generateNew(head, rest) {
     let [call] = rest;
-    if (Array.isArray(call) && (call[0] === '.' || call[0] === '?.')) {
+    if ((this.is(call, '.') || this.is(call, '?.'))) {
       let [accType, target, prop] = call;
       if (Array.isArray(target) && !target[0].startsWith) {
         return `(${this.generate(['new', target], 'value')}).${prop}`;
@@ -1544,7 +1544,7 @@ export class CodeGenerator {
     let codes = elements.map(el => {
       if (el === ',') return '';
       if (el === '...') return '';
-      if (Array.isArray(el) && el[0] === '...') return `...${this.generate(el[1], 'value')}`;
+      if (this.is(el, '...')) return `...${this.generate(el[1], 'value')}`;
       return this.generate(el, 'value');
     }).join(', ');
     return hasTrailingElision ? `[${codes},]` : `[${codes}]`;
@@ -1559,11 +1559,11 @@ export class CodeGenerator {
     }
 
     let codes = pairs.map(pair => {
-      if (Array.isArray(pair) && pair[0] === '...') return `...${this.generate(pair[1], 'value')}`;
+      if (this.is(pair, '...')) return `...${this.generate(pair[1], 'value')}`;
       let [key, value, operator] = pair;
       let keyCode;
-      if (Array.isArray(key) && key[0] === 'dynamicKey') keyCode = `[${this.generate(key[1], 'value')}]`;
-      else if (Array.isArray(key) && key[0] === 'str') keyCode = `[${this.generate(key, 'value')}]`;
+      if (this.is(key, 'dynamicKey')) keyCode = `[${this.generate(key[1], 'value')}]`;
+      else if (this.is(key, 'str')) keyCode = `[${this.generate(key, 'value')}]`;
       else keyCode = this.generate(key, 'value');
       let valCode = this.generate(value, 'value');
       if (operator === '=') return `${keyCode} = ${valCode}`;
@@ -1598,22 +1598,22 @@ export class CodeGenerator {
     let needsReturns = context === 'value';
     let tryCode = 'try ';
     let tryBlock = rest[0];
-    tryCode += (needsReturns && this.isBlock(tryBlock))
+    tryCode += (needsReturns && this.is(tryBlock, 'block'))
       ? this.generateBlockWithReturns(tryBlock) : this.generate(tryBlock, 'statement');
 
     if (rest.length >= 2 && Array.isArray(rest[1]) && rest[1].length === 2 && rest[1][0] !== 'block') {
       let [param, catchBlock] = rest[1];
       tryCode += ' catch';
-      if (param && Array.isArray(param) && (param[0] === 'object' || param[0] === 'array')) {
+      if (param && (this.is(param, 'object') || this.is(param, 'array'))) {
         tryCode += ' (error)';
         let destructStmt = `(${this.generate(param, 'value')} = error)`;
-        catchBlock = this.isBlock(catchBlock)
+        catchBlock = this.is(catchBlock, 'block')
           ? ['block', destructStmt, ...catchBlock.slice(1)]
           : ['block', destructStmt, catchBlock];
       } else if (param) {
         tryCode += ` (${param})`;
       }
-      tryCode += ' ' + ((needsReturns && this.isBlock(catchBlock))
+      tryCode += ' ' + ((needsReturns && this.is(catchBlock, 'block'))
         ? this.generateBlockWithReturns(catchBlock) : this.generate(catchBlock, 'statement'));
     } else if (rest.length === 2) {
       tryCode += ' finally ' + this.generate(rest[1], 'statement');
@@ -1737,7 +1737,7 @@ export class CodeGenerator {
         let va = Array.isArray(vars) ? vars : [vars];
         let noVar = va.length === 0;
         let [itemVar, indexVar] = noVar ? ['_i', null] : va;
-        let ivp = (Array.isArray(itemVar) && (itemVar[0] === 'array' || itemVar[0] === 'object'))
+        let ivp = ((this.is(itemVar, 'array') || this.is(itemVar, 'object')))
           ? this.generateDestructuringPattern(itemVar) : itemVar;
 
         if (step && step !== null) {
@@ -1752,7 +1752,7 @@ export class CodeGenerator {
             this.indentLevel++;
           } else {
             let ic = this.generate(iterable, 'value'), idxN = indexVar || '_i', stc = this.generate(step, 'value');
-            let isNeg = this.isNegativeStep(step);
+            let isNeg = this.is(step, '-', 1);
             code += isNeg
               ? this.indent() + `for (let ${idxN} = ${ic}.length - 1; ${idxN} >= 0; ${idxN} += ${stc}) {\n`
               : this.indent() + `for (let ${idxN} = 0; ${idxN} < ${ic}.length; ${idxN} += ${stc}) {\n`;
@@ -1772,7 +1772,7 @@ export class CodeGenerator {
         let own = stepOrOwn;
         let va = Array.isArray(vars) ? vars : [vars];
         let [kv, vv] = va;
-        let kvp = (Array.isArray(kv) && (kv[0] === 'array' || kv[0] === 'object'))
+        let kvp = ((this.is(kv, 'array') || this.is(kv, 'object')))
           ? this.generateDestructuringPattern(kv) : kv;
         let oc = this.generate(iterable, 'value');
         code += this.indent() + `for (const ${kvp} in ${oc}) {\n`;
@@ -1783,7 +1783,7 @@ export class CodeGenerator {
         let isAwait = iter[3];
         let va = Array.isArray(vars) ? vars : [vars];
         let [fv] = va;
-        let ivp = (Array.isArray(fv) && (fv[0] === 'array' || fv[0] === 'object'))
+        let ivp = ((this.is(fv, 'array') || this.is(fv, 'object')))
           ? this.generateDestructuringPattern(fv) : fv;
         code += this.indent() + `for ${isAwait ? 'await ' : ''}(const ${ivp} of ${this.generate(iterable, 'value')}) {\n`;
         this.indentLevel++;
@@ -1804,7 +1804,7 @@ export class CodeGenerator {
     };
 
     let loopStmts = ['for-in', 'for-of', 'for-as', 'while', 'until', 'loop'];
-    if (this.isBlock(expr)) {
+    if (this.is(expr, 'block')) {
       for (let i = 0; i < expr.length - 1; i++) {
         let s = expr[i + 1], isLast = i === expr.length - 2;
         if (!isLast || hasCtrl(s)) {
@@ -1883,24 +1883,24 @@ export class CodeGenerator {
           // First pass: identify bound methods
           let boundMethods = [];
           for (let [mk, mv] of members) {
-            let isStatic = this.isStaticMember(mk);
-            let isComputed = this.isComputedMember(mk);
+            let isStatic = this.is(mk, '.') && mk[1] === 'this';
+            let isComputed = this.is(mk, 'computed');
             let mName = this.extractMemberName(mk);
-            if (this.isBoundMethod(mv) && !isStatic && !isComputed && mName !== 'constructor') boundMethods.push(mName);
+            if (this.is(mv, '=>') && !isStatic && !isComputed && mName !== 'constructor') boundMethods.push(mName);
           }
 
           // Second pass: generate members
           for (let [mk, mv] of members) {
-            let isStatic = this.isStaticMember(mk);
-            let isComputed = this.isComputedMember(mk);
+            let isStatic = this.is(mk, '.') && mk[1] === 'this';
+            let isComputed = this.is(mk, 'computed');
             let mName = this.extractMemberName(mk);
-            if (Array.isArray(mv) && (mv[0] === '->' || mv[0] === '=>')) {
+            if ((this.is(mv, '->') || this.is(mv, '=>'))) {
               let [, params, body] = mv;
               let hasAwait = this.containsAwait(body), hasYield = this.containsYield(body);
               let cleanParams = params, autoAssign = [];
               if (mName === 'constructor') {
                 cleanParams = params.map(p => {
-                  if (Array.isArray(p) && p[0] === '.' && p[1] === 'this') { autoAssign.push(`this.${p[2]} = ${p[2]}`); return p[2]; }
+                  if (this.is(p, '.') && p[1] === 'this') { autoAssign.push(`this.${p[2]} = ${p[2]}`); return p[2]; }
                   return p;
                 });
                 for (let bm of boundMethods) autoAssign.unshift(`this.${bm} = this.${bm}.bind(this)`);
@@ -1924,8 +1924,8 @@ export class CodeGenerator {
           let additionalStmts = bodyStmts.slice(1);
           this.indentLevel++;
           for (let [mk, mv] of members) {
-            let isStatic = this.isStaticMember(mk), mName = this.extractMemberName(mk);
-            if (Array.isArray(mv) && (mv[0] === '->' || mv[0] === '=>')) {
+            let isStatic = this.is(mk, '.') && mk[1] === 'this', mName = this.extractMemberName(mk);
+            if ((this.is(mv, '->') || this.is(mv, '=>'))) {
               let [, params, body] = mv;
               let pList = this.generateParamList(params);
               let prefix = (isStatic ? 'static ' : '') + (this.containsAwait(body) ? 'async ' : '') + (this.containsYield(body) ? '*' : '');
@@ -1941,9 +1941,9 @@ export class CodeGenerator {
             }
           }
           for (let stmt of additionalStmts) {
-            if (Array.isArray(stmt) && stmt[0] === 'class') {
+            if (this.is(stmt, 'class')) {
               let [, nestedName, parent, ...nestedBody] = stmt;
-              if (Array.isArray(nestedName) && nestedName[0] === '.' && nestedName[1] === 'this') {
+              if (this.is(nestedName, '.') && nestedName[1] === 'this') {
                 code += this.indent() + `static ${nestedName[2]} = ${this.generate(['class', null, parent, ...nestedBody], 'value')};\n`;
               }
             } else {
@@ -1954,7 +1954,7 @@ export class CodeGenerator {
         } else {
           this.indentLevel++;
           for (let stmt of bodyStmts) {
-            if (Array.isArray(stmt) && stmt[0] === '=' && Array.isArray(stmt[1]) && stmt[1][0] === '.' && stmt[1][1] === 'this') {
+            if (this.is(stmt, '=') && Array.isArray(stmt[1]) && stmt[1][0] === '.' && stmt[1][1] === 'this') {
               code += this.indent() + `static ${stmt[1][2]} = ${this.generate(stmt[2], 'value')};\n`;
             } else {
               code += this.indent() + this.generate(stmt, 'statement') + ';\n';
@@ -2009,13 +2009,13 @@ export class CodeGenerator {
   generateExport(head, rest) {
     let [decl] = rest;
     if (Array.isArray(decl) && decl.every(i => typeof i === 'string')) return `export { ${decl.join(', ')} }`;
-    if (Array.isArray(decl) && decl[0] === '=') return `export const ${decl[1]} = ${this.generate(decl[2], 'value')}`;
+    if (this.is(decl, '=')) return `export const ${decl[1]} = ${this.generate(decl[2], 'value')}`;
     return `export ${this.generate(decl, 'statement')}`;
   }
 
   generateExportDefault(head, rest) {
     let [expr] = rest;
-    if (Array.isArray(expr) && expr[0] === '=') {
+    if (this.is(expr, '=')) {
       return `const ${expr[1]} = ${this.generate(expr[2], 'value')};\nexport default ${expr[1]}`;
     }
     return `export default ${this.generate(expr, 'statement')}`;
@@ -2107,14 +2107,14 @@ export class CodeGenerator {
   generateDestructuringPattern(pattern) { return this.formatParam(pattern); }
 
   generateParamList(params) {
-    let expIdx = params.findIndex(p => Array.isArray(p) && p[0] === 'expansion');
+    let expIdx = params.findIndex(p => this.is(p, 'expansion'));
     if (expIdx !== -1) {
       let before = params.slice(0, expIdx), after = params.slice(expIdx + 1);
       let regular = before.map(p => this.formatParam(p)).join(', ');
       this.expansionAfterParams = after;
       return regular ? `${regular}, ..._rest` : '..._rest';
     }
-    let restIdx = params.findIndex(p => Array.isArray(p) && p[0] === 'rest');
+    let restIdx = params.findIndex(p => this.is(p, 'rest'));
     if (restIdx !== -1 && restIdx < params.length - 1) {
       let before = params.slice(0, restIdx), restP = params[restIdx], after = params.slice(restIdx + 1);
       let beforeP = before.map(p => this.formatParam(p));
@@ -2129,24 +2129,24 @@ export class CodeGenerator {
   formatParam(param) {
     if (typeof param === 'string') return param;
     if (param instanceof String) return param.valueOf();
-    if (Array.isArray(param) && param[0] === 'rest') return `...${param[1]}`;
-    if (Array.isArray(param) && param[0] === 'default') return `${param[1]} = ${this.generate(param[2], 'value')}`;
-    if (Array.isArray(param) && param[0] === '.' && param[1] === 'this') return param[2];
-    if (Array.isArray(param) && param[0] === 'array') {
+    if (this.is(param, 'rest')) return `...${param[1]}`;
+    if (this.is(param, 'default')) return `${param[1]} = ${this.generate(param[2], 'value')}`;
+    if (this.is(param, '.') && param[1] === 'this') return param[2];
+    if (this.is(param, 'array')) {
       let els = param.slice(1).map(el => {
         if (el === ',') return '';
         if (el === '...') return '';
-        if (Array.isArray(el) && el[0] === '...') return `...${el[1]}`;
-        if (Array.isArray(el) && el[0] === '=' && typeof el[1] === 'string') return `${el[1]} = ${this.generate(el[2], 'value')}`;
+        if (this.is(el, '...')) return `...${el[1]}`;
+        if (this.is(el, '=') && typeof el[1] === 'string') return `${el[1]} = ${this.generate(el[2], 'value')}`;
         if (typeof el === 'string') return el;
         return this.formatParam(el);
       });
       return `[${els.join(', ')}]`;
     }
-    if (Array.isArray(param) && param[0] === 'object') {
+    if (this.is(param, 'object')) {
       let pairs = param.slice(1).map(pair => {
-        if (Array.isArray(pair) && pair[0] === '...') return `...${pair[1]}`;
-        if (Array.isArray(pair) && pair[0] === 'default') return `${pair[1]} = ${this.generate(pair[2], 'value')}`;
+        if (this.is(pair, '...')) return `...${pair[1]}`;
+        if (this.is(pair, 'default')) return `${pair[1]} = ${this.generate(pair[2], 'value')}`;
         let [key, value] = pair;
         if (key === value) return key;
         return `${key}: ${value}`;
@@ -2181,7 +2181,7 @@ export class CodeGenerator {
     let noRetStmts = ['return', 'throw', 'break', 'continue'];
     let loopStmts = ['for-in', 'for-of', 'for-as', 'while', 'until', 'loop'];
 
-    if (this.isBlock(body)) {
+    if (this.is(body, 'block')) {
       let statements = this.unwrapBlock(body);
 
       if (hasExpansionParams && this.expansionAfterParams?.length > 0) {
@@ -2198,7 +2198,7 @@ export class CodeGenerator {
         let afterCount = afterParams.length;
         let extr = [];
         afterParams.forEach((p, i) => {
-          let pn = typeof p === 'string' ? p : (Array.isArray(p) && p[0] === 'default') ? p[1] : JSON.stringify(p);
+          let pn = typeof p === 'string' ? p : (this.is(p, 'default')) ? p[1] : JSON.stringify(p);
           extr.push(`const ${pn} = ${restName}[${restName}.length - ${afterCount - i}]`);
         });
         if (afterCount > 0) extr.push(`${restName} = ${restName}.slice(0, -${afterCount})`);
@@ -2226,7 +2226,7 @@ export class CodeGenerator {
 
           if (!isConstructor && !sideEffectOnly && isLast && (h === 'if' || h === 'unless')) {
             let [cond, thenB, ...elseB] = stmt.slice(1);
-            let hasMulti = (b) => this.isBlock(b) && b.length > 2;
+            let hasMulti = (b) => this.is(b, 'block') && b.length > 2;
             if (hasMulti(thenB) || elseB.some(hasMulti)) {
               code += this.generateIfElseWithEarlyReturns(stmt);
               return;
@@ -2317,7 +2317,7 @@ export class CodeGenerator {
     if (body[0] === 'block' || Array.isArray(body[0])) {
       let stmts = body[0] === 'block' ? body.slice(1) : body;
       let lines = this.withIndent(() => stmts.map(s => {
-        if (Array.isArray(s) && s[0] === 'comprehension') {
+        if (this.is(s, 'comprehension')) {
           let [, expr, iters, guards] = s;
           return this.indent() + this.generateComprehensionAsLoop(expr, iters, guards);
         }
@@ -2354,7 +2354,7 @@ export class CodeGenerator {
   generateComprehensionWithTarget(expr, iterators, guards, targetVar) {
     let code = '';
     code += this.indent() + `${targetVar} = [];\n`;
-    let unwrappedExpr = (this.isBlock(expr) && expr.length === 2) ? expr[1] : expr;
+    let unwrappedExpr = (this.is(expr, 'block') && expr.length === 2) ? expr[1] : expr;
 
     if (iterators.length === 1) {
       let [iterType, vars, iterable, stepOrOwn] = iterators[0];
@@ -2363,7 +2363,7 @@ export class CodeGenerator {
         let va = Array.isArray(vars) ? vars : [vars];
         let noVar = va.length === 0;
         let [itemVar, indexVar] = noVar ? ['_i', null] : va;
-        let ivp = (Array.isArray(itemVar) && (itemVar[0] === 'array' || itemVar[0] === 'object'))
+        let ivp = ((this.is(itemVar, 'array') || this.is(itemVar, 'object')))
           ? this.generateDestructuringPattern(itemVar) : itemVar;
 
         if (step && step !== null) {
@@ -2376,7 +2376,7 @@ export class CodeGenerator {
             code += this.indent() + `for (let ${ivp} = ${this.generate(s, 'value')}; ${ivp} ${isExcl ? '<' : '<='} ${this.generate(e, 'value')}; ${ivp} += ${this.generate(step, 'value')}) {\n`;
           } else {
             let ic = this.generate(iterable, 'value'), idxN = indexVar || '_i', stc = this.generate(step, 'value');
-            let isNeg = this.isNegativeStep(step);
+            let isNeg = this.is(step, '-', 1);
             code += isNeg
               ? this.indent() + `for (let ${idxN} = ${ic}.length - 1; ${idxN} >= 0; ${idxN} += ${stc}) {\n`
               : this.indent() + `for (let ${idxN} = 0; ${idxN} < ${ic}.length; ${idxN} += ${stc}) {\n`;
@@ -2411,7 +2411,7 @@ export class CodeGenerator {
         let va = Array.isArray(vars) ? vars : [vars];
         let noVar = va.length === 0;
         let [itemVar, indexVar] = noVar ? ['_i', null] : va;
-        let ivp = (Array.isArray(itemVar) && (itemVar[0] === 'array' || itemVar[0] === 'object'))
+        let ivp = ((this.is(itemVar, 'array') || this.is(itemVar, 'object')))
           ? this.generateDestructuringPattern(itemVar) : itemVar;
 
         if (step && step !== null) {
@@ -2424,7 +2424,7 @@ export class CodeGenerator {
             code += `for (let ${ivp} = ${this.generate(s, 'value')}; ${ivp} ${isExcl ? '<' : '<='} ${this.generate(e, 'value')}; ${ivp} += ${this.generate(step, 'value')}) `;
           } else {
             let ic = this.generate(iterable, 'value'), idxN = indexVar || '_i', stc = this.generate(step, 'value');
-            let isNeg = this.isNegativeStep(step);
+            let isNeg = this.is(step, '-', 1);
             let isMinus1 = isNeg && (step[1] === '1' || step[1] === 1 || str(step[1]) === '1');
             let isPlus1 = !isNeg && (step === '1' || step === 1 || str(step) === '1');
             if (isMinus1) code += `for (let ${idxN} = ${ic}.length - 1; ${idxN} >= 0; ${idxN}--) `;
@@ -2492,7 +2492,7 @@ export class CodeGenerator {
       if (iterType === 'for-as') {
         let va = Array.isArray(vars) ? vars : [vars];
         let [fv] = va;
-        let ivp = (Array.isArray(fv) && (fv[0] === 'array' || fv[0] === 'object'))
+        let ivp = ((this.is(fv, 'array') || this.is(fv, 'object')))
           ? this.generateDestructuringPattern(fv) : fv;
         code += `for (const ${ivp} of ${this.generate(iterable, 'value')}) `;
         if (guards?.length) {
@@ -2574,7 +2574,7 @@ export class CodeGenerator {
     code += this.indent() + '}';
     for (let branch of elseBranches) {
       code += ' else ';
-      if (Array.isArray(branch) && branch[0] === 'if') {
+      if (this.is(branch, 'if')) {
         let [, nc, nt, ...ne] = branch;
         code += `if (${this.generate(nc, 'value')}) {\n`;
         code += this.withIndent(() => this.generateBranchWithReturn(nt));
@@ -2603,8 +2603,8 @@ export class CodeGenerator {
   }
 
   generateIfAsExpression(condition, thenBranch, elseBranches) {
-    let needsIIFE = this.isMultiStatementBlock(thenBranch) || this.hasStatementInBranch(thenBranch) ||
-                   elseBranches.some(b => this.isMultiStatementBlock(b) || this.hasStatementInBranch(b) || this.hasNestedMultiStatement(b));
+    let needsIIFE = this.is(thenBranch, 'block') && thenBranch.length > 2 || this.hasStatementInBranch(thenBranch) ||
+                   elseBranches.some(b => this.is(b, 'block') && b.length > 2 || this.hasStatementInBranch(b) || this.hasNestedMultiStatement(b));
     if (needsIIFE) {
       let hasAwait = this.containsAwait(condition) || this.containsAwait(thenBranch) || elseBranches.some(b => this.containsAwait(b));
       let code = `${hasAwait ? 'await ' : ''}(${hasAwait ? 'async ' : ''}() => { `;
@@ -2612,13 +2612,13 @@ export class CodeGenerator {
       code += this.generateBlockWithReturns(thenBranch);
       for (let branch of elseBranches) {
         code += ' else ';
-        if (Array.isArray(branch) && branch[0] === 'if') {
+        if (this.is(branch, 'if')) {
           let [_, nc, nt, ...ne] = branch;
           code += `if (${this.generate(nc, 'value')}) `;
           code += this.generateBlockWithReturns(nt);
           for (let nb of ne) {
             code += ' else ';
-            if (Array.isArray(nb) && nb[0] === 'if') {
+            if (this.is(nb, 'if')) {
               let [__, nnc, nnt, ...nne] = nb;
               code += `if (${this.generate(nnc, 'value')}) `;
               code += this.generateBlockWithReturns(nnt);
@@ -2636,7 +2636,7 @@ export class CodeGenerator {
     let thenExpr = this.extractExpression(this.unwrapIfBranch(thenBranch));
     let elseExpr = this.buildTernaryChain(elseBranches);
     let condCode = this.generate(condition, 'value');
-    if (Array.isArray(condition) && (condition[0] === 'yield' || condition[0] === 'await')) condCode = `(${condCode})`;
+    if ((this.is(condition, 'yield') || this.is(condition, 'await'))) condCode = `(${condCode})`;
     return `(${condCode} ? ${thenExpr} : ${elseExpr})`;
   }
 
@@ -2653,7 +2653,7 @@ export class CodeGenerator {
     if (hasFlow) {
       for (let s of this.unwrapBlock(body)) code += this.indent() + this.generate(s, 'statement') + ';\n';
     } else if (context === 'value') {
-      if (this.isBlock(body) && body.length > 2) {
+      if (this.is(body, 'block') && body.length > 2) {
         let stmts = body.slice(1);
         for (let i = 0; i < stmts.length; i++) {
           if (i === stmts.length - 1) code += this.indent() + `return ${this.generate(stmts[i], 'value')};\n`;
@@ -2663,7 +2663,7 @@ export class CodeGenerator {
         code += this.indent() + `return ${this.extractExpression(body)};\n`;
       }
     } else {
-      if (this.isBlock(body) && body.length > 1) {
+      if (this.is(body, 'block') && body.length > 1) {
         for (let s of body.slice(1)) code += this.indent() + this.generate(s, 'statement') + ';\n';
       } else {
         code += this.indent() + this.generate(body, 'statement') + ';\n';
@@ -2767,14 +2767,17 @@ export class CodeGenerator {
     return result;
   }
 
-  isNegativeStep(step) {
-    if (!Array.isArray(step) || step.length !== 2) return false;
-    return (str(step[0]) ?? step[0]) === '-';
-  }
-
-  isNegativeOneLiteral(sexpr) {
-    return Array.isArray(sexpr) && sexpr[0] === '-' && sexpr.length === 2 &&
-           (sexpr[1] === '1' || sexpr[1] === 1 || str(sexpr[1]) === '1');
+  // S-expression pattern match: is(node, op, arity?) → args or null
+  // is(node, '-', 1) on ["-", 5]         → [5]
+  // is(node, '[]', 2) on ["[]", a, b]    → [a, b]
+  // is(node, 'block') on ["block", ...]   → [...]
+  // is("x", '-', 1)                       → null
+  is(node, op, arity) {
+    if (!Array.isArray(node)) return null;
+    if ((str(node[0]) ?? node[0]) !== op) return null;
+    let args = node.slice(1);
+    if (arity != null && args.length !== arity) return null;
+    return args;
   }
 
   unwrap(code) {
@@ -2837,15 +2840,11 @@ export class CodeGenerator {
     return false;
   }
 
-  isBlock(node) { return Array.isArray(node) && node[0] === 'block'; }
-
-  isMultiStatementBlock(branch) { return this.isBlock(branch) && branch.length > 2; }
-
   hasNestedMultiStatement(branch) {
     if (!Array.isArray(branch)) return false;
     if (branch[0] === 'if') {
       let [_, cond, then_, ...elseB] = branch;
-      return this.isMultiStatementBlock(then_) || elseB.some(b => this.hasNestedMultiStatement(b));
+      return this.is(then_, 'block') && then_.length > 2 || elseB.some(b => this.hasNestedMultiStatement(b));
     }
     return false;
   }
@@ -2854,7 +2853,7 @@ export class CodeGenerator {
     if (branches.length === 0) return 'undefined';
     if (branches.length === 1) return this.extractExpression(this.unwrapIfBranch(branches[0]));
     let first = branches[0];
-    if (Array.isArray(first) && first[0] === 'if') {
+    if (this.is(first, 'if')) {
       let [_, cond, then_, ...rest] = first;
       let thenPart = this.extractExpression(this.unwrapIfBranch(then_));
       let elsePart = this.buildTernaryChain([...rest, ...branches.slice(1)]);
@@ -2957,9 +2956,9 @@ export class CodeGenerator {
     if (!sexpr) return false;
     if (sexpr instanceof String && meta(sexpr, 'await') === true) return true;
     if (typeof sexpr !== 'object') return false;
-    if (Array.isArray(sexpr) && sexpr[0] === 'await') return true;
-    if (Array.isArray(sexpr) && sexpr[0] === 'for-as' && sexpr[3] === true) return true;
-    if (Array.isArray(sexpr) && (sexpr[0] === 'def' || sexpr[0] === '->' || sexpr[0] === '=>' || sexpr[0] === 'class')) return false;
+    if (this.is(sexpr, 'await')) return true;
+    if (this.is(sexpr, 'for-as') && sexpr[3] === true) return true;
+    if ((this.is(sexpr, 'def') || this.is(sexpr, '->') || this.is(sexpr, '=>') || this.is(sexpr, 'class'))) return false;
     if (Array.isArray(sexpr)) return sexpr.some(item => this.containsAwait(item));
     return false;
   }
@@ -2967,21 +2966,18 @@ export class CodeGenerator {
   containsYield(sexpr) {
     if (!sexpr) return false;
     if (typeof sexpr !== 'object') return false;
-    if (Array.isArray(sexpr) && (sexpr[0] === 'yield' || sexpr[0] === 'yield-from')) return true;
-    if (Array.isArray(sexpr) && (sexpr[0] === 'def' || sexpr[0] === '->' || sexpr[0] === '=>' || sexpr[0] === 'class')) return false;
+    if ((this.is(sexpr, 'yield') || this.is(sexpr, 'yield-from'))) return true;
+    if ((this.is(sexpr, 'def') || this.is(sexpr, '->') || this.is(sexpr, '=>') || this.is(sexpr, 'class'))) return false;
     if (Array.isArray(sexpr)) return sexpr.some(item => this.containsYield(item));
     return false;
   }
 
   // Class helpers
-  isStaticMember(mk) { return Array.isArray(mk) && mk[0] === '.' && mk[1] === 'this'; }
-  isComputedMember(mk) { return Array.isArray(mk) && mk[0] === 'computed'; }
   extractMemberName(mk) {
-    if (this.isStaticMember(mk)) return mk[2];
-    if (this.isComputedMember(mk)) return `[${this.generate(mk[1], 'value')}]`;
+    if (this.is(mk, '.') && mk[1] === 'this') return mk[2];
+    if (this.is(mk, 'computed')) return `[${this.generate(mk[1], 'value')}]`;
     return mk;
   }
-  isBoundMethod(mv) { return Array.isArray(mv) && mv[0] === '=>'; }
 
   // ---------------------------------------------------------------------------
   // Reactive Runtime (injected inline when reactive operators are used)
