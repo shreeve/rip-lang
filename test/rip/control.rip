@@ -924,3 +924,36 @@ test "timing returns undefined when condition false", '''
     result
   fn(false, 42)
   ''', undefined
+
+# ============================================================================
+# Postfix if...else (Python-style ternary expression)
+# ============================================================================
+
+test "postfix if else basic", '"yes" if true else "no"', "yes"
+
+test "postfix if else false branch", '"yes" if false else "no"', "no"
+
+test "postfix if else with variable", '''
+  x = 10
+  "big" if x > 5 else "small"
+  ''', "big"
+
+test "postfix if else assignment", '''
+  x = 10
+  label = "big" if x > 5 else "small"
+  label
+  ''', "big"
+
+test "postfix if else in expression", '''
+  x = 3
+  result = "even" if x % 2 is 0 else "odd"
+  result
+  ''', "odd"
+
+code "postfix if else compiles to ternary", '''
+  x = "a" if cond else "b"
+  ''', '''
+  let x;
+
+  x = (cond ? "a" : "b")
+  '''

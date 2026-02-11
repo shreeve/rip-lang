@@ -1105,8 +1105,19 @@ export class CodeGenerator {
     return `(${this.generate(rest[0], 'value')} != null)`;
   }
 
-  generateTernary(head, rest) {
+  generateTernary(head, rest, context) {
     let [cond, then_, else_] = rest;
+
+    // Hoist assignment: (cond ? (x = a) : b) → x = (cond ? a : b)
+    // Enables: x = "admin" if cond else "member" without parens
+    let thenHead = then_?.[0]?.valueOf?.() ?? then_?.[0];
+    if (thenHead === '=' && Array.isArray(then_)) {
+      let target = this.generate(then_[1], 'value');
+      let thenVal = this.generate(then_[2], 'value');
+      let elseVal = this.generate(else_, 'value');
+      return `${target} = (${this.unwrap(this.generate(cond, 'value'))} ? ${thenVal} : ${elseVal})`;
+    }
+
     return `(${this.unwrap(this.generate(cond, 'value'))} ? ${this.generate(then_, 'value')} : ${this.generate(else_, 'value')})`;
   }
 
