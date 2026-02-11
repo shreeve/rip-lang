@@ -8056,7 +8056,7 @@ function getComponentRuntime() {
 }
 // src/browser.js
 var VERSION = "3.7.3";
-var BUILD_DATE = "2026-02-11@11:45:22GMT";
+var BUILD_DATE = "2026-02-11@11:55:37GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }
@@ -8072,14 +8072,20 @@ async function processRipScripts() {
       continue;
     try {
       const ripCode = dedent(script.textContent);
-      const jsCode = compileToJS(ripCode);
+      let jsCode;
+      try {
+        jsCode = compileToJS(ripCode);
+      } catch (compileError) {
+        console.error("Rip compile error:", compileError.message);
+        console.error("Source:", ripCode);
+        continue;
+      }
       await (0, eval)(`(async()=>{
 ${jsCode}
 })()`);
       script.setAttribute("data-rip-processed", "true");
     } catch (error) {
-      console.error("Error compiling Rip script:", error);
-      console.error("Script content:", script.textContent);
+      console.error("Rip runtime error:", error);
     }
   }
 }

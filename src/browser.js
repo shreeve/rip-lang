@@ -34,15 +34,21 @@ async function processRipScripts() {
 
     try {
       const ripCode = dedent(script.textContent);
-      const jsCode = compileToJS(ripCode);
+      let jsCode;
+      try {
+        jsCode = compileToJS(ripCode);
+      } catch (compileError) {
+        console.error('Rip compile error:', compileError.message);
+        console.error('Source:', ripCode);
+        continue;
+      }
 
       // Execute as async to support await (importRip!, etc.)
       await (0, eval)(`(async()=>{\n${jsCode}\n})()`);
 
       script.setAttribute('data-rip-processed', 'true');
     } catch (error) {
-      console.error('Error compiling Rip script:', error);
-      console.error('Script content:', script.textContent);
+      console.error('Rip runtime error:', error);
     }
   }
 }

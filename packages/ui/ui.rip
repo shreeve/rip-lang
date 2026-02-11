@@ -23,7 +23,8 @@
 { __state, __effect, __batch } = globalThis.__rip
 
 # Re-export context functions from the component runtime
-export { setContext, getContext, hasContext } = globalThis.__ripComponent or {}
+{ setContext, getContext, hasContext } = globalThis.__ripComponent or {}
+export { setContext, getContext, hasContext }
 
 # ==============================================================================
 # Stash — deep reactive proxy with path navigation
