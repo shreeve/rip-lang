@@ -117,6 +117,7 @@ else
 
 # Ternary
 status = active ? "on" : "off"
+label = "big" if x > 5 else "small"
 
 # Postfix
 console.log "hi" if ready

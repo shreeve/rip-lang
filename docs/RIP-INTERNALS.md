@@ -66,7 +66,7 @@ console.log(code);
 | Feature | CoffeeScript | Rip |
 |---------|-------------|------|
 | Optional chaining | 4 soak operators | ES6 `?.` / `?.[]` / `?.()` + shorthand `?[]` / `?()` |
-| Ternary | No | `x ? a : b` |
+| Ternary | No | `x ? a : b` and `a if x else b` |
 | Regex features | Basic | Ruby-style (`=~`, indexing, captures in `_`) |
 | Async shorthand | No | Dammit operator (`!`) |
 | Void functions | No | `def fn!` |

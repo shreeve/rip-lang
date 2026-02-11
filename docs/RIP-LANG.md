@@ -121,6 +121,10 @@ else
 status = active ? "on" : "off"
 result = x > 5 ? "big" : "small"
 
+# Ternary (Python-style postfix)
+status = "active" if online else "offline"
+label = "big" if x > 5 else "small"
+
 # NOTE: Subscript in ternary true-branch needs parentheses
 item = found ? (arr[0]) : default
 
@@ -275,6 +279,7 @@ Multiple lines
 | `of` | `k of obj` | Object key existence |
 | `?` (postfix) | `a?` | Existence check (`a != null`) |
 | `?` (ternary) | `a ? b : c` | Ternary conditional |
+| `if...else` (postfix) | `b if a else c` | Python-style ternary |
 | `?.` `?.[]` `?.()` | `a?.b` `a?.[0]` `a?.()` | Optional chaining (ES6) |
 | `?[]` `?()` | `a?[0]` `a?(x)` | Optional chaining shorthand |
 | `??` | `a ?? b` | Nullish coalescing |
@@ -332,6 +337,10 @@ fn?(arg)      # Compiles to fn?.(arg)
 status = active ? 'on' : 'off'
 result = valid ? obj.field : null
 output = ready ? compute() : fallback
+
+# Python-style postfix ternary
+status = "active" if online else "offline"
+label = "big" if x > 5 else "small"
 
 # Nested
 level = score > 90 ? 'A' : score > 80 ? 'B' : score > 70 ? 'C' : 'F'

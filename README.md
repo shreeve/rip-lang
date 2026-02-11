@@ -168,6 +168,7 @@ Compiles to `.js` (types erased) + `.d.ts` (types preserved) — full IDE suppor
 | `!?` (otherwise) | `val !? 5` | Default only if `undefined` |
 | `?` (existence) | `x?` | True if `x != null` |
 | `?:` (ternary) | `x > 0 ? 'yes' : 'no'` | JS-style ternary expression |
+| `if...else` (postfix) | `"yes" if cond else "no"` | Python-style ternary expression |
 | `?.` `?.[]` `?.()` | `a?.b` `a?.[0]` `a?.()` | Optional chaining (ES6) |
 | `?[]` `?()` | `a?[0]` `a?(x)` | Optional chaining shorthand |
 | `??` | `a ?? b` | Nullish coalescing |

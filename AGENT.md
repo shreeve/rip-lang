@@ -537,6 +537,7 @@ variables to persist across `rip()` calls in the browser console.
 | Feature | Syntax | Purpose |
 |---------|--------|---------|
 | Ternary operator | `x ? a : b` | JS-style ternary expressions |
+| Postfix ternary | `a if x else b` | Python-style ternary expressions |
 | `for...as` iteration | `for x as iter` | ES6 `for...of` on iterables |
 | `as!` async shorthand | `for x as! iter` | Shorthand for `for await x as iter` |
 
