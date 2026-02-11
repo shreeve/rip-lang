@@ -640,6 +640,8 @@ export createRenderer = (opts = {}) ->
       current = router.current
       mountRoute(current) if current.route
 
+    cache: componentCache
+
   renderer
 
 # =============================================================================
@@ -713,7 +715,7 @@ export launch = (appBase = '', opts = {}) ->
       router: router
       renderer: renderer
       stash: app
-      cache: componentCache
+      cache: renderer.cache
       version: '0.2.0'
 
   { app, parts: appParts, router, renderer }
