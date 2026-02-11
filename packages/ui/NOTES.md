@@ -78,6 +78,14 @@
 - `createResource` caching with stale-while-revalidate (TanStack Query-style)
 - Persistent VFS (IndexedDB/OPFS) for offline support and instant reloads
 - Compiled template optimization (ahead-of-time DOM operations)
-- Route transition animations
+- SSR / streaming — server-side rendering for SEO and initial load performance.
+  Low priority: the initial HTML can be hydrated for SEO, and the bundle
+  downloads quickly. The app architecture already supports a two-phase load
+  (initial route inline, remainder on demand).
+- Form handling — validation, form state management, optimistic updates.
+  React Hook Form, TanStack Form, and Formik are entire ecosystems. This is
+  a large feature area that deserves dedicated design work.
+- Route transition animations — enter/exit animations for components during
+  navigation. Nice to have for polish. Vue's `<Transition>` and React's
+  Framer Motion are the reference implementations.
 - Scroll restoration on back/forward navigation
-- Form handling utilities
