@@ -44,7 +44,7 @@ function extractInputType(pairs) {
  */
 function getMemberName(target) {
   if (typeof target === 'string') return target;
-  if (Array.isArray(target) && target[0] === '.' && target[1] === 'this' && typeof target[2] === 'string') {
+  if (this.is(target, '.') && target[1] === 'this' && typeof target[2] === 'string') {
     return target[2];
   }
   return null;
@@ -94,7 +94,7 @@ export function installComponentSupport(CodeGenerator) {
   proto.collectTemplateClasses = function(sexpr) {
     const classes = [];
     let current = sexpr;
-    while (Array.isArray(current) && current[0] === '.') {
+    while (this.is(current, '.')) {
       const prop = current[2];
       if (typeof prop === 'string' || prop instanceof String) {
         classes.unshift(prop.valueOf());
@@ -153,7 +153,7 @@ export function installComponentSupport(CodeGenerator) {
     this.usesReactivity = true;
 
     // Extract component body statements
-    const statements = Array.isArray(body) && body[0] === 'block' ? body.slice(1) : [];
+    const statements = this.is(body, 'block') ? body.slice(1) : [];
 
     // Categorize statements
     const stateVars = [];
@@ -386,7 +386,7 @@ export function installComponentSupport(CodeGenerator) {
     this._setupLines = [];
     this._blockFactories = [];
 
-    const statements = Array.isArray(body) && body[0] === 'block' ? body.slice(1) : [body];
+    const statements = this.is(body, 'block') ? body.slice(1) : [body];
 
     let rootVar;
     if (statements.length === 0) {
@@ -565,7 +565,7 @@ export function installComponentSupport(CodeGenerator) {
       // Arrow function = children
       if (Array.isArray(arg) && (arg[0] === '->' || arg[0] === '=>')) {
         const block = arg[2];
-        if (Array.isArray(block) && block[0] === 'block') {
+        if (this.is(block, 'block')) {
           for (const child of block.slice(1)) {
             const childVar = this.generateNode(child);
             this._createLines.push(`${elVar}.appendChild(${childVar});`);
@@ -576,7 +576,7 @@ export function installComponentSupport(CodeGenerator) {
         }
       }
       // Object = attributes/events
-      else if (Array.isArray(arg) && arg[0] === 'object') {
+      else if (this.is(arg, 'object')) {
         this.generateAttributes(elVar, arg);
       }
       // String = text child
@@ -651,7 +651,7 @@ export function installComponentSupport(CodeGenerator) {
           this._createLines.push(`${elVar}.appendChild(${childVar});`);
         }
       }
-      else if (Array.isArray(arg) && arg[0] === 'object') {
+      else if (this.is(arg, 'object')) {
         this.generateAttributes(elVar, arg);
       }
       else if (typeof arg === 'string' || arg instanceof String) {
@@ -687,7 +687,7 @@ export function installComponentSupport(CodeGenerator) {
       let [key, value] = objExpr[i];
 
       // Event handler: @click or (. this eventName)
-      if (Array.isArray(key) && key[0] === '.' && key[1] === 'this') {
+      if (this.is(key, '.') && key[1] === 'this') {
         const eventName = key[2];
         const handlerCode = this.generateInComponent(value, 'value');
         this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => (${handlerCode})(e));`);
@@ -938,11 +938,11 @@ export function installComponentSupport(CodeGenerator) {
 
     // Extract key expression from body if present
     let keyExpr = itemVar;
-    if (Array.isArray(body) && body[0] === 'block' && body.length > 1) {
+    if (this.is(body, 'block') && body.length > 1) {
       const firstChild = body[1];
       if (Array.isArray(firstChild)) {
         for (const arg of firstChild) {
-          if (Array.isArray(arg) && arg[0] === 'object') {
+          if (this.is(arg, 'object')) {
             for (let i = 1; i < arg.length; i++) {
               const [k, v] = arg[i];
               if (k === 'key') {
@@ -1107,7 +1107,7 @@ export function installComponentSupport(CodeGenerator) {
     const childrenSetupLines = [];
 
     for (const arg of args) {
-      if (Array.isArray(arg) && arg[0] === 'object') {
+      if (this.is(arg, 'object')) {
         for (let i = 1; i < arg.length; i++) {
           const [key, value] = arg[i];
           if (typeof key === 'string') {
