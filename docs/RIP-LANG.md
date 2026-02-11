@@ -412,7 +412,14 @@ users .= map -> it.name
 users .= sort()
 ```
 
-Works with any method — built-in or custom, with or without arguments.
+Works with any method — built-in or custom, with or without arguments. Spacing
+is flexible — all of these are equivalent:
+
+```coffee
+str .= trim()          # canonical (spaced)
+str.=trim()            # compact (no spaces)
+str .=trim()           # mixed
+```
 
 ## Merge Assignment (`*`)
 
