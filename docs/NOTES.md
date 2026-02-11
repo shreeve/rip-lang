@@ -1,6 +1,6 @@
-<p><img src="rip.svg" alt="Rip Logo" width="100"></p>
+<img src="https://raw.githubusercontent.com/shreeve/rip-lang/main/docs/rip.png" style="width:50px" /> <br>
 
-# Notes
+# Rip — Notes
 
 Ideas, future plans, and design thoughts for Rip.
 
