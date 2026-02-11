@@ -178,6 +178,10 @@ Compiles to `.js` (types erased) + `.d.ts` (types preserved) — full IDE suppor
 | `=~` | `str =~ /Hello, (\w+)/` | Match (captures in `_`) |
 | `[//, n]` | `str[/Hello, (\w+)/, 1]` | Extract capture n |
 | `.new()` | `Dog.new()` | Ruby-style constructor |
+| `*` (string repeat) | `"-" * 40` | String repeat via `.repeat()` |
+| `<` `<=` (chained) | `1 < x < 10` | Chained comparisons |
+| `not in` | `x not in arr` | Negated membership test |
+| `not of` | `k not of obj` | Negated key existence |
 | `or return` | `x = get() or return err` | Guard clause (Ruby-style) |
 | `?? throw` | `x = get() ?? throw err` | Nullish guard |
 

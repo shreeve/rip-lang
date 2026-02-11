@@ -599,6 +599,10 @@ rip> .js      # Toggle JS display
 | `~=` | Computed | `doubled ~= count * 2` — computed |
 | `=~` | Match | `str =~ /pat/` — Ruby-style regex |
 | `.new()` | Constructor | `User.new()` — Ruby-style new |
+| `if...else` | Postfix ternary | `"a" if cond else "b"` — Python-style |
+| `*` | String repeat | `"-" * 40` — string repetition |
+| `<` `<=` | Chained | `1 < x < 10` — chained comparisons |
+| `not in` | Not in | `x not in arr` — negated membership |
 | `or return` | Guard | `x = get() or return err` — early return |
 | `?? throw` | Nullish guard | `x = get() ?? throw err` — throw if null |
 

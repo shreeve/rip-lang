@@ -175,6 +175,11 @@ Rip extends JavaScript with powerful operators:
 | `:=` | State | `count := 0` | Reactive signal |
 | `~=` | Computed | `doubled ~= x * 2` | Reactive computed |
 | `~>` | Effect | `~> console.log x` | Reactive side effect |
+| `*` | String repeat | `"-" * 40` | `"-".repeat(40)` |
+| `<` `<=` | Chained | `1 < x < 10` | `(1 < x) && (x < 10)` |
+| `not in` | Not in | `x not in arr` | Negated membership |
+| `not of` | Not of | `k not of obj` | Negated key existence |
+| `if...else` | Postfix ternary | `"a" if x else "b"` | `x ? "a" : "b"` |
 | `**` | Power | `2 ** 10` | `1024` |
 | `..` | Range | `[1..5]` | Inclusive range |
 | `...` | Spread/rest | `[...a, ...b]` | ES6 spread |
@@ -634,7 +639,7 @@ rip -d file.rip            # Generate .d.ts
 rip -t file.rip            # Show tokens
 rip -s file.rip            # Show S-expressions
 rip -q -c file.rip         # Quiet (no headers)
-bun run test               # Run test suite (1,140 tests)
+bun run test               # Run test suite
 ```
 
 ---

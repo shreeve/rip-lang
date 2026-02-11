@@ -298,6 +298,10 @@ Multiple lines
 | `!` | Void | `def process!` | Suppresses implicit return |
 | `!?` | Otherwise | `val !? 5` | Default if undefined or throws |
 | `=~` | Match | `str =~ /pat/` | Ruby-style regex match, captures in `_` |
+| `*` | String repeat | `"-" * 40` | `"-".repeat(40)` |
+| `<` `<=` | Chained comparison | `1 < x < 10` | `(1 < x) && (x < 10)` |
+| `not in` | Not in | `x not in arr` | Negated membership test |
+| `not of` | Not of | `k not of obj` | Negated key existence |
 
 ## Assignment Operators
 
