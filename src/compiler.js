@@ -752,6 +752,17 @@ export class CodeGenerator {
         return `${this.generate(left, 'value')}.repeat(${this.generate(right, 'value')})`;
       }
     }
+    // Chained comparisons: (< (< a b) c) → ((a < b) && (b < c))
+    let COMPARE_OPS = new Set(['<', '>', '<=', '>=']);
+    if (COMPARE_OPS.has(op) && Array.isArray(left)) {
+      let leftOp = left[0]?.valueOf?.() ?? left[0];
+      if (COMPARE_OPS.has(leftOp)) {
+        let a = this.generate(left[1], 'value');
+        let b = this.generate(left[2], 'value');
+        let c = this.generate(right, 'value');
+        return `((${a} ${leftOp} ${b}) && (${b} ${op} ${c}))`;
+      }
+    }
     if (op === '!?') {
       let l = this.generate(left, 'value'), r = this.generate(right, 'value');
       return `(${l} !== undefined ? ${l} : ${r})`;

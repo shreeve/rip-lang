@@ -255,3 +255,16 @@ test "string repeat single char", '"=" * 5', "====="
 test "string repeat zero", '"x" * 0', ""
 test "string repeat one", '"abc" * 1', "abc"
 code "string repeat compiles to repeat", '"-" * 40', '"-".repeat(40)'
+
+# ============================================================================
+# Chained Comparisons — a < b < c
+# ============================================================================
+
+test "chained less than", "x = 5; 1 < x < 10", true
+test "chained less than false low", "x = 0; 1 < x < 10", false
+test "chained less than false high", "x = 15; 1 < x < 10", false
+test "chained less equal", "x = 5; 1 <= x <= 10", true
+test "chained less equal boundary", "x = 1; 1 <= x <= 10", true
+test "chained greater than", "x = 5; 10 > x > 1", true
+test "chained mixed", "x = 5; 0 <= x < 10", true
+code "chained compiles to conjunction", "1 < x < 10", "((1 < x) && (x < 10))"
