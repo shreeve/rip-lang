@@ -288,12 +288,13 @@ export createRouter = (parts, opts = {}) ->
   addBase = (path) ->
     if base then base + path else path
 
-  _path   = __state(stripBase(location.pathname))
-  _params = __state({})
-  _route  = __state(null)
-  _layouts = __state([])
-  _query  = __state({})
-  _hash   = __state('')
+  _path       = __state(stripBase(location.pathname))
+  _params     = __state({})
+  _route      = __state(null)
+  _layouts    = __state([])
+  _query      = __state({})
+  _hash       = __state('')
+  _navigating = __state(false)
 
   tree = buildRoutes(parts, root)
   navCallbacks = new Set()
@@ -351,13 +352,14 @@ export createRouter = (parts, opts = {}) ->
     back: -> history.back()
     forward: -> history.forward()
 
-    current: undefined  # overridden by getter
-    path:    undefined
-    params:  undefined
-    route:   undefined
-    layouts: undefined
-    query:   undefined
-    hash:    undefined
+    current:    undefined  # overridden by getter
+    path:       undefined
+    params:     undefined
+    route:      undefined
+    layouts:    undefined
+    query:      undefined
+    hash:       undefined
+    navigating: undefined
 
     onNavigate: (cb) ->
       navCallbacks.add cb
@@ -385,6 +387,7 @@ export createRouter = (parts, opts = {}) ->
   Object.defineProperty router, 'layouts', get: -> _layouts.value
   Object.defineProperty router, 'query', get: -> _query.value
   Object.defineProperty router, 'hash', get: -> _hash.value
+  Object.defineProperty router, 'navigating', get: -> _navigating.value
   Object.defineProperty router, 'routes', get: -> tree.routes
 
   router
@@ -458,19 +461,22 @@ export createRenderer = (opts = {}) ->
     return unless route
 
     gen = ++generation
+    _navigating.value = true
 
     try
       source = parts.read(route.file)
       unless source
         onError({ status: 404, message: "File not found: #{route.file}" }) if onError
+        _navigating.value = false
         return
 
       mod = compileAndImport! source, compile, parts, route.file
-      return if gen isnt generation
+      if gen isnt generation then _navigating.value = false; return
 
       Component = findComponent(mod)
       unless Component
         onError({ status: 500, message: "No component found in #{route.file}" }) if onError
+        _navigating.value = false
         return
 
       layoutsChanged = not arraysEqual(layoutFiles, currentLayouts)
@@ -492,7 +498,7 @@ export createRenderer = (opts = {}) ->
           layoutSource = parts.read(layoutFile)
           continue unless layoutSource
           layoutMod = compileAndImport! layoutSource, compile, parts, layoutFile
-          return if gen isnt generation
+          if gen isnt generation then _navigating.value = false; return
 
           LayoutClass = findComponent(layoutMod)
           continue unless LayoutClass
@@ -523,8 +529,10 @@ export createRenderer = (opts = {}) ->
       currentComponent = instance
 
       instance.load!(params, query) if instance.load
+      _navigating.value = false
 
     catch err
+      _navigating.value = false
       console.error "Renderer: error mounting #{route.file}:", err
       onError({ status: 500, message: err.message, error: err }) if onError
       pre = document.createElement('pre')
