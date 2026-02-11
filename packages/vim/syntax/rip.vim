@@ -94,7 +94,7 @@ syn match  ripInstVar       /@[a-zA-Z_$][a-zA-Z0-9_$]*/
 syn match  ripOperator      /[+\-*/%&|^~<>=!?]/
 
 " Two-char
-syn match  ripOperator      /\*\*\|\/\/\|%%\|++\|--/
+syn match  ripOperator      /\*\*\|\/\/\|%%\|++\|--\||>/
 syn match  ripOperator      /==\|!=\|<=\|>=\|&&\|||\|<<\|>>\|=\~\|\.\./
 
 " Three-char
