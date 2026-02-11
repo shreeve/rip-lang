@@ -104,11 +104,11 @@ async function test(name, code, expected) {
 }
 
 // Test helper: Compile and compare generated code
-function code(name, sourceCode, expectedCode, options = {}) {
+function code(name, have, want, options = {}) {
   try {
-    const result = compile(sourceCode, options);
+    const result = compile(have, options);
     const actualNorm = normalizeCode(result.code);
-    const expectedNorm = normalizeCode(expectedCode);
+    const expectedNorm = normalizeCode(want);
 
     if (actualNorm === expectedNorm) {
       fileTests.pass++;
@@ -122,7 +122,7 @@ function code(name, sourceCode, expectedCode, options = {}) {
         file: currentFile,
         test: name,
         type: 'code',
-        expected: expectedCode,
+        expected: want,
         actual: result.code,
         normalized: {
           expected: expectedNorm,
@@ -139,17 +139,17 @@ function code(name, sourceCode, expectedCode, options = {}) {
       test: name,
       type: 'code',
       error: error.message,
-      sourceCode
+      have
     });
   }
 }
 
 // Test helper: Compile with types and compare .d.ts output
-function type(name, sourceCode, expectedDts) {
+function type(name, have, want) {
   try {
-    const result = compile(sourceCode, { types: 'emit' });
+    const result = compile(have, { types: 'emit' });
     const actualDts = (result.dts || '').trim();
-    const expectedTrimmed = expectedDts.trim();
+    const expectedTrimmed = want.trim();
 
     if (actualDts === expectedTrimmed) {
       fileTests.pass++;
@@ -176,15 +176,15 @@ function type(name, sourceCode, expectedDts) {
       test: name,
       type: 'type',
       error: error.message,
-      sourceCode
+      have
     });
   }
 }
 
 // Test helper: Expect failure (compilation or execution)
-function fail(name, sourceCode) {
+function fail(name, have) {
   try {
-    const result = compile(sourceCode);
+    const result = compile(have);
 
     // Try to execute - should fail
     try {
