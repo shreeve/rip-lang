@@ -704,8 +704,17 @@ export launch = (appBase = '', opts = {}) ->
   if bundle.data?.watch
     connectWatch appParts, router, renderer, "#{appBase}/watch", appBase
 
-  # Expose for console
-  window.app = app if typeof window isnt 'undefined'
+  # Expose for console and dev tools
+  if typeof window isnt 'undefined'
+    window.app = app
+    window.__RIP__ =
+      app: app
+      parts: appParts
+      router: router
+      renderer: renderer
+      stash: app
+      cache: componentCache
+      version: '0.2.0'
 
   { app, parts: appParts, router, renderer }
 
