@@ -156,7 +156,7 @@ export Layout = component
     .app-layout
       if errorMsg
         .error-banner "#{errorMsg}"
-      div data-slot: "true"
+      #content
 ```
 
 ## Navigation Indicator

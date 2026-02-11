@@ -627,10 +627,19 @@ export class Lexer {
   // --------------------------------------------------------------------------
 
   commentToken() {
+    // In render blocks, #word is an element ID, not a comment
+    if (this.inRenderBlock) {
+      if (/^#[a-zA-Z_]/.test(this.chunk)) {
+        let prev = this.prev();
+        if (prev && (prev[0] === 'IDENTIFIER' || prev[0] === 'PROPERTY'))
+          return 0;  // after a tag (div#main) → let # become a token for rewriter
+        let m = /^#([a-zA-Z_][\w-]*)/.exec(this.chunk);
+        if (m) { this.emit('IDENTIFIER', 'div#' + m[1]); return m[0].length; }
+      }
+      if (/^\s+#[a-zA-Z_]/.test(this.chunk)) return 0;  // let lineToken handle indentation first
+    }
     let match = COMMENT_RE.exec(this.chunk);
     if (!match) return 0;
-    // For now, consume the comment and discard it
-    // TODO: attach comments to adjacent tokens for source map support
     return match[0].length;
   }
 
@@ -1499,7 +1508,7 @@ export class Lexer {
       if (tag === 'IDENTIFIER' || tag === 'PROPERTY') {
         let next = tokens[i + 1];
         let nextNext = tokens[i + 2];
-        if (next && next[0] === '#' && nextNext && nextNext[0] === 'PROPERTY') {
+        if (next && next[0] === '#' && nextNext && (nextNext[0] === 'PROPERTY' || nextNext[0] === 'IDENTIFIER')) {
           token[1] = token[1] + '#' + nextNext[1];
           if (nextNext.spaced) token.spaced = true;
           tokens.splice(i + 1, 2);

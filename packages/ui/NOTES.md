@@ -39,7 +39,7 @@
 - **Props flow** — syntax for passing signals between parent and child
   in render blocks.
 - **Slots / children** — passing content into reusable components. Only
-  `data-slot` exists for layouts.
+  `#content` exists for layouts.
 - **Props validation** — no mechanism for expected props, defaults, or
   required props.
 - **Scoped styles** — no CSS scoping per component. Global namespace only.

@@ -23,4 +23,4 @@ export Layout = component
           .error-banner
             p "Something went wrong: #{errorMsg}"
             button.btn @click: (-> errorMsg = null), "Dismiss"
-        div data-slot: "true"
+        #content

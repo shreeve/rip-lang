@@ -38,4 +38,4 @@ export About = component
 
       .card
         h3 "Modules"
-        p "The framework lives in one file: ui.rip. It uses Rip's built-in reactive primitives directly — the same signals that power := and ~= in components. Deep reactive stash with path navigation. Parts system for component storage. File-based router mapping URLs to components. Renderer that compiles and mounts components with layout support."
+        p "The framework lives in one file: ui.rip. It uses Rip's built-in reactive primitives directly — the same signals that power := and ~= in components. Deep reactive stash with path navigation. Component store for source management. File-based router mapping URLs to components. Renderer that compiles and mounts components with layout support."

@@ -50,7 +50,7 @@ export ripUI = (opts = {}) ->
     ripUI._registered = true
 
   # ----------------------------------------------------------------------------
-  # Route: {prefix}/components/* — individual .rip part files (for hot-reload)
+  # Route: {prefix}/components/* — individual .rip component files (for hot-reload)
   # Route: {prefix}/bundle  — app bundle (components + data as JSON)
   # Route: {prefix}/watch   — SSE hot-reload stream
   # ----------------------------------------------------------------------------

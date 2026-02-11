@@ -11,8 +11,8 @@ export Home = component
       .feature-grid
         .feature-card
           .feature-icon "🗂"
-          .feature-name "Parts System"
-          .feature-desc "Component source files in a unified stash. Compiled on demand."
+          .feature-name "Component Store"
+          .feature-desc "Component source files loaded on demand. Compiled in the browser."
 
         .feature-card
           .feature-icon "🔀"

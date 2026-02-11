@@ -101,8 +101,11 @@ export function installComponentSupport(CodeGenerator) {
       }
       current = current[1];
     }
-    const tag = typeof current === 'string' ? current : (current instanceof String ? current.valueOf() : 'div');
-    return { tag, classes };
+    let raw = typeof current === 'string' ? current : (current instanceof String ? current.valueOf() : 'div');
+    // Split tag#id — e.g. "div#content" → tag: "div", id: "content"
+    let [tag, id] = raw.split('#');
+    if (!tag) tag = 'div';  // bare #id → div
+    return { tag, classes, id };
   };
 
   // ==========================================================================
@@ -428,9 +431,11 @@ export function installComponentSupport(CodeGenerator) {
         this._setupLines.push(`__effect(() => { ${textVar}.data = this.${str}.value; });`);
         return textVar;
       }
-      // Static tag without content
+      // Static tag without content (possibly with #id)
+      const [tagStr, idStr] = str.split('#');
       const elVar = this.newElementVar();
-      this._createLines.push(`${elVar} = document.createElement('${str}');`);
+      this._createLines.push(`${elVar} = document.createElement('${tagStr || 'div'}');`);
+      if (idStr) this._createLines.push(`${elVar}.id = '${idStr}';`);
       return elVar;
     }
 
@@ -448,9 +453,10 @@ export function installComponentSupport(CodeGenerator) {
       return this.generateChildComponent(headStr, rest);
     }
 
-    // HTML tag
+    // HTML tag (possibly with #id, e.g. div#content)
     if (headStr && this.isHtmlTag(headStr)) {
-      return this.generateTag(headStr, [], rest);
+      let [tagName, id] = headStr.split('#');
+      return this.generateTag(tagName || 'div', [], rest, id);
     }
 
     // Property chain (div.class or item.name)
@@ -471,10 +477,10 @@ export function installComponentSupport(CodeGenerator) {
         return slotVar;
       }
 
-      // HTML tag with classes (div.class)
-      const { tag, classes } = this.collectTemplateClasses(sexpr);
+      // HTML tag with classes (div.class) and optional #id
+      const { tag, classes, id } = this.collectTemplateClasses(sexpr);
       if (tag && this.isHtmlTag(tag)) {
-        return this.generateTag(tag, classes, []);
+        return this.generateTag(tag, classes, [], id);
       }
 
       // General property access (e.g., item.name in a loop)
@@ -494,13 +500,13 @@ export function installComponentSupport(CodeGenerator) {
         return this.generateDynamicTag(tag, classExprs, rest);
       }
 
-      const { tag, classes } = this.collectTemplateClasses(head);
+      const { tag, classes, id } = this.collectTemplateClasses(head);
       if (tag && this.isHtmlTag(tag)) {
         // Dynamic class syntax: div.("classes") → (. div __clsx) "classes"
         if (classes.length === 1 && classes[0] === '__clsx') {
           return this.generateDynamicTag(tag, rest, []);
         }
-        return this.generateTag(tag, classes, rest);
+        return this.generateTag(tag, classes, rest, id);
       }
     }
 
@@ -535,10 +541,13 @@ export function installComponentSupport(CodeGenerator) {
   // generateTag — HTML element with static classes and children
   // --------------------------------------------------------------------------
 
-  proto.generateTag = function(tag, classes, args) {
+  proto.generateTag = function(tag, classes, args, id) {
     const elVar = this.newElementVar();
     this._createLines.push(`${elVar} = document.createElement('${tag}');`);
 
+    if (id) {
+      this._createLines.push(`${elVar}.id = '${id}';`);
+    }
     if (classes.length > 0) {
       this._createLines.push(`${elVar}.className = '${classes.join(' ')}';`);
     }
