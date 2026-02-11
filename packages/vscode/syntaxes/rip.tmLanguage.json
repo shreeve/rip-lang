@@ -285,6 +285,9 @@
     { "match": "\\|\\|",  "name": "keyword.operator.logical.rip" },
     { "match": "!(?![=?])", "name": "keyword.operator.logical.rip" },
 
+    {"comment": "=== PIPE ==="},
+    { "match": "\\|>", "name": "keyword.operator.pipe.rip" },
+
     {"comment": "=== ARITHMETIC (longest match first) ==="},
     { "match": "\\*\\*", "name": "keyword.operator.arithmetic.rip" },
     { "match": "//",     "name": "keyword.operator.arithmetic.rip" },
