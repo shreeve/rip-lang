@@ -238,11 +238,8 @@ export function installComponentSupport(CodeGenerator) {
 
     lines.push('class extends __Component {');
 
-    // --- Constructor ---
-    lines.push('  constructor(props = {}) {');
-    lines.push('    super();');
-    lines.push('    const __prevComponent = __pushComponent(this);');
-    lines.push('');
+    // --- Init (called by __Component constructor) ---
+    lines.push('  _init(props) {');
 
     // Constants (readonly)
     for (const { name, value } of readonlyVars) {
@@ -269,8 +266,6 @@ export function installComponentSupport(CodeGenerator) {
       lines.push(`    __effect(${effectCode});`);
     }
 
-    lines.push('');
-    lines.push('    __popComponent(__prevComponent);');
     lines.push('  }');
 
     // --- Methods ---
@@ -1211,6 +1206,12 @@ function __cx__(...args) {
 }
 
 class __Component {
+  constructor(props = {}) {
+    const prev = __pushComponent(this);
+    this._init(props);
+    __popComponent(prev);
+  }
+  _init() {}
   mount(target) {
     if (typeof target === "string") target = document.querySelector(target);
     this._target = target;
