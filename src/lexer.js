@@ -127,7 +127,7 @@ let IMPLICIT_UNSPACED_CALL = new Set(['+', '-']);
 // Tokens that end an implicit call
 let IMPLICIT_END = new Set([
   'POST_IF', 'POST_UNLESS', 'FOR', 'WHILE', 'UNTIL',
-  'WHEN', 'BY', 'LOOP', 'TERMINATOR', '||', '&&',
+  'WHEN', 'BY', 'LOOP', 'TERMINATOR', '||', '&&', 'PIPE',
 ]);
 
 // Tokens that trigger implicit comma insertion before arrows
