@@ -565,6 +565,7 @@
               <button id="show-tokens" title="Toggle token stream display">Tokens</button>
               <button id="show-sexp" title="Toggle S-expression display">S-Expressions</button>
               <button id="show-preamble" title="Toggle preamble code display">Preamble</button>
+              <button id="show-types" title="Toggle .d.ts type declarations">Types</button>
               <button id="show-js" title="Toggle JavaScript output">JS</button>
             </div>
           </div>
@@ -934,6 +935,7 @@ console.log "Domain:", domain`;
     const showTokensBtn = document.getElementById('show-tokens');
     const showSexpBtn = document.getElementById('show-sexp');
     const showPreambleBtn = document.getElementById('show-preamble');
+    const showTypesBtn = document.getElementById('show-types');
     const showJSBtn = document.getElementById('show-js');
     const replOutput = document.getElementById('repl-output');
     const promptSpan = document.getElementById('prompt');
@@ -982,6 +984,7 @@ console.log "Domain:", domain`;
     let showTokens = localStorage.getItem('rip-repl-tokens') === 'true';
     let showSexp = localStorage.getItem('rip-repl-sexp') === 'true';
     let showPreamble = localStorage.getItem('rip-preamble') === 'true';
+    let showTypes = localStorage.getItem('rip-types') === 'true';
     let showJS = localStorage.getItem('rip-repl-js') !== 'false';  // default true
 
     // Format tokens for display — clean, minimal output
@@ -1012,7 +1015,10 @@ console.log "Domain:", domain`;
     function compileCode() {
       try {
         const source = monacoEditor.getValue();
-        const result = compile(source, showPreamble ? {} : { skipPreamble: true });
+        const opts = {};
+        if (!showPreamble) opts.skipPreamble = true;
+        if (showTypes) opts.types = 'emit';
+        const result = compile(source, opts);
 
         let parts = [];
 
@@ -1024,6 +1030,10 @@ console.log "Domain:", domain`;
           parts.push(window.toSexpr ? window.toSexpr(result.sexpr, 0, true) : JSON.stringify(result.sexpr, null, 1));
         }
 
+        if (showTypes && result.dts) {
+          parts.push('// .d.ts\n' + result.dts.trim());
+        }
+
         if (showJS) {
           parts.push(result.code);
         }
@@ -1032,7 +1042,8 @@ console.log "Domain:", domain`;
 
         // Update output editor language and content
         const model = outputEditor.getModel();
-        monaco.editor.setModelLanguage(model, (showTokens || showSexp) ? 'plaintext' : 'javascript');
+        let lang = (showTokens || showSexp) ? 'plaintext' : (showTypes && !showJS) ? 'typescript' : 'javascript';
+        monaco.editor.setModelLanguage(model, lang);
         outputEditor.setValue(outputText);
       } catch (error) {
         const model = outputEditor.getModel();
@@ -1085,6 +1096,7 @@ console.log "Domain:", domain`;
     showTokensBtn.classList.toggle('active', showTokens);
     showSexpBtn.classList.toggle('active', showSexp);
     showPreambleBtn.classList.toggle('active', showPreamble);
+    showTypesBtn.classList.toggle('active', showTypes);
     showJSBtn.classList.toggle('active', showJS);
 
     // Initialize from URL hash on page load (default to compiler)
@@ -1536,10 +1548,11 @@ console.log "Domain:", domain`;
     monacoEditor.onDidChangeModelContent(compileCode);
 
     const toggles = [
-      { btn: showTokensBtn, key: 'rip-repl-tokens',  get: () => showTokens,  set: v => showTokens = v },
-      { btn: showSexpBtn,   key: 'rip-repl-sexp',    get: () => showSexp,    set: v => showSexp = v },
-      { btn: showPreambleBtn, key: 'rip-preamble', get: () => showPreamble, set: v => showPreamble = v },
-      { btn: showJSBtn,     key: 'rip-repl-js',       get: () => showJS,      set: v => showJS = v },
+      { btn: showTokensBtn,   key: 'rip-repl-tokens', get: () => showTokens,   set: v => showTokens = v },
+      { btn: showSexpBtn,     key: 'rip-repl-sexp',   get: () => showSexp,     set: v => showSexp = v },
+      { btn: showPreambleBtn, key: 'rip-preamble',     get: () => showPreamble, set: v => showPreamble = v },
+      { btn: showTypesBtn,    key: 'rip-types',        get: () => showTypes,    set: v => showTypes = v },
+      { btn: showJSBtn,       key: 'rip-repl-js',      get: () => showJS,       set: v => showJS = v },
     ];
 
     for (const { btn, key, get, set } of toggles) {

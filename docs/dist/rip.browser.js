@@ -7899,8 +7899,8 @@ function getComponentRuntime() {
   return new CodeGenerator({}).getComponentRuntime();
 }
 // src/browser.js
-var VERSION = "3.6.2";
-var BUILD_DATE = "2026-02-11@06:26:01GMT";
+var VERSION = "3.6.3";
+var BUILD_DATE = "2026-02-11@06:36:28GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }
