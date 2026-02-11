@@ -90,6 +90,7 @@ input, button, textarea, select { font: inherit; }
 .app-nav {
     background: var(--card);
     border-bottom: 1px solid var(--border);
+    border-radius: var(--radius);
     padding: 0 1.5rem;
     position: sticky;
     top: 0;

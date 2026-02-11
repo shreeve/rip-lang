@@ -424,7 +424,9 @@ export createRouter = (components, opts = {}) ->
   Object.defineProperty router, 'layouts', get: -> _layouts.value
   Object.defineProperty router, 'query', get: -> _query.value
   Object.defineProperty router, 'hash', get: -> _hash.value
-  Object.defineProperty router, 'navigating', get: -> _navigating.value
+  Object.defineProperty router, 'navigating',
+    get: -> _navigating.value
+    set: (v) -> _navigating.value = v
   Object.defineProperty router, 'routes', get: -> tree.routes
 
   router
@@ -520,22 +522,22 @@ export createRenderer = (opts = {}) ->
     return unless route
 
     gen = ++generation
-    _navigating.value = true
+    router.navigating = true
 
     try
       source = components.read(route.file)
       unless source
         onError({ status: 404, message: "File not found: #{route.file}" }) if onError
-        _navigating.value = false
+        router.navigating = false
         return
 
       mod = compileAndImport! source, compile, components, route.file
-      if gen isnt generation then _navigating.value = false; return
+      if gen isnt generation then router.navigating = false; return
 
       Component = findComponent(mod)
       unless Component
         onError({ status: 500, message: "No component found in #{route.file}" }) if onError
-        _navigating.value = false
+        router.navigating = false
         return
 
       layoutsChanged = not arraysEqual(layoutFiles, currentLayouts)
@@ -555,7 +557,7 @@ export createRenderer = (opts = {}) ->
           layoutSource = components.read(layoutFile)
           continue unless layoutSource
           layoutMod = compileAndImport! layoutSource, compile, components, layoutFile
-          if gen isnt generation then _navigating.value = false; return
+          if gen isnt generation then router.navigating = false; return
 
           LayoutClass = findComponent(layoutMod)
           continue unless LayoutClass
@@ -597,10 +599,10 @@ export createRenderer = (opts = {}) ->
         currentRoute = route.file
 
         instance.load!(params, query) if instance.load
-      _navigating.value = false
+      router.navigating = false
 
     catch err
-      _navigating.value = false
+      router.navigating = false
       console.error "Renderer: error mounting #{route.file}:", err
       onError({ status: 500, message: err.message, error: err }) if onError
 

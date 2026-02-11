@@ -33,7 +33,7 @@ bun run browser
 
 | Metric | Value |
 |--------|-------|
-| Version | 3.7.3 |
+| Version | 3.7.4 |
 | Tests | 1,140/1,140 (100%) |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |

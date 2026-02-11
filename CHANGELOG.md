@@ -7,6 +7,21 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.4] - 2026-02-11
+
+### Compiler — Nested Function Scope Chain
+
+- **Scope stack for variable hoisting** — Nested functions no longer re-declare variables from enclosing function scopes. Previously, the compiler only checked program-level variables; now it tracks a full scope chain. Fixes incorrect `let` shadowing in deeply nested function patterns (e.g., `mountRoute` inside `createRenderer` in `ui.rip`).
+
+### Rip UI — Demo App Working
+
+- **Router `navigating` getter/setter** — The `_navigating` signal is now accessible through `router.navigating` (read/write), fixing a cross-scope reference where `createRenderer` accessed a variable local to `createRouter`.
+- **Component props passthrough** — `__Component` base class now assigns all props to `this` via `Object.assign(this, props)` before `_init`, so components can access `@router`, `@app`, `@params` etc.
+
+### Language — `*@` Merge-This
+
+- **`*@ = props`** — New merge-assign variant for `this`. Compiles to `Object.assign(this, props)`. Natural extension of `*obj = expr` — no `??=` guard needed since `this` is never null.
+
 ## [3.7.3] - 2026-02-11
 
 ### Fixes & Polish

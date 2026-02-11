@@ -276,6 +276,7 @@ export class CodeGenerator {
     this.programVars = new Set();
     this.functionVars = new Map();
     this.helpers = new Set();
+    this.scopeStack = [];  // Track enclosing function scopes for proper variable hoisting
     this.collectProgramVariables(sexpr);
     let code = this.generate(sexpr);
 
@@ -2186,9 +2187,15 @@ export class CodeGenerator {
     if (Array.isArray(params)) params.forEach(extractPN);
 
     let bodyVars = this.collectFunctionVariables(body);
-    let newVars = new Set([...bodyVars].filter(v => !this.programVars.has(v) && !this.reactiveVars?.has(v) && !paramNames.has(v)));
+    let newVars = new Set([...bodyVars].filter(v =>
+      !this.programVars.has(v) && !this.reactiveVars?.has(v) && !paramNames.has(v) &&
+      !this.scopeStack.some(s => s.has(v))  // don't re-declare variables from enclosing scopes
+    ));
     let noRetStmts = ['return', 'throw', 'break', 'continue'];
     let loopStmts = ['for-in', 'for-of', 'for-as', 'while', 'until', 'loop'];
+
+    // Track this function's scope so nested functions don't re-declare its variables
+    this.scopeStack.push(new Set([...newVars, ...paramNames]));
 
     if (this.is(body, 'block')) {
       let statements = this.unwrapBlock(body);
@@ -2284,16 +2291,20 @@ export class CodeGenerator {
 
       this.indentLevel--;
       code += this.indent() + '}';
+      this.scopeStack.pop();
       this.sideEffectOnly = prevSEO;
       return code;
     }
 
     // Single expression
     this.sideEffectOnly = prevSEO;
-    if (isConstructor || this.hasExplicitControlFlow(body)) return `{ ${this.generate(body, 'statement')}; }`;
-    if (Array.isArray(body) && (noRetStmts.includes(body[0]) || loopStmts.includes(body[0]))) return `{ ${this.generate(body, 'statement')}; }`;
-    if (sideEffectOnly) return `{ ${this.generate(body, 'statement')}; return; }`;
-    return `{ return ${this.generate(body, 'value')}; }`;
+    let result;
+    if (isConstructor || this.hasExplicitControlFlow(body)) result = `{ ${this.generate(body, 'statement')}; }`;
+    else if (Array.isArray(body) && (noRetStmts.includes(body[0]) || loopStmts.includes(body[0]))) result = `{ ${this.generate(body, 'statement')}; }`;
+    else if (sideEffectOnly) result = `{ ${this.generate(body, 'statement')}; return; }`;
+    else result = `{ return ${this.generate(body, 'value')}; }`;
+    this.scopeStack.pop();
+    return result;
   }
 
   generateFunctionBody(body, params = [], sideEffectOnly = false) {

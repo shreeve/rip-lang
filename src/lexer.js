@@ -1133,10 +1133,23 @@ export class Lexer {
     else if (val === '~>') tag = 'REACT_ASSIGN';
     else if (val === '=!') tag = 'READONLY_ASSIGN';
     // Merge assignment: *config = {a: 1} → Object.assign(config, {a: 1})
+    // Also supports *@ = props → Object.assign(this, props)
     else if (val === '*' && (!prev || prev[0] === 'TERMINATOR' || prev[0] === 'INDENT' || prev[0] === 'OUTDENT') &&
-             /^[a-zA-Z_$]/.test(this.chunk[1] || '')) {
-      // Scan ahead to find "IDENTIFIER =" pattern
+             (/^[a-zA-Z_$]/.test(this.chunk[1] || '') || this.chunk[1] === '@')) {
       let rest = this.chunk.slice(1);
+      // Handle *@ = ... → Object.assign(@, ...)
+      let mAt = /^@(\s*)=(?!=)/.exec(rest);
+      if (mAt) {
+        let space = mAt[1];
+        this.emit('IDENTIFIER', 'Object');
+        this.emit('.', '.');
+        let t = this.emit('PROPERTY', 'assign');
+        t.spaced = true; // trigger implicit call detection
+        this.emit('@', '@');
+        this.emit(',', ',');
+        return 1 + 1 + space.length + 1; // consume *@ =, value tokens become args
+      }
+      // Scan ahead to find "IDENTIFIER =" pattern
       let m = /^((?:(?!\s)[$\w\x7f-\uffff])+(?:\.[a-zA-Z_$][\w]*)*)(\s*)=(?!=)/.exec(rest);
       if (m) {
         let target = m[1], space = m[2];

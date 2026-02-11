@@ -1212,6 +1212,7 @@ function __clsx(...args) {
 
 class __Component {
   constructor(props = {}) {
+    Object.assign(this, props);
     const prev = __pushComponent(this);
     this._init(props);
     __popComponent(prev);

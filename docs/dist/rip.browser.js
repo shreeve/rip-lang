@@ -2049,8 +2049,19 @@ class Lexer {
       tag = "REACT_ASSIGN";
     else if (val === "=!")
       tag = "READONLY_ASSIGN";
-    else if (val === "*" && (!prev || prev[0] === "TERMINATOR" || prev[0] === "INDENT" || prev[0] === "OUTDENT") && /^[a-zA-Z_$]/.test(this.chunk[1] || "")) {
+    else if (val === "*" && (!prev || prev[0] === "TERMINATOR" || prev[0] === "INDENT" || prev[0] === "OUTDENT") && (/^[a-zA-Z_$]/.test(this.chunk[1] || "") || this.chunk[1] === "@")) {
       let rest = this.chunk.slice(1);
+      let mAt = /^@(\s*)=(?!=)/.exec(rest);
+      if (mAt) {
+        let space = mAt[1];
+        this.emit("IDENTIFIER", "Object");
+        this.emit(".", ".");
+        let t = this.emit("PROPERTY", "assign");
+        t.spaced = true;
+        this.emit("@", "@");
+        this.emit(",", ",");
+        return 1 + 1 + space.length + 1;
+      }
       let m = /^((?:(?!\s)[$\w\x7f-\uffff])+(?:\.[a-zA-Z_$][\w]*)*)(\s*)=(?!=)/.exec(rest);
       if (m) {
         let target = m[1], space = m[2];
@@ -4399,6 +4410,7 @@ function __clsx(...args) {
 
 class __Component {
   constructor(props = {}) {
+    Object.assign(this, props);
     const prev = __pushComponent(this);
     this._init(props);
     __popComponent(prev);
@@ -4810,6 +4822,7 @@ class CodeGenerator {
     this.programVars = new Set;
     this.functionVars = new Map;
     this.helpers = new Set;
+    this.scopeStack = [];
     this.collectProgramVariables(sexpr);
     let code = this.generate(sexpr);
     if (this.sourceMap)
@@ -6712,9 +6725,10 @@ export default ${expr[1]}`;
     if (Array.isArray(params))
       params.forEach(extractPN);
     let bodyVars = this.collectFunctionVariables(body);
-    let newVars = new Set([...bodyVars].filter((v) => !this.programVars.has(v) && !this.reactiveVars?.has(v) && !paramNames.has(v)));
+    let newVars = new Set([...bodyVars].filter((v) => !this.programVars.has(v) && !this.reactiveVars?.has(v) && !paramNames.has(v) && !this.scopeStack.some((s) => s.has(v))));
     let noRetStmts = ["return", "throw", "break", "continue"];
     let loopStmts = ["for-in", "for-of", "for-as", "while", "until", "loop"];
+    this.scopeStack.push(new Set([...newVars, ...paramNames]));
     if (this.is(body, "block")) {
       let statements = this.unwrapBlock(body);
       if (hasExpansionParams && this.expansionAfterParams?.length > 0) {
@@ -6814,17 +6828,22 @@ export default ${expr[1]}`;
       }
       this.indentLevel--;
       code += this.indent() + "}";
+      this.scopeStack.pop();
       this.sideEffectOnly = prevSEO;
       return code;
     }
     this.sideEffectOnly = prevSEO;
+    let result;
     if (isConstructor || this.hasExplicitControlFlow(body))
-      return `{ ${this.generate(body, "statement")}; }`;
-    if (Array.isArray(body) && (noRetStmts.includes(body[0]) || loopStmts.includes(body[0])))
-      return `{ ${this.generate(body, "statement")}; }`;
-    if (sideEffectOnly)
-      return `{ ${this.generate(body, "statement")}; return; }`;
-    return `{ return ${this.generate(body, "value")}; }`;
+      result = `{ ${this.generate(body, "statement")}; }`;
+    else if (Array.isArray(body) && (noRetStmts.includes(body[0]) || loopStmts.includes(body[0])))
+      result = `{ ${this.generate(body, "statement")}; }`;
+    else if (sideEffectOnly)
+      result = `{ ${this.generate(body, "statement")}; return; }`;
+    else
+      result = `{ return ${this.generate(body, "value")}; }`;
+    this.scopeStack.pop();
+    return result;
   }
   generateFunctionBody(body, params = [], sideEffectOnly = false) {
     return this.generateBodyWithReturns(body, params, { sideEffectOnly, hasExpansionParams: this.expansionAfterParams?.length > 0 });
@@ -8055,8 +8074,8 @@ function getComponentRuntime() {
   return new CodeGenerator({}).getComponentRuntime();
 }
 // src/browser.js
-var VERSION = "3.7.3";
-var BUILD_DATE = "2026-02-11@11:55:37GMT";
+var VERSION = "3.7.4";
+var BUILD_DATE = "2026-02-11@13:07:41GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }
