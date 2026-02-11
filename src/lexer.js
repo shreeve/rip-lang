@@ -1361,7 +1361,7 @@ export class Lexer {
   //   - Combine #id selectors: div # main → div#main
   //   - Two-way binding: value <=> username → __bind_value__: username
   //   - Event modifiers: @click.prevent: → [@click.prevent]:
-  //   - Dynamic classes: div.('card', x && 'active') → div.__cx__(...)
+  //   - Dynamic classes: div.('card', x && 'active') → div.__clsx(...)
   //   - Implicit nesting: inject -> before INDENT for template elements
   //   - Hyphenated attributes: data-foo: "x" → "data-foo": "x"
   // =========================================================================
@@ -1533,15 +1533,15 @@ export class Lexer {
 
       // ─────────────────────────────────────────────────────────────────────
       // Dynamic classes
-      // div.('card', x && 'active') → div.__cx__('card', x && 'active')
-      // .('card') → div.__cx__('card')
+      // div.('card', x && 'active') → div.__clsx('card', x && 'active')
+      // .('card') → div.__clsx('card')
       // ─────────────────────────────────────────────────────────────────────
       if (tag === '.' && nextToken && nextToken[0] === '(') {
         let prevToken = i > 0 ? tokens[i - 1] : null;
         let prevTag = prevToken ? prevToken[0] : null;
         let atLineStart = prevTag === 'INDENT' || prevTag === 'TERMINATOR';
 
-        let cxToken = gen('PROPERTY', '__cx__', token);
+        let cxToken = gen('PROPERTY', '__clsx', token);
         nextToken[0] = 'CALL_START';
         let depth = 1;
         for (let j = i + 2; j < tokens.length && depth > 0; j++) {

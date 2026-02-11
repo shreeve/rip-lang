@@ -481,9 +481,9 @@ export function installComponentSupport(CodeGenerator) {
 
     // Call expression: (tag.class args...) or ((tag.class) args...)
     if (Array.isArray(head)) {
-      // Nested dynamic class call: (((. div __cx__) "classes") children)
+      // Nested dynamic class call: (((. div __clsx) "classes") children)
       if (Array.isArray(head[0]) && head[0][0] === '.' &&
-          (head[0][2] === '__cx__' || (head[0][2] instanceof String && head[0][2].valueOf() === '__cx__'))) {
+          (head[0][2] === '__clsx' || (head[0][2] instanceof String && head[0][2].valueOf() === '__clsx'))) {
         const tag = typeof head[0][1] === 'string' ? head[0][1] : head[0][1].valueOf();
         const classExprs = head.slice(1);
         return this.generateDynamicTag(tag, classExprs, rest);
@@ -491,8 +491,8 @@ export function installComponentSupport(CodeGenerator) {
 
       const { tag, classes } = this.collectTemplateClasses(head);
       if (tag && this.isHtmlTag(tag)) {
-        // Dynamic class syntax: div.("classes") → (. div __cx__) "classes"
-        if (classes.length === 1 && classes[0] === '__cx__') {
+        // Dynamic class syntax: div.("classes") → (. div __clsx) "classes"
+        if (classes.length === 1 && classes[0] === '__clsx') {
           return this.generateDynamicTag(tag, rest, []);
         }
         return this.generateTag(tag, classes, rest);
@@ -607,9 +607,9 @@ export function installComponentSupport(CodeGenerator) {
       const classArgs = classExprs.map(e => this.generateInComponent(e, 'value')).join(', ');
       const hasReactive = classExprs.some(e => this.hasReactiveDeps(e));
       if (hasReactive) {
-        this._setupLines.push(`__effect(() => { ${elVar}.className = __cx__(${classArgs}); });`);
+        this._setupLines.push(`__effect(() => { ${elVar}.className = __clsx(${classArgs}); });`);
       } else {
-        this._createLines.push(`${elVar}.className = __cx__(${classArgs});`);
+        this._createLines.push(`${elVar}.className = __clsx(${classArgs});`);
       }
     }
 
@@ -1201,7 +1201,7 @@ function hasContext(key) {
   return false;
 }
 
-function __cx__(...args) {
+function __clsx(...args) {
   return args.filter(Boolean).join(' ');
 }
 
@@ -1231,7 +1231,7 @@ class __Component {
 
 // Register on globalThis for runtime deduplication
 if (typeof globalThis !== 'undefined') {
-  globalThis.__ripComponent = { __pushComponent, __popComponent, setContext, getContext, hasContext, __cx__, __Component };
+  globalThis.__ripComponent = { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __Component };
 }
 
 `;
