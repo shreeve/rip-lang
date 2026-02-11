@@ -490,7 +490,6 @@ export createRenderer = (opts = {}) ->
   cacheComponent = ->
     if currentComponent and currentRoute
       currentComponent.beforeUnmount() if currentComponent.beforeUnmount
-      currentComponent._root?.remove()
       componentCache.set currentRoute, currentComponent
       # Evict oldest if over limit
       if componentCache.size > maxCacheSize
@@ -498,6 +497,7 @@ export createRenderer = (opts = {}) ->
         evicted = componentCache.get(oldest)
         evicted.unmounted() if evicted.unmounted
         componentCache.delete oldest
+      # Don't remove _root here — leave visible until new content is ready
       currentComponent = null
       currentRoute = null
 
@@ -520,6 +520,7 @@ export createRenderer = (opts = {}) ->
   mountRoute = (info) ->
     { route, params, layouts: layoutFiles, query } = info
     return unless route
+    return if route.file is currentRoute  # already showing this route
 
     gen = ++generation
     router.navigating = true
@@ -541,6 +542,7 @@ export createRenderer = (opts = {}) ->
         return
 
       layoutsChanged = not arraysEqual(layoutFiles, currentLayouts)
+      oldRoot = currentComponent?._root
 
       if layoutsChanged
         unmount()
@@ -599,6 +601,7 @@ export createRenderer = (opts = {}) ->
         currentRoute = route.file
 
         instance.load!(params, query) if instance.load
+      oldRoot?.remove()
       router.navigating = false
 
     catch err
