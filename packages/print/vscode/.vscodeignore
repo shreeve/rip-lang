@@ -1,0 +1,10 @@
+**/*
+!package.json
+!src/**
+!lib/**
+!icon.png
+!README.md
+!node_modules/highlight.js/package.json
+!node_modules/highlight.js/lib/**
+!node_modules/highlight.js/styles/*.css
+.vscode/**

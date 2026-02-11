@@ -47,16 +47,6 @@ function normalizeCode(code) {
     .trim();
 }
 
-// Strip reactive runtime from code (for code comparison tests)
-function stripRuntime(code) {
-  return code
-    // New format with detailed comments
-    .replace(/\/\/ =+\n\/\/ Rip Reactive Runtime[\s\S]*?\/\/ === End Reactive Runtime ===/g, '')
-    // Old format
-    .replace(/\/\/ === Rip Reactive Runtime ===[\s\S]*?\/\/ === End Reactive Runtime ===/g, '')
-    .replace(/let __currentEffect[\s\S]*?function __readonly\([^)]*\)\s*\{[^}]*\}/g, '')
-    .trim();
-}
 
 // Test helper: Execute code and compare result
 // Note: This is async to support await - but await on non-promises is instant,
@@ -114,9 +104,9 @@ async function test(name, code, expected) {
 }
 
 // Test helper: Compile and compare generated code
-function code(name, sourceCode, expectedCode) {
+function code(name, sourceCode, expectedCode, options = {}) {
   try {
-    const result = compile(sourceCode);
+    const result = compile(sourceCode, options);
     const actualNorm = normalizeCode(result.code);
     const expectedNorm = normalizeCode(expectedCode);
 
@@ -154,16 +144,14 @@ function code(name, sourceCode, expectedCode) {
   }
 }
 
-// Test helper: Compile and compare generated code (strips reactive runtime)
-// Use for tests where we only want to compare the class/function output
-function codeBody(name, sourceCode, expectedCode) {
+// Test helper: Compile with types and compare .d.ts output
+function type(name, sourceCode, expectedDts) {
   try {
-    const result = compile(sourceCode);
-    const actualStripped = stripRuntime(result.code);
-    const actualNorm = normalizeCode(actualStripped);
-    const expectedNorm = normalizeCode(expectedCode);
+    const result = compile(sourceCode, { types: 'emit' });
+    const actualDts = (result.dts || '').trim();
+    const expectedTrimmed = expectedDts.trim();
 
-    if (actualNorm === expectedNorm) {
+    if (actualDts === expectedTrimmed) {
       fileTests.pass++;
       totalTests.pass++;
       console.log(`  ${colors.green}✓${colors.reset} ${name}`);
@@ -174,13 +162,9 @@ function codeBody(name, sourceCode, expectedCode) {
       failures.push({
         file: currentFile,
         test: name,
-        type: 'codeBody',
-        expected: expectedCode,
-        actual: actualStripped,
-        normalized: {
-          expected: expectedNorm,
-          actual: actualNorm
-        }
+        type: 'type',
+        expected: expectedTrimmed,
+        actual: actualDts,
       });
     }
   } catch (error) {
@@ -190,7 +174,7 @@ function codeBody(name, sourceCode, expectedCode) {
     failures.push({
       file: currentFile,
       test: name,
-      type: 'codeBody',
+      type: 'type',
       error: error.message,
       sourceCode
     });
@@ -246,12 +230,10 @@ async function runTestFile(filePath) {
     const testEnv = {
       test,
       code,
-      codeBody,
       fail,
+      type,
       console,
-      // For async tests
       Promise,
-      async: true,
     };
 
     // Execute test file as async function
@@ -313,10 +295,17 @@ function printFailures() {
       console.log(`   Actual:   ${failure.actual}`);
     }
 
-    if (failure.type === 'code' || failure.type === 'codeBody') {
+    if (failure.type === 'code') {
       console.log(`   Expected code:`);
       console.log(`   ${failure.expected}`);
       console.log(`   Actual code:`);
+      console.log(`   ${failure.actual}`);
+    }
+
+    if (failure.type === 'type') {
+      console.log(`   Expected .d.ts:`);
+      console.log(`   ${failure.expected}`);
+      console.log(`   Actual .d.ts:`);
       console.log(`   ${failure.actual}`);
     }
 

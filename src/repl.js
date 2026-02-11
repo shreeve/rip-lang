@@ -17,7 +17,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as vm from 'vm';
-import { Compiler, compileToJS } from './compiler.js';
+import { Compiler, compileToJS, getReactiveRuntime, getComponentRuntime } from './compiler.js';
 import packageJson from '../package.json' with { type: 'json' };
 
 const VERSION = packageJson.version;
@@ -114,134 +114,11 @@ export class RipREPL {
   }
 
   injectReactiveRuntime() {
-    // Define reactive primitives in the VM context
-    const ctx = this.vmContext;
-
-    ctx.__currentEffect = null;
-    ctx.__pendingEffects = new Set();
-
-    ctx.__state = function(v) {
-      const subs = new Set();
-      let notifying = false, locked = false, dead = false;
-      const s = {
-        get value() { if (dead) return v; if (ctx.__currentEffect) { subs.add(ctx.__currentEffect); ctx.__currentEffect.dependencies.add(subs); } return v; },
-        set value(n) {
-          if (dead || locked || n === v || notifying) return;
-          v = n;
-          notifying = true;
-          for (const sub of subs) if (sub.markDirty) sub.markDirty();
-          for (const sub of subs) if (!sub.markDirty) ctx.__pendingEffects.add(sub);
-          const fx = [...ctx.__pendingEffects]; ctx.__pendingEffects.clear();
-          for (const e of fx) e.run();
-          notifying = false;
-        },
-        read() { return v; },
-        lock() { locked = true; return s; },
-        free() { subs.clear(); return s; },
-        kill() { dead = true; subs.clear(); return v; },
-        valueOf() { return this.value; },
-        toString() { return String(this.value); },
-        [Symbol.toPrimitive](hint) { return hint === 'string' ? this.toString() : this.valueOf(); }
-      };
-      return s;
-    };
-
-    ctx.__computed = function(fn) {
-      let v, dirty = true, locked = false, dead = false;
-      const subs = new Set();
-      const c = {
-        dependencies: new Set(),
-        markDirty() {
-          if (!dead && !locked && !dirty) { dirty = true; for (const s of subs) if (s.markDirty) s.markDirty(); for (const s of subs) if (!s.markDirty) ctx.__pendingEffects.add(s); }
-        },
-        get value() {
-          if (dead) return v;
-          if (ctx.__currentEffect) { subs.add(ctx.__currentEffect); ctx.__currentEffect.dependencies.add(subs); }
-          if (dirty && !locked) {
-            for (const d of c.dependencies) d.delete(c); c.dependencies.clear();
-            const prev = ctx.__currentEffect; ctx.__currentEffect = c;
-            try { v = fn(); } finally { ctx.__currentEffect = prev; }
-            dirty = false;
-          }
-          return v;
-        },
-        read() { return dead ? v : c.value; },
-        lock() { locked = true; c.value; return c; },
-        free() { for (const d of c.dependencies) d.delete(c); c.dependencies.clear(); subs.clear(); return c; },
-        kill() { dead = true; const result = v; c.free(); return result; },
-        valueOf() { return this.value; },
-        toString() { return String(this.value); },
-        [Symbol.toPrimitive](hint) { return hint === 'string' ? this.toString() : this.valueOf(); }
-      };
-      return c;
-    };
-
-    ctx.__effect = function(fn) {
-      const e = {
-        dependencies: new Set(),
-        run() {
-          for (const d of e.dependencies) d.delete(e); e.dependencies.clear();
-          const prev = ctx.__currentEffect; ctx.__currentEffect = e;
-          try { fn(); } finally { ctx.__currentEffect = prev; }
-        },
-        free() { for (const d of e.dependencies) d.delete(e); e.dependencies.clear(); }
-      };
-      e.run();
-      return () => e.free();
-    };
-
-    ctx.__batch = function(fn) { fn(); };
-    ctx.__readonly = function(v) { return Object.freeze({ value: v }); };
+    vm.runInContext(getReactiveRuntime(), this.vmContext);
   }
 
   injectComponentRuntime() {
-    // Define component primitives in the VM context
-    const ctx = this.vmContext;
-
-    let __currentComponent = null;
-
-    ctx.__pushComponent = function(component) {
-      component._parent = __currentComponent;
-      const prev = __currentComponent;
-      __currentComponent = component;
-      return prev;
-    };
-
-    ctx.__popComponent = function(prev) {
-      __currentComponent = prev;
-    };
-
-    ctx.isSignal = function(v) {
-      return v != null && typeof v === 'object' && typeof v.read === 'function';
-    };
-
-    ctx.setContext = function(key, value) {
-      if (!__currentComponent) throw new Error('setContext must be called during component initialization');
-      if (!__currentComponent._context) __currentComponent._context = new Map();
-      __currentComponent._context.set(key, value);
-    };
-
-    ctx.getContext = function(key) {
-      let component = __currentComponent;
-      while (component) {
-        if (component._context && component._context.has(key)) return component._context.get(key);
-        component = component._parent;
-      }
-      return undefined;
-    };
-
-    ctx.hasContext = function(key) {
-      let component = __currentComponent;
-      while (component) {
-        if (component._context && component._context.has(key)) return true;
-        component = component._parent;
-      }
-      return false;
-    };
-
-    ctx.__cx__ = function(...args) {
-      return args.filter(Boolean).join(' ');
-    };
+    vm.runInContext(getComponentRuntime(), this.vmContext);
   }
 
   async handleLine(line) {
@@ -329,8 +206,7 @@ export class RipREPL {
       const compiler = new Compiler({
         showTokens: this.showTokens,
         showSExpr: this.showSExp,
-        skipReactiveRuntime: true,
-        skipComponentRuntime: true,
+        skipPreamble: true,
         reactiveVars: this.reactiveVars
       });
       const result = compiler.compile(code);

@@ -1878,6 +1878,104 @@ Each row is a test case. Verify both .js and .d.ts output.
 
 ---
 
+## Current Status
+
+Rip Types Phase I is complete. The `.d.ts` emission covers the full
+surface area of the type system — variables, functions, classes, components,
+type aliases, interfaces, enums, generics, and all four reactive operators.
+
+Phase II (consuming external `.d.ts` files for IDE intelligence) is in
+progress via the VS Code extension. Phase III (a standalone Language
+Server Protocol server) is planned.
+
+### Architecture
+
+The type system uses a two-phase approach:
+
+1. **Lexer phase** — `rewriteTypes()` strips type annotations from the token
+   stream and stores them as `.data` metadata on surviving tokens. The parser
+   never sees types.
+2. **Compiler phase** — `emitTypes(tokens, sexpr)` runs after parsing,
+   producing `.d.ts` from both annotated tokens (variables, functions, types)
+   and the s-expression tree (components). One function, one output.
+
+### What's Working
+
+**Variables and Constants:**
+
+| Rip Input | .d.ts Output |
+|-----------|-------------|
+| `x:: number = 0` | `let x: number;` |
+| `x:: number =! 100` | `declare const x: number;` |
+| `x:: number := 0` | `declare const x: Signal<number>;` |
+| `x:: number ~= y * 2` | `declare const x: Computed<number>;` |
+| `x:: Function ~> ...` | `declare const x: () => void;` |
+| `export` variants of all above | `export const/let ...` |
+
+**Functions:**
+
+| Rip Input | .d.ts Output |
+|-----------|-------------|
+| `def f(a:: T):: R` | `declare function f(a: T): R;` |
+| `def f<T>(a:: T):: T` | `declare function f<T>(a: T): T;` |
+| `def f<T extends Base>(...)` | `declare function f<T extends Base>(...);` |
+| `f = (a:: T) -> ...` | `declare function f(a: T);` |
+| `export def ...` | `export function ...;` |
+
+**Types, Interfaces, and Enums:**
+
+| Rip Input | .d.ts Output |
+|-----------|-------------|
+| `Name ::= type { id: number }` | `type Name = { id: number; };` |
+| `Name ::= number` | `type Name = number;` |
+| Block union `::= \| "a" \| "b"` | `type Name = "a" \| "b";` |
+| `interface Name { ... }` | `interface Name { ... }` |
+| `interface X extends Y` | `interface X extends Y { ... }` |
+| Function types `read: => string` | `read: () => string` |
+| `enum Name { A = 1; B = 2 }` | `enum Name { A = 1, B = 2 }` |
+
+**Classes:**
+
+| Rip Input | .d.ts Output |
+|-----------|-------------|
+| `class X { prop:: T = val }` | `declare class X { prop: T; }` |
+| `constructor: (@name:: T) ->` | `constructor(name: T);` |
+| `method: (a:: T) ->` | `method(a: T);` |
+| `class X extends Y` | `declare class X extends Y { ... }` |
+
+**Components:**
+
+| Rip Input | .d.ts Output |
+|-----------|-------------|
+| `Name = component { ... }` | `declare class Name { ... }` |
+| Reactive state `count:: number := 0` | `count: number;` |
+| Computed `doubled ~= ...` | `readonly doubled: any;` |
+| Methods | Method declarations |
+| Auto-generated | `constructor`, `mount()`, `unmount()` |
+
+**Infrastructure:**
+
+| Feature | Status |
+|---------|--------|
+| `Signal<T>` / `Computed<T>` preamble | Auto-generated when `:=` or `~=` used |
+| Import pass-through | Working |
+| Export default | Working |
+| Optional properties (`email?: string`) | Working |
+| Type suffixes (`T?`, `T??`, `T!`) | Working |
+| Generic constraints (`<T extends X>`) | Working |
+| Deferred emission (after parsing) | Working |
+| Component variable deduplication | Working |
+
+### Roadmap
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| Phase I | `.d.ts` emission from annotated Rip code | **Complete** |
+| Phase II | External type consumption — read third-party `.d.ts` files for autocomplete, hover, and go-to-definition | In progress (VS Code extension) |
+| Phase III | Language Server Protocol — full LSP server for IDE-agnostic type intelligence | Planned |
+
+---
+
 **See Also:**
 - [RIP-LANG.md](RIP-LANG.md) — Language reference
 - [RIP-REACTIVITY.md](RIP-REACTIVITY.md) — Reactive system details

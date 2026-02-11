@@ -672,24 +672,28 @@ export class CodeGenerator {
       needsBlank = true;
     }
 
-    if (this.helpers.has('slice'))      { code += 'const slice = [].slice;\n'; needsBlank = true; }
-    if (this.helpers.has('modulo'))     { code += 'const modulo = (n, d) => { n = +n; d = +d; return (n % d + d) % d; };\n'; needsBlank = true; }
-    if (this.helpers.has('toSearchable')) {
-      code += 'const toSearchable = (v, allowNewlines) => {\n';
-      code += '  if (typeof v === "string") return !allowNewlines && /[\\n\\r]/.test(v) ? null : v;\n';
-      code += '  if (v == null) return "";\n';
-      code += '  if (typeof v === "number" || typeof v === "bigint" || typeof v === "boolean") return String(v);\n';
-      code += '  if (typeof v === "symbol") return v.description || "";\n';
-      code += '  if (v instanceof Uint8Array || v instanceof ArrayBuffer) {\n';
-      code += '    return new TextDecoder().decode(v instanceof Uint8Array ? v : new Uint8Array(v));\n';
-      code += '  }\n';
-      code += '  if (Array.isArray(v)) return v.join(",");\n';
-      code += '  if (typeof v.toString === "function" && v.toString !== Object.prototype.toString) {\n';
-      code += '    try { return v.toString(); } catch { return ""; }\n';
-      code += '  }\n';
-      code += '  return "";\n';
-      code += '};\n';
-      needsBlank = true;
+    let skip = this.options.skipPreamble;
+
+    if (!skip) {
+      if (this.helpers.has('slice'))      { code += 'const slice = [].slice;\n'; needsBlank = true; }
+      if (this.helpers.has('modulo'))     { code += 'const modulo = (n, d) => { n = +n; d = +d; return (n % d + d) % d; };\n'; needsBlank = true; }
+      if (this.helpers.has('toSearchable')) {
+        code += 'const toSearchable = (v, allowNewlines) => {\n';
+        code += '  if (typeof v === "string") return !allowNewlines && /[\\n\\r]/.test(v) ? null : v;\n';
+        code += '  if (v == null) return "";\n';
+        code += '  if (typeof v === "number" || typeof v === "bigint" || typeof v === "boolean") return String(v);\n';
+        code += '  if (typeof v === "symbol") return v.description || "";\n';
+        code += '  if (v instanceof Uint8Array || v instanceof ArrayBuffer) {\n';
+        code += '    return new TextDecoder().decode(v instanceof Uint8Array ? v : new Uint8Array(v));\n';
+        code += '  }\n';
+        code += '  if (Array.isArray(v)) return v.join(",");\n';
+        code += '  if (typeof v.toString === "function" && v.toString !== Object.prototype.toString) {\n';
+        code += '    try { return v.toString(); } catch { return ""; }\n';
+        code += '  }\n';
+        code += '  return "";\n';
+        code += '};\n';
+        needsBlank = true;
+      }
     }
 
     // Generate exports code early so component/reactivity flags are set before runtime checks
@@ -698,7 +702,7 @@ export class CodeGenerator {
       exportsCode = '\n' + exports.map(s => this.addSemicolon(s, this.generate(s, 'statement'))).join('\n');
     }
 
-    if (this.usesReactivity && !this.options.skipReactiveRuntime) {
+    if (this.usesReactivity && !skip) {
       if (typeof globalThis !== 'undefined' && globalThis.__rip) {
         code += 'const { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;\n';
       } else {
@@ -707,7 +711,7 @@ export class CodeGenerator {
       needsBlank = true;
     }
 
-    if (this.usesTemplates && !this.options.skipComponentRuntime) {
+    if (this.usesTemplates && !skip) {
       if (typeof globalThis !== 'undefined' && globalThis.__ripComponent) {
         code += 'const { isSignal, __pushComponent, __popComponent, setContext, getContext, hasContext, __cx__ } = globalThis.__ripComponent;\n';
       } else {
@@ -716,7 +720,7 @@ export class CodeGenerator {
       needsBlank = true;
     }
 
-    if (this.dataSection !== null && this.dataSection !== undefined) {
+    if (this.dataSection !== null && this.dataSection !== undefined && !skip) {
       code += 'var DATA;\n_setDataSection();\n';
       needsBlank = true;
     }
@@ -1001,7 +1005,7 @@ export class CodeGenerator {
     let prefix = isAsync ? 'async ' : '';
 
     if (!sideEffectOnly) {
-      if (Array.isArray(body) && body[0] === 'block' && body.length === 2) {
+      if (this.isBlock(body) && body.length === 2) {
         let expr = body[1];
         if (!Array.isArray(expr) || expr[0] !== 'return') {
           return `${prefix}${paramSyntax} => ${this.generate(expr, 'value')}`;
@@ -1073,7 +1077,7 @@ export class CodeGenerator {
     let [target, body] = rest;
     this.usesReactivity = true;
     let bodyCode;
-    if (Array.isArray(body) && body[0] === 'block') {
+    if (this.isBlock(body)) {
       let stmts = this.withIndent(() => this.formatStatements(body.slice(1)));
       bodyCode = `{\n${stmts.join('\n')}\n${this.indent()}}`;
     } else if (Array.isArray(body) && (body[0] === '->' || body[0] === '=>')) {
@@ -1172,7 +1176,7 @@ export class CodeGenerator {
       else if (isNeg) loopHeader = `for (let ${idxName} = ${iterCode}.length - 1; ${idxName} >= 0; ${idxName} += ${stepCode}) `;
       else loopHeader = `for (let ${idxName} = 0; ${idxName} < ${iterCode}.length; ${idxName} += ${stepCode}) `;
 
-      if (Array.isArray(body) && body[0] === 'block') {
+      if (this.isBlock(body)) {
         let stmts = body.slice(1);
         this.indentLevel++;
         let lines = [];
@@ -1204,7 +1208,7 @@ export class CodeGenerator {
     if (indexVar) {
       let iterCode = this.generate(iterable, 'value');
       let code = `for (let ${indexVar} = 0; ${indexVar} < ${iterCode}.length; ${indexVar}++) `;
-      if (Array.isArray(body) && body[0] === 'block') {
+      if (this.isBlock(body)) {
         code += '{\n';
         this.indentLevel++;
         code += this.indent() + `const ${itemVarPattern} = ${iterCode}[${indexVar}];\n`;
@@ -1258,7 +1262,7 @@ export class CodeGenerator {
     let code = `for (const ${keyVar} in ${objCode}) `;
 
     if (own && !valueVar && !guard) {
-      if (Array.isArray(body) && body[0] === 'block') {
+      if (this.isBlock(body)) {
         this.indentLevel++;
         let stmts = [`if (!Object.hasOwn(${objCode}, ${keyVar})) continue;`, ...body.slice(1).map(s => this.addSemicolon(s, this.generate(s, 'statement')))];
         this.indentLevel--;
@@ -1268,7 +1272,7 @@ export class CodeGenerator {
     }
 
     if (valueVar) {
-      if (Array.isArray(body) && body[0] === 'block') {
+      if (this.isBlock(body)) {
         let stmts = body.slice(1);
         this.indentLevel++;
         let lines = [];
@@ -1533,7 +1537,7 @@ export class CodeGenerator {
     let needsReturns = context === 'value';
     let tryCode = 'try ';
     let tryBlock = rest[0];
-    tryCode += (needsReturns && Array.isArray(tryBlock) && tryBlock[0] === 'block')
+    tryCode += (needsReturns && this.isBlock(tryBlock))
       ? this.generateBlockWithReturns(tryBlock) : this.generate(tryBlock, 'statement');
 
     if (rest.length >= 2 && Array.isArray(rest[1]) && rest[1].length === 2 && rest[1][0] !== 'block') {
@@ -1542,13 +1546,13 @@ export class CodeGenerator {
       if (param && Array.isArray(param) && (param[0] === 'object' || param[0] === 'array')) {
         tryCode += ' (error)';
         let destructStmt = `(${this.generate(param, 'value')} = error)`;
-        catchBlock = Array.isArray(catchBlock) && catchBlock[0] === 'block'
+        catchBlock = this.isBlock(catchBlock)
           ? ['block', destructStmt, ...catchBlock.slice(1)]
           : ['block', destructStmt, catchBlock];
       } else if (param) {
         tryCode += ` (${param})`;
       }
-      tryCode += ' ' + ((needsReturns && Array.isArray(catchBlock) && catchBlock[0] === 'block')
+      tryCode += ' ' + ((needsReturns && this.isBlock(catchBlock))
         ? this.generateBlockWithReturns(catchBlock) : this.generate(catchBlock, 'statement'));
     } else if (rest.length === 2) {
       tryCode += ' finally ' + this.generate(rest[1], 'statement');
@@ -1739,7 +1743,7 @@ export class CodeGenerator {
     };
 
     let loopStmts = ['for-in', 'for-of', 'for-as', 'while', 'until', 'loop'];
-    if (Array.isArray(expr) && expr[0] === 'block') {
+    if (this.isBlock(expr)) {
       for (let i = 0; i < expr.length - 1; i++) {
         let s = expr[i + 1], isLast = i === expr.length - 2;
         if (!isLast || hasCtrl(s)) {
@@ -2116,7 +2120,7 @@ export class CodeGenerator {
     let noRetStmts = ['return', 'throw', 'break', 'continue'];
     let loopStmts = ['for-in', 'for-of', 'for-as', 'while', 'until', 'loop'];
 
-    if (Array.isArray(body) && body[0] === 'block') {
+    if (this.isBlock(body)) {
       let statements = this.unwrapBlock(body);
 
       if (hasExpansionParams && this.expansionAfterParams?.length > 0) {
@@ -2161,7 +2165,7 @@ export class CodeGenerator {
 
           if (!isConstructor && !sideEffectOnly && isLast && (h === 'if' || h === 'unless')) {
             let [cond, thenB, ...elseB] = stmt.slice(1);
-            let hasMulti = (b) => Array.isArray(b) && b[0] === 'block' && b.length > 2;
+            let hasMulti = (b) => this.isBlock(b) && b.length > 2;
             if (hasMulti(thenB) || elseB.some(hasMulti)) {
               code += this.generateIfElseWithEarlyReturns(stmt);
               return;
@@ -2289,7 +2293,7 @@ export class CodeGenerator {
   generateComprehensionWithTarget(expr, iterators, guards, targetVar) {
     let code = '';
     code += this.indent() + `${targetVar} = [];\n`;
-    let unwrappedExpr = (Array.isArray(expr) && expr[0] === 'block' && expr.length === 2) ? expr[1] : expr;
+    let unwrappedExpr = (this.isBlock(expr) && expr.length === 2) ? expr[1] : expr;
 
     if (iterators.length === 1) {
       let [iterType, vars, iterable, stepOrOwn] = iterators[0];
@@ -2588,7 +2592,7 @@ export class CodeGenerator {
     if (hasFlow) {
       for (let s of this.unwrapBlock(body)) code += this.indent() + this.generate(s, 'statement') + ';\n';
     } else if (context === 'value') {
-      if (Array.isArray(body) && body[0] === 'block' && body.length > 2) {
+      if (this.isBlock(body) && body.length > 2) {
         let stmts = body.slice(1);
         for (let i = 0; i < stmts.length; i++) {
           if (i === stmts.length - 1) code += this.indent() + `return ${this.generate(stmts[i], 'value')};\n`;
@@ -2598,7 +2602,7 @@ export class CodeGenerator {
         code += this.indent() + `return ${this.extractExpression(body)};\n`;
       }
     } else {
-      if (Array.isArray(body) && body[0] === 'block' && body.length > 1) {
+      if (this.isBlock(body) && body.length > 1) {
         for (let s of body.slice(1)) code += this.indent() + this.generate(s, 'statement') + ';\n';
       } else {
         code += this.indent() + this.generate(body, 'statement') + ';\n';
@@ -2772,7 +2776,9 @@ export class CodeGenerator {
     return false;
   }
 
-  isMultiStatementBlock(branch) { return Array.isArray(branch) && branch[0] === 'block' && branch.length > 2; }
+  isBlock(node) { return Array.isArray(node) && node[0] === 'block'; }
+
+  isMultiStatementBlock(branch) { return this.isBlock(branch) && branch.length > 2; }
 
   hasNestedMultiStatement(branch) {
     if (!Array.isArray(branch)) return false;
@@ -3166,13 +3172,14 @@ export class Compiler {
       console.log();
     }
 
-    // Step 2: Emit .d.ts from annotated tokens (before parsing)
+    // Save annotated tokens for deferred .d.ts emission (after parsing)
     let dts = null;
+    let typeTokens = null;
     if (this.options.types === 'emit' || this.options.types === 'check' || this.options.types === true) {
-      dts = emitTypes(tokens);
+      typeTokens = [...tokens];
     }
 
-    // Always remove TYPE_DECL markers — the parser doesn't know about them
+    // Remove TYPE_DECL markers — the parser doesn't know about them
     tokens = tokens.filter(t => t[0] !== 'TYPE_DECL');
 
     // Strip leading terminators that may result from removed type declarations
@@ -3180,8 +3187,9 @@ export class Compiler {
       tokens.shift();
     }
 
-    // If only terminators remain (type-only source), return early
+    // If only terminators remain (type-only source), emit types and return early
     if (tokens.every(t => t[0] === 'TERMINATOR')) {
+      if (typeTokens) dts = emitTypes(typeTokens, ['program']);
       return { tokens, sexpr: ['program'], code: '', dts, data: dataSection, reactiveVars: {} };
     }
 
@@ -3229,8 +3237,7 @@ export class Compiler {
 
     let generator = new CodeGenerator({
       dataSection,
-      skipReactiveRuntime: this.options.skipReactiveRuntime,
-      skipComponentRuntime: this.options.skipComponentRuntime,
+      skipPreamble: this.options.skipPreamble,
       reactiveVars: this.options.reactiveVars,
       sourceMap,
     });
@@ -3243,6 +3250,11 @@ export class Compiler {
       code += `\n//# sourceMappingURL=data:application/json;base64,${b64}`;
     } else if (map && this.options.filename) {
       code += `\n//# sourceMappingURL=${this.options.filename}.js.map`;
+    }
+
+    // Step 5: Emit .d.ts from annotated tokens + parsed s-expression
+    if (typeTokens) {
+      dts = emitTypes(typeTokens, sexpr);
     }
 
     return { tokens, sexpr, code, dts, map, reverseMap, data: dataSection, reactiveVars: generator.reactiveVars };

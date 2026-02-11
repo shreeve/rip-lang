@@ -1,13 +1,17 @@
 // Type System — Optional type annotations and .d.ts emission for Rip
 //
-// Architecture: installTypeSupport(Lexer) adds rewriteTypes() to the lexer
-// prototype (sidecar pattern, same as components.js for CodeGenerator).
-// emitTypes(tokens) generates .d.ts from annotated tokens before parsing.
-// generateEnum() is the one CodeGenerator method for runtime enum output.
+// Architecture:
+//   installTypeSupport(Lexer) — adds rewriteTypes() to the lexer prototype.
+//     Strips type annotations from the token stream and stores them as
+//     metadata on surviving tokens. The parser never sees types.
 //
-// Design: Types are fully resolved at the token level. The parser never sees
-// type annotations, type aliases, or interfaces — only enum crosses into the
-// grammar because it emits runtime JavaScript.
+//   emitTypes(tokens, sexpr) — generates .d.ts from annotated tokens and
+//     the parsed s-expression tree. Called after parsing so it has access
+//     to both token-level annotations (variables, functions, types) and
+//     s-expression structures (components). One function, one output.
+//
+//   generateEnum() — the one CodeGenerator method for runtime enum output.
+//     Enums cross into the grammar because they emit runtime JavaScript.
 
 // ============================================================================
 // installTypeSupport — adds rewriteTypes() to Lexer.prototype
@@ -56,7 +60,7 @@ export function installTypeSupport(Lexer) {
             let isAlias = !isDef && tokens[i + 1 + genTokens.length]?.[0] === 'TYPE_ALIAS';
             if (isDef || isAlias) {
               if (!token.data) token.data = {};
-              token.data.typeParams = genTokens.map(t => t[1]).join('');
+              token.data.typeParams = buildTypeString(genTokens);
               tokens.splice(i + 1, genTokens.length);
               // After removing <T>, retag ( as CALL_START if it follows DEF IDENTIFIER
               if (isDef && tokens[i + 1]?.[0] === '(') {
@@ -272,12 +276,17 @@ function collectTypeExpression(tokens, j) {
 // Build a clean type string from collected tokens
 function buildTypeString(typeTokens) {
   if (typeTokens.length === 0) return '';
+  // Bare => (no params) means () => — add empty parens
+  if (typeTokens[0]?.[0] === '=>') typeTokens.unshift(['', '()']);
   let typeStr = typeTokens.map(t => t[1]).join(' ').replace(/\s+/g, ' ').trim();
   typeStr = typeStr
     .replace(/\s*<\s*/g, '<').replace(/\s*>\s*/g, '>')
     .replace(/\s*\[\s*/g, '[').replace(/\s*\]\s*/g, ']')
     .replace(/\s*\(\s*/g, '(').replace(/\s*\)\s*/g, ')')
-    .replace(/\s*,\s*/g, ', ');
+    .replace(/\s*,\s*/g, ', ')
+    .replace(/\s*=>\s*/g, ' => ')
+    .replace(/ :: /g, ': ')
+    .replace(/:: /g, ': ');
   return typeStr;
 }
 
@@ -347,11 +356,17 @@ function collectStructuralType(tokens, indentIdx) {
       // Skip : separator
       if (tokens[j]?.[1] === ':') j++;
 
-      // Collect the type (until TERMINATOR, OUTDENT, or next property)
+      // Collect the type (until TERMINATOR or OUTDENT at property depth)
       let propTypeTokens = [];
+      let typeDepth = 0;
       while (j < tokens.length) {
         let pt = tokens[j];
-        if (pt[0] === 'TERMINATOR' || pt[0] === 'OUTDENT' || pt[0] === 'INDENT') break;
+        if (pt[0] === 'INDENT') { typeDepth++; j++; continue; }
+        if (pt[0] === 'OUTDENT') {
+          if (typeDepth > 0) { typeDepth--; j++; continue; }
+          break;
+        }
+        if (pt[0] === 'TERMINATOR' && typeDepth === 0) break;
         propTypeTokens.push(pt);
         j++;
       }
@@ -441,15 +456,17 @@ function collectBlockUnion(tokens, startIdx) {
 }
 
 // ============================================================================
-// emitTypes — generate .d.ts from annotated token stream
+// emitTypes — generate .d.ts from annotated tokens + s-expression tree
 // ============================================================================
 
-export function emitTypes(tokens) {
+export function emitTypes(tokens, sexpr = null) {
   let lines = [];
   let indentLevel = 0;
   let indentStr = '  ';
   let indent = () => indentStr.repeat(indentLevel);
   let inClass = false;
+  let usesSignal = false;
+  let usesComputed = false;
 
   // Format { prop; prop } into multi-line block
   let emitBlock = (prefix, body, suffix) => {
@@ -467,6 +484,110 @@ export function emitTypes(tokens) {
     lines.push(`${indent()}${prefix}${body}${suffix}`);
   };
 
+  // Collect function parameters (handles simple, destructured, rest, defaults)
+  let collectParams = (tokens, startIdx) => {
+    let params = [];
+    let j = startIdx;
+    let openTag = tokens[j]?.[0];
+    if (openTag !== 'CALL_START' && openTag !== 'PARAM_START') return { params, endIdx: j };
+    let closeTag = openTag === 'CALL_START' ? 'CALL_END' : 'PARAM_END';
+    j++;
+    let depth = 0;
+
+    while (j < tokens.length && !(tokens[j][0] === closeTag && depth === 0)) {
+      let tok = tokens[j];
+
+      // Skip commas at depth 0
+      if (tok[1] === ',' && depth === 0) { j++; continue; }
+
+      // Track nesting
+      if (tok[0] === '{' || tok[0] === '[' || tok[0] === 'CALL_START' ||
+          tok[0] === 'PARAM_START' || tok[0] === 'INDEX_START') depth++;
+      if (tok[0] === '}' || tok[0] === ']' || tok[0] === 'CALL_END' ||
+          tok[0] === 'PARAM_END' || tok[0] === 'INDEX_END') { depth--; j++; continue; }
+
+      // @ prefix (constructor shorthand: @name)
+      if (tok[0] === '@') {
+        j++;
+        if (tokens[j]?.[0] === 'PROPERTY' || tokens[j]?.[0] === 'IDENTIFIER') {
+          let name = tokens[j][1];
+          let type = tokens[j].data?.type;
+          params.push(type ? `${name}: ${expandSuffixes(type)}` : name);
+          j++;
+        }
+        continue;
+      }
+
+      // Rest parameter: ...name
+      if (tok[0] === 'SPREAD' || tok[1] === '...') {
+        j++;
+        if (tokens[j]?.[0] === 'IDENTIFIER') {
+          let name = tokens[j][1];
+          let type = tokens[j].data?.type;
+          params.push(type ? `...${name}: ${expandSuffixes(type)}` : `...${name}: any[]`);
+          j++;
+        }
+        continue;
+      }
+
+      // Destructured object parameter: { a, b }
+      if (tok[0] === '{') {
+        // Collect the whole destructured pattern as a string
+        let pattern = '{';
+        j++;
+        let d = 1;
+        while (j < tokens.length && d > 0) {
+          if (tokens[j][0] === '{') d++;
+          if (tokens[j][0] === '}') d--;
+          if (d > 0) pattern += tokens[j][1] + (tokens[j + 1]?.[0] === '}' ? '' : ', ');
+          j++;
+        }
+        pattern += '}';
+        // Check if the closing } had a type annotation
+        let type = tokens[j - 1]?.data?.type;
+        params.push(type ? `${pattern}: ${expandSuffixes(type)}` : pattern);
+        continue;
+      }
+
+      // Simple identifier parameter
+      if (tok[0] === 'IDENTIFIER') {
+        let paramName = tok[1];
+        let paramType = tok.data?.type;
+
+        // Check for default value (skip = and the default expression)
+        let hasDefault = false;
+        if (tokens[j + 1]?.[0] === '=') {
+          hasDefault = true;
+        }
+
+        if (paramType) {
+          params.push(`${paramName}${hasDefault ? '?' : ''}: ${expandSuffixes(paramType)}`);
+        } else {
+          params.push(paramName);
+        }
+        j++;
+
+        // Skip past default value expression
+        if (hasDefault) {
+          j++; // skip =
+          let dd = 0;
+          while (j < tokens.length) {
+            let dt = tokens[j];
+            if (dt[0] === '(' || dt[0] === '[' || dt[0] === '{') dd++;
+            if (dt[0] === ')' || dt[0] === ']' || dt[0] === '}') dd--;
+            if (dd === 0 && (dt[1] === ',' || dt[0] === 'CALL_END')) break;
+            j++;
+          }
+        }
+        continue;
+      }
+
+      j++;
+    }
+
+    return { params, endIdx: j };
+  };
+
   for (let i = 0; i < tokens.length; i++) {
     let t = tokens[i];
     let tag = t[0];
@@ -479,6 +600,40 @@ export function emitTypes(tokens) {
       if (i >= tokens.length) break;
       t = tokens[i];
       tag = t[0];
+
+      // Export default
+      if (tag === 'DEFAULT') {
+        i++;
+        if (i >= tokens.length) break;
+        t = tokens[i];
+        tag = t[0];
+
+        // export default IDENTIFIER (re-export)
+        if (tag === 'IDENTIFIER') {
+          lines.push(`${indent()}export default ${t[1]};`);
+        }
+        // export default { ... } or other expressions — skip for now
+        continue;
+      }
+    }
+
+    // Import statements — pass through for type references
+    if (tag === 'IMPORT') {
+      let importTokens = [];
+      let j = i + 1;
+      while (j < tokens.length && tokens[j][0] !== 'TERMINATOR') {
+        importTokens.push(tokens[j]);
+        j++;
+      }
+      // Reconstruct: join with spaces, then clean up spacing
+      let raw = 'import ' + importTokens.map(tk => tk[1]).join(' ');
+      raw = raw.replace(/\s+/g, ' ')
+               .replace(/\s*,\s*/g, ', ')
+               .replace(/\{\s*/g, '{ ').replace(/\s*\}/g, ' }')
+               .trim();
+      lines.push(`${indent()}${raw};`);
+      i = j;
+      continue;
     }
 
     // TYPE_DECL marker — emit type alias or interface
@@ -578,7 +733,7 @@ export function emitTypes(tokens) {
       continue;
     }
 
-    // DEF — emit function declaration
+    // DEF — emit function or method declaration
     if (tag === 'DEF') {
       let nameToken = tokens[i + 1];
       if (!nameToken) continue;
@@ -586,24 +741,7 @@ export function emitTypes(tokens) {
       let returnType = nameToken.data?.returnType;
       let typeParams = nameToken.data?.typeParams || '';
 
-      // Collect parameters
-      let j = i + 2;
-      let params = [];
-      if (tokens[j]?.[0] === 'CALL_START') {
-        j++;
-        while (j < tokens.length && tokens[j][0] !== 'CALL_END') {
-          if (tokens[j][0] === 'IDENTIFIER') {
-            let paramName = tokens[j][1];
-            let paramType = tokens[j].data?.type;
-            if (paramType) {
-              params.push(`${paramName}: ${expandSuffixes(paramType)}`);
-            } else {
-              params.push(paramName);
-            }
-          }
-          j++;
-        }
-      }
+      let { params, endIdx } = collectParams(tokens, i + 2);
 
       // Only emit if there are type annotations
       if (returnType || params.some(p => p.includes(':'))) {
@@ -611,8 +749,68 @@ export function emitTypes(tokens) {
         let declare = inClass ? '' : (exported ? '' : 'declare ');
         let ret = returnType ? `: ${expandSuffixes(returnType)}` : '';
         let paramStr = params.join(', ');
-        lines.push(`${indent()}${exp}${declare}function ${fnName}${typeParams}(${paramStr})${ret};`);
+        if (inClass) {
+          lines.push(`${indent()}${fnName}${typeParams}(${paramStr})${ret};`);
+        } else {
+          lines.push(`${indent()}${exp}${declare}function ${fnName}${typeParams}(${paramStr})${ret};`);
+        }
       }
+      continue;
+    }
+
+    // Class method block: { PROPERTY ... PROPERTY ... }
+    // Contains one or more methods separated by TERMINATOR
+    if (tag === '{' && inClass) {
+      let j = i + 1;
+      let braceDepth = 1;
+
+      while (j < tokens.length && braceDepth > 0) {
+        let tok = tokens[j];
+
+        if (tok[0] === '{') { braceDepth++; j++; continue; }
+        if (tok[0] === '}') { braceDepth--; j++; continue; }
+        if (tok[0] === 'TERMINATOR') { j++; continue; }
+
+        // Found a method: PROPERTY "name" : PARAM_START ... PARAM_END -> body
+        if (tok[0] === 'PROPERTY' && braceDepth === 1) {
+          let methodName = tok[1];
+          let returnType = tok.data?.returnType;
+          j++;
+
+          // Skip : separator
+          if (tokens[j]?.[1] === ':') j++;
+
+          let params = [];
+          if (tokens[j]?.[0] === 'PARAM_START') {
+            let result = collectParams(tokens, j);
+            params = result.params;
+            j = result.endIdx + 1;
+          }
+
+          // Skip -> and method body (INDENT ... OUTDENT)
+          if (tokens[j]?.[0] === '->' || tokens[j]?.[0] === '=>') j++;
+          if (tokens[j]?.[0] === 'INDENT') {
+            let d = 1;
+            j++;
+            while (j < tokens.length && d > 0) {
+              if (tokens[j][0] === 'INDENT') d++;
+              if (tokens[j][0] === 'OUTDENT') d--;
+              j++;
+            }
+          }
+
+          if (returnType || params.some(p => p.includes(':'))) {
+            let ret = returnType ? `: ${expandSuffixes(returnType)}` : '';
+            let paramStr = params.join(', ');
+            lines.push(`${indent()}${methodName}(${paramStr})${ret};`);
+          }
+          continue;
+        }
+
+        j++;
+      }
+
+      i = j - 1;
       continue;
     }
 
@@ -629,6 +827,35 @@ export function emitTypes(tokens) {
       continue;
     }
 
+    // Arrow function assignment: name = (params) -> body
+    if (tag === 'IDENTIFIER' && !inClass && tokens[i + 1]?.[0] === '=' &&
+        (tokens[i + 2]?.[0] === 'PARAM_START' || tokens[i + 2]?.[0] === '(')) {
+      let fnName = t[1];
+      let j = i + 2;
+
+      let { params } = collectParams(tokens, j);
+
+      // Find the -> or => token to get return type
+      let k = j;
+      let depth = 0;
+      while (k < tokens.length) {
+        if (tokens[k][0] === 'PARAM_START' || tokens[k][0] === '(') depth++;
+        if (tokens[k][0] === 'PARAM_END' || tokens[k][0] === ')') depth--;
+        if (depth === 0 && (tokens[k][0] === '->' || tokens[k][0] === '=>')) break;
+        k++;
+      }
+      let returnType = tokens[k]?.data?.returnType;
+
+      if (returnType || params.some(p => p.includes(':'))) {
+        let exp = exported ? 'export ' : '';
+        let declare = exported ? '' : 'declare ';
+        let ret = returnType ? `: ${expandSuffixes(returnType)}` : '';
+        let paramStr = params.join(', ');
+        lines.push(`${indent()}${exp}${declare}function ${fnName}(${paramStr})${ret};`);
+        continue;
+      }
+    }
+
     // Variable assignments with type annotations
     if (tag === 'IDENTIFIER' && t.data?.type) {
       let varName = t[1];
@@ -642,11 +869,35 @@ export function emitTypes(tokens) {
         if (next[0] === 'READONLY_ASSIGN') {
           lines.push(`${indent()}${exp}${declare}const ${varName}: ${type};`);
         } else if (next[0] === 'REACTIVE_ASSIGN') {
+          usesSignal = true;
           lines.push(`${indent()}${exp}${declare}const ${varName}: Signal<${type}>;`);
         } else if (next[0] === 'COMPUTED_ASSIGN') {
+          usesComputed = true;
           lines.push(`${indent()}${exp}${declare}const ${varName}: Computed<${type}>;`);
+        } else if (next[0] === 'REACT_ASSIGN') {
+          lines.push(`${indent()}${exp}${declare}const ${varName}: () => void;`);
         } else if (next[0] === '=') {
-          if (inClass) {
+          // Check if RHS is an arrow function with return type
+          let arrowIdx = i + 2;
+          // Skip past PARAM_START ... PARAM_END if present
+          if (tokens[arrowIdx]?.[0] === 'PARAM_START') {
+            let d = 1, k = arrowIdx + 1;
+            while (k < tokens.length && d > 0) {
+              if (tokens[k][0] === 'PARAM_START') d++;
+              if (tokens[k][0] === 'PARAM_END') d--;
+              k++;
+            }
+            arrowIdx = k;
+          }
+          let arrowToken = tokens[arrowIdx];
+          if (arrowToken && (arrowToken[0] === '->' || arrowToken[0] === '=>') &&
+              arrowToken.data?.returnType) {
+            // Typed arrow function assignment
+            let returnType = expandSuffixes(arrowToken.data.returnType);
+            let { params } = collectParams(tokens, i + 2);
+            let paramStr = params.join(', ');
+            lines.push(`${indent()}${exp}${declare}function ${varName}(${paramStr}): ${returnType};`);
+          } else if (inClass) {
             lines.push(`${indent()}${varName}: ${type};`);
           } else {
             lines.push(`${indent()}${exp}let ${varName}: ${type};`);
@@ -661,8 +912,35 @@ export function emitTypes(tokens) {
     }
   }
 
+  // Walk s-expression tree for component declarations
+  let componentVars = new Set();
+  if (sexpr) {
+    emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars);
+
+    // Remove lines for variables that belong to components (emitted as class members)
+    if (componentVars.size > 0) {
+      for (let k = lines.length - 1; k >= 0; k--) {
+        let match = lines[k].match(/(?:declare |export )*(?:const|let) (\w+)/);
+        if (match && componentVars.has(match[1])) lines.splice(k, 1);
+      }
+    }
+  }
+
   if (lines.length === 0) return null;
-  return lines.join('\n') + '\n';
+
+  // Prepend reactive type definitions if used
+  let preamble = [];
+  if (usesSignal) {
+    preamble.push('interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }');
+  }
+  if (usesComputed) {
+    preamble.push('interface Computed<T> { readonly value: T; read(): T; lock(): Computed<T>; free(): Computed<T>; kill(): T; }');
+  }
+  if (preamble.length > 0) {
+    preamble.push('');
+  }
+
+  return preamble.concat(lines).join('\n') + '\n';
 }
 
 // ============================================================================
@@ -685,6 +963,109 @@ function expandSuffixes(typeStr) {
   typeStr = typeStr.replace(/(\w+(?:<[^>]+>)?)\!/g, 'NonNullable<$1>');
 
   return typeStr;
+}
+
+// ============================================================================
+// Component type emission — walk s-expression for component declarations
+// ============================================================================
+
+function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars) {
+  if (!Array.isArray(sexpr)) return;
+  let head = sexpr[0]?.valueOf?.() ?? sexpr[0];
+
+  // export Name = component ... → ["export", ["=", "Name", ["component", ...members]]]
+  // Name = component ...       → ["=", "Name", ["component", ...members]]
+  let exported = false;
+  let name = null;
+  let compNode = null;
+
+  if (head === 'export' && Array.isArray(sexpr[1])) {
+    exported = true;
+    let inner = sexpr[1];
+    let innerHead = inner[0]?.valueOf?.() ?? inner[0];
+    if (innerHead === '=' && Array.isArray(inner[2]) &&
+        (inner[2][0]?.valueOf?.() ?? inner[2][0]) === 'component') {
+      name = inner[1]?.valueOf?.() ?? inner[1];
+      compNode = inner[2];
+    }
+  } else if (head === '=' && Array.isArray(sexpr[2]) &&
+             (sexpr[2][0]?.valueOf?.() ?? sexpr[2][0]) === 'component') {
+    name = sexpr[1]?.valueOf?.() ?? sexpr[1];
+    compNode = sexpr[2];
+  }
+
+  if (name && compNode) {
+    let exp = exported ? 'export ' : '';
+
+    // Component structure: ["component", parent, ["block", ...members]]
+    let body = compNode[2];
+    let members = (Array.isArray(body) && (body[0]?.valueOf?.() ?? body[0]) === 'block')
+      ? body.slice(1) : (body ? [body] : []);
+
+    let props = [];
+    let methods = [];
+
+    for (let member of members) {
+      if (!Array.isArray(member)) continue;
+      let mHead = member[0]?.valueOf?.() ?? member[0];
+
+      // Reactive state: ["state", "count", 0]
+      if (mHead === 'state') {
+        let propName = member[1]?.valueOf?.() ?? member[1];
+        let type = member[1]?.type;
+        props.push(`  ${propName}: ${type ? expandSuffixes(type) : 'any'};`);
+        componentVars.add(propName);
+      }
+      // Computed: ["computed", "doubled", expr]
+      else if (mHead === 'computed') {
+        let propName = member[1]?.valueOf?.() ?? member[1];
+        let type = member[1]?.type;
+        props.push(`  readonly ${propName}: ${type ? expandSuffixes(type) : 'any'};`);
+        componentVars.add(propName);
+      }
+      // Method object: ["object", ["methodName", ["->", params, body], ":"]]
+      else if (mHead === 'object') {
+        for (let j = 1; j < member.length; j++) {
+          let entry = member[j];
+          if (!Array.isArray(entry)) continue;
+          let methodName = entry[0]?.valueOf?.() ?? entry[0];
+          if (methodName === 'render') continue; // skip render
+          let fn = entry[1];
+          if (Array.isArray(fn)) {
+            let fnHead = fn[0]?.valueOf?.() ?? fn[0];
+            if (fnHead === '->' || fnHead === '=>') {
+              methods.push(`  ${methodName}(): void;`);
+            }
+          }
+        }
+      }
+      // Skip render blocks
+      else if (mHead === 'render') {
+        continue;
+      }
+    }
+
+    lines.push(`${exp}declare class ${name} {`);
+    lines.push(`  constructor(props?: Record<string, any>);`);
+    for (let p of props) lines.push(p);
+    for (let m of methods) lines.push(m);
+    lines.push(`  mount(target: Element | string): ${name};`);
+    lines.push(`  unmount(): void;`);
+    lines.push(`}`);
+  }
+
+  // Recurse into child nodes
+  if (head === 'program' || head === 'block') {
+    for (let i = 1; i < sexpr.length; i++) {
+      if (Array.isArray(sexpr[i])) {
+        emitComponentTypes(sexpr[i], lines, indent, indentLevel, componentVars);
+      }
+    }
+  }
+  // Also check inside export wrappers
+  if (head === 'export' && Array.isArray(sexpr[1]) && !compNode) {
+    emitComponentTypes(sexpr[1], lines, indent, indentLevel, componentVars);
+  }
 }
 
 // ============================================================================

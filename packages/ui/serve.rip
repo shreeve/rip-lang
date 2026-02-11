@@ -1,6 +1,6 @@
-# =============================================================================
+# ==============================================================================
 # @rip-lang/ui/serve — Rip UI Server Middleware
-# =============================================================================
+# ==============================================================================
 #
 # Serves the Rip UI runtime, auto-generated app bundles, and optional
 # SSE hot-reload.
@@ -18,7 +18,7 @@
 #   state:    object  — initial app state passed via bundle
 #   title:    string  — document title
 #
-# =============================================================================
+# ==============================================================================
 
 import { get } from '@rip-lang/api'
 import { watch as fsWatch } from 'node:fs'
@@ -40,20 +40,20 @@ export ripUI = (opts = {}) ->
   catch
     compilerPath = "#{uiDir}/../../docs/dist/rip.browser.js"
 
-  # ---------------------------------------------------------------------------
+  # ----------------------------------------------------------------------------
   # Route: /rip/* — framework files (compiler + ui.rip), registered once
-  # ---------------------------------------------------------------------------
+  # ----------------------------------------------------------------------------
 
   unless ripUI._registered
     get "/rip/browser.js", (c) -> c.send compilerPath, 'application/javascript'
     get "/rip/ui.rip", (c) -> c.send "#{uiDir}/ui.rip", 'text/plain; charset=UTF-8'
     ripUI._registered = true
 
-  # ---------------------------------------------------------------------------
+  # ----------------------------------------------------------------------------
   # Route: {prefix}/parts/* — individual .rip part files (for hot-reload)
   # Route: {prefix}/bundle  — app bundle (parts + data as JSON)
   # Route: {prefix}/watch   — SSE hot-reload stream
-  # ---------------------------------------------------------------------------
+  # ----------------------------------------------------------------------------
 
   get "#{prefix}/parts/*", (c) ->
     name = c.req.path.slice("#{prefix}/parts/".length)

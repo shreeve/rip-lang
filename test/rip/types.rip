@@ -412,3 +412,112 @@ test "function many typed params", '''
     a + b + c + d + e
   sum5(1, 2, 3, 4, 5)
   ''', 15
+
+# ============================================================================
+# .d.ts Emission Tests — verify type declarations are emitted correctly
+# ============================================================================
+
+# Variables
+type "typed variable dts", "count:: number = 0", "let count: number;"
+type "typed constant dts", 'MAX:: number =! 100', "declare const MAX: number;"
+
+# Reactive state
+type "reactive state dts", "count:: number := 0", """
+  interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }
+
+  declare const count: Signal<number>;
+  """
+
+# Computed
+type "computed dts", """
+  count:: number := 0
+  doubled:: number ~= count * 2
+  """, """
+  interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }
+  interface Computed<T> { readonly value: T; read(): T; lock(): Computed<T>; free(): Computed<T>; kill(): T; }
+
+  declare const count: Signal<number>;
+  declare const doubled: Computed<number>;
+  """
+
+# Effect
+type "effect dts", "logger:: Function ~> console.log 42", "declare const logger: () => void;"
+
+# Functions
+type "typed function dts", '''
+  def greet(name:: string):: string
+    "Hello, #{name}!"
+  ''', 'declare function greet(name: string): string;'
+
+# Generics
+type "generic function dts", '''
+  def add<T>(a:: T, b:: T):: T
+    a + b
+  ''', 'declare function add<T>(a: T, b: T): T;'
+
+# Generic constraints
+type "generic constraint dts", '''
+  def identity<T extends object>(v:: T):: T
+    v
+  ''', 'declare function identity<T extends object>(v: T): T;'
+
+# Type alias
+type "type alias dts", """
+  User ::= type
+    id: number
+    name: string
+    email?: string
+  """, """
+  type User = {
+    id: number;
+    name: string;
+    email?: string;
+  };
+  """
+
+# Interface
+type "interface dts", """
+  interface Readable
+    read: => string
+  """, """
+  interface Readable {
+    read: () => string;
+  }
+  """
+
+# Enum
+type "enum dts", """
+  enum Direction
+    North
+    South
+  """, """
+  enum Direction {
+    North,
+    South
+  }
+  """
+
+# Export reactive
+type "export reactive dts", "export count:: number := 0", """
+  interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }
+
+  export const count: Signal<number>;
+  """
+
+# Arrow function
+type "arrow function dts", 'greet = (name:: string) -> "Hello"', "declare function greet(name: string);"
+
+# Class with methods
+type "class with methods dts", """
+  class UserService
+    url:: string = ""
+    constructor: (@url:: string) ->
+    fetch: (id:: number) ->
+      console.log id
+  """, """
+  declare class UserService {
+    url: string;
+    constructor(url: string);
+    fetch(id: number);
+  }
+  """

@@ -1,0 +1,71 @@
+{
+  "name": "print",
+  "displayName": "Rip Print",
+  "description": "Syntax-highlighted source code printing — beautifully formatted with themes and line numbers",
+  "version": "1.0.0",
+  "publisher": "rip-lang",
+  "license": "MIT",
+  "main": "./src/extension.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shreeve/rip-lang.git",
+    "directory": "packages/print/vscode"
+  },
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "activationEvents": [
+    "onCommand:rip-print.printFile",
+    "onCommand:rip-print.printFolder"
+  ],
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "print",
+    "syntax",
+    "highlighting",
+    "source",
+    "code",
+    "rip"
+  ],
+  "icon": "icon.png",
+  "contributes": {
+    "commands": [
+      {
+        "command": "rip-print.printFile",
+        "title": "Rip Print: Print Current File"
+      },
+      {
+        "command": "rip-print.printFolder",
+        "title": "Rip Print: Print Folder"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "rip-print.printFolder",
+          "when": "explorerResourceIsFolder",
+          "group": "5_cutcopypaste@100"
+        },
+        {
+          "command": "rip-print.printFile",
+          "when": "!explorerResourceIsFolder",
+          "group": "5_cutcopypaste@100"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "rip-print.printFile",
+          "group": "1_modification@100"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "package": "npx @vscode/vsce package"
+  },
+  "dependencies": {
+    "highlight.js": "^11.11.1"
+  }
+}

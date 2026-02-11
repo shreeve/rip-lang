@@ -564,7 +564,7 @@
             <div class="pane-header-buttons">
               <button id="show-tokens" title="Toggle token stream display">Tokens</button>
               <button id="show-sexp" title="Toggle S-expression display">S-Expressions</button>
-              <button id="show-runtime" title="Toggle runtime code display">Runtime</button>
+              <button id="show-preamble" title="Toggle preamble code display">Preamble</button>
               <button id="show-js" title="Toggle JavaScript output">JS</button>
             </div>
           </div>
@@ -933,7 +933,7 @@ console.log "Domain:", domain`;
 
     const showTokensBtn = document.getElementById('show-tokens');
     const showSexpBtn = document.getElementById('show-sexp');
-    const showRuntimeBtn = document.getElementById('show-runtime');
+    const showPreambleBtn = document.getElementById('show-preamble');
     const showJSBtn = document.getElementById('show-js');
     const replOutput = document.getElementById('repl-output');
     const promptSpan = document.getElementById('prompt');
@@ -981,30 +981,43 @@ console.log "Domain:", domain`;
 
     let showTokens = localStorage.getItem('rip-repl-tokens') === 'true';
     let showSexp = localStorage.getItem('rip-repl-sexp') === 'true';
-    let showRuntime = localStorage.getItem('rip-repl-runtime') === 'true';
+    let showPreamble = localStorage.getItem('rip-preamble') === 'true';
     let showJS = localStorage.getItem('rip-repl-js') !== 'false';  // default true
 
-    function stripHelpers(code) {
-      code = code.replace(/^const slice = \[\]\.slice;\n/m, '');
-      code = code.replace(/^const modulo = \(n, d\) => \{[^}]+\};\n/m, '');
-      code = code.replace(/^const toSearchable = \(v, allowNewlines\) => \{[\s\S]+?\n\};\n/m, '');
-      code = code.replace(/^\n+/, '');
-      return code;
+    // Format tokens for display — clean, minimal output
+    const SUPPRESS_VALUE = new Set([
+      'DEF', 'IF', 'ELSE', 'UNLESS', 'FOR', 'WHILE', 'UNTIL', 'LOOP',
+      'SWITCH', 'WHEN', 'TRY', 'CATCH', 'FINALLY', 'THROW', 'RETURN',
+      'CLASS', 'EXTENDS', 'SUPER', 'NEW', 'DELETE', 'TYPEOF', 'INSTANCEOF',
+      'IMPORT', 'FROM', 'EXPORT', 'DEFAULT', 'ENUM', 'INTERFACE',
+      'AND', 'OR', 'NOT', 'IS', 'ISNT', 'IN', 'OF',
+      'TRUE', 'FALSE', 'NULL', 'UNDEFINED', 'YES', 'NO',
+      'CALL_START', 'CALL_END', 'PARAM_START', 'PARAM_END',
+      'INDEX_START', 'INDEX_END', 'TERMINATOR',
+    ]);
+
+    function formatTokens(tokens) {
+      let maxTag = 0;
+      for (const t of tokens) maxTag = Math.max(maxTag, t[0].length);
+      return tokens.map(t => {
+        let tag = t[0], val = t[1];
+        if (SUPPRESS_VALUE.has(tag)) return tag;
+        if (tag === val || tag.toLowerCase() === val) return tag;
+        if (tag === 'INDENT' || tag === 'OUTDENT') return `${tag.padEnd(maxTag)}  ${val}`;
+        if (tag === 'STRING' || tag === 'REGEX') return `${tag.padEnd(maxTag)}  ${val}`;
+        return `${tag.padEnd(maxTag)}  ${JSON.stringify(val)}`;
+      }).join('\n');
     }
 
     function compileCode() {
       try {
         const source = monacoEditor.getValue();
-        const result = compile(source);
+        const result = compile(source, showPreamble ? {} : { skipPreamble: true });
 
         let parts = [];
 
         if (showTokens) {
-          let tokenText = '';
-          result.tokens.forEach(t => {
-            tokenText += `${t[0].padEnd(12)} ${JSON.stringify(t[1])}\n`;
-          });
-          parts.push(tokenText);
+          parts.push(formatTokens(result.tokens));
         }
 
         if (showSexp) {
@@ -1012,8 +1025,7 @@ console.log "Domain:", domain`;
         }
 
         if (showJS) {
-          const cleanCode = showRuntime ? result.code : stripHelpers(result.code);
-          parts.push(cleanCode);
+          parts.push(result.code);
         }
 
         const outputText = parts.join('\n\n');
@@ -1072,7 +1084,7 @@ console.log "Domain:", domain`;
     // Restore toggle button states from localStorage (before page reveal)
     showTokensBtn.classList.toggle('active', showTokens);
     showSexpBtn.classList.toggle('active', showSexp);
-    showRuntimeBtn.classList.toggle('active', showRuntime);
+    showPreambleBtn.classList.toggle('active', showPreamble);
     showJSBtn.classList.toggle('active', showJS);
 
     // Initialize from URL hash on page load (default to compiler)
@@ -1154,8 +1166,8 @@ console.log "Domain:", domain`;
     replContext.showTokens = false;
     replContext.__reactiveVars = {};  // Store reactive objects persistently
 
-    // Inject reactive runtime into iframe context
-    (function injectReactiveRuntime() {
+    // Inject reactive preamble into iframe context
+    (function injectReactivePreamble() {
       const ctx = replContext;
       ctx.__currentEffect = null;
       ctx.__pendingEffects = new Set();
@@ -1248,7 +1260,7 @@ console.log "Domain:", domain`;
     function evaluateRip(code) {
       try {
         // Pass reactiveVars to compiler so it knows which vars need .value access
-        const result = compile(code, { reactiveVars, skipReactiveRuntime: true });
+        const result = compile(code, { reactiveVars, skipPreamble: true });
         let js = result.code;
 
         // Track new reactive variables
@@ -1410,11 +1422,7 @@ console.log "Domain:", domain`;
       if (evalResult.success) {
         // Show debug info if enabled
         if (replContext.showTokens) {
-          let tokenOutput = '';
-          evalResult.result.tokens.forEach(t => {
-            tokenOutput += `${t[0].padEnd(12)} ${JSON.stringify(t[1])}<br>`;
-          });
-          addOutput(tokenOutput, 'command-output');
+          addOutput(formatTokens(evalResult.result.tokens).replace(/\n/g, '<br>'), 'command-output');
         }
 
         if (replContext.showSexp) {
@@ -1530,7 +1538,7 @@ console.log "Domain:", domain`;
     const toggles = [
       { btn: showTokensBtn, key: 'rip-repl-tokens',  get: () => showTokens,  set: v => showTokens = v },
       { btn: showSexpBtn,   key: 'rip-repl-sexp',    get: () => showSexp,    set: v => showSexp = v },
-      { btn: showRuntimeBtn,key: 'rip-repl-runtime',  get: () => showRuntime, set: v => showRuntime = v },
+      { btn: showPreambleBtn, key: 'rip-preamble', get: () => showPreamble, set: v => showPreamble = v },
       { btn: showJSBtn,     key: 'rip-repl-js',       get: () => showJS,      set: v => showJS = v },
     ];
 

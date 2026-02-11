@@ -4,7 +4,7 @@
 // CodeGenerator prototype, enabling component compilation. A separate
 // getComponentRuntime() emits runtime helpers only when components are used.
 //
-// Naming: All render-tree emitters use emit* (ported from v2.5.1's fg* methods).
+// Naming: All render-tree generators use generate* (consistent with compiler).
 
 import { TEMPLATE_TAGS } from './tags.js';
 
@@ -60,6 +60,16 @@ export function installComponentSupport(CodeGenerator) {
   // ==========================================================================
   // Utilities
   // ==========================================================================
+
+  /**
+   * Localize variable references for block factories.
+   * Converts this._elN to _elN and this.x to ctx.x.
+   */
+  proto.localizeVar = function(line) {
+    let result = line.replace(/this\.(_el\d+|_t\d+|_anchor\d+|_frag\d+|_slot\d+|_c\d+|_inst\d+|_empty\d+)/g, '$1');
+    result = result.replace(/\bthis\./g, 'ctx.');
+    return result;
+  };
 
   /**
    * Check if name is an HTML/SVG tag
@@ -369,12 +379,12 @@ export function installComponentSupport(CodeGenerator) {
    * Entry point for processing an entire render block.
    */
   proto.buildRender = function(body) {
-    this._emitElementCount = 0;
-    this._emitTextCount = 0;
-    this._emitBlockCount = 0;
-    this._emitCreateLines = [];
-    this._emitSetupLines = [];
-    this._emitBlockFactories = [];
+    this._elementCount = 0;
+    this._textCount = 0;
+    this._blockCount = 0;
+    this._createLines = [];
+    this._setupLines = [];
+    this._blockFactories = [];
 
     const statements = Array.isArray(body) && body[0] === 'block' ? body.slice(1) : [body];
 
@@ -382,68 +392,68 @@ export function installComponentSupport(CodeGenerator) {
     if (statements.length === 0) {
       rootVar = 'null';
     } else if (statements.length === 1) {
-      rootVar = this.emitNode(statements[0]);
+      rootVar = this.generateNode(statements[0]);
     } else {
       rootVar = this.newElementVar('frag');
-      this._emitCreateLines.push(`${rootVar} = document.createDocumentFragment();`);
+      this._createLines.push(`${rootVar} = document.createDocumentFragment();`);
       for (const stmt of statements) {
-        const childVar = this.emitNode(stmt);
-        this._emitCreateLines.push(`${rootVar}.appendChild(${childVar});`);
+        const childVar = this.generateNode(stmt);
+        this._createLines.push(`${rootVar}.appendChild(${childVar});`);
       }
     }
 
     return {
-      createLines: this._emitCreateLines,
-      setupLines: this._emitSetupLines,
-      blockFactories: this._emitBlockFactories,
+      createLines: this._createLines,
+      setupLines: this._setupLines,
+      blockFactories: this._blockFactories,
       rootVar
     };
   };
 
   /** Generate a unique block factory name */
   proto.newBlockVar = function() {
-    return `create_block_${this._emitBlockCount++}`;
+    return `create_block_${this._blockCount++}`;
   };
 
   /** Generate a unique element variable name */
   proto.newElementVar = function(hint = 'el') {
-    return `this._${hint}${this._emitElementCount++}`;
+    return `this._${hint}${this._elementCount++}`;
   };
 
   /** Generate a unique text node variable name */
   proto.newTextVar = function() {
-    return `this._t${this._emitTextCount++}`;
+    return `this._t${this._textCount++}`;
   };
 
   // --------------------------------------------------------------------------
-  // emitNode — main dispatch for all render tree nodes
+  // generateNode — main dispatch for all render tree nodes
   // --------------------------------------------------------------------------
 
-  proto.emitNode = function(sexpr) {
+  proto.generateNode = function(sexpr) {
     // String literal → text node (handle both primitive and String objects)
     if (typeof sexpr === 'string' || sexpr instanceof String) {
       const str = sexpr.valueOf();
       if (str.startsWith('"') || str.startsWith("'") || str.startsWith('`')) {
         const textVar = this.newTextVar();
-        this._emitCreateLines.push(`${textVar} = document.createTextNode(${str});`);
+        this._createLines.push(`${textVar} = document.createTextNode(${str});`);
         return textVar;
       }
       // Dynamic text binding (reactive member)
       if (this.reactiveMembers && this.reactiveMembers.has(str)) {
         const textVar = this.newTextVar();
-        this._emitCreateLines.push(`${textVar} = document.createTextNode('');`);
-        this._emitSetupLines.push(`__effect(() => { ${textVar}.data = this.${str}.value; });`);
+        this._createLines.push(`${textVar} = document.createTextNode('');`);
+        this._setupLines.push(`__effect(() => { ${textVar}.data = this.${str}.value; });`);
         return textVar;
       }
       // Static tag without content
       const elVar = this.newElementVar();
-      this._emitCreateLines.push(`${elVar} = document.createElement('${str}');`);
+      this._createLines.push(`${elVar} = document.createElement('${str}');`);
       return elVar;
     }
 
     if (!Array.isArray(sexpr)) {
       const commentVar = this.newElementVar('c');
-      this._emitCreateLines.push(`${commentVar} = document.createComment('unknown');`);
+      this._createLines.push(`${commentVar} = document.createComment('unknown');`);
       return commentVar;
     }
 
@@ -452,12 +462,12 @@ export function installComponentSupport(CodeGenerator) {
 
     // Component instantiation (PascalCase)
     if (headStr && this.isComponent(headStr)) {
-      return this.emitChildComponent(headStr, rest);
+      return this.generateChildComponent(headStr, rest);
     }
 
     // HTML tag
     if (headStr && this.isHtmlTag(headStr)) {
-      return this.emitTag(headStr, [], rest);
+      return this.generateTag(headStr, [], rest);
     }
 
     // Property chain (div.class or item.name)
@@ -468,13 +478,13 @@ export function installComponentSupport(CodeGenerator) {
       if (obj === 'this' && typeof prop === 'string') {
         if (this.reactiveMembers && this.reactiveMembers.has(prop)) {
           const textVar = this.newTextVar();
-          this._emitCreateLines.push(`${textVar} = document.createTextNode('');`);
-          this._emitSetupLines.push(`__effect(() => { ${textVar}.data = this.${prop}.value; });`);
+          this._createLines.push(`${textVar} = document.createTextNode('');`);
+          this._setupLines.push(`__effect(() => { ${textVar}.data = this.${prop}.value; });`);
           return textVar;
         }
         if (this.componentMembers && this.componentMembers.has(prop)) {
           const slotVar = this.newElementVar('slot');
-          this._emitCreateLines.push(`${slotVar} = this.${prop} instanceof Node ? this.${prop} : (this.${prop} != null ? document.createTextNode(String(this.${prop})) : document.createComment(''));`);
+          this._createLines.push(`${slotVar} = this.${prop} instanceof Node ? this.${prop} : (this.${prop} != null ? document.createTextNode(String(this.${prop})) : document.createComment(''));`);
           return slotVar;
         }
       }
@@ -482,13 +492,13 @@ export function installComponentSupport(CodeGenerator) {
       // HTML tag with classes (div.class)
       const { tag, classes } = this.collectTemplateClasses(sexpr);
       if (tag && this.isHtmlTag(tag)) {
-        return this.emitTag(tag, classes, []);
+        return this.generateTag(tag, classes, []);
       }
 
       // General property access (e.g., item.name in a loop)
       const textVar = this.newTextVar();
       const exprCode = this.generateInComponent(sexpr, 'value');
-      this._emitCreateLines.push(`${textVar} = document.createTextNode(String(${exprCode}));`);
+      this._createLines.push(`${textVar} = document.createTextNode(String(${exprCode}));`);
       return textVar;
     }
 
@@ -499,56 +509,56 @@ export function installComponentSupport(CodeGenerator) {
           (head[0][2] === '__cx__' || (head[0][2] instanceof String && head[0][2].valueOf() === '__cx__'))) {
         const tag = typeof head[0][1] === 'string' ? head[0][1] : head[0][1].valueOf();
         const classExprs = head.slice(1);
-        return this.emitDynamicTag(tag, classExprs, rest);
+        return this.generateDynamicTag(tag, classExprs, rest);
       }
 
       const { tag, classes } = this.collectTemplateClasses(head);
       if (tag && this.isHtmlTag(tag)) {
         // Dynamic class syntax: div.("classes") → (. div __cx__) "classes"
         if (classes.length === 1 && classes[0] === '__cx__') {
-          return this.emitDynamicTag(tag, rest, []);
+          return this.generateDynamicTag(tag, rest, []);
         }
-        return this.emitTag(tag, classes, rest);
+        return this.generateTag(tag, classes, rest);
       }
     }
 
     // Arrow function (children block)
     if (headStr === '->' || headStr === '=>') {
-      return this.emitBlock(rest[1]);
+      return this.generateTemplateBlock(rest[1]);
     }
 
     // Conditional: if/else
     if (headStr === 'if') {
-      return this.emitConditional(sexpr);
+      return this.generateConditional(sexpr);
     }
 
     // For loop
     if (headStr === 'for' || headStr === 'for-in' || headStr === 'for-of' || headStr === 'for-as') {
-      return this.emitLoop(sexpr);
+      return this.generateTemplateLoop(sexpr);
     }
 
     // General expression (computed value, function call, binary op, etc.)
     const textVar = this.newTextVar();
     const exprCode = this.generateInComponent(sexpr, 'value');
     if (this.hasReactiveDeps(sexpr)) {
-      this._emitCreateLines.push(`${textVar} = document.createTextNode('');`);
-      this._emitSetupLines.push(`__effect(() => { ${textVar}.data = ${exprCode}; });`);
+      this._createLines.push(`${textVar} = document.createTextNode('');`);
+      this._setupLines.push(`__effect(() => { ${textVar}.data = ${exprCode}; });`);
     } else {
-      this._emitCreateLines.push(`${textVar} = document.createTextNode(String(${exprCode}));`);
+      this._createLines.push(`${textVar} = document.createTextNode(String(${exprCode}));`);
     }
     return textVar;
   };
 
   // --------------------------------------------------------------------------
-  // emitTag — HTML element with static classes and children
+  // generateTag — HTML element with static classes and children
   // --------------------------------------------------------------------------
 
-  proto.emitTag = function(tag, classes, args) {
+  proto.generateTag = function(tag, classes, args) {
     const elVar = this.newElementVar();
-    this._emitCreateLines.push(`${elVar} = document.createElement('${tag}');`);
+    this._createLines.push(`${elVar} = document.createElement('${tag}');`);
 
     if (classes.length > 0) {
-      this._emitCreateLines.push(`${elVar}.className = '${classes.join(' ')}';`);
+      this._createLines.push(`${elVar}.className = '${classes.join(' ')}';`);
     }
 
     for (const arg of args) {
@@ -557,51 +567,51 @@ export function installComponentSupport(CodeGenerator) {
         const block = arg[2];
         if (Array.isArray(block) && block[0] === 'block') {
           for (const child of block.slice(1)) {
-            const childVar = this.emitNode(child);
-            this._emitCreateLines.push(`${elVar}.appendChild(${childVar});`);
+            const childVar = this.generateNode(child);
+            this._createLines.push(`${elVar}.appendChild(${childVar});`);
           }
         } else if (block) {
-          const childVar = this.emitNode(block);
-          this._emitCreateLines.push(`${elVar}.appendChild(${childVar});`);
+          const childVar = this.generateNode(block);
+          this._createLines.push(`${elVar}.appendChild(${childVar});`);
         }
       }
       // Object = attributes/events
       else if (Array.isArray(arg) && arg[0] === 'object') {
-        this.emitAttributes(elVar, arg);
+        this.generateAttributes(elVar, arg);
       }
       // String = text child
       else if (typeof arg === 'string') {
         const textVar = this.newTextVar();
         if (arg.startsWith('"') || arg.startsWith("'") || arg.startsWith('`')) {
-          this._emitCreateLines.push(`${textVar} = document.createTextNode(${arg});`);
+          this._createLines.push(`${textVar} = document.createTextNode(${arg});`);
         } else if (this.reactiveMembers && this.reactiveMembers.has(arg)) {
-          this._emitCreateLines.push(`${textVar} = document.createTextNode('');`);
-          this._emitSetupLines.push(`__effect(() => { ${textVar}.data = this.${arg}.value; });`);
+          this._createLines.push(`${textVar} = document.createTextNode('');`);
+          this._setupLines.push(`__effect(() => { ${textVar}.data = this.${arg}.value; });`);
         } else if (this.componentMembers && this.componentMembers.has(arg)) {
-          this._emitCreateLines.push(`${textVar} = document.createTextNode(String(this.${arg}));`);
+          this._createLines.push(`${textVar} = document.createTextNode(String(this.${arg}));`);
         } else {
-          this._emitCreateLines.push(`${textVar} = document.createTextNode(String(${arg}));`);
+          this._createLines.push(`${textVar} = document.createTextNode(String(${arg}));`);
         }
-        this._emitCreateLines.push(`${elVar}.appendChild(${textVar});`);
+        this._createLines.push(`${elVar}.appendChild(${textVar});`);
       }
       // String object (from parser)
       else if (arg instanceof String) {
         const val = arg.valueOf();
         const textVar = this.newTextVar();
         if (val.startsWith('"') || val.startsWith("'") || val.startsWith('`')) {
-          this._emitCreateLines.push(`${textVar} = document.createTextNode(${val});`);
+          this._createLines.push(`${textVar} = document.createTextNode(${val});`);
         } else if (this.reactiveMembers && this.reactiveMembers.has(val)) {
-          this._emitCreateLines.push(`${textVar} = document.createTextNode('');`);
-          this._emitSetupLines.push(`__effect(() => { ${textVar}.data = this.${val}.value; });`);
+          this._createLines.push(`${textVar} = document.createTextNode('');`);
+          this._setupLines.push(`__effect(() => { ${textVar}.data = this.${val}.value; });`);
         } else {
-          this._emitCreateLines.push(`${textVar} = document.createTextNode(String(${val}));`);
+          this._createLines.push(`${textVar} = document.createTextNode(String(${val}));`);
         }
-        this._emitCreateLines.push(`${elVar}.appendChild(${textVar});`);
+        this._createLines.push(`${elVar}.appendChild(${textVar});`);
       }
       // Other = nested element
       else if (arg) {
-        const childVar = this.emitNode(arg);
-        this._emitCreateLines.push(`${elVar}.appendChild(${childVar});`);
+        const childVar = this.generateNode(arg);
+        this._createLines.push(`${elVar}.appendChild(${childVar});`);
       }
     }
 
@@ -609,20 +619,20 @@ export function installComponentSupport(CodeGenerator) {
   };
 
   // --------------------------------------------------------------------------
-  // emitDynamicTag — tag with .() CLSX dynamic classes
+  // generateDynamicTag — tag with .() CLSX dynamic classes
   // --------------------------------------------------------------------------
 
-  proto.emitDynamicTag = function(tag, classExprs, children) {
+  proto.generateDynamicTag = function(tag, classExprs, children) {
     const elVar = this.newElementVar();
-    this._emitCreateLines.push(`${elVar} = document.createElement('${tag}');`);
+    this._createLines.push(`${elVar} = document.createElement('${tag}');`);
 
     if (classExprs.length > 0) {
       const classArgs = classExprs.map(e => this.generateInComponent(e, 'value')).join(', ');
       const hasReactive = classExprs.some(e => this.hasReactiveDeps(e));
       if (hasReactive) {
-        this._emitSetupLines.push(`__effect(() => { ${elVar}.className = __cx__(${classArgs}); });`);
+        this._setupLines.push(`__effect(() => { ${elVar}.className = __cx__(${classArgs}); });`);
       } else {
-        this._emitCreateLines.push(`${elVar}.className = __cx__(${classArgs});`);
+        this._createLines.push(`${elVar}.className = __cx__(${classArgs});`);
       }
     }
 
@@ -633,33 +643,33 @@ export function installComponentSupport(CodeGenerator) {
         const blockHead = Array.isArray(block) ? (block[0] instanceof String ? block[0].valueOf() : block[0]) : null;
         if (blockHead === 'block') {
           for (const child of block.slice(1)) {
-            const childVar = this.emitNode(child);
-            this._emitCreateLines.push(`${elVar}.appendChild(${childVar});`);
+            const childVar = this.generateNode(child);
+            this._createLines.push(`${elVar}.appendChild(${childVar});`);
           }
         } else if (block) {
-          const childVar = this.emitNode(block);
-          this._emitCreateLines.push(`${elVar}.appendChild(${childVar});`);
+          const childVar = this.generateNode(block);
+          this._createLines.push(`${elVar}.appendChild(${childVar});`);
         }
       }
       else if (Array.isArray(arg) && arg[0] === 'object') {
-        this.emitAttributes(elVar, arg);
+        this.generateAttributes(elVar, arg);
       }
       else if (typeof arg === 'string' || arg instanceof String) {
         const textVar = this.newTextVar();
         const argStr = arg.valueOf();
         if (argStr.startsWith('"') || argStr.startsWith("'") || argStr.startsWith('`')) {
-          this._emitCreateLines.push(`${textVar} = document.createTextNode(${argStr});`);
+          this._createLines.push(`${textVar} = document.createTextNode(${argStr});`);
         } else if (this.reactiveMembers && this.reactiveMembers.has(argStr)) {
-          this._emitCreateLines.push(`${textVar} = document.createTextNode('');`);
-          this._emitSetupLines.push(`__effect(() => { ${textVar}.data = this.${argStr}.value; });`);
+          this._createLines.push(`${textVar} = document.createTextNode('');`);
+          this._setupLines.push(`__effect(() => { ${textVar}.data = this.${argStr}.value; });`);
         } else {
-          this._emitCreateLines.push(`${textVar} = document.createTextNode(${this.generateInComponent(arg, 'value')});`);
+          this._createLines.push(`${textVar} = document.createTextNode(${this.generateInComponent(arg, 'value')});`);
         }
-        this._emitCreateLines.push(`${elVar}.appendChild(${textVar});`);
+        this._createLines.push(`${elVar}.appendChild(${textVar});`);
       }
       else {
-        const childVar = this.emitNode(arg);
-        this._emitCreateLines.push(`${elVar}.appendChild(${childVar});`);
+        const childVar = this.generateNode(arg);
+        this._createLines.push(`${elVar}.appendChild(${childVar});`);
       }
     }
 
@@ -667,10 +677,10 @@ export function installComponentSupport(CodeGenerator) {
   };
 
   // --------------------------------------------------------------------------
-  // emitAttributes — attributes, events, and bindings on an element
+  // generateAttributes — attributes, events, and bindings on an element
   // --------------------------------------------------------------------------
 
-  proto.emitAttributes = function(elVar, objExpr) {
+  proto.generateAttributes = function(elVar, objExpr) {
     const inputType = extractInputType(objExpr.slice(1));
 
     for (let i = 1; i < objExpr.length; i++) {
@@ -680,7 +690,7 @@ export function installComponentSupport(CodeGenerator) {
       if (Array.isArray(key) && key[0] === '.' && key[1] === 'this') {
         const eventName = key[2];
         const handlerCode = this.generateInComponent(value, 'value');
-        this._emitCreateLines.push(`${elVar}.addEventListener('${eventName}', (e) => (${handlerCode})(e));`);
+        this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => (${handlerCode})(e));`);
         continue;
       }
 
@@ -706,8 +716,8 @@ export function installComponentSupport(CodeGenerator) {
               ? 'e.target.valueAsNumber' : 'e.target.value';
           }
 
-          this._emitSetupLines.push(`__effect(() => { ${elVar}.${prop} = ${valueCode}; });`);
-          this._emitCreateLines.push(`${elVar}.addEventListener('${event}', (e) => ${valueCode} = ${valueAccessor});`);
+          this._setupLines.push(`__effect(() => { ${elVar}.${prop} = ${valueCode}; });`);
+          this._createLines.push(`${elVar}.addEventListener('${event}', (e) => ${valueCode} = ${valueAccessor});`);
           continue;
         }
 
@@ -716,72 +726,72 @@ export function installComponentSupport(CodeGenerator) {
         // Smart two-way binding for value/checked when bound to reactive state
         if ((key === 'value' || key === 'checked') && this.hasReactiveDeps(value)) {
           // Reactive effect: signal → DOM property
-          this._emitSetupLines.push(`__effect(() => { ${elVar}.${key} = ${valueCode}; });`);
+          this._setupLines.push(`__effect(() => { ${elVar}.${key} = ${valueCode}; });`);
           // Event listener: DOM → signal (two-way)
           const event = key === 'checked' ? 'change' : 'input';
           const accessor = key === 'checked' ? 'e.target.checked'
             : (inputType === 'number' || inputType === 'range') ? 'e.target.valueAsNumber'
             : 'e.target.value';
-          this._emitCreateLines.push(`${elVar}.addEventListener('${event}', (e) => { ${valueCode} = ${accessor}; });`);
+          this._createLines.push(`${elVar}.addEventListener('${event}', (e) => { ${valueCode} = ${accessor}; });`);
           continue;
         }
 
         if (this.hasReactiveDeps(value)) {
-          this._emitSetupLines.push(`__effect(() => { ${elVar}.setAttribute('${key}', ${valueCode}); });`);
+          this._setupLines.push(`__effect(() => { ${elVar}.setAttribute('${key}', ${valueCode}); });`);
         } else {
-          this._emitCreateLines.push(`${elVar}.setAttribute('${key}', ${valueCode});`);
+          this._createLines.push(`${elVar}.setAttribute('${key}', ${valueCode});`);
         }
       }
     }
   };
 
   // --------------------------------------------------------------------------
-  // emitBlock — a block of template children
+  // generateTemplateBlock — a block of template children
   // --------------------------------------------------------------------------
 
-  proto.emitBlock = function(body) {
+  proto.generateTemplateBlock = function(body) {
     if (!Array.isArray(body) || body[0] !== 'block') {
-      return this.emitNode(body);
+      return this.generateNode(body);
     }
 
     const statements = body.slice(1);
     if (statements.length === 0) {
       const commentVar = this.newElementVar('empty');
-      this._emitCreateLines.push(`${commentVar} = document.createComment('');`);
+      this._createLines.push(`${commentVar} = document.createComment('');`);
       return commentVar;
     }
     if (statements.length === 1) {
-      return this.emitNode(statements[0]);
+      return this.generateNode(statements[0]);
     }
 
     const fragVar = this.newElementVar('frag');
-    this._emitCreateLines.push(`${fragVar} = document.createDocumentFragment();`);
+    this._createLines.push(`${fragVar} = document.createDocumentFragment();`);
     for (const stmt of statements) {
-      const childVar = this.emitNode(stmt);
-      this._emitCreateLines.push(`${fragVar}.appendChild(${childVar});`);
+      const childVar = this.generateNode(stmt);
+      this._createLines.push(`${fragVar}.appendChild(${childVar});`);
     }
     return fragVar;
   };
 
   // --------------------------------------------------------------------------
-  // emitConditional — reactive if/else using block factories
+  // generateConditional — reactive if/else using block factories
   // --------------------------------------------------------------------------
 
-  proto.emitConditional = function(sexpr) {
+  proto.generateConditional = function(sexpr) {
     const [, condition, thenBlock, elseBlock] = sexpr;
 
     const anchorVar = this.newElementVar('anchor');
-    this._emitCreateLines.push(`${anchorVar} = document.createComment('if');`);
+    this._createLines.push(`${anchorVar} = document.createComment('if');`);
 
     const condCode = this.generateInComponent(condition, 'value');
 
     const thenBlockName = this.newBlockVar();
-    this.emitConditionBranch(thenBlockName, thenBlock);
+    this.generateConditionBranch(thenBlockName, thenBlock);
 
     let elseBlockName = null;
     if (elseBlock) {
       elseBlockName = this.newBlockVar();
-      this.emitConditionBranch(elseBlockName, elseBlock);
+      this.generateConditionBranch(elseBlockName, elseBlock);
     }
 
     const setupLines = [];
@@ -818,36 +828,30 @@ export function installComponentSupport(CodeGenerator) {
     setupLines.push(`  });`);
     setupLines.push(`}`);
 
-    this._emitSetupLines.push(setupLines.join('\n    '));
+    this._setupLines.push(setupLines.join('\n    '));
 
     return anchorVar;
   };
 
   // --------------------------------------------------------------------------
-  // emitConditionBranch — block factory for a conditional branch
+  // generateConditionBranch — block factory for a conditional branch
   // --------------------------------------------------------------------------
 
-  proto.emitConditionBranch = function(blockName, block) {
-    const savedCreateLines = this._emitCreateLines;
-    const savedSetupLines = this._emitSetupLines;
+  proto.generateConditionBranch = function(blockName, block) {
+    const savedCreateLines = this._createLines;
+    const savedSetupLines = this._setupLines;
 
-    this._emitCreateLines = [];
-    this._emitSetupLines = [];
+    this._createLines = [];
+    this._setupLines = [];
 
-    const rootVar = this.emitBlock(block);
-    const createLines = this._emitCreateLines;
-    const setupLines = this._emitSetupLines;
+    const rootVar = this.generateTemplateBlock(block);
+    const createLines = this._createLines;
+    const setupLines = this._setupLines;
 
-    this._emitCreateLines = savedCreateLines;
-    this._emitSetupLines = savedSetupLines;
+    this._createLines = savedCreateLines;
+    this._setupLines = savedSetupLines;
 
-    const localizeVar = (line) => {
-      // First localize template element refs (this._elN → _elN)
-      let result = line.replace(/this\.(_el\d+|_t\d+|_anchor\d+|_frag\d+|_slot\d+|_c\d+|_inst\d+|_empty\d+)/g, '$1');
-      // Then replace remaining this. with ctx. (component instance in block context)
-      result = result.replace(/\bthis\./g, 'ctx.');
-      return result;
-    };
+    const localizeVar = (line) => this.localizeVar(line);
 
     const factoryLines = [];
     factoryLines.push(`function ${blockName}(ctx) {`);
@@ -911,20 +915,20 @@ export function installComponentSupport(CodeGenerator) {
     factoryLines.push(`  };`);
     factoryLines.push(`}`);
 
-    this._emitBlockFactories.push(factoryLines.join('\n'));
+    this._blockFactories.push(factoryLines.join('\n'));
   };
 
   // --------------------------------------------------------------------------
-  // emitLoop — reactive for-loop with keyed reconciliation
+  // generateTemplateLoop — reactive for-loop with keyed reconciliation
   // --------------------------------------------------------------------------
 
-  proto.emitLoop = function(sexpr) {
+  proto.generateTemplateLoop = function(sexpr) {
     const [head, vars, collection, guard, step, body] = sexpr;
 
     const blockName = this.newBlockVar();
 
     const anchorVar = this.newElementVar('anchor');
-    this._emitCreateLines.push(`${anchorVar} = document.createComment('for');`);
+    this._createLines.push(`${anchorVar} = document.createComment('for');`);
 
     const varNames = Array.isArray(vars) ? vars : [vars];
     const itemVar = varNames[0];
@@ -953,26 +957,20 @@ export function installComponentSupport(CodeGenerator) {
     }
 
     // Save state and generate item template in isolation
-    const savedCreateLines = this._emitCreateLines;
-    const savedSetupLines = this._emitSetupLines;
+    const savedCreateLines = this._createLines;
+    const savedSetupLines = this._setupLines;
 
-    this._emitCreateLines = [];
-    this._emitSetupLines = [];
+    this._createLines = [];
+    this._setupLines = [];
 
-    const itemNode = this.emitBlock(body);
-    const itemCreateLines = this._emitCreateLines;
-    const itemSetupLines = this._emitSetupLines;
+    const itemNode = this.generateTemplateBlock(body);
+    const itemCreateLines = this._createLines;
+    const itemSetupLines = this._setupLines;
 
-    this._emitCreateLines = savedCreateLines;
-    this._emitSetupLines = savedSetupLines;
+    this._createLines = savedCreateLines;
+    this._setupLines = savedSetupLines;
 
-    const localizeVar = (line) => {
-      // First localize template element refs (this._elN → _elN)
-      let result = line.replace(/this\.(_el\d+|_t\d+|_anchor\d+|_frag\d+|_slot\d+|_c\d+|_inst\d+|_empty\d+)/g, '$1');
-      // Then replace remaining this. with ctx. (component instance in block context)
-      result = result.replace(/\bthis\./g, 'ctx.');
-      return result;
-    };
+    const localizeVar = (line) => this.localizeVar(line);
 
     // Generate block factory
     const factoryLines = [];
@@ -1036,7 +1034,7 @@ export function installComponentSupport(CodeGenerator) {
     factoryLines.push(`  };`);
     factoryLines.push(`}`);
 
-    this._emitBlockFactories.push(factoryLines.join('\n'));
+    this._blockFactories.push(factoryLines.join('\n'));
 
     // Generate reconciliation code in _setup()
     const setupLines = [];
@@ -1073,27 +1071,27 @@ export function installComponentSupport(CodeGenerator) {
     setupLines.push(`  });`);
     setupLines.push(`}`);
 
-    this._emitSetupLines.push(setupLines.join('\n    '));
+    this._setupLines.push(setupLines.join('\n    '));
 
     return anchorVar;
   };
 
   // --------------------------------------------------------------------------
-  // emitChildComponent — instantiate a child component
+  // generateChildComponent — instantiate a child component
   // --------------------------------------------------------------------------
 
-  proto.emitChildComponent = function(componentName, args) {
+  proto.generateChildComponent = function(componentName, args) {
     const instVar = this.newElementVar('inst');
     const elVar = this.newElementVar('el');
     const { propsCode, childrenSetupLines } = this.buildComponentProps(args);
 
-    this._emitCreateLines.push(`${instVar} = new ${componentName}(${propsCode});`);
-    this._emitCreateLines.push(`${elVar} = ${instVar}._create();`);
+    this._createLines.push(`${instVar} = new ${componentName}(${propsCode});`);
+    this._createLines.push(`${elVar} = ${instVar}._create();`);
 
-    this._emitSetupLines.push(`if (${instVar}._setup) ${instVar}._setup();`);
+    this._setupLines.push(`if (${instVar}._setup) ${instVar}._setup();`);
 
     for (const line of childrenSetupLines) {
-      this._emitSetupLines.push(line);
+      this._setupLines.push(line);
     }
 
     return elVar;
@@ -1120,21 +1118,21 @@ export function installComponentSupport(CodeGenerator) {
       } else if (Array.isArray(arg) && (arg[0] === '->' || arg[0] === '=>')) {
         const block = arg[2];
         if (block) {
-          const savedCreateLines = this._emitCreateLines;
-          const savedSetupLines = this._emitSetupLines;
-          this._emitCreateLines = [];
-          this._emitSetupLines = [];
+          const savedCreateLines = this._createLines;
+          const savedSetupLines = this._setupLines;
+          this._createLines = [];
+          this._setupLines = [];
 
-          childrenVar = this.emitBlock(block);
+          childrenVar = this.generateTemplateBlock(block);
 
-          const childCreateLines = this._emitCreateLines;
-          const childSetupLinesCopy = this._emitSetupLines;
+          const childCreateLines = this._createLines;
+          const childSetupLinesCopy = this._setupLines;
 
-          this._emitCreateLines = savedCreateLines;
-          this._emitSetupLines = savedSetupLines;
+          this._createLines = savedCreateLines;
+          this._setupLines = savedSetupLines;
 
           for (const line of childCreateLines) {
-            this._emitCreateLines.push(line);
+            this._createLines.push(line);
           }
           childrenSetupLines.push(...childSetupLinesCopy);
           props.push(`children: ${childrenVar}`);

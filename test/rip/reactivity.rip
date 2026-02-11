@@ -7,19 +7,21 @@
 # State (:=) — Code Generation
 # ============================================================================
 
-codeBody "state creation", "count := 0", "const count = __state(0)"
+skip = { skipPreamble: true }
 
-codeBody "state with string", 'name := "Rip"', 'const name = __state("Rip")'
+code "state creation", "count := 0", "const count = __state(0)", skip
 
-codeBody "state update", '''
+code "state with string", 'name := "Rip"', 'const name = __state("Rip")', skip
+
+code "state update", '''
   count := 0
   count += 1
   ''', '''
   const count = __state(0);
   count.value += 1
-  '''
+  ''', skip
 
-codeBody "state read", '''
+code "state read", '''
   count := 0
   x = count
   ''', '''
@@ -27,35 +29,35 @@ codeBody "state read", '''
 
   const count = __state(0);
   x = count.value
-  '''
+  ''', skip
 
 # ============================================================================
 # Computed (~=) — Code Generation
 # ============================================================================
 
-codeBody "computed creation", "doubled ~= count * 2", "const doubled = __computed(() => (count * 2))"
+code "computed creation", "doubled ~= count * 2", "const doubled = __computed(() => (count * 2))", skip
 
-codeBody "computed with expression", '''
+code "computed with expression", '''
   message ~= "Count is #{count}"
   ''', '''
   const message = __computed(() => `Count is ${count}`)
-  '''
+  ''', skip
 
 # ============================================================================
 # Effect (~>) — Code Generation
 # ============================================================================
 
-codeBody "fire-and-forget effect", '''
+code "fire-and-forget effect", '''
   ~> console.log count
   ''', '''
   __effect(() => { console.log(count); })
-  '''
+  ''', skip
 
-codeBody "assigned effect", '''
+code "assigned effect", '''
   logger ~> console.log count
   ''', '''
   const logger = __effect(() => { console.log(count); })
-  '''
+  ''', skip
 
 # ============================================================================
 # Readonly (=!) — Code Generation

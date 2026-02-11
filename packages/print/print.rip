@@ -1,4 +1,4 @@
-# ============================================================================
+# ==============================================================================
 # rip-print — Syntax-highlighted source code printer
 #
 # Author: Steve Shreeve (steve.shreeve@gmail.com)
@@ -6,7 +6,7 @@
 #
 # Highlights source code using Shiki (VS Code's syntax engine) and serves
 # the result in the browser for viewing and printing. Serves once and exits.
-# ============================================================================
+# ==============================================================================
 
 import hljs from 'highlight.js'
 import ripLanguage from './hljs-rip.js'
@@ -17,14 +17,14 @@ import { execSync } from 'child_process'
 # Register Rip language with highlight.js
 hljs.registerLanguage 'rip', ripLanguage
 
-# ============================================================================
+# ==============================================================================
 # CLI argument parsing
-# ============================================================================
+# ==============================================================================
 
 args = process.argv.slice(2)
 
 if args.includes('-v') or args.includes('--version')
-  console.log "rip-print 0.1.8"
+  console.log "rip-print 1.0.0"
   process.exit(0)
 
 if args.includes('-h') or args.includes('--help')
@@ -76,9 +76,9 @@ defaultExclude = new Set [
 for ext in excludeExts
   defaultExclude.add ext
 
-# ============================================================================
+# ==============================================================================
 # File discovery
-# ============================================================================
+# ==============================================================================
 
 skipDirs = new Set ['.git', 'node_modules', '.rip-cache', '.zig-cache', 'zig-out', 'dist', 'misc']
 
@@ -121,9 +121,9 @@ if allFiles.length is 0
 
 console.log "#{allFiles.length} file#{if allFiles.length > 1 then 's' else ''}"
 
-# ============================================================================
+# ==============================================================================
 # Language detection
-# ============================================================================
+# ==============================================================================
 
 extToLang =
   rip:    'rip'
@@ -181,9 +181,9 @@ def getLang(file)
   return lang if lang and hljs.getLanguage(lang)
   return 'plaintext'
 
-# ============================================================================
+# ==============================================================================
 # Highlight and build HTML
-# ============================================================================
+# ==============================================================================
 
 def stripTopComments(code)
   lines = code.split('\n')
@@ -232,9 +232,9 @@ for file in allFiles
   html = "<pre><code class=\"hljs\">#{highlighted}</code></pre>"
   sections.push { file, lineCount, lang, timestamp, html }
 
-# ============================================================================
+# ==============================================================================
 # HTML template
-# ============================================================================
+# ==============================================================================
 
 bgColor    = if dark then '#0d1117' else '#ffffff'
 textColor  = if dark then '#e6edf3' else '#1f2328'
@@ -323,44 +323,46 @@ html = """
     <link rel="icon" href="data:,">
     <style id="hljs-theme">#{defaultCss}</style>
     <style>
+      :root { --bg: #{bgColor}; --fg: #{textColor}; --hdr: #{headerBg}; --brd: #{borderColor}; --gut: #{if dark then '#161b22' else '#f4f4f4'}; --act: #{if dark then '#30363d' else '#e0e0e0'}; }
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #{bgColor}; color: #{textColor}; }
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--fg); }
 
-      .toolbar { padding: 8px 16px; border-bottom: 1px solid #{borderColor}; text-align: right; font-size: 13px; }
-      .toolbar select { font-size: 13px; padding: 4px 8px; border-radius: 3px; border: 1px solid #{borderColor}; background: #{bgColor}; color: #{textColor}; }
+      .toolbar { padding: 8px 16px; border-bottom: 1px solid var(--brd); text-align: right; font-size: 13px; }
+      .toolbar select { font-size: 13px; padding: 4px 8px; border-radius: 3px; border: 1px solid var(--brd); background: var(--bg); color: var(--fg); }
       .toolbar label { color: #888; margin-left: 16px; }
       .size-group { display: inline-flex; vertical-align: middle; margin-left: 4px; }
-      .size-btn { font-size: 13px; width: 32px; height: 28px; border: 1px solid #{borderColor}; background: #{bgColor}; color: #888; cursor: pointer; margin: 0; padding: 0; }
+      .size-btn { font-size: 13px; width: 32px; height: 28px; border: 1px solid var(--brd); background: var(--bg); color: #888; cursor: pointer; margin: 0; padding: 0; }
       .size-btn:first-child { border-radius: 3px 0 0 3px; }
       .size-btn:last-child { border-radius: 0 3px 3px 0; }
       .size-btn + .size-btn { margin-left: -1px; }
-      .size-btn.active { background: #{if dark then '#30363d' else '#e0e0e0'}; color: #{textColor}; font-weight: 600; }
-      .toc { padding: 20px 30px; border-bottom: 1px solid #{borderColor}; }
+      .size-btn.active { background: var(--act); color: var(--fg); font-weight: 600; }
+      .toc { padding: 20px 30px; border-bottom: 1px solid var(--brd); }
       .toc h2 { font-size: 18px; margin-bottom: 10px; }
       .toc ol { padding-left: 24px; columns: 2; column-gap: 40px; }
       .toc li { font-size: 13px; line-height: 1.8; }
-      .toc a { color: #{textColor}; text-decoration: none; }
+      .toc a { color: var(--fg); text-decoration: none; }
       .toc a:hover { text-decoration: underline; }
       .meta { color: #888; font-size: 12px; }
 
       .file-section { margin-bottom: 0; margin-top: -1px; }
       .file-header {
-        background: #{headerBg}; padding: 10px 16px 10px 5.85em; font-size: 13px; font-weight: 600;
-        border-top: 1px solid #{borderColor}; border-bottom: 1px solid #{borderColor};
+        background: var(--hdr); padding: 10px 16px 10px 5.85em; font-size: 13px; font-weight: 600;
+        border-top: 1px solid var(--brd); border-bottom: 1px solid var(--brd);
         display: flex; justify-content: space-between; align-items: center;
       }
       .nav { font-weight: normal; font-size: 12px; }
       .nav a { color: #888; text-decoration: none; padding: 6px 10px; border-radius: 3px; }
-      .nav a:hover { color: #{textColor}; background: #{if dark then '#30363d' else '#e0e0e0'}; }
+      .nav a:hover { color: var(--fg); background: var(--act); }
 
-      .code-container { overflow-x: auto; border-bottom: 1px solid #{borderColor}; }
+      .code-container { overflow-x: auto; border-bottom: 1px solid var(--brd); }
       .code-container pre { margin: 0; border-radius: 0; }
-      .code-container code { font-size: 13px; line-height: 1.5; padding: 0 !important; display: block; }
-      .line-num { color: #aaa; background: #{if dark then '#161b22' else '#f4f4f4'}; user-select: none; display: inline-block; min-width: 2em; text-align: right; padding: 0 0.7em; margin-right: 0.7em; border-right: 1px solid #{borderColor}; }
+      .code-container code { font-size: var(--code-size, 13px); line-height: 1.5; padding: 0 !important; display: block; }
+      .line-num { color: #aaa; background: var(--gut); user-select: none; display: inline-block; min-width: 2em; text-align: right; padding: 0 0.7em; margin-right: 0.7em; border-right: 1px solid var(--brd); }
       .line-num.first { padding-top: 4px; }
 
       @media print {
-        .file-header { background: #f0f0f0 !important; color: #000 !important; }
+        .file-header { background: #333 !important; color: #fff !important; box-shadow: inset 0 0 0 1000px #333; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .file-header .meta { color: #ccc !important; }
         .toolbar { display: none; }
         .nav { display: none; }
         body { background: white !important; color: black !important; }
@@ -393,20 +395,13 @@ html = """
         if (!t) return;
         document.getElementById('hljs-theme').textContent = t.c;
         var d = t.d;
-        var bg = d ? '#0d1117' : '#ffffff';
-        var fg = d ? '#e6edf3' : '#1f2328';
-        var hdr = d ? '#161b22' : '#f6f8fa';
-        var brd = d ? '#30363d' : '#d0d7de';
-        var gut = d ? '#161b22' : '#f4f4f4';
-        document.body.style.background = bg;
-        document.body.style.color = fg;
-        document.querySelectorAll('.toolbar').forEach(function(e) { e.style.borderColor = brd; });
-        document.querySelectorAll('.toolbar select').forEach(function(e) { e.style.background = bg; e.style.color = fg; e.style.borderColor = brd; });
-        document.querySelectorAll('.toc').forEach(function(e) { e.style.borderColor = brd; });
-        document.querySelectorAll('.file-header').forEach(function(e) { e.style.background = hdr; e.style.borderColor = brd; e.style.color = fg; });
-        document.querySelectorAll('.line-num').forEach(function(e) { e.style.background = gut; e.style.borderColor = brd; });
-        document.querySelectorAll('.code-container').forEach(function(e) { e.style.borderColor = brd; });
-        document.querySelectorAll('.toc a').forEach(function(e) { e.style.color = fg; });
+        var r = document.documentElement.style;
+        r.setProperty('--bg',  d ? '#0d1117' : '#ffffff');
+        r.setProperty('--fg',  d ? '#e6edf3' : '#1f2328');
+        r.setProperty('--hdr', d ? '#161b22' : '#f6f8fa');
+        r.setProperty('--brd', d ? '#30363d' : '#d0d7de');
+        r.setProperty('--gut', d ? '#161b22' : '#f4f4f4');
+        r.setProperty('--act', d ? '#30363d' : '#e0e0e0');
       });
       // Restore saved theme
       var saved = localStorage.getItem('rip-print-theme');
@@ -419,7 +414,7 @@ html = """
       document.querySelectorAll('.size-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
           var size = btn.getAttribute('data-size') + 'px';
-          document.querySelectorAll('.code-container code').forEach(function(el) { el.style.fontSize = size; });
+          document.documentElement.style.setProperty('--code-size', size);
           document.querySelectorAll('.size-btn').forEach(function(b) { b.classList.remove('active'); });
           btn.classList.add('active');
           localStorage.setItem('rip-print-size', btn.getAttribute('data-size'));
@@ -436,9 +431,9 @@ html = """
   </html>
   """
 
-# ============================================================================
+# ==============================================================================
 # Serve once and open browser
-# ============================================================================
+# ==============================================================================
 
 served = false
 

@@ -43,9 +43,9 @@ class UserModel extends Model
     # hairColor: { type: 'string', enum: ['blonde','brown','black','red'], column: 'hair_color' }
     # active:    { type: 'bool', default: true }
 
-  # ---------------------------------------------------------------------------
+  # ----------------------------------------------------------------------------
   # Instance methods — Rich business logic on records
-  # ---------------------------------------------------------------------------
+  # ----------------------------------------------------------------------------
 
   createAccessCode: (secs = 3600) ->
     # Generate 5-char code from safe alphabet (no I, L, O)
@@ -58,9 +58,9 @@ class UserModel extends Model
   greet: ->
     "Hello, #{@name}!"
 
-  # ---------------------------------------------------------------------------
+  # ----------------------------------------------------------------------------
   # Computed properties — Reactive getters (better than Ruby!)
-  # ---------------------------------------------------------------------------
+  # ----------------------------------------------------------------------------
   #
   # In Ruby:
   #   def identifier
