@@ -1181,7 +1181,7 @@ export class CodeGenerator {
   generateLoopN(head, rest) {
     let [count, body] = rest;
     let n = this.generate(count, 'value');
-    return `for (let _i = 0; _i < ${n}; _i++) ${this.generateLoopBody(body)}`;
+    return `for (let it = 0; it < ${n}; it++) ${this.generateLoopBody(body)}`;
   }
 
   generateAwait(head, rest) { return `await ${this.generate(rest[0], 'value')}`; }

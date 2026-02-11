@@ -292,4 +292,11 @@ test "loop n inline", '''
   arr
   ''', [0, 1, 2, 3, 4]
 
-code "loop n compiles to for", "loop 3\n  console.log 'hi'", """for (let _i = 0; _i < 3; _i++) {\n  console.log('hi');\n}""", {skipPreamble: true}
+test "loop n with it as counter", '''
+  arr = []
+  loop 5
+    arr.push it
+  arr
+  ''', [0, 1, 2, 3, 4]
+
+code "loop n compiles to for", "loop 3\n  console.log 'hi'", """for (let it = 0; it < 3; it++) {\n  console.log('hi');\n}""", {skipPreamble: true}
