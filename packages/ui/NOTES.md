@@ -1,38 +1,57 @@
-# Rip UI — Design Notes
+# Rip UI — Notes & Known Issues
 
-## Why `@click` is not a conflict
+## Keep in Mind
 
-The `@` sigil in Rip always means `this.` — it accesses a member of the
-current component. In render blocks, `@click` compiles to `this.click`
-regardless of context. What changes is how the compiler *uses* that
-reference, based on what element it's attached to.
+- **Keep-alive doesn't pause effects.** Cached components continue running
+  reactive effects while off-screen. A counter with `~>` logging will still
+  fire. This is intentional (background data stays current), but differs from
+  Vue's `<KeepAlive>` which deactivates effects. May want an `onDeactivate`/
+  `onActivate` lifecycle pair in the future.
 
-**On an HTML element** (button, div, input, etc.):
+- **`getCompiled`/`setCompiled` cache modules, not JS strings.** The compiled
+  module (ES module object) is cached. If the same source is written to two
+  different paths, each gets its own cached module. This is correct but means
+  no deduplication across paths.
 
-```coffee
-button @click: @increment, "Click me"
-```
+- **Proxy `getOwnPropertyDescriptor` trap is missing.** The stash proxy has
+  `get`, `set`, `deleteProperty`, and `ownKeys`, but no `getOwnPropertyDescriptor`.
+  Some operations (`Object.keys`, `JSON.stringify`, spread) call both `ownKeys`
+  and `getOwnPropertyDescriptor`. Works in practice but could cause issues in
+  strict environments. Adding `getOwnPropertyDescriptor` that returns
+  `{ configurable: true, enumerable: true, value: ... }` would be more robust.
 
-This becomes `addEventListener('click', ...)`. HTML elements don't have
-props — they have attributes and event listeners. When the compiler sees
-`@click` on something it knows is an HTML tag, it treats it as an event
-binding.
+- **Router regex objects are recreated on every `buildRoutes` call.** Each
+  file-watcher event triggers `buildRoutes`, which recreates `RegExp` objects
+  for all routes even when routes haven't changed. Not a performance problem
+  with small route tables, but could be optimized with a route fingerprint
+  comparison.
 
-**On a component** (MyWidget, Counter, etc.):
+- **`router.current` creates a new object on every read.** Each access to
+  `router.current` constructs a fresh `{path, params, route, layouts, query,
+  hash}` object. The renderer's effect reads this on every reactive trigger.
+  A cached current object that updates only inside the batch would reduce
+  garbage.
 
-```coffee
-MyWidget @click: @handler
-```
+- **Context support exists but is unused.** The compiler runtime has
+  `setContext`, `getContext`, and `hasContext` with parent-chain walking. The
+  UI framework doesn't wire these up or document them. Ready to use when
+  needed.
 
-This becomes `new MyWidget({ click: this.handler })`. Components receive
-values through their constructor's `props` argument. When the compiler
-sees `@click` on something it knows is a component (capitalized name),
-it treats it as a prop.
+- **REPL reactive state doesn't persist across calls.** In the browser console,
+  `rip("count := 0")` followed by `rip("count = 5")` doesn't trigger reactivity
+  because each `rip()` call is a separate compilation — the compiler doesn't
+  know `count` was declared as `:=`. All reactive code must be in a single
+  `rip()` call.
 
-**Why there's no conflict:** You never pass props to HTML elements, and
-you never call `addEventListener` on components. The compiler already
-distinguishes HTML elements from components (HTML tags are lowercase and
-come from a known set; components are capitalized). The same `@click`
-syntax gets the right behavior in both contexts automatically — event
-listener on HTML elements, prop on components. No special-casing of
-event names, no reserved prop names, no ambiguity.
+- **Bundle caching uses a separate fs.watch.** In `serve.rip`, the bundle
+  cache invalidation watcher is separate from the SSE change watcher. Both
+  watch the same directory. Could be unified into a single watcher.
+
+## Future Ideas
+
+- `onActivate`/`onDeactivate` lifecycle hooks for keep-alive components
+- Route-level `loader` functions (data prefetching before component mounts)
+- Persistent VFS (IndexedDB/OPFS) for offline support and instant reloads
+- Compiled template optimization (ahead-of-time DOM operations)
+- Route transition animations
+- Scroll restoration on back/forward navigation
