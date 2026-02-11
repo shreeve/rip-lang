@@ -116,6 +116,15 @@ these moves Rip UI from "impressive demo" to "serious contender."
   know when they're cached/restored.
 - **`updated` lifecycle hook.** Fire after reactive effects flush (compiler change).
 
+### Language Ideas
+- **Reactive resource operator (`~>?`).** A language-level operator that
+  combines `~>` (auto-tracking effect) with `createResource` (loading/error/data
+  states). `user ~>? fetch!("/api/users/#{userId}").json!` would give you
+  `user.loading`, `user.error`, `user.data` — all reactive. Essentially
+  `createResource` as syntax instead of a function call. Park until real-world
+  usage shows whether `createResource` is used frequently enough to warrant
+  an operator.
+
 ### Infrastructure
 - **SSR / streaming.** Server-side rendering for SEO and initial load. The
   architecture supports two-phase loading (initial route inline, rest on
