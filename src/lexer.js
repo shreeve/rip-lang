@@ -1599,6 +1599,16 @@ export class Lexer {
         }
       }
 
+      // ─────────────────────────────────────────────────────────────────────
+      // Bare component reference (PascalCase, no children, no args)
+      // Counter → Counter() so it gets treated as a component instantiation
+      // ─────────────────────────────────────────────────────────────────────
+      if (tag === 'IDENTIFIER' && isComponent(token[1]) &&
+          nextToken && (nextToken[0] === 'OUTDENT' || nextToken[0] === 'TERMINATOR')) {
+        tokens.splice(i + 1, 0, gen('CALL_START', '(', token), gen('CALL_END', ')', token));
+        return 3;
+      }
+
       return 1;
     });
   }
