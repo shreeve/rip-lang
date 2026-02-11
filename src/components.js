@@ -249,10 +249,10 @@ export function installComponentSupport(CodeGenerator) {
       lines.push(`    this.${name} = props.${name} ?? ${val};`);
     }
 
-    // State variables (with isSignal prop merging)
+    // State variables (__state handles signal passthrough)
     for (const { name, value } of stateVars) {
       const val = this.generateInComponent(value, 'value');
-      lines.push(`    this.${name} = isSignal(props.${name}) ? props.${name} : __state(props.${name} ?? ${val});`);
+      lines.push(`    this.${name} = __state(props.${name} ?? ${val});`);
     }
 
     // Computed (derived)
@@ -1182,10 +1182,6 @@ export function installComponentSupport(CodeGenerator) {
 // Rip Component Runtime
 // ============================================================================
 
-function isSignal(v) {
-  return v != null && typeof v === 'object' && typeof v.read === 'function';
-}
-
 let __currentComponent = null;
 
 function __pushComponent(component) {
@@ -1229,7 +1225,7 @@ function __cx__(...args) {
 
 // Register on globalThis for runtime deduplication
 if (typeof globalThis !== 'undefined') {
-  globalThis.__ripComponent = { isSignal, __pushComponent, __popComponent, setContext, getContext, hasContext, __cx__ };
+  globalThis.__ripComponent = { __pushComponent, __popComponent, setContext, getContext, hasContext, __cx__ };
 }
 
 `;

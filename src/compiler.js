@@ -715,7 +715,7 @@ export class CodeGenerator {
 
     if (this.usesTemplates && !skip) {
       if (typeof globalThis !== 'undefined' && globalThis.__ripComponent) {
-        code += 'const { isSignal, __pushComponent, __popComponent, setContext, getContext, hasContext, __cx__ } = globalThis.__ripComponent;\n';
+        code += 'const { __pushComponent, __popComponent, setContext, getContext, hasContext, __cx__ } = globalThis.__ripComponent;\n';
       } else {
         code += this.getComponentRuntime();
       }
@@ -3043,6 +3043,7 @@ const __primitiveCoercion = {
 };
 
 function __state(initialValue) {
+  if (initialValue != null && typeof initialValue === 'object' && typeof initialValue.read === 'function') return initialValue;
   let value = initialValue;
   const subscribers = new Set();
   let notifying = false;

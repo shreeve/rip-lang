@@ -163,3 +163,29 @@ test "multiple states", '''
   c := 3
   a + b + c + 0
   ''', 6
+
+# ============================================================================
+# Components with reactive state
+# ============================================================================
+
+test "component with state", '''
+  A = component
+    x := 5
+  a = A.new()
+  a.x.value
+  ''', 5
+
+test "component state mutation", '''
+  A = component
+    x := 10
+  a = A.new()
+  a.x.value = 20
+  a.x.value
+  ''', 20
+
+test "component signal read", '''
+  A = component
+    x := 5
+  a = A.new()
+  a.x.read()
+  ''', 5
