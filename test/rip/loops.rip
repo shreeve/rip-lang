@@ -273,3 +273,23 @@ code 'reverse iteration generates countdown', '''
     console.log(x);
   }
 '''
+
+# ============================================================================
+# loop n — repeat N times
+# ============================================================================
+
+test "loop n times", '''
+  count = 0
+  loop 3
+    count++
+  count
+  ''', 3
+
+test "loop n inline", '''
+  arr = []
+  loop 5
+    arr.push arr.length
+  arr
+  ''', [0, 1, 2, 3, 4]
+
+code "loop n compiles to for", "loop 3\n  console.log 'hi'", """for (let _i = 0; _i < 3; _i++) {\n  console.log('hi');\n}""", {skipPreamble: true}

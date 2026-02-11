@@ -208,6 +208,7 @@ export class CodeGenerator {
     '?:': 'generateTernary',
     '|>': 'generatePipe',
     'loop': 'generateLoop',
+    'loop-n': 'generateLoopN',
     'await': 'generateAwait',
     'yield': 'generateYield',
     'yield-from': 'generateYieldFrom',
@@ -1173,6 +1174,12 @@ export class CodeGenerator {
 
   generateLoop(head, rest) {
     return `while (true) ${this.generateLoopBody(rest[0])}`;
+  }
+
+  generateLoopN(head, rest) {
+    let [count, body] = rest;
+    let n = this.generate(count, 'value');
+    return `for (let _i = 0; _i < ${n}; _i++) ${this.generateLoopBody(body)}`;
   }
 
   generateAwait(head, rest) { return `await ${this.generate(rest[0], 'value')}`; }

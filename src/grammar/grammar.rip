@@ -621,8 +621,9 @@ grammar =
   ]
 
   Loop: [
-    o 'LOOP Block'     , '["loop", 2]'
-    o 'LOOP Expression', '["loop", [2]]'
+    o 'LOOP Block'            , '["loop", 2]'
+    o 'LOOP Expression'       , '["loop", [2]]'
+    o 'LOOP Expression Block' , '["loop-n", 2, 3]'
   ]
 
   # For loops
