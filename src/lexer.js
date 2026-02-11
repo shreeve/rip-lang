@@ -1071,6 +1071,20 @@ export class Lexer {
     // Arrow functions → tag parameters
     if (CODE_RE.test(val)) this.tagParameters();
 
+    // Method assignment: x .= trim() → x = x.trim()
+    if (val === '=' && prev && prev[1] === '.' && !prev.spaced) {
+      let target = this.tokens[this.tokens.length - 2];
+      if (target && (target[0] === 'IDENTIFIER' || target[0] === 'PROPERTY' || target[0] === ')' || target[0] === ']')) {
+        prev[0] = '=';
+        prev[1] = '=';
+        // Insert target clone + '.' after the '='
+        let targetClone = tok(target[0], target[1], { pre: 0, row: target[2], col: target[3], len: target[4] });
+        let dot = tok('.', '.', { pre: 0, row: this.row, col: this.col, len: 1 });
+        this.tokens.push(targetClone, dot);
+        return val.length;
+      }
+    }
+
     // Compound assignment merging: ||= &&= ??=
     if (prev && (val === '=' || COMPOUND_ASSIGN.has(val))) {
       if (val === '=' && (prev[1] === '||' || prev[1] === '&&' || prev[1] === '??') && !prev.spaced) {

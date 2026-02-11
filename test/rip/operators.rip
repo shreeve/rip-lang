@@ -346,3 +346,34 @@ test "prototype method assignment", '''
   ''', "HELLO!"
 
 code "prototype compiles to .prototype.", "String::trim", "String.prototype.trim"
+
+# ============================================================================
+# Method Assignment — .=
+# ============================================================================
+
+test "method assign trim", '''
+  x = "  hello  "
+  x .= trim()
+  x
+  ''', "hello"
+
+test "method assign filter", '''
+  arr = [1, 2, 3, 4, 5]
+  arr .= filter -> it > 3
+  arr
+  ''', [4, 5]
+
+test "method assign chained", '''
+  str = "  Hello World  "
+  str .= trim()
+  str .= toLowerCase()
+  str
+  ''', "hello world"
+
+test "method assign map", '''
+  items = [1, 2, 3]
+  items .= map -> it * 10
+  items
+  ''', [10, 20, 30]
+
+code "method assign compiles", "x .= trim()", "let x;\n\nx = x.trim();"
