@@ -34,6 +34,11 @@ id = -> it
 # Useful as a default handler: onClick ?= noop
 noop = ->
 
+# String method aliases (shorter names for common checks)
+String::starts = String::startsWith
+String::ends   = String::endsWith
+String::has    = String::includes
+
 # Clamp a value to a range
 clamp = (v, lo, hi) -> Math.min(Math.max(v, lo), hi)
 
