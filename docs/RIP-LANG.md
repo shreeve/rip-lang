@@ -313,6 +313,7 @@ Multiple lines
 | `<` `<=` | Chained comparison | `1 < x < 10` | `(1 < x) && (x < 10)` |
 | `\|>` | Pipe | `x \|> fn` or `x \|> fn(y)` | `fn(x)` or `fn(x, y)` |
 | `.=` | Method assign | `x .= trim()` | `x = x.trim()` |
+| `*` | Merge assign | `*obj = {a: 1}` | `Object.assign(obj, {a: 1})` |
 | `not in` | Not in | `x not in arr` | Negated membership test |
 | `not of` | Not of | `k not of obj` | Negated key existence |
 
@@ -412,6 +413,44 @@ users .= sort()
 ```
 
 Works with any method — built-in or custom, with or without arguments.
+
+## Merge Assignment (`*`)
+
+A Rip original. Merge properties into an existing object without repeating
+its name:
+
+```coffee
+# Without * — repeat the object name or use verbose Object.assign
+Object.assign config,
+  host: "localhost"
+  port: 3000
+  debug: true
+
+# With * — clean and direct
+*config =
+  host: "localhost"
+  port: 3000
+  debug: true
+
+# Single line
+*opts = {method: "POST", body: data}
+
+# Dotted paths
+*el.style =
+  color: "red"
+  fontSize: "14px"
+
+# Merge user overrides into defaults
+*defaults = userConfig
+```
+
+`*target = value` compiles to `Object.assign(target, value)`. The `*` reads
+as "spread these into" — the same concept as `...` spread but as an
+assignment. This is unique to Rip.
+
+Common use cases: config objects, options bags, state initialization, DOM
+styling, merging defaults with overrides — anywhere you're setting multiple
+properties on an existing object.
 
 ## Prototype Operator (`::`)
 
