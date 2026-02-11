@@ -400,4 +400,9 @@ test "merge assign inline", '''
   opts.a + opts.b
   ''', 3
 
-code "merge assign compiles to Object.assign", "*config = {a: 1}", "Object.assign(config, {a: 1})"
+test "merge assign auto-init", '''
+  *opts = {x: 1, y: 2}
+  opts.x + opts.y
+  ''', 3
+
+code "merge assign compiles to Object.assign", "*config = {a: 1}", "let config;\n\nconfig = Object.assign(config ??= {}, {a: 1});"

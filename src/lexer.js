@@ -1134,17 +1134,25 @@ export class Lexer {
       let m = /^((?:(?!\s)[$\w\x7f-\uffff])+(?:\.[a-zA-Z_$][\w]*)*)(\s*)=(?!=)/.exec(rest);
       if (m) {
         let target = m[1], space = m[2];
+        let parts = target.split('.');
+        // Emit: target = Object.assign(target ??= {}, ...)
+        let emitTarget = () => {
+          this.emit('IDENTIFIER', parts[0]);
+          for (let i = 1; i < parts.length; i++) {
+            this.emit('.', '.');
+            this.emit('PROPERTY', parts[i]);
+          }
+        };
+        emitTarget();
+        this.emit('=', '=');
         this.emit('IDENTIFIER', 'Object');
         this.emit('.', '.');
         this.emit('PROPERTY', 'assign');
         this.emit('CALL_START', '(');
-        // Emit target — handle dotted paths like el.style
-        let parts = target.split('.');
-        this.emit('IDENTIFIER', parts[0]);
-        for (let i = 1; i < parts.length; i++) {
-          this.emit('.', '.');
-          this.emit('PROPERTY', parts[i]);
-        }
+        emitTarget();
+        this.emit('COMPOUND_ASSIGN', '??=');
+        this.emit('{', '{');
+        this.emit('}', '}');
         this.emit(',', ',');
         let comma = this.prev();
         comma.mergeClose = true; // mark for rewriter to insert CALL_END
