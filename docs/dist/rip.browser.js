@@ -2049,16 +2049,24 @@ class Lexer {
       let m = /^((?:(?!\s)[$\w\x7f-\uffff])+(?:\.[a-zA-Z_$][\w]*)*)(\s*)=(?!=)/.exec(rest);
       if (m) {
         let target = m[1], space = m[2];
+        let parts = target.split(".");
+        let emitTarget = () => {
+          this.emit("IDENTIFIER", parts[0]);
+          for (let i = 1;i < parts.length; i++) {
+            this.emit(".", ".");
+            this.emit("PROPERTY", parts[i]);
+          }
+        };
+        emitTarget();
+        this.emit("=", "=");
         this.emit("IDENTIFIER", "Object");
         this.emit(".", ".");
         this.emit("PROPERTY", "assign");
         this.emit("CALL_START", "(");
-        let parts = target.split(".");
-        this.emit("IDENTIFIER", parts[0]);
-        for (let i = 1;i < parts.length; i++) {
-          this.emit(".", ".");
-          this.emit("PROPERTY", parts[i]);
-        }
+        emitTarget();
+        this.emit("COMPOUND_ASSIGN", "??=");
+        this.emit("{", "{");
+        this.emit("}", "}");
         this.emit(",", ",");
         let comma = this.prev();
         comma.mergeClose = true;
@@ -8028,8 +8036,8 @@ function getComponentRuntime() {
   return new CodeGenerator({}).getComponentRuntime();
 }
 // src/browser.js
-var VERSION = "3.7.1";
-var BUILD_DATE = "2026-02-11@10:08:34GMT";
+var VERSION = "3.7.2";
+var BUILD_DATE = "2026-02-11@10:15:53GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }
