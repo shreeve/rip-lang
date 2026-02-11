@@ -19,7 +19,7 @@ echo 'your code' | ./bin/rip -s  # S-expressions (parser)
 echo 'your code' | ./bin/rip -c  # JavaScript (codegen)
 
 # Run tests
-bun run test                              # All tests (1219)
+bun run test                             # All tests (1225)
 bun test/runner.js test/rip/FILE.rip     # Specific file
 
 # Rebuild parser (after grammar changes)
@@ -33,7 +33,7 @@ bun run browser
 
 | Metric | Value |
 |--------|-------|
-| Version | 3.7.0 |
+| Version | 3.7.3 |
 | Tests | 1,140/1,140 (100%) |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |

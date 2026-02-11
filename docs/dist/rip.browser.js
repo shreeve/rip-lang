@@ -1993,13 +1993,18 @@ class Lexer {
     if (CODE_RE.test(val))
       this.tagParameters();
     if (val === "=" && prev && prev[1] === "." && !prev.spaced) {
-      let target = this.tokens[this.tokens.length - 2];
-      if (target && (target[0] === "IDENTIFIER" || target[0] === "PROPERTY" || target[0] === ")" || target[0] === "]")) {
+      let tokens = this.tokens;
+      let j = tokens.length - 2;
+      while (j >= 1 && tokens[j][0] === "PROPERTY" && tokens[j - 1]?.[1] === ".")
+        j -= 2;
+      if (j >= 0 && (tokens[j][0] === "IDENTIFIER" || tokens[j][0] === ")" || tokens[j][0] === "]")) {
+        let chainTokens = tokens.slice(j, tokens.length - 1);
         prev[0] = "=";
         prev[1] = "=";
-        let targetClone = tok(target[0], target[1], { pre: 0, row: target[2], col: target[3], len: target[4] });
-        let dot = tok(".", ".", { pre: 0, row: this.row, col: this.col, len: 1 });
-        this.tokens.push(targetClone, dot);
+        for (let t of chainTokens) {
+          this.tokens.push(tok(t[0], t[1], { pre: 0, row: t[2], col: t[3], len: t[4] }));
+        }
+        this.tokens.push(tok(".", ".", { pre: 0, row: this.row, col: this.col, len: 1 }));
         return val.length;
       }
     }
@@ -8036,8 +8041,8 @@ function getComponentRuntime() {
   return new CodeGenerator({}).getComponentRuntime();
 }
 // src/browser.js
-var VERSION = "3.7.2";
-var BUILD_DATE = "2026-02-11@10:15:53GMT";
+var VERSION = "3.7.3";
+var BUILD_DATE = "2026-02-11@10:29:15GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }
