@@ -1650,6 +1650,20 @@ class Lexer {
     return fallback;
   }
   commentToken() {
+    if (this.inRenderBlock) {
+      if (/^#[a-zA-Z_]/.test(this.chunk)) {
+        let prev = this.prev();
+        if (prev && (prev[0] === "IDENTIFIER" || prev[0] === "PROPERTY"))
+          return 0;
+        let m = /^#([a-zA-Z_][\w-]*)/.exec(this.chunk);
+        if (m) {
+          this.emit("IDENTIFIER", "div#" + m[1]);
+          return m[0].length;
+        }
+      }
+      if (/^\s+#[a-zA-Z_]/.test(this.chunk))
+        return 0;
+    }
     let match = COMMENT_RE.exec(this.chunk);
     if (!match)
       return 0;
@@ -2339,7 +2353,7 @@ class Lexer {
       if (tag === "IDENTIFIER" || tag === "PROPERTY") {
         let next = tokens[i + 1];
         let nextNext = tokens[i + 2];
-        if (next && next[0] === "#" && nextNext && nextNext[0] === "PROPERTY") {
+        if (next && next[0] === "#" && nextNext && (nextNext[0] === "PROPERTY" || nextNext[0] === "IDENTIFIER")) {
           token[1] = token[1] + "#" + nextNext[1];
           if (nextNext.spaced)
             token.spaced = true;
@@ -3586,8 +3600,11 @@ function installComponentSupport(CodeGenerator) {
       }
       current = current[1];
     }
-    const tag = typeof current === "string" ? current : current instanceof String ? current.valueOf() : "div";
-    return { tag, classes };
+    let raw = typeof current === "string" ? current : current instanceof String ? current.valueOf() : "div";
+    let [tag, id] = raw.split("#");
+    if (!tag)
+      tag = "div";
+    return { tag, classes, id };
   };
   proto.transformComponentMembers = function(sexpr) {
     if (!Array.isArray(sexpr)) {
@@ -3829,8 +3846,11 @@ ${blockFactoriesCode}return ${lines.join(`
         this._setupLines.push(`__effect(() => { ${textVar2}.data = this.${str}.value; });`);
         return textVar2;
       }
+      const [tagStr, idStr] = str.split("#");
       const elVar = this.newElementVar();
-      this._createLines.push(`${elVar} = document.createElement('${str}');`);
+      this._createLines.push(`${elVar} = document.createElement('${tagStr || "div"}');`);
+      if (idStr)
+        this._createLines.push(`${elVar}.id = '${idStr}';`);
       return elVar;
     }
     if (!Array.isArray(sexpr)) {
@@ -3844,7 +3864,8 @@ ${blockFactoriesCode}return ${lines.join(`
       return this.generateChildComponent(headStr, rest);
     }
     if (headStr && this.isHtmlTag(headStr)) {
-      return this.generateTag(headStr, [], rest);
+      let [tagName, id] = headStr.split("#");
+      return this.generateTag(tagName || "div", [], rest, id);
     }
     if (headStr === ".") {
       const [, obj, prop] = sexpr;
@@ -3859,9 +3880,9 @@ ${blockFactoriesCode}return ${lines.join(`
         this._createLines.push(`${slotVar} = this.${prop} instanceof Node ? this.${prop} : (this.${prop} != null ? document.createTextNode(String(this.${prop})) : document.createComment(''));`);
         return slotVar;
       }
-      const { tag, classes } = this.collectTemplateClasses(sexpr);
+      const { tag, classes, id } = this.collectTemplateClasses(sexpr);
       if (tag && this.isHtmlTag(tag)) {
-        return this.generateTag(tag, classes, []);
+        return this.generateTag(tag, classes, [], id);
       }
       const textVar2 = this.newTextVar();
       const exprCode2 = this.generateInComponent(sexpr, "value");
@@ -3874,12 +3895,12 @@ ${blockFactoriesCode}return ${lines.join(`
         const classExprs = head.slice(1);
         return this.generateDynamicTag(tag2, classExprs, rest);
       }
-      const { tag, classes } = this.collectTemplateClasses(head);
+      const { tag, classes, id } = this.collectTemplateClasses(head);
       if (tag && this.isHtmlTag(tag)) {
         if (classes.length === 1 && classes[0] === "__clsx") {
           return this.generateDynamicTag(tag, rest, []);
         }
-        return this.generateTag(tag, classes, rest);
+        return this.generateTag(tag, classes, rest, id);
       }
     }
     if (headStr === "->" || headStr === "=>") {
@@ -3901,9 +3922,12 @@ ${blockFactoriesCode}return ${lines.join(`
     }
     return textVar;
   };
-  proto.generateTag = function(tag, classes, args) {
+  proto.generateTag = function(tag, classes, args, id) {
     const elVar = this.newElementVar();
     this._createLines.push(`${elVar} = document.createElement('${tag}');`);
+    if (id) {
+      this._createLines.push(`${elVar}.id = '${id}';`);
+    }
     if (classes.length > 0) {
       this._createLines.push(`${elVar}.className = '${classes.join(" ")}';`);
     }
@@ -8075,7 +8099,7 @@ function getComponentRuntime() {
 }
 // src/browser.js
 var VERSION = "3.7.4";
-var BUILD_DATE = "2026-02-11@13:07:41GMT";
+var BUILD_DATE = "2026-02-11@15:37:22GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }
