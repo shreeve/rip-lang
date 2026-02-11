@@ -10,13 +10,13 @@
 #   use ripUI app: '/demo', dir: dir, title: 'My App'
 #
 # Options:
-#   app:      string  — URL mount point (default: '')
-#   dir:      string  — app directory on disk (default: '.')
-#   components:    string  — components subdirectory name (default: 'components')
-#   watch:    boolean — enable SSE hot-reload endpoint (default: false)
-#   debounce: number  — ms to batch filesystem events (default: 250)
-#   state:    object  — initial app state passed via bundle
-#   title:    string  — document title
+#   app:        string  — URL mount point (default: '')
+#   dir:        string  — app directory on disk (default: '.')
+#   components: string  — components subdirectory name (default: 'components')
+#   watch:      boolean — enable SSE hot-reload endpoint (default: false)
+#   debounce:   number  — ms to batch filesystem events (default: 250)
+#   state:      object  — initial app state passed via bundle
+#   title:      string  — document title
 #
 # ==============================================================================
 
@@ -24,14 +24,14 @@ import { get } from '@rip-lang/api'
 import { watch as fsWatch } from 'node:fs'
 
 export ripUI = (opts = {}) ->
-  prefix      = opts.app or ''
-  appDir      = opts.dir or '.'
-  componentsDir    = opts.components or "#{appDir}/components"
-  enableWatch = opts.watch or false
-  debounceMs  = opts.debounce or 250
-  appState    = opts.state or null
-  appTitle    = opts.title or null
-  uiDir       = import.meta.dir
+  prefix        = opts.app or ''
+  appDir        = opts.dir or '.'
+  componentsDir = opts.components or "#{appDir}/components"
+  enableWatch   = opts.watch or false
+  debounceMs    = opts.debounce or 250
+  appState      = opts.state or null
+  appTitle      = opts.title or null
+  uiDir         = import.meta.dir
 
   # Resolve compiler (rip.browser.js)
   compilerPath = null
