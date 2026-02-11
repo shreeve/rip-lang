@@ -507,6 +507,13 @@ export createRenderer = (opts = {}) ->
     layoutInstances = []
     mountPoint = container
 
+  # Invalidate cached components when their source changes (HMR)
+  parts.watch (event, path) ->
+    if componentCache.has(path)
+      evicted = componentCache.get(path)
+      evicted.unmounted() if evicted.unmounted
+      componentCache.delete path
+
   mountRoute = (info) ->
     { route, params, layouts: layoutFiles, query } = info
     return unless route
