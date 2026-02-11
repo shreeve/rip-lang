@@ -66,6 +66,10 @@
 
 ## Future Ideas
 
+- Code splitting / lazy route loading — currently the bundle sends all parts
+  in one JSON request. For small apps this is fine (Rip source compresses well
+  with Brotli). For large apps, could lazy-load per route. Low priority until
+  apps grow large enough for bundle size to matter.
 - `onActivate`/`onDeactivate` lifecycle hooks for keep-alive components
 - `updated` hook triggered after reactive effect flushes (compiler change)
 - State-preserving HMR for component code changes (state transfer)
@@ -76,5 +80,4 @@
 - Compiled template optimization (ahead-of-time DOM operations)
 - Route transition animations
 - Scroll restoration on back/forward navigation
-- Code splitting / lazy route loading
 - Form handling utilities
