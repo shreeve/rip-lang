@@ -307,6 +307,7 @@ Multiple lines
 | `!` | Void | `def process!` | Suppresses implicit return |
 | `!?` | Otherwise | `val !? 5` | Default if undefined or throws |
 | `=~` | Match | `str =~ /pat/` | Ruby-style regex match, captures in `_` |
+| `::` | Prototype | `String::trim` | `String.prototype.trim` |
 | `[-n]` | Negative index | `arr[-1]` | `arr.at(-1)` |
 | `*` | String repeat | `"-" * 40` | `"-".repeat(40)` |
 | `<` `<=` | Chained comparison | `1 < x < 10` | `(1 < x) && (x < 10)` |
@@ -372,6 +373,33 @@ Handles both null/undefined AND thrown errors:
 result = riskyOperation() !? "default"
 # If riskyOperation() throws or returns null/undefined, result = "default"
 ```
+
+## Prototype Operator (`::`)
+
+Access `.prototype` with `::` (CoffeeScript-style). Disambiguated from type annotations by spacing:
+
+```coffee
+# Prototype access (no space after ::)
+String::starts = String::startsWith
+String::ends   = String::endsWith
+String::has    = String::includes
+
+# Now you can use them
+"hello".starts "he"        # true
+"hello.rip".ends ".rip"    # true
+"error: bad".has "error"   # true
+
+# Define new prototype methods
+String::shout = -> @toUpperCase() + "!"
+"hello".shout()            # "HELLO!"
+
+# Type annotations (space after ::) — unaffected
+name:: string = "Alice"
+def greet(name:: string):: string
+  "Hello, #{name}!"
+```
+
+The rule is simple: `::` with **no space** before an identifier is prototype access. `::` with a **space** is a type annotation.
 
 ## Negative Indexing
 

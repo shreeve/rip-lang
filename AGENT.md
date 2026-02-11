@@ -599,6 +599,7 @@ rip> .js      # Toggle JS display
 | `~=` | Computed | `doubled ~= count * 2` — computed |
 | `=~` | Match | `str =~ /pat/` — Ruby-style regex |
 | `.new()` | Constructor | `User.new()` — Ruby-style new |
+| `::` | Prototype | `String::trim` — `String.prototype.trim` |
 | `if...else` | Postfix ternary | `"a" if cond else "b"` — Python-style |
 | `[-n]` | Negative index | `arr[-1]` — last element via `.at()` |
 | `*` | String repeat | `"-" * 40` — string repetition |

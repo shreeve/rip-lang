@@ -193,6 +193,7 @@ Compiles to `.js` (types erased) + `.d.ts` (types preserved) — full IDE suppor
 | `=~` | `str =~ /Hello, (\w+)/` | Match (captures in `_`) |
 | `[//, n]` | `str[/Hello, (\w+)/, 1]` | Extract capture n |
 | `.new()` | `Dog.new()` | Ruby-style constructor |
+| `::` (prototype) | `String::trim` | `String.prototype.trim` |
 | `[-n]` (negative index) | `arr[-1]` | Last element via `.at()` |
 | `*` (string repeat) | `"-" * 40` | String repeat via `.repeat()` |
 | `<` `<=` (chained) | `1 < x < 10` | Chained comparisons |

@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Works with dotted references (`x |> Math.sqrt`, `x |> console.log`) and dotted calls (`x |> obj.method(y)` → `obj.method(x, y)`).
 - Implicit calls close at pipe boundaries — `x |> fn 1 |> bar 2` works correctly without parens.
 
+### Prototype Operator (`::`)
+
+- **CoffeeScript-style prototype access restored** — `String::trim` compiles to `String.prototype.trim`. Disambiguated from type annotations by spacing: `::` with no space is prototype, `::` with a space is a type annotation. Both coexist cleanly.
+
 ### `loop n` — Repeat N Times
 
 - **Counted loop** — `loop 5 -> body` compiles to `for (let _i = 0; _i < 5; _i++) { body }`. Works with literals, variables, and expressions.
