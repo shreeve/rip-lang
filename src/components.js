@@ -465,11 +465,10 @@ export function installComponentSupport(CodeGenerator) {
           this._setupLines.push(`__effect(() => { ${textVar}.data = this.${prop}.value; });`);
           return textVar;
         }
-        if (this.componentMembers && this.componentMembers.has(prop)) {
-          const slotVar = this.newElementVar('slot');
-          this._createLines.push(`${slotVar} = this.${prop} instanceof Node ? this.${prop} : (this.${prop} != null ? document.createTextNode(String(this.${prop})) : document.createComment(''));`);
-          return slotVar;
-        }
+        // Slot/prop — handle DOM nodes (children) and plain values
+        const slotVar = this.newElementVar('slot');
+        this._createLines.push(`${slotVar} = this.${prop} instanceof Node ? this.${prop} : (this.${prop} != null ? document.createTextNode(String(this.${prop})) : document.createComment(''));`);
+        return slotVar;
       }
 
       // HTML tag with classes (div.class)
