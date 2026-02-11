@@ -671,8 +671,13 @@ export function installComponentSupport(CodeGenerator) {
       // Event handler: @click or (. this eventName)
       if (this.is(key, '.') && key[1] === 'this') {
         const eventName = key[2];
-        const handlerCode = this.generateInComponent(value, 'value');
-        this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => (${handlerCode})(e));`);
+        // Bind method references to this
+        if (typeof value === 'string' && this.componentMembers?.has(value)) {
+          this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => this.${value}(e));`);
+        } else {
+          const handlerCode = this.generateInComponent(value, 'value');
+          this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => (${handlerCode})(e));`);
+        }
         continue;
       }
 
