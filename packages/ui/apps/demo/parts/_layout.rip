@@ -1,6 +1,10 @@
-# Root Layout
+# Root Layout (with error boundary and navigation indicator)
 
 export Layout = component
+  errorMsg := null
+
+  onError: (err) ->
+    errorMsg = err.message
 
   render
     .app-layout
@@ -12,5 +16,11 @@ export Layout = component
             a.nav-link href: "/counter", "Counter"
             a.nav-link href: "/todos", "Todos"
             a.nav-link href: "/about", "About"
+            if @router.navigating
+              span.nav-loading "Loading..."
       main.app-main
+        if errorMsg
+          .error-banner
+            p "Something went wrong: #{errorMsg}"
+            button.btn @click: (-> errorMsg = null), "Dismiss"
         div data-slot: "true"
