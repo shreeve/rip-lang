@@ -308,3 +308,25 @@ code "pipe compiles to function call", "x |> fn", "fn(x)"
 code "pipe multi-arg compiles correctly", "x |> fn(y)", "fn(x, y)"
 code "pipe dotted reference compiles", "x |> console.log", "console.log(x)"
 code "pipe dotted call compiles", "x |> obj.method(y)", "obj.method(x, y)"
+
+# ============================================================================
+# Negative Indexing
+# ============================================================================
+
+test "negative index last element", '''
+  arr = [10, 20, 30]
+  arr[-1]
+  ''', 30
+
+test "negative index second to last", '''
+  arr = [10, 20, 30]
+  arr[-2]
+  ''', 20
+
+test "negative index on string", '''
+  str = "hello"
+  str[-1]
+  ''', "o"
+
+code "negative index compiles to .at()", "arr[-1]", "arr.at(-1)"
+code "negative index -2 compiles to .at()", "arr[-2]", "arr.at(-2)"

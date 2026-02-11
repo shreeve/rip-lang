@@ -971,11 +971,25 @@ export class CodeGenerator {
       let e = this.generate(end, 'value');
       return isIncl ? `${arrCode}.slice(${s}, +${e} + 1 || 9e9)` : `${arrCode}.slice(${s}, ${e})`;
     }
+    // Negative literal index: arr[-1] → arr.at(-1)
+    if (Array.isArray(index) && index[0] === '-' && index.length === 2) {
+      let n = str(index[1]) ?? index[1];
+      if (typeof n === 'number' || (typeof n === 'string' && /^\d+$/.test(n))) {
+        return `${this.generate(arr, 'value')}.at(-${n})`;
+      }
+    }
     return `${this.generate(arr, 'value')}[${this.unwrap(this.generate(index, 'value'))}]`;
   }
 
   generateOptIndex(head, rest) {
     let [arr, index] = rest;
+    // Negative literal index: arr?[-1] → arr?.at(-1)
+    if (Array.isArray(index) && index[0] === '-' && index.length === 2) {
+      let n = str(index[1]) ?? index[1];
+      if (typeof n === 'number' || (typeof n === 'string' && /^\d+$/.test(n))) {
+        return `${this.generate(arr, 'value')}?.at(-${n})`;
+      }
+    }
     return `${this.generate(arr, 'value')}?.[${this.generate(index, 'value')}]`;
   }
 

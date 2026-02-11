@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **First-arg insertion pipe** — `x |> fn` compiles to `fn(x)`, and `x |> fn(y)` compiles to `fn(x, y)`. Combines the simplicity of F#-style pipes with multi-arg support like Elixir — no placeholder syntax needed. Left-associative, chains naturally: `5 |> double |> add(1)`.
 - Works with dotted references (`x |> Math.sqrt`, `x |> console.log`) and dotted calls (`x |> obj.method(y)` → `obj.method(x, y)`).
+- Implicit calls close at pipe boundaries — `x |> fn 1 |> bar 2` works correctly without parens.
+
+### Negative Indexing
+
+- **Python-style negative indexing** — `arr[-1]` compiles to `arr.at(-1)`, `arr[-2]` to `arr.at(-2)`, etc. Works on arrays and strings. Optional variant: `arr?[-1]` → `arr?.at(-1)`. Only literal negative numbers trigger the transform; variable indexes pass through unchanged.
 
 ### Browser Runtime — Full Async/Await Support
 

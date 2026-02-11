@@ -175,6 +175,7 @@ Rip extends JavaScript with powerful operators:
 | `:=` | State | `count := 0` | Reactive signal |
 | `~=` | Computed | `doubled ~= x * 2` | Reactive computed |
 | `~>` | Effect | `~> console.log x` | Reactive side effect |
+| `[-n]` | Negative index | `arr[-1]` | `arr.at(-1)` |
 | `*` | String repeat | `"-" * 40` | `"-".repeat(40)` |
 | `<` `<=` | Chained | `1 < x < 10` | `(1 < x) && (x < 10)` |
 | `not in` | Not in | `x not in arr` | Negated membership |

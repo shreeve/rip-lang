@@ -298,6 +298,7 @@ Multiple lines
 | `!` | Void | `def process!` | Suppresses implicit return |
 | `!?` | Otherwise | `val !? 5` | Default if undefined or throws |
 | `=~` | Match | `str =~ /pat/` | Ruby-style regex match, captures in `_` |
+| `[-n]` | Negative index | `arr[-1]` | `arr.at(-1)` |
 | `*` | String repeat | `"-" * 40` | `"-".repeat(40)` |
 | `<` `<=` | Chained comparison | `1 < x < 10` | `(1 < x) && (x < 10)` |
 | `\|>` | Pipe | `x \|> fn` or `x \|> fn(y)` | `fn(x)` or `fn(x, y)` |
@@ -362,6 +363,26 @@ Handles both null/undefined AND thrown errors:
 result = riskyOperation() !? "default"
 # If riskyOperation() throws or returns null/undefined, result = "default"
 ```
+
+## Negative Indexing
+
+Literal negative indexes compile to `.at()` for Python-style access from the end:
+
+```coffee
+arr = [10, 20, 30, 40, 50]
+
+arr[-1]          # → arr.at(-1)  — 50 (last)
+arr[-2]          # → arr.at(-2)  — 40 (second to last)
+str[-1]          # works on strings too
+
+arr?[-1]         # → arr?.at(-1) — optional variant
+
+# Positive and variable indexes are unchanged
+arr[0]           # → arr[0]      — normal access
+arr[i]           # → arr[i]      — variable index
+```
+
+Only literal negative numbers trigger the `.at()` transform. Variable indexes pass through as-is.
 
 ## Pipe Operator (`|>`)
 
