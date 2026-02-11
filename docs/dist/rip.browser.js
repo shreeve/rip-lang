@@ -439,7 +439,7 @@ function collectStructuralType(tokens, indentIdx) {
         optional = true;
         j++;
       }
-      if (tokens[j]?.[1] === ":")
+      if (tokens[j]?.[1] === ":" || tokens[j]?.[0] === "TYPE_ANNOTATION")
         j++;
       let propTypeTokens = [];
       let typeDepth = 0;
@@ -8029,7 +8029,7 @@ function getComponentRuntime() {
 }
 // src/browser.js
 var VERSION = "3.7.0";
-var BUILD_DATE = "2026-02-11@09:35:09GMT";
+var BUILD_DATE = "2026-02-11@09:50:20GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }

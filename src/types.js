@@ -353,8 +353,8 @@ function collectStructuralType(tokens, indentIdx) {
         j++;
       }
 
-      // Skip : separator
-      if (tokens[j]?.[1] === ':') j++;
+      // Skip : or :: separator
+      if (tokens[j]?.[1] === ':' || tokens[j]?.[0] === 'TYPE_ANNOTATION') j++;
 
       // Collect the type (until TERMINATOR or OUTDENT at property depth)
       let propTypeTokens = [];
