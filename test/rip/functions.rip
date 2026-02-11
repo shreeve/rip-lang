@@ -390,3 +390,30 @@ code "void fat arrow compiler", '''
 #   result = obj.fn()
 #   result
 #   ''', undefined
+
+# ============================================================================
+# Implicit `it` parameter
+# ============================================================================
+
+test "implicit it in filter", '''
+  [1, 2, 3, 4, 5].filter -> it > 3
+  ''', [4, 5]
+
+test "implicit it in map", '''
+  [1, 2, 3].map -> it * 2
+  ''', [2, 4, 6]
+
+test "implicit it property access", '''
+  [{name: "Alice"}, {name: "Bob"}].map -> it.name
+  ''', ["Alice", "Bob"]
+
+test "implicit it with fat arrow", '''
+  [10, 20, 30].map => it + 1
+  ''', [11, 21, 31]
+
+test "implicit it does not affect explicit params", '''
+  fn = (x) -> x * 10
+  fn 5
+  ''', 50
+
+code "implicit it injects parameter", "arr.filter -> it > 5", "arr.filter(function(it) {\n  return (it > 5);\n})", {skipPreamble: true}

@@ -1016,6 +1016,7 @@ export class CodeGenerator {
 
   generateThinArrow(head, rest, context, sexpr) {
     let [params, body] = rest;
+    if ((!params || (Array.isArray(params) && params.length === 0)) && this.containsIt(body)) params = ['it'];
     let sideEffectOnly = this.nextFunctionIsVoid || false;
     this.nextFunctionIsVoid = false;
     let paramList = this.generateParamList(params);
@@ -1028,6 +1029,7 @@ export class CodeGenerator {
 
   generateFatArrow(head, rest, context, sexpr) {
     let [params, body] = rest;
+    if ((!params || (Array.isArray(params) && params.length === 0)) && this.containsIt(body)) params = ['it'];
     let sideEffectOnly = this.nextFunctionIsVoid || false;
     this.nextFunctionIsVoid = false;
     let paramList = this.generateParamList(params);
@@ -2957,6 +2959,15 @@ export class CodeGenerator {
       else finalPath = path + '.js';
     }
     return `'${finalPath}'` + assertion;
+  }
+
+  containsIt(sexpr) {
+    if (!sexpr) return false;
+    if (sexpr === 'it' || (sexpr instanceof String && str(sexpr) === 'it')) return true;
+    if (typeof sexpr !== 'object') return false;
+    if (this.is(sexpr, 'def') || this.is(sexpr, '->') || this.is(sexpr, '=>')) return false;
+    if (Array.isArray(sexpr)) return sexpr.some(item => this.containsIt(item));
+    return false;
   }
 
   containsAwait(sexpr) {
