@@ -1098,6 +1098,13 @@ export class Lexer {
     else if (val === '|>') tag = 'PIPE';
     // Type operators
     else if (val === '::=') tag = 'TYPE_ALIAS';
+    else if (val === '::' && /^[a-zA-Z_$]/.test(this.chunk[2] || '')) {
+      // Prototype access: String::trim → String.prototype.trim
+      this.emit('.', '.');
+      this.emit('PROPERTY', 'prototype');
+      this.emit('.', '.');
+      return 2;
+    }
     else if (val === '::')  tag = 'TYPE_ANNOTATION';
     // Reactive operators
     else if (val === '~=') tag = 'COMPUTED_ASSIGN';

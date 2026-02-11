@@ -330,3 +330,19 @@ test "negative index on string", '''
 
 code "negative index compiles to .at()", "arr[-1]", "arr.at(-1)"
 code "negative index -2 compiles to .at()", "arr[-2]", "arr.at(-2)"
+
+# ============================================================================
+# Prototype Operator — ::
+# ============================================================================
+
+test "prototype access", '''
+  String::starts = String::startsWith
+  "hello".starts "he"
+  ''', true
+
+test "prototype method assignment", '''
+  String::shout = -> @toUpperCase() + "!"
+  "hello".shout()
+  ''', "HELLO!"
+
+code "prototype compiles to .prototype.", "String::trim", "String.prototype.trim"
