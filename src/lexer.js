@@ -441,7 +441,7 @@ export class Lexer {
     let match = IDENTIFIER_RE.exec(this.chunk);
     if (!match) return 0;
 
-    let [input, id, colon] = match;
+    let [, id, colon] = match;
     let idLen = id.length;
     let data = {};
     let tag;
@@ -487,8 +487,8 @@ export class Lexer {
     }
 
     // 'do super' shorthand
-    if (id === 'do' && /^(\s*super)(?!\(\))/.test(this.chunk.slice(3))) {
-      let m = /^(\s*super)(?!\(\))/.exec(this.chunk.slice(3));
+    let m;
+    if (id === 'do' && (m = /^(\s*super)(?!\(\))/.exec(this.chunk.slice(3)))) {
       this.emit('SUPER', 'super');
       this.emit('CALL_START', '(');
       this.emit('CALL_END', ')');

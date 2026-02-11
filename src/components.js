@@ -44,7 +44,7 @@ function extractInputType(pairs) {
  */
 function getMemberName(target) {
   if (typeof target === 'string') return target;
-  if (this.is(target, '.') && target[1] === 'this' && typeof target[2] === 'string') {
+  if (Array.isArray(target) && target[0] === '.' && target[1] === 'this' && typeof target[2] === 'string') {
     return target[2];
   }
   return null;
