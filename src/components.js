@@ -15,7 +15,7 @@ import { TEMPLATE_TAGS } from './tags.js';
 const BIND_PREFIX = '__bind_';
 const BIND_SUFFIX = '__';
 
-const LIFECYCLE_HOOKS = new Set(['mounted', 'unmounted', 'updated']);
+const LIFECYCLE_HOOKS = new Set(['beforeMount', 'mounted', 'updated', 'beforeUnmount', 'unmounted']);
 
 // ============================================================================
 // Standalone Utilities

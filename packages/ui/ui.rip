@@ -486,6 +486,7 @@ export createRenderer = (opts = {}) ->
 
   cacheComponent = ->
     if currentComponent and currentRoute
+      currentComponent.beforeUnmount() if currentComponent.beforeUnmount
       currentComponent._root?.remove()
       componentCache.set currentRoute, currentComponent
       # Evict oldest if over limit
@@ -500,6 +501,7 @@ export createRenderer = (opts = {}) ->
   unmount = ->
     cacheComponent()
     for inst in layoutInstances by -1
+      inst.beforeUnmount() if inst.beforeUnmount
       inst.unmounted() if inst.unmounted
       inst._root?.remove()
     layoutInstances = []
@@ -551,6 +553,7 @@ export createRenderer = (opts = {}) ->
           continue unless LayoutClass
 
           inst = new LayoutClass { app: appStash, params, router }
+          inst.beforeMount() if inst.beforeMount
           wrapper = document.createElement('div')
           wrapper.setAttribute 'data-layout', layoutFile
           mp.appendChild wrapper
@@ -580,6 +583,7 @@ export createRenderer = (opts = {}) ->
         mp.appendChild pageWrapper
 
         instance = new Component { app: appStash, params, query, router }
+        instance.beforeMount() if instance.beforeMount
         instance.mount pageWrapper
         currentComponent = instance
         currentRoute = route.file
