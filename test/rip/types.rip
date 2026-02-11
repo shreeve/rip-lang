@@ -521,3 +521,29 @@ type "class with methods dts", """
     fetch(id: number);
   }
   """
+
+type "interface with :: annotations", """
+  interface User
+    id:: number
+    name:: string
+    email:: string
+    isAdmin?:: boolean
+  """, """
+  interface User {
+    id: number;
+    name: string;
+    email: string;
+    isAdmin?: boolean;
+  }
+  """
+
+type "export interface with :: annotations", """
+  export interface Config
+    host:: string
+    port:: number
+  """, """
+  export interface Config {
+    host: string;
+    port: number;
+  }
+  """
