@@ -715,7 +715,7 @@ export class CodeGenerator {
 
     if (this.usesTemplates && !skip) {
       if (typeof globalThis !== 'undefined' && globalThis.__ripComponent) {
-        code += 'const { __pushComponent, __popComponent, setContext, getContext, hasContext, __cx__ } = globalThis.__ripComponent;\n';
+        code += 'const { __pushComponent, __popComponent, setContext, getContext, hasContext, __cx__, __Component } = globalThis.__ripComponent;\n';
       } else {
         code += this.getComponentRuntime();
       }

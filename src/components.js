@@ -236,10 +236,11 @@ export function installComponentSupport(CodeGenerator) {
     const lines = [];
     let blockFactoriesCode = '';
 
-    lines.push('class {');
+    lines.push('class extends __Component {');
 
     // --- Constructor ---
     lines.push('  constructor(props = {}) {');
+    lines.push('    super();');
     lines.push('    const __prevComponent = __pushComponent(this);');
     lines.push('');
 
@@ -315,25 +316,6 @@ export function installComponentSupport(CodeGenerator) {
         lines.push('  }');
       }
     }
-
-    // --- Mount ---
-    lines.push('  mount(target) {');
-    lines.push('    if (typeof target === "string") target = document.querySelector(target);');
-    lines.push('    this._target = target;');
-    lines.push('    this._root = this._create();');
-    lines.push('    target.appendChild(this._root);');
-    lines.push('    if (this._setup) this._setup();');
-    lines.push('    if (this.mounted) this.mounted();');
-    lines.push('    return this;');
-    lines.push('  }');
-
-    // --- Unmount ---
-    lines.push('  unmount() {');
-    lines.push('    if (this.unmounted) this.unmounted();');
-    lines.push('    if (this._root && this._root.parentNode) {');
-    lines.push('      this._root.parentNode.removeChild(this._root);');
-    lines.push('    }');
-    lines.push('  }');
 
     lines.push('}');
 
@@ -1223,9 +1205,27 @@ function __cx__(...args) {
   return args.filter(Boolean).join(' ');
 }
 
+class __Component {
+  mount(target) {
+    if (typeof target === "string") target = document.querySelector(target);
+    this._target = target;
+    this._root = this._create();
+    target.appendChild(this._root);
+    if (this._setup) this._setup();
+    if (this.mounted) this.mounted();
+    return this;
+  }
+  unmount() {
+    if (this.unmounted) this.unmounted();
+    if (this._root && this._root.parentNode) {
+      this._root.parentNode.removeChild(this._root);
+    }
+  }
+}
+
 // Register on globalThis for runtime deduplication
 if (typeof globalThis !== 'undefined') {
-  globalThis.__ripComponent = { __pushComponent, __popComponent, setContext, getContext, hasContext, __cx__ };
+  globalThis.__ripComponent = { __pushComponent, __popComponent, setContext, getContext, hasContext, __cx__, __Component };
 }
 
 `;
