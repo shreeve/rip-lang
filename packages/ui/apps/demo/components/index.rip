@@ -17,7 +17,7 @@ export Home = component
         .feature-card
           .feature-icon "🔀"
           .feature-name "File-Based Router"
-          .feature-desc "URLs map to parts. Dynamic segments and nested layouts."
+          .feature-desc "URLs map to components. Dynamic segments and nested layouts."
 
         .feature-card
           .feature-icon "⚡"

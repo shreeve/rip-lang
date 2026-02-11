@@ -32,7 +32,7 @@ start port: 3000
 </script>
 ```
 
-**`parts/index.rip`** — a component:
+**`components/index.rip`** — a component:
 
 ```coffee
 export Home = component
@@ -60,7 +60,7 @@ Everything lives in one reactive tree:
 
 ```
 app
-├── parts/          ← component source files
+├── components/          ← component source files
 │   ├── index.rip
 │   ├── counter.rip
 │   └── _layout.rip
@@ -78,9 +78,9 @@ The bundle is JSON served at `/{app}/bundle`. It populates the stash:
 
 ```json
 {
-  "parts": {
-    "parts/index.rip": "export Home = component...",
-    "parts/counter.rip": "export Counter = component..."
+  "components": {
+    "components/index.rip": "export Home = component...",
+    "components/counter.rip": "export Counter = component..."
   },
   "data": {
     "title": "My App",
@@ -102,7 +102,7 @@ use ripUI app: '/demo', dir: dir, title: 'My App'
 |--------|---------|-------------|
 | `app` | `''` | URL mount point |
 | `dir` | `'.'` | App directory on disk |
-| `parts` | `'parts'` | Parts subdirectory within `dir` |
+| `components` | `'components'` | Components subdirectory within `dir` |
 | `watch` | `false` | Enable SSE hot-reload |
 | `debounce` | `250` | Milliseconds to batch file change events |
 | `state` | `null` | Initial app state |
@@ -113,9 +113,9 @@ Routes registered:
 ```
 /rip/browser.js      — Rip compiler
 /rip/ui.rip          — UI framework
-/{app}/bundle        — app bundle (parts + data as JSON)
+/{app}/bundle        — app bundle (components + data as JSON)
 /{app}/watch         — SSE hot-reload stream (when watch: true)
-/{app}/parts/*       — individual part files (for hot-reload refetch)
+/{app}/components/*       — individual component files (for hot-reload refetch)
 ```
 
 ## State Preservation (Keep-Alive)
@@ -184,7 +184,7 @@ get '/', -> Response.redirect('/demo/', 302)
 start port: 3002
 ```
 
-Each app is a directory with `parts/`, `css/`, `index.html`, and `index.rip`.
+Each app is a directory with `components/`, `css/`, `index.html`, and `index.rip`.
 The `/rip/` namespace is shared — all apps use the same compiler and framework.
 
 ## File Structure
@@ -193,7 +193,7 @@ The `/rip/` namespace is shared — all apps use the same compiler and framework
 my-app/
 ├── index.rip            # Server
 ├── index.html           # HTML page
-├── parts/
+├── components/
 │   ├── _layout.rip      # Root layout
 │   ├── index.rip        # Home          → /
 │   ├── about.rip        # About         → /about

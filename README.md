@@ -267,7 +267,7 @@ Counter = component
 
 Two keywords — `component` and `render` — are all the language adds. Everything else (`:=` state, `~=` computed, methods, lifecycle) is standard Rip.
 
-See [@rip-lang/ui](packages/ui/) for the full framework: file-based router, reactive stash, parts system, and component renderer.
+See [@rip-lang/ui](packages/ui/) for the full framework: file-based router, reactive stash, component store, and renderer.
 
 ---
 

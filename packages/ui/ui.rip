@@ -7,7 +7,7 @@
 #   /rip/ui.rip      — the framework (this file, compiled in browser)
 #
 # The app stash:
-#   app.parts   — component source files
+#   app.components   — component source files
 #   app.routes  — navigation state (path, params, query, hash)
 #   app.data    — reactive app state
 #
@@ -267,10 +267,10 @@ matchRoute = (path, routes) ->
       return { route, params }
   null
 
-buildRoutes = (parts, root = 'parts') ->
+buildRoutes = (components, root = 'components') ->
   routes = []
   layouts = new Map()
-  allFiles = parts.listAll(root)
+  allFiles = components.listAll(root)
 
   for filePath in allFiles
     rel = filePath.slice(root.length + 1)
@@ -313,8 +313,8 @@ getLayoutChain = (routeFile, root, layouts) ->
     chain.push layouts.get(dir) if layouts.has(dir)
   chain
 
-export createRouter = (parts, opts = {}) ->
-  root = opts.root or 'parts'
+export createRouter = (components, opts = {}) ->
+  root = opts.root or 'components'
   base = opts.base or ''
   onError = opts.onError or null
 
@@ -332,12 +332,12 @@ export createRouter = (parts, opts = {}) ->
   _hash       = __state('')
   _navigating = __state(false)
 
-  tree = buildRoutes(parts, root)
+  tree = buildRoutes(components, root)
   navCallbacks = new Set()
 
-  parts.watch (event, path) ->
+  components.watch (event, path) ->
     return unless path.startsWith(root + '/')
-    tree = buildRoutes(parts, root)
+    tree = buildRoutes(components, root)
 
   resolve = (url) ->
     rawPath = url.split('?')[0].split('#')[0]
@@ -401,7 +401,7 @@ export createRouter = (parts, opts = {}) ->
       navCallbacks.add cb
       -> navCallbacks.delete cb
 
-    rebuild: -> tree = buildRoutes(parts, root)
+    rebuild: -> tree = buildRoutes(components, root)
 
     routes: undefined  # overridden by getter
 
@@ -443,10 +443,10 @@ findComponent = (mod) ->
     return val if typeof val is 'function' and (val.prototype?.mount or val.prototype?._create)
   mod.default if typeof mod.default is 'function'
 
-compileAndImport = (source, compile, parts = null, path = null) ->
+compileAndImport = (source, compile, components = null, path = null) ->
   # Check compilation cache
-  if parts and path
-    cached = parts.getCompiled(path)
+  if components and path
+    cached = components.getCompiled(path)
     return cached if cached
 
   js = compile(source)
@@ -458,11 +458,11 @@ compileAndImport = (source, compile, parts = null, path = null) ->
     URL.revokeObjectURL url
 
   # Store in cache
-  parts.setCompiled(path, mod) if parts and path
+  components.setCompiled(path, mod) if components and path
   mod
 
 export createRenderer = (opts = {}) ->
-  { router, parts, appStash, compile, target, onError } = opts
+  { router, components, appStash, compile, target, onError } = opts
 
   container = if typeof target is 'string'
     document.querySelector(target)
@@ -508,7 +508,7 @@ export createRenderer = (opts = {}) ->
     mountPoint = container
 
   # Invalidate cached components when their source changes (HMR)
-  parts.watch (event, path) ->
+  components.watch (event, path) ->
     if componentCache.has(path)
       evicted = componentCache.get(path)
       evicted.unmounted() if evicted.unmounted
@@ -522,13 +522,13 @@ export createRenderer = (opts = {}) ->
     _navigating.value = true
 
     try
-      source = parts.read(route.file)
+      source = components.read(route.file)
       unless source
         onError({ status: 404, message: "File not found: #{route.file}" }) if onError
         _navigating.value = false
         return
 
-      mod = compileAndImport! source, compile, parts, route.file
+      mod = compileAndImport! source, compile, components, route.file
       if gen isnt generation then _navigating.value = false; return
 
       Component = findComponent(mod)
@@ -551,9 +551,9 @@ export createRenderer = (opts = {}) ->
         mp = container
 
         for layoutFile in layoutFiles
-          layoutSource = parts.read(layoutFile)
+          layoutSource = components.read(layoutFile)
           continue unless layoutSource
-          layoutMod = compileAndImport! layoutSource, compile, parts, layoutFile
+          layoutMod = compileAndImport! layoutSource, compile, components, layoutFile
           if gen isnt generation then _navigating.value = false; return
 
           LayoutClass = findComponent(layoutMod)
@@ -670,30 +670,30 @@ export launch = (appBase = '', opts = {}) ->
   bundle = res.json!
 
   # Create the unified stash
-  app = stash { parts: {}, routes: {}, data: {} }
+  app = stash { components: {}, routes: {}, data: {} }
 
   # Hydrate from bundle — any keys populate the stash
   app.data = bundle.data if bundle.data
   if bundle.routes
     app.routes = bundle.routes
 
-  # Create parts store and load component sources
+  # Create components store and load component sources
   appParts = createParts()
-  appParts.load(bundle.parts) if bundle.parts
+  appParts.load(bundle.components) if bundle.components
 
   # Set document title
   document.title = app.data.title if app.data.title and typeof document isnt 'undefined'
 
   # Create router
   router = createRouter appParts,
-    root: 'parts'
+    root: 'components'
     base: appBase
     onError: (err) -> console.error "[Rip] Error #{err.status}: #{err.message or err.path}"
 
   # Create renderer
   renderer = createRenderer
     router: router
-    parts: appParts
+    components: appParts
     appStash: app
     compile: compile
     target: target
@@ -711,20 +711,20 @@ export launch = (appBase = '', opts = {}) ->
     window.app = app
     window.__RIP__ =
       app: app
-      parts: appParts
+      components: appParts
       router: router
       renderer: renderer
       stash: app
       cache: renderer.cache
       version: '0.2.0'
 
-  { app, parts: appParts, router, renderer }
+  { app, components: appParts, router, renderer }
 
 # ==============================================================================
 # SSE Watch — hot-reload connection
 # ==============================================================================
 
-connectWatch = (parts, router, renderer, url, base = '') ->
+connectWatch = (components, router, renderer, url, base = '') ->
   delay = 1000
   maxDelay = 30000
 
@@ -737,7 +737,7 @@ connectWatch = (parts, router, renderer, url, base = '') ->
 
     es.addEventListener 'changed', (e) ->
       { paths } = JSON.parse(e.data)
-      parts.del(path) for path in paths
+      components.del(path) for path in paths
       router.rebuild()
 
       current = router.current
@@ -748,7 +748,7 @@ connectWatch = (parts, router, renderer, url, base = '') ->
         results = await Promise.allSettled(toFetch.map (path) ->
           res = await fetch(base + '/' + path)
           content = res.text!
-          parts.write path, content
+          components.write path, content
         )
         failed = results.filter (r) -> r.status is 'rejected'
         console.error '[Rip] Hot reload fetch error:', r.reason for r in failed

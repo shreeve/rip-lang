@@ -20,7 +20,7 @@
 - **Reactive stash** — shared reactive store with proxy-based access.
 - **File-based router** — URL-to-component mapping with params, guards,
   layouts, `_navigating` signal, keep-alive component cache.
-- **Parts system** — in-memory `.rip` file storage with compilation cache
+- **Component store** — in-memory `.rip` file storage with compilation cache
   and file watchers for hot reload via SSE.
 - **Error boundaries** — catch mount-time errors.
 - **Runtime deduplication** — both runtimes register on `globalThis.__rip`
