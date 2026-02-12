@@ -189,3 +189,37 @@ test "component signal read", '''
   a = A.new()
   a.x.read()
   ''', 5
+
+# ============================================================================
+# Effect Cleanup (~>) — Runtime Behavior
+# ============================================================================
+
+test "effect without cleanup still works", '''
+  result := 0
+  count := 1
+  ~> result = count * 10
+  count += 1
+  result + 0
+  ''', 20
+
+test "effect cleanup runs before re-execution", '''
+  log = []
+  count := 0
+  __effect ->
+    v = count + 0
+    log.push "run:#{v}"
+    -> log.push "cleanup:#{v}"
+  count += 1
+  log.join ","
+  ''', "run:0,cleanup:0,run:1"
+
+test "effect cleanup on multiple re-runs", '''
+  log = []
+  count := 0
+  __effect ->
+    v = count + 0
+    -> log.push "c:#{v}"
+  count += 1
+  count += 1
+  log.join ","
+  ''', "c:0,c:1"

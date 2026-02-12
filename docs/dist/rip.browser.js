@@ -7903,14 +7903,19 @@ function __effect(fn) {
     dependencies: new Set(),
 
     run() {
+      if (effect._cleanup) { effect._cleanup(); effect._cleanup = null; }
       for (const dep of effect.dependencies) dep.delete(effect);
       effect.dependencies.clear();
       const prev = __currentEffect;
       __currentEffect = effect;
-      try { fn(); } finally { __currentEffect = prev; }
+      try {
+        const result = fn();
+        if (typeof result === 'function') effect._cleanup = result;
+      } finally { __currentEffect = prev; }
     },
 
     dispose() {
+      if (effect._cleanup) { effect._cleanup(); effect._cleanup = null; }
       for (const dep of effect.dependencies) dep.delete(effect);
       effect.dependencies.clear();
     }
@@ -8099,7 +8104,7 @@ function getComponentRuntime() {
 }
 // src/browser.js
 var VERSION = "3.7.4";
-var BUILD_DATE = "2026-02-11@15:37:22GMT";
+var BUILD_DATE = "2026-02-11@23:59:48GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }

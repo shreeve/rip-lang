@@ -3154,14 +3154,19 @@ function __effect(fn) {
     dependencies: new Set(),
 
     run() {
+      if (effect._cleanup) { effect._cleanup(); effect._cleanup = null; }
       for (const dep of effect.dependencies) dep.delete(effect);
       effect.dependencies.clear();
       const prev = __currentEffect;
       __currentEffect = effect;
-      try { fn(); } finally { __currentEffect = prev; }
+      try {
+        const result = fn();
+        if (typeof result === 'function') effect._cleanup = result;
+      } finally { __currentEffect = prev; }
     },
 
     dispose() {
+      if (effect._cleanup) { effect._cleanup(); effect._cleanup = null; }
       for (const dep of effect.dependencies) dep.delete(effect);
       effect.dependencies.clear();
     }

@@ -184,6 +184,79 @@ export createResource = (fn, opts = {}) ->
   resource
 
 # ==============================================================================
+# Timing — reactive timing primitives composed from __state + __effect + cleanup
+# ==============================================================================
+
+_toFn = (source) ->
+  if typeof source is 'function' then source else -> source.value
+
+_proxy = (out, source) ->
+  obj = read: -> out.read()
+  Object.defineProperty obj, 'value',
+    get: -> out.value
+    set: (v) -> source.value = v
+  obj
+
+# delay(ms, source) — truthy waits ms, falsy immediate
+# Usage: showLoading := delay 200 -> loading
+#        navigating = delay 100, __state(false)
+export delay = (ms, source) ->
+  fn = _toFn(source)
+  out = __state(!!fn())
+  __effect ->
+    if fn()
+      t = setTimeout (-> out.value = true), ms
+      -> clearTimeout t
+    else
+      out.value = false
+  if typeof source isnt 'function' then _proxy(out, source) else out
+
+# debounce(ms, source) — waits ms after last change, then propagates
+# Usage: debouncedQuery := debounce 300 -> query
+export debounce = (ms, source) ->
+  fn = _toFn(source)
+  out = __state(fn())
+  __effect ->
+    val = fn()
+    t = setTimeout (-> out.value = val), ms
+    -> clearTimeout t
+  if typeof source isnt 'function' then _proxy(out, source) else out
+
+# throttle(ms, source) — propagates at most once per ms
+# Usage: smoothScroll := throttle 100 -> scrollY
+export throttle = (ms, source) ->
+  fn = _toFn(source)
+  out = __state(fn())
+  last = 0
+  __effect ->
+    val = fn()
+    now = Date.now()
+    remaining = ms - (now - last)
+    if remaining <= 0
+      out.value = val
+      last = now
+    else
+      t = setTimeout (->
+        out.value = fn()
+        last = Date.now()
+      ), remaining
+      -> clearTimeout t
+  if typeof source isnt 'function' then _proxy(out, source) else out
+
+# hold(ms, source) — once truthy, stays true for at least ms
+# Usage: showSaved := hold 2000 -> saved
+export hold = (ms, source) ->
+  fn = _toFn(source)
+  out = __state(!!fn())
+  __effect ->
+    if fn()
+      out.value = true
+    else
+      t = setTimeout (-> out.value = false), ms
+      -> clearTimeout t
+  if typeof source isnt 'function' then _proxy(out, source) else out
+
+# ==============================================================================
 # Components — in-memory file storage with watchers
 # ==============================================================================
 
@@ -331,7 +404,7 @@ export createRouter = (components, opts = {}) ->
   _layouts    = __state([])
   _query      = __state({})
   _hash       = __state('')
-  _navigating = __state(false)
+  _navigating = delay 100, __state(false)
 
   tree = buildRoutes(components, root)
   navCallbacks = new Set()
