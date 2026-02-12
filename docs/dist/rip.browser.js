@@ -4932,6 +4932,8 @@ class CodeGenerator {
     }
     if (head === "readonly")
       return;
+    if (head === "component")
+      return;
     if (CodeGenerator.ASSIGNMENT_OPS.has(head)) {
       let [target, value] = rest;
       if (typeof target === "string" || target instanceof String) {
@@ -6089,8 +6091,11 @@ ${this.indent()}}`;
         keyCode = `[${this.generate(key[1], "value")}]`;
       else if (this.is(key, "str"))
         keyCode = `[${this.generate(key, "value")}]`;
-      else
+      else {
+        this.suppressReactiveUnwrap = true;
         keyCode = this.generate(key, "value");
+        this.suppressReactiveUnwrap = false;
+      }
       let valCode = this.generate(value, "value");
       if (operator === "=")
         return `${keyCode} = ${valCode}`;
@@ -8116,7 +8121,7 @@ function getComponentRuntime() {
 }
 // src/browser.js
 var VERSION = "3.7.4";
-var BUILD_DATE = "2026-02-12@18:41:31GMT";
+var BUILD_DATE = "2026-02-12@20:04:54GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }

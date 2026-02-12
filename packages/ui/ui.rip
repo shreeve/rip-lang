@@ -888,7 +888,7 @@ export launch = (appBase = '', opts = {}) ->
       router: router
       renderer: renderer
       cache: renderer.cache
-      version: '0.2.0'
+      version: '0.3.0'
 
   { app, components: appComponents, router, renderer }
 
