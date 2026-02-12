@@ -1,0 +1,10 @@
+# Card — reusable content card component
+
+export Card = component
+  title =! ""
+
+  render
+    div.card
+      if title
+        h3 "#{title}"
+      @children

@@ -4329,6 +4329,7 @@ ${blockFactoriesCode}return ${lines.join(`
     const { propsCode, childrenSetupLines } = this.buildComponentProps(args);
     this._createLines.push(`${instVar} = new ${componentName}(${propsCode});`);
     this._createLines.push(`${elVar} = ${instVar}._create();`);
+    this._createLines.push(`(this._children || (this._children = [])).push(${instVar});`);
     this._setupLines.push(`if (${instVar}._setup) ${instVar}._setup();`);
     for (const line of childrenSetupLines) {
       this._setupLines.push(line);
@@ -4344,7 +4345,10 @@ ${blockFactoriesCode}return ${lines.join(`
         for (let i = 1;i < arg.length; i++) {
           const [key, value] = arg[i];
           if (typeof key === "string") {
+            const prevReactive = this.reactiveMembers;
+            this.reactiveMembers = new Set;
             const valueCode = this.generateInComponent(value, "value");
+            this.reactiveMembers = prevReactive;
             props.push(`${key}: ${valueCode}`);
           }
         }
@@ -4453,6 +4457,11 @@ class __Component {
     return this;
   }
   unmount() {
+    if (this._children) {
+      for (const child of this._children) {
+        child.unmount();
+      }
+    }
     if (this.unmounted) this.unmounted();
     if (this._root && this._root.parentNode) {
       this._root.parentNode.removeChild(this._root);
@@ -8107,7 +8116,7 @@ function getComponentRuntime() {
 }
 // src/browser.js
 var VERSION = "3.7.4";
-var BUILD_DATE = "2026-02-12@16:36:40GMT";
+var BUILD_DATE = "2026-02-12@18:41:31GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }

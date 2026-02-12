@@ -223,3 +223,33 @@ test "effect cleanup on multiple re-runs", '''
   count += 1
   log.join ","
   ''', "c:0,c:1"
+
+# ============================================================================
+# Component Composition — Signal Passthrough (foundation of reactive props)
+# ============================================================================
+
+test "signal passthrough identity", '''
+  count := 42
+  wrapped := count
+  wrapped is count
+  ''', true
+
+test "signal passthrough preserves value", '''
+  count := 42
+  wrapped := count
+  wrapped + 0
+  ''', 42
+
+test "component readonly prop via constructor", '''
+  A = component
+    label =! "default"
+  a = A.new({ label: "custom" })
+  a.label
+  ''', "custom"
+
+test "readonly prop receives value not signal", '''
+  A = component
+    label =! "hello"
+  a = A.new label: "world"
+  a.label
+  ''', "world"

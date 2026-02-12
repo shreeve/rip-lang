@@ -1088,6 +1088,7 @@ export function installComponentSupport(CodeGenerator) {
 
     this._createLines.push(`${instVar} = new ${componentName}(${propsCode});`);
     this._createLines.push(`${elVar} = ${instVar}._create();`);
+    this._createLines.push(`(this._children || (this._children = [])).push(${instVar});`);
 
     this._setupLines.push(`if (${instVar}._setup) ${instVar}._setup();`);
 
@@ -1112,7 +1113,12 @@ export function installComponentSupport(CodeGenerator) {
         for (let i = 1; i < arg.length; i++) {
           const [key, value] = arg[i];
           if (typeof key === 'string') {
+            // Pass reactive members as signals (not values) for reactive prop binding.
+            // Child's __state passthrough returns the signal as-is — shared reactivity.
+            const prevReactive = this.reactiveMembers;
+            this.reactiveMembers = new Set();
             const valueCode = this.generateInComponent(value, 'value');
+            this.reactiveMembers = prevReactive;
             props.push(`${key}: ${valueCode}`);
           }
         }
@@ -1242,6 +1248,11 @@ class __Component {
     return this;
   }
   unmount() {
+    if (this._children) {
+      for (const child of this._children) {
+        child.unmount();
+      }
+    }
     if (this.unmounted) this.unmounted();
     if (this._root && this._root.parentNode) {
       this._root.parentNode.removeChild(this._root);

@@ -522,13 +522,59 @@ findComponent = (mod) ->
     return val if typeof val is 'function' and (val.prototype?.mount or val.prototype?._create)
   mod.default if typeof mod.default is 'function'
 
-compileAndImport = (source, compile, components = null, path = null) ->
+findAllComponents = (mod) ->
+  result = {}
+  for key, val of mod
+    if typeof val is 'function' and (val.prototype?.mount or val.prototype?._create)
+      result[key] = val
+  result
+
+# Convert file path to PascalCase component name
+# components/card.rip → Card, components/todo-item.rip → TodoItem
+fileToComponentName = (filePath) ->
+  name = filePath.split('/').pop().replace(/\.rip$/, '')
+  name.replace /(^|[-_])([a-z])/g, (_, sep, ch) -> ch.toUpperCase()
+
+# Build name-to-path map from component store
+buildComponentMap = (components, root = 'components') ->
+  map = {}
+  for path in components.listAll(root)
+    continue unless path.endsWith('.rip')
+    fileName = path.split('/').pop()
+    continue if fileName.startsWith('_')
+    name = fileToComponentName(path)
+    if map[name]
+      console.warn "[Rip] Component name collision: #{name} (#{map[name]} vs #{path})"
+    map[name] = path
+  map
+
+compileAndImport = (source, compile, components = null, path = null, componentMap = null, registry = null) ->
   # Check compilation cache
   if components and path
     cached = components.getCompiled(path)
     return cached if cached
 
   js = compile(source)
+
+  # Resolve component dependencies — scan for PascalCase references in compiled JS
+  if componentMap and registry
+    needed = {}
+    for name, depPath of componentMap
+      if depPath isnt path and js.includes("new #{name}(")
+        unless registry.classes[name]
+          depSource = components.read(depPath)
+          if depSource
+            depMod = compileAndImport! depSource, compile, components, depPath, componentMap, registry
+            found = findAllComponents(depMod)
+            registry.classes[k] = v for k, v of found
+        needed[name] = true if registry.classes[name]
+
+    # Inject resolved components into scope via preamble
+    names = Object.keys(needed)
+    if names.length > 0
+      preamble = "const {#{names.join(', ')}} = globalThis['#{registry.key}'];\n"
+      js = preamble + js
+
   blob = new Blob([js], { type: 'application/javascript' })
   url = URL.createObjectURL(blob)
   try
@@ -536,12 +582,17 @@ compileAndImport = (source, compile, components = null, path = null) ->
   finally
     URL.revokeObjectURL url
 
+  # Register any components from this module
+  if registry
+    found = findAllComponents(mod)
+    registry.classes[k] = v for k, v of found
+
   # Store in cache
   components.setCompiled(path, mod) if components and path
   mod
 
 export createRenderer = (opts = {}) ->
-  { router, components, appStash, compile, target, onError } = opts
+  { router, components, appStash, compile, target, onError, componentMap, registry } = opts
 
   container = if typeof target is 'string'
     document.querySelector(target)
@@ -611,7 +662,7 @@ export createRenderer = (opts = {}) ->
         router.navigating = false
         return
 
-      mod = compileAndImport! source, compile, components, route.file
+      mod = compileAndImport! source, compile, components, route.file, componentMap, registry
       if gen isnt generation then router.navigating = false; return
 
       Component = findComponent(mod)
@@ -637,7 +688,7 @@ export createRenderer = (opts = {}) ->
         for layoutFile in layoutFiles
           layoutSource = components.read(layoutFile)
           continue unless layoutSource
-          layoutMod = compileAndImport! layoutSource, compile, components, layoutFile
+          layoutMod = compileAndImport! layoutSource, compile, components, layoutFile, componentMap, registry
           if gen isnt generation then router.navigating = false; return
 
           LayoutClass = findComponent(layoutMod)
@@ -794,6 +845,12 @@ export launch = (appBase = '', opts = {}) ->
   appComponents = createComponents()
   appComponents.load(bundle.components) if bundle.components
 
+  # Build component name-to-path map and app-scoped class registry
+  componentMap = buildComponentMap(appComponents)
+  classesKey = "__rip_#{appBase.replace(/\//g, '_') or 'app'}"
+  registry = { classes: {}, key: classesKey }
+  globalThis[classesKey] = registry.classes if typeof globalThis isnt 'undefined'
+
   # Set document title
   document.title = app.data.title if app.data.title and typeof document isnt 'undefined'
 
@@ -807,6 +864,8 @@ export launch = (appBase = '', opts = {}) ->
   renderer = createRenderer
     router: router
     components: appComponents
+    componentMap: componentMap
+    registry: registry
     appStash: app
     compile: compile
     target: target
