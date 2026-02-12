@@ -1407,7 +1407,7 @@ export class Lexer {
       return isHtmlTag(name) || isComponent(name);
     };
 
-    let startsWithHtmlTag = (tokens, i) => {
+    let startsWithTemplateTag = (tokens, i) => {
       let j = i;
       while (j > 0) {
         let pt = tokens[j - 1][0];
@@ -1416,7 +1416,7 @@ export class Lexer {
         }
         j--;
       }
-      return tokens[j] && tokens[j][0] === 'IDENTIFIER' && isHtmlTag(tokens[j][1]);
+      return tokens[j] && tokens[j][0] === 'IDENTIFIER' && isTemplateTag(tokens[j][1]);
     };
 
     this.scanTokens(function(token, i, tokens) {
@@ -1598,10 +1598,10 @@ export class Lexer {
         if (tag === 'IDENTIFIER' && isTemplateTag(token[1])) {
           isTemplateElement = true;
         } else if (tag === 'PROPERTY' || tag === 'STRING' || tag === 'CALL_END' || tag === ')') {
-          isTemplateElement = startsWithHtmlTag(tokens, i);
+          isTemplateElement = startsWithTemplateTag(tokens, i);
         }
         else if (tag === 'IDENTIFIER' && i > 1 && tokens[i - 1][0] === '...') {
-          if (startsWithHtmlTag(tokens, i)) {
+          if (startsWithTemplateTag(tokens, i)) {
             let commaToken = gen(',', ',', token);
             let arrowToken = gen('->', '->', token);
             arrowToken.newLine = true;
@@ -1611,13 +1611,22 @@ export class Lexer {
         }
 
         if (isTemplateElement) {
-          let callStartToken = gen('CALL_START', '(', token);
-          let arrowToken = gen('->', '->', token);
-          arrowToken.newLine = true;
-
-          tokens.splice(i + 1, 0, callStartToken, arrowToken);
-          pendingCallEnds.push(currentIndent + 1);
-          return 3;
+          if (tag === 'IDENTIFIER' && isTemplateTag(token[1])) {
+            // Bare tag (no args): inject CALL_START -> and manage CALL_END
+            let callStartToken = gen('CALL_START', '(', token);
+            let arrowToken = gen('->', '->', token);
+            arrowToken.newLine = true;
+            tokens.splice(i + 1, 0, callStartToken, arrowToken);
+            pendingCallEnds.push(currentIndent + 1);
+            return 3;
+          } else {
+            // Tag with args: inject , -> (call wrapping handled by addImplicitBracesAndParens)
+            let commaToken = gen(',', ',', token);
+            let arrowToken = gen('->', '->', token);
+            arrowToken.newLine = true;
+            tokens.splice(i + 1, 0, commaToken, arrowToken);
+            return 3;
+          }
         }
       }
 
