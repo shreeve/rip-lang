@@ -4053,6 +4053,11 @@ ${blockFactoriesCode}return ${lines.join(`
         if (key.startsWith('"') && key.endsWith('"')) {
           key = key.slice(1, -1);
         }
+        if (key === "ref") {
+          const refName = String(value).replace(/^["']|["']$/g, "");
+          this._createLines.push(`this.${refName} = ${elVar};`);
+          continue;
+        }
         if (key.startsWith(BIND_PREFIX) && key.endsWith(BIND_SUFFIX)) {
           const prop = key.slice(BIND_PREFIX.length, -BIND_SUFFIX.length);
           const valueCode2 = this.generateInComponent(value, "value");
@@ -8129,7 +8134,7 @@ function getComponentRuntime() {
 }
 // src/browser.js
 var VERSION = "3.7.4";
-var BUILD_DATE = "2026-02-12@20:46:28GMT";
+var BUILD_DATE = "2026-02-12@20:54:36GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }

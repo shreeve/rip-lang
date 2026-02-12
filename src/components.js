@@ -702,6 +702,13 @@ export function installComponentSupport(CodeGenerator) {
           key = key.slice(1, -1);
         }
 
+        // Element ref: ref: "name" → this.name = element
+        if (key === 'ref') {
+          const refName = String(value).replace(/^["']|["']$/g, '');
+          this._createLines.push(`this.${refName} = ${elVar};`);
+          continue;
+        }
+
         // Two-way binding: __bind_value__ pattern
         if (key.startsWith(BIND_PREFIX) && key.endsWith(BIND_SUFFIX)) {
           const prop = key.slice(BIND_PREFIX.length, -BIND_SUFFIX.length);
