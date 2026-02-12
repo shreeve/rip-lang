@@ -7,52 +7,18 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [@rip-lang/ui 0.3.0] - 2026-02-12
+## [3.7.4] - 2026-02-12
 
-### Rip UI — Component Composition
-
-- **Cross-file component resolution** — Components in `components/` are automatically available by PascalCase name (`card.rip` → `Card`). App-scoped, lazy-compiled, cached after first use. No imports needed.
-- **Reactive props via signal passthrough** — Parent passes `:=` signals directly to children. Child's `__state` passthrough returns the signal as-is. Two-way binding for free.
-- **Children blocks** — `Card title: "Hello" -> p "content"` passes children as a DOM node via the `@children` slot.
-- **Child unmounting cascade** — Parent tracks child instances in `_children`. `unmount()` cascades depth-first.
-- **Resolver architecture** — Single `{ map, classes, key }` object carries all resolution state per-app. No module-scoped mutable state, no cross-app leakage.
-
-### Rip UI — Reactive Timing Primitives
+### Compiler — Reactive Scoping & Component Fixes
 
 - **Effect cleanup** — `__effect` now captures return values as cleanup functions, run before re-execution and on disposal. Backward-compatible.
-- **`delay(ms, source)`** — Truthy delayed, falsy immediate. For loading indicators.
-- **`debounce(ms, source)`** — Waits until value stops changing. For search inputs.
-- **`throttle(ms, source)`** — At most one update per interval. For scroll/resize.
-- **`hold(ms, source)`** — Once truthy, stays true for at least ms. For success messages.
-- **Writable proxy pattern** — `delay 100, __state(false)` returns a signal-compatible proxy: reads are delayed, writes go to source. Drop-in replacement for `__state`.
-
-### Rip UI — State Persistence
-
-- **`persist: true`** — `launch '/app', persist: true` enables debounced auto-save of `app.data` to sessionStorage. Restores on reload.
-- **`_writeVersion` signal** — Global stash write counter triggers reactive auto-save. No polling, no JSON diffing.
-- **`beforeunload` safety net** — Also saves on tab close/reload for edge cases.
-
-### Rip UI — Polish
-
-- **Smooth app launch** — Container starts at `opacity: 0`, fades in after first mount + font load. No FOUC.
-- **Navigation anti-flicker** — `_navigating` uses `delay 100` to suppress brief loading indicators.
-- **Demo persistence** — Counter and todos sync to `app.data` and survive reload.
-- **Card component** — Reusable `Card` with title prop and `@children` slot, used in about page.
-
-### Compiler Fixes
-
 - **Component scope leak** — `collectProgramVariables` no longer recurses into component bodies. Inner `:=` variables don't pollute the outer scope.
 - **Object key reactive transform** — Object literal keys are no longer transformed to `key.value` when the key name matches a reactive variable.
 - **Component effect index** — Fixed `effect[1]` → `effect[2]` for the body of `~>` in components.
 - **Component effect wrapping** — Effects now wrapped in `() => { expr; }` for proper reactivity.
 - **Dot-chain property names** — `app.data.count` no longer transforms `count` as a reactive member when it's a property name in a dot chain.
-
-### Documentation
-
-- **RIP-REACTIVITY.md** — Complete rewrite. Reactive triad naming ("gets state", "always equals", "always calls"), effect cleanup, timing composition, writable signals, framework comparison.
-- **INQUISITION.md** — Critical assessment of Rip UI vs React, Solid, Svelte, Vue, Angular. Honest wins and gaps.
-
-## [3.7.4] - 2026-02-11
+- **Reactive prop passthrough** — `buildComponentProps` passes `:=` members as signals (not values) to child components. Child's `__state` returns the signal as-is.
+- **Child unmounting** — `generateChildComponent` tracks child instances in `_children`. `__Component.unmount()` cascades depth-first.
 
 ### Compiler — Nested Function Scope Chain
 

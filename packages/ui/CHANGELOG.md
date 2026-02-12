@@ -1,0 +1,44 @@
+# Changelog — @rip-lang/ui
+
+All notable changes to `@rip-lang/ui` will be documented in this file.
+
+## [0.3.0] - 2026-02-12
+
+### Component Composition
+
+- **Cross-file component resolution** — Components in `components/` are automatically available by PascalCase name (`card.rip` → `Card`). App-scoped, lazy-compiled, cached after first use. No imports needed.
+- **Reactive props via signal passthrough** — Parent passes `:=` signals directly to children. Child's `__state` passthrough returns the signal as-is. Two-way binding for free.
+- **Children blocks** — `Card title: "Hello" -> p "content"` passes children as a DOM node via the `@children` slot.
+- **Child unmounting cascade** — Parent tracks child instances in `_children`. `unmount()` cascades depth-first.
+- **Resolver architecture** — Single `{ map, classes, key }` object carries all resolution state per-app. No module-scoped mutable state, no cross-app leakage.
+
+### Reactive Timing Primitives
+
+- **Effect cleanup** — `__effect` now captures return values as cleanup functions, run before re-execution and on disposal. Backward-compatible.
+- **`delay(ms, source)`** — Truthy delayed, falsy immediate. For loading indicators.
+- **`debounce(ms, source)`** — Waits until value stops changing. For search inputs.
+- **`throttle(ms, source)`** — At most one update per interval. For scroll/resize.
+- **`hold(ms, source)`** — Once truthy, stays true for at least ms. For success messages.
+- **Writable proxy pattern** — `delay 100, __state(false)` returns a signal-compatible proxy: reads are delayed, writes go to source. Drop-in replacement for `__state`.
+
+### State Persistence
+
+- **`persist: true`** — `launch '/app', persist: true` enables debounced auto-save of `app.data` to sessionStorage. Restores on reload.
+- **`_writeVersion` signal** — Global stash write counter triggers reactive auto-save. No polling, no JSON diffing.
+- **`beforeunload` safety net** — Also saves on tab close/reload for edge cases.
+
+### Polish
+
+- **Smooth app launch** — Container starts at `opacity: 0`, fades in after first mount + font load. No FOUC.
+- **Navigation anti-flicker** — `_navigating` uses `delay 100` to suppress brief loading indicators.
+- **Demo persistence** — Counter and todos sync to `app.data` and survive reload.
+- **Card component** — Reusable `Card` with title prop and `@children` slot, used in about page.
+
+### Documentation
+
+- **RIP-REACTIVITY.md** — Complete rewrite. Reactive triad naming ("gets state", "always equals", "always calls"), effect cleanup, timing composition, writable signals, framework comparison.
+- **INQUISITION.md** — Critical assessment of Rip UI vs React, Solid, Svelte, Vue, Angular. Honest wins and gaps.
+
+## [0.2.0] - 2026-02-11
+
+Initial release. Reactive stash, file-based router, renderer, SSE hot reload, demo app.
