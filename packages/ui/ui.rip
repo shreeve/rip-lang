@@ -550,6 +550,9 @@ export createRenderer = (opts = {}) ->
     container.id = 'app'
     document.body.appendChild container
 
+  # Fade in after first mount (prevents layout-before-content flicker)
+  container.style.opacity = '0'
+
   currentComponent = null
   currentRoute = null
   currentLayouts = []
@@ -676,9 +679,15 @@ export createRenderer = (opts = {}) ->
         instance.load!(params, query) if instance.load
       oldRoot?.remove()
       router.navigating = false
+      if container.style.opacity is '0'
+        document.fonts.ready.then ->
+          requestAnimationFrame ->
+            container.style.transition = 'opacity 150ms ease-in'
+            container.style.opacity = '1'
 
     catch err
       router.navigating = false
+      container.style.opacity = '1'
       console.error "Renderer: error mounting #{route.file}:", err
       onError({ status: 500, message: err.message, error: err }) if onError
 
