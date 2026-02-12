@@ -3623,6 +3623,9 @@ function installComponentSupport(CodeGenerator) {
       }
       return sexpr;
     }
+    if (sexpr[0] === ".") {
+      return [".", this.transformComponentMembers(sexpr[1]), sexpr[2]];
+    }
     if (sexpr[0] === "->") {
       return ["=>", ...sexpr.slice(1).map((item) => this.transformComponentMembers(item))];
     }
@@ -3723,9 +3726,9 @@ function installComponentSupport(CodeGenerator) {
       lines.push(`    this.${name} = __computed(() => ${val});`);
     }
     for (const effect of effects) {
-      const effectBody = effect[1];
+      const effectBody = effect[2];
       const effectCode = this.generateInComponent(effectBody, "value");
-      lines.push(`    __effect(${effectCode});`);
+      lines.push(`    __effect(() => { ${effectCode}; });`);
     }
     lines.push("  }");
     for (const { name, func } of methods) {
@@ -8104,7 +8107,7 @@ function getComponentRuntime() {
 }
 // src/browser.js
 var VERSION = "3.7.4";
-var BUILD_DATE = "2026-02-11@23:59:48GMT";
+var BUILD_DATE = "2026-02-12@16:36:40GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }

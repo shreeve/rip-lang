@@ -1,8 +1,10 @@
 # Counter Page
 
 export Counter = component
-  count := 0
+  count := @app.data.count or 0
   step  := 1
+
+  ~> @app.data.count = count
 
   increment: -> count += step
   decrement: -> count -= step
@@ -12,7 +14,7 @@ export Counter = component
     div
       .page-header
         h1.page-title "Counter"
-        p.page-subtitle "Reactive state with := operator"
+        p.page-subtitle "Reactive state — persists across reload"
 
       .card
         .counter-display "#{count}"

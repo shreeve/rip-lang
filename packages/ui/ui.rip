@@ -35,6 +35,7 @@ SIGNALS = Symbol('signals')
 RAW     = Symbol('raw')
 PROXIES = new WeakMap()
 _keysVersion = 0
+_writeVersion = __state(0)
 
 getSignal = (target, prop) ->
   unless target[SIGNALS]
@@ -80,12 +81,14 @@ makeProxy = (target) ->
     set: (target, prop, value) ->
       old = target[prop]
       r = if value?[RAW] then value[RAW] else value
+      return true if r is old
       target[prop] = r
 
       if target[SIGNALS]?.has(prop)
         target[SIGNALS].get(prop).value = r
       if old is undefined and r isnt undefined
         keysSignal(target).value = ++_keysVersion
+      _writeVersion.value++
 
       true
 
@@ -740,6 +743,7 @@ export launch = (appBase = '', opts = {}) ->
   appBase = appBase.replace(/\/+$/, '')  # strip trailing slashes
   target = opts.target or '#app'
   compile = opts.compile or null
+  persist = opts.persist or false
   bundleUrl = "#{appBase}/bundle"
 
   # Auto-detect compile function from the global rip.js module
@@ -764,6 +768,27 @@ export launch = (appBase = '', opts = {}) ->
   app.data = bundle.data if bundle.data
   if bundle.routes
     app.routes = bundle.routes
+
+  # Restore persisted state (overrides bundle defaults with saved user state)
+  if persist and typeof sessionStorage isnt 'undefined'
+    _storageKey = "__rip_#{appBase}"
+    _storage = if persist is 'local' then localStorage else sessionStorage
+    try
+      saved = _storage.getItem(_storageKey)
+      if saved
+        savedData = JSON.parse(saved)
+        app.data[k] = v for k, v of savedData
+    catch
+      null
+    # Auto-save: debounce 2s after any stash write. Also save on unload.
+    _save = ->
+      try _storage.setItem _storageKey, JSON.stringify(raw(app.data))
+      catch then null
+    __effect ->
+      _writeVersion.value
+      t = setTimeout _save, 2000
+      -> clearTimeout t
+    window.addEventListener 'beforeunload', _save
 
   # Create components store and load component sources
   appComponents = createComponents()
@@ -813,14 +838,14 @@ export launch = (appBase = '', opts = {}) ->
 # ==============================================================================
 
 connectWatch = (components, router, renderer, url, base = '') ->
-  delay = 1000
+  retryDelay = 1000
   maxDelay = 30000
 
   connect = ->
     es = new EventSource(url)
 
     es.addEventListener 'connected', ->
-      delay = 1000  # reset backoff on successful connection
+      retryDelay = 1000  # reset backoff on successful connection
       console.log '[Rip] Hot reload connected'
 
     es.addEventListener 'changed', (e) ->
@@ -844,8 +869,8 @@ connectWatch = (components, router, renderer, url, base = '') ->
 
     es.onerror = ->
       es.close()
-      console.log "[Rip] Hot reload reconnecting in #{delay / 1000}s..."
-      setTimeout connect, delay
-      delay = Math.min(delay * 2, maxDelay)
+      console.log "[Rip] Hot reload reconnecting in #{retryDelay / 1000}s..."
+      setTimeout connect, retryDelay
+      retryDelay = Math.min(retryDelay * 2, maxDelay)
 
   connect()

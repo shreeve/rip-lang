@@ -136,6 +136,11 @@ export function installComponentSupport(CodeGenerator) {
       return sexpr;
     }
 
+    // Dot access: transform the object but not the property name
+    if (sexpr[0] === '.') {
+      return ['.', this.transformComponentMembers(sexpr[1]), sexpr[2]];
+    }
+
     // Force thin arrows to fat arrows inside components to preserve this binding
     if (sexpr[0] === '->') {
       return ['=>', ...sexpr.slice(1).map(item => this.transformComponentMembers(item))];
@@ -267,9 +272,9 @@ export function installComponentSupport(CodeGenerator) {
 
     // Effects
     for (const effect of effects) {
-      const effectBody = effect[1];
+      const effectBody = effect[2];
       const effectCode = this.generateInComponent(effectBody, 'value');
-      lines.push(`    __effect(${effectCode});`);
+      lines.push(`    __effect(() => { ${effectCode}; });`);
     }
 
     lines.push('  }');

@@ -2,8 +2,11 @@
 
 export Todos = component
   newTodo := ''
-  todos := []
-  nextId := 1
+  todos := @app.data.todos or []
+  nextId := (@app.data.nextId or 1)
+
+  ~> @app.data.todos = todos
+  ~> @app.data.nextId = nextId
 
   remaining ~= todos.filter((t) -> not t.done).length
 
