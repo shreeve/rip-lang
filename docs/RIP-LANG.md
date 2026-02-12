@@ -697,9 +697,9 @@ Rip's reactive features are **language-level operators**, not library imports.
 | Operator | Name | Read as | Purpose |
 |----------|------|---------|---------|
 | `=` | Assign | "gets value" | Regular assignment |
-| `:=` | State | "has state" | Reactive state variable |
+| `:=` | State | "gets state" | Reactive state variable |
 | `~=` | Computed | "always equals" | Computed value (auto-updates) |
-| `~>` | Effect | "reacts to" | Side effect on dependency change |
+| `~>` | Effect | "always calls" | Side effect on dependency change |
 | `=!` | Readonly | "equals, dammit!" | Constant (`const`) |
 
 ## State (`:=`)

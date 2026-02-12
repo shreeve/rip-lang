@@ -146,9 +146,9 @@ State, computed values, and effects as language operators:
 | Operator | Mnemonic | Example | What it does |
 |----------|----------|---------|--------------|
 | `=` | "gets value" | `x = 5` | Regular assignment |
-| `:=` | "has state" | `count := 0` | Reactive state container |
+| `:=` | "gets state" | `count := 0` | Reactive state container |
 | `~=` | "always equals" | `twice ~= count * 2` | Auto-updates on changes |
-| `~>` | "reacts to" | `~> log count` | Runs on dependency changes |
+| `~>` | "always calls" | `~> log count` | Runs on dependency changes |
 | `=!` | "equals, dammit!" | `MAX =! 100` | Readonly constant |
 
 ---
