@@ -922,7 +922,7 @@ console.log "Domain:", domain`;
     const localBuildDate = new Date(BUILD_DATE.replace('@', 'T').replace('GMT', 'Z'))
       .toLocaleString(undefined, {
         year: 'numeric', month: 'short', day: 'numeric',
-        hour: '2-digit', minute: '2-digit', timeZoneName: 'short'
+        hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
       });
 
     document.querySelector('.subtitle').textContent =
