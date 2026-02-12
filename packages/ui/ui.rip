@@ -7,9 +7,8 @@
 #   /rip/ui.rip      — the framework (this file, compiled in browser)
 #
 # The app stash:
-#   app.components   — component source files
-#   app.routes  — navigation state (path, params, query, hash)
 #   app.data    — reactive app state
+#   app.routes  — navigation state (path, params, query, hash)
 #
 # Boot (in <script type="text/rip">):
 #   { launch } = importRip! '/rip/ui.rip'
@@ -522,6 +521,10 @@ findComponent = (mod) ->
     return val if typeof val is 'function' and (val.prototype?.mount or val.prototype?._create)
   mod.default if typeof mod.default is 'function'
 
+# --------------------------------------------------------------------------
+# Component resolution — name discovery, lazy compilation, class registry
+# --------------------------------------------------------------------------
+
 findAllComponents = (mod) ->
   result = {}
   for key, val of mod
@@ -548,7 +551,7 @@ buildComponentMap = (components, root = 'components') ->
     map[name] = path
   map
 
-compileAndImport = (source, compile, components = null, path = null, componentMap = null, registry = null) ->
+compileAndImport = (source, compile, components = null, path = null, resolver = null) ->
   # Check compilation cache
   if components and path
     cached = components.getCompiled(path)
@@ -557,22 +560,22 @@ compileAndImport = (source, compile, components = null, path = null, componentMa
   js = compile(source)
 
   # Resolve component dependencies — scan for PascalCase references in compiled JS
-  if componentMap and registry
+  if resolver
     needed = {}
-    for name, depPath of componentMap
+    for name, depPath of resolver.map
       if depPath isnt path and js.includes("new #{name}(")
-        unless registry.classes[name]
+        unless resolver.classes[name]
           depSource = components.read(depPath)
           if depSource
-            depMod = compileAndImport! depSource, compile, components, depPath, componentMap, registry
+            depMod = compileAndImport! depSource, compile, components, depPath, resolver
             found = findAllComponents(depMod)
-            registry.classes[k] = v for k, v of found
-        needed[name] = true if registry.classes[name]
+            resolver.classes[k] = v for k, v of found
+        needed[name] = true if resolver.classes[name]
 
     # Inject resolved components into scope via preamble
     names = Object.keys(needed)
     if names.length > 0
-      preamble = "const {#{names.join(', ')}} = globalThis['#{registry.key}'];\n"
+      preamble = "const {#{names.join(', ')}} = globalThis['#{resolver.key}'];\n"
       js = preamble + js
 
   blob = new Blob([js], { type: 'application/javascript' })
@@ -583,16 +586,16 @@ compileAndImport = (source, compile, components = null, path = null, componentMa
     URL.revokeObjectURL url
 
   # Register any components from this module
-  if registry
+  if resolver
     found = findAllComponents(mod)
-    registry.classes[k] = v for k, v of found
+    resolver.classes[k] = v for k, v of found
 
   # Store in cache
   components.setCompiled(path, mod) if components and path
   mod
 
 export createRenderer = (opts = {}) ->
-  { router, components, appStash, compile, target, onError, componentMap, registry } = opts
+  { router, app, components, resolver, compile, target, onError } = opts
 
   container = if typeof target is 'string'
     document.querySelector(target)
@@ -662,7 +665,7 @@ export createRenderer = (opts = {}) ->
         router.navigating = false
         return
 
-      mod = compileAndImport! source, compile, components, route.file, componentMap, registry
+      mod = compileAndImport! source, compile, components, route.file, resolver
       if gen isnt generation then router.navigating = false; return
 
       Component = findComponent(mod)
@@ -688,13 +691,13 @@ export createRenderer = (opts = {}) ->
         for layoutFile in layoutFiles
           layoutSource = components.read(layoutFile)
           continue unless layoutSource
-          layoutMod = compileAndImport! layoutSource, compile, components, layoutFile, componentMap, registry
+          layoutMod = compileAndImport! layoutSource, compile, components, layoutFile, resolver
           if gen isnt generation then router.navigating = false; return
 
           LayoutClass = findComponent(layoutMod)
           continue unless LayoutClass
 
-          inst = new LayoutClass { app: appStash, params, router }
+          inst = new LayoutClass { app, params, router }
           inst.beforeMount() if inst.beforeMount
           wrapper = document.createElement('div')
           wrapper.setAttribute 'data-layout', layoutFile
@@ -724,7 +727,7 @@ export createRenderer = (opts = {}) ->
         pageWrapper.setAttribute 'data-component', route.file
         mp.appendChild pageWrapper
 
-        instance = new Component { app: appStash, params, query, router }
+        instance = new Component { app, params, query, router }
         instance.beforeMount() if instance.beforeMount
         instance.mount pageWrapper
         currentComponent = instance
@@ -845,11 +848,10 @@ export launch = (appBase = '', opts = {}) ->
   appComponents = createComponents()
   appComponents.load(bundle.components) if bundle.components
 
-  # Build component name-to-path map and app-scoped class registry
-  componentMap = buildComponentMap(appComponents)
+  # Build component resolver — name-to-path map + app-scoped class registry
   classesKey = "__rip_#{appBase.replace(/\//g, '_') or 'app'}"
-  registry = { classes: {}, key: classesKey }
-  globalThis[classesKey] = registry.classes if typeof globalThis isnt 'undefined'
+  resolver = { map: buildComponentMap(appComponents), classes: {}, key: classesKey }
+  globalThis[classesKey] = resolver.classes if typeof globalThis isnt 'undefined'
 
   # Set document title
   document.title = app.data.title if app.data.title and typeof document isnt 'undefined'
@@ -863,10 +865,9 @@ export launch = (appBase = '', opts = {}) ->
   # Create renderer
   renderer = createRenderer
     router: router
+    app: app
     components: appComponents
-    componentMap: componentMap
-    registry: registry
-    appStash: app
+    resolver: resolver
     compile: compile
     target: target
     onError: (err) -> console.error "[Rip] #{err.message}", err.error
@@ -886,7 +887,6 @@ export launch = (appBase = '', opts = {}) ->
       components: appComponents
       router: router
       renderer: renderer
-      stash: app
       cache: renderer.cache
       version: '0.2.0'
 
