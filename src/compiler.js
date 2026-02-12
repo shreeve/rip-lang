@@ -359,6 +359,7 @@ export class CodeGenerator {
     }
 
     if (head === 'readonly') return;
+    if (head === 'component') return;  // Component body has its own scope
 
     if (CodeGenerator.ASSIGNMENT_OPS.has(head)) {
       let [target, value] = rest;
@@ -1574,7 +1575,11 @@ export class CodeGenerator {
       let keyCode;
       if (this.is(key, 'dynamicKey')) keyCode = `[${this.generate(key[1], 'value')}]`;
       else if (this.is(key, 'str')) keyCode = `[${this.generate(key, 'value')}]`;
-      else keyCode = this.generate(key, 'value');
+      else {
+        this.suppressReactiveUnwrap = true;
+        keyCode = this.generate(key, 'value');
+        this.suppressReactiveUnwrap = false;
+      }
       let valCode = this.generate(value, 'value');
       if (operator === '=') return `${keyCode} = ${valCode}`;
       if (operator === ':') return `${keyCode}: ${valCode}`;
