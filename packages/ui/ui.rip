@@ -798,7 +798,6 @@ export launch = (appBase = '', opts = {}) ->
   target = opts.target or '#app'
   compile = opts.compile or null
   persist = opts.persist or false
-  bundleUrl = "#{appBase}/bundle"
 
   # Auto-detect compile function from the global rip.js module
   unless compile
@@ -810,10 +809,14 @@ export launch = (appBase = '', opts = {}) ->
     el.id = target.replace(/^#/, '')
     document.body.prepend el
 
-  # Fetch the app bundle
-  res = await fetch(bundleUrl)
-  throw new Error "launch: #{bundleUrl} (#{res.status})" unless res.ok
-  bundle = res.json!
+  # Get the app bundle — inline, from DOM, or fetch from server
+  if opts.bundle
+    bundle = opts.bundle
+  else
+    bundleUrl = "#{appBase}/bundle"
+    res = await fetch(bundleUrl)
+    throw new Error "launch: #{bundleUrl} (#{res.status})" unless res.ok
+    bundle = res.json!
 
   # Create the unified stash
   app = stash { components: {}, routes: {}, data: {} }

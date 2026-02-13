@@ -2278,7 +2278,7 @@ class Lexer {
     let isTemplateTag = (name) => {
       return isHtmlTag(name) || isComponent(name);
     };
-    let startsWithTemplateTag = (tokens, i) => {
+    let startsWithTag = (tokens, i) => {
       let j = i;
       while (j > 0) {
         let pt = tokens[j - 1][0];
@@ -2422,9 +2422,9 @@ class Lexer {
         if (tag === "IDENTIFIER" && isTemplateTag(token[1])) {
           isTemplateElement = true;
         } else if (tag === "PROPERTY" || tag === "STRING" || tag === "CALL_END" || tag === ")") {
-          isTemplateElement = startsWithTemplateTag(tokens, i);
+          isTemplateElement = startsWithTag(tokens, i);
         } else if (tag === "IDENTIFIER" && i > 1 && tokens[i - 1][0] === "...") {
-          if (startsWithTemplateTag(tokens, i)) {
+          if (startsWithTag(tokens, i)) {
             let commaToken = gen(",", ",", token);
             let arrowToken = gen("->", "->", token);
             arrowToken.newLine = true;
@@ -8134,7 +8134,7 @@ function getComponentRuntime() {
 }
 // src/browser.js
 var VERSION = "3.7.4";
-var BUILD_DATE = "2026-02-12@20:54:36GMT";
+var BUILD_DATE = "2026-02-12@23:11:56GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }
