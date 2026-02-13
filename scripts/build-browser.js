@@ -62,11 +62,12 @@ const brRatio = ((1 - brSize / minSize) * 100).toFixed(1);
 console.log('✓ docs/dist/rip.browser.min.js.br');
 console.log(`  Size: ${(brSize / 1024).toFixed(2)} KB (-${brRatio}%)`);
 
-// Step 4: Brotli compress ui.rip (served via symlink, compressed for production)
+// Step 4: Copy and compress ui.rip for GitHub Pages
 const uiSource = readFileSync('./packages/ui/ui.rip');
+writeFileSync('./docs/dist/ui.rip', uiSource);
 const uiCompressed = brotliCompressSync(uiSource);
 writeFileSync('./docs/dist/ui.rip.br', uiCompressed);
-console.log('✓ docs/dist/ui.rip.br');
+console.log('✓ docs/dist/ui.rip + ui.rip.br');
 console.log(`  Size: ${(uiCompressed.length / 1024).toFixed(2)} KB (from ${(uiSource.length / 1024).toFixed(2)} KB)`);
 
 // Final summary
