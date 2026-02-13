@@ -2424,7 +2424,9 @@ class Lexer {
           return 1;
         }
         let isTemplateElement = false;
-        if (tag === "IDENTIFIER" && isTemplateTag(token[1])) {
+        let prevTag = i > 0 ? tokens[i - 1][0] : null;
+        let isAfterControlFlow = prevTag === "IF" || prevTag === "UNLESS" || prevTag === "WHILE" || prevTag === "UNTIL" || prevTag === "WHEN";
+        if (tag === "IDENTIFIER" && isTemplateTag(token[1]) && !isAfterControlFlow) {
           isTemplateElement = true;
         } else if (tag === "PROPERTY" || tag === "STRING" || tag === "CALL_END" || tag === ")") {
           isTemplateElement = startsWithTag(tokens, i);
@@ -8171,7 +8173,7 @@ function getComponentRuntime() {
 }
 // src/browser.js
 var VERSION = "3.8.5";
-var BUILD_DATE = "2026-02-13@10:32:05GMT";
+var BUILD_DATE = "2026-02-13@10:46:06GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }

@@ -1602,8 +1602,10 @@ export class Lexer {
         }
 
         let isTemplateElement = false;
+        let prevTag = i > 0 ? tokens[i - 1][0] : null;
+        let isAfterControlFlow = prevTag === 'IF' || prevTag === 'UNLESS' || prevTag === 'WHILE' || prevTag === 'UNTIL' || prevTag === 'WHEN';
 
-        if (tag === 'IDENTIFIER' && isTemplateTag(token[1])) {
+        if (tag === 'IDENTIFIER' && isTemplateTag(token[1]) && !isAfterControlFlow) {
           isTemplateElement = true;
         } else if (tag === 'PROPERTY' || tag === 'STRING' || tag === 'CALL_END' || tag === ')') {
           isTemplateElement = startsWithTag(tokens, i);
