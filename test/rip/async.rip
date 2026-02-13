@@ -375,6 +375,10 @@ code 'dammit with parens', 'getData!()', 'await getData()'
 code 'dammit with args', 'getData!(x)', 'await getData(x)'
 code 'dammit method with args', 'console.log!("hey")', 'await console.log("hey")'
 
+# Chained dammit — await must parenthesize for correct JS precedence
+code 'chained dammit', 'fetch!(url).json!', 'await (await fetch(url)).json()'
+code 'chained dammit prop', 'obj!.method!.prop', '(await (await obj()).method()).prop'
+
 # Dynamic import with dammit operator
 code 'import! dynamic', 'import!("./foo.rip")', '(await import("./foo.rip"))'
 code 'import! with variable', 'import!(path)', '(await import(path))'

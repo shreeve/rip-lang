@@ -7,6 +7,14 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.4] - 2026-02-13
+
+### Compiler — Chained Dammit Operator Fix
+
+- **Chained `!` parenthesization** — `fetch!(url).json!` now correctly compiles to `await (await fetch(url)).json()` instead of `await await fetch(url).json()` which had wrong JS precedence. The `await` from `!` metadata is now parenthesized when used as a property access base.
+- Playground Async example restored to clean `fetch!(url).json!` syntax.
+- 2 new tests (1,241 total).
+
 ## [3.8.3] - 2026-02-13
 
 ### Lexer — Heregex Forward Slash Escaping

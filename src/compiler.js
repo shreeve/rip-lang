@@ -939,7 +939,8 @@ export class CodeGenerator {
     let objCode = this.generate(obj, 'value');
     this.suppressReactiveUnwrap = false;
     let needsParens = CodeGenerator.NUMBER_LITERAL_RE.test(objCode) ||
-                      ((this.is(obj, 'object') || this.is(obj, 'await') || this.is(obj, 'yield')));
+                      objCode.startsWith('await ') ||
+                      ((this.is(obj, 'object') || this.is(obj, 'yield')));
     let base = needsParens ? `(${objCode})` : objCode;
     if (meta(prop, 'await') === true) return `await ${base}.${str(prop)}()`;
     if (meta(prop, 'predicate')) return `(${base}.${str(prop)} != null)`;

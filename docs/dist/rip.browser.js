@@ -5513,7 +5513,7 @@ function _setDataSection() {
     this.suppressReactiveUnwrap = true;
     let objCode = this.generate(obj, "value");
     this.suppressReactiveUnwrap = false;
-    let needsParens = CodeGenerator.NUMBER_LITERAL_RE.test(objCode) || (this.is(obj, "object") || this.is(obj, "await") || this.is(obj, "yield"));
+    let needsParens = CodeGenerator.NUMBER_LITERAL_RE.test(objCode) || objCode.startsWith("await ") || (this.is(obj, "object") || this.is(obj, "yield"));
     let base = needsParens ? `(${objCode})` : objCode;
     if (meta(prop, "await") === true)
       return `await ${base}.${str(prop)}()`;
@@ -8170,8 +8170,8 @@ function getComponentRuntime() {
   return new CodeGenerator({}).getComponentRuntime();
 }
 // src/browser.js
-var VERSION = "3.8.3";
-var BUILD_DATE = "2026-02-13@10:15:08GMT";
+var VERSION = "3.8.4";
+var BUILD_DATE = "2026-02-13@10:23:52GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }
