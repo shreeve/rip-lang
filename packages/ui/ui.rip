@@ -392,6 +392,7 @@ getLayoutChain = (routeFile, root, layouts) ->
 export createRouter = (components, opts = {}) ->
   root = opts.root or 'components'
   base = opts.base or ''
+  hashMode = opts.hash or false
   onError = opts.onError or null
 
   stripBase = (url) ->
@@ -400,7 +401,13 @@ export createRouter = (components, opts = {}) ->
   addBase = (path) ->
     if base then base + path else path
 
-  _path       = __state(stripBase(location.pathname))
+  readUrl = ->
+    if hashMode then (location.hash.slice(1) or '/') else (location.pathname + location.search + location.hash)
+
+  writeUrl = (path) ->
+    if hashMode then '#' + path else addBase(path)
+
+  _path       = __state(stripBase(if hashMode then (location.hash.slice(1) or '/') else location.pathname))
   _params     = __state({})
   _route      = __state(null)
   _layouts    = __state([])
@@ -436,7 +443,7 @@ export createRouter = (components, opts = {}) ->
     onError({ status: 404, path }) if onError
     false
 
-  onPopState = -> resolve(location.pathname + location.search + location.hash)
+  onPopState = -> resolve(readUrl())
   window.addEventListener 'popstate', onPopState if typeof window isnt 'undefined'
 
   onClick = (e) ->
@@ -448,18 +455,19 @@ export createRouter = (components, opts = {}) ->
     return if url.origin isnt location.origin
     return if target.target is '_blank' or target.hasAttribute('data-external')
     e.preventDefault()
-    router.push url.pathname + url.search + url.hash
+    dest = if hashMode and url.hash then (url.hash.slice(1) or '/') else (url.pathname + url.search + url.hash)
+    router.push dest
 
   document.addEventListener 'click', onClick if typeof document isnt 'undefined'
 
   router =
     push: (url) ->
       if resolve(url)
-        history.pushState null, '', addBase(_path.read())
+        history.pushState null, '', writeUrl(_path.read())
 
     replace: (url) ->
       if resolve(url)
-        history.replaceState null, '', addBase(_path.read())
+        history.replaceState null, '', writeUrl(_path.read())
 
     back: -> history.back()
     forward: -> history.forward()
@@ -482,7 +490,7 @@ export createRouter = (components, opts = {}) ->
     routes: undefined  # overridden by getter
 
     init: ->
-      resolve location.pathname + location.search + location.hash
+      resolve readUrl()
       router
 
     destroy: ->
@@ -798,6 +806,7 @@ export launch = (appBase = '', opts = {}) ->
   target = opts.target or '#app'
   compile = opts.compile or null
   persist = opts.persist or false
+  hash = opts.hash or false
 
   # Auto-detect compile function from the global rip.js module
   unless compile
@@ -863,6 +872,7 @@ export launch = (appBase = '', opts = {}) ->
   router = createRouter appComponents,
     root: 'components'
     base: appBase
+    hash: hash
     onError: (err) -> console.error "[Rip] Error #{err.status}: #{err.message or err.path}"
 
   # Create renderer
