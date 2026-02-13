@@ -33,7 +33,7 @@ bun run browser
 
 | Metric | Value |
 |--------|-------|
-| Version | 3.7.4 |
+| Version | 3.8.0 |
 | Tests | 1,235/1,235 (100%) |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
@@ -45,18 +45,18 @@ bun run browser
 ```
 rip-lang/
 ├── src/
-│   ├── lexer.js         # Lexer + Rewriter (1,958 LOC)
-│   ├── compiler.js      # Compiler + Code Generator (3,378 LOC)
+│   ├── lexer.js         # Lexer + Rewriter (2,022 LOC)
+│   ├── compiler.js      # Compiler + Code Generator (3,400 LOC)
 │   ├── types.js         # Type System — sidecar for lexer (1,099 LOC)
-│   ├── components.js    # Component System — sidecar for compiler (1,240 LOC)
-│   ├── sourcemaps.js    # Source Map V3 generator (122 LOC)
-│   ├── tags.js          # HTML tag classification (63 LOC)
-│   ├── parser.js        # Generated parser (357 LOC) — Don't edit!
+│   ├── components.js    # Component System — sidecar for compiler (1,281 LOC)
+│   ├── sourcemaps.js    # Source Map V3 generator (121 LOC)
+│   ├── tags.js          # HTML tag classification (62 LOC)
+│   ├── parser.js        # Generated parser (359 LOC) — Don't edit!
 │   ├── repl.js          # Terminal REPL (582 LOC)
-│   ├── browser.js       # Browser integration (119 LOC)
+│   ├── browser.js       # Browser integration (125 LOC)
 │   └── grammar/
-│       ├── grammar.rip  # Grammar specification (945 LOC)
-│       └── solar.rip    # Parser generator (916 LOC) — Don't edit!
+│       ├── grammar.rip  # Grammar specification (944 LOC)
+│       └── solar.rip    # Parser generator (929 LOC) — Don't edit!
 ├── packages/            # Optional packages (see Packages section below)
 │   ├── api/             # @rip-lang/api — Web framework
 │   ├── ui/              # @rip-lang/ui — Reactive web UI framework
@@ -373,7 +373,7 @@ code "name", "x + y", "(x + y)"
 fail "name", "invalid syntax"
 ```
 
-### Test Files (25 files, 1,219 tests)
+### Test Files (25 files, 1,235 tests)
 
 ```
 test/rip/
@@ -420,7 +420,7 @@ Hono-compatible web framework with Sinatra-style routing, magic `@` context,
 
 | File | Lines | Role |
 |------|-------|------|
-| `api.rip` | ~647 | Core framework: routing, validation, `read()`, `session`, `@send`, server |
+| `api.rip` | ~655 | Core framework: routing, validation, `read()`, `session`, `@send`, server |
 | `middleware.rip` | ~463 | Built-in middleware: cors, logger, sessions, compression, security |
 
 Key concepts:
@@ -447,8 +447,8 @@ directly — one signal graph shared between framework and components.
 
 | File | Lines | Role |
 |------|-------|------|
-| `ui.rip` | ~640 | Unified framework: stash, parts, router, renderer, launch |
-| `serve.rip` | ~130 | Server middleware: framework files, bundle, SSE hot-reload |
+| `ui.rip` | ~938 | Unified framework: stash, parts, router, renderer, launch |
+| `serve.rip` | ~140 | Server middleware: framework files, bundle, SSE hot-reload |
 
 Key concepts:
 - **`ripUI` middleware** — `use ripUI app: '/demo', dir: dir` registers routes for framework files (`/rip/browser.js`, `/rip/ui.rip`), app bundle (`/{app}/bundle`), and SSE hot-reload (`/{app}/watch`)
@@ -546,11 +546,11 @@ Three playground versions in `docs/`, all single HTML files with zero dependenci
 
 | File | Approach | Lines |
 |------|----------|-------|
-| `playground-js.html` | Pure JavaScript (reference) | ~1,600 |
-| `playground-rip.html` | Rip via `<script type="text/rip">` | ~1,420 |
-| `playground-rip-ui.html` | Rip UI component via `launch bundle:` | ~1,410 |
+| `playground-js.html` | Pure JavaScript (reference) | ~1,800 |
+| `playground-rip.html` | Rip via `<script type="text/rip">` | ~1,620 |
+| `playground-rip-ui.html` | Rip UI component via `launch bundle:` | ~1,600 |
 
-All three share: same CSS, same Monarch tokenizer, same default code sample, same 15 features (live compiler, REPL, theme select, dark/light mode, 5 output toggles, resizable panes, localStorage persistence, URL hash routing, keyboard shortcuts).
+All three share: same CSS, same Monarch tokenizer, same default code sample, same 16 features (live compiler, REPL, example snippets, theme select, dark/light mode, 5 output toggles, resizable panes, source persistence, URL hash routing, keyboard shortcuts).
 
 Run with `bun run serve` → `http://localhost:3000/playground-rip.html`
 

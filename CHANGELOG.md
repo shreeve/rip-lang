@@ -7,6 +7,25 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.0] - 2026-02-12
+
+### Playground — Example Snippets & Source Persistence
+
+- **Example snippets dropdown** — 6 curated examples (Basics, Reactive State, Classes, Regex & Strings, Async & Dammit, Full Demo) plus a Custom option for user code.
+- **Source persistence** — Editor content saved to localStorage with 2-second debounce, restored on page load.
+- **Auto-switch to Custom** — Editing code after selecting an example automatically switches the dropdown to Custom.
+- Applied to all three playground versions (playground-rip.html, playground-js.html, playground-rip-ui.html).
+
+### Language — Raw Heredocs
+
+- **Raw heredocs (`'''\` and `"""\`)** — Appending `\` to a heredoc opener keeps JS escape sequences (`\n`, `\t`, `\u`, `\x`, `\\`) literal in the output.
+- **`.class` shorthand fix** — `div.foo` or `.foo` with indented children in render blocks now produces correct JS.
+
+### Parser — Recursive Descent Generator
+
+- **Lunar grammar** (`src/grammar/lunar.rip`) — New recursive descent parser generator producing `src/parser-rd.js`.
+- **98.3% test parity** — 1,162 of 1,182 tests passing with the generated parser.
+
 ## [3.7.4] - 2026-02-12
 
 ### Compiler — Reactive Scoping & Component Fixes

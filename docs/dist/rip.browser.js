@@ -8143,8 +8143,8 @@ function getComponentRuntime() {
   return new CodeGenerator({}).getComponentRuntime();
 }
 // src/browser.js
-var VERSION = "3.7.4";
-var BUILD_DATE = "2026-02-13@06:30:11GMT";
+var VERSION = "3.8.0";
+var BUILD_DATE = "2026-02-13@09:34:08GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }

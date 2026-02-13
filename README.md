@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.7.4-blue.svg" alt="Version"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.8.0-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
   <a href="#"><img src="https://img.shields.io/badge/tests-1235%2F1235-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
@@ -17,7 +17,7 @@
 
 ---
 
-Rip is a modern language inspired by CoffeeScript. It compiles to **ES2022** (classes, `?.`, `??`, modules), adds about a **dozen new operators**, includes **built-in reactivity**, and sports a self-hosting compiler with **zero dependencies** — all in about 10,800 lines of code.
+Rip is a modern language inspired by CoffeeScript. It compiles to **ES2022** (classes, `?.`, `??`, modules), adds about a **dozen new operators**, includes **built-in reactivity**, and sports a self-hosting compiler with **zero dependencies** — all in about 10,900 lines of code.
 
 > **No imports. No hooks. No dependency arrays. Just write code.**
 
@@ -289,9 +289,9 @@ See [@rip-lang/ui](packages/ui/) for the full framework: file-based router, reac
 | **Reactivity** | None | Built-in |
 | **Dependencies** | Multiple | Zero |
 | **Self-hosting** | No | Yes |
-| **Lexer** | 3,558 LOC | 1,958 LOC |
-| **Compiler** | 10,346 LOC | 3,378 LOC |
-| **Total** | 17,760 LOC | ~10,800 LOC |
+| **Lexer** | 3,558 LOC | 2,022 LOC |
+| **Compiler** | 10,346 LOC | 3,400 LOC |
+| **Total** | 17,760 LOC | ~10,900 LOC |
 
 Smaller codebase, modern output, built-in reactivity.
 
