@@ -1013,8 +1013,8 @@ export class Lexer {
       let end = index + flags.length;
 
       if (parts.length === 1 || !parts.some(p => p[0] === 'TOKENS')) {
-        // Simple heregex (no interpolations)
-        let body = parts[0]?.[1] || '';
+        // Simple heregex (no interpolations) — escape unescaped / for regex literal
+        let body = (parts[0]?.[1] || '').replace(/(?<!\\)\//g, '\\/');
         this.emit('REGEX', `/${body}/${flags}`, {len: end, data: {delimiter: '///', heregex: {flags}}});
       } else {
         // Complex heregex with interpolations

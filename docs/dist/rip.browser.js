@@ -1955,7 +1955,7 @@ class Lexer {
       let [flags2] = REGEX_FLAGS_RE.exec(this.chunk.slice(index2));
       let end2 = index2 + flags2.length;
       if (parts.length === 1 || !parts.some((p) => p[0] === "TOKENS")) {
-        let body2 = parts[0]?.[1] || "";
+        let body2 = (parts[0]?.[1] || "").replace(/(?<!\\)\//g, "\\/");
         this.emit("REGEX", `/${body2}/${flags2}`, { len: end2, data: { delimiter: "///", heregex: { flags: flags2 } } });
       } else {
         this.emit("REGEX_START", "(", { len: 0 });
@@ -8170,8 +8170,8 @@ function getComponentRuntime() {
   return new CodeGenerator({}).getComponentRuntime();
 }
 // src/browser.js
-var VERSION = "3.8.2";
-var BUILD_DATE = "2026-02-13@10:00:23GMT";
+var VERSION = "3.8.3";
+var BUILD_DATE = "2026-02-13@10:15:08GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }

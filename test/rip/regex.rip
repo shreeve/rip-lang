@@ -286,3 +286,14 @@ test "heregex $ anchor", '''
   pattern = ///^test$///
   pattern.test("test") and not pattern.test("testing")
   ''', true
+
+# Forward slashes in heregex should be auto-escaped
+test "heregex forward slashes", '''
+  pattern = ///
+    ^(https?://)  # protocol
+    ([^/]+)       # hostname
+    (/.*)?$       # path
+  ///
+  [_, proto, host, path] = "https://rip-lang.org/docs".match(pattern)
+  host
+  ''', "rip-lang.org"
