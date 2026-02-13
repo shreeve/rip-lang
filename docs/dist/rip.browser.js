@@ -1354,7 +1354,7 @@ var NEWLINE_RE = /^(?:\n[^\n\S]*)+/;
 var COMMENT_RE = /^(\s*)###([^#][\s\S]*?)(?:###([^\n\S]*)|###$)|^((?:\s*#(?!##[^#]).*)+)/;
 var CODE_RE = /^[-=]>/;
 var REACTIVE_RE = /^(?:~[=>]|=!)/;
-var STRING_START_RE = /^(?:'''|"""|'|")/;
+var STRING_START_RE = /^(?:'''\\|"""\\|'''|"""|'|")/;
 var STRING_SINGLE_RE = /^(?:[^\\']|\\[\s\S])*/;
 var STRING_DOUBLE_RE = /^(?:[^\\"#$]|\\[\s\S]|\#(?!\{)|\$(?!\{))*/;
 var HEREDOC_SINGLE_RE = /^(?:[^\\']|\\[\s\S]|'(?!''))*/;
@@ -1780,12 +1780,14 @@ class Lexer {
     if (!m)
       return 0;
     let quote = m[0];
+    let raw = quote.length > 1 && quote.endsWith("\\");
+    let baseQuote = raw ? quote.slice(0, -1) : quote;
     let prev = this.prev();
     if (prev && this.prevVal() === "from" && (this.seenImport || this.seenExport)) {
       prev[0] = "FROM";
     }
     let regex;
-    switch (quote) {
+    switch (baseQuote) {
       case "'":
         regex = STRING_SINGLE_RE;
         break;
@@ -1799,13 +1801,13 @@ class Lexer {
         regex = HEREDOC_DOUBLE_RE;
         break;
     }
-    let { tokens: parts, index: end } = this.matchWithInterpolations(regex, quote);
-    let heredoc = quote.length === 3;
+    let { tokens: parts, index: end } = this.matchWithInterpolations(regex, quote, baseQuote);
+    let heredoc = baseQuote.length === 3;
     let indent = null;
     if (heredoc) {
-      indent = this.processHeredocIndent(end, quote, parts);
+      indent = this.processHeredocIndent(end, baseQuote, parts);
     }
-    this.mergeInterpolationTokens(parts, { quote, indent, endOffset: end });
+    this.mergeInterpolationTokens(parts, { quote: baseQuote, indent, endOffset: end, raw });
     return end;
   }
   processHeredocIndent(end, quote, tokens) {
@@ -1889,7 +1891,7 @@ class Lexer {
     }
     return { tokens, index: offset + closingDelimiter.length };
   }
-  mergeInterpolationTokens(tokens, { quote, indent, endOffset }) {
+  mergeInterpolationTokens(tokens, { quote, indent, endOffset, raw }) {
     if (tokens.length > 1) {
       this.emit("STRING_START", "(", { len: quote?.length || 0, data: { quote } });
     }
@@ -1910,6 +1912,9 @@ class Lexer {
         }
         if (i === tokens.length - 1 && quote?.length === 3) {
           processed = processed.replace(/\n[^\S\n]*$/, "");
+        }
+        if (raw) {
+          processed = processed.replace(/\\([nrtbfv0\\'"`xu])/g, "\\\\$1");
         }
         this.emit("STRING", `"${processed}"`, { len: val.length, data: { quote } });
       }
@@ -2433,7 +2438,8 @@ class Lexer {
           }
         }
         if (isTemplateElement) {
-          if (tag === "IDENTIFIER" && isTemplateTag(token[1])) {
+          let isClassOrIdTail = tag === "PROPERTY" && i > 0 && (tokens[i - 1][0] === "." || tokens[i - 1][0] === "#");
+          if (tag === "IDENTIFIER" && isTemplateTag(token[1]) || isClassOrIdTail) {
             let callStartToken = gen("CALL_START", "(", token);
             let arrowToken = gen("->", "->", token);
             arrowToken.newLine = true;
@@ -3743,15 +3749,19 @@ function installComponentSupport(CodeGenerator) {
       if (Array.isArray(func) && (func[0] === "->" || func[0] === "=>")) {
         const [, params, methodBody] = func;
         const paramStr = Array.isArray(params) ? params.map((p) => this.formatParam(p)).join(", ") : "";
-        const bodyCode = this.generateInComponent(methodBody, "value");
-        lines.push(`  ${name}(${paramStr}) { return ${bodyCode}; }`);
+        const transformed = this.reactiveMembers ? this.transformComponentMembers(methodBody) : methodBody;
+        const isAsync = this.containsAwait(methodBody);
+        const bodyCode = this.generateFunctionBody(transformed, params || []);
+        lines.push(`  ${isAsync ? "async " : ""}${name}(${paramStr}) ${bodyCode}`);
       }
     }
     for (const { name, value } of lifecycleHooks) {
       if (Array.isArray(value) && (value[0] === "->" || value[0] === "=>")) {
         const [, , hookBody] = value;
-        const bodyCode = this.generateInComponent(hookBody, "value");
-        lines.push(`  ${name}() { return ${bodyCode}; }`);
+        const transformed = this.reactiveMembers ? this.transformComponentMembers(hookBody) : hookBody;
+        const isAsync = this.containsAwait(hookBody);
+        const bodyCode = this.generateFunctionBody(transformed, []);
+        lines.push(`  ${isAsync ? "async " : ""}${name}() ${bodyCode}`);
       }
     }
     if (renderBlock) {
@@ -8134,7 +8144,7 @@ function getComponentRuntime() {
 }
 // src/browser.js
 var VERSION = "3.7.4";
-var BUILD_DATE = "2026-02-12@23:11:56GMT";
+var BUILD_DATE = "2026-02-13@06:30:11GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }

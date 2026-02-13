@@ -34,7 +34,7 @@ bun run browser
 | Metric | Value |
 |--------|-------|
 | Version | 3.7.4 |
-| Tests | 1,140/1,140 (100%) |
+| Tests | 1,235/1,235 (100%) |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
 
@@ -71,7 +71,7 @@ rip-lang/
 │   ├── RIP-TYPES.md     # Type system specification
 │   ├── RIP-REACTIVITY.md # Reactivity deep dive
 │   └── RIP-INTERNALS.md # Compiler architecture & design decisions
-├── test/rip/            # 25 test files (1,219 tests)
+├── test/rip/            # 25 test files (1,235 tests)
 └── scripts/             # Build utilities
 ```
 
@@ -172,6 +172,26 @@ html = '''
   '''
 # Result: "  <div>\n    <p>Hello</p>\n  </div>"
 ```
+
+### 4a. Raw Heredocs (`'''\` and `"""\`)
+
+Appending `\` to a heredoc opener makes recognized escape sequences (`\n`, `\t`, `\u`, `\x`, `\\`, etc.) stay literal in the output. Useful for embedding code strings, shell scripts, or regex-heavy content where backslashes must pass through unchanged.
+
+```coffee
+# Normal heredoc: \n becomes a newline
+normal = '''
+  hello\nworld
+  '''
+# Result: "hello" + newline + "world"
+
+# Raw heredoc: \n stays as \n (two characters)
+raw = '''\
+  hello\nworld
+  \'''
+# Result: "hello\\nworld" (literal \n)
+```
+
+Note: `\s`, `\w`, `\d` and other non-JS-escape sequences are NOT affected — they pass through unchanged in both normal and raw heredocs. Raw mode only affects the sequences that `'''`/`"""` would normally process (`\n`, `\t`, `\r`, `\b`, `\f`, `\v`, `\0`, `\uXXXX`, `\xXX`, `\\`).
 
 ### 5. Block Unwrapping
 
@@ -517,6 +537,22 @@ it registers key functions on `globalThis` and processes inline Rip scripts.
 `let` declarations are stripped (bare assignments create globals in sloppy
 mode eval). `const` is hoisted to `globalThis.` explicitly. This allows
 variables to persist across `rip()` calls in the browser console.
+
+---
+
+## Playground
+
+Three playground versions in `docs/`, all single HTML files with zero dependencies:
+
+| File | Approach | Lines |
+|------|----------|-------|
+| `playground-js.html` | Pure JavaScript (reference) | ~1,600 |
+| `playground-rip.html` | Rip via `<script type="text/rip">` | ~1,420 |
+| `playground-rip-ui.html` | Rip UI component via `launch bundle:` | ~1,410 |
+
+All three share: same CSS, same Monarch tokenizer, same default code sample, same 15 features (live compiler, REPL, theme select, dark/light mode, 5 output toggles, resizable panes, localStorage persistence, URL hash routing, keyboard shortcuts).
+
+Run with `bun run serve` → `http://localhost:3000/playground-rip.html`
 
 ---
 

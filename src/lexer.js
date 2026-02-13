@@ -220,7 +220,7 @@ let NEWLINE_RE    = /^(?:\n[^\n\S]*)+/;
 let COMMENT_RE    = /^(\s*)###([^#][\s\S]*?)(?:###([^\n\S]*)|###$)|^((?:\s*#(?!##[^#]).*)+)/;
 let CODE_RE       = /^[-=]>/;
 let REACTIVE_RE   = /^(?:~[=>]|=!)/;
-let STRING_START_RE   = /^(?:'''|"""|'|")/;
+let STRING_START_RE   = /^(?:'''\\|"""\\|'''|"""|'|")/;
 let STRING_SINGLE_RE  = /^(?:[^\\']|\\[\s\S])*/;
 let STRING_DOUBLE_RE  = /^(?:[^\\"#$]|\\[\s\S]|\#(?!\{)|\$(?!\{))*/;
 let HEREDOC_SINGLE_RE = /^(?:[^\\']|\\[\s\S]|'(?!''))*/;
@@ -788,6 +788,8 @@ export class Lexer {
     if (!m) return 0;
 
     let quote = m[0];
+    let raw = quote.length > 1 && quote.endsWith('\\');
+    let baseQuote = raw ? quote.slice(0, -1) : quote;
     let prev = this.prev();
 
     // Tag 'from' in import/export context
@@ -796,24 +798,24 @@ export class Lexer {
     }
 
     let regex;
-    switch (quote) {
+    switch (baseQuote) {
       case "'":   regex = STRING_SINGLE_RE; break;
       case '"':   regex = STRING_DOUBLE_RE; break;
       case "'''": regex = HEREDOC_SINGLE_RE; break;
       case '"""': regex = HEREDOC_DOUBLE_RE; break;
     }
 
-    let {tokens: parts, index: end} = this.matchWithInterpolations(regex, quote);
-    let heredoc = quote.length === 3;
+    let {tokens: parts, index: end} = this.matchWithInterpolations(regex, quote, baseQuote);
+    let heredoc = baseQuote.length === 3;
 
     // Heredoc indent processing
     let indent = null;
     if (heredoc) {
-      indent = this.processHeredocIndent(end, quote, parts);
+      indent = this.processHeredocIndent(end, baseQuote, parts);
     }
 
     // Merge interpolation tokens into the stream
-    this.mergeInterpolationTokens(parts, {quote, indent, endOffset: end});
+    this.mergeInterpolationTokens(parts, {quote: baseQuote, indent, endOffset: end, raw});
 
     return end;
   }
@@ -919,7 +921,7 @@ export class Lexer {
   }
 
   // Merge NEOSTRING/TOKENS into the real token stream
-  mergeInterpolationTokens(tokens, {quote, indent, endOffset}) {
+  mergeInterpolationTokens(tokens, {quote, indent, endOffset, raw}) {
     if (tokens.length > 1) {
       this.emit('STRING_START', '(', {len: quote?.length || 0, data: {quote}});
     }
@@ -946,6 +948,12 @@ export class Lexer {
         // Strip trailing newline for heredocs
         if (i === tokens.length - 1 && quote?.length === 3) {
           processed = processed.replace(/\n[^\S\n]*$/, '');
+        }
+
+        // Raw heredocs ('''\, """\): escape only recognized JS escape sequences
+        // so \n \t \u etc. stay literal, but \s \w \d pass through unchanged
+        if (raw) {
+          processed = processed.replace(/\\([nrtbfv0\\'"`xu])/g, '\\\\$1');
         }
 
         this.emit('STRING', `"${processed}"`, {len: val.length, data: {quote}});
@@ -1611,8 +1619,9 @@ export class Lexer {
         }
 
         if (isTemplateElement) {
-          if (tag === 'IDENTIFIER' && isTemplateTag(token[1])) {
-            // Bare tag (no args): inject CALL_START -> and manage CALL_END
+          let isClassOrIdTail = tag === 'PROPERTY' && i > 0 && (tokens[i - 1][0] === '.' || tokens[i - 1][0] === '#');
+          if ((tag === 'IDENTIFIER' && isTemplateTag(token[1])) || isClassOrIdTail) {
+            // Bare tag or tag.class/tag#id (no other args): inject CALL_START -> and manage CALL_END
             let callStartToken = gen('CALL_START', '(', token);
             let arrowToken = gen('->', '->', token);
             arrowToken.newLine = true;

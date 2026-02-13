@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rip Playground (App)</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1e1e1e; color: #d4d4d4; height: 100vh; }
+    #app { height: 100%; display: flex; flex-direction: column; }
+    .editor-box { flex: 1; min-height: 0; }
+    h1 { color: #ccc; padding: 15px 20px; background: #252526; border-bottom: 1px solid #3e3e42; font-size: 18px; }
+  </style>
+  <script type="module" src="dist/rip.browser.min.js"></script>
+</head>
+<body>
+  <div id="app"></div>
+
+  <!-- Rip UI framework — embedded source (no server fetch needed) -->
+  <script type="text/plain" id="ui-rip-source">
+# ==============================================================================
+# Rip UI — Unified reactive framework
+#
+# Two files. One is JavaScript, everything else is Rip.
+#
+#   /rip/browser.js  — the compiler (pre-compiled JS, cached forever)
+#   /rip/ui.rip      — the framework (this file, compiled in browser)
+#
+# The app stash:
+#   app.data    — reactive app state
+#   app.routes  — navigation state (path, params, query, hash)
+#
+# Boot (in <script type="text/rip">):
+#   { launch } = importRip! '/rip/ui.rip'
+#   launch '/myapp'
+#
+# Author: Steve Shreeve <steve.shreeve@gmail.com>
+#   Date: February 2026
+# ==============================================================================
+
+# Rip's reactive primitives (registered on globalThis by rip.js)
+{ __state, __effect, __batch } = globalThis.__rip
+
+# Re-export context functions from the component runtime
+{ setContext, getContext, hasContext } = globalThis.__ripComponent or {}
+export { setContext, getContext, hasContext }
+
+# ==============================================================================
+# Stash — deep reactive proxy with path navigation
+# ==============================================================================
+
+STASH   = Symbol('stash')
+SIGNALS = Symbol('signals')
+RAW     = Symbol('raw')
+PROXIES = new WeakMap()
+_keysVersion = 0
+_writeVersion = __state(0)
+
+getSignal = (target, prop) ->
+  unless target[SIGNALS]
+    Object.defineProperty target, SIGNALS, { value: new Map(), enumerable: false }
+  sig = target[SIGNALS].get(prop)
+  unless sig
+    sig = __state(target[prop])
+    target[SIGNALS].set(prop, sig)
+  sig
+
+keysSignal = (target) -> getSignal(target, Symbol.for('keys'))
+
+wrapDeep = (value) ->
+  return value unless value? and typeof value is 'object'
+  return value if value[STASH]
+  return value if value instanceof Date or value instanceof RegExp or value instanceof Map or value instanceof Set or value instanceof Promise
+  existing = PROXIES.get(value)
+  return existing if existing
+  makeProxy(value)
+
+makeProxy = (target) ->
+  proxy = null
+  handler =
+    get: (target, prop) ->
+      return true if prop is STASH
+      return target if prop is RAW
+      return Reflect.get(target, prop) if typeof prop is 'symbol'
+
+      if prop is 'length' and Array.isArray(target)
+        keysSignal(target).value
+        return target.length
+
+      # Stash API methods
+      return ((path) -> stashGet(proxy, path)) if prop is 'get'
+      return ((path, val) -> stashSet(proxy, path, val)) if prop is 'set'
+
+      sig = getSignal(target, prop)
+      val = sig.value
+
+      return wrapDeep(val) if val? and typeof val is 'object'
+      val
+
+    set: (target, prop, value) ->
+      old = target[prop]
+      r = if value?[RAW] then value[RAW] else value
+      return true if r is old
+      target[prop] = r
+
+      if target[SIGNALS]?.has(prop)
+        target[SIGNALS].get(prop).value = r
+      if old is undefined and r isnt undefined
+        keysSignal(target).value = ++_keysVersion
+      _writeVersion.value++
+
+      true
+
+    deleteProperty: (target, prop) ->
+      delete target[prop]
+      sig = target[SIGNALS]?.get(prop)
+      sig.value = undefined if sig
+      keysSignal(target).value = ++_keysVersion
+      true
+
+    ownKeys: (target) ->
+      keysSignal(target).value
+      Reflect.ownKeys(target)
+
+  proxy = new Proxy(target, handler)
+  PROXIES.set(target, proxy)
+  proxy
+
+# Path navigation
+PATH_RE = /([./][^./\[\s]+|\[[-+]?\d+\]|\[(?:"[^"]+"|'[^']+')\])/
+
+walk = (path) ->
+  list = ('.' + path).split(PATH_RE)
+  list.shift()
+  result = []
+  i = 0
+  while i < list.length
+    part = list[i]
+    chr = part[0]
+    if chr is '.' or chr is '/'
+      result.push part.slice(1)
+    else if chr is '['
+      if part[1] is '"' or part[1] is "'"
+        result.push part.slice(2, -2)
+      else
+        result.push +(part.slice(1, -1))
+    i += 2
+  result
+
+stashGet = (proxy, path) ->
+  segs = walk(path)
+  obj = proxy
+  for seg in segs
+    return undefined unless obj?
+    obj = obj[seg]
+  obj
+
+stashSet = (proxy, path, value) ->
+  segs = walk(path)
+  obj = proxy
+  for seg, i in segs
+    if i is segs.length - 1
+      obj[seg] = value
+    else
+      obj[seg] = {} unless obj[seg]?
+      obj = obj[seg]
+  value
+
+export stash = (data = {}) -> makeProxy(data)
+
+export raw = (proxy) -> if proxy?[RAW] then proxy[RAW] else proxy
+
+export isStash = (obj) -> obj?[STASH] is true
+
+# ==============================================================================
+# Resource — async data loading with reactive loading/error/data states
+# ==============================================================================
+
+export createResource = (fn, opts = {}) ->
+  _data    = __state(opts.initial or null)
+  _loading = __state(false)
+  _error   = __state(null)
+
+  load = ->
+    _loading.value = true
+    _error.value = null
+    try
+      result = await fn()
+      _data.value = result
+    catch err
+      _error.value = err
+    finally
+      _loading.value = false
+
+  resource =
+    data:    undefined
+    loading: undefined
+    error:   undefined
+    refetch: load
+
+  Object.defineProperty resource, 'data', get: -> _data.value
+  Object.defineProperty resource, 'loading', get: -> _loading.value
+  Object.defineProperty resource, 'error', get: -> _error.value
+
+  load() unless opts.lazy
+  resource
+
+# ==============================================================================
+# Timing — reactive timing primitives composed from __state + __effect + cleanup
+# ==============================================================================
+
+_toFn = (source) ->
+  if typeof source is 'function' then source else -> source.value
+
+_proxy = (out, source) ->
+  obj = read: -> out.read()
+  Object.defineProperty obj, 'value',
+    get: -> out.value
+    set: (v) -> source.value = v
+  obj
+
+# delay(ms, source) — truthy waits ms, falsy immediate
+# Usage: showLoading := delay 200 -> loading
+#        navigating = delay 100, __state(false)
+export delay = (ms, source) ->
+  fn = _toFn(source)
+  out = __state(!!fn())
+  __effect ->
+    if fn()
+      t = setTimeout (-> out.value = true), ms
+      -> clearTimeout t
+    else
+      out.value = false
+  if typeof source isnt 'function' then _proxy(out, source) else out
+
+# debounce(ms, source) — waits ms after last change, then propagates
+# Usage: debouncedQuery := debounce 300 -> query
+export debounce = (ms, source) ->
+  fn = _toFn(source)
+  out = __state(fn())
+  __effect ->
+    val = fn()
+    t = setTimeout (-> out.value = val), ms
+    -> clearTimeout t
+  if typeof source isnt 'function' then _proxy(out, source) else out
+
+# throttle(ms, source) — propagates at most once per ms
+# Usage: smoothScroll := throttle 100 -> scrollY
+export throttle = (ms, source) ->
+  fn = _toFn(source)
+  out = __state(fn())
+  last = 0
+  __effect ->
+    val = fn()
+    now = Date.now()
+    remaining = ms - (now - last)
+    if remaining <= 0
+      out.value = val
+      last = now
+    else
+      t = setTimeout (->
+        out.value = fn()
+        last = Date.now()
+      ), remaining
+      -> clearTimeout t
+  if typeof source isnt 'function' then _proxy(out, source) else out
+
+# hold(ms, source) — once truthy, stays true for at least ms
+# Usage: showSaved := hold 2000 -> saved
+export hold = (ms, source) ->
+  fn = _toFn(source)
+  out = __state(!!fn())
+  __effect ->
+    if fn()
+      out.value = true
+    else
+      t = setTimeout (-> out.value = false), ms
+      -> clearTimeout t
+  if typeof source isnt 'function' then _proxy(out, source) else out
+
+# ==============================================================================
+# Components — in-memory file storage with watchers
+# ==============================================================================
+
+export createComponents = ->
+  files = new Map()
+  watchers = []
+  compiled = new Map()
+
+  notify = (event, path) ->
+    for watcher in watchers
+      watcher(event, path)
+
+  read:    (path) -> files.get(path)
+  write:   (path, content) ->
+    isNew = not files.has(path)
+    files.set(path, content)
+    compiled.delete(path)
+    notify (if isNew then 'create' else 'change'), path
+
+  del:     (path) ->
+    files.delete(path)
+    compiled.delete(path)
+    notify 'delete', path
+
+  exists:  (path) -> files.has(path)
+  size:    -> files.size
+
+  list: (dir = '') ->
+    result = []
+    prefix = if dir then dir + '/' else ''
+    for [path] in files
+      if path.startsWith(prefix)
+        rest = path.slice(prefix.length)
+        continue if rest.includes('/')
+        result.push path
+    result
+
+  listAll: (dir = '') ->
+    result = []
+    prefix = if dir then dir + '/' else ''
+    for [path] in files
+      result.push path if path.startsWith(prefix)
+    result
+
+  load: (obj) ->
+    for key, content of obj
+      files.set(key, content)
+
+  watch: (fn) ->
+    watchers.push fn
+    -> watchers.splice(watchers.indexOf(fn), 1)
+
+  getCompiled: (path) -> compiled.get(path)
+  setCompiled: (path, result) -> compiled.set(path, result)
+
+# ==============================================================================
+# Router — URL-to-component mapping with reactive state
+# ==============================================================================
+
+fileToPattern = (rel) ->
+  pattern = rel.replace(/\.rip$/, '')
+  pattern = pattern.replace(/\[\.\.\.(\w+)\]/g, '*$1')
+  pattern = pattern.replace(/\[(\w+)\]/g, ':$1')
+  return '/' if pattern is 'index'
+  pattern = pattern.replace(/\/index$/, '')
+  '/' + pattern
+
+patternToRegex = (pattern) ->
+  names = []
+  str = pattern
+    .replace /\*(\w+)/g, (_, name) -> names.push(name); '(.+)'
+    .replace /:(\w+)/g, (_, name) -> names.push(name); '([^/]+)'
+  { regex: new RegExp('^' + str + '$'), names }
+
+matchRoute = (path, routes) ->
+  for route in routes
+    match = path.match(route.regex.regex)
+    if match
+      params = {}
+      for name, i in route.regex.names
+        params[name] = decodeURIComponent(match[i + 1])
+      return { route, params }
+  null
+
+buildRoutes = (components, root = 'components') ->
+  routes = []
+  layouts = new Map()
+  allFiles = components.listAll(root)
+
+  for filePath in allFiles
+    rel = filePath.slice(root.length + 1)
+    continue unless rel.endsWith('.rip')
+    name = rel.split('/').pop()
+
+    if name is '_layout.rip'
+      dir = if rel is '_layout.rip' then '' else rel.slice(0, -'/_layout.rip'.length)
+      layouts.set dir, filePath
+      continue
+
+    continue if name.startsWith('_')
+
+    urlPattern = fileToPattern(rel)
+    regex = patternToRegex(urlPattern)
+    routes.push { pattern: urlPattern, regex, file: filePath, rel }
+
+  # Sort: static first, then fewest dynamic segments, catch-all last
+  routes.sort (a, b) ->
+    aDyn = (a.pattern.match(/:/g) or []).length
+    bDyn = (b.pattern.match(/:/g) or []).length
+    aCatch = if a.pattern.includes('*') then 1 else 0
+    bCatch = if b.pattern.includes('*') then 1 else 0
+    return aCatch - bCatch if aCatch isnt bCatch
+    return aDyn - bDyn if aDyn isnt bDyn
+    a.pattern.localeCompare(b.pattern)
+
+  { routes, layouts }
+
+getLayoutChain = (routeFile, root, layouts) ->
+  chain = []
+  rel = routeFile.slice(root.length + 1)
+  segments = rel.split('/')
+  dir = ''
+
+  chain.push layouts.get('') if layouts.has('')
+  for seg, i in segments
+    break if i is segments.length - 1
+    dir = if dir then dir + '/' + seg else seg
+    chain.push layouts.get(dir) if layouts.has(dir)
+  chain
+
+export createRouter = (components, opts = {}) ->
+  root = opts.root or 'components'
+  base = opts.base or ''
+  onError = opts.onError or null
+
+  stripBase = (url) ->
+    if base and url.startsWith(base) then url.slice(base.length) or '/' else url
+
+  addBase = (path) ->
+    if base then base + path else path
+
+  _path       = __state(stripBase(location.pathname))
+  _params     = __state({})
+  _route      = __state(null)
+  _layouts    = __state([])
+  _query      = __state({})
+  _hash       = __state('')
+  _navigating = delay 100, __state(false)
+
+  tree = buildRoutes(components, root)
+  navCallbacks = new Set()
+
+  components.watch (event, path) ->
+    return unless path.startsWith(root + '/')
+    tree = buildRoutes(components, root)
+
+  resolve = (url) ->
+    rawPath = url.split('?')[0].split('#')[0]
+    path = stripBase(rawPath)
+    queryStr = url.split('?')[1]?.split('#')[0] or ''
+    hash = if url.includes('#') then url.split('#')[1] else ''
+
+    result = matchRoute(path, tree.routes)
+    if result
+      __batch ->
+        _path.value = path
+        _params.value = result.params
+        _route.value = result.route
+        _layouts.value = getLayoutChain(result.route.file, root, tree.layouts)
+        _query.value = Object.fromEntries(new URLSearchParams(queryStr))
+        _hash.value = hash
+      cb(router.current) for cb in navCallbacks
+      return true
+
+    onError({ status: 404, path }) if onError
+    false
+
+  onPopState = -> resolve(location.pathname + location.search + location.hash)
+  window.addEventListener 'popstate', onPopState if typeof window isnt 'undefined'
+
+  onClick = (e) ->
+    return if e.button isnt 0 or e.metaKey or e.ctrlKey or e.shiftKey or e.altKey
+    target = e.target
+    target = target.parentElement while target and target.tagName isnt 'A'
+    return unless target?.href
+    url = new URL(target.href, location.origin)
+    return if url.origin isnt location.origin
+    return if target.target is '_blank' or target.hasAttribute('data-external')
+    e.preventDefault()
+    router.push url.pathname + url.search + url.hash
+
+  document.addEventListener 'click', onClick if typeof document isnt 'undefined'
+
+  router =
+    push: (url) ->
+      if resolve(url)
+        history.pushState null, '', addBase(_path.read())
+
+    replace: (url) ->
+      if resolve(url)
+        history.replaceState null, '', addBase(_path.read())
+
+    back: -> history.back()
+    forward: -> history.forward()
+
+    current:    undefined  # overridden by getter
+    path:       undefined
+    params:     undefined
+    route:      undefined
+    layouts:    undefined
+    query:      undefined
+    hash:       undefined
+    navigating: undefined
+
+    onNavigate: (cb) ->
+      navCallbacks.add cb
+      -> navCallbacks.delete cb
+
+    rebuild: -> tree = buildRoutes(components, root)
+
+    routes: undefined  # overridden by getter
+
+    init: ->
+      resolve location.pathname + location.search + location.hash
+      router
+
+    destroy: ->
+      window.removeEventListener 'popstate', onPopState if typeof window isnt 'undefined'
+      document.removeEventListener 'click', onClick if typeof document isnt 'undefined'
+      navCallbacks.clear()
+
+  Object.defineProperty router, 'current', get: ->
+    { path: _path.value, params: _params.value, route: _route.value, layouts: _layouts.value, query: _query.value, hash: _hash.value }
+
+  Object.defineProperty router, 'path', get: -> _path.value
+  Object.defineProperty router, 'params', get: -> _params.value
+  Object.defineProperty router, 'route', get: -> _route.value
+  Object.defineProperty router, 'layouts', get: -> _layouts.value
+  Object.defineProperty router, 'query', get: -> _query.value
+  Object.defineProperty router, 'hash', get: -> _hash.value
+  Object.defineProperty router, 'navigating',
+    get: -> _navigating.value
+    set: (v) -> _navigating.value = v
+  Object.defineProperty router, 'routes', get: -> tree.routes
+
+  router
+
+# ==============================================================================
+# Renderer — compile, import, mount/unmount, layouts, slots
+# ==============================================================================
+
+arraysEqual = (a, b) ->
+  return false if a.length isnt b.length
+  for item, i in a
+    return false if item isnt b[i]
+  true
+
+findComponent = (mod) ->
+  for key, val of mod
+    return val if typeof val is 'function' and (val.prototype?.mount or val.prototype?._create)
+  mod.default if typeof mod.default is 'function'
+
+# --------------------------------------------------------------------------
+# Component resolution — name discovery, lazy compilation, class registry
+# --------------------------------------------------------------------------
+
+findAllComponents = (mod) ->
+  result = {}
+  for key, val of mod
+    if typeof val is 'function' and (val.prototype?.mount or val.prototype?._create)
+      result[key] = val
+  result
+
+# Convert file path to PascalCase component name
+# components/card.rip → Card, components/todo-item.rip → TodoItem
+fileToComponentName = (filePath) ->
+  name = filePath.split('/').pop().replace(/\.rip$/, '')
+  name.replace /(^|[-_])([a-z])/g, (_, sep, ch) -> ch.toUpperCase()
+
+# Build name-to-path map from component store
+buildComponentMap = (components, root = 'components') ->
+  map = {}
+  for path in components.listAll(root)
+    continue unless path.endsWith('.rip')
+    fileName = path.split('/').pop()
+    continue if fileName.startsWith('_')
+    name = fileToComponentName(path)
+    if map[name]
+      console.warn "[Rip] Component name collision: #{name} (#{map[name]} vs #{path})"
+    map[name] = path
+  map
+
+compileAndImport = (source, compile, components = null, path = null, resolver = null) ->
+  # Check compilation cache
+  if components and path
+    cached = components.getCompiled(path)
+    return cached if cached
+
+  js = compile(source)
+
+  # Resolve component dependencies — scan for PascalCase references in compiled JS
+  if resolver
+    needed = {}
+    for name, depPath of resolver.map
+      if depPath isnt path and js.includes("new #{name}(")
+        unless resolver.classes[name]
+          depSource = components.read(depPath)
+          if depSource
+            depMod = compileAndImport! depSource, compile, components, depPath, resolver
+            found = findAllComponents(depMod)
+            resolver.classes[k] = v for k, v of found
+        needed[name] = true if resolver.classes[name]
+
+    # Inject resolved components into scope via preamble
+    names = Object.keys(needed)
+    if names.length > 0
+      preamble = "const {#{names.join(', ')}} = globalThis['#{resolver.key}'];\n"
+      js = preamble + js
+
+  blob = new Blob([js], { type: 'application/javascript' })
+  url = URL.createObjectURL(blob)
+  try
+    mod = await import(url)
+  finally
+    URL.revokeObjectURL url
+
+  # Register any components from this module
+  if resolver
+    found = findAllComponents(mod)
+    resolver.classes[k] = v for k, v of found
+
+  # Store in cache
+  components.setCompiled(path, mod) if components and path
+  mod
+
+export createRenderer = (opts = {}) ->
+  { router, app, components, resolver, compile, target, onError } = opts
+
+  container = if typeof target is 'string'
+    document.querySelector(target)
+  else
+    target or document.getElementById('app')
+
+  unless container
+    container = document.createElement('div')
+    container.id = 'app'
+    document.body.appendChild container
+
+  # Fade in after first mount (prevents layout-before-content flicker)
+  container.style.opacity = '0'
+
+  currentComponent = null
+  currentRoute = null
+  currentLayouts = []
+  layoutInstances = []
+  mountPoint = container
+  generation = 0
+  disposeEffect = null
+  componentCache = new Map()
+  maxCacheSize = opts.cacheSize or 10
+
+  cacheComponent = ->
+    if currentComponent and currentRoute
+      currentComponent.beforeUnmount() if currentComponent.beforeUnmount
+      componentCache.set currentRoute, currentComponent
+      # Evict oldest if over limit
+      if componentCache.size > maxCacheSize
+        oldest = componentCache.keys().next().value
+        evicted = componentCache.get(oldest)
+        evicted.unmounted() if evicted.unmounted
+        componentCache.delete oldest
+      # Don't remove _root here — leave visible until new content is ready
+      currentComponent = null
+      currentRoute = null
+
+  unmount = ->
+    cacheComponent()
+    for inst in layoutInstances by -1
+      inst.beforeUnmount() if inst.beforeUnmount
+      inst.unmounted() if inst.unmounted
+      inst._root?.remove()
+    layoutInstances = []
+    mountPoint = container
+
+  # Invalidate cached components when their source changes (HMR)
+  components.watch (event, path) ->
+    if componentCache.has(path)
+      evicted = componentCache.get(path)
+      evicted.unmounted() if evicted.unmounted
+      componentCache.delete path
+
+  mountRoute = (info) ->
+    { route, params, layouts: layoutFiles, query } = info
+    return unless route
+    return if route.file is currentRoute  # already showing this route
+
+    gen = ++generation
+    router.navigating = true
+
+    try
+      source = components.read(route.file)
+      unless source
+        onError({ status: 404, message: "File not found: #{route.file}" }) if onError
+        router.navigating = false
+        return
+
+      mod = compileAndImport! source, compile, components, route.file, resolver
+      if gen isnt generation then router.navigating = false; return
+
+      Component = findComponent(mod)
+      unless Component
+        onError({ status: 500, message: "No component found in #{route.file}" }) if onError
+        router.navigating = false
+        return
+
+      layoutsChanged = not arraysEqual(layoutFiles, currentLayouts)
+      oldRoot = currentComponent?._root
+
+      if layoutsChanged
+        unmount()
+      else
+        cacheComponent()
+
+      mp = if layoutsChanged then container else mountPoint
+
+      if layoutsChanged and layoutFiles.length > 0
+        container.innerHTML = ''
+        mp = container
+
+        for layoutFile in layoutFiles
+          layoutSource = components.read(layoutFile)
+          continue unless layoutSource
+          layoutMod = compileAndImport! layoutSource, compile, components, layoutFile, resolver
+          if gen isnt generation then router.navigating = false; return
+
+          LayoutClass = findComponent(layoutMod)
+          continue unless LayoutClass
+
+          inst = new LayoutClass { app, params, router }
+          inst.beforeMount() if inst.beforeMount
+          wrapper = document.createElement('div')
+          wrapper.setAttribute 'data-layout', layoutFile
+          mp.appendChild wrapper
+          inst.mount wrapper
+          layoutInstances.push inst
+
+          slot = wrapper.querySelector('#content') or wrapper
+          mp = slot
+
+        currentLayouts = [...layoutFiles]
+        mountPoint = mp
+      else if layoutsChanged
+        container.innerHTML = ''
+        currentLayouts = []
+        mountPoint = container
+
+      # Check component cache for a preserved instance
+      cached = componentCache.get(route.file)
+      if cached
+        componentCache.delete route.file
+        mp.appendChild cached._root
+        currentComponent = cached
+        currentRoute = route.file
+      else
+        pageWrapper = document.createElement('div')
+        pageWrapper.setAttribute 'data-component', route.file
+        mp.appendChild pageWrapper
+
+        instance = new Component { app, params, query, router }
+        instance.beforeMount() if instance.beforeMount
+        instance.mount pageWrapper
+        currentComponent = instance
+        currentRoute = route.file
+
+        instance.load!(params, query) if instance.load
+      oldRoot?.remove()
+      router.navigating = false
+      if container.style.opacity is '0'
+        document.fonts.ready.then ->
+          requestAnimationFrame ->
+            container.style.transition = 'opacity 150ms ease-in'
+            container.style.opacity = '1'
+
+    catch err
+      router.navigating = false
+      container.style.opacity = '1'
+      console.error "Renderer: error mounting #{route.file}:", err
+      onError({ status: 500, message: err.message, error: err }) if onError
+
+      # Walk layout chain for an error boundary (component with onError method)
+      handled = false
+      for inst in layoutInstances by -1
+        if inst.onError
+          try
+            inst.onError(err)
+            handled = true
+            break
+          catch boundaryErr
+            console.error "Renderer: error boundary failed:", boundaryErr
+
+      unless handled
+        pre = document.createElement('pre')
+        pre.style.cssText = 'color:red;padding:1em'
+        pre.textContent = err.stack or err.message
+        container.innerHTML = ''
+        container.appendChild pre
+
+  renderer =
+    start: ->
+      disposeEffect = __effect ->
+        current = router.current
+        mountRoute(current) if current.route
+      router.init()
+      renderer
+
+    stop: ->
+      unmount()
+      if disposeEffect
+        disposeEffect()
+        disposeEffect = null
+      container.innerHTML = ''
+
+    remount: ->
+      current = router.current
+      mountRoute(current) if current.route
+
+    cache: componentCache
+
+  renderer
+
+# ==============================================================================
+# Launch — fetch an app bundle, populate the stash, start everything
+# ==============================================================================
+
+export launch = (appBase = '', opts = {}) ->
+  appBase = appBase.replace(/\/+$/, '')  # strip trailing slashes
+  target = opts.target or '#app'
+  compile = opts.compile or null
+  persist = opts.persist or false
+
+  # Auto-detect compile function from the global rip.js module
+  unless compile
+    compile = globalThis?.compileToJS or null
+
+  # Auto-create target element
+  if typeof document isnt 'undefined' and not document.querySelector(target)
+    el = document.createElement('div')
+    el.id = target.replace(/^#/, '')
+    document.body.prepend el
+
+  # Get the app bundle — inline, from DOM, or fetch from server
+  if opts.bundle
+    bundle = opts.bundle
+  else
+    bundleUrl = "#{appBase}/bundle"
+    res = await fetch(bundleUrl)
+    throw new Error "launch: #{bundleUrl} (#{res.status})" unless res.ok
+    bundle = res.json!
+
+  # Create the unified stash
+  app = stash { components: {}, routes: {}, data: {} }
+
+  # Hydrate from bundle — any keys populate the stash
+  app.data = bundle.data if bundle.data
+  if bundle.routes
+    app.routes = bundle.routes
+
+  # Restore persisted state (overrides bundle defaults with saved user state)
+  if persist and typeof sessionStorage isnt 'undefined'
+    _storageKey = "__rip_#{appBase}"
+    _storage = if persist is 'local' then localStorage else sessionStorage
+    try
+      saved = _storage.getItem(_storageKey)
+      if saved
+        savedData = JSON.parse(saved)
+        app.data[k] = v for k, v of savedData
+    catch
+      null
+    # Auto-save: debounce 2s after any stash write. Also save on unload.
+    _save = ->
+      try _storage.setItem _storageKey, JSON.stringify(raw(app.data))
+      catch then null
+    __effect ->
+      _writeVersion.value
+      t = setTimeout _save, 2000
+      -> clearTimeout t
+    window.addEventListener 'beforeunload', _save
+
+  # Create components store and load component sources
+  appComponents = createComponents()
+  appComponents.load(bundle.components) if bundle.components
+
+  # Build component resolver — name-to-path map + app-scoped class registry
+  classesKey = "__rip_#{appBase.replace(/\//g, '_') or 'app'}"
+  resolver = { map: buildComponentMap(appComponents), classes: {}, key: classesKey }
+  globalThis[classesKey] = resolver.classes if typeof globalThis isnt 'undefined'
+
+  # Set document title
+  document.title = app.data.title if app.data.title and typeof document isnt 'undefined'
+
+  # Create router
+  router = createRouter appComponents,
+    root: 'components'
+    base: appBase
+    onError: (err) -> console.error "[Rip] Error #{err.status}: #{err.message or err.path}"
+
+  # Create renderer
+  renderer = createRenderer
+    router: router
+    app: app
+    components: appComponents
+    resolver: resolver
+    compile: compile
+    target: target
+    onError: (err) -> console.error "[Rip] #{err.message}", err.error
+
+  # Start
+  renderer.start()
+
+  # Connect SSE watch if enabled
+  if bundle.data?.watch
+    connectWatch appComponents, router, renderer, "#{appBase}/watch", appBase
+
+  # Expose for console and dev tools
+  if typeof window isnt 'undefined'
+    window.app = app
+    window.__RIP__ =
+      app: app
+      components: appComponents
+      router: router
+      renderer: renderer
+      cache: renderer.cache
+      version: '0.3.0'
+
+  { app, components: appComponents, router, renderer }
+
+# ==============================================================================
+# SSE Watch — hot-reload connection
+# ==============================================================================
+
+connectWatch = (components, router, renderer, url, base = '') ->
+  retryDelay = 1000
+  maxDelay = 30000
+
+  connect = ->
+    es = new EventSource(url)
+
+    es.addEventListener 'connected', ->
+      retryDelay = 1000  # reset backoff on successful connection
+      console.log '[Rip] Hot reload connected'
+
+    es.addEventListener 'changed', (e) ->
+      { paths } = JSON.parse(e.data)
+      components.del(path) for path in paths
+      router.rebuild()
+
+      current = router.current
+      toFetch = paths.filter (p) ->
+        p is current.route?.file or current.layouts?.includes(p)
+
+      if toFetch.length > 0
+        results = await Promise.allSettled(toFetch.map (path) ->
+          res = await fetch(base + '/' + path)
+          content = res.text!
+          components.write path, content
+        )
+        failed = results.filter (r) -> r.status is 'rejected'
+        console.error '[Rip] Hot reload fetch error:', r.reason for r in failed
+        renderer.remount()
+
+    es.onerror = ->
+      es.close()
+      console.log "[Rip] Hot reload reconnecting in #{retryDelay / 1000}s..."
+      setTimeout connect, retryDelay
+      retryDelay = Math.min(retryDelay * 2, maxDelay)
+
+  connect()
+</script>
+
+  <script type="text/rip">
+    # === Spike: Rip UI component with Monaco editor, server-free ===
+
+    # Load Monaco from CDN
+    MONACO_CDN =! 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0'
+
+    loadMonaco = ->
+      new Promise (resolve) ->
+        script = document.createElement 'script'
+        script.src = "#{MONACO_CDN}/min/vs/loader.js"
+        script.onload = ->
+          window.require.config paths: vs: "#{MONACO_CDN}/min/vs"
+          window.require ['vs/editor/editor.main'], (m) -> resolve m
+        document.head.appendChild script
+
+    monaco = loadMonaco!
+    globalThis.monaco = monaco
+
+    # Load compiler API (reuses already-loaded module)
+    compilerUrl = new URL('dist/rip.browser.min.js', window.location.href).href
+    { compile, formatSExpr, VERSION, BUILD_DATE } = await import(compilerUrl)
+    globalThis.compile = compile
+    globalThis.formatSExpr = formatSExpr
+
+    # Import ui.rip from embedded source (no server needed)
+    uiSource = document.getElementById('ui-rip-source').textContent
+    uiJS = compileToJS uiSource
+    blob = new Blob([uiJS], { type: 'application/javascript' })
+    blobUrl = URL.createObjectURL blob
+    { launch } = await import(blobUrl)
+    URL.revokeObjectURL blobUrl
+
+    # Launch with inline bundle
+    launch window.location.pathname,
+      target: '#app'
+      bundle:
+        components:
+          'components/index.rip': '''
+            export Index = component
+              @msg := "It works!"
+
+              mounted: ->
+                m = globalThis.monaco
+                @editor = m.editor.create @editorBox,
+                  value: "# Hello from Rip UI!"
+                  language: "javascript"
+                  theme: "vs-dark"
+                  fontSize: 14
+                  minimap: { enabled: false }
+                  automaticLayout: true
+                  scrollBeyondLastLine: false
+
+              render
+                div
+                  h1 "Rip Playground — #{@msg}"
+                  .editor-box ref: "editorBox"
+            '''
+        data:
+          title: 'Rip Playground'
+  </script>
+</body>
+</html>

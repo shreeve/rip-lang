@@ -10,6 +10,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { fileURLToPath, pathToFileURL } from 'url'
+import { install as installLunar } from './lunar.rip'
 
 VERSION = '1.5.0'
 
@@ -89,9 +90,11 @@ class Generator
     # Build parser
     @timing '💥 Total time', =>
       @timing 'processGrammar'   , => @processGrammar grammar # Process grammar rules
-      @timing 'buildLRAutomaton' , => @buildLRAutomaton()     # Build LR(0) automaton
+      unless @options.rd
+        @timing 'buildLRAutomaton' , => @buildLRAutomaton()     # Build LR(0) automaton
       @timing 'processLookaheads', => @processLookaheads()    # Compute FIRST/FOLLOW and assign lookaheads
-      @timing 'buildParseTable'  , => @buildParseTable()      # Build parse table with default actions
+      unless @options.rd
+        @timing 'buildParseTable'  , => @buildParseTable()      # Build parse table with default actions
 
   # ============================================================================
   # Helper Functions
@@ -470,6 +473,7 @@ class Generator
 
   # Assign FOLLOW sets to reduction items
   _assignItemLookaheads!: ->
+    return unless @states
     for state in @states
       for item as state.reductions
         follows = @types[item.rule.type]?.follows
@@ -653,6 +657,8 @@ class Generator
     # Decoder reconstructs [{key: val}, ...] at runtime
     "(()=>{let d=[#{data.join ','}],t=[],p=0,n,o,k,a;while(p<d.length){n=d[p++];o={};k=0;a=[];while(n--)k+=d[p++],a.push(k);for(k of a)o[k]=d[p++];t.push(o)}return t})()"
 
+  # Recursive descent generation — installed by Lunar (see lunar.rip)
+
   # ============================================================================
   # Runtime Parser
   # ============================================================================
@@ -767,6 +773,8 @@ class Generator
 # Exports
 # ==============================================================================
 
+installLunar Generator
+
 export { Generator }
 
 # ==============================================================================
@@ -798,6 +806,7 @@ if isRunAsScript
         -v, --version           Show version
         -i, --info              Show grammar information
         -s, --sexpr             Show grammar as s-expression
+        -r, --rd                Generate recursive descent parser (parser-rd.js)
         -c, --conflicts         Show conflict details (use with --info)
         -o, --output <file>     Output file (default: parser.js)
 
@@ -835,7 +844,7 @@ if isRunAsScript
           console.log "     Resolution: #{conflict.resolution} (by default)"
 
     # Parse command line
-    options = {help: false, version: false, info: false, sexpr: false, conflicts: false, output: 'parser.js'}
+    options = {help: false, version: false, info: false, sexpr: false, conflicts: false, rd: false, output: 'parser.js'}
     grammarFile = null
     i = 0
 
@@ -846,6 +855,7 @@ if isRunAsScript
         when '-v', '--version'   then options.version   = true
         when '-i', '--info'      then options.info      = true
         when '-s', '--sexpr'     then options.sexpr     = true
+        when '-r', '--rd'        then options.rd        = true
         when '-c', '--conflicts' then options.conflicts = true
         when '-o', '--output'    then options.output    = process.argv[++i + 2]
         else grammarFile = arg unless arg.startsWith('-')
@@ -906,7 +916,11 @@ if isRunAsScript
       if options.info
         showStats generator
       else
-        parserCode = generator.generate()
+        if options.rd
+          options.output = 'parser-rd.js' if options.output is 'parser.js'
+          parserCode = generator.generateRD()
+        else
+          parserCode = generator.generate()
         fs.writeFileSync options.output, parserCode
         console.log "\nParser generated: #{options.output}"
 

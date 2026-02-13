@@ -84,6 +84,11 @@ multiline = """
   """
 # Result: "This is a\nmulti-line string" (closing """ at col 2 strips 2 spaces)
 
+# Raw heredocs — append \ to keep escape sequences literal
+script = '''\
+  echo "hello\nworld"   # \n stays as \n, not a newline
+  \'''
+
 # Numbers
 count = 42
 price = 19.99

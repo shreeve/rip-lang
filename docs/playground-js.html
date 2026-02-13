@@ -21,11 +21,13 @@
       display: flex;
       flex-direction: column;
       opacity: 0;
+      visibility: hidden;
     }
 
     body.ready {
+      visibility: visible;
       opacity: 1;
-      transition: opacity 0.15s ease-in;
+      transition: opacity 0.3s ease-in;
     }
 
     .header {
@@ -165,10 +167,6 @@
       display: inline !important;
       background: none !important;
       padding: 0 !important;
-    }
-
-    .prompt-continuation {
-      color: #666;
     }
 
     .result {
@@ -483,7 +481,6 @@
     body.light .repl-output .command-output { color: #555555; }
     body.light .repl-input-area { background: #f3f3f3; border-color: #d4d4d4; border-radius: 6px; }
     body.light .repl-prompt-text { color: #007acc; }
-
   </style>
 </head>
 <body>
@@ -493,7 +490,7 @@
         <img src="rip.svg" alt="Rip" class="logo" style="background-color: #fff; border-radius: 5px; padding: 4px;">
         Rip Playground
       </h1>
-      <div class="subtitle">Interactive environment with REPL console and live compiler</div>
+      <div class="subtitle">Loading...</div>
     </div>
     <div class="header-right">
       <button id="mode-toggle" class="mode-toggle" title="Toggle light/dark mode">&#9790;</button>
@@ -516,6 +513,15 @@
           <div class="pane-header">
             <span>Rip Source</span>
             <div class="pane-header-buttons">
+              <select id="example-select" class="theme-select" title="Load example">
+                <option value="demo">Full Demo</option>
+                <option value="basics">Basics</option>
+                <option value="reactive">Reactive State</option>
+                <option value="classes">Classes</option>
+                <option value="regex">Regex & Strings</option>
+                <option value="async">Async & Dammit</option>
+                <option value="custom">Custom</option>
+              </select>
               <select id="theme-select" class="theme-select" title="Editor theme">
                 <optgroup label="Dark Themes">
                   <option value="vs-dark">Dark+ (default)</option>
@@ -789,25 +795,176 @@
 
     const defaultCode = `# Rip code - edit me!
 def fibonacci(n)
-  if n <= 1
-    n
-  else
-    fibonacci(n - 1) + fibonacci(n - 2)
+  if n <= 1 then n
+  else fibonacci(n - 1) + fibonacci(n - 2)
 
-# Try heregex
-pattern = ///
-  ^ \\\\d+      # digits
-  \\\\s*        # space
-  [a-z]+     # letters
-  $
-///i
-
-# Try regex features
+# Regex features
 email = "user@example.com"
 domain = email[/@(.+)$/, 1]
 
+# Reactive state
+count := 0
+doubled ~= count * 2
+~> console.log "Count: \#{count}, Doubled: \#{doubled}"
+
+# Classes
+class Animal
+  (@name, @sound) ->
+  speak: -> "\#{@name} says \#{@sound}!"
+
+dog = Animal.new "Rex", "woof"
 console.log "Fib(10):", fibonacci(10)
-console.log "Domain:", domain`;
+console.log "Domain:", domain
+console.log dog.speak()`;
+
+    // ========================================================================
+    // Example Snippets
+    // ========================================================================
+
+    const examples = {
+      demo: defaultCode,
+      basics: `# Variables and expressions
+name = "World"
+greeting = "Hello, \#{name}!"
+console.log greeting
+
+# Functions
+def fibonacci(n)
+  if n <= 1 then n
+  else fibonacci(n - 1) + fibonacci(n - 2)
+
+# Control flow
+for i in [1..10]
+  if i %% 2 is 0
+    console.log "\#{i} is even"
+
+# Array comprehensions
+squares = (x * x for x in [1..5])
+console.log "Squares:", squares
+
+# Destructuring
+[first, ...rest] = [1, 2, 3, 4, 5]
+console.log "First:", first, "Rest:", rest
+
+console.log "Fib(10):", fibonacci(10)`,
+      reactive: `# Reactive state (:=) creates a signal
+count := 0
+name := "Rip"
+
+# Computed values (~=) auto-update when dependencies change
+doubled ~= count * 2
+greeting ~= "Hello, \#{name}! Count is \#{count}"
+
+# Effects (~>) run when dependencies change
+~> console.log "Effect:", greeting
+
+# Modify state — effects and computed values update automatically
+count = 5
+name = "World"
+console.log "Doubled:", doubled
+
+# Readonly constants
+MAX =! 100
+console.log "Max:", MAX`,
+      classes: `class Animal
+  (@name, @sound) ->
+  speak: -> "\#{@name} says \#{@sound}!"
+
+class Dog extends Animal
+  (@name) -> super @name, "woof"
+  fetch: (item) -> "\#{@name} fetches the \#{item}!"
+
+# Ruby-style .new() constructor
+rex = Dog.new "Rex"
+console.log rex.speak()
+console.log rex.fetch("ball")
+
+# Class with methods
+class Counter
+  (@count = 0) ->
+  increment: -> @count++
+  decrement: -> @count--
+  toString: -> "Counter(\#{@count})"
+
+c = Counter.new 10
+c.increment()
+c.increment()
+console.log "\#{c}"
+
+# Chained comparisons
+x = 5
+console.log "1 < x < 10:", 1 < x < 10`,
+      regex: `# String interpolation
+name = "Rip"
+console.log "Hello, \#{name}!"
+
+# Regex match with capture groups
+email = "user@example.com"
+domain = email[/@(.+)$/, 1]
+console.log "Domain:", domain
+
+# Ruby-style =~ match operator
+if "hello world" =~ /world/
+  console.log "Match found!"
+
+# Heregex (multiline regex with comments)
+urlPattern = ///
+  ^(https?://)    # protocol
+  ([^/]+)         # hostname
+  (/.*)?$         # path
+///
+
+url = "https://rip-lang.org/docs"
+[_, protocol, host, path] = url.match(urlPattern)
+console.log "Host:", host
+
+# Heredocs (triple-quoted strings)
+html = """
+  <div class="greeting">
+    <h1>Hello!</h1>
+  </div>
+  """
+console.log html
+
+# String repetition
+console.log "-" * 40`,
+      async: `# The ! (dammit) operator calls AND awaits
+# fetchData! is equivalent to: await fetchData()
+
+def fetchJSON(url)
+  response = fetch!(url)
+  response.json!
+
+# Fetch data with !
+data = fetchJSON!("https://jsonplaceholder.typicode.com/todos/1")
+console.log "Todo:", data.title
+
+# Error handling
+def safeFetch(url)
+  try
+    response = fetch!(url)
+    unless response.ok
+      throw new Error "HTTP \#{response.status}"
+    response.json!
+  catch err
+    console.error "Failed:", err.message
+    null
+
+# Multiple async operations
+urls = [
+  "https://jsonplaceholder.typicode.com/todos/1"
+  "https://jsonplaceholder.typicode.com/todos/2"
+]
+
+results = Promise.all!(urls.map (url) -> fetch!(url).json!())
+for item in results
+  console.log "- \#{item.title}"`,
+    };
+
+    // Restore saved source (or default)
+    const savedSource = localStorage.getItem('rip-playground-source');
+    const savedExample = localStorage.getItem('rip-playground-example') || 'demo';
+    const initialCode = savedSource != null ? savedSource : defaultCode;
 
     // Shared editor configuration
     const sharedConfig = {
@@ -827,7 +984,7 @@ console.log "Domain:", domain`;
 
     const monacoEditor = monaco.editor.create(document.getElementById('editor-container'), {
       ...sharedConfig,
-      value: defaultCode,
+      value: initialCode,
       language: 'rip',
       tabSize: 2,
       insertSpaces: true,
@@ -1311,9 +1468,15 @@ console.log "Domain:", domain`;
     }
 
     // Built-in properties to preserve when clearing REPL context
-    const replBuiltins = ['console', 'showSexp', 'showTokens', 'eval', 'window', 'document',
-      'location', 'navigator', 'self', 'top', 'parent', 'frames', '__state', '__computed',
-      '__effect', '__batch', '__readonly', '__currentEffect', '__pendingEffects', '__reactiveVars'];
+    const replBuiltins = new Set([
+      'console', 'showSexp', 'showTokens', 'eval', 'window', 'document',
+      'location', 'navigator', 'self', 'top', 'parent', 'frames',
+      '__state', '__computed', '__effect', '__batch', '__readonly',
+      '__currentEffect', '__pendingEffects', '__reactiveVars',
+      '__rip', '__flushEffects', '__primitiveCoercion',
+      '__setErrorHandler', '__handleError', '__catchErrors', '__errorHandler',
+      '__batching',
+    ]);
 
     function handleCommand(cmd) {
       switch (cmd) {
@@ -1342,7 +1505,7 @@ console.log "Domain:", domain`;
           replContext.__reactiveVars = {};
           // Clear all user-defined globals in iframe
           for (const key of Object.keys(replContext)) {
-            if (!replBuiltins.includes(key) && !key.startsWith('__')) {
+            if (!replBuiltins.has(key) && !key.startsWith('__')) {
               try { delete replContext[key]; } catch {}
             }
           }
@@ -1351,7 +1514,7 @@ console.log "Domain:", domain`;
 
         case '.vars':
           const vars = Object.keys(replContext).filter(k =>
-            !replBuiltins.includes(k) && !k.startsWith('__') || k === '_'
+            !replBuiltins.has(k) && !k.startsWith('__') || k === '_'
           );
           if (vars.length === 0 || (vars.length === 1 && vars[0] === '_' && replContext._ === undefined)) {
             addOutput('<span class="help-text">No variables defined</span>', 'command-output');
@@ -1421,7 +1584,7 @@ console.log "Domain:", domain`;
       }
 
       // Add to buffer
-      replBuffer = replBuffer ? replBuffer + '\\n' + line : line;
+      replBuffer = replBuffer ? replBuffer + '\n' + line : line;
 
       // Try to evaluate
       const evalResult = evaluateRip(replBuffer);
@@ -1539,8 +1702,45 @@ console.log "Domain:", domain`;
     // Compiler Event Handlers
     // ========================================================================
 
-    // Auto-compile on changes (Monaco fires onDidChangeModelContent)
-    monacoEditor.onDidChangeModelContent(compileCode);
+    // ========================================================================
+    // Source Persistence & Example Snippets
+    // ========================================================================
+
+    const exampleSelect = document.getElementById('example-select');
+    exampleSelect.value = savedExample;
+    let settingExample = false;
+    let saveTimer = null;
+
+    function saveSource() {
+      if (saveTimer) clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        localStorage.setItem('rip-playground-source', monacoEditor.getValue());
+      }, 2000);
+    }
+
+    // Auto-compile on change + persist + track example
+    monacoEditor.onDidChangeModelContent(() => {
+      compileCode();
+      saveSource();
+      if (!settingExample && exampleSelect.value !== 'custom') {
+        exampleSelect.value = 'custom';
+        localStorage.setItem('rip-playground-example', 'custom');
+      }
+    });
+
+    // Example dropdown handler
+    exampleSelect.addEventListener('change', (e) => {
+      const name = e.target.value;
+      if (name === 'custom') {
+        localStorage.setItem('rip-playground-example', 'custom');
+      } else if (examples[name]) {
+        settingExample = true;
+        monacoEditor.setValue(examples[name]);
+        settingExample = false;
+        localStorage.setItem('rip-playground-example', name);
+        localStorage.setItem('rip-playground-source', examples[name]);
+      }
+    });
 
     const toggles = [
       { btn: showTokensBtn,   key: 'rip-repl-tokens', get: () => showTokens,   set: v => showTokens = v },

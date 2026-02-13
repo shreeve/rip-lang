@@ -284,8 +284,10 @@ export function installComponentSupport(CodeGenerator) {
       if (Array.isArray(func) && (func[0] === '->' || func[0] === '=>')) {
         const [, params, methodBody] = func;
         const paramStr = Array.isArray(params) ? params.map(p => this.formatParam(p)).join(', ') : '';
-        const bodyCode = this.generateInComponent(methodBody, 'value');
-        lines.push(`  ${name}(${paramStr}) { return ${bodyCode}; }`);
+        const transformed = this.reactiveMembers ? this.transformComponentMembers(methodBody) : methodBody;
+        const isAsync = this.containsAwait(methodBody);
+        const bodyCode = this.generateFunctionBody(transformed, params || []);
+        lines.push(`  ${isAsync ? 'async ' : ''}${name}(${paramStr}) ${bodyCode}`);
       }
     }
 
@@ -293,8 +295,10 @@ export function installComponentSupport(CodeGenerator) {
     for (const { name, value } of lifecycleHooks) {
       if (Array.isArray(value) && (value[0] === '->' || value[0] === '=>')) {
         const [, , hookBody] = value;
-        const bodyCode = this.generateInComponent(hookBody, 'value');
-        lines.push(`  ${name}() { return ${bodyCode}; }`);
+        const transformed = this.reactiveMembers ? this.transformComponentMembers(hookBody) : hookBody;
+        const isAsync = this.containsAwait(hookBody);
+        const bodyCode = this.generateFunctionBody(transformed, []);
+        lines.push(`  ${isAsync ? 'async ' : ''}${name}() ${bodyCode}`);
       }
     }
 

@@ -62,6 +62,13 @@ const brRatio = ((1 - brSize / minSize) * 100).toFixed(1);
 console.log('✓ docs/dist/rip.browser.min.js.br');
 console.log(`  Size: ${(brSize / 1024).toFixed(2)} KB (-${brRatio}%)`);
 
+// Step 4: Brotli compress ui.rip (served via symlink, compressed for production)
+const uiSource = readFileSync('./packages/ui/ui.rip');
+const uiCompressed = brotliCompressSync(uiSource);
+writeFileSync('./docs/dist/ui.rip.br', uiCompressed);
+console.log('✓ docs/dist/ui.rip.br');
+console.log(`  Size: ${(uiCompressed.length / 1024).toFixed(2)} KB (from ${(uiSource.length / 1024).toFixed(2)} KB)`);
+
 // Final summary
 const origSize = Buffer.byteLength(unminified);
 const totalRatio = ((1 - brSize / origSize) * 100).toFixed(1);
@@ -70,6 +77,7 @@ console.log('Summary:');
 console.log(`  Original:    ${(origSize / 1024).toFixed(2)} KB`);
 console.log(`  Minified:    ${(minSize / 1024).toFixed(2)} KB`);
 console.log(`  Compressed:  ${(brSize / 1024).toFixed(2)} KB (${totalRatio}% total reduction)`);
+console.log('');
 console.log('');
 console.log(`✨ Browser bundles ready • Version ${version} • ${buildDate}`);
 console.log('🚀 Run: bun run serve');
