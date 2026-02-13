@@ -7,6 +7,13 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.5] - 2026-02-13
+
+### Build — GitHub Pages Fixes
+
+- **Copy ui.rip instead of symlink** — `bun run browser` now copies `packages/ui/ui.rip` to `docs/dist/ui.rip` on every build. Symlinks return 404 on GitHub Pages.
+- Fixed Async example to use clean chained `!` syntax now that precedence is correct.
+
 ## [3.8.4] - 2026-02-13
 
 ### Compiler — Chained Dammit Operator Fix
