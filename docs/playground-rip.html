@@ -1012,7 +1012,7 @@
           "https://jsonplaceholder.typicode.com/todos/2"
         ]
 
-        results = Promise.all!(urls.map (url) -> fetch!(url).json!())
+        results = Promise.all!(urls.map (url) -> fetchJSON!(url))
         for item in results
           console.log "- #{item.title}"
         '''
