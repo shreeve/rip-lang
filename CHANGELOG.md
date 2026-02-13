@@ -7,6 +7,14 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.6] - 2026-02-13
+
+### Rip UI — Hash Routing & Static Demo
+
+- **Hash routing** — `launch '/app', hash: true` switches the router from path-based to hash-based URLs (`demo.html#/about` instead of `/about`). Supports both `href="#/path"` and `href="/path"` link styles. Back/forward navigation and direct URL loading work correctly. Essential for single-file static deployment where no server rewrites are available.
+- **Self-contained demo** — New `docs/demo.html` (337 lines) runs the full Rip UI Demo app as a single HTML file. All 6 components and CSS inlined via `launch bundle:` with heredoc strings. No build step, no server, no dependencies — just the 40KB compiler.
+- **Render block fix** — Identifiers matching HTML tag names (e.g., `title`) are no longer misclassified as template elements when preceded by control flow keywords (`if`, `unless`, `while`, `until`, `when`).
+
 ## [3.8.5] - 2026-02-13
 
 ### Build — GitHub Pages Fixes

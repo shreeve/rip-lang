@@ -2,6 +2,13 @@
 
 All notable changes to `@rip-lang/ui` will be documented in this file.
 
+## [0.3.1] - 2026-02-13
+
+### Hash Routing
+
+- **`hash: true` option** — `launch '/app', hash: true` switches from path-based to hash-based routing (`page.html#/about` instead of `/about`). Uses `readUrl()` / `writeUrl()` helpers to encapsulate the mode difference. Supports both `href="#/path"` and `href="/path"` link styles. Back/forward and direct URL loading work correctly.
+- **Self-contained demo** — `docs/demo.html` runs the full Rip UI Demo as a single static HTML file (337 lines) with all components inlined via `launch bundle:` and `hash: true`.
+
 ## [0.3.0] - 2026-02-12
 
 ### Component Composition

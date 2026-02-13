@@ -19,7 +19,7 @@ echo 'your code' | ./bin/rip -s  # S-expressions (parser)
 echo 'your code' | ./bin/rip -c  # JavaScript (codegen)
 
 # Run tests
-bun run test                             # All tests (1225)
+bun run test                             # All tests (1241)
 bun test/runner.js test/rip/FILE.rip     # Specific file
 
 # Rebuild parser (after grammar changes)
@@ -33,7 +33,7 @@ bun run browser
 
 | Metric | Value |
 |--------|-------|
-| Version | 3.8.5 |
+| Version | 3.8.6 |
 | Tests | 1,241/1,241 (100%) |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
@@ -45,8 +45,8 @@ bun run browser
 ```
 rip-lang/
 ├── src/
-│   ├── lexer.js         # Lexer + Rewriter (2,022 LOC)
-│   ├── compiler.js      # Compiler + Code Generator (3,400 LOC)
+│   ├── lexer.js         # Lexer + Rewriter (2,024 LOC)
+│   ├── compiler.js      # Compiler + Code Generator (3,431 LOC)
 │   ├── types.js         # Type System — sidecar for lexer (1,099 LOC)
 │   ├── components.js    # Component System — sidecar for compiler (1,281 LOC)
 │   ├── sourcemaps.js    # Source Map V3 generator (121 LOC)
@@ -56,7 +56,8 @@ rip-lang/
 │   ├── browser.js       # Browser integration (125 LOC)
 │   └── grammar/
 │       ├── grammar.rip  # Grammar specification (944 LOC)
-│       └── solar.rip    # Parser generator (929 LOC) — Don't edit!
+│       ├── lunar.rip    # Recursive descent parser generator (2,412 LOC)
+│       └── solar.rip    # SLR(1) parser generator (929 LOC) — Don't edit!
 ├── packages/            # Optional packages (see Packages section below)
 │   ├── api/             # @rip-lang/api — Web framework
 │   ├── ui/              # @rip-lang/ui — Reactive web UI framework
@@ -71,7 +72,7 @@ rip-lang/
 │   ├── RIP-TYPES.md     # Type system specification
 │   ├── RIP-REACTIVITY.md # Reactivity deep dive
 │   └── RIP-INTERNALS.md # Compiler architecture & design decisions
-├── test/rip/            # 25 test files (1,235 tests)
+├── test/rip/            # 25 test files (1,241 tests)
 └── scripts/             # Build utilities
 ```
 
@@ -96,7 +97,7 @@ rip-lang/
 
 ```
 Rip Source  ->  Lexer  ->  emitTypes  ->  Parser  ->  S-Expressions  ->  Codegen  ->  JavaScript
-               (1,958)     (types.js)     (359)       (arrays + .loc)     (3,378)      + source map
+               (2,024)     (types.js)     (359)       (arrays + .loc)     (3,431)      + source map
                               ↓
                            file.d.ts (when types: "emit")
 ```
@@ -373,7 +374,7 @@ code "name", "x + y", "(x + y)"
 fail "name", "invalid syntax"
 ```
 
-### Test Files (25 files, 1,235 tests)
+### Test Files (25 files, 1,241 tests)
 
 ```
 test/rip/
@@ -438,7 +439,7 @@ notFound -> @send 'index.html', 'text/html; charset=UTF-8'
 start port: 3000
 ```
 
-### @rip-lang/ui (v0.2.0) — Reactive Web Framework
+### @rip-lang/ui (v0.3.1) — Reactive Web Framework
 
 Zero-build reactive web framework. The browser loads the Rip compiler,
 compiles the UI framework (`ui.rip`), fetches an app bundle, and renders
@@ -447,7 +448,7 @@ directly — one signal graph shared between framework and components.
 
 | File | Lines | Role |
 |------|-------|------|
-| `ui.rip` | ~938 | Unified framework: stash, parts, router, renderer, launch |
+| `ui.rip` | ~948 | Unified framework: stash, router (path + hash), renderer, launch |
 | `serve.rip` | ~140 | Server middleware: framework files, bundle, SSE hot-reload |
 
 Key concepts:
@@ -542,15 +543,18 @@ variables to persist across `rip()` calls in the browser console.
 
 ## Playground
 
-Three playground versions in `docs/`, all single HTML files with zero dependencies:
+Three playground versions and a demo app in `docs/`, all single HTML files with zero dependencies:
 
 | File | Approach | Lines |
 |------|----------|-------|
 | `playground-js.html` | Pure JavaScript (reference) | ~1,800 |
-| `playground-rip.html` | Rip via `<script type="text/rip">` | ~1,620 |
-| `playground-rip-ui.html` | Rip UI component via `launch bundle:` | ~1,600 |
+| `playground-rip.html` | Rip via `<script type="text/rip">` | ~1,623 |
+| `playground-rip-ui.html` | Rip UI component via `launch bundle:` | ~1,595 |
+| `demo.html` | Full Rip UI app via `launch bundle:` with hash routing | ~337 |
 
-All three share: same CSS, same Monarch tokenizer, same default code sample, same 16 features (live compiler, REPL, example snippets, theme select, dark/light mode, 5 output toggles, resizable panes, source persistence, URL hash routing, keyboard shortcuts).
+All three playgrounds share: same CSS, same Monarch tokenizer, same default code sample, same 16 features (live compiler, REPL, example snippets, theme select, dark/light mode, 5 output toggles, resizable panes, source persistence, URL hash routing, keyboard shortcuts).
+
+`demo.html` is a self-contained Rip UI Demo app — all 6 components and CSS inlined, hash-based routing for static hosting. No server required.
 
 Run with `bun run serve` → `http://localhost:3000/playground-rip.html`
 

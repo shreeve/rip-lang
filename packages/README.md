@@ -106,7 +106,7 @@ swarm { setup, perform }
 
 ### [@rip-lang/ui](ui/) — Reactive Web Framework
 
-Zero-build reactive web framework. The browser loads the Rip compiler, compiles the UI framework (`ui.rip`), fetches an app bundle, and renders with fine-grained DOM updates. Includes file-based router, reactive stash, parts system, server middleware (`ripUI`), and SSE hot-reload. ~770 lines.
+Zero-build reactive web framework. The browser loads the Rip compiler, compiles the UI framework (`ui.rip`), fetches an app bundle, and renders with fine-grained DOM updates. Includes file-based router (path + hash modes), reactive stash, component store, server middleware (`ripUI`), SSE hot-reload, and `launch bundle:` for self-contained static deployment. ~1,088 lines.
 
 ```coffee
 import { get, use, start, notFound } from '@rip-lang/api'
