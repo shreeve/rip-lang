@@ -871,7 +871,9 @@ console.log "Max:", MAX`,
   speak: -> "\#{@name} says \#{@sound}!"
 
 class Dog extends Animal
-  constructor: (@name) -> super @name, "woof"
+  constructor: (name) ->
+    super name, "woof"
+    @name = name
   fetch: (item) -> "\#{@name} fetches the \#{item}!"
 
 # Ruby-style .new() constructor
@@ -881,7 +883,8 @@ console.log rex.fetch("ball")
 
 # Class with methods
 class Counter
-  constructor: (@count = 0) ->
+  constructor: (count = 0) ->
+    @count = count
   increment: -> @count++
   decrement: -> @count--
   toString: -> "Counter(\#{@count})"
