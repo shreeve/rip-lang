@@ -45,12 +45,41 @@ export Home = component
 
 Run `bun index.rip`, open `http://localhost:3000`.
 
+## Component Composition
+
+Components in `components/` are automatically available by PascalCase name.
+No imports needed:
+
+```coffee
+# components/card.rip
+export Card = component
+  title =! ""
+  render
+    div.card
+      if title
+        h3 "#{title}"
+      @children
+
+# components/about.rip
+export About = component
+  render
+    div
+      h1 "About"
+      Card title: "The Idea"
+        p "Components compose naturally."
+      Card title: "Architecture"
+        p "PascalCase resolution, signal passthrough, children blocks."
+```
+
+Reactive props via `:=` signal passthrough. Readonly props via `=!`.
+Children blocks passed as DOM nodes via `@children`.
+
 ## How It Works
 
 The browser loads two things from the `/rip/` namespace:
 
-- `/rip/browser.js` — the Rip compiler (~45KB gzip, cached forever)
-- `/rip/ui.rip` — the UI framework (compiled in the browser in ~10-20ms)
+- `/rip/browser.js` — the Rip compiler (~47KB Brotli, cached forever)
+- `/rip/ui.rip` — the UI framework (~948 lines, compiled in the browser in ~10-20ms)
 
 Then `launch()` fetches the app bundle, hydrates the stash, and renders.
 
@@ -202,6 +231,45 @@ my-app/
 └── css/
     └── styles.css       # Styles
 ```
+
+## Hash Routing
+
+For static hosting (GitHub Pages, S3, etc.) where the server can't handle
+SPA fallback routing, use hash-based URLs:
+
+```coffee
+launch '/app', hash: true
+```
+
+This switches from `/about` to `page.html#/about`. Back/forward navigation,
+direct URL loading, and `href="#/path"` links all work correctly.
+
+## Static Deployment — `launch bundle:`
+
+Inline all components in a single HTML file for zero-server deployment:
+
+```html
+<script type="text/rip">
+  { launch } = importRip! '/rip/ui.rip'
+
+  launch bundle:
+    '/':        '''
+                  export Home = component
+                    render
+                      h1 "Hello"
+                '''
+    '/about':   '''
+                  export About = component
+                    render
+                      h1 "About"
+                '''
+  , hash: true
+</script>
+```
+
+See `docs/demo.html` for a complete example — the full Rip UI Demo app
+(6 components, router, reactive state, persistence) in 337 lines of
+static HTML.
 
 ## License
 

@@ -2,7 +2,7 @@
 
 A critical assessment of Rip UI through the eyes of developers from React, Solid, Svelte, Vue, and Angular. Each section presents the toughest questions they would ask, our honest defense, and where we agree the criticism is valid.
 
-Conducted February 2026, against Rip UI v0.2.0.
+Originally conducted February 2026 against v0.2.0. Updated for v0.3.1.
 
 ---
 
@@ -20,7 +20,7 @@ Conducted February 2026, against Rip UI v0.2.0.
 
 ### Dr. React: "You compile in the browser? That's a non-starter for production."
 
-Rip UI ships the 47KB compiler to the browser. Components arrive as `.rip` source files and compile on demand. Every other framework compiles ahead of time.
+Rip UI ships the ~47KB compiler to the browser. Components arrive as `.rip` source files and compile on demand. Every other framework compiles ahead of time.
 
 **Our defense:** The compilation is fast (~10-20ms per component, cached after first compile). The developer experience is zero-config — no bundler, no build step, no `node_modules` maze. For applications where first-paint speed is paramount (landing pages, SEO-critical), this is a real tradeoff. For internal tools, dashboards, prototypes, and developer-facing apps, the simplicity wins.
 
@@ -38,7 +38,7 @@ Solid compiles JSX into direct DOM manipulation code. `<div>{count()}</div>` bec
 
 **Our defense:** Svelte requires `.svelte` files, a Vite plugin, and a build pipeline. Rip requires one `<script>` tag. The mental overhead difference is real: Rip developers never see `node_modules`, `vite.config.js`, `svelte.config.js`, or a 30-second build. They edit a `.rip` file and reload. For the same reason people prototyped in CodePen before spinning up a React project, Rip removes friction.
 
-**Our concession:** Svelte 5's compiled output is more optimized than our runtime-generated code. Their runes have been tuned through multiple iterations. We're at v0.2.0.
+**Our concession:** Svelte 5's compiled output is more optimized than our runtime-generated code. Their runes have been tuned through multiple iterations. We're at v0.3.1.
 
 ---
 
@@ -74,25 +74,41 @@ Solid compiles JSX into direct DOM manipulation code. `<div>{count()}</div>` bec
 
 ### Dr. React: "You can't compose components. That's not a framework — that's a page renderer."
 
-This is the hardest question, and the criticism is valid.
+**Update (v0.3.0):** Component composition is shipped. PascalCase identifiers in render blocks instantiate child components. Cross-file resolution is automatic — `card.rip` → `Card`. App-scoped, lazy-compiled, cached after first use.
 
-**The state of things:** Rip UI components are pages. You can write `Counter`, `TodoList`, `About` — but you can't write `<Button>` and use it inside `<Counter>`. There's no way to nest `Header`, `Sidebar`, `Card` as reusable building blocks. The only composition mechanism is layouts (which are page-level wrappers, not inline components).
+```coffee
+Card title: "The Idea"
+  p "Traditional frameworks build and bundle..."
 
-**Our defense:** Component composition is the #1 priority on our roadmap. The compiler already recognizes PascalCase identifiers as components (`isComponent` check exists). The `__Component` base class supports nesting (`__pushComponent`/`__popComponent` for context). The infrastructure is there — the template code generation for inline component instantiation isn't.
+Card title: "Architecture"
+  p "Components live as source files..."
+```
 
-**Our concession:** Until component composition ships, Rip UI is not a general-purpose UI framework. It's a reactive page renderer with routing. This is the single biggest gap. Every other framework — React, Solid, Svelte, Vue, Angular — has had component composition from day one. We need it.
+**Reactive props via signal passthrough** — parent passes `:=` signals directly to children. Child's `__state` passthrough returns the signal as-is. Two-way binding for free. **Children blocks** — `Card title: "Hello" -> p "content"` passes children as a DOM node via the `@children` slot. **Unmount cascade** — parent tracks child instances in `_children`, depth-first disposal.
+
+**Remaining gap:** Named slots (only `@children` exists), scoped slots, and teleport are not yet implemented.
 
 ### Dr. Svelte: "No conditional rendering? No list rendering? Those are table stakes."
 
-**Update:** Rip UI v0.2.0 actually DOES have conditional rendering (`if`/`else`) and list rendering (`for item in items`) in component render blocks. The compiler generates anchor-based conditional DOM and keyed list reconciliation. These were implemented in the component compiler (`src/components.js`).
+Rip UI has had conditional rendering (`if`/`else`) and list rendering (`for item in items`) since v0.2.0. The compiler generates anchor-based conditional DOM and keyed list reconciliation (`src/components.js`).
 
-**What's missing:** The reconciliation is basic. Svelte and Solid use optimized keyed diffing algorithms. Our `for` loop does full re-render on collection change rather than minimal DOM patches. For small lists (todos, nav items), this is fine. For large datasets (1000+ rows), it would be noticeably slower.
+**Remaining gap:** The reconciliation is basic compared to Svelte and Solid's optimized keyed diffing. For small-to-medium lists (todos, nav items), performance is fine. Large datasets (1000+ rows) would benefit from a more sophisticated diffing algorithm.
 
 ### Dr. Vue: "No slots? No scoped slots? No teleport? How do you build reusable UI libraries?"
 
-**Our defense:** We have `#content` for layout slots — a single content insertion point. That's sufficient for page-level composition.
+**Update (v0.3.0):** We now have `@children` for component content slots and `#content` for layout slots. A `Card` component with a title prop and children block is a working pattern:
 
-**Our concession:** Named slots, scoped slots, and teleport are essential for component libraries. A `Card` component needs a `header` slot and a `body` slot. A `Modal` needs teleport to render at the document root. These require component composition first, then slot syntax. They're on the roadmap but blocked by the composition gap.
+```coffee
+export Card = component
+  title =! ""
+  render
+    div.card
+      if title
+        h3 "#{title}"
+      @children
+```
+
+**Remaining gap:** Named slots (header/body/footer), scoped slots, and teleport. These are on the roadmap.
 
 ---
 
@@ -100,7 +116,7 @@ This is the hardest question, and the criticism is valid.
 
 ### Dr. React: "Where's your DevTools? How do I inspect state?"
 
-**Our defense:** `window.__RIP__` exposes the full framework state — `app`, `router`, `renderer`, `components`, `cache`. `window.app` gives direct stash access in the console. For a framework at v0.2.0, console access is sufficient.
+**Our defense:** `window.__RIP__` exposes the full framework state — `app`, `router`, `renderer`, `components`, `cache`. `window.app` gives direct stash access in the console. For a framework at v0.3.1, console access is sufficient.
 
 **Our concession:** React DevTools, Vue DevTools, and Svelte DevTools are transformative for debugging. A Chrome extension showing the component tree, reactive dependencies, stash state, and route history would be a major DX win. We have the data (`window.__RIP__`); we need the UI.
 
@@ -158,7 +174,7 @@ That's the entire setup. No CLI because there's no configuration, no build, no p
 
 ### Dr. Angular: "No Angular Material, no PrimeNG."
 
-**Our defense:** We're a language with a framework at v0.2.0. Component libraries come after component composition.
+**Our defense:** We're a language with a framework at v0.3.1. Component composition now works — component libraries can be built.
 
 **Our concession:** This is the ecosystem cold-start problem. Developers choose frameworks partly based on available UI libraries. We can't compete on ecosystem today. Our strategy is to make the component model so simple that building components is trivial — reducing the need for large third-party libraries. But headless UI primitives (accessible dropdown, modal, dialog, tooltip) are table stakes that every framework needs.
 
@@ -170,7 +186,9 @@ That's the entire setup. No CLI because there's no configuration, no build, no p
 
 No other framework runs entirely in the browser with zero build tooling. Svelte requires a compiler. React requires JSX transformation. Vue requires SFC compilation. Angular requires the Angular CLI. Solid requires Babel with solid-jsx.
 
-Rip ships a 47KB compiler to the browser. You write `.rip` files. They compile on demand. No `node_modules`. No `package.json`. No `vite.config.js`. No 30-second cold start. No "it works on my machine" build failures.
+Rip ships a ~47KB compiler to the browser. You write `.rip` files. They compile on demand. No `node_modules`. No `package.json`. No `vite.config.js`. No 30-second cold start. No "it works on my machine" build failures.
+
+**Update (v0.3.1):** `launch bundle:` goes even further — inline all components as heredoc strings in a single HTML file. `docs/demo.html` runs the full Rip UI Demo (6 components, router, reactive state) in 337 lines of static HTML. No server. No fetch. No filesystem. Hash routing (`hash: true`) makes it work on any static host.
 
 This isn't a limitation — it's a design choice. The browser becomes the build tool.
 
@@ -204,7 +222,7 @@ Rip's timing primitives aren't framework features — they're compositions of th
 
 1. **Simplicity of the reactive model.** Three operators, minimal complete set. No hooks rules, no dependency arrays, no `.value` papercuts.
 
-2. **Zero-build development.** No other framework offers this. The friction reduction is real and measurable.
+2. **Zero-build development.** No other framework offers this. The friction reduction is real and measurable. `launch bundle:` takes it further — a full app in a single HTML file.
 
 3. **Timing primitives from composition.** Proves architectural correctness — hard problems dissolve into small functions.
 
@@ -214,11 +232,15 @@ Rip's timing primitives aren't framework features — they're compositions of th
 
 6. **Syntax over API.** `:=` beats `ref()`. `~=` beats `computed()`. `~>` beats `watchEffect()`. Less ceremony, same power.
 
+7. **Component composition (v0.3.0).** PascalCase resolution, signal passthrough, children blocks, unmount cascade — shipped and working. This was the #1 gap; now it's a strength.
+
+8. **Static deployment (v0.3.1).** Hash routing + `launch bundle:` = full SPA in a single HTML file on any static host. No framework offers this.
+
 ## Verdict: Where They Won
 
-1. **Component composition.** Every framework has it. We don't. This is the #1 blocker for general-purpose use. Until this ships, Rip UI is a page renderer, not a component framework.
+1. ~~**Component composition.**~~ **Shipped in v0.3.0.** No longer a gap.
 
-2. **Ecosystem.** We have zero component libraries, zero third-party integrations, zero community packages. Cold-start problem.
+2. **Ecosystem.** We have zero component libraries, zero third-party integrations, zero community packages. Cold-start problem. (Component composition is now available, so libraries CAN be built.)
 
 3. **SSR.** No server-side rendering means no SEO, no progressive enhancement, no first-paint optimization for content-heavy sites.
 
@@ -226,7 +248,7 @@ Rip's timing primitives aren't framework features — they're compositions of th
 
 5. **TypeScript depth.** The framework exports have no `.d.ts` files. The type system is optional and young.
 
-6. **Tooling.** No DevTools extension, no CLI, no code generators.
+6. **Tooling.** No DevTools extension, no CLI. (Playground with live compilation is now available.)
 
 7. **Battle-testing.** React serves billions of users. Vue serves millions. We serve a demo app. Production hardening takes years of real-world usage.
 
@@ -234,23 +256,29 @@ Rip's timing primitives aren't framework features — they're compositions of th
 
 ## The Path Forward
 
+### Done (shipped)
+- ~~Component composition~~ — v0.3.0. PascalCase resolution, signal passthrough, children blocks.
+- ~~Props system~~ — v0.3.0. Reactive props via `:=` signal passthrough and `=!` readonly.
+- ~~Children slot~~ — v0.3.0. `@children` for content projection into components.
+- ~~Hash routing~~ — v0.3.1. `hash: true` for static single-file deployment.
+- ~~Static bundle~~ — v0.3.1. `launch bundle:` for zero-server apps.
+
 ### Must-have (blocks adoption)
-1. Component composition — nest components in render blocks
-2. Props system — pass data to child components
-3. Named slots — content projection into reusable components
-4. Framework `.d.ts` files — TypeScript definitions for all exports
+1. Named slots — multiple content projection points (header, body, footer)
+2. Framework `.d.ts` files — TypeScript definitions for all exports
 
 ### Should-have (competitive parity)
-5. AOT compilation path — optional ahead-of-time for production
-6. SSR — server rendering for SEO
-7. js-framework-benchmark — published performance numbers
-8. Keyed list reconciliation — efficient array diffing
+3. AOT compilation path — optional ahead-of-time for production
+4. SSR — server rendering for SEO
+5. js-framework-benchmark — published performance numbers
+6. Keyed list reconciliation — optimized array diffing for large datasets
 
 ### Nice-to-have (ecosystem growth)
-9. DevTools extension — visual component/state inspector
-10. `create-rip-app` CLI — project scaffolding
-11. Headless UI primitives — accessible dropdown, modal, dialog
-12. State-preserving HMR — keep reactive state during hot reload
+7. DevTools extension — visual component/state inspector
+8. `create-rip-app` CLI — project scaffolding
+9. Headless UI primitives — accessible dropdown, modal, dialog
+10. State-preserving HMR — keep reactive state during hot reload
+11. Scoped slots and teleport — advanced composition patterns
 
 ---
 
@@ -264,6 +292,6 @@ When reactivity is syntax instead of API, the `.value` papercut disappears. When
 
 The tradeoff is real: we sacrifice ecosystem, maturity, and production hardening for simplicity, composability, and developer experience. That tradeoff is worth making at this stage — because if the foundations are right, the ecosystem can grow. If the foundations are wrong, no ecosystem can fix it.
 
-The foundations are right. Three operators. Effect cleanup. Composition. Zero build.
+The foundations are right. Three operators. Effect cleanup. Composition. Zero build. Component composition. Static deployment.
 
-Now we need to build on them.
+The building has begun.
