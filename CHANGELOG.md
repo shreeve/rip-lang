@@ -7,6 +7,15 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.2] - 2026-02-13
+
+### Compiler — Class Constructor Fixes
+
+- **`@param` defaults in constructors** — `constructor: (@count = 0) ->` now correctly compiles to `constructor(count = 0) { this.count = count; }` instead of producing invalid `(.,this,count)` syntax.
+- **`super` with `@param` in subclass constructors** — `constructor: (@name) -> super @name, "woof"` now compiles to `constructor(_name) { super(_name, "woof"); this.name = _name; }` using a temporary parameter to avoid illegal `this` access before `super()`.
+- **Single-expression constructor autoAssignments** — `@param` assignments are now emitted in single-expression constructor bodies (previously only worked in block bodies).
+- 3 new tests (1,238 total).
+
 ## [3.8.1] - 2026-02-13
 
 ### Playground — Fix Class Examples

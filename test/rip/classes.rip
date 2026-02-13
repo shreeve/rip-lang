@@ -45,6 +45,32 @@ test "super with spread args", '''
   c.method(1, 2, 3)
 ''', '1-2-3'
 
+# Super with @param forwarding (single-line body)
+test "super with @param", '''
+  class Animal
+    constructor: (@name) ->
+  class Dog extends Animal
+    constructor: (@name) -> super @name, "woof"
+  d = Dog.new "Rex"
+  d.name
+  ''', "Rex"
+
+# Super with @param and default value
+test "@param with default", '''
+  class Counter
+    constructor: (@count = 0) ->
+  c = Counter.new 10
+  c.count
+  ''', 10
+
+# Super with @param default value
+test "@param default no args", '''
+  class Counter
+    constructor: (@count = 0) ->
+  c = Counter.new()
+  c.count
+  ''', 0
+
 # Code generation
 code "super call", "super(arg)", "super(arg)"
 code "super method", "super.method()", "super.method()"

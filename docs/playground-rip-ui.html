@@ -895,9 +895,7 @@
           speak: -> "#{@name} says #{@sound}!"
 
         class Dog extends Animal
-          constructor: (name) ->
-            super name, "woof"
-            @name = name
+          constructor: (@name) -> super @name, "woof"
           fetch: (item) -> "#{@name} fetches the #{item}!"
 
         # Ruby-style .new() constructor
@@ -907,8 +905,7 @@
 
         # Class with methods
         class Counter
-          constructor: (count = 0) ->
-            @count = count
+          constructor: (@count = 0) ->
           increment: -> @count++
           decrement: -> @count--
           toString: -> "Counter(#{@count})"

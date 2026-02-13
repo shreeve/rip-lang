@@ -930,6 +930,11 @@ export class CodeGenerator {
 
   generatePropertyAccess(head, rest, context, sexpr) {
     let [obj, prop] = rest;
+    // In subclass constructors, rewrite @param refs (this.x) to _x for super() safety
+    if (this._atParamMap && obj === 'this') {
+      let mapped = this._atParamMap.get(str(prop));
+      if (mapped) return mapped;
+    }
     this.suppressReactiveUnwrap = true;
     let objCode = this.generate(obj, 'value');
     this.suppressReactiveUnwrap = false;
@@ -1914,17 +1919,36 @@ export class CodeGenerator {
               let hasAwait = this.containsAwait(body), hasYield = this.containsYield(body);
               let cleanParams = params, autoAssign = [];
               if (mName === 'constructor') {
+                let isSubclass = !!parentClass;
+                let atParamMap = isSubclass ? new Map() : null;
                 cleanParams = params.map(p => {
-                  if (this.is(p, '.') && p[1] === 'this') { autoAssign.push(`this.${p[2]} = ${p[2]}`); return p[2]; }
+                  // Handle @param: ['.', 'this', 'name']
+                  if (this.is(p, '.') && p[1] === 'this') {
+                    let name = p[2];
+                    let param = isSubclass ? `_${name}` : name;
+                    autoAssign.push(`this.${name} = ${param}`);
+                    if (isSubclass) atParamMap.set(name, param);
+                    return param;
+                  }
+                  // Handle @param with default: ['default', ['.', 'this', 'name'], value]
+                  if (this.is(p, 'default') && this.is(p[1], '.') && p[1][1] === 'this') {
+                    let name = p[1][2];
+                    let param = isSubclass ? `_${name}` : name;
+                    autoAssign.push(`this.${name} = ${param}`);
+                    if (isSubclass) atParamMap.set(name, param);
+                    return ['default', param, p[2]];
+                  }
                   return p;
                 });
                 for (let bm of boundMethods) autoAssign.unshift(`this.${bm} = this.${bm}.bind(this)`);
+                if (atParamMap?.size > 0) this._atParamMap = atParamMap;
               }
               let pList = this.generateParamList(cleanParams);
               let prefix = (isStatic ? 'static ' : '') + (hasAwait ? 'async ' : '') + (hasYield ? '*' : '');
               code += this.indent() + `${prefix}${mName}(${pList}) `;
               if (!isComputed) this.currentMethodName = mName;
               code += this.generateMethodBody(body, autoAssign, mName === 'constructor', cleanParams);
+              this._atParamMap = null;
               this.currentMethodName = null;
               code += '\n';
             } else if (isStatic) {
@@ -2304,7 +2328,13 @@ export class CodeGenerator {
     // Single expression
     this.sideEffectOnly = prevSEO;
     let result;
-    if (isConstructor || this.hasExplicitControlFlow(body)) result = `{ ${this.generate(body, 'statement')}; }`;
+    if (isConstructor && autoAssignments.length > 0) {
+      // Constructor with @params as a single expression — need to emit autoAssignments
+      let isSuper = Array.isArray(body) && body[0] === 'super';
+      let bodyCode = this.generate(body, 'statement');
+      let assigns = autoAssignments.map(a => `${a};`).join(' ');
+      result = isSuper ? `{ ${bodyCode}; ${assigns} }` : `{ ${assigns} ${bodyCode}; }`;
+    } else if (isConstructor || this.hasExplicitControlFlow(body)) result = `{ ${this.generate(body, 'statement')}; }`;
     else if (Array.isArray(body) && (noRetStmts.includes(body[0]) || loopStmts.includes(body[0]))) result = `{ ${this.generate(body, 'statement')}; }`;
     else if (sideEffectOnly) result = `{ ${this.generate(body, 'statement')}; return; }`;
     else result = `{ return ${this.generate(body, 'value')}; }`;

@@ -5505,6 +5505,11 @@ function _setDataSection() {
   }
   generatePropertyAccess(head, rest, context, sexpr) {
     let [obj, prop] = rest;
+    if (this._atParamMap && obj === "this") {
+      let mapped = this._atParamMap.get(str(prop));
+      if (mapped)
+        return mapped;
+    }
     this.suppressReactiveUnwrap = true;
     let objCode = this.generate(obj, "value");
     this.suppressReactiveUnwrap = false;
@@ -6489,15 +6494,31 @@ ${this.indent()}}`;
               let hasAwait = this.containsAwait(body), hasYield = this.containsYield(body);
               let cleanParams = params, autoAssign = [];
               if (mName === "constructor") {
+                let isSubclass = !!parentClass;
+                let atParamMap = isSubclass ? new Map : null;
                 cleanParams = params.map((p) => {
                   if (this.is(p, ".") && p[1] === "this") {
-                    autoAssign.push(`this.${p[2]} = ${p[2]}`);
-                    return p[2];
+                    let name = p[2];
+                    let param = isSubclass ? `_${name}` : name;
+                    autoAssign.push(`this.${name} = ${param}`);
+                    if (isSubclass)
+                      atParamMap.set(name, param);
+                    return param;
+                  }
+                  if (this.is(p, "default") && this.is(p[1], ".") && p[1][1] === "this") {
+                    let name = p[1][2];
+                    let param = isSubclass ? `_${name}` : name;
+                    autoAssign.push(`this.${name} = ${param}`);
+                    if (isSubclass)
+                      atParamMap.set(name, param);
+                    return ["default", param, p[2]];
                   }
                   return p;
                 });
                 for (let bm of boundMethods)
                   autoAssign.unshift(`this.${bm} = this.${bm}.bind(this)`);
+                if (atParamMap?.size > 0)
+                  this._atParamMap = atParamMap;
               }
               let pList = this.generateParamList(cleanParams);
               let prefix = (isStatic ? "static " : "") + (hasAwait ? "async " : "") + (hasYield ? "*" : "");
@@ -6505,6 +6526,7 @@ ${this.indent()}}`;
               if (!isComputed)
                 this.currentMethodName = mName;
               code += this.generateMethodBody(body, autoAssign, mName === "constructor", cleanParams);
+              this._atParamMap = null;
               this.currentMethodName = null;
               code += `
 `;
@@ -6898,7 +6920,12 @@ export default ${expr[1]}`;
     }
     this.sideEffectOnly = prevSEO;
     let result;
-    if (isConstructor || this.hasExplicitControlFlow(body))
+    if (isConstructor && autoAssignments.length > 0) {
+      let isSuper = Array.isArray(body) && body[0] === "super";
+      let bodyCode = this.generate(body, "statement");
+      let assigns = autoAssignments.map((a) => `${a};`).join(" ");
+      result = isSuper ? `{ ${bodyCode}; ${assigns} }` : `{ ${assigns} ${bodyCode}; }`;
+    } else if (isConstructor || this.hasExplicitControlFlow(body))
       result = `{ ${this.generate(body, "statement")}; }`;
     else if (Array.isArray(body) && (noRetStmts.includes(body[0]) || loopStmts.includes(body[0])))
       result = `{ ${this.generate(body, "statement")}; }`;
@@ -8143,8 +8170,8 @@ function getComponentRuntime() {
   return new CodeGenerator({}).getComponentRuntime();
 }
 // src/browser.js
-var VERSION = "3.8.1";
-var BUILD_DATE = "2026-02-13@09:43:15GMT";
+var VERSION = "3.8.2";
+var BUILD_DATE = "2026-02-13@10:00:23GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }
