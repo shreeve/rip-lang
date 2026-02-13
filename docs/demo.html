@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rip UI Demo</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg width='420' height='420' viewBox='0 0 420 420' fill='none' xmlns='http://www.w3.org/2000/svg'><circle cx='210' cy='210' r='210' fill='white'/><path d='M114.5 263C79.772 263 45.7872 275.051 34.271 283.579C33.4994 284.151 34.012 285.229 34.9656 285.117C73.1916 280.629 115.309 292.74 146.5 304C178.5 315.552 221 336 269 336C314.651 336 372.074 310.499 386.401 293.944C387.038 293.208 386.301 292.353 385.435 292.799C376.614 297.341 364.243 306.018 316.073 306.948C265.273 307.928 159 263 114.5 263Z' fill='%230389FF'/><path d='M223.46 84C239.53 84 253.592 86.9253 265.645 92.7754C277.697 98.6254 287.071 107.048 293.767 118.043C300.462 129.038 303.811 142.219 303.811 157.584C303.811 173.09 300.357 186.165 293.449 196.808C287.068 206.742 278.259 214.402 267.026 219.792L309.603 297.958C297.885 297.851 283.094 295.413 266.52 291.62C257.58 289.574 248.214 287.157 238.645 284.547L209.127 229.054H188.782V270.333C176.996 266.968 165.515 263.788 154.823 261.15C146.038 258.984 137.665 257.152 130 255.885V84H223.46ZM188.782 183.381H209.505C216.412 183.381 222.297 182.535 227.16 180.844C232.094 179.082 235.865 176.297 238.473 172.491C241.151 168.685 242.49 163.716 242.49 157.584C242.49 151.382 241.151 146.342 238.473 142.466C235.865 138.519 232.094 135.628 227.16 133.796C222.297 131.893 216.412 130.941 209.505 130.941H188.782V183.381Z' fill='%23BB0000'/></svg>">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+    /**
+     * Rip UI Demo — Self-contained styles
+     */
+
+    /* Design Tokens */
+    :root {
+        --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        --gray-50:  #f9fafb; --gray-100: #f3f4f6; --gray-200: #e5e7eb;
+        --gray-300: #d1d5db; --gray-400: #9ca3af; --gray-500: #6b7280;
+        --gray-600: #4b5563; --gray-700: #374151; --gray-800: #1f2937; --gray-900: #111827;
+        --blue-50:  #eff6ff; --blue-100: #dbeafe; --blue-500: #3b82f6;
+        --blue-600: #2563eb; --blue-700: #1d4ed8;
+        --green-50: #f0fdf4; --green-500: #22c55e; --green-600: #16a34a;
+        --red-50:  #fef2f2; --red-500: #ef4444;
+        --surface: var(--gray-50); --card: #ffffff;
+        --text: var(--gray-900); --text-secondary: var(--gray-500); --text-muted: var(--gray-400);
+        --border: var(--gray-200); --accent: var(--blue-600); --accent-hover: var(--blue-700);
+        --radius: 0.75rem; --radius-lg: 1rem;
+        --shadow: 0 1px 3px rgb(0 0 0 / 0.1), 0 1px 2px rgb(0 0 0 / 0.06);
+        --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        --transition: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Reset */
+    *, *::before, *::after { box-sizing: border-box; }
+    * { margin: 0; }
+    html { -webkit-text-size-adjust: 100%; }
+    body { font-family: var(--font); line-height: 1.6; color: var(--text); background: var(--surface); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+    a { color: inherit; text-decoration: none; }
+    img, svg { display: block; max-width: 100%; }
+    input, button, textarea, select { font: inherit; }
+    #app { max-width: 52rem; margin: 0 auto; padding: 2rem; }
+
+    /* Layout Shell */
+    .app-layout { min-height: 100vh; display: flex; flex-direction: column; }
+    .app-nav { background: var(--card); border-bottom: 1px solid var(--border); border-radius: var(--radius); padding: 0 1.5rem; position: sticky; top: 0; z-index: 100; }
+    .nav-inner { max-width: 48rem; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 3.5rem; }
+    .nav-brand { display: flex; align-items: center; gap: 0.5rem; font-weight: 600; font-size: 0.9375rem; letter-spacing: -0.02em; }
+    .nav-links { display: flex; align-items: center; gap: 0.25rem; }
+    .nav-link { padding: 0.375rem 0.75rem; border-radius: 0.5rem; color: var(--text-secondary); font-size: 0.8125rem; font-weight: 500; transition: color var(--transition), background-color var(--transition); }
+    .nav-link:hover { color: var(--text); background-color: var(--gray-100); }
+    .nav-link.active { color: var(--accent); background: var(--blue-50); }
+    .app-main { flex: 1; max-width: 48rem; width: 100%; margin: 0 auto; padding: 2rem 1.5rem; }
+
+    /* Page Sections */
+    .page-header { margin-bottom: 2rem; }
+    .page-title { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1.2; color: var(--text); }
+    .page-subtitle { font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.25rem; }
+
+    /* Card */
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow); padding: 1.5rem; }
+    .card + .card { margin-top: 1rem; }
+    .card h3 { font-size: 0.8125rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin-bottom: 1rem; }
+    .card-title { font-size: 0.8125rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); margin-bottom: 1rem; }
+
+    /* Button */
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 0.5rem; background-color: var(--card); color: var(--text); font-size: 0.8125rem; font-weight: 500; cursor: pointer; transition: color var(--transition), background-color var(--transition), border-color var(--transition), transform var(--transition); user-select: none; }
+    .btn:hover { background-color: var(--gray-50); border-color: var(--gray-300); }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary { background: var(--accent); border-color: var(--accent); color: white; }
+    .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+    .btn-danger { color: var(--red-500); border-color: var(--red-500); }
+    .btn-danger:hover { background: var(--red-50); }
+    .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+    .btn-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+    /* Counter */
+    .counter-display { font-size: 4rem; font-weight: 700; letter-spacing: -0.04em; text-align: center; padding: 2rem 0; font-variant-numeric: tabular-nums; color: var(--text); transition: color var(--transition); }
+    .counter-display.positive { color: var(--green-600); }
+    .counter-display.negative { color: var(--red-500); }
+    .counter-controls { display: flex; justify-content: center; gap: 0.5rem; }
+
+    /* Input */
+    .input { width: 100%; padding: 0.5rem 0.75rem; border: 1px solid var(--border); border-radius: 0.5rem; background-color: var(--card); color: var(--text); font-size: 0.875rem; transition: border-color var(--transition), box-shadow var(--transition); }
+    .input::placeholder { color: var(--text-muted); }
+    .input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--blue-100); }
+
+    /* Todo List */
+    .todo-input-row { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+    .todo-input-row .input { flex: 1; }
+    .todo-list { list-style: none; padding: 0; }
+    .todo-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 0; border-bottom: 1px solid var(--gray-100); transition: opacity var(--transition); }
+    .todo-item:last-child { border-bottom: none; }
+    .todo-text { flex: 1; font-size: 0.875rem; color: var(--text); }
+    .todo-text.done { text-decoration: line-through; color: var(--text-muted); }
+    .todo-delete { opacity: 0; padding: 0.125rem 0.375rem; border: none; background: none; color: var(--text-muted); cursor: pointer; border-radius: 0.25rem; font-size: 0.75rem; transition: opacity var(--transition), color var(--transition), background-color var(--transition); }
+    .todo-item:hover .todo-delete { opacity: 1; }
+    .todo-delete:hover { color: var(--red-500); background: var(--red-50); }
+    .todo-stats { display: flex; justify-content: space-between; padding-top: 0.75rem; border-top: 1px solid var(--gray-100); font-size: 0.75rem; color: var(--text-secondary); }
+
+    /* Feature Grid */
+    .feature-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+    @media (max-width: 640px) { .feature-grid { grid-template-columns: 1fr; } }
+    .feature-card { background-color: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; transition: border-color var(--transition), box-shadow var(--transition); }
+    .feature-card:hover { border-color: var(--gray-300); box-shadow: var(--shadow); }
+    .feature-icon { font-size: 1.5rem; margin-bottom: 0.75rem; }
+    .feature-name { font-size: 0.875rem; font-weight: 600; color: var(--text); margin-bottom: 0.25rem; }
+    .feature-desc { font-size: 0.8125rem; color: var(--text-secondary); line-height: 1.5; }
+
+    /* Stat badge */
+    .stat { display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.375rem 0.75rem; background: var(--gray-100); border-radius: var(--radius); font-size: 0.8125rem; font-weight: 500; color: var(--text-secondary); }
+    .stat-value { font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+
+    /* Error banner */
+    .error-banner { background: var(--red-50); border: 1px solid var(--red-500); border-radius: var(--radius); padding: 1rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; }
+  </style>
+  <script type="module" src="dist/rip.browser.min.js"></script>
+</head>
+<body>
+  <div id="app"></div>
+
+  <script type="text/rip">
+    { launch } = importRip!('dist/ui.rip')
+
+    launch window.location.pathname,
+      target: '#app'
+      persist: true
+      bundle:
+        components:
+          'components/_layout.rip': '''
+            # Root Layout (with error boundary and navigation indicator)
+
+            export Layout = component
+              errorMsg := null
+
+              onError: (err) ->
+                errorMsg = err.message
+
+              render
+                .app-layout
+                  nav.app-nav
+                    .nav-inner
+                      a.nav-brand "Rip UI"
+                      .nav-links
+                        a.nav-link href: "/", "Home"
+                        a.nav-link href: "/counter", "Counter"
+                        a.nav-link href: "/todos", "Todos"
+                        a.nav-link href: "/about", "About"
+                        if @router.navigating
+                          span.nav-loading "Loading..."
+                  main.app-main
+                    if errorMsg
+                      .error-banner
+                        p "Something went wrong: #{errorMsg}"
+                        button.btn @click: (-> errorMsg = null), "Dismiss"
+                    #content
+            '''
+
+          'components/index.rip': '''
+            # Home Page
+
+            export Home = component
+
+              render
+                div
+                  .page-header
+                    h1.page-title "Rip UI Framework!"
+                    p.page-subtitle "Zero-build reactive web apps"
+
+                  .feature-grid
+                    .feature-card
+                      .feature-icon "🗂"
+                      .feature-name "Component Store"
+                      .feature-desc "Component source files loaded on demand. Compiled in the browser."
+
+                    .feature-card
+                      .feature-icon "🔀"
+                      .feature-name "File-Based Router"
+                      .feature-desc "URLs map to components. Dynamic segments and nested layouts."
+
+                    .feature-card
+                      .feature-icon "⚡"
+                      .feature-name "Reactive Stash"
+                      .feature-desc "Deep state tree with path navigation. Every property tracked."
+
+                    .feature-card
+                      .feature-icon "🎯"
+                      .feature-name "Fine-Grained Rendering"
+                      .feature-desc "No virtual DOM. Direct DOM updates via reactive effects."
+            '''
+
+          'components/counter.rip': '''
+            # Counter Page
+
+            export Counter = component
+              count := @app.data.count or 0
+              step  := 1
+
+              ~> @app.data.count = count
+
+              increment: -> count += step
+              decrement: -> count -= step
+              reset:     -> count = 0
+
+              render
+                div
+                  .page-header
+                    h1.page-title "Counter"
+                    p.page-subtitle "Reactive state — persists across reload"
+
+                  .card
+                    .counter-display "#{count}"
+
+                    .counter-controls
+                      button.btn @click: @decrement, "- #{step}"
+                      button.btn @click: @reset, "Reset"
+                      button.btn.btn-primary @click: @increment, "+ #{step}"
+
+                  .card
+                    .card-title "Step Size"
+                    .btn-group
+                      button.btn @click: (-> step = 1), "1"
+                      button.btn @click: (-> step = 5), "5"
+                      button.btn @click: (-> step = 10), "10"
+                      button.btn @click: (-> step = 100), "100"
+            '''
+
+          'components/todos.rip': '''
+            # Todos Page
+
+            export Todos = component
+              newTodo := ''
+              todos := @app.data.todos or []
+              nextId := (@app.data.nextId or 1)
+
+              ~> @app.data.todos = todos
+              ~> @app.data.nextId = nextId
+
+              remaining ~= todos.filter((t) -> not t.done).length
+
+              addTodo: ->
+                if newTodo.trim()
+                  todos = [...todos, { id: nextId, text: newTodo.trim(), done: false }]
+                  nextId++
+                  newTodo = ''
+
+              deleteTodo: (id) ->
+                todos = todos.filter (t) -> t.id isnt id
+
+              clearAll: ->
+                todos = []
+
+              handleKey: (e) ->
+                if e.key is 'Enter'
+                  @addTodo()
+
+              render
+                div
+                  .page-header
+                    h1.page-title "Todos"
+                    p.page-subtitle "List rendering and state management"
+
+                  .card
+                    .todo-input-row
+                      input.input type: "text", value: newTodo, placeholder: "What needs to be done?", @keydown: @handleKey
+                      button.btn.btn-primary @click: @addTodo, "Add"
+
+                    ul.todo-list
+                      for todo in todos
+                        li.todo-item
+                          span.todo-text todo.text
+                          button.todo-delete @click: (=> @deleteTodo(todo.id)), "x"
+
+                    .todo-stats
+                      span "#{remaining} remaining"
+                      button.btn.btn-sm @click: @clearAll, "Clear all"
+            '''
+
+          'components/about.rip': '''
+            # About Page — uses the Card component for content sections
+
+            export About = component
+
+              render
+                div
+                  .page-header
+                    h1.page-title "About Rip UI"
+                    p.page-subtitle "Zero-build reactive web apps!"
+
+                  Card title: "The Idea"
+                    p "Traditional frameworks build and bundle on the server, then ship static artifacts. Rip UI ships the 40KB compiler to the browser instead. Components arrive as .rip source files, are compiled on demand, and render with fine-grained reactivity. No build step, no bundler, no configuration files."
+
+                  Card title: "Two Keywords"
+                    p "The component model adds exactly two keywords to the Rip language: component and render. Everything else — reactive state (:=), computed values (~=), effects (~>), methods, lifecycle hooks — is standard Rip syntax that already exists."
+
+                  Card title: "Architecture"
+                    p "Components live as source files in the unified stash. The Router maps URLs to components using file-based conventions (like Next.js). When you navigate, the Renderer compiles the matching .rip file and mounts the resulting component. Each reactive binding creates a direct DOM effect — no virtual DOM diffing."
+
+                  Card title: "Stack"
+                    .btn-group
+                      .stat
+                        span "Compiler "
+                        span.stat-value "40KB"
+                      .stat
+                        span "Framework "
+                        span.stat-value "~8KB"
+                      .stat
+                        span "Build step "
+                        span.stat-value "None"
+                      .stat
+                        span "Dependencies "
+                        span.stat-value "Zero"
+
+                  Card title: "Modules"
+                    p "The framework lives in one file: ui.rip. It uses Rip's built-in reactive primitives directly — the same signals that power := and ~= in components. Deep reactive stash with path navigation. Component store for source management. File-based router mapping URLs to components. Renderer that compiles and mounts components with layout support."
+            '''
+
+          'components/card.rip': '''
+            # Card — reusable content card component
+
+            export Card = component
+              title =! ""
+
+              render
+                div.card
+                  if title
+                    h3 "#{title}"
+                  @children
+            '''
+
+        data:
+          title: 'Rip UI Demo'
+  </script>
+</body>
+</html>
