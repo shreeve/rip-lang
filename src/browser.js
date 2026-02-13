@@ -9,8 +9,8 @@ export { CodeGenerator, Compiler, compile, compileToJS, formatSExpr, getReactive
 export const VERSION = "0.0.0";
 export const BUILD_DATE = "0000-00-00@00:00:00GMT";
 
-// Import compileToJS for use in rip() function
-import { compileToJS, getReactiveRuntime } from './compiler.js';
+// Import compiler functions for use in rip() function and globalThis registration
+import { compile, compileToJS, formatSExpr, getReactiveRuntime, getComponentRuntime } from './compiler.js';
 
 // Eagerly register Rip's reactive primitives on globalThis so that
 // framework code (ui.rip) can use them directly without the compiler
@@ -113,6 +113,7 @@ if (typeof globalThis !== 'undefined') {
   globalThis.rip = rip;
   globalThis.importRip = importRip;
   globalThis.compileToJS = compileToJS;
+  globalThis.__ripExports = { compile, compileToJS, formatSExpr, VERSION, BUILD_DATE, getReactiveRuntime, getComponentRuntime };
 }
 
 // Auto-process scripts when this module loads

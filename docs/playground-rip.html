@@ -482,6 +482,7 @@
     body.light .repl-input-area { background: #f3f3f3; border-color: #d4d4d4; border-radius: 6px; }
     body.light .repl-prompt-text { color: #007acc; }
   </style>
+  <link rel="preload" href="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs/loader.js" as="script">
   <script type="module" src="dist/rip.browser.min.js"></script>
 </head>
 <body>
@@ -780,23 +781,10 @@
   <script type="text/rip">
 
     # ====================================================================
-    # Load Compiler
+    # Load Compiler Exports + Monaco (in parallel)
     # ====================================================================
 
-    compilerUrl = new URL('dist/rip.browser.min.js', window.location.href).href
-    { compile, formatSExpr, VERSION, BUILD_DATE, getReactiveRuntime } = await import(compilerUrl)
-
-    # Update subtitle
-    localDate = new Date(BUILD_DATE.replace('@', 'T').replace('GMT', 'Z'))
-      .toLocaleString undefined,
-        year: 'numeric', month: 'short', day: 'numeric'
-        hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
-    document.querySelector('.subtitle').textContent =
-      "Interactive environment • Version #{VERSION} • Built #{localDate}"
-
-    # ====================================================================
-    # Load Monaco
-    # ====================================================================
+    { compile, formatSExpr, VERSION, BUILD_DATE, getReactiveRuntime } = window.__ripExports
 
     MONACO_CDN =! 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0'
 
@@ -809,7 +797,19 @@
           window.require ['vs/editor/editor.main'], (m) -> resolve m
         document.head.appendChild script
 
-    monaco = loadMonaco!
+    # Start Monaco loading immediately (preload hint already fetching)
+    monacoPromise = loadMonaco()
+
+    # Update subtitle while Monaco loads
+    localDate = new Date(BUILD_DATE.replace('@', 'T').replace('GMT', 'Z'))
+      .toLocaleString undefined,
+        year: 'numeric', month: 'short', day: 'numeric'
+        hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+    document.querySelector('.subtitle').textContent =
+      "Interactive environment • Version #{VERSION} • Built #{localDate}"
+
+    # Await Monaco
+    monaco = await monacoPromise
 
     # Register Rip language
     monaco.languages.register id: 'rip', extensions: ['.rip']

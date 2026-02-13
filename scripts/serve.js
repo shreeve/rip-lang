@@ -54,7 +54,7 @@ function handleRequest(req) {
         headers: {
           'Content-Type': MIME_TYPES[ext] || 'application/octet-stream',
           'Content-Encoding': 'br',
-          'Cache-Control': 'public, max-age=31536000'
+          'Cache-Control': 'no-cache'
         }
       });
     } catch (e) {

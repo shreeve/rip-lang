@@ -8173,7 +8173,7 @@ function getComponentRuntime() {
 }
 // src/browser.js
 var VERSION = "3.8.6";
-var BUILD_DATE = "2026-02-13@11:41:10GMT";
+var BUILD_DATE = "2026-02-13@19:59:59GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }
@@ -8248,6 +8248,7 @@ if (typeof globalThis !== "undefined") {
   globalThis.rip = rip;
   globalThis.importRip = importRip;
   globalThis.compileToJS = compileToJS;
+  globalThis.__ripExports = { compile, compileToJS, formatSExpr, VERSION, BUILD_DATE, getReactiveRuntime, getComponentRuntime };
 }
 if (typeof document !== "undefined") {
   if (document.readyState === "loading") {
