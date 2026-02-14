@@ -76,12 +76,20 @@ Children blocks passed as DOM nodes via `@children`.
 
 ## How It Works
 
-The browser loads two things from the `/rip/` namespace:
+**Server mode** — the browser loads from the `/rip/` namespace:
 
 - `/rip/browser.js` — the Rip compiler (~47KB Brotli, cached forever)
 - `/rip/ui.rip` — the UI framework (~948 lines, compiled in the browser in ~10-20ms)
 
 Then `launch()` fetches the app bundle, hydrates the stash, and renders.
+
+**Static mode** — a single combined bundle does everything:
+
+- `rip-ui.min.js` — compiler + pre-compiled UI framework (~52KB Brotli)
+
+The UI framework is compiled to JavaScript at build time, so there's no runtime
+compilation overhead and no extra network request. The `importRip('ui.rip')` call
+is intercepted and returns the pre-compiled module instantly.
 
 ## The Stash
 
@@ -246,11 +254,15 @@ direct URL loading, and `href="#/path"` links all work correctly.
 
 ## Static Deployment — `launch bundle:`
 
-Inline all components in a single HTML file for zero-server deployment:
+Inline all components in a single HTML file for zero-server deployment.
+Use `rip-ui.min.js` (~52KB Brotli) — a combined bundle with the compiler
+and pre-compiled UI framework. No extra network requests, no runtime
+compilation of the framework:
 
 ```html
+<script type="module" src="dist/rip-ui.min.js"></script>
 <script type="text/rip">
-  { launch } = importRip! '/rip/ui.rip'
+  { launch } = importRip! 'dist/ui.rip'
 
   launch bundle:
     '/':        '''

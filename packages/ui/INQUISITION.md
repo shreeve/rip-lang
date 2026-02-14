@@ -26,6 +26,8 @@ Rip UI ships the ~47KB compiler to the browser. Components arrive as `.rip` sour
 
 **Our concession:** For production apps serving millions of users where every millisecond of Time-to-Interactive matters, ahead-of-time compilation is better. We should support an optional AOT path: compile `.rip` components to `.js` at deploy time, serve static JS instead of runtime compilation. The architecture already supports this — the compiler runs in both Node/Bun and the browser. It's a deployment flag, not an architecture change.
 
+**Update (v0.3.2):** We've taken the first AOT step — `ui.rip` (the framework itself) is now pre-compiled to JavaScript at build time and bundled into `rip-ui.min.js` (~52KB Brotli). This eliminates both the `ui.rip` network fetch and its ~948-line runtime compilation. Component-level AOT is the next step.
+
 ### Dr. Solid: "Your reactivity model is fine-grained, but your DOM operations aren't compiled. You're doing at runtime what I do at compile time."
 
 Solid compiles JSX into direct DOM manipulation code. `<div>{count()}</div>` becomes `createElement("div")` + `createEffect(() => node.textContent = count())` at build time. Rip does the same thing — but in the browser, at runtime.
@@ -262,13 +264,14 @@ Rip's timing primitives aren't framework features — they're compositions of th
 - ~~Children slot~~ — v0.3.0. `@children` for content projection into components.
 - ~~Hash routing~~ — v0.3.1. `hash: true` for static single-file deployment.
 - ~~Static bundle~~ — v0.3.1. `launch bundle:` for zero-server apps.
+- ~~AOT for ui.rip~~ — v0.3.2. Framework pre-compiled at build time. Combined `rip-ui.min.js` bundle (~52KB Brotli). Parallel Monaco loading, FOUC prevention.
 
 ### Must-have (blocks adoption)
 1. Named slots — multiple content projection points (header, body, footer)
 2. Framework `.d.ts` files — TypeScript definitions for all exports
 
 ### Should-have (competitive parity)
-3. AOT compilation path — optional ahead-of-time for production
+3. AOT compilation path — component-level ahead-of-time for production (framework AOT done in v0.3.2)
 4. SSR — server rendering for SEO
 5. js-framework-benchmark — published performance numbers
 6. Keyed list reconciliation — optimized array diffing for large datasets

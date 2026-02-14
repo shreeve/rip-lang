@@ -2,6 +2,15 @@
 
 All notable changes to `@rip-lang/ui` will be documented in this file.
 
+## [0.3.2] - 2026-02-14
+
+### Loading Optimization
+
+- **Combined bundle** — `rip-ui.min.js` (~52KB Brotli) packages the Rip compiler and pre-compiled UI framework in a single file. Eliminates the separate `ui.rip` fetch and its ~948-line runtime compilation.
+- **Build-time compilation** — `ui.rip` is compiled to `ui.js` → `ui.min.js` → `ui.min.js.br` during `bun run browser`. The combined bundle intercepts `importRip('ui.rip')` and returns pre-compiled exports instantly.
+- **Parallel loading** — Monaco Editor preloaded via `<link rel="preload">` hint. Compiler exports available instantly via `globalThis.__ripExports` (no redundant module re-import). All synchronous setup runs in parallel with the Monaco CDN fetch.
+- **FOUC prevention** — all playground pages hide the body with `opacity: 0` until fully initialized, then fade in via `body.ready` CSS transition.
+
 ## [0.3.1] - 2026-02-13
 
 ### Hash Routing

@@ -52,6 +52,15 @@
   and file watchers for hot reload via SSE.
 - **`launch bundle:`** — inline all components as heredoc strings in a single
   HTML file. Zero-server deployment. `docs/demo.html` is a 337-line example.
+- **Combined bundle** — `rip-ui.min.js` (~52KB Brotli) packages the compiler
+  and pre-compiled UI framework in one file. Eliminates the `ui.rip` fetch
+  and its runtime compilation. `importRip('ui.rip')` is intercepted and returns
+  the pre-compiled module instantly.
+- **Parallel loading** — Monaco Editor preloaded via `<link rel="preload">`,
+  compiler exports available instantly via `globalThis.__ripExports`. All
+  synchronous setup runs in parallel with the Monaco CDN fetch.
+- **FOUC prevention** — playground pages use `body { opacity: 0 }` with a
+  `body.ready` fade-in transition after full initialization.
 - **Runtime deduplication** — both runtimes register on `globalThis.__rip`
   and `globalThis.__ripComponent`. Multiple compilations share one runtime.
 - **Smooth app launch** — container fades in after first mount + font load.
@@ -100,9 +109,9 @@
 
 ### Performance & Scale
 - **Code splitting** — bundle everything upfront vs. fetch per route.
-- **AOT compilation** — ahead-of-time DOM operations instead of runtime
-  compilation. Svelte/Solid do this. Architecture supports it — the compiler
-  runs in both Bun/Node and the browser.
+- **AOT compilation (partial)** — `ui.rip` is now pre-compiled to JS at build
+  time and bundled into `rip-ui.min.js`. Component-level AOT (compile `.rip`
+  components to `.js` at deploy time) is the next step.
 - **Optimized list reconciliation** — current `for` loop does full re-render
   on collection change. Large datasets (1000+ rows) need keyed diffing.
 

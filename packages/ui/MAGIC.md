@@ -106,6 +106,7 @@ When `rip.browser.js` loads, it registers these on `globalThis`:
 | `compileToJS(code)` | Compile Rip source to JavaScript |
 | `__rip` | Reactive runtime — `__state`, `__computed`, `__effect`, `__batch` |
 | `__ripComponent` | Component runtime — `__Component`, `__clsx`, `__fragment` |
+| `__ripExports` | All compiler exports — `compile`, `compileToJS`, `formatSExpr`, `VERSION`, `BUILD_DATE`, `getReactiveRuntime`, `getComponentRuntime` |
 
 These bridge the gap between ES module scope (where the functions are
 defined) and the global scope (where eval'd code and inline scripts run).
