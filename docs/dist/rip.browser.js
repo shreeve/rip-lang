@@ -8173,7 +8173,7 @@ function getComponentRuntime() {
 }
 // src/browser.js
 var VERSION = "3.8.6";
-var BUILD_DATE = "2026-02-13@19:59:59GMT";
+var BUILD_DATE = "2026-02-14@04:04:54GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }
