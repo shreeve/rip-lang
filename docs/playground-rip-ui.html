@@ -499,7 +499,8 @@
     body.light .repl-input-area { background: #f3f3f3; border-color: #d4d4d4; border-radius: 6px; }
     body.light .repl-prompt-text { color: #007acc; }
   </style>
-  <script type="module" src="dist/rip.browser.min.js"></script>
+  <link rel="preload" href="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs/loader.js" as="script">
+  <script type="module" src="dist/rip-ui.min.js"></script>
 </head>
 <body>
 
@@ -698,7 +699,7 @@
   <script type="text/rip">
 
     # ====================================================================
-    # Load Monaco
+    # Load Compiler Exports + Monaco (in parallel)
     # ====================================================================
 
     MONACO_CDN =! 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0'
@@ -712,27 +713,13 @@
           window.require ['vs/editor/editor.main'], (m) -> resolve m
         document.head.appendChild script
 
-    monaco = loadMonaco!
+    # Start Monaco loading immediately (preload hint already fetching)
+    monacoPromise = loadMonaco()
 
-    # ====================================================================
-    # Load Compiler
-    # ====================================================================
+    # Compiler exports are already available — no network needed
+    { compile, formatSExpr, VERSION, BUILD_DATE, getReactiveRuntime } = window.__ripExports
 
-    compilerUrl = new URL('dist/rip.browser.min.js', window.location.href).href
-    { compile, formatSExpr, VERSION, BUILD_DATE, getReactiveRuntime } = await import(compilerUrl)
-
-    # ====================================================================
-    # Register Rip Language
-    # ====================================================================
-
-    monaco.languages.register id: 'rip', extensions: ['.rip']
-    monaco.languages.setMonarchTokensProvider 'rip', window.ripMonarch
-    monaco.languages.setLanguageConfiguration 'rip', window.ripLanguageConfig
-
-    # ====================================================================
-    # Compute Subtitle
-    # ====================================================================
-
+    # Compute subtitle while Monaco loads
     localDate = new Date(BUILD_DATE.replace('@', 'T').replace('GMT', 'Z'))
       .toLocaleString undefined,
         year: 'numeric', month: 'short', day: 'numeric'
@@ -742,7 +729,6 @@
     # Set Globals (accessible by the component via globalThis)
     # ====================================================================
 
-    globalThis.monaco = monaco
     globalThis.compile = compile
     globalThis.formatSExpr = formatSExpr
     globalThis.getReactiveRuntime = getReactiveRuntime
@@ -1002,6 +988,13 @@
     # ====================================================================
 
     { launch } = importRip!('dist/ui.rip')
+
+    # Await Monaco (all sync work above ran in parallel with the fetch)
+    globalThis.monaco = await monacoPromise
+    monaco = globalThis.monaco
+    monaco.languages.register id: 'rip', extensions: ['.rip']
+    monaco.languages.setMonarchTokensProvider 'rip', window.ripMonarch
+    monaco.languages.setLanguageConfiguration 'rip', window.ripLanguageConfig
 
     launch window.location.pathname,
       target: '#app'
