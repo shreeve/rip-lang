@@ -8173,7 +8173,7 @@ function getComponentRuntime() {
 }
 // src/browser.js
 var VERSION = "3.8.7";
-var BUILD_DATE = "2026-02-14@04:32:24GMT";
+var BUILD_DATE = "2026-02-14@15:03:27GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }
@@ -8188,7 +8188,17 @@ async function processRipScripts() {
     if (script.hasAttribute("data-rip-processed"))
       continue;
     try {
-      const ripCode = dedent(script.textContent);
+      let ripCode;
+      if (script.src) {
+        const response = await fetch(script.src);
+        if (!response.ok) {
+          console.error(`Rip: failed to fetch ${script.src} (${response.status})`);
+          continue;
+        }
+        ripCode = await response.text();
+      } else {
+        ripCode = dedent(script.textContent);
+      }
       let jsCode;
       try {
         jsCode = compileToJS(ripCode);
@@ -8252,9 +8262,11 @@ if (typeof globalThis !== "undefined") {
 }
 if (typeof document !== "undefined") {
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", processRipScripts);
+    globalThis.__ripScriptsReady = new Promise((resolve) => {
+      document.addEventListener("DOMContentLoaded", () => processRipScripts().then(resolve));
+    });
   } else {
-    processRipScripts();
+    globalThis.__ripScriptsReady = processRipScripts();
   }
 }
 export {

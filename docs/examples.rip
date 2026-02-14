@@ -1,0 +1,180 @@
+# Shared playground examples
+# Loaded by all playground variants via <script type="text/rip" src="examples.rip">
+
+globalThis.ripExamples =
+  demo: '''
+    # Rip code - edit me!
+    def fibonacci(n)
+      if n <= 1 then n
+      else fibonacci(n - 1) + fibonacci(n - 2)
+
+    # Regex features
+    email = "user@example.com"
+    domain = email[/@(.+)$/, 1]
+
+    # Reactive state
+    count := 0
+    doubled ~= count * 2
+    ~> console.log "Count: #{count}, Doubled: #{doubled}"
+
+    # Classes
+    class Animal
+      constructor: (@name, @sound) ->
+      speak: -> "#{@name} says #{@sound}!"
+
+    dog = Animal.new "Rex", "woof"
+    console.log "Fib(10):", fibonacci(10)
+    console.log "Domain:", domain
+    console.log dog.speak()
+    '''
+
+  basics: '''
+    # Variables and expressions
+    name = "World"
+    greeting = "Hello, #{name}!"
+    console.log greeting
+
+    # Functions
+    def fibonacci(n)
+      if n <= 1 then n
+      else fibonacci(n - 1) + fibonacci(n - 2)
+
+    # Control flow
+    for i in [1..10]
+      if i %% 2 is 0
+        console.log "#{i} is even"
+
+    # Array comprehensions
+    squares = (x * x for x in [1..5])
+    console.log "Squares:", squares
+
+    # Destructuring
+    [first, ...rest] = [1, 2, 3, 4, 5]
+    console.log "First:", first, "Rest:", rest
+
+    console.log "Fib(10):", fibonacci(10)
+    '''
+
+  reactive: '''
+    # Reactive state (:=) creates a signal
+    count := 0
+    name := "Rip"
+
+    # Computed values (~=) auto-update when dependencies change
+    doubled ~= count * 2
+    greeting ~= "Hello, #{name}! Count is #{count}"
+
+    # Effects (~>) run when dependencies change
+    ~> console.log "Effect:", greeting
+
+    # Modify state — effects and computed values update automatically
+    count = 5
+    name = "World"
+    console.log "Doubled:", doubled
+
+    # Readonly constants
+    MAX =! 100
+    console.log "Max:", MAX
+    '''
+
+  classes: '''
+    class Animal
+      constructor: (@name, @sound) ->
+      speak: -> "#{@name} says #{@sound}!"
+
+    class Dog extends Animal
+      constructor: (@name) -> super @name, "woof"
+      fetch: (item) -> "#{@name} fetches the #{item}!"
+
+    # Ruby-style .new() constructor
+    rex = Dog.new "Rex"
+    console.log rex.speak()
+    console.log rex.fetch("ball")
+
+    # Class with methods
+    class Counter
+      constructor: (@count = 0) ->
+      increment: -> @count++
+      decrement: -> @count--
+      toString: -> "Counter(#{@count})"
+
+    c = Counter.new 10
+    c.increment()
+    c.increment()
+    console.log "#{c}"
+
+    # Chained comparisons
+    x = 5
+    console.log "1 < x < 10:", 1 < x < 10
+    '''
+
+  regex: '''
+    # String interpolation
+    name = "Rip"
+    console.log "Hello, #{name}!"
+
+    # Regex match with capture groups
+    email = "user@example.com"
+    domain = email[/@(.+)$/, 1]
+    console.log "Domain:", domain
+
+    # Ruby-style =~ match operator
+    if "hello world" =~ /world/
+      console.log "Match found!"
+
+    # Heregex (multiline regex with comments)
+    urlPattern = ///
+      ^(https?://)    # protocol
+      ([^/]+)         # hostname
+      (/.*)?$         # path
+    ///
+
+    url = "https://rip-lang.org/docs"
+    [_, protocol, host, path] = url.match(urlPattern)
+    console.log "Host:", host
+
+    # Heredocs (triple-quoted strings)
+    html = """
+      <div class="greeting">
+        <h1>Hello!</h1>
+      </div>
+      """
+    console.log html
+
+    # String repetition
+    console.log "-" * 40
+    '''
+
+  async: '''
+    # The ! (dammit) operator calls AND awaits
+    # fetchData! is equivalent to: await fetchData()
+
+    def fetchJSON(url)
+      response = fetch!(url)
+      response.json!
+
+    # Fetch data with !
+    data = fetchJSON!("https://jsonplaceholder.typicode.com/todos/1")
+    console.log "Todo:", data.title
+
+    # Error handling
+    def safeFetch(url)
+      try
+        response = fetch!(url)
+        unless response.ok
+          throw new Error "HTTP #{response.status}"
+        response.json!
+      catch err
+        console.error "Failed:", err.message
+        null
+
+    # Multiple async operations
+    urls = [
+      "https://jsonplaceholder.typicode.com/todos/1"
+      "https://jsonplaceholder.typicode.com/todos/2"
+    ]
+
+    results = Promise.all!(urls.map (url) -> fetch!(url).json!)
+    for item in results
+      console.log "- #{item.title}"
+    '''

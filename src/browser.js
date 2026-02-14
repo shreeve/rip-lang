@@ -26,6 +26,7 @@ const dedent = s => {
 }
 
 // Browser runtime for executing <script type="text/rip"> tags
+// Supports both inline scripts and external files via src attribute
 async function processRipScripts() {
   const scripts = document.querySelectorAll('script[type="text/rip"]');
 
@@ -33,7 +34,18 @@ async function processRipScripts() {
     if (script.hasAttribute('data-rip-processed')) continue;
 
     try {
-      const ripCode = dedent(script.textContent);
+      let ripCode;
+      if (script.src) {
+        const response = await fetch(script.src);
+        if (!response.ok) {
+          console.error(`Rip: failed to fetch ${script.src} (${response.status})`);
+          continue;
+        }
+        ripCode = await response.text();
+      } else {
+        ripCode = dedent(script.textContent);
+      }
+
       let jsCode;
       try {
         jsCode = compileToJS(ripCode);
@@ -117,10 +129,13 @@ if (typeof globalThis !== 'undefined') {
 }
 
 // Auto-process scripts when this module loads
+// Expose __ripScriptsReady promise so other modules can await completion
 if (typeof document !== 'undefined') {
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', processRipScripts);
+    globalThis.__ripScriptsReady = new Promise(resolve => {
+      document.addEventListener('DOMContentLoaded', () => processRipScripts().then(resolve));
+    });
   } else {
-    processRipScripts();
+    globalThis.__ripScriptsReady = processRipScripts();
   }
 }
