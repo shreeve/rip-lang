@@ -903,7 +903,7 @@
                 themeId = value
                 if value.startsWith 'cdn:'
                   themeName = value.slice 4
-                  themeId = themeName.toLowerCase().replace /[\s_]+/g, '-'
+                  themeId = themeName.toLowerCase().replace /[\\s_]+/g, '-'
                   unless globalThis.loadedThemes.has themeId
                     try
                       res = fetch!("#{globalThis.THEME_CDN}/#{encodeURIComponent(themeName)}.json")
