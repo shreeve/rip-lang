@@ -318,7 +318,7 @@ export class CodeGenerator {
 
       if (!trimmed || trimmed === '}' || trimmed === '});') continue;
       if (trimmed.startsWith('let ') || trimmed.startsWith('var ')) continue;
-      if (trimmed.startsWith('const slice') || trimmed.startsWith('const modulo') || trimmed.startsWith('const toSearchable')) continue;
+      if (trimmed.startsWith('const slice') || trimmed.startsWith('const modulo') || trimmed.startsWith('const toMatchable')) continue;
       if (trimmed.startsWith('const {') && trimmed.includes('__')) continue;
       if (trimmed.startsWith('} else')) continue;
       if (trimmed.startsWith('//# source')) continue;
@@ -678,8 +678,8 @@ export class CodeGenerator {
     if (!skip) {
       if (this.helpers.has('slice'))      { code += 'const slice = [].slice;\n'; needsBlank = true; }
       if (this.helpers.has('modulo'))     { code += 'const modulo = (n, d) => { n = +n; d = +d; return (n % d + d) % d; };\n'; needsBlank = true; }
-      if (this.helpers.has('toSearchable')) {
-        code += 'const toSearchable = (v, allowNewlines) => {\n';
+      if (this.helpers.has('toMatchable')) {
+        code += 'const toMatchable = (v, allowNewlines) => {\n';
         code += '  if (typeof v === "string") return !allowNewlines && /[\\n\\r]/.test(v) ? null : v;\n';
         code += '  if (v == null) return "";\n';
         code += '  if (typeof v === "number" || typeof v === "bigint" || typeof v === "boolean") return String(v);\n';
@@ -951,12 +951,12 @@ export class CodeGenerator {
 
   generateRegexIndex(head, rest) {
     let [value, regex, captureIndex] = rest;
-    this.helpers.add('toSearchable');
+    this.helpers.add('toMatchable');
     this.programVars.add('_');
     let v = this.generate(value, 'value'), r = this.generate(regex, 'value');
     let idx = captureIndex !== null ? this.generate(captureIndex, 'value') : '0';
     let allowNL = r.includes('/m') ? ', true' : '';
-    return `(_ = toSearchable(${v}${allowNL}).match(${r})) && _[${idx}]`;
+    return `(_ = toMatchable(${v}${allowNL}).match(${r})) && _[${idx}]`;
   }
 
   generateIndexAccess(head, rest) {
@@ -1506,11 +1506,11 @@ export class CodeGenerator {
 
   generateRegexMatch(head, rest) {
     let [left, right] = rest;
-    this.helpers.add('toSearchable');
+    this.helpers.add('toMatchable');
     this.programVars.add('_');
     let r = this.generate(right, 'value');
     let allowNL = r.includes('/m') ? ', true' : '';
-    return `(_ = toSearchable(${this.generate(left, 'value')}${allowNL}).match(${r}))`;
+    return `(_ = toMatchable(${this.generate(left, 'value')}${allowNL}).match(${r}))`;
   }
 
   generateNew(head, rest) {
