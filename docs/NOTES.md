@@ -74,12 +74,6 @@ design discussion before building.
 - **`defer`** — Go-style cleanup that runs when the function exits. Compiles
   to try/finally. `defer file.close()`.
 
-- **`is a` / `isnt a`** — Readable instanceof. `x is a String` → 
-  `x instanceof String`.
-
-- **`.starts?` / `.ends?` / `.has?`** — Ruby-style question-mark methods.
-  `url.starts? "https"` → `url.startsWith("https")`.
-
 - **Pattern matching** — `match value` with destructuring arms. Big feature,
   needs careful design.
 

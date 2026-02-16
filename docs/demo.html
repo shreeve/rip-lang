@@ -18,7 +18,7 @@
         --gray-50:  #f9fafb; --gray-100: #f3f4f6; --gray-200: #e5e7eb;
         --gray-300: #d1d5db; --gray-400: #9ca3af; --gray-500: #6b7280;
         --gray-600: #4b5563; --gray-700: #374151; --gray-800: #1f2937; --gray-900: #111827;
-        --blue-50:  #eff6ff; --blue-100: #dbeafe; --blue-500: #3b82f6;
+        --blue-50:  #eff6ff; --blue-100: #dbeafe; --blue-200: #bfdbfe; --blue-500: #3b82f6;
         --blue-600: #2563eb; --blue-700: #1d4ed8;
         --green-50: #f0fdf4; --green-500: #22c55e; --green-600: #16a34a;
         --red-50:  #fef2f2; --red-500: #ef4444;
@@ -49,7 +49,10 @@
     .nav-links { display: flex; align-items: center; gap: 0.25rem; }
     .nav-link { padding: 0.375rem 0.75rem; border-radius: 0.5rem; color: var(--text-secondary); font-size: 0.8125rem; font-weight: 500; transition: color var(--transition), background-color var(--transition); }
     .nav-link:hover { color: var(--text); background-color: var(--gray-100); }
-    .nav-link.active { color: var(--accent); background: var(--blue-50); }
+    .nav-link:active { background-color: var(--gray-200); }
+    .nav-link.active { color: var(--accent); background-color: var(--blue-50); }
+    .nav-link.active:hover { color: var(--accent-hover); background-color: var(--blue-100); }
+    .nav-link.active:active { background-color: var(--blue-200); }
     .app-main { flex: 1; max-width: 48rem; width: 100%; margin: 0 auto; padding: 2rem 1.5rem; }
 
     /* Page Sections */
@@ -115,6 +118,14 @@
     .error-banner { background: var(--red-50); border: 1px solid var(--red-500); border-radius: var(--radius); padding: 1rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; }
   </style>
   <script type="module" src="dist/rip-ui.min.js"></script>
+  <script>
+    // DEBUG: intercept pushState to see what URLs are being set
+    const _pushState = history.pushState.bind(history);
+    history.pushState = function(...args) {
+      console.log('pushState:', args[2]);
+      return _pushState(...args);
+    };
+  </script>
 </head>
 <body>
   <div id="app"></div>
@@ -143,10 +154,10 @@
                     .nav-inner
                       a.nav-brand "Rip UI"
                       .nav-links
-                        a.nav-link href: "#/", "Home"
-                        a.nav-link href: "#/counter", "Counter"
-                        a.nav-link href: "#/todos", "Todos"
-                        a.nav-link href: "#/about", "About"
+                        a.('nav-link', @router.path is '/' and 'active') href: "#/", "Home"
+                        a.('nav-link', @router.path is '/counter' and 'active') href: "#/counter", "Counter"
+                        a.('nav-link', @router.path is '/todos' and 'active') href: "#/todos", "Todos"
+                        a.('nav-link', @router.path is '/about' and 'active') href: "#/about", "About"
                         if @router.navigating
                           span.nav-loading "Loading..."
                   main.app-main

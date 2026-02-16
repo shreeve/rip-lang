@@ -628,12 +628,10 @@ export function installComponentSupport(CodeGenerator) {
 
     if (classExprs.length > 0) {
       const classArgs = classExprs.map(e => this.generateInComponent(e, 'value')).join(', ');
-      const hasReactive = classExprs.some(e => this.hasReactiveDeps(e));
-      if (hasReactive) {
-        this._setupLines.push(`__effect(() => { ${elVar}.className = __clsx(${classArgs}); });`);
-      } else {
-        this._createLines.push(`${elVar}.className = __clsx(${classArgs});`);
-      }
+      // Dynamic classes are always wrapped in __effect — the .() syntax exists
+      // precisely for reactive class expressions. If a class were static, you'd
+      // just write div.foo.bar instead. The effect tracks signal reads at runtime.
+      this._setupLines.push(`__effect(() => { ${elVar}.className = __clsx(${classArgs}); });`);
     }
 
     for (const arg of children) {
@@ -1167,16 +1165,24 @@ export function installComponentSupport(CodeGenerator) {
   // --------------------------------------------------------------------------
 
   proto.hasReactiveDeps = function(sexpr) {
-    if (!this.reactiveMembers || this.reactiveMembers.size === 0) return false;
-
     if (typeof sexpr === 'string') {
-      return this.reactiveMembers.has(sexpr);
+      return !!(this.reactiveMembers && this.reactiveMembers.has(sexpr));
     }
 
     if (!Array.isArray(sexpr)) return false;
 
+    // Direct this.X — check reactive members
     if (sexpr[0] === '.' && sexpr[1] === 'this' && typeof sexpr[2] === 'string') {
-      return this.reactiveMembers.has(sexpr[2]);
+      return !!(this.reactiveMembers && this.reactiveMembers.has(sexpr[2]));
+    }
+
+    // Property chain through this (e.g., this.router.path, this.app.data.count)
+    // Props and members may hold reactive objects with signal-backed getters,
+    // so treat deeper this.X.Y chains as potentially reactive. The effect
+    // system handles actual tracking at runtime — wrapping a non-reactive
+    // chain in __effect just means it runs once with no overhead.
+    if (sexpr[0] === '.' && this._rootsAtThis(sexpr[1])) {
+      return true;
     }
 
     for (const child of sexpr) {
@@ -1184,6 +1190,15 @@ export function installComponentSupport(CodeGenerator) {
     }
 
     return false;
+  };
+
+  // _rootsAtThis — check if a property-access chain is rooted at 'this'
+  // --------------------------------------------------------------------------
+
+  proto._rootsAtThis = function(sexpr) {
+    if (typeof sexpr === 'string') return sexpr === 'this';
+    if (!Array.isArray(sexpr) || sexpr[0] !== '.') return false;
+    return this._rootsAtThis(sexpr[1]);
   };
 
   // ==========================================================================

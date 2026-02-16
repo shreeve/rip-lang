@@ -4005,12 +4005,7 @@ ${blockFactoriesCode}return ${lines.join(`
     this._createLines.push(`${elVar} = document.createElement('${tag}');`);
     if (classExprs.length > 0) {
       const classArgs = classExprs.map((e) => this.generateInComponent(e, "value")).join(", ");
-      const hasReactive = classExprs.some((e) => this.hasReactiveDeps(e));
-      if (hasReactive) {
-        this._setupLines.push(`__effect(() => { ${elVar}.className = __clsx(${classArgs}); });`);
-      } else {
-        this._createLines.push(`${elVar}.className = __clsx(${classArgs});`);
-      }
+      this._setupLines.push(`__effect(() => { ${elVar}.className = __clsx(${classArgs}); });`);
     }
     for (const arg of children) {
       const argHead = Array.isArray(arg) ? arg[0] instanceof String ? arg[0].valueOf() : arg[0] : null;
@@ -4401,21 +4396,29 @@ ${blockFactoriesCode}return ${lines.join(`
     return { propsCode, childrenSetupLines };
   };
   proto.hasReactiveDeps = function(sexpr) {
-    if (!this.reactiveMembers || this.reactiveMembers.size === 0)
-      return false;
     if (typeof sexpr === "string") {
-      return this.reactiveMembers.has(sexpr);
+      return !!(this.reactiveMembers && this.reactiveMembers.has(sexpr));
     }
     if (!Array.isArray(sexpr))
       return false;
     if (sexpr[0] === "." && sexpr[1] === "this" && typeof sexpr[2] === "string") {
-      return this.reactiveMembers.has(sexpr[2]);
+      return !!(this.reactiveMembers && this.reactiveMembers.has(sexpr[2]));
+    }
+    if (sexpr[0] === "." && this._rootsAtThis(sexpr[1])) {
+      return true;
     }
     for (const child of sexpr) {
       if (this.hasReactiveDeps(child))
         return true;
     }
     return false;
+  };
+  proto._rootsAtThis = function(sexpr) {
+    if (typeof sexpr === "string")
+      return sexpr === "this";
+    if (!Array.isArray(sexpr) || sexpr[0] !== ".")
+      return false;
+    return this._rootsAtThis(sexpr[1]);
   };
   proto.getComponentRuntime = function() {
     return `
@@ -8173,7 +8176,7 @@ function getComponentRuntime() {
 }
 // src/browser.js
 var VERSION = "3.8.7";
-var BUILD_DATE = "2026-02-14@15:03:27GMT";
+var BUILD_DATE = "2026-02-14@16:53:10GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }
