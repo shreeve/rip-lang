@@ -565,12 +565,18 @@ export const createRouter = (function(components, opts = {}) {
     return (base ? (base + path) : path);
   };
   readUrl = function() {
-    return (hashMode ? (location.hash.slice(1) || '/') : ((location.pathname + location.search) + location.hash));
-  };
+    let h;
+    if (hashMode) {
+      h = location.hash.slice(1);
+      if (!h) return '/';
+      return ((h[0] === '/') ? h : ('/' + h));
+    } else {
+      return ((location.pathname + location.search) + location.hash);
+    }  };
   writeUrl = function(path) {
-    return (hashMode ? ('#' + path) : addBase(path));
+    return (hashMode ? ((path === '/') ? location.pathname : ('#' + path.slice(1))) : addBase(path));
   };
-  _path = __state(stripBase(hashMode ? (location.hash.slice(1) || '/') : location.pathname));
+  _path = __state(stripBase(hashMode ? readUrl() : location.pathname));
   _params = __state({});
   _route = __state(null);
   _layouts = __state([]);
@@ -587,6 +593,7 @@ export const createRouter = (function(components, opts = {}) {
     let hash, path, queryStr, rawPath, result;
     rawPath = url.split('?')[0].split('#')[0];
     path = stripBase(rawPath);
+    path = (path[0] === '/') ? path : ('/' + path);
     queryStr = url.split('?')[1]?.split('#')[0] || '';
     hash = url.includes('#') ? url.split('#')[1] : '';
     result = matchRoute(path, tree.routes);

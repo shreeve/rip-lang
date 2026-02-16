@@ -402,12 +402,20 @@ export createRouter = (components, opts = {}) ->
     if base then base + path else path
 
   readUrl = ->
-    if hashMode then (location.hash.slice(1) or '/') else (location.pathname + location.search + location.hash)
+    if hashMode
+      h = location.hash.slice(1)
+      return '/' unless h
+      if h[0] is '/' then h else '/' + h
+    else
+      location.pathname + location.search + location.hash
 
   writeUrl = (path) ->
-    if hashMode then '#' + path else addBase(path)
+    if hashMode
+      if path is '/' then location.pathname else '#' + path.slice(1)
+    else
+      addBase(path)
 
-  _path       = __state(stripBase(if hashMode then (location.hash.slice(1) or '/') else location.pathname))
+  _path       = __state(stripBase(if hashMode then readUrl() else location.pathname))
   _params     = __state({})
   _route      = __state(null)
   _layouts    = __state([])
@@ -425,6 +433,7 @@ export createRouter = (components, opts = {}) ->
   resolve = (url) ->
     rawPath = url.split('?')[0].split('#')[0]
     path = stripBase(rawPath)
+    path = if path[0] is '/' then path else '/' + path
     queryStr = url.split('?')[1]?.split('#')[0] or ''
     hash = if url.includes('#') then url.split('#')[1] else ''
 
