@@ -286,74 +286,50 @@ export class CodeGenerator {
     return code;
   }
 
-  // Build source map by matching generated output lines to S-expression locs.
-  // Locs are collected in OUTPUT order (imports, statements+nested, exports)
-  // to match generateProgram's reordering. The compiler preamble (variable
-  // declarations, helpers, runtime) is skipped by position via
-  // _statementsStartLine, avoiding fragile content-based pattern matching.
+  // Build source map by walking generated output lines and S-expression nodes.
+  // Collects locations from STATEMENT-level nodes only (direct children of
+  // program/block containers), then matches them to output lines in order.
   buildMappings(code, sexpr) {
     if (!sexpr || sexpr[0] !== 'program') return;
 
-    // Walk nested blocks to collect child statement locs in source order
+    // Collect statement locations: only direct children of program/block nodes.
+    // This gives exactly one loc per output statement line, in source order.
     let locs = [];
-    let collectNested = (node) => {
+    let collect = (node) => {
       if (!Array.isArray(node)) return;
-      if (node[0] === 'block') {
+      let head = node[0];
+      if (head === 'program' || head === 'block') {
         for (let i = 1; i < node.length; i++) {
           let child = node[i];
           if (Array.isArray(child) && child.loc) locs.push(child.loc);
-          collectNested(child);
+          collect(child);
         }
       } else {
-        for (let i = 1; i < node.length; i++) collectNested(node[i]);
+        for (let i = 1; i < node.length; i++) collect(node[i]);
       }
     };
+    collect(sexpr);
 
-    // Partition children the same way generateProgram does
-    let imports = [], exports = [], other = [];
-    for (let i = 1; i < sexpr.length; i++) {
-      let child = sexpr[i];
-      if (!Array.isArray(child)) { other.push(child); continue; }
-      let h = child[0];
-      if (h === 'import') imports.push(child);
-      else if (h === 'export' || h === 'export-default' || h === 'export-all' || h === 'export-from') exports.push(child);
-      else other.push(child);
-    }
-
-    // Collect locs in output order: imports, then statements+nested, then exports
-    for (let s of imports) { if (s.loc) locs.push(s.loc); }
-    let importLocCount = locs.length;
-    for (let s of other) {
-      if (Array.isArray(s) && s.loc) locs.push(s.loc);
-      collectNested(s);
-    }
-    for (let s of exports) {
-      if (Array.isArray(s) && s.loc) locs.push(s.loc);
-      collectNested(s);
-    }
-
+    // Match output lines to collected statement locations in parallel.
+    // Skip lines with no source correspondence (preamble, braces, etc.).
     let lines = code.split('\n');
     let locIdx = 0;
+    for (let outLine = 0; outLine < lines.length; outLine++) {
+      let line = lines[outLine];
+      let trimmed = line.trim();
 
-    // Phase 1: Map import lines (before the compiler preamble)
-    for (let outLine = 0; outLine < this._statementsStartLine; outLine++) {
-      if (locIdx >= importLocCount) break;
-      let line = lines[outLine], trimmed = line.trim();
-      if (!trimmed) continue;
-      this.sourceMap.addMapping(outLine, line.length - trimmed.length, locs[locIdx].r, locs[locIdx].c);
-      locIdx++;
-    }
-
-    // Phase 2: Map statement and export lines (after the compiler preamble)
-    locIdx = importLocCount;
-    for (let outLine = this._statementsStartLine; outLine < lines.length; outLine++) {
-      if (locIdx >= locs.length) break;
-      let line = lines[outLine], trimmed = line.trim();
       if (!trimmed || trimmed === '}' || trimmed === '});') continue;
+      if (trimmed.startsWith('let ') || trimmed.startsWith('var ')) continue;
+      if (trimmed.startsWith('const slice') || trimmed.startsWith('const modulo') || trimmed.startsWith('const toSearchable')) continue;
+      if (trimmed.startsWith('const {') && trimmed.includes('__')) continue;
       if (trimmed.startsWith('} else')) continue;
       if (trimmed.startsWith('//# source')) continue;
-      this.sourceMap.addMapping(outLine, line.length - trimmed.length, locs[locIdx].r, locs[locIdx].c);
-      locIdx++;
+
+      if (locIdx < locs.length) {
+        let indent = line.length - trimmed.length;
+        this.sourceMap.addMapping(outLine, indent, locs[locIdx].r, locs[locIdx].c);
+        locIdx++;
+      }
     }
   }
 
@@ -753,7 +729,6 @@ export class CodeGenerator {
     }
 
     if (needsBlank && code.length > 0) code += '\n';
-    this._statementsStartLine = (code.match(/\n/g) || []).length;
     code += statementsCode;
     code += exportsCode;
 
