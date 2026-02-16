@@ -690,12 +690,13 @@ class Server
     # Helper to start server, incrementing port if needed
     startOnPort = (p, opts = {}) =>
       port = p
-      while true
+      while port < p + 100
         try
           return Bun.serve(Object.assign({ port, idleTimeout: 8, fetch: fetchFn }, opts))
         catch e
           throw e unless e?.code is 'EADDRINUSE'
           port++
+      throw new Error "No available port found (tried #{p}–#{p + 99})"
 
     if httpOnly
       if @flags.httpPort is 0
@@ -820,8 +821,6 @@ class Server
     worker.inflight = 0
     if @isCurrentVersion(worker)
       @availableWorkers.push(worker)
-      # Force array mutation to be visible (workaround for timing issue)
-      @availableWorkers.length
 
   logAccess: (req, res, totalSeconds, workerSeconds) ->
     if @flags.jsonLogging

@@ -328,7 +328,8 @@ export class Schema {
     // Apply defaults
     for (const [fieldName, field] of model.fields) {
       if (instance[fieldName] === undefined && field.constraints?.default !== undefined) {
-        instance[fieldName] = field.constraints.default
+        const def = field.constraints.default
+        instance[fieldName] = (typeof def === 'object' && def !== null) ? structuredClone(def) : def
       }
     }
 
