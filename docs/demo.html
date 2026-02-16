@@ -292,7 +292,7 @@
                     p.page-subtitle "Zero-build reactive web apps!"
 
                   Card title: "The Idea"
-                    p "Traditional frameworks build and bundle on the server, then ship static artifacts. Rip UI ships the compiler to the browser instead — under 75KB on the wire. Components arrive as .rip source files, are compiled on demand, and render with fine-grained reactivity. No build step, no bundler, no configuration files."
+                    p "Traditional frameworks build and bundle on the server, then ship static artifacts. Rip UI ships the compiler to the browser instead — under 55KB on the wire. Components arrive as .rip source files, are compiled on demand, and render with fine-grained reactivity. No build step, no bundler, no configuration files."
 
                   Card title: "Two Keywords"
                     p "The component model adds exactly two keywords to the Rip language: component and render. Everything else — reactive state (:=), computed values (~=), effects (~>), methods, lifecycle hooks — is standard Rip syntax that already exists."
@@ -304,10 +304,13 @@
                     .btn-group
                       .stat
                         span "Compiler "
-                        span.stat-value "65KB"
+                        span.stat-value "48KB"
                       .stat
                         span "Framework "
-                        span.stat-value "~9KB"
+                        span.stat-value "8KB"
+                      .stat
+                        span "Combined "
+                        span.stat-value "54KB"
                       .stat
                         span "Build step "
                         span.stat-value "None"
