@@ -609,8 +609,8 @@ grammar =
   WhileSource: [
     o 'WHILE Expression'                , '["while", 2]'
     o 'WHILE Expression WHEN Expression', '["while", 2, 4]'
-    o 'UNTIL Expression'                , '["until", 2]'
-    o 'UNTIL Expression WHEN Expression', '["until", 2, 4]'
+    o 'UNTIL Expression'                , '["while", ["!", 2]]'
+    o 'UNTIL Expression WHEN Expression', '["while", ["!", 2], 4]'
   ]
 
   While: [

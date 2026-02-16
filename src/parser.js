@@ -133,8 +133,8 @@ const parserInstance = {
       case 254: return ["when", $[$0-2], $[$0-1]];
       case 255: return ["while", $[$0]];
       case 256: return ["while", $[$0-2], $[$0]];
-      case 257: return ["until", $[$0]];
-      case 258: return ["until", $[$0-2], $[$0]];
+      case 257: return ["while", ["!", $[$0]]];
+      case 258: return ["while", ["!", $[$0-2]], $[$0]];
       case 259: return $[$0-1].length === 2 ? [$[$0-1][0], $[$0-1][1], $[$0]]   : [$[$0-1][0], $[$0-1][1], $[$0-1][2], $[$0]];
       case 260: case 261: return $[$0].length === 2 ? [$[$0][0], $[$0][1], [$[$0-1]]] : [$[$0][0], $[$0][1], $[$0][2], [$[$0-1]]];
       case 263: return ["loop", $[$0]];

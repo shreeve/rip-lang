@@ -65,7 +65,7 @@ test "until when", "i = 0\nsum = 0\nuntil i >= 10\n  if i % 2 == 0\n    sum += i
 test "postfix until", "i = 0; i += 1 until i >= 5; i", 5
 
 # Code generation
-code "until loop", "until cond\n  body", "while (!(cond)) {\n  body;\n}"
+code "until loop", "until cond\n  body", "while (!cond) {\n  body;\n}"
 
 # ============================================================================
 # Infinite Loops: "loop"

@@ -19,24 +19,11 @@ the compiler has no handler for `%%=` — it has `%%` → `generateModulo` and `
 
 - [ ] Done
 
-### 2. Bug: `until...when` guard silently dropped
-
-The grammar produces `["until", cond, guard]` when `WHEN` is used (grammar.rip line 613). After the
-`While` rule merges the block, this becomes `["until", cond, guard, body]`. But `generateUntil`
-only destructures two elements: `let [cond, body] = rest`. When a guard is present, `body` receives
-the guard expression and the actual body is lost. Compare with `generateWhile` which correctly
-handles the 3-element case.
-
-**Fix:** Fix `generateUntil` to match `generateWhile`'s guard handling, or desugar `until` to
-`while` at the grammar level (see item 6).
-
-- [ ] Done
-
 ---
 
 ## Redundancies
 
-### 3. `?=` is an exact alias for `??=`
+### 2. `?=` is an exact alias for `??=`
 
 The compiler explicitly maps `?=` → `??=` at line 801: `let op = head === '?=' ? '??=' : head`.
 They compile to identical JavaScript. Both are in the lexer's `COMPOUND_ASSIGN` set, the grammar,
@@ -47,7 +34,7 @@ synonym. If keeping, no code change needed — just a conscious decision.
 
 - [ ] Done
 
-### 4. `for x as! iter` duplicates `for await x as iter`
+### 3. `for x as! iter` duplicates `for await x as iter`
 
 Two ways to write async `for-as` loops:
 - `for await x as iter` — uses standard `AWAIT` keyword
@@ -66,7 +53,7 @@ only the `for await x as iter` form.
 
 ## Grammar Desugaring
 
-### 5. `unless` is half-desugared
+### 4. `unless` is half-desugared
 
 The grammar inconsistently handles `unless`:
 - `unless expr block` → `["unless", cond, body]` (compiler must handle)
@@ -81,17 +68,4 @@ handled by `generateIf` via a shared mapping, but the `unless` entry in the disp
 negation logic in `generateIf` can be simplified).
 
 - [ ] Done
-
-### 6. `until` is just `while` with negation
-
-`until cond` compiles to `while (!(cond))`. The grammar could desugar `until` to
-`["while", ["!", cond], ...]` at the grammar level, eliminating `generateUntil` entirely. This also
-fixes the guard bug (item 2) for free, since the desugared form would flow through `generateWhile`
-which already handles guards correctly.
-
-**Fix:** Change the grammar rules for `until` to emit `["while", ["!", cond], ...]`. Remove
-`generateUntil` from the compiler.
-
-- [ ] Done
-
 

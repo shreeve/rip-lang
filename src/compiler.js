@@ -218,7 +218,6 @@ export class CodeGenerator {
     'for-of': 'generateForOf',
     'for-as': 'generateForAs',
     'while': 'generateWhile',
-    'until': 'generateUntil',
     'try': 'generateTry',
     'throw': 'generateThrow',
     'control': 'generateControl',
@@ -636,7 +635,7 @@ export class CodeGenerator {
     }
 
     // Generate body first to detect needed helpers
-    let blockStmts = ['def', 'class', 'if', 'unless', 'for-in', 'for-of', 'for-as', 'while', 'until', 'loop', 'switch', 'try'];
+    let blockStmts = ['def', 'class', 'if', 'unless', 'for-in', 'for-of', 'for-as', 'while', 'loop', 'switch', 'try'];
     let statementsCode = other.map((stmt, index) => {
       let isSingle = other.length === 1 && imports.length === 0 && exports.length === 0;
       let isObj = this.is(stmt, 'object');
@@ -1433,11 +1432,6 @@ export class CodeGenerator {
     return code + (guard ? this.generateLoopBodyWithGuard(body, guard) : this.generateLoopBody(body));
   }
 
-  generateUntil(head, rest) {
-    let [cond, body] = rest;
-    return `while (!(${this.unwrap(this.generate(cond, 'value'))})) ` + this.generateLoopBody(body);
-  }
-
   generateRange(head, rest) {
     if (head === '...') {
       if (rest.length === 1) return `...${this.generate(rest[0], 'value')}`;
@@ -1838,7 +1832,7 @@ export class CodeGenerator {
       return node.some(hasCtrl);
     };
 
-    let loopStmts = ['for-in', 'for-of', 'for-as', 'while', 'until', 'loop'];
+    let loopStmts = ['for-in', 'for-of', 'for-as', 'while', 'loop'];
     if (this.is(expr, 'block')) {
       for (let i = 0; i < expr.length - 1; i++) {
         let s = expr[i + 1], isLast = i === expr.length - 2;
@@ -2236,7 +2230,7 @@ export class CodeGenerator {
       !this.scopeStack.some(s => s.has(v))  // don't re-declare variables from enclosing scopes
     ));
     let noRetStmts = ['return', 'throw', 'break', 'continue'];
-    let loopStmts = ['for-in', 'for-of', 'for-as', 'while', 'until', 'loop'];
+    let loopStmts = ['for-in', 'for-of', 'for-as', 'while', 'loop'];
 
     // Track this function's scope so nested functions don't re-declare its variables
     this.scopeStack.push(new Set([...newVars, ...paramNames]));
@@ -2660,7 +2654,7 @@ export class CodeGenerator {
     if (!generated || generated.endsWith(';')) return false;
     if (!generated.endsWith('}')) return true;
     let h = Array.isArray(stmt) ? stmt[0] : null;
-    return !['def', 'class', 'if', 'unless', 'for-in', 'for-of', 'for-as', 'while', 'until', 'loop', 'switch', 'try'].includes(h);
+    return !['def', 'class', 'if', 'unless', 'for-in', 'for-of', 'for-as', 'while', 'loop', 'switch', 'try'].includes(h);
   }
 
   addSemicolon(stmt, generated) { return generated + (this.needsSemicolon(stmt, generated) ? ';' : ''); }
