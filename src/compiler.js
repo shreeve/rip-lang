@@ -213,7 +213,6 @@ export class CodeGenerator {
 
     // Control flow — complex
     'if': 'generateIf',
-    'unless': 'generateIf',
     'for-in': 'generateForIn',
     'for-of': 'generateForOf',
     'for-as': 'generateForAs',
@@ -381,13 +380,6 @@ export class CodeGenerator {
       return;
     }
 
-    if (head === 'unless') {
-      let [condition, body] = rest;
-      this.collectProgramVariables(condition);
-      this.collectProgramVariables(body);
-      return;
-    }
-
     if (head === 'try') {
       this.collectProgramVariables(rest[0]);
       if (rest.length >= 2 && Array.isArray(rest[1]) && rest[1].length === 2 && rest[1][0] !== 'block') {
@@ -542,7 +534,7 @@ export class CodeGenerator {
         return `super.${this.currentMethodName}(${args})`;
       }
 
-      // Postfix if/unless on single-arg call
+      // Postfix if on single-arg call
       if (context === 'statement' && rest.length === 1) {
         let cond = this.findPostfixConditional(rest[0]);
         if (cond) {
@@ -551,7 +543,7 @@ export class CodeGenerator {
           let condCode = this.generate(cond.condition, 'value');
           let valCode = this.generate(argWithout, 'value');
           let callStr = `${callee}(${valCode})`;
-          return cond.type === 'unless' ? `if (!${condCode}) ${callStr}` : `if (${condCode}) ${callStr}`;
+          return `if (${condCode}) ${callStr}`;
         }
       }
 
@@ -564,7 +556,7 @@ export class CodeGenerator {
 
     // Statement sequence (comma operator)
     if (Array.isArray(head) && typeof head[0] === 'string') {
-      let stmtOps = ['=', '+=', '-=', '*=', '/=', '%=', '**=', '&&=', '||=', '??=', 'if', 'unless', 'return', 'throw'];
+      let stmtOps = ['=', '+=', '-=', '*=', '/=', '%=', '**=', '&&=', '||=', '??=', 'if', 'return', 'throw'];
       if (stmtOps.includes(head[0])) {
         let exprs = sexpr.map(stmt => this.generate(stmt, 'value'));
         return `(${exprs.join(', ')})`;
@@ -582,7 +574,7 @@ export class CodeGenerator {
         return `new ${needsParens ? `(${ctorCode})` : ctorCode}(${args})`;
       }
 
-      // Postfix if/unless on single-arg method call
+      // Postfix if on single-arg method call
       if (context === 'statement' && rest.length === 1) {
         let cond = this.findPostfixConditional(rest[0]);
         if (cond) {
@@ -591,7 +583,7 @@ export class CodeGenerator {
           let condCode = this.generate(cond.condition, 'value');
           let valCode = this.generate(argWithout, 'value');
           let callStr = `${calleeCode}(${valCode})`;
-          return cond.type === 'unless' ? `if (!${condCode}) ${callStr}` : `if (${condCode}) ${callStr}`;
+          return `if (${condCode}) ${callStr}`;
         }
       }
 
@@ -635,7 +627,7 @@ export class CodeGenerator {
     }
 
     // Generate body first to detect needed helpers
-    let blockStmts = ['def', 'class', 'if', 'unless', 'for-in', 'for-of', 'for-as', 'while', 'loop', 'switch', 'try'];
+    let blockStmts = ['def', 'class', 'if', 'for-in', 'for-of', 'for-as', 'while', 'loop', 'switch', 'try'];
     let statementsCode = other.map((stmt, index) => {
       let isSingle = other.length === 1 && imports.length === 0 && exports.length === 0;
       let isObj = this.is(stmt, 'object');
@@ -867,33 +859,29 @@ export class CodeGenerator {
       }
     }
 
-    // Postfix if/unless on assignment with || operator
+    // Postfix if on assignment with || operator
     if (context === 'statement' && head === '=' && Array.isArray(value) &&
         (value[0] === '||' || value[0] === '&&') && value.length === 3) {
       let [binOp, left, right] = value;
-      if ((this.is(right, 'unless') || this.is(right, 'if')) && right.length === 3) {
-        let [condType, condition, wrappedValue] = right;
+      if (this.is(right, 'if') && right.length === 3) {
+        let [, condition, wrappedValue] = right;
         let unwrapped = Array.isArray(wrappedValue) && wrappedValue.length === 1 ? wrappedValue[0] : wrappedValue;
         let fullValue = [binOp, left, unwrapped];
         let t = this.generate(target, 'value'), c = this.generate(condition, 'value'), v = this.generate(fullValue, 'value');
-        return condType === 'unless' ? `if (!${c}) ${t} = ${v}` : `if (${c}) ${t} = ${v}`;
+        return `if (${c}) ${t} = ${v}`;
       }
     }
 
-    // Postfix if/unless on simple assignment
+    // Postfix if on simple assignment
     if (context === 'statement' && head === '=' && Array.isArray(value) && value.length === 3) {
       let [valHead, condition, actualValue] = value;
       let isPostfix = Array.isArray(actualValue) && actualValue.length === 1 &&
                       (!Array.isArray(actualValue[0]) || actualValue[0][0] !== 'block');
-      if ((valHead === 'unless' || valHead === 'if') && isPostfix) {
+      if (valHead === 'if' && isPostfix) {
         let unwrapped = Array.isArray(actualValue) && actualValue.length === 1 ? actualValue[0] : actualValue;
         let t = this.generate(target, 'value');
         let condCode = this.unwrapLogical(this.generate(condition, 'value'));
         let v = this.generate(unwrapped, 'value');
-        if (valHead === 'unless') {
-          if (condCode.includes(' ') || /[<>=&|]/.test(condCode)) condCode = `(${condCode})`;
-          return `if (!${condCode}) ${t} = ${v}`;
-        }
         return `if (${condCode}) ${t} = ${v}`;
       }
     }
@@ -1065,23 +1053,12 @@ export class CodeGenerator {
     let [expr] = rest;
     if (this.sideEffectOnly) return 'return';
 
-    if (this.is(expr, 'unless')) {
-      let [, condition, body] = expr;
-      let val = Array.isArray(body) && body.length === 1 ? body[0] : body;
-      return `if (!${this.generate(condition, 'value')}) return ${this.generate(val, 'value')}`;
-    }
     if (this.is(expr, 'if')) {
       let [, condition, body, ...elseParts] = expr;
       if (elseParts.length === 0) {
         let val = Array.isArray(body) && body.length === 1 ? body[0] : body;
         return `if (${this.generate(condition, 'value')}) return ${this.generate(val, 'value')}`;
       }
-    }
-    if (this.is(expr, 'new') && Array.isArray(expr[1]) && expr[1][0] === 'unless') {
-      let [, unlessNode] = expr;
-      let [, condition, body] = unlessNode;
-      let val = Array.isArray(body) && body.length === 1 ? body[0] : body;
-      return `if (!${this.generate(condition, 'value')}) return ${this.generate(['new', val], 'value')}`;
     }
     return `return ${this.generate(expr, 'value')}`;
   }
@@ -1199,16 +1176,6 @@ export class CodeGenerator {
   // ---------------------------------------------------------------------------
 
   generateIf(head, rest, context, sexpr) {
-    if (head === 'unless') {
-      let [condition, body] = rest;
-      if (Array.isArray(body) && body.length === 1 && (!Array.isArray(body[0]) || body[0][0] !== 'block')) body = body[0];
-      if (context === 'value') {
-        return `(!${this.generate(condition, 'value')} ? ${this.extractExpression(body)} : undefined)`;
-      }
-      let condCode = this.unwrap(this.generate(condition, 'value'));
-      if (/[ <>=&|]/.test(condCode)) condCode = `(${condCode})`;
-      return `if (!${condCode}) ` + this.generate(body, 'statement');
-    }
     let [condition, thenBranch, ...elseBranches] = rest;
     return context === 'value'
       ? this.generateIfAsExpression(condition, thenBranch, elseBranches)
@@ -1642,20 +1609,18 @@ export class CodeGenerator {
     let [expr] = rest;
     if (Array.isArray(expr)) {
       let checkExpr = expr, wrapperType = null;
-      if (expr[0] === 'new' && Array.isArray(expr[1]) && (expr[1][0] === 'if' || expr[1][0] === 'unless')) {
+      if (expr[0] === 'new' && Array.isArray(expr[1]) && expr[1][0] === 'if') {
         wrapperType = 'new'; checkExpr = expr[1];
-      } else if (expr[0] === 'if' || expr[0] === 'unless') {
+      } else if (expr[0] === 'if') {
         checkExpr = expr;
       }
-      if (checkExpr[0] === 'if' || checkExpr[0] === 'unless') {
-        let [condType, condition, body] = checkExpr;
+      if (checkExpr[0] === 'if') {
+        let [, condition, body] = checkExpr;
         let unwrapped = Array.isArray(body) && body.length === 1 ? body[0] : body;
         expr = wrapperType === 'new' ? ['new', unwrapped] : unwrapped;
         let condCode = this.generate(condition, 'value');
         let throwCode = `throw ${this.generate(expr, 'value')}`;
-        return condType === 'unless'
-          ? `if (!(${condCode})) {\n${this.indent()}  ${throwCode};\n${this.indent()}}`
-          : `if (${condCode}) {\n${this.indent()}  ${throwCode};\n${this.indent()}}`;
+        return `if (${condCode}) {\n${this.indent()}  ${throwCode};\n${this.indent()}}`;
       }
     }
     let throwStmt = `throw ${this.generate(expr, 'value')}`;
@@ -1828,7 +1793,7 @@ export class CodeGenerator {
       if (typeof node === 'string' && (node === 'break' || node === 'continue')) return true;
       if (!Array.isArray(node)) return false;
       if (['break', 'continue', 'return', 'throw'].includes(node[0])) return true;
-      if (node[0] === 'if' || node[0] === 'unless') return node.slice(1).some(hasCtrl);
+      if (node[0] === 'if') return node.slice(1).some(hasCtrl);
       return node.some(hasCtrl);
     };
 
@@ -2136,7 +2101,7 @@ export class CodeGenerator {
   findPostfixConditional(expr) {
     if (!Array.isArray(expr)) return null;
     let h = expr[0];
-    if ((h === 'unless' || h === 'if') && expr.length === 3) return {type: h, condition: expr[1], value: expr[2]};
+    if (h === 'if' && expr.length === 3) return {type: h, condition: expr[1], value: expr[2]};
     if (h === '+' || h === '-' || h === '*' || h === '/') {
       for (let i = 1; i < expr.length; i++) {
         let found = this.findPostfixConditional(expr[i]);
@@ -2278,7 +2243,7 @@ export class CodeGenerator {
             return;
           }
 
-          if (!isConstructor && !sideEffectOnly && isLast && (h === 'if' || h === 'unless')) {
+          if (!isConstructor && !sideEffectOnly && isLast && h === 'if') {
             let [cond, thenB, ...elseB] = stmt.slice(1);
             let hasMulti = (b) => this.is(b, 'block') && b.length > 2;
             if (hasMulti(thenB) || elseB.some(hasMulti)) {
@@ -2504,7 +2469,7 @@ export class CodeGenerator {
   generateIfElseWithEarlyReturns(ifStmt) {
     let [head, condition, thenBranch, ...elseBranches] = ifStmt;
     let code = '';
-    let condCode = head === 'unless' ? `!${this.generate(condition, 'value')}` : this.generate(condition, 'value');
+    let condCode = this.generate(condition, 'value');
     code += this.indent() + `if (${condCode}) {\n`;
     code += this.withIndent(() => this.generateBranchWithReturn(thenBranch));
     code += this.indent() + '}';
@@ -2654,7 +2619,7 @@ export class CodeGenerator {
     if (!generated || generated.endsWith(';')) return false;
     if (!generated.endsWith('}')) return true;
     let h = Array.isArray(stmt) ? stmt[0] : null;
-    return !['def', 'class', 'if', 'unless', 'for-in', 'for-of', 'for-as', 'while', 'loop', 'switch', 'try'].includes(h);
+    return !['def', 'class', 'if', 'for-in', 'for-of', 'for-as', 'while', 'loop', 'switch', 'try'].includes(h);
   }
 
   addSemicolon(stmt, generated) { return generated + (this.needsSemicolon(stmt, generated) ? ';' : ''); }
@@ -2681,7 +2646,7 @@ export class CodeGenerator {
         return stmts.some(s => Array.isArray(s) && ['return', 'throw', 'break', 'continue'].includes(s[0]));
       });
     }
-    if (t === 'if' || t === 'unless') {
+    if (t === 'if') {
       let [, , thenB, elseB] = body;
       return this.branchHasControlFlow(thenB) && elseB && this.branchHasControlFlow(elseB);
     }

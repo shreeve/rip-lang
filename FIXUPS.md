@@ -49,23 +49,4 @@ only the `for await x as iter` form.
 
 - [ ] Done
 
----
-
-## Grammar Desugaring
-
-### 4. `unless` is half-desugared
-
-The grammar inconsistently handles `unless`:
-- `unless expr block` → `["unless", cond, body]` (compiler must handle)
-- `unless expr block else block` → `["if", ["!", cond], then, else]` (already desugared!)
-
-The simple form could also desugar to `["if", ["!", cond], body]` at the grammar level, removing
-the `unless` case from the compiler entirely.
-
-**Fix:** Change the grammar rule for `unless expr block` to emit `["if", ["!", cond], body]`
-instead of `["unless", cond, body]`. Remove `generateUnless` from the compiler (it's currently
-handled by `generateIf` via a shared mapping, but the `unless` entry in the dispatch table and the
-negation logic in `generateIf` can be simplified).
-
-- [ ] Done
 

@@ -108,12 +108,12 @@ const ruleActions = (rule, vals, locs, shared) => {
       case 227: return ["yield-from", $[$0]];
       case 228: return ["if", $[$0-1], $[$0]];
       case 229: return $[$0-4].length === 3 ? ["if", $[$0-4][1], $[$0-4][2], ["if", $[$0-1], $[$0]]] : [...$[$0-4], ["if", $[$0-1], $[$0]]];
-      case 230: return ["unless", $[$0-1], $[$0]];
+      case 230: return ["if", ["!", $[$0-1]], $[$0]];
       case 231: return ["if", ["!", $[$0-3]], $[$0-2], $[$0]];
       case 233: return $[$0-2].length === 3 ? ["if", $[$0-2][1], $[$0-2][2], $[$0]] : [...$[$0-2], $[$0]];
       case 235: case 236: return ["if", $[$0], [$[$0-2]]];
       case 237: return ["?:", $[$0-4], $[$0-6], $[$0-1]];
-      case 238: case 239: return ["unless", $[$0], [$[$0-2]]];
+      case 238: case 239: return ["if", ["!", $[$0]], [$[$0-2]]];
       case 240: return ["try", $[$0]];
       case 241: return ["try", $[$0-1], $[$0]];
       case 242: return ["try", $[$0-2], $[$0]];
@@ -128,8 +128,8 @@ const ruleActions = (rule, vals, locs, shared) => {
       case 254: return ["when", $[$0-2], $[$0-1]];
       case 255: return ["while", $[$0]];
       case 256: return ["while", $[$0-2], $[$0]];
-      case 257: return ["until", $[$0]];
-      case 258: return ["until", $[$0-2], $[$0]];
+      case 257: return ["while", ["!", $[$0]]];
+      case 258: return ["while", ["!", $[$0-2]], $[$0]];
       case 259: return $[$0-1].length === 2 ? [$[$0-1][0], $[$0-1][1], $[$0]]   : [$[$0-1][0], $[$0-1][1], $[$0-1][2], $[$0]];
       case 260: case 261: return $[$0].length === 2 ? [$[$0][0], $[$0][1], [$[$0-1]]] : [$[$0][0], $[$0][1], $[$0][2], [$[$0-1]]];
       case 263: return ["loop", $[$0]];
