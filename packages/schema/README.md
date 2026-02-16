@@ -74,7 +74,8 @@ Write one schema:
     password -> @matches(/[A-Z]/) and @matches(/[0-9]/)
 ```
 
-Get three outputs.
+Get three outputs. *(Code generation is planned but not yet implemented. The
+following shows the intended output format.)*
 
 **TypeScript types:**
 
