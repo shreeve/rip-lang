@@ -17,7 +17,7 @@
 
 ---
 
-Rip is a modern language inspired by CoffeeScript. It compiles to **ES2022** (classes, `?.`, `??`, modules), adds about a **dozen new operators**, includes **built-in reactivity**, and sports a self-hosting compiler with **zero dependencies** — all in about 11,000 lines of code.
+Rip is a modern language inspired by CoffeeScript. It compiles to **ES2022** (classes, `?.`, `??`, modules), adds about a **dozen new operators**, includes **built-in reactivity**, and sports a self-hosting compiler with **zero dependencies** — all in under 10,000 lines of code.
 
 > **No imports. No hooks. No dependency arrays. Just write code.**
 
@@ -291,7 +291,7 @@ See [@rip-lang/ui](packages/ui/) for the full framework: file-based router, reac
 | **Self-hosting** | No | Yes |
 | **Lexer** | 3,558 LOC | 2,024 LOC |
 | **Compiler** | 10,346 LOC | 3,289 LOC |
-| **Total** | 17,760 LOC | ~11,000 LOC |
+| **Total** | 17,760 LOC | ~9,500 LOC |
 
 Smaller codebase, modern output, built-in reactivity.
 
