@@ -51,7 +51,7 @@ rip-print -x lock,map src/
 ## How It Works
 
 1. Walks the specified paths, discovers source files
-2. Highlights each file using Shiki with the detected language
+2. Highlights each file using highlight.js with the detected language
 3. Builds a single HTML page with table of contents
 4. Starts a Bun server on a random port
 5. Opens the browser

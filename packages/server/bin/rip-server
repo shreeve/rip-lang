@@ -1,17 +1,13 @@
 #!/usr/bin/env bun
 
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const serverRip = join(__dirname, '..', 'server.rip');
-const args = process.argv.slice(2).join(' ');
+const serverRip = join(dirname(fileURLToPath(import.meta.url)), '..', 'server.rip');
 
 try {
-  execSync(`rip ${serverRip} ${args}`, { stdio: 'inherit' });
-} catch (error) {
-  process.exit(error.status || 1);
+  execFileSync('rip', [serverRip, ...process.argv.slice(2)], { stdio: 'inherit' });
+} catch (e) {
+  process.exit(e.status || 1);
 }

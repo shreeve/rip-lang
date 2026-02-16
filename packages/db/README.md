@@ -147,7 +147,7 @@ serialization, uint64-aligned validity bitmaps, and proper timestamp encoding.
 - **DuckDB** library installed on the system
   - macOS: `brew install duckdb`
   - Linux: Install from [duckdb.org](https://duckdb.org/docs/installation)
-- **rip-lang** 2.8+ (installed automatically as a dependency)
+- **rip-lang** 3.x (installed automatically as a dependency)
 
 Set `DUCKDB_LIB_PATH` if DuckDB is not in a standard location:
 

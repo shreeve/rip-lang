@@ -1,9 +1,10 @@
 #!/usr/bin/env bun
 
 import { execFileSync } from 'child_process';
+import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
-const x12Rip = join(dirname(new URL(import.meta.url).pathname), '..', 'x12.rip');
+const x12Rip = join(dirname(fileURLToPath(import.meta.url)), '..', 'x12.rip');
 
 try {
   execFileSync('rip', [x12Rip, ...process.argv.slice(2)], { stdio: 'inherit' });
