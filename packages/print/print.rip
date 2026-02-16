@@ -438,7 +438,7 @@ html = """
 served = false
 
 server = Bun.serve
-  port: 0
+  port: 9111
   fetch: (req) ->
     served = true
     new Response html, headers: { 'Content-Type': 'text/html; charset=utf-8' }
