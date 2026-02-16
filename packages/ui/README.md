@@ -91,6 +91,35 @@ The UI framework is compiled to JavaScript at build time, so there's no runtime
 compilation overhead and no extra network request. The `importRip('ui.rip')` call
 is intercepted and returns the pre-compiled module instantly.
 
+### Browser Execution Contexts
+
+Rip provides full async/await support across every browser context — no other
+compile-to-JS language has this:
+
+| Context | How async works | Returns value? |
+|---------|-----------------|----------------|
+| `<script type="text/rip">` | Async IIFE wrapper | No (fire-and-forget) |
+| Playground "Run" button | Async IIFE wrapper | No (use console.log) |
+| `rip()` console REPL | Rip `do ->` block | Yes (sync direct, async via Promise) |
+| `.rip` files via `importRip()` | ES module import | Yes (module exports) |
+
+The `!` postfix compiles to `await`. Inline scripts are wrapped in an async IIFE
+automatically. The `rip()` console function wraps user code in a `do ->` block
+so the Rip compiler handles implicit return and auto-async natively.
+
+### globalThis Exports
+
+When `rip.browser.js` loads, it registers these on `globalThis`:
+
+| Function | Purpose |
+|----------|---------|
+| `rip(code)` | Console REPL — compile and execute Rip code |
+| `importRip(url)` | Fetch, compile, and import a `.rip` file as an ES module |
+| `compileToJS(code)` | Compile Rip source to JavaScript |
+| `__rip` | Reactive runtime — `__state`, `__computed`, `__effect`, `__batch` |
+| `__ripComponent` | Component runtime — `__Component`, `__clsx`, `__fragment` |
+| `__ripExports` | All compiler exports — `compile`, `formatSExpr`, `VERSION`, etc. |
+
 ## The Stash
 
 Everything lives in one reactive tree:

@@ -9,22 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [3.8.7] - 2026-02-14
 
-### Rip UI — Loading Optimization
-
-- **Combined `rip-ui.min.js` bundle** — Packages the Rip compiler and pre-compiled UI framework in a single ~52KB Brotli file. Eliminates the separate `ui.rip` fetch and its ~948-line runtime compilation for static deployments.
-- **Build-time compilation** — `ui.rip` is compiled to `ui.js` → `ui.min.js` → `ui.min.js.br` during `bun run browser`. The combined bundle intercepts `importRip('ui.rip')` and returns pre-compiled exports instantly.
-- **`globalThis.__ripExports`** — All compiler exports (`compile`, `compileToJS`, `formatSExpr`, `VERSION`, `BUILD_DATE`, `getReactiveRuntime`, `getComponentRuntime`) registered on `globalThis` when the browser module loads. Playground pages use this directly instead of redundantly re-importing the module.
-- **Parallel Monaco loading** — Monaco Editor preloaded via `<link rel="preload">` hint in all playground HTML files. Synchronous setup runs in parallel with the Monaco CDN fetch.
-- **FOUC prevention** — All playground pages hide the body with `opacity: 0` until fully initialized (Monaco loaded, editors created, theme restored), then fade in via `body.ready` CSS transition.
-- **Dev server cache fix** — `scripts/serve.js` now uses `Cache-Control: no-cache` for Brotli responses during development.
+Rip UI loading optimization (combined bundle, build-time compilation, FOUC prevention). See `packages/ui/CHANGELOG.md` v0.3.2.
 
 ## [3.8.6] - 2026-02-13
 
-### Rip UI — Hash Routing & Static Demo
+### Compiler — Render Block Fix
 
-- **Hash routing** — `launch '/app', hash: true` switches the router from path-based to hash-based URLs (`demo.html#/about` instead of `/about`). Supports both `href="#/path"` and `href="/path"` link styles. Back/forward navigation and direct URL loading work correctly. Essential for single-file static deployment where no server rewrites are available.
-- **Self-contained demo** — New `docs/demo.html` (337 lines) runs the full Rip UI Demo app as a single HTML file. All 6 components and CSS inlined via `launch bundle:` with heredoc strings. No build step, no server, no dependencies — just the ~47KB compiler.
 - **Render block fix** — Identifiers matching HTML tag names (e.g., `title`) are no longer misclassified as template elements when preceded by control flow keywords (`if`, `unless`, `while`, `until`, `when`).
+
+Rip UI hash routing and static demo. See `packages/ui/CHANGELOG.md` v0.3.1.
 
 ## [3.8.5] - 2026-02-13
 

@@ -500,6 +500,72 @@ user.toJSON()                # Plain object (includes computed)
 
 ---
 
+## Schema Runtime API
+
+The schema runtime provides validation without ORM features — useful for API
+request validation, form validation, config validation, and test factories.
+
+```javascript
+import { parse, Schema } from '@rip-lang/schema'
+
+const ast = parse(`
+  @enum Role: admin, user, guest
+
+  @model User
+    name!: string, [1, 100]
+    email!#: email
+    role: Role, [user]
+    active: boolean, [true]
+
+    @timestamps
+`)
+
+const schema = new Schema()
+schema.register(ast)
+
+const user = schema.create('User', {
+  name: 'John Doe',
+  email: 'john@example.com',
+})
+
+const errors = user.$validate()  // null = valid
+```
+
+### Schema Class Methods
+
+| Method | Purpose |
+|--------|---------|
+| `schema.register(ast)` | Register definitions from parsed AST |
+| `schema.create(name, data)` | Create instance with defaults applied |
+| `schema.validate(name, obj)` | Validate object → `null` or `[{field, error, message}]` |
+| `schema.isValid(name, field, value)` | Check single field validity |
+| `schema.getModel(name)` | Get model definition |
+| `schema.listModels()` | List all registered models |
+
+### Error Format
+
+```javascript
+[
+  { field: 'email', error: 'required', message: 'email is required' },
+  { field: 'name', error: 'min', message: 'name must be at least 1' },
+  { field: 'role', error: 'enum', message: 'role must be one of: admin, user, guest' },
+  { field: 'address', error: 'nested', errors: [...] }
+]
+```
+
+Error types: `required`, `type`, `enum`, `min`, `max`, `pattern`, `nested`.
+
+### Performance
+
+```
+10,000 create+validate cycles: ~10ms
+Per operation: ~1µs
+```
+
+Validators are compiled once at registration time.
+
+---
+
 ## Architecture
 
 ```
@@ -592,7 +658,5 @@ This brings Vue/Solid-style reactivity to the ORM layer — something no other J
 
 ## See Also
 
-- [RIP-LANG.md](./RIP-LANG.md) — Language reference
-- [SCHEMA.md](./SCHEMA.md) — Full specification and syntax
-- [IDEAS.md](./IDEAS.md) — Syntax exploration and design decisions
+- [SCHEMA.md](./SCHEMA.md) — Full specification, syntax, and design explorations
 - [examples/](./examples/) — Working code examples

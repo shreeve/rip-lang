@@ -1023,6 +1023,68 @@ app.set '/', saved
 
 ---
 
+## Appendix: Syntax Exploration
+
+Exploring syntax options for Rip Schema, ranging from the original SPOT/ASN.1 style to compact sigil-based alternatives. SPOT (part of the Sage framework) uses an ASN.1-inspired syntax that proved itself at enterprise scale for complex applications like hospital systems.
+
+### Original SPOT Syntax
+
+From `sage.spot` — the proven baseline:
+
+```
+Application ::= Sequence {
+  name PrintableString Range(0..32) Optional,
+  lookAndFeel PrintableString Range(0..255) Optional [ style ],
+  deferredLoadingMode Enumerated {
+    auto   (0),
+    always (1),
+    never  (2)
+  } Default auto,
+  mainWindow MainWindow
+} [ onAuthFailure, onChange ]
+```
+
+**Strengths:** Self-documenting, no ambiguity, proven at scale (2000+ line schemas), language-neutral.
+**Weaknesses:** Verbose keywords, lots of punctuation.
+
+### Option C: Sigil Modifiers (chosen direction)
+
+Replace keywords with sigils: `?` optional, `!` required, `#` unique, `= x` default.
+
+```
+Application ::= Sequence [onAuthFailure, onChange]
+  name?             string(32)
+  deferredLoadingMode  = auto : auto(0) | always(1) | never(2)
+  mainWindow        MainWindow
+```
+
+### Option E: Rip-Native (@model style)
+
+Schemas as Rip code, using `@model`, `@enum` directives — this is the current implementation:
+
+```coffee
+@model Application
+  @events onAuthFailure, onChange
+  name?:                     string, [0, 32]
+  deferredLoadingMode:       DeferredLoadingMode = auto
+  mainWindow:                MainWindow
+
+@enum DeferredLoadingMode
+  auto   (0)
+  always (1)
+  never  (2)
+```
+
+### The Fundamental Tradeoff
+
+**Standalone Format** — Language-neutral, schema is data not code, clear separation, proven at scale.
+
+**Computable Rip Code** — Schemas are first-class values, can extend/compose/compute at runtime, reactive schemas possible, tighter IDE integration. But: tied to Rip.
+
+**Path Forward: Both?** — `.schema` files with clean SPOT-like syntax, Rip parser produces S-expressions, S-expressions can be interpreted by runtime, imported into Rip, or used to generate code for other languages.
+
+---
+
 ## References
 
 - [Sage Documentation](../demos/sage-docs/) — Original SPOT/Sparse Notation

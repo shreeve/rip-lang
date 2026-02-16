@@ -68,9 +68,8 @@ rip-lang/
 │   ├── csv/             # @rip-lang/csv — CSV parser + writer
 │   └── vscode/          # VS Code/Cursor extension
 ├── docs/
-│   ├── RIP-LANG.md      # Language reference
+│   ├── RIP-LANG.md      # Language reference (includes reactivity, future ideas)
 │   ├── RIP-TYPES.md     # Type system specification
-│   ├── RIP-REACTIVITY.md # Reactivity deep dive
 │   └── RIP-INTERNALS.md # Compiler architecture & design decisions
 ├── test/rip/            # 25 test files (1,241 tests)
 └── scripts/             # Build utilities
@@ -400,10 +399,8 @@ test/rip/
 | File | Purpose |
 |------|---------|
 | **README.md** | User guide, features, installation |
-| **docs/RIP-GUIDE.md** | Practical guide for USING Rip in projects (for AI and users) |
-| **docs/RIP-LANG.md** | Full language reference |
+| **docs/RIP-LANG.md** | Full language reference (syntax, operators, reactivity, future ideas) |
 | **docs/RIP-TYPES.md** | Type system specification |
-| **docs/RIP-REACTIVITY.md** | Reactivity deep dive |
 | **docs/RIP-INTERNALS.md** | Compiler architecture, design decisions, S-expressions |
 
 ---

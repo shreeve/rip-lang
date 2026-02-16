@@ -1,4 +1,4 @@
-# Rip UI — Notes
+# Rip UI — Roadmap
 
 ## What's There
 
@@ -67,61 +67,48 @@
 - **Navigation anti-flicker** — `_navigating` uses `delay 100` to suppress
   brief loading indicators.
 
-## What's Not There Yet
+---
 
-### Component Model (remaining gaps)
-- **Named slots** — only `@children` (single slot) and `#content` (layout)
-  exist. No named slots (header/body/footer) for complex reusable components.
-- **Scoped slots** — no way to pass data back to the parent from a slot.
-- **Teleport** — no mechanism to render at document root (for modals, tooltips).
-- **Props validation** — no mechanism for expected props, defaults, or
-  required props.
-- **Scoped styles** — no CSS scoping per component. Global namespace only.
+## Where Rip UI Wins
 
-### Lifecycle
-- **`updated` hook** — recognized but not triggered. Needs the compiler to
-  call `this.updated()` after reactive effect flushes.
-- **`onActivate`/`onDeactivate`** — for keep-alive components to know when
-  they're cached or restored.
-- **Keep-alive doesn't pause effects** — cached components continue running
-  effects off-screen. Intentional (data stays current) but differs from Vue.
+1. **Simplicity of the reactive model.** Three operators, minimal complete set. No hooks rules, no dependency arrays, no `.value` papercuts.
+2. **Zero-build development.** No other framework runs entirely in the browser with zero build tooling.
+3. **Timing primitives from composition.** `delay`, `debounce`, `throttle`, `hold` prove architectural correctness — hard problems dissolve into small functions.
+4. **Effect cleanup design.** Returning a function from an effect for cleanup is the cleanest pattern across all frameworks.
+5. **Syntax over API.** `:=` beats `ref()`. `~=` beats `computed()`. `~>` beats `watchEffect()`. Less ceremony, same power.
+6. **Static deployment.** Hash routing + `launch bundle:` = full SPA in a single HTML file on any static host.
 
-### Data & State
-- **Resource caching** — `createResource` exists but no cache keys,
-  stale-while-revalidate, background refetching, or query invalidation.
-  TanStack Query is the target.
-- **Form handling** — validation, form state, dirty tracking, optimistic
-  updates. Needs dedicated design.
+## Where Others Win
 
-### Type Safety
-- **Framework `.d.ts` files** — stash, router, createResource, and other
-  exports have no TypeScript definitions. No autocomplete for framework API.
+1. **Ecosystem.** Zero component libraries, zero third-party integrations, zero community packages.
+2. **SSR.** No server-side rendering means no SEO, no progressive enhancement.
+3. **Performance proof.** No benchmarks, no published numbers.
+4. **TypeScript depth.** Framework exports have no `.d.ts` files.
+5. **Tooling.** No DevTools extension, no CLI scaffolding.
+6. **Battle-testing.** React serves billions. We serve a demo app.
 
-### Developer Experience
-- **State-preserving HMR** — hot reload remounts with fresh state. Template-
-  only changes should preserve reactive state.
-- **Chrome DevTools extension** — `window.__RIP__` is console-only. A visual
-  panel for component tree, stash, route state would help.
+---
 
-### Error Handling
-- **Runtime error boundaries** — errors from reactive effects and async
-  operations aren't caught. Only mount-time errors are handled.
+## The Path Forward
 
-### Performance & Scale
-- **Code splitting** — bundle everything upfront vs. fetch per route.
-- **AOT compilation (partial)** — `ui.rip` is now pre-compiled to JS at build
-  time and bundled into `rip-ui.min.js`. Component-level AOT (compile `.rip`
-  components to `.js` at deploy time) is the next step.
-- **Optimized list reconciliation** — current `for` loop does full re-render
-  on collection change. Large datasets (1000+ rows) need keyed diffing.
+### Must-have (blocks adoption)
+1. Named slots — multiple content projection points (header, body, footer)
+2. Framework `.d.ts` files — TypeScript definitions for all exports
 
-### Polish
-- **Route transition animations** — enter/exit during navigation.
-- **Scroll restoration** — preserve scroll on back/forward.
+### Should-have (competitive parity)
+3. AOT compilation path — component-level ahead-of-time for production (framework AOT done in v0.3.2)
+4. SSR — server rendering for SEO
+5. js-framework-benchmark — published performance numbers
+6. Keyed list reconciliation — optimized array diffing for large datasets
 
-### Infrastructure
-- **SSR / streaming** — server-side rendering for SEO. Low priority until
-  SEO is a requirement.
+### Nice-to-have (ecosystem growth)
+7. DevTools extension — visual component/state inspector
+8. `create-rip-app` CLI — project scaffolding
+9. Headless UI primitives — accessible dropdown, modal, dialog
+10. State-preserving HMR — keep reactive state during hot reload
+11. Scoped slots and teleport — advanced composition patterns
+
+---
 
 ## Known Caveats
 

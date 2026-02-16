@@ -572,11 +572,9 @@ rip> .js      # Toggle JS display
 ---
 
 **See Also:**
-- [RIP-GUIDE.md](RIP-GUIDE.md) — Practical guide for using Rip
-- [RIP-LANG.md](RIP-LANG.md) — Language reference
+- [RIP-LANG.md](RIP-LANG.md) — Language reference (includes reactivity deep dive)
 - [RIP-TYPES.md](RIP-TYPES.md) — Type system specification
-- [RIP-REACTIVITY.md](RIP-REACTIVITY.md) — Reactivity deep dive
 
 ---
 
-*Rip 3.7 — 1,219 tests passing — Zero dependencies — Self-hosting — ~10,800 LOC*
+*Rip 3.8 — 1,241 tests passing — Zero dependencies — Self-hosting — ~11,000 LOC*
