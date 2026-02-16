@@ -312,13 +312,15 @@ export class CodeGenerator {
 
     // Match output lines to collected statement locations in parallel.
     // Skip generated lines that have no source correspondence.
+    // NOTE: These skip patterns are coupled to the exact output format of
+    // generateProgram(). If the preamble or statement formatting changes,
+    // these patterns must be updated to keep source maps accurate.
     let lines = code.split('\n');
     let locIdx = 0;
     for (let outLine = 0; outLine < lines.length; outLine++) {
       let line = lines[outLine];
       let trimmed = line.trim();
 
-      // Skip lines with no source correspondence
       if (!trimmed || trimmed === '}' || trimmed === '});') continue;
       if (trimmed.startsWith('let ') || trimmed.startsWith('var ')) continue;
       if (trimmed.startsWith('const slice') || trimmed.startsWith('const modulo') || trimmed.startsWith('const toSearchable')) continue;
