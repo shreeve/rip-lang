@@ -1,5 +1,5 @@
 # ==============================================================================
-# ORM Example — Rich Domain Models
+# ORM Example — Rich Domain Models with a Live Database
 # ==============================================================================
 #
 # Demonstrates:
@@ -8,47 +8,58 @@
 #   - Instance methods with business logic
 #   - Computed properties (reactive)
 #   - Property-style attribute access
-#   - Query API
+#   - Query API (find, where, orderBy, limit, count)
+#   - Dirty tracking and validation
 #
-# Run: rip orm-example.rip
-# Requires: rip-db running on localhost:4000 with labs.duckdb
+# Prerequisites:
+#   1. Install rip-db:  bun add -g @rip-lang/db
+#   2. Start rip-db:    rip-db
+#
+# Run:
+#   rip orm-example.rip
 #
 # ==============================================================================
 
-import { Model, makeCallable, connect } from '@rip-lang/schema/orm'
+import { Model, makeCallable, connect } from '../orm.js'
 
-connect 'http://localhost:4000'
+# Connect to rip-db (default: http://localhost:4213)
+connect 'http://localhost:4213'
 
 # ==============================================================================
-# Model Definition — Better than Rails!
+# Setup — Create table and seed data
 # ==============================================================================
-#
-# In Rails, schema is scattered across:
-#   - migrations (column types)
-#   - validations (required, format)
-#   - database (constraints)
-#
-# In Rip, it's all in one place:
+
+setup = ->
+  res = fetch! 'http://localhost:4213/sql',
+    method: 'POST'
+    headers: { 'Content-Type': 'application/json' }
+    body: JSON.stringify sql: """
+      DROP TABLE IF EXISTS users;
+      CREATE TABLE users (
+        id      INTEGER PRIMARY KEY,
+        name    VARCHAR NOT NULL,
+        email   VARCHAR NOT NULL UNIQUE,
+        score   DOUBLE,
+        active  BOOLEAN DEFAULT true
+      );
+      INSERT INTO users VALUES (1, 'Alice',   'alice@example.com',   95.5, true);
+      INSERT INTO users VALUES (2, 'Bob',     'bob@example.com',     82.0, true);
+      INSERT INTO users VALUES (3, 'Charlie', 'charlie@example.com', 67.3, true);
+      INSERT INTO users VALUES (4, 'Dana',    'dana@example.com',    91.0, false);
+      INSERT INTO users VALUES (5, 'Eve',     'eve@example.com',     45.2, true);
+    """
+  data = res.json!
+  throw new Error "Setup failed: #{data.error}" if data.error
+  console.log 'Setup: created users table with 5 records\n'
+
+setup!
+
+# ==============================================================================
+# Model Definition
+# ==============================================================================
 
 class UserModel extends Model
-  @table    = 'users'
-  @database = 'labs'
-
-  # Schema: types, constraints, defaults, column mapping — all here
-  @schema
-    id:    { type: 'int', primary: true }
-    name:  { type: 'string', required: true, min: 1, max: 100 }
-    email: { type: 'email', required: true, unique: true }
-    score: { type: 'float' }
-    # hairColor: { type: 'string', enum: ['blonde','brown','black','red'], column: 'hair_color' }
-    # active:    { type: 'bool', default: true }
-
-  # ----------------------------------------------------------------------------
-  # Instance methods — Rich business logic on records
-  # ----------------------------------------------------------------------------
-
   createAccessCode: (secs = 3600) ->
-    # Generate 5-char code from safe alphabet (no I, L, O)
     syms = 'ABCDEFGHJKMNPQRSTUVWXYZ'.split('')
     code = [1..5].map(-> syms[Math.floor(Math.random() * syms.length)]).join('')
     @code = code
@@ -58,21 +69,20 @@ class UserModel extends Model
   greet: ->
     "Hello, #{@name}!"
 
-  # ----------------------------------------------------------------------------
-  # Computed properties — Reactive getters (better than Ruby!)
-  # ----------------------------------------------------------------------------
-  #
-  # In Ruby:
-  #   def identifier
-  #     "#{name} (##{id})"
-  #   end
-  #
-  # In Rip, computed fields auto-update when dependencies change:
+UserModel.table = 'users'
 
-  @computed
-    identifier: -> "#{@name} (##{@id})"
-    isHighScorer: -> @score? and @score > 90
-    # isExpired: -> @codeExpiresAt? and Date.now() > @codeExpiresAt
+# Schema: types, constraints, defaults — all in one place
+UserModel.schema
+  id:     { type: 'int', primary: true }
+  name:   { type: 'string', required: true, min: 1, max: 100 }
+  email:  { type: 'email', required: true, unique: true }
+  score:  { type: 'float' }
+  active: { type: 'bool', default: true }
+
+# Computed properties: reactive getters
+UserModel.computed
+  identifier:   -> "#{@name} (##{@id})"
+  isHighScorer: -> @score? and @score > 90
 
 # Make callable: User(25) → User.find(25)
 User = makeCallable UserModel
@@ -81,55 +91,54 @@ User = makeCallable UserModel
 # Query Examples
 # ==============================================================================
 
-console.log '=== Find by ID (callable style) ==='
+console.log '── Find by ID (callable style) ────────────────────────────'
 user = User! 1
 console.log user?.toJSON()
 console.log "Greeting: #{user?.greet()}"
 
-console.log '\n=== Find by ID (method style) ==='
+console.log '\n── Find by ID (method style) ───────────────────────────────'
 user = User.find! 2
 console.log user?.toJSON()
 
-console.log '\n=== Computed properties ==='
+console.log '\n── Computed properties ─────────────────────────────────────'
 user = User! 1
-console.log "identifier: #{user?.identifier}"
+console.log "identifier:   #{user?.identifier}"
 console.log "isHighScorer: #{user?.isHighScorer}"
 
-console.log '\n=== All users ==='
+console.log '\n── All users ───────────────────────────────────────────────'
 users = User.all!()
 for u in users
   console.log "  #{u.identifier} — score=#{u.score} high=#{u.isHighScorer}"
 
-console.log '\n=== Where (object style) ==='
+console.log '\n── Where (object style) ────────────────────────────────────'
 users = User.where!(name: 'Alice').all!()
 console.log users.map (u) -> u.toJSON()
 
-console.log '\n=== Where (SQL style) ==='
+console.log '\n── Where (SQL style) ───────────────────────────────────────'
 users = User.where!('score > ?', 90).all!()
 console.log "High scorers:", users.map (u) -> u.identifier
 
-console.log '\n=== Chainable query ==='
+console.log '\n── Chainable query ─────────────────────────────────────────'
 users = User.where!('score > ?', 80).orderBy!('score', 'DESC').limit!(2).all!()
 console.log "Top 2:", users.map (u) -> "#{u.name}: #{u.score}"
 
-console.log '\n=== Count ==='
+console.log '\n── Count ───────────────────────────────────────────────────'
 console.log "Total users: #{User.count!()}"
 
-console.log '\n=== Instance method ==='
+console.log '\n── Instance method ─────────────────────────────────────────'
 user = User! 1
 code = user.createAccessCode(60)
 console.log "Access code for #{user.name}: #{code}"
 
-console.log '\n=== Property mutation + dirty tracking ==='
+console.log '\n── Property mutation + dirty tracking ──────────────────────'
 user = User! 1
 console.log "Before: #{user.name}, dirty=#{user.$dirty}"
 user.name = "Alice Updated"
-console.log "After: #{user.name}, dirty=#{user.$dirty}, changed=#{user.$changed}"
-# user.save!()  # Would persist the change
+console.log "After:  #{user.name}, dirty=#{user.$dirty}, changed=#{user.$changed}"
 
-console.log '\n=== Validation ==='
+console.log '\n── Validation ──────────────────────────────────────────────'
 badUser = new UserModel { email: 'not-valid' }
 errors = badUser.$validate()
 console.log "Validation errors:", errors
 
-console.log '\n=== Done! ==='
+console.log '\n── Done! ───────────────────────────────────────────────────'

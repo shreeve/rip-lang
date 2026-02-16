@@ -1,18 +1,25 @@
 {
   "name": "@rip-lang/schema",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Unified schema language for types, validation, database models, UI widgets, and reactive state",
   "type": "module",
   "main": "index.js",
+  "bin": {
+    "rip-schema": "./generate.js"
+  },
   "exports": {
     ".": "./index.js",
     "./runtime": "./runtime.js",
+    "./orm": "./orm.js",
     "./lexer": "./lexer.js",
-    "./parser": "./parser.js"
+    "./parser": "./parser.js",
+    "./emit-types": "./emit-types.js",
+    "./emit-sql": "./emit-sql.js"
   },
   "scripts": {
     "parser": "bun ../../src/grammar/solar.rip -o parser.js grammar.rip",
-    "test": "echo \"Tests coming soon\" && exit 0"
+    "generate": "bun generate.js",
+    "test": "bun test/test-generators.js"
   },
   "keywords": [
     "schema",
@@ -42,11 +49,14 @@
   "files": [
     "index.js",
     "runtime.js",
+    "orm.js",
     "lexer.js",
     "parser.js",
+    "emit-types.js",
+    "emit-sql.js",
+    "generate.js",
     "grammar.rip",
     "README.md",
-    "GUIDE.md",
     "SCHEMA.md"
   ]
 }

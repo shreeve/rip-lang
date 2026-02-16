@@ -101,9 +101,13 @@ export class Schema {
 
   _registerEnum(def) {
     // ["enum", name, values]
+    // Simple: ["admin", "user", "guest"]
+    // Valued: [["pending", 0], ["active", 1]]
     const [, name, values] = def
-    const enumValues = new Set(Array.isArray(values) ? values : [values])
-    this.enums.set(name, enumValues)
+    const members = Array.isArray(values[0])
+      ? values.map(v => v[0])   // Extract member names from valued enums
+      : values
+    this.enums.set(name, new Set(members))
   }
 
   _registerType(def) {

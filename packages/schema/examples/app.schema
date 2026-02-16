@@ -1,0 +1,87 @@
+# ==============================================================================
+# Example App Schema — A blog platform
+#
+# This single file replaces:
+#   - TypeScript interfaces (types/user.ts, types/post.ts, ...)
+#   - Zod validators (schemas/user.ts, schemas/post.ts, ...)
+#   - Prisma schema (prisma/schema.prisma)
+#
+# Generate outputs:
+#   bun ../generate.js app.schema --outdir ./generated
+#
+# Or use programmatically:
+#   bun app-demo.js
+# ==============================================================================
+
+# --- Enums --------------------------------------------------------------------
+
+@enum Role: admin, editor, viewer
+
+@enum PostStatus
+  draft:     "draft"
+  published: "published"
+  archived:  "archived"
+
+# --- Types (no database table) ------------------------------------------------
+
+@type Address
+  street!  string, [1, 200]
+  city!    string, [1, 100]
+  state!   string, [2, 2]
+  zip!     string, [5, 10]
+  country  string, ["US"]
+
+# --- Models (database-backed) -------------------------------------------------
+
+@model User
+  name!     string, [1, 100]
+  email!#   email
+  role      Role, ["viewer"]
+  bio?      text, [0, 500]
+  address?  Address
+  active    boolean, [true]
+
+  @belongs_to Organization, { optional: true }
+  @has_many Post
+  @has_many Comment
+
+  @timestamps
+
+  @index email#
+  @index [role, active]
+
+@model Organization
+  name!     string, [1, 200]
+  domain!#  string
+  plan      string, ["free"]
+
+  @has_many User
+  @timestamps
+
+@model Post
+  title!       string, [1, 200]
+  slug!#       string, [1, 200]
+  content!     text
+  excerpt?     text, [0, 500]
+  status       PostStatus, ["draft"]
+  publishedAt? datetime
+  viewCount    integer, [0]
+
+  @belongs_to User
+  @has_many Comment
+
+  @timestamps
+  @softDelete
+
+  @index slug#
+  @index [userId, status]
+
+@model Comment
+  body!     text, [1, 5000]
+  approved  boolean, [false]
+
+  @belongs_to Post
+  @belongs_to User
+
+  @timestamps
+  @softDelete
