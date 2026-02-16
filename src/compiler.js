@@ -201,9 +201,7 @@ export class CodeGenerator {
 
     // Control flow — simple
     'break': 'generateBreak',
-    'break-if': 'generateBreakIf',
     'continue': 'generateContinue',
-    'continue-if': 'generateContinueIf',
     '?': 'generateExistential',
     '?:': 'generateTernary',
     '|>': 'generatePipe',
@@ -1140,9 +1138,7 @@ export class CodeGenerator {
   // ---------------------------------------------------------------------------
 
   generateBreak()    { return 'break'; }
-  generateBreakIf(head, rest)    { return `if (${this.generate(rest[0], 'value')}) break`; }
   generateContinue() { return 'continue'; }
-  generateContinueIf(head, rest) { return `if (${this.generate(rest[0], 'value')}) continue`; }
 
   generateExistential(head, rest) {
     return `(${this.generate(rest[0], 'value')} != null)`;
@@ -1837,7 +1833,7 @@ export class CodeGenerator {
     let hasCtrl = (node) => {
       if (typeof node === 'string' && (node === 'break' || node === 'continue')) return true;
       if (!Array.isArray(node)) return false;
-      if (['break', 'continue', 'break-if', 'continue-if', 'return', 'throw'].includes(node[0])) return true;
+      if (['break', 'continue', 'return', 'throw'].includes(node[0])) return true;
       if (node[0] === 'if' || node[0] === 'unless') return node.slice(1).some(hasCtrl);
       return node.some(hasCtrl);
     };
