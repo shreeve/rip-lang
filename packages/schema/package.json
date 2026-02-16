@@ -37,7 +37,7 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": "^3.8.8"
+    "rip-lang": "^3.8.9"
   },
   "files": [
     "index.js",

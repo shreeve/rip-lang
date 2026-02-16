@@ -1068,6 +1068,11 @@ export class CodeGenerator {
         return `if (${this.generate(condition, 'value')}) return ${this.generate(val, 'value')}`;
       }
     }
+    if (this.is(expr, 'new') && Array.isArray(expr[1]) && expr[1][0] === 'if') {
+      let [, condition, body] = expr[1];
+      let val = Array.isArray(body) && body.length === 1 ? body[0] : body;
+      return `if (${this.generate(condition, 'value')}) return ${this.generate(['new', val], 'value')}`;
+    }
     return `return ${this.generate(expr, 'value')}`;
   }
 

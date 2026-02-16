@@ -586,7 +586,7 @@ export const createRouter = (function(components, opts = {}) {
   tree = buildRoutes(components, root);
   navCallbacks = new Set();
   components.watch(function(event, path) {
-    if (!(path.startsWith(root + '/'))) return;
+    if (!path.startsWith(root + '/')) return;
     return (tree = buildRoutes(components, root));
   });
   resolve = function(url) {
@@ -845,7 +845,13 @@ export const createRenderer = (function(opts = {}) {
           }
         }
       };
-      return (!handled ? container.appendChild(pre) : undefined);
+      return (() => { if (!handled) {
+        pre = document.createElement('pre');
+        pre.style.cssText = 'color:red;padding:1em';
+        pre.textContent = err.stack || err.message;
+        container.innerHTML = '';
+        return container.appendChild(pre);
+      } })();
     } })();
   };
   renderer = {start: (function() {
@@ -890,7 +896,7 @@ export const launch = (async function(appBase = '', opts = {}) {
   } else {
     bundleUrl = `${appBase}/bundle`;
     res = await fetch(bundleUrl);
-    if (!(res.ok)) {
+    if (!res.ok) {
       throw new Error(`launch: ${bundleUrl} (${res.status})`);
     };
     bundle = await res.json();

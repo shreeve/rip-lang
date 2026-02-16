@@ -7,6 +7,15 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.9] - 2026-02-16
+
+### Compiler — Grammar Desugaring & Cleanup
+
+- **`until` desugared to `while`** — Grammar now emits `["while", ["!", cond], ...]` directly, eliminating `generateUntil` from the compiler. Also fixes the `until...when` guard bug where the guard expression was silently dropped.
+- **`unless` desugared to `if`** — Grammar now emits `["if", ["!", cond], ...]` for all `unless` forms, removing ~20 `unless`-specific code paths from the compiler (dispatch table, postfix conditionals, assignment handlers, return/throw handlers, control flow analysis).
+- **`toSearchable` renamed to `toMatchable`** — The regex helper name now matches the `.match()` API it wraps.
+- **Added missing `%%=` handler** — The mathematical modulo assignment operator now works correctly instead of crashing during code generation.
+
 ## [3.8.8] - 2026-02-16
 
 ### Compiler — Refactoring & Cleanup

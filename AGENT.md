@@ -19,7 +19,7 @@ echo 'your code' | ./bin/rip -s  # S-expressions (parser)
 echo 'your code' | ./bin/rip -c  # JavaScript (codegen)
 
 # Run tests
-bun run test                             # All tests (1241)
+bun run test                             # All tests (1242)
 bun test/runner.js test/rip/FILE.rip     # Specific file
 
 # Rebuild parser (after grammar changes)
@@ -33,7 +33,7 @@ bun run browser
 
 | Metric | Value |
 |--------|-------|
-| Version | 3.8.8 |
+| Version | 3.8.9 |
 | Tests | 1,241/1,241 (100%) |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
@@ -46,7 +46,7 @@ bun run browser
 rip-lang/
 ├── src/
 │   ├── lexer.js         # Lexer + Rewriter (2,024 LOC)
-│   ├── compiler.js      # Compiler + Code Generator (3,317 LOC)
+│   ├── compiler.js      # Compiler + Code Generator (3,289 LOC)
 │   ├── types.js         # Type System — sidecar for lexer (1,099 LOC)
 │   ├── components.js    # Component System — sidecar for compiler (1,250 LOC)
 │   ├── sourcemaps.js    # Source Map V3 generator (121 LOC)
@@ -96,7 +96,7 @@ rip-lang/
 
 ```
 Rip Source  ->  Lexer  ->  emitTypes  ->  Parser  ->  S-Expressions  ->  Codegen  ->  JavaScript
-               (2,024)     (types.js)     (359)       (arrays + .loc)     (3,317)      + source map
+               (2,024)     (types.js)     (359)       (arrays + .loc)     (3,289)      + source map
                               ↓
                            file.d.ts (when types: "emit")
 ```
