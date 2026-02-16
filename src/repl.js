@@ -370,11 +370,30 @@ export class RipREPL {
     // Extract last expression for result capture
     const lines = js.trim().split('\n');
     let lastLine = lines[lines.length - 1];
+    const STMT_RE = /^\s*(import |export |let |const |var |for |while |if |else |switch |try |class |function )/;
 
-    if (lastLine && !lastLine.startsWith('import ') && !lastLine.startsWith('export ') &&
-        !lastLine.startsWith('let ') && !lastLine.startsWith('const ')) {
-      if (lastLine.endsWith(';')) lastLine = lastLine.slice(0, -1);
-      lines[lines.length - 1] = '__result = ' + lastLine + ';';
+    if (lastLine && !STMT_RE.test(lastLine)) {
+      // If the last line is a continuation of a multi-line expression
+      // (e.g., })(); from a comprehension IIFE), scan backwards to find
+      // where the expression actually starts by tracking delimiter depth
+      if (/^\s*[}\)]/.test(lastLine)) {
+        let depth = 0;
+        for (let i = lines.length - 1; i >= 0; i--) {
+          for (const ch of lines[i]) {
+            if (ch === '(' || ch === '{' || ch === '[') depth--;
+            if (ch === ')' || ch === '}' || ch === ']') depth++;
+          }
+          if (depth <= 0 && !STMT_RE.test(lines[i])) {
+            if (lines[lines.length - 1].endsWith(';'))
+              lines[lines.length - 1] = lines[lines.length - 1].slice(0, -1);
+            lines[i] = '__result = ' + lines[i];
+            break;
+          }
+        }
+      } else {
+        if (lastLine.endsWith(';')) lastLine = lastLine.slice(0, -1);
+        lines[lines.length - 1] = '__result = ' + lastLine + ';';
+      }
     }
 
     // Build module code
