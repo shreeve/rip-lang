@@ -547,6 +547,49 @@ export function installComponentSupport(CodeGenerator) {
   };
 
   // --------------------------------------------------------------------------
+  // appendChildren — shared child-processing loop for generateTag/generateDynamicTag
+  // --------------------------------------------------------------------------
+
+  proto.appendChildren = function(elVar, args) {
+    for (const arg of args) {
+      if (this.is(arg, '->') || this.is(arg, '=>')) {
+        const block = arg[2];
+        if (this.is(block, 'block')) {
+          for (const child of block.slice(1)) {
+            const childVar = this.generateNode(child);
+            this._createLines.push(`${elVar}.appendChild(${childVar});`);
+          }
+        } else if (block) {
+          const childVar = this.generateNode(block);
+          this._createLines.push(`${elVar}.appendChild(${childVar});`);
+        }
+      }
+      else if (this.is(arg, 'object')) {
+        this.generateAttributes(elVar, arg);
+      }
+      else if (typeof arg === 'string' || arg instanceof String) {
+        const textVar = this.newTextVar();
+        const val = arg.valueOf();
+        if (val.startsWith('"') || val.startsWith("'") || val.startsWith('`')) {
+          this._createLines.push(`${textVar} = document.createTextNode(${val});`);
+        } else if (this.reactiveMembers && this.reactiveMembers.has(val)) {
+          this._createLines.push(`${textVar} = document.createTextNode('');`);
+          this._setupLines.push(`__effect(() => { ${textVar}.data = this.${val}.value; });`);
+        } else if (this.componentMembers && this.componentMembers.has(val)) {
+          this._createLines.push(`${textVar} = document.createTextNode(String(this.${val}));`);
+        } else {
+          this._createLines.push(`${textVar} = document.createTextNode(${this.generateInComponent(arg, 'value')});`);
+        }
+        this._createLines.push(`${elVar}.appendChild(${textVar});`);
+      }
+      else if (arg) {
+        const childVar = this.generateNode(arg);
+        this._createLines.push(`${elVar}.appendChild(${childVar});`);
+      }
+    }
+  };
+
+  // --------------------------------------------------------------------------
   // generateTag — HTML element with static classes and children
   // --------------------------------------------------------------------------
 
@@ -561,60 +604,7 @@ export function installComponentSupport(CodeGenerator) {
       this._createLines.push(`${elVar}.className = '${classes.join(' ')}';`);
     }
 
-    for (const arg of args) {
-      // Arrow function = children
-      if (Array.isArray(arg) && (arg[0] === '->' || arg[0] === '=>')) {
-        const block = arg[2];
-        if (this.is(block, 'block')) {
-          for (const child of block.slice(1)) {
-            const childVar = this.generateNode(child);
-            this._createLines.push(`${elVar}.appendChild(${childVar});`);
-          }
-        } else if (block) {
-          const childVar = this.generateNode(block);
-          this._createLines.push(`${elVar}.appendChild(${childVar});`);
-        }
-      }
-      // Object = attributes/events
-      else if (this.is(arg, 'object')) {
-        this.generateAttributes(elVar, arg);
-      }
-      // String = text child
-      else if (typeof arg === 'string') {
-        const textVar = this.newTextVar();
-        if (arg.startsWith('"') || arg.startsWith("'") || arg.startsWith('`')) {
-          this._createLines.push(`${textVar} = document.createTextNode(${arg});`);
-        } else if (this.reactiveMembers && this.reactiveMembers.has(arg)) {
-          this._createLines.push(`${textVar} = document.createTextNode('');`);
-          this._setupLines.push(`__effect(() => { ${textVar}.data = this.${arg}.value; });`);
-        } else if (this.componentMembers && this.componentMembers.has(arg)) {
-          this._createLines.push(`${textVar} = document.createTextNode(String(this.${arg}));`);
-        } else {
-          this._createLines.push(`${textVar} = document.createTextNode(String(${arg}));`);
-        }
-        this._createLines.push(`${elVar}.appendChild(${textVar});`);
-      }
-      // String object (from parser)
-      else if (arg instanceof String) {
-        const val = arg.valueOf();
-        const textVar = this.newTextVar();
-        if (val.startsWith('"') || val.startsWith("'") || val.startsWith('`')) {
-          this._createLines.push(`${textVar} = document.createTextNode(${val});`);
-        } else if (this.reactiveMembers && this.reactiveMembers.has(val)) {
-          this._createLines.push(`${textVar} = document.createTextNode('');`);
-          this._setupLines.push(`__effect(() => { ${textVar}.data = this.${val}.value; });`);
-        } else {
-          this._createLines.push(`${textVar} = document.createTextNode(String(${val}));`);
-        }
-        this._createLines.push(`${elVar}.appendChild(${textVar});`);
-      }
-      // Other = nested element
-      else if (arg) {
-        const childVar = this.generateNode(arg);
-        this._createLines.push(`${elVar}.appendChild(${childVar});`);
-      }
-    }
-
+    this.appendChildren(elVar, args);
     return elVar;
   };
 
@@ -634,43 +624,7 @@ export function installComponentSupport(CodeGenerator) {
       this._setupLines.push(`__effect(() => { ${elVar}.className = __clsx(${classArgs}); });`);
     }
 
-    for (const arg of children) {
-      const argHead = Array.isArray(arg) ? (arg[0] instanceof String ? arg[0].valueOf() : arg[0]) : null;
-      if (argHead === '->' || argHead === '=>') {
-        const block = arg[2];
-        const blockHead = Array.isArray(block) ? (block[0] instanceof String ? block[0].valueOf() : block[0]) : null;
-        if (blockHead === 'block') {
-          for (const child of block.slice(1)) {
-            const childVar = this.generateNode(child);
-            this._createLines.push(`${elVar}.appendChild(${childVar});`);
-          }
-        } else if (block) {
-          const childVar = this.generateNode(block);
-          this._createLines.push(`${elVar}.appendChild(${childVar});`);
-        }
-      }
-      else if (this.is(arg, 'object')) {
-        this.generateAttributes(elVar, arg);
-      }
-      else if (typeof arg === 'string' || arg instanceof String) {
-        const textVar = this.newTextVar();
-        const argStr = arg.valueOf();
-        if (argStr.startsWith('"') || argStr.startsWith("'") || argStr.startsWith('`')) {
-          this._createLines.push(`${textVar} = document.createTextNode(${argStr});`);
-        } else if (this.reactiveMembers && this.reactiveMembers.has(argStr)) {
-          this._createLines.push(`${textVar} = document.createTextNode('');`);
-          this._setupLines.push(`__effect(() => { ${textVar}.data = this.${argStr}.value; });`);
-        } else {
-          this._createLines.push(`${textVar} = document.createTextNode(${this.generateInComponent(arg, 'value')});`);
-        }
-        this._createLines.push(`${elVar}.appendChild(${textVar});`);
-      }
-      else {
-        const childVar = this.generateNode(arg);
-        this._createLines.push(`${elVar}.appendChild(${childVar});`);
-      }
-    }
-
+    this.appendChildren(elVar, children);
     return elVar;
   };
 
