@@ -2,328 +2,258 @@
 
 # Rip Schema - @rip-lang/schema
 
-> **Define once, use everywhere.**
+**One definition. Three outputs. Zero drift.**
 
-A unified schema language for types, validation, database models, rich domain objects, UI widgets, and reactive state — all from a single source of truth.
-
-## Overview
-
-Every serious application needs the same things: types, validation, database models, business logic, UI components, and state management. Today, that requires 5-6 different tools and syntaxes that must stay manually synchronized:
-
-```
-schema.prisma      → Database schema
-types.ts           → TypeScript interfaces
-schemas/user.ts    → Zod validation
-models/user.rb     → ActiveRecord model
-forms/UserForm.tsx → React form component
-store/user.ts      → State management
-```
-
-**Rip Schema collapses all of this into one coherent system:**
-
-```
-User.rip           → Everything
-```
-
-One file. One syntax. Always in sync. With capabilities that exceed what any single tool provides today.
+A schema language that generates TypeScript types, runtime validators, and SQL
+from a single source of truth.
 
 ---
 
-## What Makes This Different
+## The Problem
 
-### Beyond Validation — Truly Reactive Domain Models
+Every real application needs three things:
 
-Most schema tools stop at validation. Rip Schema goes further, providing **ActiveRecord-style domain models** with **native reactivity**:
+1. **TypeScript types** — for compile-time safety and IDE support
+2. **Runtime validators** — for rejecting bad inputs in production
+3. **Database schema** — for tables, constraints, indexes, and migrations
 
-- **Inheritance** — `class User extends Model`
-- **Instance methods** — Business logic on records
-- **Reactive state** — `:=` tracks all changes automatically
-- **Computed properties** — `~=` auto-updates when dependencies change
-- **Effects** — `~>` auto-runs side effects on change
-- **Query API** — `User.find(25)`, `User.where(active: true)`
-- **Automatic dirty tracking** — No manual `markDirty()` calls
-- **Persistence** — `user.save()`, `user.delete()`
+Today, you write each one separately:
 
-This isn't just a schema language — it's a **reactive ORM** that's cleaner than Rails and more powerful than anything in the JavaScript ecosystem.
+```
+types/user.ts         →  interface User { name: string; email: string; ... }
+schemas/user.ts       →  z.object({ name: z.string().min(1).max(100), ... })
+prisma/schema.prisma  →  model User { name String @db.VarChar(100) ... }
+```
 
-### Feature Comparison
+Three files. Three syntaxes. Three things to keep in sync manually. They drift
+apart — silently, inevitably — and you find out at the worst possible time.
 
-| Feature | Zod | Prisma | Rails | Rip Schema |
-|---------|-----|--------|-------|------------|
-| Type definitions | ✓ | ✓ | ✓ | ✓ |
-| Runtime validation | ✓ | ✗ | ✓ | ✓ |
-| Database schema | ✗ | ✓ | ✓ | ✓ |
-| Relationships | ✗ | ✓ | ✓ | ✓ |
-| Instance methods | ✗ | ✗ | ✓ | ✓ |
-| Computed properties | ✗ | ✗ | ✓ | **✓ (truly reactive!)** |
-| Reactive effects | ✗ | ✗ | ✗ | **✓ (`~>`)** |
-| Query builder | ✗ | ✓ | ✓ | ✓ |
-| Dirty tracking | ✗ | ✗ | ✓ | **✓ (automatic!)** |
-| UI/Form definitions | ✗ | ✗ | ✗ | ✓ |
-| Widget system | ✗ | ✗ | ✗ | ✓ |
-| State management | ✗ | ✗ | ✗ | ✓ |
-| Concise modifiers | ✗ | ✗ | ✗ | ✓ (`!#?`) |
-| Centralized schema | ✗ | Partial | ✗ | ✓ |
-| Native reactivity | ✗ | ✗ | ✗ | **✓ (`:=`, `~=`, `~>`)** |
+This isn't a tooling failure. It's a structural one. Each tool solves a
+different problem at a different layer:
+
+| Tool | What it solves | Where it works | What it can't do |
+|------|---------------|----------------|------------------|
+| TypeScript | Compile-time safety | IDE, build step | Vanishes at runtime |
+| Zod | Runtime validation | API boundaries | No database awareness |
+| Prisma | Database persistence | Migrations, queries | No runtime validation |
+
+You can't eliminate this by picking one tool. TypeScript types are erased before
+your code runs. Zod doesn't know about indexes. Prisma can't enforce "must be a
+valid email" at the API layer.
+
+But you can eliminate it by writing a definition that's richer than any single
+tool — and generating all three from it.
 
 ---
 
-## Quick Start
+## The Answer
+
+Write one schema:
 
 ```coffee
-import { Model, makeCallable, connect } from '@rip-lang/schema/orm'
+@enum Role: admin, user, guest
 
-connect 'http://localhost:4000'  # Connect to rip-db
+@model User
+  name!     string, [1, 100]
+  email!#   email
+  role      Role, [user]
+  bio?      text, [0, 1000]
+  active    boolean, [true]
 
-# Define a rich domain model with native reactivity
-class UserModel extends Model
-  @table    = 'users'
-  @database = 'labs'
+  @belongs_to Organization
+  @has_many Post
 
-  # Schema: types, constraints, defaults — all in one place
-  @schema
-    id:        { type: 'int', primary: true }
-    name:      { type: 'string', required: true, min: 1, max: 100 }
-    email:     { type: 'email', required: true, unique: true }
-    hairColor: { type: 'string', enum: ['blonde','brown','black','red'], column: 'hair_color' }
-    active:    { type: 'bool', default: true }
+  @timestamps
+  @index [role, active]
 
-  # Reactive state (`:=` tracks changes)
-  code := null
-  codeExpiresAt := null
+  @computed
+    displayName -> "#{@name} <#{@email}>"
+    isAdmin     -> @role is 'admin'
 
-  # Computed properties (`~=` auto-updates when dependencies change!)
-  identifier ~= "#{@name} (##{@id})"
-  displayName ~= "#{@name} <#{@email}>"
-  isAdmin ~= @role is 'admin'
-  isExpired ~= @codeExpiresAt? and Date.now() > @codeExpiresAt
-
-  # Effects (`~>` auto-runs when dependencies change)
-  ~> console.log "User #{@id} updated" if @$changed
-
-  # Instance methods — business logic on records
-  createAccessCode: (secs = 3600) ->
-    syms = 'ABCDEFGHJKMNPQRSTUVWXYZ'.split('')
-    @code = [1..5].map(-> syms[Math.floor(Math.random() * syms.length)]).join('')
-    @codeExpiresAt = Date.now() + secs * 1000
-    @code
-
-  greet: ->
-    "Hello, #{@name}!"
-
-# Make it callable: User(25) → User.find(25)
-User = makeCallable UserModel
-
-# Query API
-user  = User(25)                          # Find by ID
-user  = User.find(25)                     # Same thing
-users = User([1, 2, 3])                   # Find multiple
-users = User.all()                        # All records
-users = User.where(active: true).all()   # Filtered
-users = User.where('score > ?', 90).orderBy('name').limit(10).all()
-
-# Rich record instances
-user.name                                 # Property access
-user.hairColor = 'red'                    # Setter (tracks dirty)
-user.identifier                           # Computed property
-user.createAccessCode(3600)               # Instance method
-user.$dirty                               # ['hairColor']
-user.$validate()                          # Validate against schema
-user.save()                               # Persist changes
+  @validate
+    password -> @matches(/[A-Z]/) and @matches(/[0-9]/)
 ```
+
+Get three outputs.
+
+**TypeScript types:**
+
+```typescript
+export type Role = 'admin' | 'user' | 'guest';
+
+export interface User {
+  id: number;
+  name: string;
+  email: string;
+  role: Role;
+  bio?: string;
+  active: boolean;
+  organizationId: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+**Runtime validators (Zod):**
+
+```typescript
+import { z } from 'zod';
+
+export const RoleSchema = z.enum(['admin', 'user', 'guest']);
+
+export const UserSchema = z.object({
+  id:             z.number().int(),
+  name:           z.string().min(1).max(100),
+  email:          z.string().email(),
+  role:           RoleSchema.default('user'),
+  bio:            z.string().max(1000).optional(),
+  active:         z.boolean().default(true),
+  organizationId: z.number().int(),
+  createdAt:      z.date(),
+  updatedAt:      z.date(),
+});
+
+export type User = z.infer<typeof UserSchema>;
+
+export const UserCreateSchema = UserSchema.omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export const UserUpdateSchema = UserCreateSchema.partial();
+```
+
+**SQL DDL:**
+
+```sql
+CREATE TABLE users (
+  id              INTEGER  PRIMARY KEY AUTOINCREMENT,
+  name            TEXT     NOT NULL CHECK(length(name) BETWEEN 1 AND 100),
+  email           TEXT     NOT NULL UNIQUE,
+  role            TEXT     NOT NULL DEFAULT 'user'
+                           CHECK(role IN ('admin', 'user', 'guest')),
+  bio             TEXT,
+  active          INTEGER  NOT NULL DEFAULT 1,
+  organization_id INTEGER  NOT NULL REFERENCES organizations(id),
+  created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_users_role_active ON users(role, active);
+```
+
+One source of truth. Always in sync. Impossible to drift.
 
 ---
 
-## Why This Is Better Than Rails
+## Why Not Just TypeScript?
 
-### 1. Centralized Schema
+TypeScript types are the weakest candidate for a single source of truth:
 
-**Rails** scatters schema across multiple files:
-- `db/migrate/*.rb` — Column types
-- `app/models/user.rb` — Validations, callbacks
-- Database constraints — Separate layer
+1. **Erased at runtime.** `JSON.parse()` returns `any`. Network responses,
+   database rows, and form submissions are all untyped at the moment you need
+   protection most. TypeScript can't help because it no longer exists.
 
-**Rip Schema** centralizes everything:
+2. **Can't express constraints.** There is no way to say "string between 1 and
+   100 characters" or "must be a valid email" in a TypeScript type. You need
+   runtime code for that — which means you need a second system.
 
-```coffee
-@schema
-  id:        { type: 'int', primary: true }
-  name:      { type: 'string', required: true, min: 1, max: 100 }
-  email:     { type: 'email', required: true, unique: true }
-  hairColor: { type: 'string', enum: ['blonde','brown','black','red'], column: 'hair_color' }
-  active:    { type: 'bool', default: true }
-```
+3. **Can't model persistence.** Indexes, unique constraints, foreign keys,
+   cascade rules, column types, precision — none of these exist in TypeScript's
+   type system. You need a third system.
 
-Types, constraints, defaults, column mapping — **all in one place**.
+You could bolt metadata onto TypeScript with decorators, JSDoc tags, or branded
+types. But then TypeScript isn't the source of truth — your annotation layer
+is. And you've built a schema language anyway, just a worse one bolted onto a
+host that fights you.
 
-### 2. True Reactive Computed Properties
-
-**Rails:**
-```ruby
-def identifier
-  "#{name} (##{id})"
-end
-```
-
-This is just a method. If `name` changes, you have to remember to call `identifier` again.
-
-**Rip Schema** — Using Rip's native reactivity:
-```coffee
-class User extends Model
-  # Reactive state (`:=` tracks changes)
-  name := ''
-  score := 0
-
-  # Computed (`~=` auto-updates when dependencies change!)
-  identifier ~= "#{@name} (##{@id})"
-  isHighScorer ~= @score > 90
-
-  # Effects (`~>` auto-runs when dependencies change)
-  ~> console.log "Score changed!" if @score
-  ~> @$markDirty('score') if @score isnt @_original.score
-```
-
-This is **true reactivity** — computed values automatically track their dependencies and update. Effects run automatically when their dependencies change. No manual invalidation. No stale data bugs.
-
-### 3. Explicit but Terse
-
-Rails relies on "magic" — implicit behaviors that are hard to trace. Rip Schema is explicit but still concise:
-
-| Rails (implicit) | Rip (explicit) |
-|------------------|----------------|
-| `belongs_to :org` (magic foreign key) | `@belongs_to Organization` |
-| `validates :email, presence: true` | `{ required: true }` in schema |
-| `before_save :normalize` (hidden callback) | Explicit method call |
-| `user.email_changed?` (magic method) | `user.$dirty.includes('email')` |
-
-### 4. Property-Style Access
-
-Both Rails and Rip give you clean property access:
-
-```coffee
-user.hairColor              # Read
-user.hairColor = 'brown'    # Write (with dirty tracking)
-```
-
-But Rip's is backed by explicit schema-defined getters, not metaprogramming magic.
-
----
-
-## Rip's Native Reactivity
-
-Rip has built-in reactivity primitives that make the ORM truly reactive:
-
-| Operator | Name | Purpose |
-|----------|------|---------|
-| `:=` | State | Reactive variable that tracks changes |
-| `~=` | Computed | Derived value that auto-updates when dependencies change |
-| `~>` | Effect | Side effect that auto-runs when dependencies change |
-
-### Reactive Records
-
-```coffee
-class User extends Model
-  # Reactive state — changes are tracked automatically
-  name := ''
-  email := ''
-  score := 0
-  active := true
-
-  # Computed — auto-updates when name or id change
-  identifier ~= "#{@name} (##{@id})"
-  displayName ~= "#{@name} <#{@email}>"
-  isHighScorer ~= @score > 90
-  greeting ~= if @active then "Hello, #{@name}!" else "Goodbye!"
-
-  # Effects — auto-run when dependencies change
-  ~> console.log "User updated: #{@identifier}"
-  ~> @_dirty.add('score') if @score isnt @_original.score
-  ~> api.sync!(@) if @$changed and @autoSync
-```
-
-### Why This Matters
-
-**Traditional ORMs** require manual change tracking:
-```javascript
-user.name = 'Alice'
-user.markDirty('name')     // Manual!
-user.recomputeIdentifier() // Manual!
-user.triggerCallbacks()    // Manual!
-```
-
-**Rip's reactive ORM** handles it automatically:
-```coffee
-user.name = 'Alice'
-# → identifier auto-updates (it depends on name)
-# → dirty tracking auto-updates (effect sees the change)
-# → callbacks auto-fire (effects run on change)
-```
-
-### Computed vs Methods
-
-Use **computed** (`~=`) when the value is derived from state:
-```coffee
-# Good — fullName depends on firstName and lastName
-fullName ~= "#{@firstName} #{@lastName}"
-
-# Good — isValid depends on multiple fields
-isValid ~= @name?.length > 0 and @email =~ /@/
-```
-
-Use **methods** when there's logic or side effects:
-```coffee
-# Good — has side effects (generates random code)
-createAccessCode: (secs = 3600) ->
-  code = generateRandomCode()
-  @code = code
-  @codeExpiresAt = Date.now() + secs * 1000
-  code
-
-# Good — takes parameters
-greetWith: (greeting) -> "#{greeting}, #{@name}!"
-```
-
-### Effects for Side Effects
-
-Effects run automatically when their dependencies change:
-
-```coffee
-class User extends Model
-  # Log changes
-  ~> console.log "Name is now: #{@name}"
-
-  # Auto-validate on change
-  ~> @_errors = @$validate() if @$changed
-
-  # Auto-save (debounced)
-  ~> debounce(1000, => @save!()) if @$changed
-
-  # Sync to server
-  ~> api.patch!("/users/#{@id}", @$dirtyData) if @$dirty.length > 0
-```
-
-### Controllable Effects
-
-Named effects can be paused/resumed:
-
-```coffee
-class User extends Model
-  # Named effect — can control it
-  autoSaver ~> @save!() if @$changed
-
-  # Pause during bulk updates
-  bulkUpdate: (data) ->
-    @autoSaver.pause()
-    for key, value of data
-      @[key] = value
-    @autoSaver.resume()
-```
+Rip Schema skips the pretense. It's a schema language purpose-built to capture
+everything all three layers need, and it generates each layer's native format
+directly.
 
 ---
 
 ## Schema Syntax
 
-Rip Schema supports a declarative syntax for defining types, models, widgets, forms, and state:
+### Fields
+
+The basic unit is a field definition:
+
+```
+name[modifiers] type[, [constraints]][, { attributes }]
+```
+
+Examples:
+
+```coffee
+name!     string, [1, 100]          # Required string, 1-100 chars
+email!#   email                     # Required + unique email
+bio?      text, [0, 1000]           # Optional text, max 1000 chars
+role      Role, [user]              # Enum with default value
+score     integer, [0, 100, 50]     # Range + default
+tags      string[]                  # Array of strings
+data      json, [{}]                # JSON with default
+zip!      string, [/^\d{5}$/]       # Regex pattern
+phone!    string, [10, 15], { mask: "(###) ###-####" }  # With UI hints
+```
+
+### Modifiers
+
+Modifiers appear between the field name and the type:
+
+| Modifier | Meaning | TS | Zod | SQL |
+|----------|---------|-----|-----|-----|
+| `!` | Required | non-optional | no `.optional()` | `NOT NULL` |
+| `#` | Unique | — | — | `UNIQUE` |
+| `?` | Optional | `field?: T` | `.optional()` | nullable |
+
+Modifiers can be combined: `email!# email` means required and unique.
+
+### Constraints
+
+Constraints appear in square brackets after the type:
+
+| Syntax | Meaning | Example |
+|--------|---------|---------|
+| `[min, max]` | Range (string length or numeric value) | `[1, 100]` |
+| `[default]` | Default value | `[true]` |
+| `[min, max, default]` | Range + default | `[0, 100, 50]` |
+| `[/regex/]` | Pattern match | `[/^\d{5}$/]` |
+| `[{}]` | Default empty object | `[{}]` |
+| `[->]` | Default from function | `[->]` |
+
+### Primitive Types
+
+| Type | TypeScript | Zod | SQL |
+|------|-----------|-----|-----|
+| `string` | `string` | `z.string()` | `TEXT` |
+| `text` | `string` | `z.string()` | `TEXT` |
+| `integer` | `number` | `z.number().int()` | `INTEGER` |
+| `bigint` | `bigint` | `z.bigint()` | `BIGINT` |
+| `float` | `number` | `z.number()` | `REAL` |
+| `double` | `number` | `z.number()` | `DOUBLE` |
+| `decimal` | `number` | `z.number()` | `DECIMAL` |
+| `boolean` | `boolean` | `z.boolean()` | `INTEGER` |
+| `date` | `Date` | `z.date()` | `DATE` |
+| `time` | `string` | `z.string()` | `TIME` |
+| `datetime` | `Date` | `z.date()` | `DATETIME` |
+| `timestamp` | `number` | `z.number()` | `INTEGER` |
+| `json` | `Record<string, unknown>` | `z.record(z.unknown())` | `TEXT` |
+| `binary` | `Buffer` | `z.instanceof(Buffer)` | `BLOB` |
+| `uuid` | `string` | `z.string().uuid()` | `TEXT` |
+
+### Special Types
+
+These carry built-in validation:
+
+| Type | Validates | Zod |
+|------|-----------|-----|
+| `email` | RFC 5322 format | `z.string().email()` |
+| `url` | Valid URL | `z.string().url()` |
+| `phone` | E.164 or regional | `z.string()` + pattern |
+| `color` | Hex, RGB, named | `z.string()` + pattern |
+
+---
+
+## Definitions
 
 ### Enums
 
@@ -331,238 +261,333 @@ Rip Schema supports a declarative syntax for defining types, models, widgets, fo
 # Inline
 @enum Role: admin, user, guest
 
-# Block with values
+# Block with explicit values
 @enum Status
-  pending: 0
-  active: 1
+  pending:   0
+  active:    1
   suspended: 2
+  deleted:   3
+
+# Block with string values
+@enum Priority
+  low:      "low"
+  medium:   "medium"
+  high:     "high"
+  critical: "critical"
 ```
 
-### Types (Reusable Structures)
+### Types
+
+Types define reusable structures without database backing — useful for embedded
+objects, API payloads, and shared shapes:
 
 ```coffee
 @type Address
-  street!: string
-  city!: string
-  state!: string, [2, 2]
-  zip!: string, [5, 10]
+  street!   string, [1, 200]
+  city!     string, [1, 100]
+  state!    string, [2, 2]
+  zip!      string, [/^\d{5}(-\d{4})?$/]
+
+@type ContactInfo
+  phone?    phone
+  email?    email
+  fax?      phone
 ```
 
-### Models (Database-Backed Entities)
+Types generate TypeScript interfaces and Zod schemas but no SQL tables.
+
+### Models
+
+Models are database-backed entities with full schema, validation, relationships,
+and lifecycle:
 
 ```coffee
 @model User
-  name!: string, [1, 100]       # ! = required, [min, max]
-  email!#: email                # # = unique
-  role?: Role, [user]           # ? = optional, [default]
-  settings: json, [{}]          # JSON with default
-  tags: string[]                # Array type
+  name!       string, [1, 100]
+  email!#     email
+  password!   string, [8, 100]
+  role!       Role, [user]
+  avatar?     url
+  bio?        text, [0, 1000]
+  settings    json, [{}]
+  active      boolean, [true]
 
-  @timestamps                   # createdAt, updatedAt
-  @softDelete                   # deletedAt
+  address?    Address                 # Embedded type
 
-  @index email#                 # Unique index
-  @index [role, active]         # Composite index
+  @timestamps                         # createdAt, updatedAt
+  @softDelete                         # deletedAt
+
+  @index email#                       # Unique index
+  @index [role, active]               # Composite index
+  @index name                         # Non-unique index
 
   @belongs_to Organization
   @has_many Post
 
   @computed
-    displayName: -> "#{@name} <#{@email}>"
-    isAdmin: -> @role == 'admin'
+    displayName -> "#{@name} <#{@email}>"
+    isAdmin     -> @role is 'admin'
 
   @validate
-    password: -> @length >= 8 && @matches(/[A-Z]/)
+    password -> @matches(/[A-Z]/) and @matches(/[0-9]/)
+    email    -> not @endsWith('@test.com') if @env is 'production'
 ```
 
-### Modifiers
+Models generate TypeScript interfaces, Zod schemas, and SQL DDL.
 
-| Modifier | Meaning | Example |
-|----------|---------|---------|
-| `!` | Required (NOT NULL) | `name!: string` |
-| `#` | Unique | `email!#: email` |
-| `?` | Optional | `bio?: text` |
-| `[min, max]` | Range constraint | `name: string, [1, 100]` |
-| `[default]` | Default value | `active: bool, [true]` |
+### Relationships
 
-### Widgets (UI Components)
+```coffee
+@belongs_to User                      # Creates user_id foreign key
+@belongs_to Category, { optional: true }
+@has_one Profile
+@has_many Post
+@has_many Comment
+```
+
+### Indexes and Directives
+
+```coffee
+@index email#                         # Unique index on one field
+@index [role, active]                 # Composite index on multiple fields
+@index name                           # Non-unique index
+
+@timestamps                           # Adds createdAt, updatedAt
+@softDelete                           # Adds deletedAt
+@include Auditable                    # Include mixin fields
+```
+
+### Computed Fields
+
+Read-only fields derived from other fields:
+
+```coffee
+@computed
+  displayName -> "#{@name} <#{@email}>"
+  isAdmin     -> @role is 'admin'
+  age         -> yearsFrom(@dob)
+```
+
+Computed fields appear in TypeScript types as readonly properties and in
+`toJSON()` output but have no SQL column.
+
+### Validation
+
+Custom validation rules beyond what type constraints can express:
+
+```coffee
+@validate
+  password -> @matches(/[A-Z]/) and @matches(/[0-9]/)
+  email    -> not @endsWith('@test.com') if @env is 'production'
+```
+
+Validation rules generate Zod `.refine()` calls and run in the ORM's
+`$validate()` method. They have no SQL equivalent — they protect the API
+boundary, not the database boundary.
+
+### Mixins
+
+Reusable field groups:
+
+```coffee
+@mixin Timestamps
+  createdAt!   datetime
+  updatedAt!   datetime
+
+@mixin SoftDelete
+  deletedAt?   datetime
+
+@mixin Auditable
+  @include Timestamps
+  @include SoftDelete
+  createdBy?   integer
+  updatedBy?   integer
+
+@model Post
+  title!    string, [1, 200]
+  content!  text
+  @include Auditable
+```
+
+---
+
+## Beyond Data: Widgets, Forms, and State
+
+Rip Schema extends beyond the data layer to cover UI and application state. This
+is the same "define once, generate everything" principle applied to
+presentation:
+
+### Widgets
 
 ```coffee
 @widget DataGrid
-  columns!: Column[]
-  pageSize: integer, [25]
-  selectionMode: SelectionMode, [single]
+  columns!       Column[]
+  pageSize       integer, [25]
+  selectionMode  SelectionMode, [single]
+  sortable       boolean, [true]
 
   @events onSelect, onSort, onAction
 ```
 
-### Forms (Model + Layout)
+### Forms
 
 ```coffee
 @form UserForm: User
-  name { x: 0, y: 0, span: 2 }
-  email { x: 0, y: 1, widget: 'input' }
-  role { x: 0, y: 2, widget: 'dropdown' }
+  name  { x: 0, y: 0, span: 2, label: "Full Name" }
+  email { x: 0, y: 1 }
+  role  { x: 0, y: 2, widget: dropdown }
+  bio   { x: 0, y: 3, widget: textarea, rows: 3 }
 
   @actions
-    save { primary: true }
+    save   { primary: true }
     cancel {}
 ```
 
-### State (Reactive State Management)
+### State
 
 ```coffee
 @state App
-  currentUser?: User
-  theme: string, ['light']
-  sidebarOpen: boolean, [true]
+  currentUser?   User
+  theme          string, ['light']
+  sidebarOpen    boolean, [true]
 
   @computed
-    isLoggedIn: -> @currentUser?
-    isAdmin: -> @currentUser?.role is 'admin'
+    isLoggedIn -> @currentUser?
+    isAdmin    -> @currentUser?.role is 'admin'
 
   @actions
-    login { async: true }
+    login  { async: true }
     logout {}
 ```
 
 ---
 
-## ORM API Reference
+## How It Works
 
-### Model Class Methods
+Schemas are parsed by a Solar-generated SLR(1) parser into S-expressions — a
+lightweight tree structure that any code generator can walk:
 
-```coffee
-User.find(id)                    # Find one by primary key
-User.findMany([id1, id2, id3])   # Find multiple by primary keys
-User.all()                       # All records
-User.first()                     # First record
-User.count()                     # Count records
-User.where(conditions)           # Start a query
-User.create(data)                # Create and save
+```
+schema.rip  →  lexer  →  parser  →  S-expressions  →  ┬── emit-ts   →  types.ts
+                                                       ├── emit-zod  →  validators.ts
+                                                       └── emit-sql  →  schema.sql
 ```
 
-### Callable Syntax
+The S-expression for a model looks like:
 
-With `makeCallable`, models become callable:
-
-```coffee
-User = makeCallable UserModel
-
-User(25)          # → User.find(25)
-User([1, 2, 3])   # → User.findMany([1, 2, 3])
-User()            # → User.all()
+```javascript
+["model", "User", null, [
+  ["field", "name",  ["!"],      "string", [[1, 100]], null],
+  ["field", "email", ["!", "#"], "email",  null,       null],
+  ["field", "role",  [],         "Role",   [["user"]], null],
+  ["timestamps"],
+  ["index", ["role", "active"], false]
+]]
 ```
 
-### Query Builder
+Each output target is a simple tree-walker over this structure. Adding a new
+target — OpenAPI, JSON Schema, Prisma, GraphQL — means writing one more walker.
+The schema definition never changes.
 
-```coffee
-User.where(active: true)              # Object conditions
-    .where('score > ?', 90)           # SQL conditions
-    .orderBy('name', 'ASC')           # Sorting
-    .limit(10)                        # Limit
-    .offset(20)                       # Offset
-    .all()                            # Execute → records
-    .first()                          # Execute → single record
-    .count()                          # Execute → number
-```
-
-### Record Instance
-
-```coffee
-# Properties (from schema)
-user.name                    # Get
-user.name = 'Alice'          # Set (tracks dirty)
-
-# Computed properties
-user.identifier              # Reactive getter
-
-# Instance methods
-user.createAccessCode(3600)  # Custom business logic
-
-# State inspection
-user.$isNew                  # Not yet persisted?
-user.$dirty                  # Changed field names
-user.$changed                # Any changes?
-user.$data                   # Raw data object
-
-# Validation
-user.$validate()             # → null or [errors]
-
-# Persistence
-user.save()                  # INSERT or UPDATE
-user.delete()                # DELETE
-user.reload()                # Refresh from DB
-
-# Serialization
-user.toJSON()                # Plain object (includes computed)
-```
+This architecture means the schema language is not coupled to any specific
+output format. It's a **representation of your domain** that happens to be
+renderable into whatever format each layer of your stack needs.
 
 ---
 
-## Schema Runtime API
+## Runtime ORM
 
-The schema runtime provides validation without ORM features — useful for API
-request validation, form validation, config validation, and test factories.
+Beyond code generation, Rip Schema includes an ActiveRecord-style ORM for
+runtime persistence and domain modeling:
 
-```javascript
-import { parse, Schema } from '@rip-lang/schema'
+```coffee
+import { Model, makeCallable, connect } from '@rip-lang/schema/orm'
 
-const ast = parse(`
-  @enum Role: admin, user, guest
+connect 'http://localhost:4000'
 
-  @model User
-    name!: string, [1, 100]
-    email!#: email
-    role: Role, [user]
-    active: boolean, [true]
+class UserModel extends Model
+  @table    = 'users'
+  @database = 'labs'
 
-    @timestamps
-`)
+  @schema
+    id:    { type: 'int', primary: true }
+    name:  { type: 'string', required: true, min: 1, max: 100 }
+    email: { type: 'email', required: true, unique: true }
+    score: { type: 'float' }
+    active: { type: 'bool', default: true }
 
-const schema = new Schema()
-schema.register(ast)
+  @computed
+    identifier:   -> "#{@name} (##{@id})"
+    isHighScorer: -> @score? and @score > 90
 
-const user = schema.create('User', {
-  name: 'John Doe',
-  email: 'john@example.com',
-})
+  createAccessCode: (secs = 3600) ->
+    syms = 'ABCDEFGHJKMNPQRSTUVWXYZ'.split('')
+    @code = [1..5].map(-> syms[Math.floor(Math.random() * syms.length)]).join('')
+    @codeExpiresAt = Date.now() + secs * 1000
+    @code
 
-const errors = user.$validate()  // null = valid
+User = makeCallable UserModel
 ```
 
-### Schema Class Methods
+### Queries
 
-| Method | Purpose |
-|--------|---------|
-| `schema.register(ast)` | Register definitions from parsed AST |
-| `schema.create(name, data)` | Create instance with defaults applied |
-| `schema.validate(name, obj)` | Validate object → `null` or `[{field, error, message}]` |
-| `schema.isValid(name, field, value)` | Check single field validity |
-| `schema.getModel(name)` | Get model definition |
-| `schema.listModels()` | List all registered models |
+```coffee
+user  = User(25)                          # Find by ID
+user  = User.find(25)                     # Same thing
+users = User([1, 2, 3])                   # Find multiple
+users = User.all()                        # All records
+users = User.where(active: true).all()    # Filtered
+count = User.count()                      # Count
 
-### Error Format
+# Chainable
+users = User
+  .where('score > ?', 90)
+  .orderBy('name')
+  .limit(10)
+  .all()
+```
 
-```javascript
-[
-  { field: 'email', error: 'required', message: 'email is required' },
-  { field: 'name', error: 'min', message: 'name must be at least 1' },
-  { field: 'role', error: 'enum', message: 'role must be one of: admin, user, guest' },
-  { field: 'address', error: 'nested', errors: [...] }
-]
+### Records
+
+```coffee
+# Properties
+user.name                    # Read
+user.name = 'Alice'          # Write (automatic dirty tracking)
+
+# Computed
+user.identifier              # Derived from schema fields
+
+# Business logic
+user.createAccessCode(3600)  # Instance methods
+
+# State
+user.$isNew                  # Not yet persisted?
+user.$dirty                  # Changed field names
+user.$changed                # Has any changes?
+user.$data                   # Raw data snapshot
+
+# Lifecycle
+user.$validate()             # → null or [{ field, error, message }]
+user.save()                  # INSERT or UPDATE (dirty fields only)
+user.delete()                # DELETE
+user.reload()                # Refresh from database
+user.toJSON()                # Serialize (includes computed fields)
+```
+
+### Validation
+
+```coffee
+errors = user.$validate()
+
+# null if valid, otherwise:
+# [
+#   { field: 'name',  error: 'required', message: 'name is required' },
+#   { field: 'email', error: 'type',     message: 'email must be a valid email' },
+#   { field: 'role',  error: 'enum',     message: 'role must be one of: admin, user, guest' },
+# ]
 ```
 
 Error types: `required`, `type`, `enum`, `min`, `max`, `pattern`, `nested`.
-
-### Performance
-
-```
-10,000 create+validate cycles: ~10ms
-Per operation: ~1µs
-```
-
-Validators are compiled once at registration time.
 
 ---
 
@@ -570,93 +595,115 @@ Validators are compiled once at registration time.
 
 ```
 packages/schema/
-├── grammar.rip    # Solar grammar (source of truth)
-├── lexer.js       # Indentation-aware tokenizer
-├── parser.js      # Generated SLR(1) parser
-├── runtime.js     # Schema registry, validation, model factory
-├── orm.rip        # ActiveRecord-style ORM
-├── index.js       # Public API
-├── SCHEMA.md      # Full specification
-├── RIP-LANG.md    # Language reference
-└── README.md      # This file
+├── grammar.rip     # Solar grammar definition (schema → S-expressions)
+├── lexer.js        # Indentation-aware tokenizer
+├── parser.js       # Generated SLR(1) parser
+├── runtime.js      # Schema registry, validation, model factory
+├── orm.rip         # ActiveRecord-style ORM
+├── SCHEMA.md       # Full specification and design details
+└── README.md       # This file
 
 packages/db/
-├── db.rip         # DuckDB HTTP server
-└── lib/duckdb.mjs # Native Zig bindings
+├── db.rip          # DuckDB HTTP server
+└── lib/duckdb.mjs  # Native bindings
 ```
 
-The architecture separates concerns:
+The schema package and database package are independent:
 
-- **@rip-lang/schema** — Schema definitions, validation, ORM, domain models
-- **@rip-lang/db** — Database server (DuckDB + HTTP API)
+- **@rip-lang/schema** — Parse schemas, validate data, generate code, build
+  domain models
+- **@rip-lang/db** — Database server (DuckDB with native FFI bindings, served
+  over HTTP)
 
-The ORM in `@rip-lang/schema` calls `@rip-lang/db` over HTTP for persistence, keeping the layers cleanly separated.
+The ORM connects to the database over HTTP, keeping the layers cleanly
+separated. You can use schema parsing and code generation without the ORM, and
+you can use the ORM without the code generators.
+
+---
+
+## Status
+
+| Component | Status |
+|-----------|--------|
+| Schema grammar (Solar) | Complete |
+| Schema parser (S-expressions) | Complete |
+| Runtime validation engine | Complete |
+| ORM (Model, Query, persistence) | Complete |
+| DuckDB adapter | Complete |
+| TypeScript type generation | Planned |
+| Zod validator generation | Planned |
+| SQL DDL generation | Planned |
+| Relationship loading | Planned |
+| Migration diffing | Planned |
+
+The grammar, parser, validation engine, and ORM are working. Code generation —
+the pipeline that produces TypeScript types, Zod validators, and SQL DDL from
+schema S-expressions — is the current focus.
 
 ---
 
 ## Roadmap
 
-### Phase 1: Core Runtime ✓
-- [x] Type registry (string, email, integer, etc.)
-- [x] Schema registry
-- [x] Model factory
-- [x] Validation engine
-- [x] Default values
-- [x] Nested types
-- [x] Enum validation
+### Phase 1: Foundation — Complete
 
-### Phase 2: ORM ✓
-- [x] Model base class with inheritance
-- [x] Schema definition on models
-- [x] Property accessors from schema
-- [x] Computed properties (reactive)
-- [x] Instance methods
-- [x] Query builder (where, orderBy, limit)
-- [x] Dirty tracking
-- [x] Save/delete/reload
-- [x] Callable models (`User(25)`)
+- Schema grammar and S-expression parser
+- Type registry and validation engine
+- Runtime model factory with defaults
+- Nested types and enum validation
 
-### Phase 3: Persistence (In Progress)
-- [x] DuckDB adapter via HTTP
-- [ ] Relationships (`@belongs_to`, `@has_many`)
-- [ ] Lazy loading
-- [ ] Migrations from schema diff
-- [ ] Transaction support
+### Phase 2: ORM — Complete
 
-### Phase 4: Reactivity & UI (Planned)
-- [ ] Reactive state management
-- [ ] Form binding
-- [ ] Widget system
-- [ ] Hydration/serialization
+- Model base class with schema-driven property accessors
+- Query builder (where, orderBy, limit, offset)
+- Dirty tracking and persistence (INSERT, UPDATE, DELETE)
+- Computed properties
+- DuckDB integration via HTTP
+
+### Phase 3: Code Generation — In Progress
+
+- TypeScript type emission from S-expressions
+- Zod validator emission from S-expressions
+- SQL DDL emission from S-expressions
+- CLI tool for schema compilation
+
+### Phase 4: Relationships and Migrations
+
+- `@belongs_to`, `@has_many`, `@has_one` in ORM
+- Lazy loading and eager loading
+- Schema diffing for migration generation
+- Transaction support
+
+### Phase 5: UI Integration
+
+- Widget definitions and component generation
+- Form binding with layout engine
+- Reactive state management
+- Hydration and serialization
 
 ---
 
 ## Background
 
-Rip Schema is inspired by:
+Rip Schema is part of the [Rip](https://github.com/shreeve/rip-lang) language
+ecosystem. It draws on ideas from:
 
-- **SPOT/Sage** — Enterprise Java framework that proved unified schemas work at scale (complex medical applications like CPRS)
-- **ActiveRecord** — Ruby's elegant ORM pattern
-- **Zod** — Runtime validation with great DX
-- **TypeScript** — Type inference and safety
-- **CoffeeScript** — Concise, expressive syntax
-- **Vue/Solid** — Fine-grained reactivity
+- **SPOT/Sage** — Enterprise schema framework that proved unified definitions
+  work at scale (complex medical systems with 2000+ line schemas)
+- **ActiveRecord** — Ruby's ORM pattern: models as rich domain objects
+- **Zod** — Runtime validation with composable schemas
+- **Prisma** — Database schema as code with generated client types
+- **TypeScript** — Type inference and structural typing
+- **ASN.1** — Formal notation for describing data structures
 
-The key differentiator is **Rip's native reactivity**:
-
-| Operator | Name | What It Does |
-|----------|------|--------------|
-| `:=` | State | Reactive variable that tracks changes |
-| `~=` | Computed | Derived value that auto-updates |
-| `~>` | Effect | Side effect that auto-runs on change |
-
-These primitives are built into the Rip language itself, making the ORM truly reactive without any framework overhead. Computed properties automatically track their dependencies. Effects run when dependencies change. Dirty tracking happens automatically.
-
-This brings Vue/Solid-style reactivity to the ORM layer — something no other JavaScript ORM provides.
+The key insight is that types, validation, and persistence are three views of
+the same underlying reality — the shape of your data. Writing them separately
+creates drift. Writing them once and generating the rest eliminates it.
 
 ---
 
 ## See Also
 
-- [SCHEMA.md](./SCHEMA.md) — Full specification, syntax, and design explorations
+- [SCHEMA.md](./SCHEMA.md) — Full specification, syntax details, and design
+  rationale
 - [examples/](./examples/) — Working code examples
+- [grammar.rip](./grammar.rip) — The Solar grammar that parses schema files

@@ -11,9 +11,9 @@
 #   @enum Role: admin, user, guest
 #   @type Address
 #   @model User
-#     name!: string, [1, 100]     # ! = required, [min, max]
-#     email!#: email              # # = unique
-#     role?: Role, [user]         # ? = optional, [default]
+#     name!   string, [1, 100]    # ! = required, [min, max]
+#     email!# email               # # = unique
+#     role?   Role, [user]        # ? = optional, [default]
 # ==============================================================================
 
 o = (pattern, action, options) ->
@@ -174,31 +174,31 @@ grammar =
   # Field Definitions
   # ============================================================================
 
-  # Syntax: name[!#?]: type[, constraints][, attributes]
+  # Syntax: name[!#?] type[, constraints][, attributes]
   #
   # Examples:
-  #   name!: string                      Required string
-  #   email!#: email                     Required + unique
-  #   bio?: text, [0, 1000]              Optional with max length
-  #   role: Role, [user]                 Enum with default
-  #   items: Item[]                      Array type
-  #   data: json, [{}]                   JSON with default
-  #   phone: string, { mask: "###" }     With UI attributes
+  #   name!   string                     Required string
+  #   email!# email                      Required + unique
+  #   bio?    text, [0, 1000]            Optional with max length
+  #   role    Role, [user]               Enum with default
+  #   items   Item[]                     Array type
+  #   data    json, [{}]                 JSON with default
+  #   phone   string, { mask: "###" }    With UI attributes
 
   # Field definition - handles both regular fields and computed fields
   Field: [
-    # Regular field: name: type
-    o 'IDENTIFIER : FieldType'                                      , '["field", 1, [], 3, null, null]'
-    o 'IDENTIFIER : FieldType , Constraints'                        , '["field", 1, [], 3, 5, null]'
-    o 'IDENTIFIER : FieldType , Attrs'                              , '["field", 1, [], 3, null, 5]'
-    o 'IDENTIFIER : FieldType , Constraints , Attrs'                , '["field", 1, [], 3, 5, 7]'
-    # Field with modifiers: name!: type, name!#: type, etc.
-    o 'IDENTIFIER FieldModifiers : FieldType'                       , '["field", 1, 2, 4, null, null]'
-    o 'IDENTIFIER FieldModifiers : FieldType , Constraints'         , '["field", 1, 2, 4, 6, null]'
-    o 'IDENTIFIER FieldModifiers : FieldType , Attrs'               , '["field", 1, 2, 4, null, 6]'
-    o 'IDENTIFIER FieldModifiers : FieldType , Constraints , Attrs' , '["field", 1, 2, 4, 6, 8]'
-    # Computed field: name: -> expr
-    o 'IDENTIFIER : ArrowFunc'                                      , '["computed", 1, 3]'
+    # Regular field: name type
+    o 'IDENTIFIER FieldType'                                      , '["field", 1, [], 2, null, null]'
+    o 'IDENTIFIER FieldType , Constraints'                        , '["field", 1, [], 2, 4, null]'
+    o 'IDENTIFIER FieldType , Attrs'                              , '["field", 1, [], 2, null, 4]'
+    o 'IDENTIFIER FieldType , Constraints , Attrs'                , '["field", 1, [], 2, 4, 6]'
+    # Field with modifiers: name! type, name!# type, etc.
+    o 'IDENTIFIER FieldModifiers FieldType'                       , '["field", 1, 2, 3, null, null]'
+    o 'IDENTIFIER FieldModifiers FieldType , Constraints'         , '["field", 1, 2, 3, 5, null]'
+    o 'IDENTIFIER FieldModifiers FieldType , Attrs'               , '["field", 1, 2, 3, null, 5]'
+    o 'IDENTIFIER FieldModifiers FieldType , Constraints , Attrs' , '["field", 1, 2, 3, 5, 7]'
+    # Computed field: name -> expr
+    o 'IDENTIFIER ArrowFunc'                                      , '["computed", 1, 2]'
   ]
 
   FieldModifiers: [

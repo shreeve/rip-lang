@@ -52,9 +52,9 @@ The goal: **Define once, generate everything.**
 ```coffeescript
 # Concise syntax with full power
 @model User
-  email!#:   email                  # Required + Unique (one line)
-  role!:     Role, [user]           # Enum with default
-  settings?: json, [{}]             # Optional with default
+  email!#   email                   # Required + Unique (one line)
+  role!     Role, [user]            # Enum with default
+  settings? json, [{}]              # Optional with default
 ```
 
 ### 3. Single Source of Truth (SPOT)
@@ -164,13 +164,13 @@ This is exactly how Sage worked: the UI was "dumb" — it just rendered whatever
 
 | Concept | SPOT | rip-schema | Unified |
 |---------|------|------------|---------|
-| Required string | `name PrintableString Range(0..100)` | `@string 'name!', 100` | `name!: string, [1, 100]` |
-| Optional string | `name PrintableString Range(0..100) Optional` | `@string 'name', 100` | `name?: string, [0, 100]` |
-| Required + Unique | (manual index) | `@email 'email!#'` | `email!#: email` |
-| Integer with range | `age Integer Range(0..120)` | `@integer 'age', [0, 120]` | `age: integer, [0, 120]` |
-| Integer with default | `count Integer Default 0` | `@integer 'count', [0]` | `count: integer, [0]` |
-| Boolean with default | `active Boolean Default true` | `@boolean 'active', true` | `active: boolean, [true]` |
-| Enum field | `role Enumerated { admin(0), user(1) }` | (planned) | `role: Role, [user]` |
+| Required string | `name PrintableString Range(0..100)` | `@string 'name!', 100` | `name! string, [1, 100]` |
+| Optional string | `name PrintableString Range(0..100) Optional` | `@string 'name', 100` | `name? string, [0, 100]` |
+| Required + Unique | (manual index) | `@email 'email!#'` | `email!# email` |
+| Integer with range | `age Integer Range(0..120)` | `@integer 'age', [0, 120]` | `age integer, [0, 120]` |
+| Integer with default | `count Integer Default 0` | `@integer 'count', [0]` | `count integer, [0]` |
+| Boolean with default | `active Boolean Default true` | `@boolean 'active', true` | `active boolean, [true]` |
+| Enum field | `role Enumerated { admin(0), user(1) }` | (planned) | `role Role, [user]` |
 
 ### Type Definitions
 
@@ -179,9 +179,9 @@ This is exactly how Sage worked: the UI was "dumb" — it just rendered whatever
 | Enum | `Enumerated { a(0), b(1), c(2) }` | `@enum Name: a, b, c` |
 | Object/Sequence | `Name ::= Sequence { ... }` | `@type Name` or `@model Name` |
 | Inheritance | `Child ::= Extends Parent { ... }` | `@widget Child: $Parent` |
-| Reference | `field Type Reference` | `field: Type` or `belongs_to` |
-| Collection | `Set { item Type }` | `field: Type[]` |
-| Polymorphic | `Any DefinedBy Widget` | `field: Widget` (union) |
+| Reference | `field Type Reference` | `field Type` or `belongs_to` |
+| Collection | `Set { item Type }` | `field Type[]` |
+| Polymorphic | `Any DefinedBy Widget` | `field Widget` (union) |
 
 ### Attributes and Events
 
@@ -189,7 +189,7 @@ This is exactly how Sage worked: the UI was "dumb" — it just rendered whatever
 |---------|-----------|---------|
 | Attributes | `[ color, size="16" ]` | `{ color, size: "16" }` |
 | Events | `[ onAction, onChange ]` | `@events onAction, onChange` |
-| Event handler | `[ onAction="doSomething()" ]` | `onAction: "doSomething()"` |
+| Event handler | `[ onAction="doSomething()" ]` | `onAction "doSomething()"` |
 
 ---
 
@@ -206,23 +206,23 @@ This is exactly how Sage worked: the UI was "dumb" — it just rendered whatever
 
 # Type definitions (reusable structures)
 @type TypeName
-  field1!: type, [constraints], { attributes }
-  field2?: type, [default]
+  field1! type, [constraints], { attributes }
+  field2? type, [default]
 
 # Model definitions (database-backed)
 @model ModelName
-  field1!: type
+  field1! type
   @timestamps
   @index field1#
 
 # Widget definitions (UI components)
 @widget WidgetName: $ParentWidget
-  prop1: type, [default]
+  prop1 type, [default]
   @events event1, event2
 
 # Form definitions (model + layout)
 @form FormName: $ModelName
-  layout: type
+  layout type
   field1 { x: 0, y: 0 }
   @actions
     submit { ... }
@@ -231,7 +231,7 @@ This is exactly how Sage worked: the UI was "dumb" — it just rendered whatever
 ### Field Syntax
 
 ```
-fieldName[!][#][?]: type[, [min, max]][, [default]][, { attributes }]
+fieldName[!][#][?] type[, [min, max]][, [default]][, { attributes }]
 ```
 
 **Modifiers:**
@@ -248,31 +248,31 @@ fieldName[!][#][?]: type[, [min, max]][, [default]][, { attributes }]
 
 ```coffeescript
 # Required string, 1-100 chars
-name!: string, [1, 100]
+name! string, [1, 100]
 
 # Required email, unique
-email!#: email
+email!# email
 
 # Optional string, max 500 chars
-bio?: string, [0, 500]
+bio? string, [0, 500]
 
 # Integer, range 1-5, default 3
-rating: integer, [1, 5], [3]
+rating integer, [1, 5], [3]
 
 # Enum with default
-status: Status, [pending]
+status Status, [pending]
 
 # JSON with default empty object
-settings: json, [{}]
+settings json, [{}]
 
 # Reference to another type
-address?: Address
+address? Address
 
 # Array of items
-tags: string[]
+tags string[]
 
 # With attributes (UI hints, etc.)
-phone!: string, [10, 15], { label: "Phone Number", mask: "(###) ###-####" }
+phone! string, [10, 15], { label: "Phone Number", mask: "(###) ###-####" }
 ```
 
 ---
@@ -284,7 +284,7 @@ From a single schema definition, generate:
 ### 1. TypeScript Types
 
 ```typescript
-// From: @model User with email!#: email, role!: Role
+// From: @model User with email!# email, role! Role
 type User = {
   id: number
   email: string
@@ -425,8 +425,8 @@ interface TableProps {
 
 ```coffeescript
 @model User
-  role!: Role, [user]              # Default to 'user'
-  status!: Status, [active]        # Default to 'active'
+  role! Role, [user]               # Default to 'user'
+  status! Status, [active]         # Default to 'active'
 ```
 
 ### Generation
@@ -455,17 +455,17 @@ Models represent database-backed entities with validation.
 ```coffeescript
 @model User
   # Fields with types and constraints
-  name!:       string, [1, 100]
-  email!#:     email
-  password!:   string, [8, 100], { writeOnly: true }
-  role!:       Role, [user]
-  avatar?:     url
-  bio?:        text, [0, 1000]
-  preferences: json, [{}]
-  active:      boolean, [true]
+  name!       string, [1, 100]
+  email!#     email
+  password!   string, [8, 100], { writeOnly: true }
+  role!       Role, [user]
+  avatar?     url
+  bio?        text, [0, 1000]
+  preferences json, [{}]
+  active      boolean, [true]
 
   # Embedded type
-  address?:    Address
+  address?    Address
 
   # Automatic timestamps
   @timestamps
@@ -480,22 +480,22 @@ Models represent database-backed entities with validation.
 
   # Computed fields (read-only)
   @computed
-    displayName: -> "#{@name} <#{@email}>"
-    isAdmin:     -> @role is 'admin'
+    displayName -> "#{@name} <#{@email}>"
+    isAdmin     -> @role is 'admin'
 
   # Validations beyond type constraints
   @validate
-    password: -> @matches /[A-Z]/ and @matches /[0-9]/
-    email:    -> not @endsWith '@test.com' if @env is 'production'
+    password -> @matches /[A-Z]/ and @matches /[0-9]/
+    email    -> not @endsWith '@test.com' if @env is 'production'
 ```
 
 ### Relationships
 
 ```coffeescript
 @model Post
-  title!:    string, [1, 200]
-  content!:  text
-  published: boolean, [false]
+  title!    string, [1, 200]
+  content!  text
+  published boolean, [false]
 
   # Foreign key relationships
   @belongs_to User                 # Creates user_id
@@ -505,8 +505,8 @@ Models represent database-backed entities with validation.
   @index [user_id, published]
 
 @model Comment
-  content!: text
-  approved: boolean, [false]
+  content! text
+  approved boolean, [false]
 
   @belongs_to Post
   @belongs_to User
@@ -526,27 +526,27 @@ Widgets define UI components with props, events, and behavior.
 ```coffeescript
 @widget Table: $Viewer
   # Behavior properties
-  selectionMode:     SelectionMode, [single]
-  columnSorting:     boolean, [true]
-  columnResizing:    boolean, [true]
-  columnReordering:  boolean, [false]
-  singleClickAction: boolean, [false]
+  selectionMode     SelectionMode, [single]
+  columnSorting     boolean, [true]
+  columnResizing    boolean, [true]
+  columnReordering  boolean, [false]
+  singleClickAction boolean, [false]
 
   # Appearance properties
-  gridLineType:      GridLineType, [both]
-  gridLineColor?:    color
-  gridLineStyle:     LineStyle, [solid]
-  rowHeight:         dimension, ["1ln"]
-  headerHeight:      dimension, ["-1"]
-  boldColumnHeaders: boolean, [false]
+  gridLineType      GridLineType, [both]
+  gridLineColor?    color
+  gridLineStyle     LineStyle, [solid]
+  rowHeight         dimension, ["1ln"]
+  headerHeight      dimension, ["-1"]
+  boldColumnHeaders boolean, [false]
 
-  alternatingHighlight: AlternatingType, [none]
-  alternatingColor?:    color
+  alternatingHighlight AlternatingType, [none]
+  alternatingColor?    color
 
   # Structure
-  columns:    ItemDescription[]
-  scrollPane: ScrollPane?
-  popupMenu:  MenuItem[]?
+  columns    ItemDescription[]
+  scrollPane ScrollPane?
+  popupMenu  MenuItem[]?
 
   # Events
   @events onAction, onChange, onItemChanged
@@ -565,19 +565,19 @@ Widgets define UI components with props, events, and behavior.
 
 ```coffeescript
 @widget TreeTable: $Table
-  expandableColumn: integer, [0]
-  expandAll:        boolean, [false]
-  showRootHandles:  boolean, [true]
-  showTreeLines:    boolean, [false]
-  treeLineColor?:   color
-  indentBy:         integer, [16]
+  expandableColumn integer, [0]
+  expandAll        boolean, [false]
+  showRootHandles  boolean, [true]
+  showTreeLines    boolean, [false]
+  treeLineColor?   color
+  indentBy         integer, [16]
 
   @events onExpand, onCollapse
 
 @widget PropertyTable: $TreeTable
-  usePane:          boolean, [true]
-  propertiesOrder:  PropertiesOrder, [categorized]
-  categorySortOrder: SortOrder, [ascending]
+  usePane          boolean, [true]
+  propertiesOrder  PropertiesOrder, [categorized]
+  categorySortOrder SortOrder, [ascending]
 
 @enum PropertiesOrder: unsorted, sorted, categorized
 @enum SortOrder: descending, unsorted, ascending
@@ -594,9 +594,9 @@ Forms combine model structure with UI layout.
 ```coffeescript
 @form UserForm: $User
   # Layout configuration
-  layout: forms
-  columns: "d,4dlu,100px,4dlu,d,4dlu,d"
-  rows: "d,2dlu,d,2dlu,d,4dlu,d"
+  layout forms
+  columns "d,4dlu,100px,4dlu,d,4dlu,d"
+  rows "d,2dlu,d,2dlu,d,4dlu,d"
 
   # Field placement and customization
   name     { x: 0, y: 0, span: 7, label: "Full Name" }
@@ -621,21 +621,21 @@ Forms combine model structure with UI layout.
 
 ```coffeescript
 # Table layout (grid)
-layout: table
-rows: 3
-columns: 2
+layout table
+rows 3
+columns 2
 
 # Forms layout (JGoodies-style)
-layout: forms
-columns: "d,4dlu,100px:grow"
-rows: "d,2dlu,d,2dlu,d"
+layout forms
+columns "d,4dlu,100px:grow"
+rows "d,2dlu,d,2dlu,d"
 
 # Absolute layout
-layout: absolute
+layout absolute
 
 # Flow layout
-layout: flow
-direction: horizontal  # or vertical
+layout flow
+direction horizontal  # or vertical
 ```
 
 ### Widget Overrides
@@ -664,23 +664,23 @@ direction: horizontal  # or vertical
 ```coffeescript
 @state App
   # Current user (nullable)
-  currentUser?: User
+  currentUser? User
 
   # Collections
-  users: User[], [->]
-  posts: Post[], [->]
+  users User[], [->]
+  posts Post[], [->]
 
   # UI state
-  sidebarOpen: boolean, [true]
-  theme: Theme, [light]
-  locale: string, ["en"]
+  sidebarOpen boolean, [true]
+  theme Theme, [light]
+  locale string, ["en"]
 
   # Computed state
   @computed
-    isLoggedIn:    -> @currentUser?
-    isAdmin:       -> @currentUser?.role is 'admin'
-    userCount:     -> @users.length
-    publishedPosts: -> @posts.filter (p) -> p.published
+    isLoggedIn    -> @currentUser?
+    isAdmin       -> @currentUser?.role is 'admin'
+    userCount     -> @users.length
+    publishedPosts -> @posts.filter (p) -> p.published
 
   # Actions (mutations)
   @actions
@@ -722,13 +722,13 @@ Components can hydrate their local state from global state:
 @component UserList
   # Local state, hydrated from global
   @state
-    users:      -> app.get '/users'           # Reactive binding
-    filter:     string, [""]                   # Local only
-    sortBy:     string, ["name"]               # Local only
+    users      -> app.get '/users'            # Reactive binding
+    filter     string, [""]                    # Local only
+    sortBy     string, ["name"]                # Local only
 
   # Computed from local state
   @computed
-    filteredUsers: ->
+    filteredUsers ->
       @users
         .filter (u) => u.name.includes @filter
         .sortBy @sortBy
@@ -756,22 +756,22 @@ app.set '/', saved
 ```coffeescript
 # Define reusable field groups
 @mixin Timestamps
-  createdAt!: datetime
-  updatedAt!: datetime
+  createdAt! datetime
+  updatedAt! datetime
 
 @mixin SoftDelete
-  deletedAt?: datetime
+  deletedAt? datetime
 
 @mixin Auditable
   @include Timestamps
   @include SoftDelete
-  createdBy?: integer
-  updatedBy?: integer
+  createdBy? integer
+  updatedBy? integer
 
 # Use in models
 @model Post
-  title!: string, [1, 200]
-  content!: text
+  title! string, [1, 200]
+  content! text
 
   @include Auditable
 ```
@@ -781,27 +781,27 @@ app.set '/', saved
 ```coffeescript
 # Base type
 @type PersonName
-  first!:  string, [1, 50]
-  middle?: string, [0, 50]
-  last!:   string, [1, 50]
+  first!  string, [1, 50]
+  middle? string, [0, 50]
+  last!   string, [1, 50]
 
   @computed
-    full: -> [@first, @middle, @last].filter(Boolean).join(' ')
+    full -> [@first, @middle, @last].filter(Boolean).join(' ')
 
 # Extended type
 @type ContactInfo
-  email!:  email
-  phone?:  phone
+  email!  email
+  phone?  phone
 
 # Composed type
 @type Person
-  name!:    PersonName
-  contact!: ContactInfo
+  name!    PersonName
+  contact! ContactInfo
 
 @model Employee: $Person
-  employeeId!#: string, [5, 10]
-  department!:  Department
-  hireDate!:    date
+  employeeId!# string, [5, 10]
+  department!  Department
+  hireDate!    date
 
   @timestamps
 ```
@@ -811,16 +811,16 @@ app.set '/', saved
 ```coffeescript
 # Define a named template
 @template prototypeTable: Table
-  alternatingHighlight: row
-  alternatingColor: "rowHilite"
-  borders: shadow, { thickness: 7 }
-  gridLineType: both
-  selectionMode: single
-  boldColumnHeaders: true
+  alternatingHighlight row
+  alternatingColor "rowHilite"
+  borders shadow, { thickness: 7 }
+  gridLineType both
+  selectionMode single
+  boldColumnHeaders true
 
 # Use the template
 @widget VitalsTable: $prototypeTable
-  columns:
+  columns
     { title: "Type",   width: "6ch" }
     { title: "Result", width: "6ch" }
     { title: "Date",   valueType: datetime }
@@ -911,52 +911,52 @@ app.set '/', saved
 
 # Types
 @type Address
-  street!:  string, [1, 200]
-  city!:    string, [1, 100]
-  state!:   string, [2, 2]
-  zip!:     string, /^\d{5}(-\d{4})?$/
+  street!  string, [1, 200]
+  city!    string, [1, 100]
+  state!   string, [2, 2]
+  zip!     string, /^\d{5}(-\d{4})?$/
 
 @type ContactInfo
-  phone?:  phone
-  email?:  email
-  fax?:    phone
+  phone?  phone
+  email?  email
+  fax?    phone
 
 # Models
 @model Patient
-  name!:        string, [1, 100]
-  mrn!#:        string, [1, 20]           # Medical Record Number
-  ssn?#:        string, [9, 11]           # SSN (encrypted)
-  dob!:         date
-  gender!:      Gender
-  photo?:       url
-  address?:     Address
-  contact?:     ContactInfo
-  preferences:  json, [{}]
-  active:       boolean, [true]
+  name!        string, [1, 100]
+  mrn!#        string, [1, 20]            # Medical Record Number
+  ssn?#        string, [9, 11]            # SSN (encrypted)
+  dob!         date
+  gender!      Gender
+  photo?       url
+  address?     Address
+  contact?     ContactInfo
+  preferences  json, [{}]
+  active       boolean, [true]
 
   @timestamps
   @softDelete
 
   @computed
-    age: -> yearsFrom @dob
-    displayName: -> "#{@name} (#{@mrn})"
+    age -> yearsFrom @dob
+    displayName -> "#{@name} (#{@mrn})"
 
 @model Vital
-  type!:     VitalType
-  value!:    string, [1, 50]
-  unit?:     string, [1, 20]
-  takenAt!:  datetime
-  notes?:    text
+  type!     VitalType
+  value!    string, [1, 50]
+  unit?     string, [1, 20]
+  takenAt!  datetime
+  notes?    text
 
   @belongs_to Patient
   @timestamps
 
 @model Allergy
-  allergen!:  string, [1, 200]
-  reaction?:  string, [0, 500]
-  severity?:  integer, [1, 5]
-  status!:    AllergyStatus, [active]
-  onsetDate?: date
+  allergen!   string, [1, 200]
+  reaction?   string, [0, 500]
+  severity?   integer, [1, 5]
+  status!     AllergyStatus, [active]
+  onsetDate?  date
 
   @belongs_to Patient
   @timestamps
@@ -964,8 +964,8 @@ app.set '/', saved
 
 # Widgets
 @widget VitalsTable: $prototypeTable
-  title: "Vitals"
-  columns:
+  title "Vitals"
+  columns
     { name: "type",    title: "Type",      width: "6ch",  fgColor: "#1C0B5A" }
     { name: "value",   title: "Result",    width: "8ch" }
     { name: "takenAt", title: "Date/Time", valueType: datetime, format: "MMM dd, yyyy HH:mm" }
@@ -973,17 +973,17 @@ app.set '/', saved
   @events onAction
 
 @widget AllergiesList: $ListBox
-  title: "Allergies"
-  fgColor: "#800000"
-  selectionMode: none
-  itemDescription:
-    icon: "warning"
+  title "Allergies"
+  fgColor "#800000"
+  selectionMode none
+  itemDescription
+    icon "warning"
 
 # Forms
 @form PatientForm: $Patient
-  layout: forms
-  columns: "d,4dlu,100px,4dlu,d,4dlu,d,4dlu,100px"
-  rows: "d,2dlu,d,2dlu,d,4dlu,d,2dlu,d"
+  layout forms
+  columns "d,4dlu,100px,4dlu,d,4dlu,d,4dlu,100px"
+  rows "d,2dlu,d,2dlu,d,4dlu,d,2dlu,d"
 
   name    { x: 0, y: 0, span: 5 }
   mrn     { x: 6, y: 0, span: 3 }
@@ -1001,17 +1001,17 @@ app.set '/', saved
 
 # State
 @state MedicalApp
-  currentPatient?: Patient
-  patients: Patient[], [->]
+  currentPatient?  Patient
+  patients         Patient[], [->]
 
   # UI state
-  infobarCollapsed: boolean, [false]
-  activeTab: string, ["summary"]
+  infobarCollapsed boolean, [false]
+  activeTab        string, ["summary"]
 
   @computed
-    patientName:     -> @currentPatient?.displayName
-    patientAge:      -> @currentPatient?.age
-    hasPatient:      -> @currentPatient?
+    patientName     -> @currentPatient?.displayName
+    patientAge      -> @currentPatient?.age
+    hasPatient      -> @currentPatient?
 
   @actions
     selectPatient: (patient) ->
@@ -1065,9 +1065,9 @@ Schemas as Rip code, using `@model`, `@enum` directives — this is the current 
 ```coffee
 @model Application
   @events onAuthFailure, onChange
-  name?:                     string, [0, 32]
-  deferredLoadingMode:       DeferredLoadingMode = auto
-  mainWindow:                MainWindow
+  name?                      string, [0, 32]
+  deferredLoadingMode        DeferredLoadingMode = auto
+  mainWindow                 MainWindow
 
 @enum DeferredLoadingMode
   auto   (0)
