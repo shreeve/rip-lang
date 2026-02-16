@@ -251,11 +251,12 @@ const parserInstance = {
     [TERROR, EOF] = [2, 1];
     lexer = Object.create(this.lexer);
     sharedState = { ctx: {} };
-    for (const k in this.ctx)
-      if (Object.hasOwn(this.ctx, k)) {
-        const v = this.ctx[k];
-        sharedState.ctx[k] = v;
-      }
+    for (const k in this.ctx) {
+      if (!Object.hasOwn(this.ctx, k))
+        continue;
+      const v = this.ctx[k];
+      sharedState.ctx[k] = v;
+    }
     lexer.setInput(input, sharedState.ctx);
     [sharedState.ctx.lexer, sharedState.ctx.parser] = [lexer, this];
     if (lexer.loc == null)
