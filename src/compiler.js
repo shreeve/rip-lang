@@ -1739,10 +1739,9 @@ export class CodeGenerator {
   // Comprehensions
   // ---------------------------------------------------------------------------
 
-  // Shared: parse a for-in iterator and return { header, setup, isRange }.
+  // Shared: parse a for-in iterator and return { header, setup }.
   //   header: the for(...) clause (no trailing brace)
   //   setup:  any `const x = arr[i]` preamble line, or null
-  //   isRange: true if iterating over a range literal
   _forInHeader(vars, iterable, step) {
     let va = Array.isArray(vars) ? vars : [vars];
     let noVar = va.length === 0;
@@ -1758,7 +1757,7 @@ export class CodeGenerator {
         let isExcl = ih === '...';
         let [s, e] = iterable.slice(1);
         let sc = this.generate(s, 'value'), ec = this.generate(e, 'value'), stc = this.generate(step, 'value');
-        return { header: `for (let ${ivp} = ${sc}; ${ivp} ${isExcl ? '<' : '<='} ${ec}; ${ivp} += ${stc})`, setup: null, isRange: true };
+        return { header: `for (let ${ivp} = ${sc}; ${ivp} ${isExcl ? '<' : '<='} ${ec}; ${ivp} += ${stc})`, setup: null };
       }
       let ic = this.generate(iterable, 'value'), idxN = indexVar || '_i', stc = this.generate(step, 'value');
       let isNeg = this.is(step, '-', 1);
@@ -1768,17 +1767,16 @@ export class CodeGenerator {
       let header = isNeg
         ? `for (let ${idxN} = ${ic}.length - 1; ${idxN} >= 0; ${update})`
         : `for (let ${idxN} = 0; ${idxN} < ${ic}.length; ${update})`;
-      return { header, setup: noVar ? null : `const ${ivp} = ${ic}[${idxN}];`, isRange: false };
+      return { header, setup: noVar ? null : `const ${ivp} = ${ic}[${idxN}];` };
     }
     if (indexVar) {
       let ic = this.generate(iterable, 'value');
       return {
         header: `for (let ${indexVar} = 0; ${indexVar} < ${ic}.length; ${indexVar}++)`,
         setup: `const ${ivp} = ${ic}[${indexVar}];`,
-        isRange: false,
       };
     }
-    return { header: `for (const ${ivp} of ${this.generate(iterable, 'value')})`, setup: null, isRange: false };
+    return { header: `for (const ${ivp} of ${this.generate(iterable, 'value')})`, setup: null };
   }
 
   // Shared: parse a for-of (object) iterator and return { header, own, vv, oc, kvp }.
@@ -2473,7 +2471,7 @@ export class CodeGenerator {
       let [iterType, vars, iterable, stepOrOwn] = iterators[0];
 
       if (iterType === 'for-in') {
-        let { header, setup, isRange } = this._forInHeader(vars, iterable, stepOrOwn);
+        let { header, setup } = this._forInHeader(vars, iterable, stepOrOwn);
         code += header + ' {\n';
         this.indentLevel++;
         if (setup) code += this.indent() + setup + '\n';
