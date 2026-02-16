@@ -1764,6 +1764,67 @@ export class CodeGenerator {
   // Comprehensions
   // ---------------------------------------------------------------------------
 
+  // Shared: parse a for-in iterator and return { header, setup, isRange }.
+  //   header: the for(...) clause (no trailing brace)
+  //   setup:  any `const x = arr[i]` preamble line, or null
+  //   isRange: true if iterating over a range literal
+  _forInHeader(vars, iterable, step) {
+    let va = Array.isArray(vars) ? vars : [vars];
+    let noVar = va.length === 0;
+    let [itemVar, indexVar] = noVar ? ['_i', null] : va;
+    let ivp = (this.is(itemVar, 'array') || this.is(itemVar, 'object'))
+      ? this.generateDestructuringPattern(itemVar) : itemVar;
+
+    if (step && step !== null) {
+      let ih = Array.isArray(iterable) && iterable[0];
+      if (ih instanceof String) ih = str(ih);
+      let isRange = ih === '..' || ih === '...';
+      if (isRange) {
+        let isExcl = ih === '...';
+        let [s, e] = iterable.slice(1);
+        let sc = this.generate(s, 'value'), ec = this.generate(e, 'value'), stc = this.generate(step, 'value');
+        return { header: `for (let ${ivp} = ${sc}; ${ivp} ${isExcl ? '<' : '<='} ${ec}; ${ivp} += ${stc})`, setup: null, isRange: true };
+      }
+      let ic = this.generate(iterable, 'value'), idxN = indexVar || '_i', stc = this.generate(step, 'value');
+      let isNeg = this.is(step, '-', 1);
+      let isMinus1 = isNeg && (step[1] === '1' || step[1] === 1 || str(step[1]) === '1');
+      let isPlus1 = !isNeg && (step === '1' || step === 1 || str(step) === '1');
+      let update = isMinus1 ? `${idxN}--` : isPlus1 ? `${idxN}++` : `${idxN} += ${stc}`;
+      let header = isNeg
+        ? `for (let ${idxN} = ${ic}.length - 1; ${idxN} >= 0; ${update})`
+        : `for (let ${idxN} = 0; ${idxN} < ${ic}.length; ${update})`;
+      return { header, setup: noVar ? null : `const ${ivp} = ${ic}[${idxN}];`, isRange: false };
+    }
+    if (indexVar) {
+      let ic = this.generate(iterable, 'value');
+      return {
+        header: `for (let ${indexVar} = 0; ${indexVar} < ${ic}.length; ${indexVar}++)`,
+        setup: `const ${ivp} = ${ic}[${indexVar}];`,
+        isRange: false,
+      };
+    }
+    return { header: `for (const ${ivp} of ${this.generate(iterable, 'value')})`, setup: null, isRange: false };
+  }
+
+  // Shared: parse a for-of (object) iterator and return { header, own, vv, oc, kvp }.
+  _forOfHeader(vars, iterable, own) {
+    let va = Array.isArray(vars) ? vars : [vars];
+    let [kv, vv] = va;
+    let kvp = (this.is(kv, 'array') || this.is(kv, 'object'))
+      ? this.generateDestructuringPattern(kv) : kv;
+    let oc = this.generate(iterable, 'value');
+    return { header: `for (const ${kvp} in ${oc})`, own, vv, oc, kvp };
+  }
+
+  // Shared: parse a for-as (iterator) spec and return { header }.
+  _forAsHeader(vars, iterable, isAwait) {
+    let va = Array.isArray(vars) ? vars : [vars];
+    let [fv] = va;
+    let ivp = (this.is(fv, 'array') || this.is(fv, 'object'))
+      ? this.generateDestructuringPattern(fv) : fv;
+    return { header: `for ${isAwait ? 'await ' : ''}(const ${ivp} of ${this.generate(iterable, 'value')})` };
+  }
+
   generateComprehension(head, rest, context) {
     let [expr, iterators, guards] = rest;
     if (context === 'statement') return this.generateComprehensionAsLoop(expr, iterators, guards);
@@ -1778,59 +1839,19 @@ export class CodeGenerator {
     for (let iter of iterators) {
       let [iterType, vars, iterable, stepOrOwn] = iter;
       if (iterType === 'for-in') {
-        let step = stepOrOwn;
-        let va = Array.isArray(vars) ? vars : [vars];
-        let noVar = va.length === 0;
-        let [itemVar, indexVar] = noVar ? ['_i', null] : va;
-        let ivp = ((this.is(itemVar, 'array') || this.is(itemVar, 'object')))
-          ? this.generateDestructuringPattern(itemVar) : itemVar;
-
-        if (step && step !== null) {
-          let ih = Array.isArray(iterable) && iterable[0];
-          if (ih instanceof String) ih = str(ih);
-          let isRange = ih === '..' || ih === '...';
-          if (isRange) {
-            let isExcl = ih === '...';
-            let [s, e] = iterable.slice(1);
-            let sc = this.generate(s, 'value'), ec = this.generate(e, 'value'), stc = this.generate(step, 'value');
-            code += this.indent() + `for (let ${ivp} = ${sc}; ${ivp} ${isExcl ? '<' : '<='} ${ec}; ${ivp} += ${stc}) {\n`;
-            this.indentLevel++;
-          } else {
-            let ic = this.generate(iterable, 'value'), idxN = indexVar || '_i', stc = this.generate(step, 'value');
-            let isNeg = this.is(step, '-', 1);
-            code += isNeg
-              ? this.indent() + `for (let ${idxN} = ${ic}.length - 1; ${idxN} >= 0; ${idxN} += ${stc}) {\n`
-              : this.indent() + `for (let ${idxN} = 0; ${idxN} < ${ic}.length; ${idxN} += ${stc}) {\n`;
-            this.indentLevel++;
-            if (!noVar) code += this.indent() + `const ${ivp} = ${ic}[${idxN}];\n`;
-          }
-        } else if (indexVar) {
-          let ic = this.generate(iterable, 'value');
-          code += this.indent() + `for (let ${indexVar} = 0; ${indexVar} < ${ic}.length; ${indexVar}++) {\n`;
-          this.indentLevel++;
-          code += this.indent() + `const ${ivp} = ${ic}[${indexVar}];\n`;
-        } else {
-          code += this.indent() + `for (const ${ivp} of ${this.generate(iterable, 'value')}) {\n`;
-          this.indentLevel++;
-        }
+        let { header, setup } = this._forInHeader(vars, iterable, stepOrOwn);
+        code += this.indent() + header + ' {\n';
+        this.indentLevel++;
+        if (setup) code += this.indent() + setup + '\n';
       } else if (iterType === 'for-of') {
-        let own = stepOrOwn;
-        let va = Array.isArray(vars) ? vars : [vars];
-        let [kv, vv] = va;
-        let kvp = ((this.is(kv, 'array') || this.is(kv, 'object')))
-          ? this.generateDestructuringPattern(kv) : kv;
-        let oc = this.generate(iterable, 'value');
-        code += this.indent() + `for (const ${kvp} in ${oc}) {\n`;
+        let { header, own, vv, oc, kvp } = this._forOfHeader(vars, iterable, stepOrOwn);
+        code += this.indent() + header + ' {\n';
         this.indentLevel++;
         if (own) code += this.indent() + `if (!Object.hasOwn(${oc}, ${kvp})) continue;\n`;
         if (vv) code += this.indent() + `const ${vv} = ${oc}[${kvp}];\n`;
       } else if (iterType === 'for-as') {
-        let isAwait = iter[3];
-        let va = Array.isArray(vars) ? vars : [vars];
-        let [fv] = va;
-        let ivp = ((this.is(fv, 'array') || this.is(fv, 'object')))
-          ? this.generateDestructuringPattern(fv) : fv;
-        code += this.indent() + `for ${isAwait ? 'await ' : ''}(const ${ivp} of ${this.generate(iterable, 'value')}) {\n`;
+        let { header } = this._forAsHeader(vars, iterable, iter[3]);
+        code += this.indent() + header + ' {\n';
         this.indentLevel++;
       }
     }
@@ -2439,34 +2460,10 @@ export class CodeGenerator {
     if (iterators.length === 1) {
       let [iterType, vars, iterable, stepOrOwn] = iterators[0];
       if (iterType === 'for-in') {
-        let step = stepOrOwn;
-        let va = Array.isArray(vars) ? vars : [vars];
-        let noVar = va.length === 0;
-        let [itemVar, indexVar] = noVar ? ['_i', null] : va;
-        let ivp = ((this.is(itemVar, 'array') || this.is(itemVar, 'object')))
-          ? this.generateDestructuringPattern(itemVar) : itemVar;
-
-        if (step && step !== null) {
-          let ih = Array.isArray(iterable) && iterable[0];
-          if (ih instanceof String) ih = str(ih);
-          let isRange = ih === '..' || ih === '...';
-          if (isRange) {
-            let isExcl = ih === '...';
-            let [s, e] = iterable.slice(1);
-            code += this.indent() + `for (let ${ivp} = ${this.generate(s, 'value')}; ${ivp} ${isExcl ? '<' : '<='} ${this.generate(e, 'value')}; ${ivp} += ${this.generate(step, 'value')}) {\n`;
-          } else {
-            let ic = this.generate(iterable, 'value'), idxN = indexVar || '_i', stc = this.generate(step, 'value');
-            let isNeg = this.is(step, '-', 1);
-            code += isNeg
-              ? this.indent() + `for (let ${idxN} = ${ic}.length - 1; ${idxN} >= 0; ${idxN} += ${stc}) {\n`
-              : this.indent() + `for (let ${idxN} = 0; ${idxN} < ${ic}.length; ${idxN} += ${stc}) {\n`;
-            this.indentLevel++;
-            if (!noVar) code += this.indent() + `const ${ivp} = ${ic}[${idxN}];\n`;
-          }
-        } else {
-          code += this.indent() + `for (const ${ivp} of ${this.generate(iterable, 'value')}) {\n`;
-        }
+        let { header, setup } = this._forInHeader(vars, iterable, stepOrOwn);
+        code += this.indent() + header + ' {\n';
         this.indentLevel++;
+        if (setup) code += this.indent() + setup + '\n';
         if (guards && guards.length > 0) {
           code += this.indent() + `if (${guards.map(g => this.generate(g, 'value')).join(' && ')}) {\n`;
           this.indentLevel++;
@@ -2483,155 +2480,51 @@ export class CodeGenerator {
 
   generateComprehensionAsLoop(expr, iterators, guards) {
     let code = '';
+    let guardCond = guards?.length ? guards.map(g => this.generate(g, 'value')).join(' && ') : null;
+
+    // Helper: emit the loop body with optional guard wrapping
+    let emitBody = () => {
+      if (guardCond) {
+        code += this.indent() + `if (${guardCond}) {\n`;
+        this.indentLevel++;
+        code += this.indent() + this.generate(expr, 'statement') + ';\n';
+        this.indentLevel--; code += this.indent() + '}\n';
+      } else {
+        code += this.indent() + this.generate(expr, 'statement') + ';\n';
+      }
+    };
+
     if (iterators.length === 1) {
       let [iterType, vars, iterable, stepOrOwn] = iterators[0];
 
       if (iterType === 'for-in') {
-        let step = stepOrOwn;
-        let va = Array.isArray(vars) ? vars : [vars];
-        let noVar = va.length === 0;
-        let [itemVar, indexVar] = noVar ? ['_i', null] : va;
-        let ivp = ((this.is(itemVar, 'array') || this.is(itemVar, 'object')))
-          ? this.generateDestructuringPattern(itemVar) : itemVar;
-
-        if (step && step !== null) {
-          let ih = Array.isArray(iterable) && iterable[0];
-          if (ih instanceof String) ih = str(ih);
-          let isRange = ih === '..' || ih === '...';
-          if (isRange) {
-            let isExcl = ih === '...';
-            let [s, e] = iterable.slice(1);
-            code += `for (let ${ivp} = ${this.generate(s, 'value')}; ${ivp} ${isExcl ? '<' : '<='} ${this.generate(e, 'value')}; ${ivp} += ${this.generate(step, 'value')}) `;
-          } else {
-            let ic = this.generate(iterable, 'value'), idxN = indexVar || '_i', stc = this.generate(step, 'value');
-            let isNeg = this.is(step, '-', 1);
-            let isMinus1 = isNeg && (step[1] === '1' || step[1] === 1 || str(step[1]) === '1');
-            let isPlus1 = !isNeg && (step === '1' || step === 1 || str(step) === '1');
-            if (isMinus1) code += `for (let ${idxN} = ${ic}.length - 1; ${idxN} >= 0; ${idxN}--) `;
-            else if (isPlus1) code += `for (let ${idxN} = 0; ${idxN} < ${ic}.length; ${idxN}++) `;
-            else if (isNeg) code += `for (let ${idxN} = ${ic}.length - 1; ${idxN} >= 0; ${idxN} += ${stc}) `;
-            else code += `for (let ${idxN} = 0; ${idxN} < ${ic}.length; ${idxN} += ${stc}) `;
-            code += '{\n';
-            this.indentLevel++;
-            if (!noVar) code += this.indent() + `const ${ivp} = ${ic}[${idxN}];\n`;
-          }
-          if (guards?.length) {
-            if (!isRange) code += this.indent();
-            code += '{\n'; this.indentLevel++;
-            code += this.indent() + `if (${guards.map(g => this.generate(g, 'value')).join(' && ')}) {\n`;
-            this.indentLevel++;
-            code += this.indent() + this.generate(expr, 'statement') + ';\n';
-            this.indentLevel--; code += this.indent() + '}\n';
-            this.indentLevel--; code += this.indent() + '}';
-          } else {
-            if (!isRange) code += this.indent();
-            code += '{\n'; this.indentLevel++;
-            code += this.indent() + this.generate(expr, 'statement') + ';\n';
-            this.indentLevel--; code += this.indent() + '}';
-          }
-          if (!isRange) { this.indentLevel--; code += '\n' + this.indent() + '}'; }
-          return code;
-        }
-
-        if (indexVar) {
-          let ic = this.generate(iterable, 'value');
-          code += `for (let ${indexVar} = 0; ${indexVar} < ${ic}.length; ${indexVar}++) `;
-          code += '{\n'; this.indentLevel++;
-          code += this.indent() + `const ${ivp} = ${ic}[${indexVar}];\n`;
-        } else {
-          code += `for (const ${ivp} of ${this.generate(iterable, 'value')}) `;
-          if (guards?.length) {
-            code += '{\n'; this.indentLevel++;
-            code += this.indent() + `if (${guards.map(g => this.generate(g, 'value')).join(' && ')}) {\n`;
-            this.indentLevel++;
-            code += this.indent() + this.generate(expr, 'statement') + ';\n';
-            this.indentLevel--; code += this.indent() + '}\n';
-            this.indentLevel--; code += this.indent() + '}';
-          } else {
-            code += '{\n'; this.indentLevel++;
-            code += this.indent() + this.generate(expr, 'statement') + ';\n';
-            this.indentLevel--; code += this.indent() + '}';
-          }
-          return code;
-        }
-
-        // Fall through for indexVar case
-        if (guards?.length) {
-          code += this.indent() + `if (${guards.map(g => this.generate(g, 'value')).join(' && ')}) {\n`;
-          this.indentLevel++;
-          code += this.indent() + this.generate(expr, 'statement') + ';\n';
-          this.indentLevel--; code += this.indent() + '}\n';
-        } else {
-          code += this.indent() + this.generate(expr, 'statement') + ';\n';
-        }
+        let { header, setup, isRange } = this._forInHeader(vars, iterable, stepOrOwn);
+        code += header + ' {\n';
+        this.indentLevel++;
+        if (setup) code += this.indent() + setup + '\n';
+        emitBody();
         this.indentLevel--;
         code += this.indent() + '}';
         return code;
       }
 
       if (iterType === 'for-as') {
-        let va = Array.isArray(vars) ? vars : [vars];
-        let [fv] = va;
-        let ivp = ((this.is(fv, 'array') || this.is(fv, 'object')))
-          ? this.generateDestructuringPattern(fv) : fv;
-        code += `for (const ${ivp} of ${this.generate(iterable, 'value')}) `;
-        if (guards?.length) {
-          code += '{\n'; this.indentLevel++;
-          code += this.indent() + `if (${guards.map(g => this.generate(g, 'value')).join(' && ')}) {\n`;
-          this.indentLevel++;
-          code += this.indent() + this.generate(expr, 'statement') + ';\n';
-          this.indentLevel--; code += this.indent() + '}\n';
-          this.indentLevel--; code += this.indent() + '}';
-        } else {
-          code += '{\n'; this.indentLevel++;
-          code += this.indent() + this.generate(expr, 'statement') + ';\n';
-          this.indentLevel--; code += this.indent() + '}';
-        }
+        let { header } = this._forAsHeader(vars, iterable, stepOrOwn);
+        code += header + ' {\n';
+        this.indentLevel++;
+        emitBody();
+        this.indentLevel--;
+        code += this.indent() + '}';
         return code;
       }
 
       if (iterType === 'for-of') {
-        let va = Array.isArray(vars) ? vars : [vars];
-        let [kv, vv] = va;
-        let own = stepOrOwn;
-        let oc = this.generate(iterable, 'value');
-        code += `for (const ${kv} in ${oc}) {\n`;
+        let { header, own, vv, oc, kvp } = this._forOfHeader(vars, iterable, stepOrOwn);
+        code += header + ' {\n';
         this.indentLevel++;
-        if (own && !vv && !guards?.length) {
-          code += this.indent() + `if (!Object.hasOwn(${oc}, ${kv})) continue;\n`;
-          code += this.indent() + this.generate(expr, 'statement') + ';\n';
-        } else if (own && vv && guards?.length) {
-          code += this.indent() + `if (Object.hasOwn(${oc}, ${kv})) {\n`;
-          this.indentLevel++;
-          code += this.indent() + `const ${vv} = ${oc}[${kv}];\n`;
-          code += this.indent() + `if (${guards.map(g => this.generate(g, 'value')).join(' && ')}) {\n`;
-          this.indentLevel++;
-          code += this.indent() + this.generate(expr, 'statement') + ';\n';
-          this.indentLevel--; code += this.indent() + '}\n';
-          this.indentLevel--; code += this.indent() + '}\n';
-        } else if (own && vv) {
-          code += this.indent() + `if (Object.hasOwn(${oc}, ${kv})) {\n`;
-          this.indentLevel++;
-          code += this.indent() + `const ${vv} = ${oc}[${kv}];\n`;
-          code += this.indent() + this.generate(expr, 'statement') + ';\n';
-          this.indentLevel--; code += this.indent() + '}\n';
-        } else if (vv && guards?.length) {
-          code += this.indent() + `const ${vv} = ${oc}[${kv}];\n`;
-          code += this.indent() + `if (${guards.map(g => this.generate(g, 'value')).join(' && ')}) {\n`;
-          this.indentLevel++;
-          code += this.indent() + this.generate(expr, 'statement') + ';\n';
-          this.indentLevel--; code += this.indent() + '}\n';
-        } else if (vv) {
-          code += this.indent() + `const ${vv} = ${oc}[${kv}];\n`;
-          code += this.indent() + this.generate(expr, 'statement') + ';\n';
-        } else if (guards?.length) {
-          code += this.indent() + `if (${guards.map(g => this.generate(g, 'value')).join(' && ')}) {\n`;
-          this.indentLevel++;
-          code += this.indent() + this.generate(expr, 'statement') + ';\n';
-          this.indentLevel--; code += this.indent() + '}\n';
-        } else {
-          code += this.indent() + this.generate(expr, 'statement') + ';\n';
-        }
+        if (own) code += this.indent() + `if (!Object.hasOwn(${oc}, ${kvp})) continue;\n`;
+        if (vv) code += this.indent() + `const ${vv} = ${oc}[${kvp}];\n`;
+        emitBody();
         this.indentLevel--;
         code += this.indent() + '}';
         return code;
