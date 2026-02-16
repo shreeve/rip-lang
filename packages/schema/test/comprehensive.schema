@@ -25,34 +25,34 @@
 # ============================================================================
 
 @mixin Timestamps
-  createdAt!: datetime
-  updatedAt!: datetime
+  createdAt! datetime
+  updatedAt! datetime
 
 @mixin Auditable
   @include Timestamps
-  createdBy?: integer
-  updatedBy?: integer
+  createdBy? integer
+  updatedBy? integer
 
 # ============================================================================
 # Types (no database backing)
 # ============================================================================
 
 @type Address
-  street!: string, [1, 200]
-  city!: string, [1, 100]
-  state!: string, [2, 2]
-  zip!: string, [5, 10]
-  country: string, ["US"]
+  street!  string, [1, 200]
+  city!    string, [1, 100]
+  state!   string, [2, 2]
+  zip!     string, [5, 10]
+  country  string, ["US"]
 
 @type ContactInfo
-  email?: email
-  phone?: string
-  fax?: string
+  email? email
+  phone? string
+  fax?   string
 
 @type PersonName
-  first!: string, [1, 50]
-  middle?: string, [0, 50]
-  last!: string, [1, 50]
+  first!  string, [1, 50]
+  middle? string, [0, 50]
+  last!   string, [1, 50]
 
 # ============================================================================
 # Models (database-backed)
@@ -60,29 +60,29 @@
 
 @model User
   # Basic fields with modifiers
-  name!: string, [1, 100]
-  email!#: email
-  password!: string, [8, 100], { writeOnly: true }
+  name!      string, [1, 100]
+  email!#    email
+  password!  string, [8, 100], { writeOnly: true }
 
   # Enum with default
-  role: Role, [user]
-  status: Status, [active]
+  role       Role, [user]
+  status     Status, [active]
 
   # Optional fields
-  avatar?: string
-  bio?: text, [0, 1000]
+  avatar?    string
+  bio?       text, [0, 1000]
 
   # Nested types
-  address?: Address
-  contact?: ContactInfo
+  address?   Address
+  contact?   ContactInfo
 
   # JSON and arrays
-  settings: json, [{}]
-  tags: string[]
+  settings   json, [{}]
+  tags       string[]
 
   # Booleans with defaults
-  active: boolean, [true]
-  verified: boolean, [false]
+  active     boolean, [true]
+  verified   boolean, [false]
 
   # Directives
   @timestamps
@@ -100,23 +100,23 @@
 
   # Computed fields
   @computed
-    displayName: -> @name
-    isAdmin: -> @admin
-    fullAddress: -> @street
+    displayName -> @name
+    isAdmin     -> @admin
+    fullAddress -> @street
 
   # Validations
   @validate
-    password: -> @valid
-    email: -> @valid
+    password -> @valid
+    email    -> @valid
 
 @model Post
-  title!: string, [1, 200]
-  slug!#: string, [1, 200]
-  content!: text
-  excerpt?: text, [0, 500]
-  published: boolean, [false]
-  publishedAt?: datetime
-  viewCount: integer, [0]
+  title!       string, [1, 200]
+  slug!#       string, [1, 200]
+  content!     text
+  excerpt?     text, [0, 500]
+  published    boolean, [false]
+  publishedAt? datetime
+  viewCount    integer, [0]
 
   @belongs_to User
   @has_many Comment
@@ -128,8 +128,8 @@
   @index slug#
 
 @model Comment
-  content!: text, [1, 5000]
-  approved: boolean, [false]
+  content! text, [1, 5000]
+  approved boolean, [false]
 
   @belongs_to Post
   @belongs_to User
@@ -142,16 +142,16 @@
 # ============================================================================
 
 @widget Table
-  selectionMode: string, ["single"]
-  sortable: boolean, [true]
-  filterable: boolean, [false]
-  pageSize: integer, [25]
+  selectionMode string, ["single"]
+  sortable      boolean, [true]
+  filterable    boolean, [false]
+  pageSize      integer, [25]
 
   @events onSelect, onSort, onFilter, onPageChange
 
 @widget Form
-  layout: string, ["vertical"]
-  labelWidth: string, ["120px"]
+  layout     string, ["vertical"]
+  labelWidth string, ["120px"]
 
   @events onSubmit, onReset, onValidate
 
@@ -176,13 +176,13 @@
 # ============================================================================
 
 @state AppState
-  currentUser?: User
-  theme: string, ["light"]
-  sidebarOpen: boolean, [true]
+  currentUser? User
+  theme        string, ["light"]
+  sidebarOpen  boolean, [true]
 
   @computed
-    isLoggedIn: -> @loggedIn
-    userCount: -> @count
+    isLoggedIn -> @loggedIn
+    userCount  -> @count
 
   @actions
     login { async: true }

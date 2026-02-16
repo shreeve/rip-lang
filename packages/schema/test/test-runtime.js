@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // Test Schema Runtime
 
-import { parse, Schema } from '../../packages/schema/index.js'
+import { parse, Schema } from '../index.js'
 
 // =============================================================================
 // Test Schema
@@ -12,21 +12,21 @@ const schemaSource = `
 @enum Status: pending, active, inactive
 
 @type Address
-  street!: string, [1, 100]
-  city!: string, [1, 50]
-  zip!: string, [5, 10]
-  country: string, ["USA"]
+  street!  string, [1, 100]
+  city!    string, [1, 50]
+  zip!     string, [5, 10]
+  country  string, ["USA"]
 
 @model User
-  name!: string, [1, 100]
-  email!#: email
-  role: Role, [user]
-  status: Status, [active]
-  age?: integer
-  bio?: text, [0, 1000]
-  address?: Address
-  tags: string[]
-  active: boolean, [true]
+  name!    string, [1, 100]
+  email!#  email
+  role     Role, [user]
+  status   Status, [active]
+  age?     integer
+  bio?     text, [0, 1000]
+  address? Address
+  tags     string[]
+  active   boolean, [true]
 
   @timestamps
 `

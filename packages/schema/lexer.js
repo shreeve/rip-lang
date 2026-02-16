@@ -1,26 +1,44 @@
-// ==============================================================================
-// Schema Lexer - Tokenizer for Rip Schema Files
+// ==========================================================================
+// Schema Lexer — Tokenizer for Rip Schema Files
+// ==========================================================================
 //
-// A clean, standalone lexer for the schema language.
-// Handles indentation-based syntax (INDENT/OUTDENT tokens).
+// Tokenizes schema source into a stream of tagged tokens with
+// indentation-based INDENT/OUTDENT for block structure.
+//
+// Design principles:
+//   - Every token carries .loc  (location: r, c, n)
+//   - Indentation tracked during tokenization
+//   - Keywords use @ prefix for definitions and directives
+//   - # is a comment when preceded by whitespace, a modifier otherwise
+//   - Zero dependencies
+//
+// Token format:
+//   { type, value, loc }
+//   type  — token tag string (IDENTIFIER, MODEL, etc.)
+//   value — parsed value (string, number, boolean)
+//   loc   — { r: row, c: col, n: length }
 //
 // Author: Steve Shreeve <steve.shreeve@gmail.com>
 //   Date: January 2026
-// ==============================================================================
+// ==========================================================================
+
+// ==========================================================================
+// Keyword Maps
+// ==========================================================================
 
 // Keywords that require @ prefix (definition and directive keywords)
-const AT_KEYWORDS = {
-  // Definition keywords
-  'enum':       'ENUM',
-  'type':       'TYPE',
-  'model':      'MODEL',
-  'mixin':      'MIXIN',
-  'widget':     'WIDGET',
-  'form':       'FORM',
-  'state':      'STATE',
-  'import':     'IMPORT',
+let AT_KEYWORDS = {
+  // Definitions
+  'enum':        'ENUM',
+  'type':        'TYPE',
+  'model':       'MODEL',
+  'mixin':       'MIXIN',
+  'widget':      'WIDGET',
+  'form':        'FORM',
+  'state':       'STATE',
+  'import':      'IMPORT',
 
-  // Directive keywords
+  // Directives
   'timestamps':  'TIMESTAMPS',
   'softDelete':  'SOFT_DELETE',
   'include':     'INCLUDE',
@@ -36,16 +54,11 @@ const AT_KEYWORDS = {
 };
 
 // Regular keywords (no @ prefix needed)
-const KEYWORDS = {
-  // Boolean literals
+let KEYWORDS = {
   'true':        'BOOL',
   'false':       'BOOL',
-
-  // Null/undefined
   'null':        'NULL',
   'undefined':   'UNDEFINED',
-
-  // Operators
   'is':          'IS',
   'isnt':        'ISNT',
   'not':         'NOT',
@@ -53,343 +66,365 @@ const KEYWORDS = {
   'or':          'OR',
 };
 
-// Regex patterns for tokens
-const IDENTIFIER = /^[a-zA-Z_$][a-zA-Z0-9_$]*/;
-const NUMBER = /^-?(?:0x[\da-f]+|0b[01]+|0o[0-7]+|\d*\.?\d+(?:e[+-]?\d+)?)/i;
-const STRING_DOUBLE = /^"(?:[^"\\]|\\.)*"/;
-const STRING_SINGLE = /^'(?:[^'\\]|\\.)*'/;
-const REGEX_LITERAL = /^\/(?:[^\/\\]|\\.)+\/[gimsuy]*/;
-const WHITESPACE = /^[^\n\S]+/;
-const COMMENT = /^#.*/;
-const NEWLINE = /^\n/;
+// ==========================================================================
+// Regex Patterns
+// ==========================================================================
+
+let IDENTIFIER_RE    = /^[a-zA-Z_$][a-zA-Z0-9_$]*/;
+let NUMBER_RE        = /^-?(?:0x[\da-f]+|0b[01]+|0o[0-7]+|\d*\.?\d+(?:e[+-]?\d+)?)/i;
+let STRING_DOUBLE_RE = /^"(?:[^"\\]|\\.)*"/;
+let STRING_SINGLE_RE = /^'(?:[^'\\]|\\.)*'/;
+let REGEX_RE         = /^\/(?:[^\/\\]|\\.)+\/[gimsuy]*/;
+let WHITESPACE_RE    = /^[^\n\S]+/;
+let COMMENT_RE       = /^#.*/;
+let NEWLINE_RE       = /^\n/;
+let INDENT_RE        = /^[ \t]*/;
+let BLANK_LINE_RE    = /^(#[^\n]*)?(\n|$)/;
+
+// ==========================================================================
+// Single-character token map
+// ==========================================================================
+
+let SINGLE_CHARS = {
+  ':': ':', ',': ',', '.': '.', '(': '(', ')': ')',
+  '[': '[', ']': ']', '{': '{', '}': '}',
+  '!': '!', '#': '#', '?': '?',
+  '+': '+', '-': '-', '*': '*', '/': '/',
+  '<': '<', '>': '>',
+  '=': '=', '&': '&', '|': '|', '^': '^',
+};
+
+// Multi-character operators (checked before single chars)
+let MULTI_OPS = ['...', '?.', '->', '==', '!=', '<=', '>=', '&&', '||', '??'];
+
+// ==========================================================================
+// Helpers
+// ==========================================================================
+
+function syntaxError(message, {r = 0, c = 0, n = 1} = {}) {
+  let err = new SyntaxError(message);
+  err.location = {r, c, n};
+  throw err;
+}
+
+// ==========================================================================
+// Schema Lexer
+// ==========================================================================
 
 export class SchemaLexer {
   constructor() {
-    this.input = '';
-    this.pos = 0;
-    this.line = 0;
-    this.column = 0;
+    this.input      = '';
+    this.pos        = 0;
+    this._row       = 0;
+    this._col       = 0;
     this.indentStack = [0];
-    this.tokens = [];
+    this.tokens     = [];
     this.tokenIndex = 0;
-    this.yytext = '';
-    this.yylineno = 0;
-    this.yyleng = 0;
-    this.yylloc = {};
+
+    // Parser-facing state (set by lex())
+    this.text  = '';
+    this.line  = 0;
+    this.len   = 0;
+    this.loc   = {};
     this.match = '';
   }
 
-  setInput(input, yy = {}) {
-    this.input = input;
-    this.pos = 0;
-    this.line = 0;
-    this.column = 0;
-    this.indentStack = [0];
-    this.tokens = [];
-    this.tokenIndex = 0;
-    this.yy = yy;
+  // --------------------------------------------------------------------------
+  // Input
+  // --------------------------------------------------------------------------
 
-    // Tokenize all at once (simpler for indentation handling)
+  setInput(input, ctx = {}) {
+    this.input      = input;
+    this.pos        = 0;
+    this._row       = 0;
+    this._col       = 0;
+    this.indentStack = [0];
+    this.tokens     = [];
+    this.tokenIndex = 0;
+    this.ctx        = ctx;
+
     this._tokenize();
   }
 
+  // --------------------------------------------------------------------------
+  // Token creation
+  // --------------------------------------------------------------------------
+
+  _emit(tokens, type, value, r, c, n) {
+    let token = { type, value, loc: {r, c, n} };
+    tokens.push(token);
+    return token;
+  }
+
+  // --------------------------------------------------------------------------
+  // Tokenizer
+  // --------------------------------------------------------------------------
+
   _tokenize() {
-    const input = this.input;
-    const tokens = this.tokens;
-    let pos = 0;
-    let line = 0;
-    let column = 0;
-    let indentStack = [0];
-    let atLineStart = true;
-    let lastSignificantToken = null;
+    let input  = this.input;
+    let tokens = this.tokens;
+    let pos    = 0;
+    let row    = 0;
+    let col    = 0;
+    let indentStack  = [0];
+    let atLineStart  = true;
+    let lastSignificant = null;
 
-    const makeLocation = (startLine, startCol, endLine, endCol) => ({
-      first_line: startLine,
-      first_column: startCol,
-      last_line: endLine,
-      last_column: endCol,
-      range: [pos, pos]  // Simplified range
-    });
-
-    const addToken = (type, value, loc) => {
-      tokens.push({ type, value, loc });
+    let emit = (type, value, r, c, n) => {
+      this._emit(tokens, type, value, r, c, n);
       if (type !== 'TERMINATOR' && type !== 'INDENT' && type !== 'OUTDENT') {
-        lastSignificantToken = type;
+        lastSignificant = type;
       }
     };
 
     while (pos < input.length) {
-      const remaining = input.slice(pos);
-      const startLine = line;
-      const startCol = column;
+      let remaining = input.slice(pos);
+      let startRow  = row;
+      let startCol  = col;
       let match;
 
-      // Handle newlines and indentation
-      if (match = remaining.match(NEWLINE)) {
+      // --- Newlines ---
+      if (match = remaining.match(NEWLINE_RE)) {
         pos += 1;
-        line += 1;
-        column = 0;
+        row += 1;
+        col  = 0;
         atLineStart = true;
 
-        // Add TERMINATOR if we had meaningful content
-        if (lastSignificantToken && lastSignificantToken !== 'TERMINATOR') {
-          addToken('TERMINATOR', '\n', makeLocation(startLine, startCol, line, 0));
+        if (lastSignificant && lastSignificant !== 'TERMINATOR') {
+          emit('TERMINATOR', '\n', startRow, startCol, 1);
         }
         continue;
       }
 
-      // Handle indentation at line start
+      // --- Indentation at line start ---
       if (atLineStart) {
-        match = remaining.match(/^[ \t]*/);
-        const indent = match[0].length;
+        match = remaining.match(INDENT_RE);
+        let indent = match[0].length;
         pos += indent;
-        column += indent;
+        col += indent;
         atLineStart = false;
 
-        // Check if this is a blank line or comment-only line
-        const restOfLine = input.slice(pos);
-        const blankOrCommentMatch = restOfLine.match(/^(#[^\n]*)?(\n|$)/);
+        // Blank or comment-only line — skip
+        let restOfLine = input.slice(pos);
+        let blankMatch = restOfLine.match(BLANK_LINE_RE);
 
-        // For blank/comment lines, skip the entire line (including comment and newline)
-        if (blankOrCommentMatch) {
-          const currentIndent = indentStack[indentStack.length - 1];
+        if (blankMatch) {
+          let currentIndent = indentStack[indentStack.length - 1];
 
-          // Only process outdent for blank/comment lines at column 0
+          // Outdent at column 0 even on blank/comment lines
           if (indent === 0 && indent < currentIndent) {
             while (indentStack.length > 1) {
               indentStack.pop();
-              addToken('OUTDENT', indent, makeLocation(line, 0, line, indent));
+              emit('OUTDENT', indent, row, 0, indent);
             }
-            if (lastSignificantToken && lastSignificantToken !== 'TERMINATOR') {
-              addToken('TERMINATOR', '\n', makeLocation(line, 0, line, 0));
+            if (lastSignificant && lastSignificant !== 'TERMINATOR') {
+              emit('TERMINATOR', '\n', row, 0, 0);
             }
           }
 
-          // Skip the entire blank/comment line (including the newline)
-          const skipLen = blankOrCommentMatch[0].length;
+          let skipLen = blankMatch[0].length;
           pos += skipLen;
-          if (blankOrCommentMatch[2] === '\n') {
-            line += 1;
-            column = 0;
+          if (blankMatch[2] === '\n') {
+            row += 1;
+            col  = 0;
             atLineStart = true;
           }
           continue;
         }
 
-        // Real content line - process indent changes
-        const currentIndent = indentStack[indentStack.length - 1];
+        // Real content — process indent changes
+        let currentIndent = indentStack[indentStack.length - 1];
 
         if (indent > currentIndent) {
           indentStack.push(indent);
-          addToken('INDENT', indent, makeLocation(line, 0, line, indent));
+          emit('INDENT', indent, row, 0, indent);
         } else if (indent < currentIndent) {
           while (indentStack.length > 1 && indentStack[indentStack.length - 1] > indent) {
             indentStack.pop();
-            addToken('OUTDENT', indent, makeLocation(line, 0, line, indent));
+            emit('OUTDENT', indent, row, 0, indent);
           }
-          // After OUTDENT, add TERMINATOR to separate the completed block from next item
-          if (lastSignificantToken && lastSignificantToken !== 'TERMINATOR') {
-            addToken('TERMINATOR', '\n', makeLocation(line, 0, line, 0));
+          if (lastSignificant && lastSignificant !== 'TERMINATOR') {
+            emit('TERMINATOR', '\n', row, 0, 0);
           }
         }
         continue;
       }
 
-      // Skip whitespace (not at line start)
-      if (match = remaining.match(WHITESPACE)) {
+      // --- Whitespace (mid-line) ---
+      if (match = remaining.match(WHITESPACE_RE)) {
         pos += match[0].length;
-        column += match[0].length;
+        col += match[0].length;
         continue;
       }
 
-      // Skip comments (# only starts a comment if preceded by whitespace or at line start)
-      // In field definitions like `email!#: email`, the # is a modifier not a comment
+      // --- Comments (#) ---
+      // # is a comment when preceded by whitespace or at line start.
+      // Otherwise it's a modifier token (e.g., email!# email).
       if (remaining[0] === '#') {
-        // Check if previous character was whitespace or we're at line start after indentation
-        const prevChar = input[pos - 1];
-        const isCommentStart = !prevChar || /\s/.test(prevChar);
+        let prevChar = input[pos - 1];
+        let isComment = !prevChar || /\s/.test(prevChar);
 
-        if (isCommentStart) {
-          match = remaining.match(COMMENT);
+        if (isComment) {
+          match = remaining.match(COMMENT_RE);
           pos += match[0].length;
-          column += match[0].length;
+          col += match[0].length;
           continue;
         }
-        // Otherwise, fall through to single char token handling below
+        // Fall through to single-char handling
       }
 
-      // @ prefix for keywords/directives
+      // --- @ keywords/directives ---
       if (remaining[0] === '@') {
         pos += 1;
-        column += 1;
-        const identMatch = input.slice(pos).match(IDENTIFIER);
+        col += 1;
+        let identMatch = input.slice(pos).match(IDENTIFIER_RE);
         if (identMatch) {
-          const word = identMatch[0];
-          const tokenType = AT_KEYWORDS[word];
+          let word = identMatch[0];
+          let tokenType = AT_KEYWORDS[word];
           if (tokenType) {
             pos += word.length;
-            column += word.length;
-            addToken(tokenType, word, makeLocation(startLine, startCol, line, column));
+            col += word.length;
+            emit(tokenType, word, startRow, startCol, word.length + 1);
             continue;
           }
-          // @ followed by identifier that's not a keyword = @property access
-          // Don't consume the identifier, just emit @
-          addToken('@', '@', makeLocation(startLine, startCol, startLine, startCol + 1));
+          // @ followed by non-keyword identifier = @property access
+          emit('@', '@', startRow, startCol, 1);
           continue;
         }
-        addToken('@', '@', makeLocation(startLine, startCol, startLine, startCol + 1));
+        emit('@', '@', startRow, startCol, 1);
         continue;
       }
 
-      // Multi-character operators (check before single char)
-      const multiOps = ['...', '?.', '->', '==', '!=', '<=', '>=', '&&', '||', '??'];
+      // --- Multi-character operators ---
       let foundMultiOp = false;
-      for (const op of multiOps) {
+      for (let op of MULTI_OPS) {
         if (remaining.startsWith(op)) {
           pos += op.length;
-          column += op.length;
-          addToken(op, op, makeLocation(startLine, startCol, line, column));
+          col += op.length;
+          emit(op, op, startRow, startCol, op.length);
           foundMultiOp = true;
           break;
         }
       }
       if (foundMultiOp) continue;
 
-      // Identifiers and keywords
-      if (match = remaining.match(IDENTIFIER)) {
-        const word = match[0];
+      // --- Identifiers and keywords ---
+      if (match = remaining.match(IDENTIFIER_RE)) {
+        let word = match[0];
         pos += word.length;
-        column += word.length;
+        col += word.length;
 
-        const tokenType = KEYWORDS[word] || 'IDENTIFIER';
-        const value = (tokenType === 'BOOL') ? (word === 'true') : word;
-        addToken(tokenType, value, makeLocation(startLine, startCol, line, column));
+        let tokenType = KEYWORDS[word] || 'IDENTIFIER';
+        let value = (tokenType === 'BOOL') ? (word === 'true') : word;
+        emit(tokenType, value, startRow, startCol, word.length);
         continue;
       }
 
-      // Numbers
-      if (match = remaining.match(NUMBER)) {
+      // --- Numbers ---
+      if (match = remaining.match(NUMBER_RE)) {
         pos += match[0].length;
-        column += match[0].length;
-        addToken('NUMBER', parseFloat(match[0]), makeLocation(startLine, startCol, line, column));
+        col += match[0].length;
+        emit('NUMBER', parseFloat(match[0]), startRow, startCol, match[0].length);
         continue;
       }
 
-      // Strings
-      if (match = remaining.match(STRING_DOUBLE) || remaining.match(STRING_SINGLE)) {
-        const str = match[0];
+      // --- Strings ---
+      if (match = remaining.match(STRING_DOUBLE_RE) || remaining.match(STRING_SINGLE_RE)) {
+        let str = match[0];
         pos += str.length;
-        // Count newlines in string
-        const newlines = (str.match(/\n/g) || []).length;
+
+        let newlines = (str.match(/\n/g) || []).length;
         if (newlines > 0) {
-          line += newlines;
-          column = str.length - str.lastIndexOf('\n') - 1;
+          row += newlines;
+          col  = str.length - str.lastIndexOf('\n') - 1;
         } else {
-          column += str.length;
+          col += str.length;
         }
+
         // Remove quotes and unescape
-        const value = str.slice(1, -1).replace(/\\(.)/g, (_, c) => {
+        let value = str.slice(1, -1).replace(/\\(.)/g, (_, c) => {
           switch (c) {
-            case 'n': return '\n';
-            case 't': return '\t';
-            case 'r': return '\r';
+            case 'n':  return '\n';
+            case 't':  return '\t';
+            case 'r':  return '\r';
             case '\\': return '\\';
-            case '"': return '"';
-            case "'": return "'";
-            default: return c;
+            case '"':  return '"';
+            case "'":  return "'";
+            default:   return c;
           }
         });
-        addToken('STRING', value, makeLocation(startLine, startCol, line, column));
+        emit('STRING', value, startRow, startCol, str.length);
         continue;
       }
 
-      // Regex literals (only after certain tokens to avoid confusion with division)
-      // Regex can follow: ( [ { , : = ! && || ?? -> etc.
-      const canBeRegex = !lastSignificantToken ||
+      // --- Regex literals ---
+      let canBeRegex = !lastSignificant ||
         [':', ',', '(', '[', '{', '=', '!', '->', '&&', '||', '??', 'TERMINATOR',
-         'INDENT', 'PATTERN', 'RETURN'].includes(lastSignificantToken);
+         'INDENT', 'PATTERN', 'RETURN'].includes(lastSignificant);
 
-      if (canBeRegex && (match = remaining.match(REGEX_LITERAL))) {
-        const regex = match[0];
+      if (canBeRegex && (match = remaining.match(REGEX_RE))) {
+        let regex = match[0];
         pos += regex.length;
-        column += regex.length;
-        addToken('REGEX', regex, makeLocation(startLine, startCol, line, column));
+        col += regex.length;
+        emit('REGEX', regex, startRow, startCol, regex.length);
         continue;
       }
 
-      // Single character tokens
-      const char = remaining[0];
+      // --- Single-character tokens ---
+      let char = remaining[0];
       pos += 1;
-      column += 1;
+      col += 1;
 
-      // Map single chars to token types
-      const singleCharTokens = {
-        ':': ':',
-        ',': ',',
-        '.': '.',
-        '(': '(',
-        ')': ')',
-        '[': '[',
-        ']': ']',
-        '{': '{',
-        '}': '}',
-        '!': '!',
-        '#': '#',
-        '?': '?',
-        '+': '+',
-        '-': '-',
-        '*': '*',
-        '/': '/',
-        '<': '<',
-        '>': '>',
-        '=': '=',
-        '&': '&',
-        '|': '|',
-        '^': '^',
-      };
-
-      if (singleCharTokens[char]) {
-        addToken(singleCharTokens[char], char, makeLocation(startLine, startCol, line, column));
+      if (SINGLE_CHARS[char]) {
+        emit(SINGLE_CHARS[char], char, startRow, startCol, 1);
         continue;
       }
 
-      // Unknown character - error
-      throw new Error(`Unexpected character '${char}' at line ${line + 1}, column ${column}`);
+      // Unknown character
+      syntaxError(`unexpected character '${char}'`, {r: row, c: col - 1, n: 1});
     }
 
-    // Close any remaining indents
+    // Close remaining indents
     while (indentStack.length > 1) {
       indentStack.pop();
-      addToken('OUTDENT', 0, makeLocation(line, column, line, column));
+      emit('OUTDENT', 0, row, col, 0);
     }
 
-    // Add final terminator if needed
-    if (lastSignificantToken && lastSignificantToken !== 'TERMINATOR') {
-      addToken('TERMINATOR', '\n', makeLocation(line, column, line, column));
+    // Final terminator
+    if (lastSignificant && lastSignificant !== 'TERMINATOR') {
+      emit('TERMINATOR', '\n', row, col, 0);
     }
   }
+
+  // --------------------------------------------------------------------------
+  // Parser interface — returns one token at a time
+  // --------------------------------------------------------------------------
 
   lex() {
     if (this.tokenIndex >= this.tokens.length) {
       return false; // EOF
     }
 
-    const token = this.tokens[this.tokenIndex++];
-    this.yytext = token.value;
-    this.yyleng = typeof token.value === 'string' ? token.value.length : 1;
-    this.yylineno = token.loc.first_line;
-    this.yylloc = token.loc;
+    let token  = this.tokens[this.tokenIndex++];
+    this.text  = token.value;
+    this.len   = typeof token.value === 'string' ? token.value.length : 1;
+    this.line  = token.loc.r;
+    this.loc   = token.loc;
     this.match = String(token.value);
 
     return token.type;
   }
 
+  // --------------------------------------------------------------------------
+  // Error display
+  // --------------------------------------------------------------------------
+
   showPosition() {
-    const lines = this.input.split('\n');
-    const line = lines[this.yylineno] || '';
-    const col = this.yylloc?.first_column || 0;
-    const pointer = ' '.repeat(col) + '^';
-    return `${line}\n${pointer}`;
+    let lines = this.input.split('\n');
+    let currentLine = lines[this.line] || '';
+    let col = this.loc?.c || 0;
+    let pointer = ' '.repeat(col) + '^';
+    return `${currentLine}\n${pointer}`;
   }
 }
 

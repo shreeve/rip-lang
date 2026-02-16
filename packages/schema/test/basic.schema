@@ -8,17 +8,17 @@
   suspended: 2
 
 @type Address
-  street!: string
-  city!: string
-  state!: string, [2, 2]
-  zip!: string
+  street! string
+  city!   string
+  state!  string, [2, 2]
+  zip!    string
 
 @model User
-  name!: string, [1, 100]
-  email!#: email
-  role: Role, [user]
-  active: boolean, [true]
-  address?: Address
+  name!    string, [1, 100]
+  email!#  email
+  role     Role, [user]
+  active   boolean, [true]
+  address? Address
 
   @timestamps
   @index [role, active]

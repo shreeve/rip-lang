@@ -4,7 +4,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { parse, SchemaLexer } from '../../packages/schema/index.js';
+import { parse, SchemaLexer } from '../index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -25,7 +25,7 @@ if (process.argv.includes('--tokens')) {
   const lexer = new SchemaLexer();
   lexer.setInput(schemaSource);
   for (const token of lexer.tokens) {
-    const loc = `L${token.loc.first_line + 1}:${token.loc.first_column}`;
+    const loc = `L${token.loc.r + 1}:${token.loc.c}`;
     console.log(`  ${loc.padEnd(8)} ${token.type.padEnd(15)} ${JSON.stringify(token.value)}`);
   }
   console.log();

@@ -2,6 +2,6 @@
 
 @model User
   # This is a comment
-  name!: string
+  name! string
   # Another comment
-  email!: string
+  email! string
