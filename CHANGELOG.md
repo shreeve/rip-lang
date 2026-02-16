@@ -7,6 +7,23 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.8] - 2026-02-16
+
+### Compiler — Refactoring & Cleanup
+
+- **Comprehension generator deduplication** — Extracted shared `_forInHeader`, `_forOfHeader`, and `_forAsHeader` helpers, consolidating loop header construction across `generateComprehension`, `generateComprehensionWithTarget`, and `generateComprehensionAsLoop`.
+- **Cleaner for-of loop output** — `for own k of obj` now generates flatter JavaScript using `continue` guard clauses instead of nested `if` blocks.
+- **Component child deduplication** — Extracted `appendChildren` helper in `components.js`, consolidating duplicate child-processing logic from `generateTag` and `generateDynamicTag`. Also fixed a missing `componentMembers` check in `generateDynamicTag`.
+- **Dead code removal** — Removed unused `break-if` and `continue-if` compiler handlers (the grammar handles these through the normal `if` path).
+
+### REPL — Bug Fix
+
+- **Comprehension crash fix** — The REPL now correctly handles multi-line expressions (comprehensions, IIFEs). Previously, the result capture logic produced broken JavaScript by prepending `__result =` to the closing `})();` line instead of the expression start.
+
+### Documentation
+
+- Fixed inaccurate content on the Rip UI demo About page (compiler/framework sizes, architecture description).
+
 ## [3.8.7] - 2026-02-14
 
 Rip UI loading optimization (combined bundle, build-time compilation, FOUC prevention). See `packages/ui/CHANGELOG.md` v0.3.2.

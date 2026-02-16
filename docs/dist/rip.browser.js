@@ -3465,11 +3465,12 @@ var parserInstance = {
     [TERROR, EOF] = [2, 1];
     lexer = Object.create(this.lexer);
     sharedState = { ctx: {} };
-    for (const k in this.ctx)
-      if (Object.hasOwn(this.ctx, k)) {
-        const v = this.ctx[k];
-        sharedState.ctx[k] = v;
-      }
+    for (const k in this.ctx) {
+      if (!Object.hasOwn(this.ctx, k))
+        continue;
+      const v = this.ctx[k];
+      sharedState.ctx[k] = v;
+    }
     lexer.setInput(input, sharedState.ctx);
     [sharedState.ctx.lexer, sharedState.ctx.parser] = [lexer, this];
     if (lexer.loc == null)
@@ -3945,17 +3946,9 @@ ${blockFactoriesCode}return ${lines.join(`
     }
     return textVar;
   };
-  proto.generateTag = function(tag, classes, args, id) {
-    const elVar = this.newElementVar();
-    this._createLines.push(`${elVar} = document.createElement('${tag}');`);
-    if (id) {
-      this._createLines.push(`${elVar}.id = '${id}';`);
-    }
-    if (classes.length > 0) {
-      this._createLines.push(`${elVar}.className = '${classes.join(" ")}';`);
-    }
+  proto.appendChildren = function(elVar, args) {
     for (const arg of args) {
-      if (Array.isArray(arg) && (arg[0] === "->" || arg[0] === "=>")) {
+      if (this.is(arg, "->") || this.is(arg, "=>")) {
         const block = arg[2];
         if (this.is(block, "block")) {
           for (const child of block.slice(1)) {
@@ -3968,29 +3961,18 @@ ${blockFactoriesCode}return ${lines.join(`
         }
       } else if (this.is(arg, "object")) {
         this.generateAttributes(elVar, arg);
-      } else if (typeof arg === "string") {
+      } else if (typeof arg === "string" || arg instanceof String) {
         const textVar = this.newTextVar();
-        if (arg.startsWith('"') || arg.startsWith("'") || arg.startsWith("`")) {
-          this._createLines.push(`${textVar} = document.createTextNode(${arg});`);
-        } else if (this.reactiveMembers && this.reactiveMembers.has(arg)) {
-          this._createLines.push(`${textVar} = document.createTextNode('');`);
-          this._setupLines.push(`__effect(() => { ${textVar}.data = this.${arg}.value; });`);
-        } else if (this.componentMembers && this.componentMembers.has(arg)) {
-          this._createLines.push(`${textVar} = document.createTextNode(String(this.${arg}));`);
-        } else {
-          this._createLines.push(`${textVar} = document.createTextNode(String(${arg}));`);
-        }
-        this._createLines.push(`${elVar}.appendChild(${textVar});`);
-      } else if (arg instanceof String) {
         const val = arg.valueOf();
-        const textVar = this.newTextVar();
         if (val.startsWith('"') || val.startsWith("'") || val.startsWith("`")) {
           this._createLines.push(`${textVar} = document.createTextNode(${val});`);
         } else if (this.reactiveMembers && this.reactiveMembers.has(val)) {
           this._createLines.push(`${textVar} = document.createTextNode('');`);
           this._setupLines.push(`__effect(() => { ${textVar}.data = this.${val}.value; });`);
+        } else if (this.componentMembers && this.componentMembers.has(val)) {
+          this._createLines.push(`${textVar} = document.createTextNode(String(this.${val}));`);
         } else {
-          this._createLines.push(`${textVar} = document.createTextNode(String(${val}));`);
+          this._createLines.push(`${textVar} = document.createTextNode(${this.generateInComponent(arg, "value")});`);
         }
         this._createLines.push(`${elVar}.appendChild(${textVar});`);
       } else if (arg) {
@@ -3998,6 +3980,17 @@ ${blockFactoriesCode}return ${lines.join(`
         this._createLines.push(`${elVar}.appendChild(${childVar});`);
       }
     }
+  };
+  proto.generateTag = function(tag, classes, args, id) {
+    const elVar = this.newElementVar();
+    this._createLines.push(`${elVar} = document.createElement('${tag}');`);
+    if (id) {
+      this._createLines.push(`${elVar}.id = '${id}';`);
+    }
+    if (classes.length > 0) {
+      this._createLines.push(`${elVar}.className = '${classes.join(" ")}';`);
+    }
+    this.appendChildren(elVar, args);
     return elVar;
   };
   proto.generateDynamicTag = function(tag, classExprs, children) {
@@ -4007,39 +4000,7 @@ ${blockFactoriesCode}return ${lines.join(`
       const classArgs = classExprs.map((e) => this.generateInComponent(e, "value")).join(", ");
       this._setupLines.push(`__effect(() => { ${elVar}.className = __clsx(${classArgs}); });`);
     }
-    for (const arg of children) {
-      const argHead = Array.isArray(arg) ? arg[0] instanceof String ? arg[0].valueOf() : arg[0] : null;
-      if (argHead === "->" || argHead === "=>") {
-        const block = arg[2];
-        const blockHead = Array.isArray(block) ? block[0] instanceof String ? block[0].valueOf() : block[0] : null;
-        if (blockHead === "block") {
-          for (const child of block.slice(1)) {
-            const childVar = this.generateNode(child);
-            this._createLines.push(`${elVar}.appendChild(${childVar});`);
-          }
-        } else if (block) {
-          const childVar = this.generateNode(block);
-          this._createLines.push(`${elVar}.appendChild(${childVar});`);
-        }
-      } else if (this.is(arg, "object")) {
-        this.generateAttributes(elVar, arg);
-      } else if (typeof arg === "string" || arg instanceof String) {
-        const textVar = this.newTextVar();
-        const argStr = arg.valueOf();
-        if (argStr.startsWith('"') || argStr.startsWith("'") || argStr.startsWith("`")) {
-          this._createLines.push(`${textVar} = document.createTextNode(${argStr});`);
-        } else if (this.reactiveMembers && this.reactiveMembers.has(argStr)) {
-          this._createLines.push(`${textVar} = document.createTextNode('');`);
-          this._setupLines.push(`__effect(() => { ${textVar}.data = this.${argStr}.value; });`);
-        } else {
-          this._createLines.push(`${textVar} = document.createTextNode(${this.generateInComponent(arg, "value")});`);
-        }
-        this._createLines.push(`${elVar}.appendChild(${textVar});`);
-      } else {
-        const childVar = this.generateNode(arg);
-        this._createLines.push(`${elVar}.appendChild(${childVar});`);
-      }
-    }
+    this.appendChildren(elVar, children);
     return elVar;
   };
   proto.generateAttributes = function(elVar, objExpr) {
@@ -4831,9 +4792,7 @@ class CodeGenerator {
     readonly: "generateReadonly",
     effect: "generateEffect",
     break: "generateBreak",
-    "break-if": "generateBreakIf",
     continue: "generateContinue",
-    "continue-if": "generateContinueIf",
     "?": "generateExistential",
     "?:": "generateTernary",
     "|>": "generatePipe",
@@ -5705,14 +5664,8 @@ ${this.indent()}}`;
   generateBreak() {
     return "break";
   }
-  generateBreakIf(head, rest) {
-    return `if (${this.generate(rest[0], "value")}) break`;
-  }
   generateContinue() {
     return "continue";
-  }
-  generateContinueIf(head, rest) {
-    return `if (${this.generate(rest[0], "value")}) continue`;
   }
   generateExistential(head, rest) {
     return `(${this.generate(rest[0], "value")} != null)`;
@@ -6280,6 +6233,52 @@ ${this.indent()}}`;
   generateWhen() {
     throw new Error("when clause should be handled by switch");
   }
+  _forInHeader(vars, iterable, step) {
+    let va = Array.isArray(vars) ? vars : [vars];
+    let noVar = va.length === 0;
+    let [itemVar, indexVar] = noVar ? ["_i", null] : va;
+    let ivp = this.is(itemVar, "array") || this.is(itemVar, "object") ? this.generateDestructuringPattern(itemVar) : itemVar;
+    if (step && step !== null) {
+      let ih = Array.isArray(iterable) && iterable[0];
+      if (ih instanceof String)
+        ih = str(ih);
+      let isRange = ih === ".." || ih === "...";
+      if (isRange) {
+        let isExcl = ih === "...";
+        let [s, e] = iterable.slice(1);
+        let sc = this.generate(s, "value"), ec = this.generate(e, "value"), stc2 = this.generate(step, "value");
+        return { header: `for (let ${ivp} = ${sc}; ${ivp} ${isExcl ? "<" : "<="} ${ec}; ${ivp} += ${stc2})`, setup: null };
+      }
+      let ic = this.generate(iterable, "value"), idxN = indexVar || "_i", stc = this.generate(step, "value");
+      let isNeg = this.is(step, "-", 1);
+      let isMinus1 = isNeg && (step[1] === "1" || step[1] === 1 || str(step[1]) === "1");
+      let isPlus1 = !isNeg && (step === "1" || step === 1 || str(step) === "1");
+      let update = isMinus1 ? `${idxN}--` : isPlus1 ? `${idxN}++` : `${idxN} += ${stc}`;
+      let header = isNeg ? `for (let ${idxN} = ${ic}.length - 1; ${idxN} >= 0; ${update})` : `for (let ${idxN} = 0; ${idxN} < ${ic}.length; ${update})`;
+      return { header, setup: noVar ? null : `const ${ivp} = ${ic}[${idxN}];` };
+    }
+    if (indexVar) {
+      let ic = this.generate(iterable, "value");
+      return {
+        header: `for (let ${indexVar} = 0; ${indexVar} < ${ic}.length; ${indexVar}++)`,
+        setup: `const ${ivp} = ${ic}[${indexVar}];`
+      };
+    }
+    return { header: `for (const ${ivp} of ${this.generate(iterable, "value")})`, setup: null };
+  }
+  _forOfHeader(vars, iterable, own) {
+    let va = Array.isArray(vars) ? vars : [vars];
+    let [kv, vv] = va;
+    let kvp = this.is(kv, "array") || this.is(kv, "object") ? this.generateDestructuringPattern(kv) : kv;
+    let oc = this.generate(iterable, "value");
+    return { header: `for (const ${kvp} in ${oc})`, own, vv, oc, kvp };
+  }
+  _forAsHeader(vars, iterable, isAwait) {
+    let va = Array.isArray(vars) ? vars : [vars];
+    let [fv] = va;
+    let ivp = this.is(fv, "array") || this.is(fv, "object") ? this.generateDestructuringPattern(fv) : fv;
+    return { header: `for ${isAwait ? "await " : ""}(const ${ivp} of ${this.generate(iterable, "value")})` };
+  }
   generateComprehension(head, rest, context) {
     let [expr, iterators, guards] = rest;
     if (context === "statement")
@@ -6296,53 +6295,16 @@ ${this.indent()}}`;
     for (let iter of iterators) {
       let [iterType, vars, iterable, stepOrOwn] = iter;
       if (iterType === "for-in") {
-        let step = stepOrOwn;
-        let va = Array.isArray(vars) ? vars : [vars];
-        let noVar = va.length === 0;
-        let [itemVar, indexVar] = noVar ? ["_i", null] : va;
-        let ivp = this.is(itemVar, "array") || this.is(itemVar, "object") ? this.generateDestructuringPattern(itemVar) : itemVar;
-        if (step && step !== null) {
-          let ih = Array.isArray(iterable) && iterable[0];
-          if (ih instanceof String)
-            ih = str(ih);
-          let isRange = ih === ".." || ih === "...";
-          if (isRange) {
-            let isExcl = ih === "...";
-            let [s, e] = iterable.slice(1);
-            let sc = this.generate(s, "value"), ec = this.generate(e, "value"), stc = this.generate(step, "value");
-            code += this.indent() + `for (let ${ivp} = ${sc}; ${ivp} ${isExcl ? "<" : "<="} ${ec}; ${ivp} += ${stc}) {
+        let { header, setup } = this._forInHeader(vars, iterable, stepOrOwn);
+        code += this.indent() + header + ` {
 `;
-            this.indentLevel++;
-          } else {
-            let ic = this.generate(iterable, "value"), idxN = indexVar || "_i", stc = this.generate(step, "value");
-            let isNeg = this.is(step, "-", 1);
-            code += isNeg ? this.indent() + `for (let ${idxN} = ${ic}.length - 1; ${idxN} >= 0; ${idxN} += ${stc}) {
-` : this.indent() + `for (let ${idxN} = 0; ${idxN} < ${ic}.length; ${idxN} += ${stc}) {
+        this.indentLevel++;
+        if (setup)
+          code += this.indent() + setup + `
 `;
-            this.indentLevel++;
-            if (!noVar)
-              code += this.indent() + `const ${ivp} = ${ic}[${idxN}];
-`;
-          }
-        } else if (indexVar) {
-          let ic = this.generate(iterable, "value");
-          code += this.indent() + `for (let ${indexVar} = 0; ${indexVar} < ${ic}.length; ${indexVar}++) {
-`;
-          this.indentLevel++;
-          code += this.indent() + `const ${ivp} = ${ic}[${indexVar}];
-`;
-        } else {
-          code += this.indent() + `for (const ${ivp} of ${this.generate(iterable, "value")}) {
-`;
-          this.indentLevel++;
-        }
       } else if (iterType === "for-of") {
-        let own = stepOrOwn;
-        let va = Array.isArray(vars) ? vars : [vars];
-        let [kv, vv] = va;
-        let kvp = this.is(kv, "array") || this.is(kv, "object") ? this.generateDestructuringPattern(kv) : kv;
-        let oc = this.generate(iterable, "value");
-        code += this.indent() + `for (const ${kvp} in ${oc}) {
+        let { header, own, vv, oc, kvp } = this._forOfHeader(vars, iterable, stepOrOwn);
+        code += this.indent() + header + ` {
 `;
         this.indentLevel++;
         if (own)
@@ -6352,11 +6314,8 @@ ${this.indent()}}`;
           code += this.indent() + `const ${vv} = ${oc}[${kvp}];
 `;
       } else if (iterType === "for-as") {
-        let isAwait = iter[3];
-        let va = Array.isArray(vars) ? vars : [vars];
-        let [fv] = va;
-        let ivp = this.is(fv, "array") || this.is(fv, "object") ? this.generateDestructuringPattern(fv) : fv;
-        code += this.indent() + `for ${isAwait ? "await " : ""}(const ${ivp} of ${this.generate(iterable, "value")}) {
+        let { header } = this._forAsHeader(vars, iterable, iter[3]);
+        code += this.indent() + header + ` {
 `;
         this.indentLevel++;
       }
@@ -6371,7 +6330,7 @@ ${this.indent()}}`;
         return true;
       if (!Array.isArray(node))
         return false;
-      if (["break", "continue", "break-if", "continue-if", "return", "throw"].includes(node[0]))
+      if (["break", "continue", "return", "throw"].includes(node[0]))
         return true;
       if (node[0] === "if" || node[0] === "unless")
         return node.slice(1).some(hasCtrl);
@@ -7014,37 +6973,13 @@ ${this.indent()}}`;
     if (iterators.length === 1) {
       let [iterType, vars, iterable, stepOrOwn] = iterators[0];
       if (iterType === "for-in") {
-        let step = stepOrOwn;
-        let va = Array.isArray(vars) ? vars : [vars];
-        let noVar = va.length === 0;
-        let [itemVar, indexVar] = noVar ? ["_i", null] : va;
-        let ivp = this.is(itemVar, "array") || this.is(itemVar, "object") ? this.generateDestructuringPattern(itemVar) : itemVar;
-        if (step && step !== null) {
-          let ih = Array.isArray(iterable) && iterable[0];
-          if (ih instanceof String)
-            ih = str(ih);
-          let isRange = ih === ".." || ih === "...";
-          if (isRange) {
-            let isExcl = ih === "...";
-            let [s, e] = iterable.slice(1);
-            code += this.indent() + `for (let ${ivp} = ${this.generate(s, "value")}; ${ivp} ${isExcl ? "<" : "<="} ${this.generate(e, "value")}; ${ivp} += ${this.generate(step, "value")}) {
+        let { header, setup } = this._forInHeader(vars, iterable, stepOrOwn);
+        code += this.indent() + header + ` {
 `;
-          } else {
-            let ic = this.generate(iterable, "value"), idxN = indexVar || "_i", stc = this.generate(step, "value");
-            let isNeg = this.is(step, "-", 1);
-            code += isNeg ? this.indent() + `for (let ${idxN} = ${ic}.length - 1; ${idxN} >= 0; ${idxN} += ${stc}) {
-` : this.indent() + `for (let ${idxN} = 0; ${idxN} < ${ic}.length; ${idxN} += ${stc}) {
-`;
-            this.indentLevel++;
-            if (!noVar)
-              code += this.indent() + `const ${ivp} = ${ic}[${idxN}];
-`;
-          }
-        } else {
-          code += this.indent() + `for (const ${ivp} of ${this.generate(iterable, "value")}) {
-`;
-        }
         this.indentLevel++;
+        if (setup)
+          code += this.indent() + setup + `
+`;
         if (guards && guards.length > 0) {
           code += this.indent() + `if (${guards.map((g) => this.generate(g, "value")).join(" && ")}) {
 `;
@@ -7068,229 +7003,59 @@ ${this.indent()}}`;
   }
   generateComprehensionAsLoop(expr, iterators, guards) {
     let code = "";
+    let guardCond = guards?.length ? guards.map((g) => this.generate(g, "value")).join(" && ") : null;
+    let emitBody = () => {
+      if (guardCond) {
+        code += this.indent() + `if (${guardCond}) {
+`;
+        this.indentLevel++;
+        code += this.indent() + this.generate(expr, "statement") + `;
+`;
+        this.indentLevel--;
+        code += this.indent() + `}
+`;
+      } else {
+        code += this.indent() + this.generate(expr, "statement") + `;
+`;
+      }
+    };
     if (iterators.length === 1) {
       let [iterType, vars, iterable, stepOrOwn] = iterators[0];
       if (iterType === "for-in") {
-        let step = stepOrOwn;
-        let va = Array.isArray(vars) ? vars : [vars];
-        let noVar = va.length === 0;
-        let [itemVar, indexVar] = noVar ? ["_i", null] : va;
-        let ivp = this.is(itemVar, "array") || this.is(itemVar, "object") ? this.generateDestructuringPattern(itemVar) : itemVar;
-        if (step && step !== null) {
-          let ih = Array.isArray(iterable) && iterable[0];
-          if (ih instanceof String)
-            ih = str(ih);
-          let isRange = ih === ".." || ih === "...";
-          if (isRange) {
-            let isExcl = ih === "...";
-            let [s, e] = iterable.slice(1);
-            code += `for (let ${ivp} = ${this.generate(s, "value")}; ${ivp} ${isExcl ? "<" : "<="} ${this.generate(e, "value")}; ${ivp} += ${this.generate(step, "value")}) `;
-          } else {
-            let ic = this.generate(iterable, "value"), idxN = indexVar || "_i", stc = this.generate(step, "value");
-            let isNeg = this.is(step, "-", 1);
-            let isMinus1 = isNeg && (step[1] === "1" || step[1] === 1 || str(step[1]) === "1");
-            let isPlus1 = !isNeg && (step === "1" || step === 1 || str(step) === "1");
-            if (isMinus1)
-              code += `for (let ${idxN} = ${ic}.length - 1; ${idxN} >= 0; ${idxN}--) `;
-            else if (isPlus1)
-              code += `for (let ${idxN} = 0; ${idxN} < ${ic}.length; ${idxN}++) `;
-            else if (isNeg)
-              code += `for (let ${idxN} = ${ic}.length - 1; ${idxN} >= 0; ${idxN} += ${stc}) `;
-            else
-              code += `for (let ${idxN} = 0; ${idxN} < ${ic}.length; ${idxN} += ${stc}) `;
-            code += `{
+        let { header, setup } = this._forInHeader(vars, iterable, stepOrOwn);
+        code += header + ` {
 `;
-            this.indentLevel++;
-            if (!noVar)
-              code += this.indent() + `const ${ivp} = ${ic}[${idxN}];
+        this.indentLevel++;
+        if (setup)
+          code += this.indent() + setup + `
 `;
-          }
-          if (guards?.length) {
-            if (!isRange)
-              code += this.indent();
-            code += `{
-`;
-            this.indentLevel++;
-            code += this.indent() + `if (${guards.map((g) => this.generate(g, "value")).join(" && ")}) {
-`;
-            this.indentLevel++;
-            code += this.indent() + this.generate(expr, "statement") + `;
-`;
-            this.indentLevel--;
-            code += this.indent() + `}
-`;
-            this.indentLevel--;
-            code += this.indent() + "}";
-          } else {
-            if (!isRange)
-              code += this.indent();
-            code += `{
-`;
-            this.indentLevel++;
-            code += this.indent() + this.generate(expr, "statement") + `;
-`;
-            this.indentLevel--;
-            code += this.indent() + "}";
-          }
-          if (!isRange) {
-            this.indentLevel--;
-            code += `
-` + this.indent() + "}";
-          }
-          return code;
-        }
-        if (indexVar) {
-          let ic = this.generate(iterable, "value");
-          code += `for (let ${indexVar} = 0; ${indexVar} < ${ic}.length; ${indexVar}++) `;
-          code += `{
-`;
-          this.indentLevel++;
-          code += this.indent() + `const ${ivp} = ${ic}[${indexVar}];
-`;
-        } else {
-          code += `for (const ${ivp} of ${this.generate(iterable, "value")}) `;
-          if (guards?.length) {
-            code += `{
-`;
-            this.indentLevel++;
-            code += this.indent() + `if (${guards.map((g) => this.generate(g, "value")).join(" && ")}) {
-`;
-            this.indentLevel++;
-            code += this.indent() + this.generate(expr, "statement") + `;
-`;
-            this.indentLevel--;
-            code += this.indent() + `}
-`;
-            this.indentLevel--;
-            code += this.indent() + "}";
-          } else {
-            code += `{
-`;
-            this.indentLevel++;
-            code += this.indent() + this.generate(expr, "statement") + `;
-`;
-            this.indentLevel--;
-            code += this.indent() + "}";
-          }
-          return code;
-        }
-        if (guards?.length) {
-          code += this.indent() + `if (${guards.map((g) => this.generate(g, "value")).join(" && ")}) {
-`;
-          this.indentLevel++;
-          code += this.indent() + this.generate(expr, "statement") + `;
-`;
-          this.indentLevel--;
-          code += this.indent() + `}
-`;
-        } else {
-          code += this.indent() + this.generate(expr, "statement") + `;
-`;
-        }
+        emitBody();
         this.indentLevel--;
         code += this.indent() + "}";
         return code;
       }
       if (iterType === "for-as") {
-        let va = Array.isArray(vars) ? vars : [vars];
-        let [fv] = va;
-        let ivp = this.is(fv, "array") || this.is(fv, "object") ? this.generateDestructuringPattern(fv) : fv;
-        code += `for (const ${ivp} of ${this.generate(iterable, "value")}) `;
-        if (guards?.length) {
-          code += `{
+        let { header } = this._forAsHeader(vars, iterable, stepOrOwn);
+        code += header + ` {
 `;
-          this.indentLevel++;
-          code += this.indent() + `if (${guards.map((g) => this.generate(g, "value")).join(" && ")}) {
-`;
-          this.indentLevel++;
-          code += this.indent() + this.generate(expr, "statement") + `;
-`;
-          this.indentLevel--;
-          code += this.indent() + `}
-`;
-          this.indentLevel--;
-          code += this.indent() + "}";
-        } else {
-          code += `{
-`;
-          this.indentLevel++;
-          code += this.indent() + this.generate(expr, "statement") + `;
-`;
-          this.indentLevel--;
-          code += this.indent() + "}";
-        }
+        this.indentLevel++;
+        emitBody();
+        this.indentLevel--;
+        code += this.indent() + "}";
         return code;
       }
       if (iterType === "for-of") {
-        let va = Array.isArray(vars) ? vars : [vars];
-        let [kv, vv] = va;
-        let own = stepOrOwn;
-        let oc = this.generate(iterable, "value");
-        code += `for (const ${kv} in ${oc}) {
+        let { header, own, vv, oc, kvp } = this._forOfHeader(vars, iterable, stepOrOwn);
+        code += header + ` {
 `;
         this.indentLevel++;
-        if (own && !vv && !guards?.length) {
-          code += this.indent() + `if (!Object.hasOwn(${oc}, ${kv})) continue;
+        if (own)
+          code += this.indent() + `if (!Object.hasOwn(${oc}, ${kvp})) continue;
 `;
-          code += this.indent() + this.generate(expr, "statement") + `;
+        if (vv)
+          code += this.indent() + `const ${vv} = ${oc}[${kvp}];
 `;
-        } else if (own && vv && guards?.length) {
-          code += this.indent() + `if (Object.hasOwn(${oc}, ${kv})) {
-`;
-          this.indentLevel++;
-          code += this.indent() + `const ${vv} = ${oc}[${kv}];
-`;
-          code += this.indent() + `if (${guards.map((g) => this.generate(g, "value")).join(" && ")}) {
-`;
-          this.indentLevel++;
-          code += this.indent() + this.generate(expr, "statement") + `;
-`;
-          this.indentLevel--;
-          code += this.indent() + `}
-`;
-          this.indentLevel--;
-          code += this.indent() + `}
-`;
-        } else if (own && vv) {
-          code += this.indent() + `if (Object.hasOwn(${oc}, ${kv})) {
-`;
-          this.indentLevel++;
-          code += this.indent() + `const ${vv} = ${oc}[${kv}];
-`;
-          code += this.indent() + this.generate(expr, "statement") + `;
-`;
-          this.indentLevel--;
-          code += this.indent() + `}
-`;
-        } else if (vv && guards?.length) {
-          code += this.indent() + `const ${vv} = ${oc}[${kv}];
-`;
-          code += this.indent() + `if (${guards.map((g) => this.generate(g, "value")).join(" && ")}) {
-`;
-          this.indentLevel++;
-          code += this.indent() + this.generate(expr, "statement") + `;
-`;
-          this.indentLevel--;
-          code += this.indent() + `}
-`;
-        } else if (vv) {
-          code += this.indent() + `const ${vv} = ${oc}[${kv}];
-`;
-          code += this.indent() + this.generate(expr, "statement") + `;
-`;
-        } else if (guards?.length) {
-          code += this.indent() + `if (${guards.map((g) => this.generate(g, "value")).join(" && ")}) {
-`;
-          this.indentLevel++;
-          code += this.indent() + this.generate(expr, "statement") + `;
-`;
-          this.indentLevel--;
-          code += this.indent() + `}
-`;
-        } else {
-          code += this.indent() + this.generate(expr, "statement") + `;
-`;
-        }
+        emitBody();
         this.indentLevel--;
         code += this.indent() + "}";
         return code;
@@ -8175,8 +7940,8 @@ function getComponentRuntime() {
   return new CodeGenerator({}).getComponentRuntime();
 }
 // src/browser.js
-var VERSION = "3.8.7";
-var BUILD_DATE = "2026-02-16@17:10:23GMT";
+var VERSION = "3.8.8";
+var BUILD_DATE = "2026-02-16@19:03:24GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }

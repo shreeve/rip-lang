@@ -33,7 +33,7 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": "^3.8.7"
+    "rip-lang": "^3.8.8"
   },
   "files": [
     "api.rip",

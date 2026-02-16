@@ -33,7 +33,7 @@ bun run browser
 
 | Metric | Value |
 |--------|-------|
-| Version | 3.8.7 |
+| Version | 3.8.8 |
 | Tests | 1,241/1,241 (100%) |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
@@ -46,13 +46,13 @@ bun run browser
 rip-lang/
 ├── src/
 │   ├── lexer.js         # Lexer + Rewriter (2,024 LOC)
-│   ├── compiler.js      # Compiler + Code Generator (3,431 LOC)
+│   ├── compiler.js      # Compiler + Code Generator (3,317 LOC)
 │   ├── types.js         # Type System — sidecar for lexer (1,099 LOC)
-│   ├── components.js    # Component System — sidecar for compiler (1,281 LOC)
+│   ├── components.js    # Component System — sidecar for compiler (1,250 LOC)
 │   ├── sourcemaps.js    # Source Map V3 generator (121 LOC)
 │   ├── tags.js          # HTML tag classification (62 LOC)
 │   ├── parser.js        # Generated parser (359 LOC) — Don't edit!
-│   ├── repl.js          # Terminal REPL (582 LOC)
+│   ├── repl.js          # Terminal REPL (601 LOC)
 │   ├── browser.js       # Browser integration (125 LOC)
 │   └── grammar/
 │       ├── grammar.rip  # Grammar specification (944 LOC)
@@ -96,7 +96,7 @@ rip-lang/
 
 ```
 Rip Source  ->  Lexer  ->  emitTypes  ->  Parser  ->  S-Expressions  ->  Codegen  ->  JavaScript
-               (2,024)     (types.js)     (359)       (arrays + .loc)     (3,431)      + source map
+               (2,024)     (types.js)     (359)       (arrays + .loc)     (3,317)      + source map
                               ↓
                            file.d.ts (when types: "emit")
 ```

@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.8.7-blue.svg" alt="Version"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.8.8-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
   <a href="#"><img src="https://img.shields.io/badge/tests-1%2C241%2F1%2C241-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
@@ -290,7 +290,7 @@ See [@rip-lang/ui](packages/ui/) for the full framework: file-based router, reac
 | **Dependencies** | Multiple | Zero |
 | **Self-hosting** | No | Yes |
 | **Lexer** | 3,558 LOC | 2,024 LOC |
-| **Compiler** | 10,346 LOC | 3,431 LOC |
+| **Compiler** | 10,346 LOC | 3,317 LOC |
 | **Total** | 17,760 LOC | ~11,000 LOC |
 
 Smaller codebase, modern output, built-in reactivity.
@@ -354,7 +354,7 @@ Rip includes optional packages for full-stack development:
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| [rip-lang](https://www.npmjs.com/package/rip-lang) | 3.8.7 | Core language compiler |
+| [rip-lang](https://www.npmjs.com/package/rip-lang) | 3.8.8 | Core language compiler |
 | [@rip-lang/api](packages/api/) | 1.1.6 | HTTP framework (Sinatra-style routing, 37 validators) |
 | [@rip-lang/server](packages/server/) | 1.1.5 | Multi-worker app server (hot reload, HTTPS, mDNS) |
 | [@rip-lang/db](packages/db/) | 1.1.4 | DuckDB server with official UI (pure Bun FFI) |

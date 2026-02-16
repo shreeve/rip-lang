@@ -29,7 +29,7 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": "^3.8.7",
+    "rip-lang": "^3.8.8",
     "highlight.js": "^11.11.1"
   },
   "files": [
