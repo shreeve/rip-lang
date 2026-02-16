@@ -40,6 +40,7 @@ test "division assignment", "a = 15; a /= 3; a", 5
 test "modulo assignment", "a = 17; a %= 5; a", 2
 test "exponentiation assignment", "a = 2; a **= 3; a", 8
 test "floor division assignment", "a = 17; a //= 5; a", 3
+test "mathematical modulo assignment", "a = -7; a %%= 3; a", 2
 
 # ============================================================================
 # Logical Assignment

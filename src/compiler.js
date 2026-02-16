@@ -148,6 +148,7 @@ export class CodeGenerator {
 
     // Special operators
     '%%': 'generateModulo',
+    '%%=': 'generateModuloAssign',
     '//': 'generateFloorDiv',
     '//=': 'generateFloorDivAssign',
     '..': 'generateRange',
@@ -768,6 +769,13 @@ export class CodeGenerator {
     let [left, right] = rest;
     this.helpers.add('modulo');
     return `modulo(${this.generate(left, 'value')}, ${this.generate(right, 'value')})`;
+  }
+
+  generateModuloAssign(head, rest) {
+    let [target, value] = rest;
+    this.helpers.add('modulo');
+    let t = this.generate(target, 'value'), v = this.generate(value, 'value');
+    return `${t} = modulo(${t}, ${v})`;
   }
 
   generateFloorDiv(head, rest) {
