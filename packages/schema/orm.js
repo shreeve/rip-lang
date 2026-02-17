@@ -820,3 +820,19 @@ Schema.prototype.model = function(modelName, options = {}) {
   this._models.set(modelName, callable);
   return callable;
 };
+
+// ---------------------------------------------------------------------------
+// Transactions — atomic multi-model operations
+// ---------------------------------------------------------------------------
+
+Schema.prototype.transaction = async function(fn) {
+  await query('BEGIN TRANSACTION');
+  try {
+    const result = await fn();
+    await query('COMMIT');
+    return result;
+  } catch (err) {
+    await query('ROLLBACK');
+    throw err;
+  }
+};

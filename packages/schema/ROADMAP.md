@@ -25,6 +25,7 @@ What works today, end-to-end:
 | Derived types | `UserCreate`, `UserUpdate` generated per model | Complete |
 | Eager loading | `User.include('posts').all!()` — batch loading | Complete |
 | Lifecycle hooks | `beforeSave`, `afterCreate`, `beforeDelete`, etc. | Complete |
+| Transactions | `schema.transaction!` — atomic multi-model operations | Complete |
 | VS Code highlighting | `packages/vscode` | Complete |
 | CLI | `rip-schema generate app.schema` | Complete |
 
@@ -99,19 +100,12 @@ options in `schema.model()`, called with `this` bound to the instance.
 Before hooks can return `false` to abort. Hooks run before validation so
 they can normalize data (lowercase, trim) before constraints are checked.
 
-### 7. Transactions
+### ~~7. Transactions~~ — Complete
 
-**Priority: Medium — needed for multi-step operations.**
-
-```coffee
-schema.transaction! ->
-  user = User.create!(name: 'Alice', email: 'alice@co.com')
-  post = Post.create!(title: 'Hello', userId: user.id)
-  # If either fails, both roll back
-```
-
-Without transactions, any multi-model operation is unsafe. The HTTP-based
-query interface needs a way to batch statements atomically.
+`schema.transaction!` wraps a callback in `BEGIN`/`COMMIT`/`ROLLBACK`.
+All ORM operations inside the callback are atomic — if any step throws,
+everything rolls back. Works because rip-db uses a single persistent
+DuckDB connection.
 
 ### 8. One More Code Generation Target
 
@@ -214,6 +208,7 @@ rip packages/schema/examples/orm-example.rip
 | **Relation: belongsTo**       | `post.user()` returns the author                           |
 | **Eager loading**             | `User.include('posts').all()` batch-loads in 2 queries     |
 | **Lifecycle hooks**           | `beforeSave` normalizes email, `afterCreate` logs creation |
+| **Transaction rollback**      | `schema.transaction!` rolls back on error, count unchanged |
 | **Soft delete**               | `softDelete()` hides, `withDeleted()` includes, `restore()` recovers |
 | **Factory: build**            | `User.factory(0)` builds with realistic fake data (not persisted)    |
 | **Factory: batch create**     | `User.factory(3, role: 'editor')` creates 3 with overrides           |

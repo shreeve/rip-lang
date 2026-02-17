@@ -15,6 +15,7 @@
 #   - Soft delete (softDelete, restore, withDeleted)
 #   - Factory (schema-driven fake data generation)
 #   - Lifecycle hooks (beforeSave, afterCreate, etc.)
+#   - Transactions (atomic multi-model operations)
 #   - Dirty tracking and validation
 #
 # Prerequisites:
@@ -169,6 +170,18 @@ console.log '\n── Lifecycle hooks: beforeSave normalizes email ────�
 # beforeSave lowercases email, afterCreate logs creation
 hookUser = User.create!(name: 'Zara', email: 'ZARA@EXAMPLE.COM', role: 'viewer')
 console.log "  Saved email: #{hookUser.email}"  # → zara@example.com (lowercased by hook)
+
+console.log '\n── Transaction: atomic multi-model operation ────────────────'
+beforeCount = User.count!()
+try
+  schema.transaction! ->
+    User.create!(name: 'TxUser1', email: 'tx1@example.com', role: 'viewer')
+    User.create!(name: 'TxUser2', email: 'tx2@example.com', role: 'viewer')
+    throw new Error 'Simulated failure!'
+catch err
+  console.log "  Rolled back: #{err.message}"
+afterCount = User.count!()
+console.log "  Users before: #{beforeCount}, after: #{afterCount} (unchanged — rollback worked)"
 
 console.log '\n── Soft delete ─────────────────────────────────────────────'
 allPosts = Post.all!()

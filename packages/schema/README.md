@@ -701,6 +701,21 @@ Available hooks: `beforeSave`, `afterSave`, `beforeCreate`, `afterCreate`,
 - Hooks can be async
 - `beforeDelete`/`afterDelete` fire on both `delete()` and `softDelete()`
 
+### Transactions
+
+Wrap multi-model operations in a transaction for atomicity:
+
+```coffee
+schema.transaction! ->
+  user = User.create!(name: 'Alice', email: 'alice@co.com')
+  post = Post.create!(title: 'Hello', userId: user.id)
+  # If either fails, both roll back
+```
+
+If the callback throws, all changes are rolled back. If it succeeds, all
+changes are committed. The return value of the callback is returned from
+`transaction()`.
+
 ### Factory
 
 Schema-driven fake data generation — zero configuration, zero dependencies:
@@ -850,6 +865,7 @@ you can use the ORM without the code generators.
 | Factory (`User.factory!(5)`) | Complete |
 | Eager loading (`User.include('posts')`) | Complete |
 | Lifecycle hooks (`beforeSave`, `afterCreate`) | Complete |
+| Transactions (`schema.transaction!`) | Complete |
 | `@computed` / `@validate` in DSL | Planned |
 | Migration diffing | Planned |
 
@@ -894,7 +910,7 @@ schema-driven fake data — from a single source of truth.
 
 - ~~Eager loading (`User.include('posts').all()`)~~ — Complete
 - ~~Lifecycle hooks (`beforeSave`, `afterCreate`, etc.)~~ — Complete
-- Transaction support
+- ~~Transactions (`schema.transaction!`)~~ — Complete
 - Schema diffing for migration generation
 - `@computed` and `@validate` blocks in the DSL
 
