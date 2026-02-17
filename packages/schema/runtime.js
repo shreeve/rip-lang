@@ -11,6 +11,11 @@
 //   Date: January 2026
 // ==============================================================================
 
+import { readFileSync } from 'fs'
+import { parse } from './parser.js'
+import { generateSQL } from './emit-sql.js'
+import { generateTypes } from './emit-types.js'
+
 // =============================================================================
 // Built-in Type Validators
 // =============================================================================
@@ -62,11 +67,23 @@ const Constraints = {
 // =============================================================================
 
 export class Schema {
-  constructor() {
+  constructor(source) {
     this.types = new Map()      // @type definitions
     this.models = new Map()     // @model definitions
     this.enums = new Map()      // @enum definitions
     this.validators = new Map() // Compiled validators per model
+    this._ast = null            // Raw AST (retained for code generation)
+
+    if (source) this.register(parse(source))
+  }
+
+  // ---------------------------------------------------------------------------
+  // Factory
+  // ---------------------------------------------------------------------------
+
+  static load(path, base) {
+    if (base) path = new URL(path, base)
+    return new Schema(readFileSync(path, 'utf-8'))
   }
 
   // ---------------------------------------------------------------------------
@@ -80,6 +97,8 @@ export class Schema {
     if (!Array.isArray(ast) || ast[0] !== 'schema') {
       throw new Error('Invalid schema AST')
     }
+
+    this._ast = ast
 
     for (let i = 1; i < ast.length; i++) {
       const def = ast[i]
@@ -97,6 +116,18 @@ export class Schema {
           break
       }
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Code generation convenience methods
+  // ---------------------------------------------------------------------------
+
+  toSQL() {
+    return generateSQL(this._ast)
+  }
+
+  toTypes() {
+    return generateTypes(this._ast)
   }
 
   _registerEnum(def) {

@@ -11,12 +11,13 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { fileURLToPath } from 'url'
-import { parse, schema, generateTypes, generateSQL } from '../index.js'
+import { Schema } from '../index.js'
 
 dir = path.dirname fileURLToPath import.meta.url
-schemaSource = fs.readFileSync path.join(dir, 'app.schema'), 'utf-8'
 
+# =============================================================================
 # Helpers
+# =============================================================================
 
 clean = (obj) ->
   out = {}
@@ -48,12 +49,9 @@ console.log()
 console.log '1. PARSE'
 console.log '─'.repeat 60
 
-ast = parse schemaSource
+schema = Schema.load path.join(dir, 'app.schema')
 
-enumCount  = ast.filter((n) -> n[0] is 'enum').length
-typeCount  = ast.filter((n) -> n[0] is 'type').length
-modelCount = ast.filter((n) -> n[0] is 'model').length
-console.log "   Parsed app.schema: #{enumCount} enums, #{typeCount} types, #{modelCount} models"
+console.log "   Parsed app.schema: #{schema.listEnums().length} enums, #{schema.listTypes().length} types, #{schema.listModels().length} models"
 
 # =============================================================================
 # 2. TypeScript types
@@ -63,7 +61,7 @@ console.log()
 console.log '2. TYPESCRIPT TYPES  (replaces hand-written interfaces)'
 console.log '─'.repeat 60
 
-ts = generateTypes ast
+ts = schema.toTypes()
 console.log ts
 
 # =============================================================================
@@ -73,7 +71,7 @@ console.log ts
 console.log '3. SQL DDL  (replaces Prisma migrations)'
 console.log '─'.repeat 60
 
-sql = generateSQL ast
+sql = schema.toSQL()
 console.log sql
 
 # =============================================================================
@@ -82,8 +80,6 @@ console.log sql
 
 console.log '4. RUNTIME VALIDATION  (replaces Zod schemas)'
 console.log '─'.repeat 60
-
-schema.register ast
 
 # --- Valid user ---
 console.log()

@@ -1,15 +1,14 @@
 #!/usr/bin/env rip
 
 # ==============================================================================
-# ORM Example — Rich Domain Models with a Live Database
+# ORM Example — Schema-Driven Models with a Live Database
 # ==============================================================================
 #
 # Demonstrates:
-#   - Class-based models with inheritance
-#   - Schema definition with constraints
-#   - Instance methods with business logic
+#   - Loading models from a .schema file (no manual schema declaration!)
+#   - Schema-generated SQL DDL for table creation
+#   - Class-based models with instance methods
 #   - Computed properties (reactive)
-#   - Property-style attribute access
 #   - Query API (find, where, orderBy, limit, count)
 #   - Dirty tracking and validation
 #
@@ -22,118 +21,134 @@
 #
 # ==============================================================================
 
+import { Schema } from '../index.js'
 import { Model, makeCallable, connect } from '../orm.js'
 
 # Connect to rip-db (default: http://localhost:4213)
 connect 'http://localhost:4213'
 
 # ==============================================================================
-# Setup — Create table and seed data
+# Load Schema — one .schema file drives everything
+# ==============================================================================
+
+schema = Schema.load './app.schema', import.meta.url
+
+# ==============================================================================
+# Setup — Create tables from generated DDL
 # ==============================================================================
 
 setup = ->
+  ddl = schema.toSQL()
+
+  # Drop existing tables (reverse dependency order)
+  drops = """
+    DROP TABLE IF EXISTS comments CASCADE;
+    DROP TABLE IF EXISTS posts CASCADE;
+    DROP TABLE IF EXISTS users CASCADE;
+    DROP TABLE IF EXISTS organizations CASCADE;
+    DROP TYPE IF EXISTS post_status CASCADE;
+    DROP TYPE IF EXISTS role CASCADE;
+  """
+
   res = fetch! 'http://localhost:4213/sql',
     method: 'POST'
     headers: { 'Content-Type': 'application/json' }
-    body: JSON.stringify sql: """
-      DROP TABLE IF EXISTS users CASCADE;
-      CREATE TABLE users (
-        id      INTEGER PRIMARY KEY,
-        name    VARCHAR NOT NULL,
-        email   VARCHAR NOT NULL UNIQUE,
-        score   DOUBLE,
-        active  BOOLEAN DEFAULT true
-      );
-      INSERT INTO users VALUES (1, 'Alice',   'alice@example.com',   95.5, true);
-      INSERT INTO users VALUES (2, 'Bob',     'bob@example.com',     82.0, true);
-      INSERT INTO users VALUES (3, 'Charlie', 'charlie@example.com', 67.3, true);
-      INSERT INTO users VALUES (4, 'Dana',    'dana@example.com',    91.0, false);
-      INSERT INTO users VALUES (5, 'Eve',     'eve@example.com',     45.2, true);
-    """
+    body: JSON.stringify sql: drops + ddl
   data = res.json!
   throw new Error "Setup failed: #{data.error}" if data.error
-  console.log 'Setup: created users table with 5 records\n'
+  console.log 'Setup: created tables from app.schema DDL\n'
 
 setup!
 
 # ==============================================================================
-# Model Definition
+# Seed Data
+# ==============================================================================
+
+seed = ->
+  sql = """
+    INSERT INTO users (name, email, role, bio, active) VALUES
+      ('Alice',   'alice@example.com',   'admin',  'Platform administrator', true),
+      ('Bob',     'bob@example.com',     'editor', 'Content editor', true),
+      ('Charlie', 'charlie@example.com', 'viewer', NULL, true),
+      ('Dana',    'dana@example.com',    'editor', 'Technical writer', false),
+      ('Eve',     'eve@example.com',     'viewer', NULL, true);
+  """
+  res = fetch! 'http://localhost:4213/sql',
+    method: 'POST'
+    headers: { 'Content-Type': 'application/json' }
+    body: JSON.stringify { sql }
+  data = res.json!
+  throw new Error "Seed failed: #{data.error}" if data.error
+  console.log 'Seed: inserted 5 users\n'
+
+seed!
+
+# ==============================================================================
+# Model Definition — schema-driven, not hand-coded!
 # ==============================================================================
 
 class UserModel extends Model
-  createAccessCode: (secs = 3600) ->
-    syms = 'ABCDEFGHJKMNPQRSTUVWXYZ'.split('')
-    code = [1..5].map(-> syms[Math.floor(Math.random() * syms.length)]).join('')
-    @code = code
-    @codeExpiresAt = Date.now() + secs * 1000
-    code
-
   greet: ->
     "Hello, #{@name}!"
 
-UserModel.table = 'users'
+  displayRole: ->
+    @role.charAt(0).toUpperCase() + @role.slice(1)
 
-# Schema: types, constraints, defaults — all in one place
-UserModel.schema
-  id:     { type: 'int', primary: true }
-  name:   { type: 'string', required: true, min: 1, max: 100 }
-  email:  { type: 'email', required: true, unique: true }
-  score:  { type: 'float' }
-  active: { type: 'bool', default: true }
+# One line loads everything: table name, fields, types, constraints
+UserModel.fromSchema schema, 'User'
 
 # Computed properties: reactive getters
 UserModel.computed
-  identifier:   -> "#{@name} (##{@id})"
-  isHighScorer: -> @score? and @score > 90
+  identifier: -> "#{@name} <#{@email}>"
+  isAdmin:    -> @role is 'admin'
 
-# Make callable: User(25) → User.find(25)
+# Make callable: User('uuid') → User.find('uuid')
 User = makeCallable UserModel
 
 # ==============================================================================
 # Query Examples
 # ==============================================================================
 
-console.log '── Find by ID (callable style) ────────────────────────────'
-user = User! 1
+console.log '── Find first user ─────────────────────────────────────────'
+user = User.first!()
 console.log user?.toJSON()
 console.log "Greeting: #{user?.greet()}"
 
-console.log '\n── Find by ID (method style) ───────────────────────────────'
-user = User.find! 2
+console.log '\n── Find by email ───────────────────────────────────────────'
+user = User.where!(email: 'bob@example.com').first!()
 console.log user?.toJSON()
 
 console.log '\n── Computed properties ─────────────────────────────────────'
-user = User! 1
-console.log "identifier:   #{user?.identifier}"
-console.log "isHighScorer: #{user?.isHighScorer}"
+user = User.where!(name: 'Alice').first!()
+console.log "identifier: #{user?.identifier}"
+console.log "isAdmin:    #{user?.isAdmin}"
 
 console.log '\n── All users ───────────────────────────────────────────────'
 users = User.all!()
 for u in users
-  console.log "  #{u.identifier} — score=#{u.score} high=#{u.isHighScorer}"
+  console.log "  #{u.identifier} — role=#{u.displayRole()} admin=#{u.isAdmin}"
 
 console.log '\n── Where (object style) ────────────────────────────────────'
-users = User.where!(name: 'Alice').all!()
+users = User.where!(role: 'editor').all!()
 console.log users.map (u) -> u.toJSON()
 
 console.log '\n── Where (SQL style) ───────────────────────────────────────'
-users = User.where!('score > ?', 90).all!()
-console.log "High scorers:", users.map (u) -> u.identifier
+users = User.where!('active = ?', true).all!()
+console.log "Active users:", users.map (u) -> u.identifier
 
 console.log '\n── Chainable query ─────────────────────────────────────────'
-users = User.where!('score > ?', 80).orderBy!('score', 'DESC').limit!(2).all!()
-console.log "Top 2:", users.map (u) -> "#{u.name}: #{u.score}"
+users = User.where!('active = ?', true).orderBy!('name').limit!(3).all!()
+console.log "First 3 active:", users.map (u) -> u.name
 
 console.log '\n── Count ───────────────────────────────────────────────────'
 console.log "Total users: #{User.count!()}"
 
 console.log '\n── Instance method ─────────────────────────────────────────'
-user = User! 1
-code = user.createAccessCode(60)
-console.log "Access code for #{user.name}: #{code}"
+user = User.first!()
+console.log "Role: #{user.displayRole()}"
 
 console.log '\n── Property mutation + dirty tracking ──────────────────────'
-user = User! 1
+user = User.where!(name: 'Alice').first!()
 console.log "Before: #{user.name}, dirty=#{user.$dirty}"
 user.name = "Alice Updated"
 console.log "After:  #{user.name}, dirty=#{user.$dirty}, changed=#{user.$changed}"

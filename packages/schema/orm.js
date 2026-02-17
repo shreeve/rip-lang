@@ -4,7 +4,19 @@
 //
 // Rich domain models with inheritance, behavior, schema, and computed fields.
 //
-// Usage (from Rip):
+// Usage (from Rip — schema-driven):
+//   import { Schema } from '@rip-lang/schema'
+//   import { Model, connect } from '@rip-lang/schema/orm'
+//
+//   schema = Schema.load './app.schema', import.meta.url
+//   connect 'http://localhost:4213'
+//
+//   class User extends Model
+//     greet: -> "Hello, #{@name}!"
+//
+//   User.fromSchema schema, 'User'   # loads table, fields, types, constraints
+//
+// Usage (from Rip — manual):
 //   import { Model, connect } from '@rip-lang/schema/orm'
 //
 //   connect 'http://localhost:4213'
@@ -14,25 +26,6 @@
 //
 //   User.table = 'users'
 //   User.schema { id: { type: 'int', primary: true }, name: { type: 'string', required: true } }
-//
-// Usage (from JS — with .schema file):
-//   import { parse, schema } from '@rip-lang/schema'
-//   import { Model, connect } from '@rip-lang/schema/orm'
-//
-//   schema.register(parse(fs.readFileSync('app.schema', 'utf-8')))
-//   connect('http://localhost:4213')
-//
-//   class User extends Model {}
-//   User.fromSchema(schema, 'User')   // pulls table, fields, types, constraints
-//
-// Usage (from JS — manual):
-//   import { Model, connect } from '@rip-lang/schema/orm'
-//
-//   connect('http://localhost:4213')
-//
-//   class User extends Model {}
-//   User.table = 'users'
-//   User.schema({ id: { type: 'int', primary: true }, name: { type: 'string', required: true } })
 //
 // Query API:
 //   user = await User.find(25)
@@ -113,8 +106,10 @@ export class Model {
       this.table = snake.replace(/(?:([^s])$|s$)/, (m, p1) => p1 ? p1 + 's' : 's');
     }
 
+    // Models always have an implicit id primary key (added by emit-sql.js)
+    const fields = { id: { type: 'uuid', primary: true } };
+
     // Convert runtime field definitions → ORM schema format
-    const fields = {};
     for (const [name, field] of model.fields) {
       const def = {};
       const type = typeof field.type === 'object' && field.type?.array ? 'array' : field.type;
@@ -126,8 +121,27 @@ export class Model {
         if (field.constraints.max != null) def.max = field.constraints.max;
         if (field.constraints.default != null) def.default = field.constraints.default;
       }
-      if (field.attrs?.primary) def.primary = true;
+      if (field.attrs?.primary) { def.primary = true; }
       fields[name] = def;
+    }
+
+    // Add relationship foreign keys
+    if (model.directives?.belongsTo) {
+      for (const rel of model.directives.belongsTo) {
+        const fk = rel.model.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase() + '_id';
+        if (!fields[fk]) fields[fk] = { type: 'uuid' };
+      }
+    }
+
+    // Add timestamp fields
+    if (model.directives?.timestamps) {
+      fields.created_at = { type: 'datetime' };
+      fields.updated_at = { type: 'datetime' };
+    }
+
+    // Add soft delete field
+    if (model.directives?.softDelete) {
+      fields.deleted_at = { type: 'datetime' };
     }
 
     // Detect primary key from fields

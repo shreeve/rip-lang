@@ -54,10 +54,10 @@ const updates = [
     ]
   },
   {
-    file: 'AGENT-RIP.md',
+    file: 'AGENT.md',
     replacements: [
-      // Version line at bottom
-      [/Version \d+\.\d+\.\d+(-[\w.]+)?/g, `Version ${newVersion}`]
+      // Version in metadata table
+      [/\| Version \| \d+\.\d+\.\d+(-[\w.]+)? \|/g, `| Version | ${newVersion} |`]
     ]
   },
 ];

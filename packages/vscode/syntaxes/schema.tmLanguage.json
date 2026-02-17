@@ -1,0 +1,152 @@
+{
+  "name": "Rip Schema",
+  "scopeName": "source.rip-schema",
+  "fileTypes": ["schema"],
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#directives" },
+    { "include": "#fields" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#constants" },
+    { "include": "#constraints" },
+    { "include": "#options" }
+  ],
+  "repository": {
+
+    "comments": {
+      "comment": "Only match # when preceded by whitespace or at start of line, not after word chars (email!#)",
+      "name": "comment.line.number-sign.rip-schema",
+      "match": "(?:^|(?<=\\s))#.*$"
+    },
+
+    "directives": {
+      "patterns": [
+        {
+          "comment": "Top-level declarations: @enum, @type, @model",
+          "match": "(@(?:enum|type|model))\\s+([A-Z]\\w*)",
+          "captures": {
+            "1": { "name": "storage.type.declaration.rip-schema" },
+            "2": { "name": "entity.name.type.rip-schema" }
+          }
+        },
+        {
+          "comment": "Relationship directives: @belongs_to, @has_many, @has_one",
+          "match": "(@(?:belongs_to|has_many|has_one))\\s+([A-Z]\\w*)",
+          "captures": {
+            "1": { "name": "keyword.other.directive.rip-schema" },
+            "2": { "name": "entity.name.type.rip-schema" }
+          }
+        },
+        {
+          "comment": "Index directive with fields",
+          "match": "(@index)\\b",
+          "name": "keyword.other.directive.rip-schema"
+        },
+        {
+          "comment": "Standalone directives: @timestamps, @softDelete",
+          "match": "@(?:timestamps|softDelete)\\b",
+          "name": "keyword.other.directive.rip-schema"
+        }
+      ]
+    },
+
+    "fields": {
+      "patterns": [
+        {
+          "comment": "Field with modifiers and type: name!# string, [1, 100]",
+          "match": "^(\\s+)([a-z]\\w*)((?:[!#?])+)?\\s+([a-z]\\w*|[A-Z]\\w*)",
+          "captures": {
+            "2": { "name": "variable.other.field.rip-schema" },
+            "3": { "name": "keyword.operator.modifier.rip-schema" },
+            "4": { "name": "support.type.rip-schema" }
+          }
+        },
+        {
+          "comment": "Enum member with value: draft: \"draft\"",
+          "match": "^(\\s+)([a-z]\\w*)\\s*(:)",
+          "captures": {
+            "2": { "name": "variable.other.enummember.rip-schema" },
+            "3": { "name": "punctuation.separator.colon.rip-schema" }
+          }
+        },
+        {
+          "comment": "Inline enum values after colon: @enum Role: admin, editor, viewer",
+          "match": "(?<=:\\s*)([a-z]\\w*(?:\\s*,\\s*[a-z]\\w*)*)",
+          "captures": {
+            "1": { "name": "variable.other.enummember.rip-schema" }
+          }
+        }
+      ]
+    },
+
+    "constraints": {
+      "patterns": [
+        {
+          "comment": "Constraint brackets: [1, 200], [\"viewer\"], [true]",
+          "begin": "\\[",
+          "end": "\\]",
+          "beginCaptures": { "0": { "name": "punctuation.definition.constraint.begin.rip-schema" } },
+          "endCaptures":   { "0": { "name": "punctuation.definition.constraint.end.rip-schema" } },
+          "patterns": [
+            { "include": "#strings" },
+            { "include": "#numbers" },
+            { "include": "#constants" },
+            {
+              "match": ",",
+              "name": "punctuation.separator.comma.rip-schema"
+            }
+          ]
+        }
+      ]
+    },
+
+    "options": {
+      "comment": "Options objects: { optional: true }",
+      "begin": "\\{",
+      "end": "\\}",
+      "beginCaptures": { "0": { "name": "punctuation.definition.options.begin.rip-schema" } },
+      "endCaptures":   { "0": { "name": "punctuation.definition.options.end.rip-schema" } },
+      "patterns": [
+        {
+          "match": "([a-z]\\w*)\\s*(:)",
+          "captures": {
+            "1": { "name": "variable.other.property.rip-schema" },
+            "2": { "name": "punctuation.separator.colon.rip-schema" }
+          }
+        },
+        { "include": "#strings" },
+        { "include": "#numbers" },
+        { "include": "#constants" },
+        {
+          "match": ",",
+          "name": "punctuation.separator.comma.rip-schema"
+        }
+      ]
+    },
+
+    "strings": {
+      "name": "string.quoted.double.rip-schema",
+      "begin": "\"",
+      "end": "\"",
+      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.rip-schema" } },
+      "endCaptures":   { "0": { "name": "punctuation.definition.string.end.rip-schema" } },
+      "patterns": [
+        {
+          "name": "constant.character.escape.rip-schema",
+          "match": "\\\\."
+        }
+      ]
+    },
+
+    "numbers": {
+      "name": "constant.numeric.rip-schema",
+      "match": "\\b\\d+(?:\\.\\d+)?\\b"
+    },
+
+    "constants": {
+      "name": "constant.language.rip-schema",
+      "match": "\\b(?:true|false|null)\\b"
+    }
+  }
+}
