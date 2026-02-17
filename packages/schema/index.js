@@ -1,18 +1,19 @@
 // ==============================================================================
-// Schema - Rip Schema Language
+// @rip-lang/schema — Unified schema language
 //
-// A unified schema language for types, validation, database models, and UI.
+// One definition → TypeScript types + SQL DDL + runtime validation + ORM models
 //
-// Usage:
-//   import { parse, schema, generateTypes, generateSQL } from '@rip-lang/schema'
+// Code generation:
+//   import { Schema } from '@rip-lang/schema'
+//   const schema = Schema.load('app.schema')
+//   const ts  = schema.toTypes()
+//   const sql = schema.toSQL()
 //
-//   const ast = parse(schemaSource)
-//   schema.register(ast)
-//
-//   const ts  = generateTypes(ast)   // TypeScript declarations
-//   const sql = generateSQL(ast)     // SQL DDL
-//   const user = schema.create('User', { name: 'John' })
-//   const errors = user.$validate()
+// ORM (with database):
+//   import { Schema } from '@rip-lang/schema/orm'
+//   const schema = Schema.load('app.schema')
+//   schema.connect('http://localhost:4213')
+//   const User = schema.model('User', { ... })
 //
 // Author: Steve Shreeve <steve.shreeve@gmail.com>
 //   Date: January 2026
@@ -20,6 +21,6 @@
 
 export { parse, parser, Parser } from './parser.js'
 export { SchemaLexer } from './lexer.js'
-export { Schema, schema } from './runtime.js'
+export { Schema } from './runtime.js'
 export { generateTypes } from './emit-types.js'
 export { generateSQL } from './emit-sql.js'

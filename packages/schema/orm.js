@@ -4,31 +4,19 @@
 //
 // Rich domain models with inheritance, behavior, schema, and computed fields.
 //
-// Usage (from Rip — schema-driven):
-//   import { Schema } from '@rip-lang/schema'
-//   import { Model, connect } from '@rip-lang/schema/orm'
+// Usage:
+//   import { Schema } from '@rip-lang/schema/orm'
 //
 //   schema = Schema.load './app.schema', import.meta.url
-//   connect 'http://localhost:4213'
+//   schema.connect 'http://localhost:4213'
 //
-//   class User extends Model
+//   User = schema.model 'User',
 //     greet: -> "Hello, #{@name}!"
-//
-//   User.fromSchema schema, 'User'   # loads table, fields, types, constraints
-//
-// Usage (from Rip — manual):
-//   import { Model, connect } from '@rip-lang/schema/orm'
-//
-//   connect 'http://localhost:4213'
-//
-//   class User extends Model
-//     greet: -> "Hello, #{@name}!"
-//
-//   User.table = 'users'
-//   User.schema { id: { type: 'int', primary: true }, name: { type: 'string', required: true } }
+//     computed:
+//       identifier: -> "#{@name} <#{@email}>"
 //
 // Query API:
-//   user = await User.find(25)
+//   user = await User.find(id)
 //   users = await User.all()
 //   users = await User.where({ active: true }).all()
 //   users = await User.where('score > ?', 90).all()
@@ -36,11 +24,11 @@
 //
 // =============================================================================
 
-let _dbUrl = process.env.DB_URL || 'http://localhost:4213';
+import { Schema } from './runtime.js';
+import { toSnakeCase, pluralize } from './emit-sql.js';
+export { Schema };
 
-export function connect(url) {
-  _dbUrl = url;
-}
+let _dbUrl = process.env.DB_URL || 'http://localhost:4213';
 
 // =============================================================================
 // Query helper
@@ -100,10 +88,9 @@ export class Model {
     const model = schemaInstance.getModel(modelName);
     if (!model) throw new Error(`Model '${modelName}' not found in schema`);
 
-    // Derive table name: UserProfile → user_profiles
+    // Derive table name: UserProfile → user_profiles, Person → people
     if (!this.table) {
-      const snake = modelName.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
-      this.table = snake.replace(/(?:([^s])$|s$)/, (m, p1) => p1 ? p1 + 's' : 's');
+      this.table = pluralize(toSnakeCase(modelName));
     }
 
     // Models always have an implicit id primary key (added by emit-sql.js)
@@ -128,7 +115,7 @@ export class Model {
     // Add relationship foreign keys
     if (model.directives?.belongsTo) {
       for (const rel of model.directives.belongsTo) {
-        const fk = rel.model.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase() + '_id';
+        const fk = toSnakeCase(rel.model) + '_id';
         if (!fields[fk]) fields[fk] = { type: 'uuid' };
       }
     }
@@ -409,10 +396,14 @@ export class Model {
     return q.count();
   }
 
-  static async create(data = {}) {
-    const record = new this(data, false);
-    return await record.save();
+  static build(data = {}) {
+    return new this(data, false);
   }
+
+  static async create(data = {}) {
+    return await this.build(data).save();
+  }
+
 }
 
 // =============================================================================
@@ -520,3 +511,32 @@ export function makeCallable(ModelClass) {
 
   return callable;
 }
+
+// =============================================================================
+// Extend Schema with ORM capabilities
+// =============================================================================
+
+Schema.prototype.connect = function(url) {
+  _dbUrl = url;
+};
+
+Schema.prototype.model = function(modelName, options = {}) {
+  const { computed: computedDefs, ...methods } = options;
+
+  // Create a new class extending Model
+  const ModelClass = class extends Model {};
+
+  // Add instance methods to the prototype
+  for (const [name, fn] of Object.entries(methods)) {
+    ModelClass.prototype[name] = fn;
+  }
+
+  // Load schema (table, fields, types, constraints, timestamps, FKs)
+  ModelClass.fromSchema(this, modelName);
+
+  // Add computed properties (getters, no parens needed)
+  if (computedDefs) ModelClass.computed(computedDefs);
+
+  // Return callable: User(id) → User.find(id)
+  return makeCallable(ModelClass);
+};

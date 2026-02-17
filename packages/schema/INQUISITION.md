@@ -73,10 +73,10 @@ Rip Schema includes the database-layer metadata that Zod explicitly (and correct
 
 ### Q2: "Zod schemas are runtime JavaScript — they work in any JS environment with zero build step. Your schema requires parsing and registration. Isn't that extra complexity?"
 
-**Rip Schema**: Our runtime validators are also pure JavaScript — no build step required. You parse a schema, register it, and call `schema.create()` or `schema.validate()`. It's two function calls, not a build pipeline:
+**Rip Schema**: Our runtime validators are also pure JavaScript — no build step required. Load a schema and call `schema.create()` or `schema.validate()`. It's one function call, not a build pipeline:
 
 ```js
-schema.register(parse(schemaSource))
+const schema = Schema.load('app.schema')
 const user = schema.create('User', data)  // defaults applied, ready to validate
 ```
 
@@ -89,9 +89,9 @@ Zod is the right choice for ad-hoc validation at API boundaries — parsing a we
 **Rip Schema**: We built our own runtime validation engine — `runtime.js` — that handles the structural validation Zod is typically used for: required fields, type checking, min/max constraints, email format, enum membership, nested type validation, and default application. It works today:
 
 ```js
-import { parse, schema } from '@rip-lang/schema'
+import { Schema } from '@rip-lang/schema'
 
-schema.register(parse(schemaSource))
+const schema = Schema.load('app.schema')
 const user = schema.create('User', { name: 'Alice', email: 'alice@example.com' })
 const errors = user.$validate()  // null if valid, array of errors if not
 ```
@@ -154,7 +154,20 @@ Rip Schema is a definition language, not a query engine. For the query layer, we
 
 1. **Use any query tool you like.** The generated TypeScript types and SQL DDL work with Prisma Client, Drizzle, Knex, or raw SQL. Since we generate standard `.d.ts` interfaces, any query library that accepts TypeScript types will work. The schema doesn't lock you into a specific ORM.
 
-2. **Rip's own ORM** — we have a working ActiveRecord-style ORM (`orm.js`) with `find`, `findMany`, `where`, `orderBy`, `limit`, `count`, `create`, `all`, `first` — plus chainable queries, dirty tracking, computed properties, and schema validation. It connects to `rip-db` (our DuckDB HTTP server) over a simple JSON API. The full example (`orm-example.rip`) runs end-to-end: creates a table, seeds data, and exercises every query pattern against a live database.
+2. **Rip's own ORM** — the schema object itself creates models. One call does everything — wires fields, types, constraints, methods, and computed properties from the `.schema` file:
+
+```coffee
+schema = Schema.load './app.schema', import.meta.url
+schema.connect 'http://localhost:4213'
+
+User = schema.model 'User',
+  greet: -> "Hello, #{@name}!"
+  computed:
+    identifier: -> "#{@name} <#{@email}>"
+    isAdmin:    -> @role is 'admin'
+```
+
+From there you get `find`, `findMany`, `where`, `orderBy`, `limit`, `count`, `create`, `build`, `all`, `first` — plus chainable queries, dirty tracking, computed properties, and schema validation. It connects to `rip-db` (our DuckDB HTTP server) over a simple JSON API. The full example (`orm-example.rip`) runs end-to-end against a live database.
 
 The honest position: Prisma Client is more mature for complex query patterns today — relation loading, transactions, middleware. Our advantage is in the layers above and below the query — the unified definition that Prisma can't provide because Prisma doesn't generate your TypeScript interfaces or your runtime validators. A developer can use Rip Schema for the definition layer and Prisma Client for the query layer. They work together, not against each other.
 
@@ -217,7 +230,7 @@ The schema generates the data types. TypeScript composes them. Each tool does wh
 | Compile-time types | Native | Inferred | Generated client | **Generated .d.ts** (working) |
 | Runtime validation | None | Native | None | **Native** (working) |
 | Database schema | None | None | Native | **Generated SQL DDL** (working) |
-| Query engine | None | None | Prisma Client | **ORM** (working — find, where, chain, count) |
+| Query engine | None | None | Prisma Client | **ORM** (schema-driven — find, where, chain, count, dirty tracking) |
 | IDE experience | Native | Via inference | Via client types | Via generated .d.ts |
 | Ecosystem size | Massive | Large | Large | Small (but compatible with theirs) |
 | Single source of truth | Types only | Types + validation | DB + types | **Types + validation + DB** |
@@ -226,11 +239,12 @@ The schema generates the data types. TypeScript composes them. Each tool does wh
 
 ## What Works Today
 
-Rip Schema delivers three outputs from a single definition — today, not in a future roadmap:
+Rip Schema delivers four capabilities from a single definition — today, not in a future roadmap:
 
-- **`emit-types.js`** — Generates TypeScript interfaces, enums, JSDoc constraints, relationship fields, and optional markers. Import the `.d.ts` file and your IDE gives you autocomplete, hover types, and go-to-definition.
-- **`emit-sql.js`** — Generates `CREATE TABLE`, `CREATE INDEX`, `CREATE TYPE AS ENUM` with proper column types, constraints, foreign keys, Rails-style pluralized table names, and soft delete support.
-- **`runtime.js`** — Validates data at runtime: required fields, type checking, min/max constraints, email format, enum membership, nested type validation, and automatic default application.
+- **`schema.toTypes()`** — Generates TypeScript interfaces, enums, JSDoc constraints, relationship fields, and optional markers. Import the `.d.ts` file and your IDE gives you autocomplete, hover types, and go-to-definition.
+- **`schema.toSQL()`** — Generates `CREATE TABLE`, `CREATE INDEX`, `CREATE TYPE AS ENUM` with proper column types, constraints, foreign keys, Rails-style pluralized table names, and soft delete support.
+- **`schema.create()` / `schema.validate()`** — Validates data at runtime: required fields, type checking, min/max constraints, email format, enum membership, nested type validation, and automatic default application.
+- **`schema.model()`** — Creates schema-driven ORM models with one call: fields, types, constraints, methods, computed properties, dirty tracking, and a chainable query API — all wired from the `.schema` file.
 - **`generate.js`** — CLI that reads `.schema` files and writes `.d.ts` and `.sql` output.
 
 All of this runs with zero external dependencies on a single `npm install @rip-lang/schema`.
@@ -248,6 +262,7 @@ The weaknesses are real:
 The strengths are also real:
 - Zero drift between types, validation, and persistence — proven with working generators and tests
 - One definition instead of three — demonstrated end-to-end in `examples/app-demo.rip` and `examples/orm-example.rip`
+- Schema-centric API — `Schema.load`, `schema.model`, `schema.toSQL()`, `schema.toTypes()` — everything flows from one object
 - Zero runtime dependencies — no Zod, no Prisma engine, no code generation framework
 - Richer metadata than any single tool captures alone — constraints, relationships, indexes, timestamps, and soft deletes in one definition
 - Incremental adoption — opt-in, model by model, alongside existing TypeScript/Zod/Prisma code
@@ -262,6 +277,6 @@ The thesis is not "throw away your tools." The thesis is "define your data once,
 
 **Dr. Z**: "I expected them to generate Zod schemas and was ready to argue about generator correctness. Instead, they built their own runtime validator — zero dependencies, handles nested types, enums, constraints, defaults. It's not Zod, but it covers the structural validation that accounts for 90% of Zod usage. For the 10% that needs Zod ecosystem integration (tRPC, react-hook-form), a `--zod` target is straightforward. The cross-field `@validate` blocks are reasonable. **Pass.**"
 
-**Dr. P**: "The SQL DDL output is solid — proper `CREATE TABLE` with constraints, foreign keys, indexes, enum types, Rails-style pluralization. It targets DuckDB today but the patterns are standard SQL. They're honest that they don't have migrations yet. The decision to generate standard SQL rather than locking into Prisma schema format is defensible — it means they work with any database tool, not just ours. The ORM now runs against a live database with find, where, chainable queries, count, dirty tracking, and validation — that's more than a design document. It's early, but it works. **Pass — with the caveat that relation loading, transactions, and migration tooling are still ahead.**"
+**Dr. P**: "The SQL DDL output is solid — proper `CREATE TABLE` with constraints, foreign keys, indexes, enum types, Rails-style pluralization. It targets DuckDB today but the patterns are standard SQL. They're honest that they don't have migrations yet. The decision to generate standard SQL rather than locking into Prisma schema format is defensible — it means they work with any database tool, not just ours. The ORM is schema-driven — `schema.model('User', { ... })` wires everything from the `.schema` file in one call, including fields, types, constraints, methods, computed properties, dirty tracking, and a chainable query API. It runs end-to-end against a live database. It's early, but it works and the API is clean. **Pass — with the caveat that relation loading, transactions, and migration tooling are still ahead.**"
 
-**Chair**: "The candidate has moved from architecture to working software. TypeScript generation, SQL DDL generation, runtime validation, and an ActiveRecord-style ORM are all functional and tested — including an end-to-end smoke test against a live database. The original conditions were: (1) demonstrate high-quality TypeScript output — **met**, (2) demonstrate high-quality SQL output — **met**, (3) provide a clear migration path for existing codebases — **partially met** (incremental adoption is supported, but schema inference from existing TypeScript types is not yet built), (4) demonstrate a query layer — **met** (find, where, chainable queries, dirty tracking, validation against rip-db). The panel issues a **pass**, with the remaining work being relation loading, transactions, migration tooling, and Zod/Prisma output targets for teams that specifically need those formats."
+**Chair**: "The candidate has moved from architecture to working software. TypeScript generation, SQL DDL generation, runtime validation, and a Schema-centric ORM are all functional and tested — including an end-to-end smoke test against a live database. The API has been refined to a single entry point: `Schema.load` → `schema.model` → queries. The original conditions were: (1) demonstrate high-quality TypeScript output — **met**, (2) demonstrate high-quality SQL output — **met**, (3) provide a clear migration path for existing codebases — **partially met** (incremental adoption is supported, but schema inference from existing TypeScript types is not yet built), (4) demonstrate a query layer — **met** (schema-driven models with find, where, chainable queries, dirty tracking, computed properties, and validation against rip-db). The panel issues a **pass**, with the remaining work being relation loading, transactions, migration tooling, and Zod/Prisma output targets for teams that specifically need those formats."

@@ -22,39 +22,42 @@ rip packages/schema/examples/app-demo.rip
 
 | What                          | Validates                                                 |
 |-------------------------------|-----------------------------------------------------------|
-| **Parse**                     | Schema DSL parses 2 enums, 1 type, 4 models               |
-| **TypeScript generation**     | Produces `.d.ts` with interfaces, enums, JSDoc constraints |
-| **SQL DDL generation**        | Produces CREATE TABLE / CREATE TYPE with constraints        |
+| **Parse**                     | `Schema.load` parses 2 enums, 1 type, 4 models            |
+| **TypeScript generation**     | `schema.toTypes()` produces interfaces, enums, JSDoc       |
+| **SQL DDL generation**        | `schema.toSQL()` produces CREATE TABLE / CREATE TYPE        |
 | **Valid instance**            | `schema.create('User', {...})` applies defaults, passes    |
 | **Missing required field**    | Catches missing `email`                                    |
 | **Invalid email**             | Catches `not-an-email` format                              |
 | **String max length**         | Catches name > 100 chars                                   |
 | **Invalid enum**              | Catches `superadmin` not in `Role` enum                    |
 | **Nested type validation**    | Catches multiple violations in `Address` sub-object        |
-| **Enum + integer defaults**   | `Post` gets correct `status` and `views` defaults          |
+| **Enum + integer defaults**   | `Post` gets correct `status` and `viewCount` defaults      |
 | **File output**               | Writes `generated/app.d.ts` and `generated/app.sql`        |
 
 ### 2. ORM with Live Database (`examples/orm-example.rip`)
 
-Connects to `rip-db`, creates a table, seeds data, and exercises the full
-ActiveRecord-style ORM.
+Connects to `rip-db`, creates tables from schema-generated DDL, seeds
+data, and exercises the full Schema-centric ORM.
 
 ```bash
-bun bin/rip packages/schema/examples/orm-example.rip
+rip packages/schema/examples/orm-example.rip
 ```
 
 | What                          | Validates                                                 |
 |-------------------------------|-----------------------------------------------------------|
+| **Schema load**               | `Schema.load './app.schema'` parses and registers models   |
+| **DDL generation**            | `schema.toSQL()` produces dependency-ordered DDL           |
 | **Setup**                     | DROP/CREATE TABLE via `/sql` endpoint, seed 5 users        |
-| **Find by ID (callable)**     | `User(1)` returns Alice with all fields                    |
-| **Find by ID (method)**       | `User.find(2)` returns Bob                                 |
-| **Computed properties**       | `identifier` and `isHighScorer` derive from fields         |
+| **Model definition**          | `schema.model 'User', { ... }` wires fields + behavior    |
+| **Find first**                | `User.first()` returns a user with all schema fields       |
+| **Find by email**             | `User.where(email: ...)` filters correctly                 |
+| **Computed properties**       | `user.identifier` and `user.isAdmin` derive from fields    |
 | **All users**                 | `User.all()` returns all 5 records                         |
-| **Where (object style)**      | `User.where(name: 'Alice')` filters correctly              |
-| **Where (SQL style)**         | `User.where('score > ?', 90)` with parameterized query     |
+| **Where (object style)**      | `User.where(role: 'editor')` filters correctly             |
+| **Where (SQL style)**         | `User.where('active = ?', true)` with parameterized query  |
 | **Chainable query**           | `.where().orderBy().limit()` chains produce correct SQL     |
 | **Count**                     | `User.count()` returns 5                                   |
-| **Instance methods**          | `createAccessCode()` and `greet()` work on model instances |
+| **Instance methods**          | `user.greet()` and `user.displayRole()` work               |
 | **Dirty tracking**            | Mutation of `name` sets `$dirty` and `$changed`            |
 | **Validation**                | Missing `name` and invalid `email` caught by `$validate()` |
 

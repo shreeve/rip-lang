@@ -21,17 +21,14 @@
 #
 # ==============================================================================
 
-import { Schema } from '../index.js'
-import { Model, makeCallable, connect } from '../orm.js'
-
-# Connect to rip-db (default: http://localhost:4213)
-connect 'http://localhost:4213'
+import { Schema } from '../orm.js'
 
 # ==============================================================================
 # Load Schema — one .schema file drives everything
 # ==============================================================================
 
 schema = Schema.load './app.schema', import.meta.url
+schema.connect 'http://localhost:4213'
 
 # ==============================================================================
 # Setup — Create tables from generated DDL
@@ -84,26 +81,15 @@ seed = ->
 seed!
 
 # ==============================================================================
-# Model Definition — schema-driven, not hand-coded!
+# Model Definition — one construct does everything
 # ==============================================================================
 
-class UserModel extends Model
-  greet: ->
-    "Hello, #{@name}!"
-
-  displayRole: ->
-    @role.charAt(0).toUpperCase() + @role.slice(1)
-
-# One line loads everything: table name, fields, types, constraints
-UserModel.fromSchema schema, 'User'
-
-# Computed properties: reactive getters
-UserModel.computed
-  identifier: -> "#{@name} <#{@email}>"
-  isAdmin:    -> @role is 'admin'
-
-# Make callable: User('uuid') → User.find('uuid')
-User = makeCallable UserModel
+User = schema.model 'User',
+  greet: -> "Hello, #{@name}!"
+  displayRole: -> @role.charAt(0).toUpperCase() + @role.slice(1)
+  computed:
+    identifier: -> "#{@name} <#{@email}>"
+    isAdmin:    -> @role is 'admin'
 
 # ==============================================================================
 # Query Examples
@@ -154,7 +140,7 @@ user.name = "Alice Updated"
 console.log "After:  #{user.name}, dirty=#{user.$dirty}, changed=#{user.$changed}"
 
 console.log '\n── Validation ──────────────────────────────────────────────'
-badUser = new UserModel { email: 'not-valid' }
+badUser = User.build email: 'not-valid'
 errors = badUser.$validate()
 console.log "Validation errors:", errors
 

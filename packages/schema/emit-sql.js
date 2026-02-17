@@ -412,5 +412,5 @@ export function generateSQL(ast, options = {}) {
   return blocks.join('\n\n') + '\n'
 }
 
-export { pluralize }
+export { toSnakeCase, toTableName, pluralize }
 export default generateSQL
