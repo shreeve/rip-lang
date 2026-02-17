@@ -257,6 +257,10 @@ export class Schema {
           directives.hasOne = directives.hasOne || []
           directives.hasOne.push({ model: item[1], options: item[2] })
           break
+        case 'link':
+          directives.links = directives.links || []
+          directives.links.push({ role: item[1], model: item[2], options: item[3] })
+          break
       }
     }
     return directives

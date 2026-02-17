@@ -53,6 +53,9 @@ let AT_KEYWORDS = {
   'hasOne':      'HAS_ONE',
   'has_many':    'HAS_MANY',
   'hasMany':     'HAS_MANY',
+  'one':         'ONE',
+  'many':        'MANY',
+  'link':        'LINK',
   'events':      'EVENTS',
   'actions':     'ACTIONS',
 };

@@ -48,6 +48,20 @@ async function query(sql, params = []) {
 }
 
 // =============================================================================
+// Temporal filter helper for links
+// =============================================================================
+
+function _temporalFilter(at, params) {
+  if (at === null) at = new Date().toISOString();
+  params.push(at, at);
+  return ` AND ("when_from" IS NULL OR "when_from" <= ?) AND ("when_till" IS NULL OR "when_till" >= ?)`;
+}
+
+function _toCamelCase(s) {
+  return s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+}
+
+// =============================================================================
 // Model — Base class for all domain models
 // =============================================================================
 
@@ -453,6 +467,59 @@ export class Model {
       }
     }
     return obj;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Links — Universal temporal associations
+  // ---------------------------------------------------------------------------
+
+  async link(role, target, { from = null, till = null } = {}) {
+    const sourceType = this.constructor.table;
+    const sourceId = this._data[this.constructor.primaryKey];
+    const targetType = target.constructor.table;
+    const targetId = target._data[target.constructor.primaryKey];
+    const sql = `INSERT INTO "links" ("source_type", "source_id", "target_type", "target_id", "role", "when_from", "when_till") VALUES (?, ?, ?, ?, ?, ?, ?)`;
+    await query(sql, [sourceType, sourceId, targetType, targetId, role, from, till]);
+    return this;
+  }
+
+  async unlink(role, target) {
+    const sourceType = this.constructor.table;
+    const sourceId = this._data[this.constructor.primaryKey];
+    const targetType = target.constructor.table;
+    const targetId = target._data[target.constructor.primaryKey];
+    const sql = `UPDATE "links" SET "when_till" = CURRENT_TIMESTAMP WHERE "source_type" = ? AND "source_id" = ? AND "target_type" = ? AND "target_id" = ? AND "role" = ? AND "when_till" IS NULL`;
+    await query(sql, [sourceType, sourceId, targetType, targetId, role]);
+    return this;
+  }
+
+  async links(role, { at = null } = {}) {
+    const sourceType = this.constructor.table;
+    const sourceId = this._data[this.constructor.primaryKey];
+    const params = [sourceType, sourceId];
+    let sql = `SELECT * FROM "links" WHERE "source_type" = ? AND "source_id" = ?`;
+    if (role) { sql += ` AND "role" = ?`; params.push(role); }
+    sql += _temporalFilter(at, params);
+    sql += ` ORDER BY "created_at" DESC`;
+    const result = await query(sql, params);
+    return result.data.map(row => {
+      const link = {};
+      for (let i = 0; i < result.meta.length; i++) link[_toCamelCase(result.meta[i].name)] = row[i];
+      return link;
+    });
+  }
+
+  static async linked(role, target, { at = null } = {}) {
+    const targetType = target.constructor ? target.constructor.table : target.table;
+    const targetId = target.constructor ? target._data[target.constructor.primaryKey] : target._data?.[target.primaryKey];
+    const sourceType = this.table;
+    const params = [sourceType, targetType, targetId, role];
+    let sql = `SELECT "source_id" FROM "links" WHERE "source_type" = ? AND "target_type" = ? AND "target_id" = ? AND "role" = ?`;
+    sql += _temporalFilter(at, params);
+    const result = await query(sql, params);
+    if (result.rows === 0) return [];
+    const ids = result.data.map(row => row[0]);
+    return this.findMany(ids);
   }
 
   // ---------------------------------------------------------------------------

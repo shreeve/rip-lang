@@ -328,6 +328,42 @@ function isRelationOptional(opts) {
 }
 
 // =============================================================================
+// Links table (universal temporal associations)
+// =============================================================================
+
+function hasLinks(models) {
+  for (const def of models) {
+    const body = def[3]
+    if (!Array.isArray(body)) continue
+    for (const member of body) {
+      if (Array.isArray(member) && member[0] === 'link') return true
+    }
+  }
+  return false
+}
+
+function emitLinksTableSQL() {
+  const lines = [
+    'CREATE TABLE links (',
+    '  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),',
+    '  source_type VARCHAR NOT NULL,',
+    '  source_id UUID NOT NULL,',
+    '  target_type VARCHAR NOT NULL,',
+    '  target_id UUID NOT NULL,',
+    '  role VARCHAR NOT NULL,',
+    '  when_from TIMESTAMP,',
+    '  when_till TIMESTAMP,',
+    '  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+    ');',
+    '',
+    'CREATE INDEX idx_links_source ON links (source_type, source_id);',
+    'CREATE INDEX idx_links_target ON links (target_type, target_id);',
+    'CREATE INDEX idx_links_role ON links (role);',
+  ]
+  return lines.join('\n')
+}
+
+// =============================================================================
 // Main entry point
 // =============================================================================
 
@@ -406,6 +442,14 @@ export function generateSQL(ast, options = {}) {
     const sorted = topologicalSort(models)
     for (const def of sorted) {
       blocks.push(emitTableSQL(def, enumNames))
+    }
+
+    // Auto-generate links table if any model uses @link
+    if (hasLinks(models)) {
+      if (dropFirst) {
+        blocks.push('DROP TABLE IF EXISTS links CASCADE;')
+      }
+      blocks.push(emitLinksTableSQL())
     }
   }
 

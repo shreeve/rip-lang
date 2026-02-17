@@ -326,7 +326,41 @@ export function generateTypes(ast, options = {}) {
     }
   }
 
+  // Auto-generate Link interface if any model uses @link
+  if (hasLinks(ast)) {
+    blocks.push(emitLinkInterface())
+  }
+
   return blocks.join('\n\n') + '\n'
+}
+
+function hasLinks(ast) {
+  for (let i = 1; i < ast.length; i++) {
+    const def = ast[i]
+    if (!Array.isArray(def) || def[0] !== 'model') continue
+    const body = def[3]
+    if (!Array.isArray(body)) continue
+    for (const member of body) {
+      if (Array.isArray(member) && member[0] === 'link') return true
+    }
+  }
+  return false
+}
+
+function emitLinkInterface() {
+  return [
+    'export interface Link {',
+    '  id: string;',
+    '  sourceType: string;',
+    '  sourceId: string;',
+    '  targetType: string;',
+    '  targetId: string;',
+    '  role: string;',
+    '  whenFrom?: Date;',
+    '  whenTill?: Date;',
+    '  createdAt: Date;',
+    '}',
+  ].join('\n')
 }
 
 export default generateTypes

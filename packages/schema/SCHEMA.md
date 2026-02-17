@@ -515,6 +515,50 @@ Models represent database-backed entities with validation.
   @softDelete
 ```
 
+### Shorthand Aliases
+
+`@one` and `@many` are shorthand aliases for `@has_one` and `@has_many`:
+
+```coffeescript
+@model User
+  @one  Profile                      # Same as @has_one Profile
+  @many Post                         # Same as @has_many Post
+```
+
+### Links (Universal Temporal Associations)
+
+`@link` declares a named, temporal, any-to-any relationship stored in a shared
+`links` table:
+
+```coffeescript
+@model User
+  @link "admin", Organization        # User can be admin of Organization
+  @link "mentor", User               # Self-referential: User mentors User
+```
+
+The `links` table is auto-generated when any model uses `@link`:
+
+```sql
+CREATE TABLE links (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  source_type VARCHAR NOT NULL,
+  source_id   UUID NOT NULL,
+  target_type VARCHAR NOT NULL,
+  target_id   UUID NOT NULL,
+  role        VARCHAR NOT NULL,
+  when_from   TIMESTAMP,            -- null = beginning of time
+  when_till   TIMESTAMP,            -- null = end of time
+  created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+ORM methods:
+
+- `user.link("admin", org, { from, till })` — create a temporal link
+- `user.unlink("admin", org)` — end the link (sets `when_till`)
+- `user.links("admin")` — query active outgoing links
+- `User.linked("admin", org)` — query active incoming links (who is admin of org?)
+
 ---
 
 ## Widgets
@@ -864,6 +908,8 @@ Native validation engine (replaces Zod for structural validation):
 - [x] Enum type generation
 - [x] Zod schema generation (`emit-zod.js` — third AST walker)
 - [x] Beautiful parse error messages (`errors.js` — contextual hints, "did you mean?")
+- [x] `@link` temporal associations — auto-generated `links` table with indexes
+- [x] `@one`/`@many` shorthand aliases for `@has_one`/`@has_many`
 - [ ] Migration diffing (use external tools for now)
 
 ### Phase 5: ORM — Complete
@@ -878,6 +924,8 @@ Native validation engine (replaces Zod for structural validation):
 - [x] Eager loading (`User.include('posts').all()` — batch loading)
 - [x] Lifecycle hooks (`beforeSave`, `afterCreate`, `beforeDelete`, etc.)
 - [x] Transactions (`schema.transaction!` — atomic BEGIN/COMMIT/ROLLBACK)
+- [x] `@link` ORM methods (`link()`, `unlink()`, `links()`, `linked()`)
+- [x] `@one`/`@many` relationship aliases (grammar-level desugaring)
 
 ### Phase 6: Widget System
 

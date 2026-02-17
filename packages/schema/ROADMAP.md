@@ -28,6 +28,8 @@ What works today, end-to-end:
 | Transactions | `schema.transaction!` — atomic multi-model operations | Complete |
 | Zod generation | `schema.toZod()` / `--zod` CLI — third emit target | Complete |
 | Parse errors | Contextual hints, line context, "did you mean?" | Complete |
+| `@link` | Universal temporal associations — `link()`, `unlink()`, `links()`, `linked()` | Complete |
+| `@one`/`@many` | Shorthand aliases for `@has_one` / `@has_many` | Complete |
 | VS Code highlighting | `packages/vscode` | Complete |
 | CLI | `rip-schema generate app.schema` | Complete |
 
@@ -109,7 +111,23 @@ variants. Available via `schema.toZod()`, `generateZod(ast)`, or
 `--zod` CLI flag. Proves the "any new target is just one more walker"
 architecture claim.
 
-### 9. Per-Schema Connection State
+### ~~9. `@link` — Universal Temporal Associations~~ — Complete
+
+`@link "role", Model` declares that a model can be linked to another model
+with a named role and optional time window. A shared `links` table is auto-
+generated in DDL with indexes on source, target, and role.
+
+ORM methods: `user.link("admin", org, { from, till })`, `user.unlink("admin", org)`,
+`user.links("admin")`, `User.linked("admin", org)`. Temporal filtering defaults to
+"now" — only active links where `when_from <= now` and `when_till >= now`.
+
+### ~~10. `@one`/`@many` — Relationship Aliases~~ — Complete
+
+`@one` and `@many` are shorthand aliases for `@has_one` and `@has_many`.
+They desugar to the same S-expressions at the grammar level. Both forms
+produce identical output across all code generators.
+
+### 11. Per-Schema Connection State
 
 **Priority: Lower — needed for testing and multi-database apps.**
 

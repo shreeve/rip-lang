@@ -51,6 +51,7 @@ exec = (sql) ->
 
 # Drop existing tables (reverse dependency order), then create from DDL
 exec! """
+  DROP TABLE IF EXISTS links CASCADE;
   DROP TABLE IF EXISTS comments CASCADE;
   DROP TABLE IF EXISTS posts CASCADE;
   DROP TABLE IF EXISTS users CASCADE;
@@ -61,7 +62,13 @@ exec! """
 
 exec! schema.toSQL()
 
-# Seed users, then posts (separate requests ensure users exist before FK lookup)
+# Seed organizations, users, and posts
+exec! """
+  INSERT INTO organizations (name, domain, plan) VALUES
+    ('Acme Corp', 'acme.com', 'pro'),
+    ('Widgets Inc', 'widgets.io', 'free');
+"""
+
 exec! """
   INSERT INTO users (name, email, role, bio, active) VALUES
     ('Alice',   'alice@example.com',   'admin',  'Platform administrator', true),
@@ -94,6 +101,10 @@ User = schema.model 'User',
   computed:
     identifier: -> "#{@name} <#{@email}>"
     isAdmin:    -> @role is 'admin'
+
+Organization = schema.model 'Organization',
+  computed:
+    label: -> "#{@name} (#{@plan})"
 
 Post = schema.model 'Post',
   computed:
@@ -222,5 +233,36 @@ console.log '\n── Validation ───────────────�
 badUser = User.build email: 'not-valid'
 errors = badUser.$validate()
 console.log "Validation errors:", errors
+
+console.log '\n── Links: temporal associations ─────────────────────────────'
+alice = User.where!(name: 'Alice').first!()
+acme = Organization.where!(name: 'Acme Corp').first!()
+widgets = Organization.where!(name: 'Widgets Inc').first!()
+
+# Alice is an admin of Acme Corp (active now)
+alice.link! "admin", acme
+console.log "Linked Alice as admin of Acme Corp"
+
+# Alice is also a member of Widgets Inc
+alice.link! "member", widgets
+console.log "Linked Alice as member of Widgets Inc"
+
+# Query Alice's active links
+aliceLinks = alice.links!()
+console.log "Alice has #{aliceLinks.length} active links:"
+for l in aliceLinks
+  console.log "  - role=#{l.role} target=#{l.targetType}/#{l.targetId}"
+
+# Query: who are the admins of Acme?
+admins = User.linked! "admin", acme
+console.log "Admins of Acme: #{admins.map((u) -> u.name).join(', ')}"
+
+# End Alice's admin link
+alice.unlink! "admin", acme
+console.log "Unlinked Alice as admin of Acme Corp"
+
+# Now only the member link remains active
+remaining = alice.links!()
+console.log "Alice's remaining active links: #{remaining.length}"
 
 console.log '\n── Done! ───────────────────────────────────────────────────'

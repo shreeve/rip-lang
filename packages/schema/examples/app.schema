@@ -42,8 +42,10 @@
   active    boolean, [true]
 
   @belongs_to Organization, { optional: true }
-  @has_many Post
-  @has_many Comment
+  @many Post
+  @many Comment
+
+  @link "admin", Organization
 
   @timestamps
 
@@ -55,7 +57,7 @@
   domain!#  string
   plan      string, ["free"]
 
-  @has_many User
+  @many User
   @timestamps
 
 @model Post
@@ -68,7 +70,7 @@
   viewCount    integer, [0]
 
   @belongs_to User
-  @has_many Comment
+  @many Comment
 
   @timestamps
   @softDelete

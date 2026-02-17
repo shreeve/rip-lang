@@ -381,10 +381,24 @@ Models generate TypeScript interfaces, runtime validators, and SQL DDL.
 ```coffee
 @belongs_to User                      # Creates user_id foreign key
 @belongs_to Category, { optional: true }
-@has_one Profile
-@has_many Post
-@has_many Comment
+@has_one Profile                      # (or @one Profile)
+@has_many Post                        # (or @many Post)
+@has_many Comment                     # (or @many Comment)
 ```
+
+`@one` and `@many` are shorthand aliases for `@has_one` and `@has_many`.
+
+### Links (Universal Temporal Associations)
+
+```coffee
+@link "admin", Organization           # User can be linked as admin to Organization
+@link "mentor", User                  # Self-referential: User mentors another User
+```
+
+Links are stored in a shared `links` table (auto-generated in DDL) with temporal
+windowing (`when_from`, `when_till`), enabling role-based, time-bounded, any-to-any
+relationships between models. The ORM provides `link()`, `unlink()`, `links()`, and
+`linked()` methods for querying and managing links.
 
 ### Indexes and Directives
 
@@ -617,11 +631,12 @@ user.toJSON()                # Serialize (includes computed fields)
 
 ### Relations
 
-Relations are derived from the `@belongs_to`, `@has_many`, and `@has_one`
-directives in the schema. Each relation becomes an async method on instances:
+Relations are derived from the `@belongs_to`, `@has_many` (or `@many`), and
+`@has_one` (or `@one`) directives in the schema. Each relation becomes an async
+method on instances:
 
 ```coffee
-# Given: User @has_many Post, Post @belongs_to User
+# Given: User @many Post, Post @belongs_to User
 
 # Lazy loading — one query per call
 posts  = user.posts!()           # → [Post, Post, ...]
@@ -630,6 +645,26 @@ author = post.user!()            # → User
 
 All models registered with `schema.model` are automatically discoverable — no
 manual wiring needed.
+
+### Links (Temporal Associations)
+
+Links use a shared `links` table for named, time-bounded, any-to-any associations:
+
+```coffee
+# Given: User @link "admin", Organization
+
+# Create a link
+user.link! "admin", org
+
+# Query outgoing links
+user.links! "admin"              # → [{ role, targetType, targetId, ... }]
+
+# Query incoming: who is admin of this org?
+admins = User.linked! "admin", org  # → [User, User, ...]
+
+# End a link (preserves history by setting when_till)
+user.unlink! "admin", org
+```
 
 ### Eager Loading
 
@@ -905,6 +940,8 @@ you can use the ORM without the code generators.
 | Transactions (`schema.transaction!`) | Complete |
 | Zod schema generation (`schema.toZod()`) | Complete |
 | Parse error messages (contextual, with hints) | Complete |
+| `@link` temporal associations (`user.link!`, `User.linked!`) | Complete |
+| `@one`/`@many` aliases for `@has_one`/`@has_many` | Complete |
 | `@computed` / `@validate` in DSL | Planned |
 | Migration diffing | Planned |
 
@@ -954,6 +991,8 @@ of truth.
 - ~~Transactions (`schema.transaction!`)~~ — Complete
 - ~~Zod schema generation (`emit-zod.js`)~~ — Complete
 - ~~Parser error messages (`errors.js`)~~ — Complete
+- ~~`@link` temporal associations~~ — Complete
+- ~~`@one`/`@many` relationship aliases~~ — Complete
 - Schema diffing for migration generation
 - `@computed` and `@validate` blocks in the DSL
 

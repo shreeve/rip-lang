@@ -289,7 +289,44 @@ export function generateZod(ast, options = {}) {
     blocks.push(typeAliases.join('\n'))
   }
 
+  // Auto-generate LinkSchema if any model uses @link
+  if (hasLinks(ast)) {
+    blocks.push(emitLinkSchema())
+    if (emitInfer) {
+      blocks.push(emitTypeAlias('Link'))
+    }
+  }
+
   return blocks.join('\n\n') + '\n'
+}
+
+function hasLinks(ast) {
+  for (let i = 1; i < ast.length; i++) {
+    const def = ast[i]
+    if (!Array.isArray(def) || def[0] !== 'model') continue
+    const body = def[3]
+    if (!Array.isArray(body)) continue
+    for (const member of body) {
+      if (Array.isArray(member) && member[0] === 'link') return true
+    }
+  }
+  return false
+}
+
+function emitLinkSchema() {
+  return [
+    'export const LinkSchema = z.object({',
+    '  id: z.string().uuid(),',
+    '  sourceType: z.string(),',
+    '  sourceId: z.string().uuid(),',
+    '  targetType: z.string(),',
+    '  targetId: z.string().uuid(),',
+    '  role: z.string(),',
+    '  whenFrom: z.coerce.date().nullable().optional(),',
+    '  whenTill: z.coerce.date().nullable().optional(),',
+    '  createdAt: z.coerce.date(),',
+    '});',
+  ].join('\n')
 }
 
 export default generateZod

@@ -256,12 +256,18 @@ grammar =
   # ============================================================================
 
   Relation: [
-    o 'BELONGS_TO IDENTIFIER'                  , '["belongs_to", 2, null]'
-    o 'BELONGS_TO IDENTIFIER , RelationOpts'   , '["belongs_to", 2, 4]'
-    o 'HAS_ONE IDENTIFIER'                     , '["has_one", 2, null]'
-    o 'HAS_ONE IDENTIFIER , RelationOpts'      , '["has_one", 2, 4]'
-    o 'HAS_MANY IDENTIFIER'                    , '["has_many", 2, null]'
-    o 'HAS_MANY IDENTIFIER , RelationOpts'     , '["has_many", 2, 4]'
+    o 'BELONGS_TO IDENTIFIER'                         , '["belongs_to", 2, null]'
+    o 'BELONGS_TO IDENTIFIER , RelationOpts'          , '["belongs_to", 2, 4]'
+    o 'HAS_ONE IDENTIFIER'                            , '["has_one", 2, null]'
+    o 'HAS_ONE IDENTIFIER , RelationOpts'             , '["has_one", 2, 4]'
+    o 'HAS_MANY IDENTIFIER'                           , '["has_many", 2, null]'
+    o 'HAS_MANY IDENTIFIER , RelationOpts'            , '["has_many", 2, 4]'
+    o 'ONE IDENTIFIER'                                , '["has_one", 2, null]'
+    o 'ONE IDENTIFIER , RelationOpts'                 , '["has_one", 2, 4]'
+    o 'MANY IDENTIFIER'                               , '["has_many", 2, null]'
+    o 'MANY IDENTIFIER , RelationOpts'                , '["has_many", 2, 4]'
+    o 'LINK STRING , IDENTIFIER'                      , '["link", 2, 4, null]'
+    o 'LINK STRING , IDENTIFIER , RelationOpts'       , '["link", 2, 4, 6]'
   ]
 
   RelationOpts: [

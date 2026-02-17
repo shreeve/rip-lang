@@ -37,6 +37,9 @@ const FRIENDLY = {
   'BELONGS_TO':  '@belongs_to',
   'HAS_ONE':     '@has_one',
   'HAS_MANY':    '@has_many',
+  'ONE':         '@one',
+  'MANY':        '@many',
+  'LINK':        '@link',
   'INDEX':       '@index',
   'COMPUTED':    '@computed',
   'VALIDATE':    '@validate',
@@ -77,7 +80,8 @@ function humanizeList(tokens) {
 
 const DIRECTIVES = [
   '@timestamps', '@softDelete', '@belongs_to', '@has_one',
-  '@has_many', '@index', '@computed', '@validate',
+  '@has_many', '@one', '@many', '@link',
+  '@index', '@computed', '@validate',
   '@include', '@pattern', '@events', '@actions',
 ]
 
