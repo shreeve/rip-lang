@@ -51,65 +51,73 @@ export Time = component
 
   render
     div
-      .page-header
-        h1.page-title "Book a Session"
-        p.page-subtitle "Select a week and time slot"
+      div.('flex items-center justify-between')
+        div
+          h1.('text-3xl font-semibold') "Book a Session"
+          p.('mt-1 text-sm-plus text-tertiary') "Select a week and time slot"
 
       if loading
-        .page-center
-          p "Loading sessions..."
+        div.('flex items-center justify-center py-20')
+          p.('text-tertiary') "Loading sessions..."
 
       if error
-        .alert.alert-error error
+        div.('mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-error') error
 
       unless loading or error
-        .booking-two-col
+        div.('mt-8 lg:flex lg:gap-x-8')
 
           # Left column: week picker + time slots
-          .booking-main-col
+          div.('lg:w-0 lg:flex-auto')
 
             # Week picker — horizontal scroll
-            .week-picker-section
-              .week-picker-header
-                span.week-picker-label "Select a week"
-              .week-picker-scroll
+            div
+              div.('flex items-center justify-between gap-x-4')
+                div.('text-base-plus font-semibold text-secondary') "Select a week"
+              div.('mt-4 flex snap-x snap-mandatory gap-x-3 overflow-x-auto scroll-smooth pb-2 md:mt-5 md:gap-x-4') style: "scrollbar-width: none"
                 for s in sessions
-                  .week-picker-item
-                    button.week-btn @click: (=> @selectWeek(s.week)),
-                      class: (if s.week is selectedWeek then 'active' else ''),
+                  div.('flex flex-col items-center gap-y-2')
+                    button.('h-12 w-[145px] snap-start rounded-lg border font-semibold transition-colors',
+                      if s.week is selectedWeek then 'border-brand bg-brand text-white' else 'border-primary bg-primary text-secondary hover:border-secondary hover:bg-secondary active:bg-tertiary') @click: (=> @selectWeek(s.week)),
                       "Week #{s.week}"
-                    span.week-meta "Tue–Fri"
+                    span.('text-sm font-medium text-tertiary') "Tue–Fri"
 
             # Time slots — vertical list
-            .slots-list
+            div.('mt-8 flex flex-col gap-y-4 md:mt-9 md:gap-y-5')
               for slot in currentSlots
-                button.slot-row @click: (=> @addToCart(slot)),
-                  class: (if @isInCart(slot) then 'slot-added' else '')
-                  span.slot-time slot.time
-                  span.slot-spots "#{slot.spots} spots left"
+                button.('flex h-14 items-center justify-between rounded-lg border px-4 transition hover:bg-secondary active:bg-tertiary md:px-5',
+                  if @isInCart(slot) then 'border-brand ring ring-brand' else 'border-primary hover:border-secondary') @click: (=> @addToCart(slot))
+                  span.('font-medium text-secondary') slot.time
+                  span.('text-sm-plus text-tertiary') "#{slot.spots} spots left"
 
           # Right column: cart sidebar
-          .cart-sidebar
-            .cart-sidebar-inner
-              h2.cart-title "Your Cart"
-              if cart.length is 0
-                p.text-muted "No sessions added yet"
-              if cart.length > 0
-                .cart-items
-                  for item, idx in cart
-                    .cart-item
-                      .cart-item-header
-                        .cart-item-info
-                          span.cart-item-week "Week #{item.week}"
-                          span.cart-item-slot item.slot
-                        button.btn-remove @click: (=> @removeFromCart(idx)), "✕"
-                      .cart-children
-                        span.text-muted "#{item.children.length} child(ren)"
-                        button.btn.btn-sm @click: (=> @addChild(idx)), "+ Add"
+          div.('mt-8 lg:mt-0 lg:w-[360px]')
+            div.('flex flex-col justify-between gap-y-3 rounded-lg-plus border border-primary bg-primary p-6')
+              div.('flex flex-col gap-y-6')
+                div
+                  div.('text-xl leading-none font-semibold lg:text-lg') "One-on-One Swim Lesson"
+                  div.('mt-2.5 text-base-plus leading-none text-tertiary lg:text-base') "Streamline Swim School"
 
-              .cart-footer
-                .cart-total-row
-                  span "Total"
-                  span.cart-total priceDisplay
-                button.btn.btn-primary.btn-block @click: @goToConfirm, disabled: (cart.length is 0),
-                  "Continue"
+                if cart.length is 0
+                  p.('text-sm-plus text-tertiary') "No sessions added yet"
+
+                if cart.length > 0
+                  div.('flex flex-col')
+                    for item, idx in cart
+                      div.('flex flex-col gap-y-5 pb-6',
+                        if idx > 0 then 'border-t border-primary pt-6' else '')
+                        div.('flex items-start justify-between')
+                          div.('flex flex-col gap-y-1')
+                            span.('text-sm font-semibold') "Week #{item.week}"
+                            span.('text-sm text-tertiary') item.slot
+                          button.('rounded-lg px-2 py-1 text-tertiary transition-colors hover:text-brand active:opacity-70') @click: (=> @removeFromCart(idx)), "✕"
+                        div.('flex items-center gap-x-2')
+                          span.('text-sm text-tertiary') "#{item.children.length} child(ren)"
+                          button.('flex items-center gap-x-1.5 rounded-lg border border-dashed border-secondary bg-tertiary px-3 py-1.5 text-sm font-medium text-secondary transition-colors hover:border-tertiary active:bg-quaternary/65') @click: (=> @addChild(idx)), "+ Add"
+
+                  div.('border-t border-primary pt-6')
+                    div.('flex items-center justify-between')
+                      div.('text-base-plus font-semibold leading-none lg:text-base') "Total"
+                      div.('text-base-plus font-semibold leading-none lg:text-base') priceDisplay
+
+              button.('flex w-full items-center justify-center rounded-lg bg-brand px-4 py-2.5 text-sm-plus font-semibold text-white transition-colors hover:bg-brand-hover active:bg-brand-active disabled:opacity-50') @click: @goToConfirm, disabled: (cart.length is 0),
+                "Continue"

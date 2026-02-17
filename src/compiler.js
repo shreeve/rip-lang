@@ -3253,7 +3253,7 @@ export class Compiler {
 // Component Support (prototype installation)
 // =============================================================================
 
-installComponentSupport(CodeGenerator);
+installComponentSupport(CodeGenerator, Lexer);
 
 // =============================================================================
 // Type Support (enum generator)

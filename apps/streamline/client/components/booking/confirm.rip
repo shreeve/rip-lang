@@ -33,49 +33,60 @@ export Confirm = component
 
   render
     div
-      .page-header
-        h1.page-title "Confirm Booking"
-        p.page-subtitle "Review your selections"
+      div.('flex items-center justify-between')
+        div
+          h1.('text-3xl font-semibold') "Confirm Booking"
+          p.('mt-1 text-sm-plus text-tertiary') "Review your selections"
 
       if error
-        .alert.alert-error error
+        div.('mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-error') error
 
       if cart.length is 0
-        .empty-state
-          .empty-icon "🛒"
-          p "Your cart is empty"
-          a.btn.btn-primary href: "/booking/time", "Browse Sessions"
+        div.('mt-8 flex flex-col items-center gap-y-7 rounded-lg-plus border border-primary px-6 py-8 md:py-10')
+          div.('text-[50px] text-quaternary/40') "🛒"
+          div.('flex flex-col items-center gap-y-2 text-center')
+            div.('text-xl font-semibold') "Your cart is empty"
+            div.('text-sm-plus text-tertiary') "Add sessions to get started"
+          a.('inline-flex items-center rounded-full border border-primary bg-primary px-4 py-2 text-sm font-semibold text-secondary shadow-xs transition-colors hover:border-secondary hover:bg-secondary active:bg-tertiary') href: "/booking/time", "Browse Sessions"
 
       unless cart.length is 0
-        .confirm-layout
+        div.('mt-8 lg:flex lg:gap-x-8')
           # Left: cart summary
-          .confirm-main
-            .confirm-list
-              for item, idx in cart
-                .confirm-card
-                  .confirm-card-header
-                    span.confirm-session "🏊 Swim Lesson"
-                    span.confirm-week "Week #{item.week} · #{item.slot}"
-                  .confirm-children
-                    for child in item.children
-                      .child-tag "#{child.name or 'Unnamed'} (age #{child.age or '?'})"
+          div.('lg:w-0 lg:flex-auto')
+            div.('flex max-w-[500px] flex-col gap-y-6')
+              div
+                div.('text-xl leading-none font-semibold lg:text-lg') "One-on-One Swim Lesson"
+                div.('mt-2.5 text-base-plus leading-none text-tertiary lg:text-base') "Streamline Swim School"
 
-          # Right: payment summary
-          .confirm-sidebar
-            .confirm-summary-card
-              h3.confirm-summary-title "Order Summary"
-              .confirm-line-items
-                for item, idx in cart
-                  .confirm-line
-                    span "Week #{item.week} · #{item.slot}"
-                    span "$100"
-              hr.divider
-              .confirm-total-row
-                span "Total"
-                span.confirm-total priceDisplay
-              .confirm-payment-note
-                p.text-muted "Payment integration coming soon — booking is free for now."
-              .confirm-actions
-                button.btn.btn-outline.btn-block @click: @goBack, "Back"
-                button.btn.btn-primary.btn-block @click: @submit, disabled: submitting,
+              for item, idx in cart
+                div.('flex flex-col gap-y-2.5')
+                  span.('text-sm font-semibold text-secondary') "Week #{item.week} · #{item.slot}"
+                  div.('flex flex-wrap gap-1.5')
+                    for child in item.children
+                      span.('inline-flex items-center rounded-full bg-cyan-50 px-2.5 py-0.5 text-xs font-medium text-cyan-700') "#{child.name or 'Unnamed'} (age #{child.age or '?'})"
+                div.('border-t border-primary')
+
+              div.('flex items-center justify-between')
+                div.('text-base-plus font-semibold leading-none lg:text-base') "Total"
+                div.('text-base-plus font-semibold leading-none lg:text-base') priceDisplay
+
+          # Right: payment summary sidebar
+          div.('mt-8 lg:mt-0 lg:w-[360px]')
+            div.('flex flex-col justify-between gap-y-9 rounded-lg-plus border border-primary bg-primary p-6')
+              div.('flex flex-col gap-y-4')
+                h3.('text-lg font-semibold') "Order Summary"
+                div.('flex flex-col gap-y-2')
+                  for item, idx in cart
+                    div.('flex justify-between text-sm text-tertiary')
+                      span "Week #{item.week} · #{item.slot}"
+                      span "$100"
+                div.('border-t border-primary')
+                div.('flex items-center justify-between')
+                  span.('text-base-plus font-semibold leading-none') "Total"
+                  span.('text-base-plus font-semibold leading-none') priceDisplay
+                p.('text-sm text-tertiary') "Payment integration coming soon — booking is free for now."
+
+              div.('flex flex-col gap-y-3')
+                button.('flex w-full items-center justify-center rounded-lg border border-primary bg-primary px-4 py-2.5 text-sm-plus font-semibold text-secondary shadow-xs transition-colors hover:border-secondary hover:bg-secondary active:bg-tertiary') @click: @goBack, "Back"
+                button.('flex w-full items-center justify-center rounded-lg bg-brand px-4 py-2.5 text-sm-plus font-semibold text-white transition-colors hover:bg-brand-hover active:bg-brand-active disabled:opacity-50') @click: @submit, disabled: submitting,
                   if submitting then "Booking..." else "Confirm Booking"

@@ -27,84 +27,78 @@ export Bookings = component
     selectedId = b.id
 
   render
-    div
-      .page-header
-        h1.page-title "My Bookings"
-        a.btn.btn-primary.btn-pill href: "/booking/time", "Book a Session"
+    div.('py-12')
+      div.('flex justify-between')
+        h1.('text-3xl font-semibold') "Bookings"
+        a.('inline-flex items-center rounded-full border border-primary bg-primary px-4 py-2 text-sm font-semibold text-secondary shadow-xs transition-colors hover:border-secondary hover:bg-secondary active:bg-tertiary') href: "/booking/time", "Book session"
 
       if loading
-        .page-center
-          p "Loading..."
+        div.('flex items-center justify-center py-20')
+          p.('text-tertiary') "Loading..."
 
       if error
-        .alert.alert-error error
+        div.('mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-error') error
 
       unless loading or error
         if bookings.length is 0
-          .empty-state
-            .empty-icon "📋"
-            p "No bookings yet"
-            a.btn.btn-primary href: "/booking/time", "Book your first session"
+          div.('mt-8 flex flex-col items-center gap-y-7 rounded-lg-plus border border-primary px-6 py-8 md:py-10 lg:min-w-[460px] lg:py-12')
+            div.('text-[50px] text-quaternary/40') "📋"
+            div.('flex flex-col items-center gap-y-2 text-center')
+              div.('text-xl font-semibold') "No upcoming bookings"
+              div.('text-sm-plus text-tertiary') "Your upcoming sessions will appear here"
+            a.('inline-flex items-center rounded-full border border-primary bg-primary px-4 py-2 text-sm font-semibold text-secondary shadow-xs transition-colors hover:border-secondary hover:bg-secondary active:bg-tertiary') href: "/booking/time", "Book session"
 
         unless bookings.length is 0
-          .bookings-layout
-
-            # Left column: booking list
-            .bookings-list-col
-
+          div.('mt-8 lg:flex lg:gap-x-15')
+            div
+              h2.('text-xl font-semibold') "Upcoming"
               if upcoming.length > 0
-                h2.section-title "Upcoming"
-                .booking-list
+                div.('mt-4 flex flex-col gap-y-3')
                   for b in upcoming
-                    .booking-card @click: (=> @selectBooking(b)),
-                      class: (if b.id is selectedId then 'booking-selected' else '')
-                      .booking-icon
-                        span "🏊"
-                      .booking-info
-                        .booking-title "Swim Lesson"
-                        .booking-meta "Week #{b.week} · #{b.slot}"
-                        .booking-children-row
+                    button.('flex items-stretch overflow-hidden rounded-lg-plus border bg-primary transition',
+                      if b.id is selectedId then 'border-brand ring ring-brand' else 'border-primary hover:border-secondary active:bg-secondary') @click: (=> @selectBooking(b))
+                      div.('flex w-[80px] items-center justify-center bg-tertiary sm:w-[130px]')
+                        span.('text-[35px] text-quaternary/40 md:text-[45px]') "🏊"
+                      div.('flex flex-col gap-y-3.5 p-5 text-left')
+                        div.('leading-none font-semibold') "One-on-One Swim Lesson"
+                        div.('flex flex-col gap-y-2.5')
+                          span.('text-sm text-tertiary') "Week #{b.week} · #{b.slot}"
                           if b.children and b.children.length > 0
-                            for child in b.children
-                              span.child-tag "#{child.name or 'Child'}"
+                            div.('flex flex-wrap gap-1')
+                              for child in b.children
+                                span.('inline-flex items-center rounded-full bg-cyan-50 px-2.5 py-0.5 text-xs font-medium text-cyan-700') "#{child.name or 'Child'}"
                           else
-                            span.text-muted "No children listed"
+                            span.('text-xs text-quaternary') "No children listed"
 
               if past.length > 0
-                h2.section-title "Past"
-                .booking-list
+                h2.('mt-10 text-xl font-semibold') "Past"
+                div.('mt-4 flex flex-col gap-y-3')
                   for b in past
-                    .booking-card.booking-past @click: (=> @selectBooking(b)),
-                      class: (if b.id is selectedId then 'booking-selected' else '')
-                      .booking-icon
-                        span "🏊"
-                      .booking-info
-                        .booking-title "Swim Lesson"
-                        .booking-meta "Week #{b.week} · #{b.slot}"
+                    button.('flex items-stretch overflow-hidden rounded-lg-plus border bg-primary opacity-60 transition',
+                      if b.id is selectedId then 'border-brand ring ring-brand' else 'border-primary hover:border-secondary active:bg-secondary') @click: (=> @selectBooking(b))
+                      div.('flex w-[80px] items-center justify-center bg-tertiary sm:w-[130px]')
+                        span.('text-[35px] text-quaternary/40 md:text-[45px]') "🏊"
+                      div.('flex flex-col gap-y-3.5 p-5 text-left')
+                        div.('leading-none font-semibold') "One-on-One Swim Lesson"
+                        span.('text-sm text-tertiary') "Week #{b.week} · #{b.slot}"
 
             # Right column: detail panel (desktop only)
             if selected
-              .booking-detail-col
-                .detail-panel
-                  .detail-hero
-                    .detail-hero-icon "🏊‍♂️"
-                  .detail-body
-                    .detail-status
-                      span.status-badge.status-confirmed "Confirmed"
-                    h3.detail-title "One-on-One Swim Lesson"
-                    .detail-info
-                      .detail-row
-                        span.detail-label "Week"
-                        span "#{selected.week}"
-                      .detail-row
-                        span.detail-label "Time"
-                        span selected.slot
-                      .detail-row
-                        span.detail-label "Location"
-                        span "2966 N 1400 E, North Logan, UT"
-                    if selected.children and selected.children.length > 0
-                      .detail-children
-                        span.detail-label "Children"
-                        .detail-children-list
-                          for child in selected.children
-                            span.child-tag "#{child.name or 'Child'} (age #{child.age or '?'})"
+              div.('hidden overflow-hidden rounded-lg-plus border border-primary bg-primary lg:block lg:flex-auto')
+                div.('h-[250px] bg-gradient-to-br from-blue-100 to-cyan-50 flex items-center justify-center')
+                  span.('text-[56px]') "🏊‍♂️"
+                div.('flex flex-col gap-y-8 px-6 py-7 md:p-7 lg:p-8')
+                  div.('flex flex-col gap-y-5')
+                    span.('flex h-9 items-center justify-center self-start rounded-full px-3.5 text-sm-plus font-medium text-white bg-info') "Confirmed"
+                    div.('text-2xl leading-none font-semibold') "One-on-One Swim Lesson"
+                  div.('flex flex-col gap-y-4')
+                    div.('flex items-center gap-x-2 text-sm-plus text-tertiary')
+                      span "Week #{selected.week} · #{selected.slot}"
+                    div.('flex items-center gap-x-2 text-sm-plus text-tertiary')
+                      span "2966 N 1400 E, North Logan, UT"
+                  if selected.children and selected.children.length > 0
+                    div.('flex flex-col gap-y-2')
+                      span.('text-sm font-semibold text-secondary') "Children"
+                      div.('flex flex-wrap gap-1.5')
+                        for child in selected.children
+                          span.('inline-flex items-center rounded-full bg-cyan-50 px-2.5 py-0.5 text-xs font-medium text-cyan-700') "#{child.name or 'Child'} (age #{child.age or '?'})"

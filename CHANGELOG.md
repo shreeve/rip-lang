@@ -7,6 +7,25 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.0] - 2026-02-17
+
+### Architecture — Render Rewriter Extraction
+
+- **Extracted `rewriteRender()` from lexer into component system** — The ~330-line render block rewriter, which handles implicit div, `#id` combining, `<=>` binding, `@event` modifiers, `.__clsx` dynamic classes, `->` nesting injection, and hyphenated attributes, now lives in `src/components.js` via `installComponentSupport(CodeGenerator, Lexer)`. This matches the existing `installTypeSupport(Lexer)` pattern from `src/types.js`. The core lexer (`src/lexer.js`) no longer contains any UI/template transformation code, and uses `this.rewriteRender?.()` to gracefully skip render rewriting when component support is not installed.
+
+### Lexer — Render Block Fixes
+
+- **Fixed `startsWithTag` backward scan** — The helper that determines if a line starts with a template tag now correctly skips over balanced parenthetical expressions (function calls, grouped args) instead of stopping at `)` or `CALL_END`. This fixes cases where template elements with parenthesized arguments were not recognized for implicit nesting.
+- **Added `isClsxCallEnd` handling** — Dynamic class expressions (`.('card', active && 'active')`) followed by indented children now correctly wrap in an outer call, producing the right AST shape for the component compiler.
+
+### Build — Simplified Browser Bundles
+
+- **Reduced dist output from 10 files to 4** — The browser build now produces only `rip.browser.min.js` + `.br` (compiler only) and `rip-ui.min.js` + `.br` (compiler + UI). Intermediate artifacts (`rip.browser.js`, `ui.rip`, `ui.rip.br`, `ui.js`, `ui.min.js`, `ui.min.js.br`) eliminated. Build script reduced from 154 to 58 lines.
+
+### Streamline App
+
+- **Updated Streamline Swim School components** — Revised layout, auth, bookings, profile, booking/confirm, and booking/time components. Removed standalone `app.css` in favor of inline styles.
+
 ## [3.8.10] - 2026-02-17
 
 ### Compiler — Bug Fix

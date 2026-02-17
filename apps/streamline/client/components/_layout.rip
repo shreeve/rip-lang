@@ -37,74 +37,72 @@ export Layout = component
     [user.firstName, user.lastName].filter(Boolean).join(' ') or user.email
 
   render
-    .app-layout
+    div.('min-h-dvh xl:flex')
 
-      # ---- Desktop Sidebar (hidden on mobile) ----
-      aside.sidebar
-        .sidebar-top
-          a.sidebar-brand href: "/"
-            span.brand-icon "🏊"
-            span "Streamline"
+      # ---- Desktop Sidebar (hidden below xl) ----
+      aside.('hidden xl:sticky xl:top-0 xl:left-0 xl:flex xl:h-dvh xl:w-[250px] xl:flex-col xl:justify-between xl:border-r xl:border-primary xl:bg-primary xl:px-4 xl:py-5')
+        div
+          a.('mb-7 ml-3.5 block text-lg font-bold text-brand') href: "/"
+            span "🏊 Streamline"
 
           if user
-            .sidebar-user
-              .user-avatar initials
-              .user-name displayName
-
-            nav.sidebar-nav
-              a.sidebar-link href: "/booking/time"
-                span.link-icon "📅"
+            div.('ml-3.5 overflow-hidden text-base-plus leading-tight font-semibold text-ellipsis')
+              displayName
+            nav.('mt-3 flex flex-col gap-y-0.5')
+              a.('flex h-11 items-center gap-x-3 rounded-lg px-3.5 text-sm-plus font-medium transition-colors hover:bg-tertiary/70 active:bg-quaternary/60') href: "/booking/time"
+                span.('text-base w-5 text-center') "📅"
                 span "Book a Session"
-              a.sidebar-link href: "/bookings"
-                span.link-icon "📋"
+              a.('flex h-11 items-center gap-x-3 rounded-lg px-3.5 text-sm-plus font-medium transition-colors hover:bg-tertiary/70 active:bg-quaternary/60') href: "/bookings"
+                span.('text-base w-5 text-center') "📋"
                 span "My Bookings"
-              a.sidebar-link href: "/profile"
-                span.link-icon "👤"
+              a.('flex h-11 items-center gap-x-3 rounded-lg px-3.5 text-sm-plus font-medium transition-colors hover:bg-tertiary/70 active:bg-quaternary/60') href: "/profile"
+                span.('text-base w-5 text-center') "👤"
                 span "Profile"
 
-        .sidebar-bottom
+        div.('mb-1 flex flex-col gap-y-4')
           if user
-            button.sidebar-link.btn-link @click: @signOut
-              span.link-icon "🚪"
+            button.('ml-3.5 flex items-center gap-x-3 text-sm-plus font-medium text-secondary transition-colors hover:text-brand') @click: @signOut
+              span.('text-base w-5 text-center') "🚪"
               span "Sign Out"
 
       # ---- Mobile Top Bar (hidden on desktop) ----
-      header.mobile-bar
-        a.mobile-brand href: "/"
-          span.brand-icon "🏊"
-          span "Streamline"
+      div.('min-h-dvh bg-secondary xl:w-0 xl:flex-auto xl:min-h-0')
+        header.('flex xl:hidden h-[80px] items-center justify-between border-b border-primary bg-primary px-5')
+          a.('text-base-plus font-bold text-brand') href: "/"
+            span "🏊 Streamline"
 
-        if user
-          button.mobile-avatar-btn @click: @toggleMenu
-            .user-avatar.user-avatar-sm initials
-            span.mobile-chevron "▾"
+          if user
+            button.('flex h-12 items-center rounded-full border border-primary bg-primary p-0.5 transition-colors hover:border-secondary hover:bg-secondary active:bg-tertiary') @click: @toggleMenu
+              div.('size-10 overflow-hidden rounded-full')
+                div.('size-full flex items-center justify-center bg-brand/12 text-xs-plus font-semibold text-brand uppercase')
+                  initials
+              span.('px-3 text-lg text-secondary') "▾"
 
-        else unless loading
-          a.nav-link href: "/auth", "Sign In"
+          else unless loading
+            a.('text-sm-plus font-medium text-secondary transition-colors hover:text-brand') href: "/auth", "Sign In"
 
-      # ---- Mobile Menu Dropdown ----
-      if menuOpen
-        .mobile-overlay @click: @closeMenu
-        .mobile-menu
-          .mobile-menu-user
-            .user-avatar initials
-            .user-name displayName
-          nav.mobile-nav
-            a.mobile-nav-link href: "/booking/time", @click: @closeMenu
-              span.link-icon "📅"
-              span "Book a Session"
-            a.mobile-nav-link href: "/bookings", @click: @closeMenu
-              span.link-icon "📋"
-              span "My Bookings"
-            a.mobile-nav-link href: "/profile", @click: @closeMenu
-              span.link-icon "👤"
-              span "Profile"
-          hr.divider
-          button.mobile-nav-link.btn-link @click: @signOut
-            span.link-icon "🚪"
-            span "Sign Out"
+        # ---- Mobile Menu Dropdown ----
+        if menuOpen
+          div.('fixed inset-0 z-50 bg-black/15') @click: @closeMenu
+          div.('fixed top-[88px] right-4 z-50 min-w-[250px] rounded-lg-plus border border-primary bg-primary px-3 pt-6 pb-5 shadow-xl/7') style: "animation: menuFadeIn 200ms cubic-bezier(0.35, 0.91, 0.33, 0.97)"
+            div.('ml-3.5 overflow-hidden text-base-plus leading-tight font-semibold text-ellipsis')
+              displayName
+            nav.('mt-3 flex flex-col gap-y-0.5')
+              a.('flex h-11 items-center gap-x-3 rounded-lg px-3.5 text-sm-plus font-medium transition-colors hover:bg-tertiary/70 active:bg-quaternary/60') href: "/booking/time", @click: @closeMenu
+                span.('text-base w-5 text-center') "📅"
+                span "Book a Session"
+              a.('flex h-11 items-center gap-x-3 rounded-lg px-3.5 text-sm-plus font-medium transition-colors hover:bg-tertiary/70 active:bg-quaternary/60') href: "/bookings", @click: @closeMenu
+                span.('text-base w-5 text-center') "📋"
+                span "My Bookings"
+              a.('flex h-11 items-center gap-x-3 rounded-lg px-3.5 text-sm-plus font-medium transition-colors hover:bg-tertiary/70 active:bg-quaternary/60') href: "/profile", @click: @closeMenu
+                span.('text-base w-5 text-center') "👤"
+                span "Profile"
+            div.('mx-3.5 mt-6 mb-5 border-t border-primary')
+            button.('ml-3.5 flex items-center gap-x-3 text-sm-plus font-medium text-secondary transition-colors hover:text-brand') @click: @signOut
+              span.('text-base w-5 text-center') "🚪"
+              span "Sign Out"
 
-      # ---- Main Content ----
-      main.main-content
-        .content-container
-          #content
+        # ---- Main Content ----
+        div.('px-5')
+          div.('mx-auto max-w-[940px] py-6 md:py-8 xl:py-10')
+            #content

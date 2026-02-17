@@ -75,43 +75,51 @@ export Auth = component
     @submitCode() if e.key is 'Enter'
 
   render
-    .page-center
-      .auth-card
-        h1.auth-title "Streamline Swim School"
-        p.auth-subtitle "Book swim lessons for your kids"
+    div.('flex min-h-[60vh] items-center justify-center py-8 md:py-10 lg:py-12')
+      div.('w-full max-w-[420px]')
+        div.('mb-6 text-center')
+          div.('text-lg font-bold text-brand') "🏊 Streamline"
 
-        if error
-          .alert.alert-error error
+        div.('rounded-2xl border border-primary/50 bg-primary p-6 pt-8 shadow-lg/6 xs:px-8 md:p-11')
+          h1.('text-xl-plus font-semibold text-center') "Welcome"
+          p.('mt-2 text-sm-plus text-tertiary text-center') "Sign in or create an account to book and manage your swim lessons."
 
-        if step is 'email'
-          .form-group
-            label "Email address"
-            input.input type: "email", value: email, placeholder: "you@example.com", @keydown: @handleEmailKey
-          button.btn.btn-primary @click: @submitEmail, disabled: submitting,
-            if submitting then "Checking..." else "Continue"
-          hr.divider
-          button.btn.btn-outline @click: @devSignIn, "Sign in as Test User"
+          if error
+            div.('mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-error') error
 
-        if step is 'code'
-          p.auth-info "We sent a 6-digit code to #{email}"
-          .form-group
-            label "Verification code"
-            input.input type: "text", value: code, placeholder: "123456", @keydown: @handleCodeKey
-          button.btn.btn-primary @click: @submitCode, disabled: submitting,
-            if submitting then "Verifying..." else "Sign In"
-          button.btn.btn-link @click: (-> step = 'email'), "Use a different email"
+          if step is 'email'
+            div.('mt-6')
+              div.('mb-4')
+                label.('block text-sm font-medium text-secondary mb-1.5') "Email address"
+                input.('block w-full rounded-lg border border-primary bg-primary px-3.5 py-2.5 text-sm-plus text-primary shadow-xs transition-colors focus:border-brand focus:ring-1 focus:ring-brand outline-none') type: "email", value: email, placeholder: "you@example.com", @keydown: @handleEmailKey
+              button.('flex w-full items-center justify-center rounded-lg bg-brand px-4 py-2.5 text-sm-plus font-semibold text-white transition-colors hover:bg-brand-hover active:bg-brand-active disabled:opacity-50') @click: @submitEmail, disabled: submitting,
+                if submitting then "Checking..." else "Continue"
+              div.('my-6 border-t border-primary')
+              button.('flex w-full items-center justify-center rounded-lg border border-primary bg-primary px-4 py-2.5 text-sm-plus font-semibold text-secondary shadow-xs transition-colors hover:border-secondary hover:bg-secondary active:bg-tertiary') @click: @devSignIn, "Sign in as Test User"
 
-        if step is 'signup'
-          p.auth-info "Create your account"
-          .form-group
-            label "First name"
-            input.input type: "text", value: firstName, placeholder: "First name"
-          .form-group
-            label "Last name"
-            input.input type: "text", value: lastName, placeholder: "Last name"
-          .form-group
-            label "Phone"
-            input.input type: "tel", value: phone, placeholder: "Phone number"
-          button.btn.btn-primary @click: @submitSignup, disabled: submitting,
-            if submitting then "Creating account..." else "Create Account"
-          button.btn.btn-link @click: (-> step = 'email'), "Use a different email"
+          if step is 'code'
+            div.('mt-6')
+              p.('mb-4 text-sm-plus text-tertiary') "We sent a 6-digit code to #{email}"
+              div.('mb-4')
+                label.('block text-sm font-medium text-secondary mb-1.5') "Verification code"
+                input.('block w-full rounded-lg border border-primary bg-primary px-3.5 py-2.5 text-sm-plus text-primary shadow-xs transition-colors focus:border-brand focus:ring-1 focus:ring-brand outline-none') type: "text", value: code, placeholder: "123456", @keydown: @handleCodeKey
+              button.('flex w-full items-center justify-center rounded-lg bg-brand px-4 py-2.5 text-sm-plus font-semibold text-white transition-colors hover:bg-brand-hover active:bg-brand-active disabled:opacity-50') @click: @submitCode, disabled: submitting,
+                if submitting then "Verifying..." else "Sign In"
+              button.('mt-3 text-sm-plus font-medium text-brand transition-opacity hover:opacity-70') @click: (-> step = 'email'), "Use a different email"
+
+          if step is 'signup'
+            div.('mt-6')
+              p.('mb-4 text-sm-plus text-tertiary') "Create your account"
+              div.('grid gap-4 sm:grid-cols-2')
+                div
+                  label.('block text-sm font-medium text-secondary mb-1.5') "First name"
+                  input.('block w-full rounded-lg border border-primary bg-primary px-3.5 py-2.5 text-sm-plus text-primary shadow-xs transition-colors focus:border-brand focus:ring-1 focus:ring-brand outline-none') type: "text", value: firstName, placeholder: "First name"
+                div
+                  label.('block text-sm font-medium text-secondary mb-1.5') "Last name"
+                  input.('block w-full rounded-lg border border-primary bg-primary px-3.5 py-2.5 text-sm-plus text-primary shadow-xs transition-colors focus:border-brand focus:ring-1 focus:ring-brand outline-none') type: "text", value: lastName, placeholder: "Last name"
+              div.('mt-4')
+                label.('block text-sm font-medium text-secondary mb-1.5') "Phone"
+                input.('block w-full rounded-lg border border-primary bg-primary px-3.5 py-2.5 text-sm-plus text-primary shadow-xs transition-colors focus:border-brand focus:ring-1 focus:ring-brand outline-none') type: "tel", value: phone, placeholder: "Phone number"
+              button.('mt-4 flex w-full items-center justify-center rounded-lg bg-brand px-4 py-2.5 text-sm-plus font-semibold text-white transition-colors hover:bg-brand-hover active:bg-brand-active disabled:opacity-50') @click: @submitSignup, disabled: submitting,
+                if submitting then "Creating account..." else "Create Account"
+              button.('mt-3 text-sm-plus font-medium text-brand transition-opacity hover:opacity-70') @click: (-> step = 'email'), "Use a different email"
