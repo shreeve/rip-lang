@@ -10,7 +10,7 @@
 #   bun ../generate.js app.schema --outdir ./generated
 #
 # Or use programmatically:
-#   bun app-demo.js
+#   rip app-demo.rip
 # ==============================================================================
 
 # --- Enums --------------------------------------------------------------------

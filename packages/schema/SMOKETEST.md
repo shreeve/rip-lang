@@ -11,13 +11,13 @@ bun bin/rip packages/db/db.rip :memory:   # start rip-db (in-memory)
 
 ## Tests
 
-### 1. Schema Code Generation (`examples/app-demo.js`)
+### 1. Schema Code Generation (`examples/app-demo.rip`)
 
 Parses `app.schema` (a blog platform with enums, types, and models) and
 validates all three output targets from a single source file.
 
 ```bash
-bun packages/schema/examples/app-demo.js
+rip packages/schema/examples/app-demo.rip
 ```
 
 | What                          | Validates                                                 |

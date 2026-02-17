@@ -1,0 +1,168 @@
+# ==============================================================================
+# app-demo.rip — Full demo of @rip-lang/schema
+#
+# One schema file → TypeScript types + SQL DDL + runtime validation
+#
+# Run: rip examples/app-demo.rip     (from packages/schema/)
+# ==============================================================================
+
+import * as fs from 'fs'
+import * as path from 'path'
+import { fileURLToPath } from 'url'
+import { parse, schema, generateTypes, generateSQL } from '../index.js'
+
+dir = path.dirname fileURLToPath import.meta.url
+schemaSource = fs.readFileSync path.join(dir, 'app.schema'), 'utf-8'
+
+# Helpers
+
+clean = (obj) ->
+  out = {}
+  for [k, v] in Object.entries(obj)
+    continue if k.startsWith('$') or typeof v is 'function'
+    out[k] = v
+  out
+
+show = (label, obj) ->
+  console.log "   #{label}:", JSON.stringify(clean(obj), null, 2).replace(/\n/g, '\n   ')
+
+showErrors = (errors) ->
+  unless errors
+    console.log '   ✓ valid'
+    return
+  for e in errors
+    if e.errors
+      console.log "   ✗ #{e.field}:"
+      for ne in e.errors
+        console.log "     - #{ne.message}"
+    else
+      console.log "   ✗ #{e.message}"
+
+# =============================================================================
+# 1. Parse
+# =============================================================================
+
+console.log()
+console.log '1. PARSE'
+console.log '─'.repeat 60
+
+ast = parse schemaSource
+
+enumCount  = ast.filter((n) -> n[0] is 'enum').length
+typeCount  = ast.filter((n) -> n[0] is 'type').length
+modelCount = ast.filter((n) -> n[0] is 'model').length
+console.log "   Parsed app.schema: #{enumCount} enums, #{typeCount} types, #{modelCount} models"
+
+# =============================================================================
+# 2. TypeScript types
+# =============================================================================
+
+console.log()
+console.log '2. TYPESCRIPT TYPES  (replaces hand-written interfaces)'
+console.log '─'.repeat 60
+
+ts = generateTypes ast
+console.log ts
+
+# =============================================================================
+# 3. SQL DDL
+# =============================================================================
+
+console.log '3. SQL DDL  (replaces Prisma migrations)'
+console.log '─'.repeat 60
+
+sql = generateSQL ast
+console.log sql
+
+# =============================================================================
+# 4. Runtime validation  (replaces Zod)
+# =============================================================================
+
+console.log '4. RUNTIME VALIDATION  (replaces Zod schemas)'
+console.log '─'.repeat 60
+
+schema.register ast
+
+# --- Valid user ---
+console.log()
+console.log '   a) Valid user — defaults are applied automatically'
+alice = schema.create 'User', name: 'Alice Chen', email: 'alice@example.com'
+show 'result', alice
+showErrors alice.$validate()
+
+# --- Missing required field ---
+console.log()
+console.log '   b) Missing required field'
+bad1 = schema.create 'User', name: 'Bob'
+bad1.email = undefined
+showErrors bad1.$validate()
+
+# --- Bad email ---
+console.log()
+console.log '   c) Invalid email format'
+bad2 = schema.create 'User', name: 'Charlie', email: 'not-an-email'
+showErrors bad2.$validate()
+
+# --- String too long ---
+console.log()
+console.log '   d) Name exceeds max length (100)'
+bad3 = schema.create 'User', name: 'X'.repeat(101), email: 'x@test.com'
+showErrors bad3.$validate()
+
+# --- Invalid enum ---
+console.log()
+console.log '   e) Invalid enum value'
+bad4 = schema.create 'User', name: 'Dana', email: 'd@test.com', role: 'superadmin'
+showErrors bad4.$validate()
+
+# --- Nested type validation ---
+console.log()
+console.log '   f) Nested type with multiple violations'
+bad5 = schema.create 'User',
+  name: 'Eve'
+  email: 'eve@test.com'
+  address: { street: '', city: 'X', zip: '12' }
+showErrors bad5.$validate()
+
+# --- Valid post ---
+console.log()
+console.log '   g) Valid post — enum + integer defaults'
+post = schema.create 'Post',
+  title: 'Hello World'
+  slug: 'hello-world'
+  content: 'This is my first post.'
+show 'result', post
+showErrors post.$validate()
+
+# =============================================================================
+# 5. Write generated files to disk
+# =============================================================================
+
+console.log()
+console.log '5. FILE OUTPUT'
+console.log '─'.repeat 60
+
+outdir = path.join dir, 'generated'
+fs.mkdirSync outdir, recursive: true
+fs.writeFileSync path.join(outdir, 'app.d.ts'), ts
+fs.writeFileSync path.join(outdir, 'app.sql'), sql
+
+console.log "   Written: examples/generated/app.d.ts  (#{ts.length} bytes)"
+console.log "   Written: examples/generated/app.sql   (#{sql.length} bytes)"
+
+# =============================================================================
+# Summary
+# =============================================================================
+
+console.log """
+
+  ════════════════════════════════════════════════════════════
+
+    One schema file. Three outputs. Zero drift.
+
+    app.schema  ──→  TypeScript interfaces (emit-types.js)
+                ──→  SQL DDL tables        (emit-sql.js)
+                ──→  Runtime validation    (runtime.js)
+
+  ════════════════════════════════════════════════════════════
+  """

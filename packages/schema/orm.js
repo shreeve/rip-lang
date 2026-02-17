@@ -15,7 +15,17 @@
 //   User.table = 'users'
 //   User.schema { id: { type: 'int', primary: true }, name: { type: 'string', required: true } }
 //
-// Usage (from JS):
+// Usage (from JS — with .schema file):
+//   import { parse, schema } from '@rip-lang/schema'
+//   import { Model, connect } from '@rip-lang/schema/orm'
+//
+//   schema.register(parse(fs.readFileSync('app.schema', 'utf-8')))
+//   connect('http://localhost:4213')
+//
+//   class User extends Model {}
+//   User.fromSchema(schema, 'User')   // pulls table, fields, types, constraints
+//
+// Usage (from JS — manual):
 //   import { Model, connect } from '@rip-lang/schema/orm'
 //
 //   connect('http://localhost:4213')
@@ -87,6 +97,46 @@ export class Model {
 
   static computed(fields) {
     this._computed = fields;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Load schema from a parsed .schema AST (bridges runtime → ORM)
+  // ---------------------------------------------------------------------------
+
+  static fromSchema(schemaInstance, modelName) {
+    const model = schemaInstance.getModel(modelName);
+    if (!model) throw new Error(`Model '${modelName}' not found in schema`);
+
+    // Derive table name: UserProfile → user_profiles
+    if (!this.table) {
+      const snake = modelName.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
+      this.table = snake.replace(/(?:([^s])$|s$)/, (m, p1) => p1 ? p1 + 's' : 's');
+    }
+
+    // Convert runtime field definitions → ORM schema format
+    const fields = {};
+    for (const [name, field] of model.fields) {
+      const def = {};
+      const type = typeof field.type === 'object' && field.type?.array ? 'array' : field.type;
+      if (type) def.type = type;
+      if (field.required) def.required = true;
+      if (field.unique) def.unique = true;
+      if (field.constraints) {
+        if (field.constraints.min != null) def.min = field.constraints.min;
+        if (field.constraints.max != null) def.max = field.constraints.max;
+        if (field.constraints.default != null) def.default = field.constraints.default;
+      }
+      if (field.attrs?.primary) def.primary = true;
+      fields[name] = def;
+    }
+
+    // Detect primary key from fields
+    for (const [name, def] of Object.entries(fields)) {
+      if (def.primary) { this.primaryKey = name; break; }
+    }
+
+    this.schema(fields);
+    return this;
   }
 
   // ---------------------------------------------------------------------------

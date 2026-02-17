@@ -247,7 +247,7 @@ The weaknesses are real:
 
 The strengths are also real:
 - Zero drift between types, validation, and persistence — proven with working generators and tests
-- One definition instead of three — demonstrated end-to-end in `examples/app-demo.js` and `examples/orm-example.rip`
+- One definition instead of three — demonstrated end-to-end in `examples/app-demo.rip` and `examples/orm-example.rip`
 - Zero runtime dependencies — no Zod, no Prisma engine, no code generation framework
 - Richer metadata than any single tool captures alone — constraints, relationships, indexes, timestamps, and soft deletes in one definition
 - Incremental adoption — opt-in, model by model, alongside existing TypeScript/Zod/Prisma code
