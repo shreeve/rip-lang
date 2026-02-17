@@ -1,0 +1,63 @@
+# Bookings list — upcoming and past bookings
+
+export Bookings = component
+  bookings := []
+  loading := true
+  error := null
+
+  beforeMount: ->
+    try
+      res = await fetch('/api/bookings')
+      data = await res.json()
+      if data.error
+        @router.push '/auth'
+        return
+      bookings = data.bookings or []
+    catch
+      error = 'Failed to load bookings'
+    loading = false
+
+  currentWeek ~= Math.ceil((Date.now() - new Date(new Date().getFullYear(), 0, 1)) / (7 * 24 * 60 * 60 * 1000))
+  upcoming ~= bookings.filter (b) -> b.week >= currentWeek
+  past ~= bookings.filter (b) -> b.week < currentWeek
+
+  render
+    div
+      .page-header
+        h1.page-title "My Bookings"
+        a.btn.btn-primary href: "/booking/time", "Book a Session"
+
+      if loading
+        .page-center
+          p "Loading..."
+
+      if error
+        .alert.alert-error error
+
+      unless loading or error
+        if upcoming.length > 0
+          h2.section-title "Upcoming"
+          .booking-list
+            for b in upcoming
+              .booking-card
+                .booking-week "Week #{b.week}"
+                .booking-slot b.slot
+                .booking-children
+                  if b.children and b.children.length > 0
+                    for child in b.children
+                      span.child-tag "#{child.name} (age #{child.age})"
+                  else
+                    span.text-muted "No children listed"
+
+        if past.length > 0
+          h2.section-title "Past"
+          .booking-list
+            for b in past
+              .booking-card.booking-past
+                .booking-week "Week #{b.week}"
+                .booking-slot b.slot
+
+        if bookings.length is 0
+          .empty-state
+            p "No bookings yet"
+            a.btn.btn-primary href: "/booking/time", "Book your first session"

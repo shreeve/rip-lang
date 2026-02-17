@@ -1,0 +1,77 @@
+# Profile page — view and edit user info
+
+export Profile = component
+  user := null
+  firstName := ''
+  lastName := ''
+  phone := ''
+  loading := true
+  saving := false
+  saved := false
+  error := null
+
+  beforeMount: ->
+    try
+      res = await fetch('/api/user')
+      data = await res.json()
+      if data.user
+        user = data.user
+        firstName = user.firstName or ''
+        lastName = user.lastName or ''
+        phone = user.phone or ''
+      else
+        @router.push '/auth'
+    catch
+      @router.push '/auth'
+    loading = false
+
+  save: ->
+    return if saving
+    saving = true
+    saved = false
+    error = null
+    try
+      res = await fetch '/api/user',
+        method: 'PATCH'
+        headers: { 'Content-Type': 'application/json' }
+        body: JSON.stringify { ["firstName"]: firstName, ["lastName"]: lastName, ["phone"]: phone }
+      data = await res.json()
+      if data.error
+        error = data.error
+      else
+        saved = true
+    catch err
+      error = err.message or 'Failed to save'
+    saving = false
+
+  render
+    div
+      .page-header
+        h1.page-title "Profile"
+
+      if loading
+        .page-center
+          p "Loading..."
+
+      if user and not loading
+        .profile-card
+          .form-group
+            label "Email"
+            input.input type: "email", value: user.email, disabled: true
+          .form-group
+            label "First name"
+            input.input type: "text", value: firstName
+          .form-group
+            label "Last name"
+            input.input type: "text", value: lastName
+          .form-group
+            label "Phone"
+            input.input type: "tel", value: phone
+
+          if error
+            .alert.alert-error error
+          if saved
+            .alert.alert-success "Profile updated!"
+
+          button.btn.btn-primary @click: @save, disabled: saving,
+            if saving then "Saving..." else "Save"

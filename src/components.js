@@ -67,7 +67,7 @@ export function installComponentSupport(CodeGenerator) {
    */
   proto.localizeVar = function(line) {
     let result = line.replace(/this\.(_el\d+|_t\d+|_anchor\d+|_frag\d+|_slot\d+|_c\d+|_inst\d+|_empty\d+)/g, '$1');
-    result = result.replace(/\bthis\./g, 'ctx.');
+    result = result.replace(/\bthis\b/g, 'ctx');
     return result;
   };
 
@@ -860,7 +860,7 @@ export function installComponentSupport(CodeGenerator) {
           /__effect\(\(\) => \{/g,
           'disposers.push(__effect(() => {'
         ).replace(
-          /\}\);$/g,
+          /\}\);$/gm,
           '}));'
         );
         factoryLines.push(`      ${wrappedLine}`);
@@ -979,7 +979,7 @@ export function installComponentSupport(CodeGenerator) {
           /__effect\(\(\) => \{/g,
           'disposers.push(__effect(() => {'
         ).replace(
-          /\}\);$/g,
+          /\}\);$/gm,
           '}));'
         );
         factoryLines.push(`      ${wrappedLine}`);

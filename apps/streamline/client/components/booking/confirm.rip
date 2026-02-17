@@ -1,0 +1,63 @@
+# Confirm booking — review cart and submit (Stripe stubbed)
+
+export Confirm = component
+  cart := @app.data.cart or []
+  submitting := false
+  error := null
+
+  priceDisplay ~= "$#{cart.length * 100}"
+
+  goBack: ->
+    @router.push '/booking/time'
+
+  submit: ->
+    return if submitting or cart.length is 0
+    submitting = true
+    error = null
+    try
+      res = await fetch '/api/bookings/create',
+        method: 'POST'
+        headers: { 'Content-Type': 'application/json' }
+        body: JSON.stringify items: cart
+      data = await res.json()
+      if data.error
+        error = data.error
+        submitting = false
+        return
+      # Clear cart and go to bookings
+      @app.data.cart = []
+      @router.push '/bookings'
+    catch err
+      error = err.message or 'Booking failed'
+      submitting = false
+
+  render
+    div
+      .page-header
+        h1.page-title "Confirm Booking"
+        p.page-subtitle "Review your selections"
+
+      if error
+        .alert.alert-error error
+
+      if cart.length is 0
+        .empty-state
+          p "Your cart is empty"
+          a.btn.btn-primary href: "/booking/time", "Browse Sessions"
+
+      else
+        .confirm-list
+          for item, idx in cart
+            .confirm-card
+              .confirm-header "Week #{item.week} — #{item.slot}"
+              .confirm-children
+                for child in item.children
+                  .child-tag "#{child.name or 'Unnamed'} (age #{child.age or '?'})"
+
+        .confirm-footer
+          .confirm-total "Total: #{priceDisplay}"
+          p.text-muted "Payment integration coming soon — booking is free for now."
+          .confirm-actions
+            button.btn.btn-outline @click: @goBack, "Back"
+            button.btn.btn-primary @click: @submit, disabled: submitting,
+              if submitting then "Booking..." else "Confirm Booking"

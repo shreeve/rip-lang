@@ -1,0 +1,33 @@
+# User routes — get and update profile
+
+import { get, patch, prefix, read, session } from '@rip-lang/api'
+import { schema } from '../setup.rip'
+
+User = schema.model 'User'
+
+prefix '/api/user', ->
+
+  # Get current user (returns null if not authenticated)
+  get '' ->
+    return { user: null } unless session.userId
+    user = User.find!(session.userId)
+    return { user: null } unless user
+    { user: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, phone: user.phone } }
+
+  # Update user profile
+  patch '' ->
+    unless session.userId
+      @status = 401
+      return { error: 'Not authenticated' }
+    user = User.find!(session.userId)
+    unless user
+      @status = 404
+      return { error: 'User not found' }
+    firstName = read 'firstName', 'text'
+    lastName  = read 'lastName', 'text'
+    phone     = read 'phone', 'text'
+    user.firstName = firstName if firstName?
+    user.lastName  = lastName if lastName?
+    user.phone     = phone if phone?
+    user.save!()
+    { ok: true }

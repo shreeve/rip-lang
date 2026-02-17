@@ -1,0 +1,35 @@
+# Root layout — nav bar + main content
+
+export Layout = component
+  user := null
+  loading := true
+
+  beforeMount: ->
+    try
+      res = await fetch('/api/user')
+      data = await res.json()
+      user = data.user
+    catch
+      user = null
+    loading = false
+
+  signOut: ->
+    await fetch '/api/auth/signout', method: 'POST'
+    user = null
+    @router.push '/auth'
+
+  render
+    .app-layout
+      nav.nav-bar
+        .nav-inner
+          a.nav-brand href: "/", "Streamline Swim School"
+          .nav-links
+            if user
+              a.nav-link href: "/booking/time", "Book"
+              a.nav-link href: "/bookings", "My Bookings"
+              a.nav-link href: "/profile", "Profile"
+              button.nav-link.btn-link @click: @signOut, "Sign Out"
+            else unless loading
+              a.nav-link href: "/auth", "Sign In"
+      main.main-content
+        #content

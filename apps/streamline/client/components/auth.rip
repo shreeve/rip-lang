@@ -1,0 +1,117 @@
+# Auth page — email magic code sign-in flow
+
+export Auth = component
+  step := 'email'        # email | code | signup
+  email := ''
+  code := ''
+  firstName := ''
+  lastName := ''
+  phone := ''
+  error := null
+  submitting := false
+
+  submitEmail: ->
+    return if submitting
+    error = null
+    submitting = true
+    try
+      res = await fetch '/api/auth/signinWithEmail',
+        method: 'POST'
+        headers: { 'Content-Type': 'application/json' }
+        body: JSON.stringify { ["email"]: email }
+      data = await res.json()
+      if data.isUser
+        step = 'code'
+      else
+        step = 'signup'
+    catch err
+      error = err.message or 'Something went wrong'
+    submitting = false
+
+  submitCode: ->
+    return if submitting
+    error = null
+    submitting = true
+    try
+      res = await fetch '/api/auth/signin',
+        method: 'POST'
+        headers: { 'Content-Type': 'application/json' }
+        body: JSON.stringify { ["email"]: email, ["code"]: code }
+      data = await res.json()
+      if data.error
+        error = data.error
+      else
+        @router.push '/bookings'
+    catch err
+      error = err.message or 'Invalid code'
+    submitting = false
+
+  submitSignup: ->
+    return if submitting
+    error = null
+    submitting = true
+    try
+      res = await fetch '/api/auth/signup',
+        method: 'POST'
+        headers: { 'Content-Type': 'application/json' }
+        body: JSON.stringify { ["email"]: email, ["firstName"]: firstName, ["lastName"]: lastName, ["phone"]: phone }
+      data = await res.json()
+      if data.error
+        error = data.error
+      else
+        @router.push '/bookings'
+    catch err
+      error = err.message or 'Something went wrong'
+    submitting = false
+
+  devSignIn: ->
+    await fetch '/api/auth/dev', method: 'POST'
+    @router.push '/bookings'
+
+  handleEmailKey: (e) ->
+    @submitEmail() if e.key is 'Enter'
+
+  handleCodeKey: (e) ->
+    @submitCode() if e.key is 'Enter'
+
+  render
+    .page-center
+      .auth-card
+        h1.auth-title "Streamline Swim School"
+        p.auth-subtitle "Book swim lessons for your kids"
+
+        if error
+          .alert.alert-error error
+
+        if step is 'email'
+          .form-group
+            label "Email address"
+            input.input type: "email", value: email, placeholder: "you@example.com", @keydown: @handleEmailKey
+          button.btn.btn-primary @click: @submitEmail, disabled: submitting,
+            if submitting then "Checking..." else "Continue"
+          hr.divider
+          button.btn.btn-outline @click: @devSignIn, "Sign in as Test User"
+
+        if step is 'code'
+          p.auth-info "We sent a 6-digit code to #{email}"
+          .form-group
+            label "Verification code"
+            input.input type: "text", value: code, placeholder: "123456", @keydown: @handleCodeKey
+          button.btn.btn-primary @click: @submitCode, disabled: submitting,
+            if submitting then "Verifying..." else "Sign In"
+          button.btn.btn-link @click: (-> step = 'email'), "Use a different email"
+
+        if step is 'signup'
+          p.auth-info "Create your account"
+          .form-group
+            label "First name"
+            input.input type: "text", value: firstName, placeholder: "First name"
+          .form-group
+            label "Last name"
+            input.input type: "text", value: lastName, placeholder: "Last name"
+          .form-group
+            label "Phone"
+            input.input type: "tel", value: phone, placeholder: "Phone number"
+          button.btn.btn-primary @click: @submitSignup, disabled: submitting,
+            if submitting then "Creating account..." else "Create Account"
+          button.btn.btn-link @click: (-> step = 'email'), "Use a different email"

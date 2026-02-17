@@ -3595,7 +3595,7 @@ function installComponentSupport(CodeGenerator) {
   const proto = CodeGenerator.prototype;
   proto.localizeVar = function(line) {
     let result = line.replace(/this\.(_el\d+|_t\d+|_anchor\d+|_frag\d+|_slot\d+|_c\d+|_inst\d+|_empty\d+)/g, "$1");
-    result = result.replace(/\bthis\./g, "ctx.");
+    result = result.replace(/\bthis\b/g, "ctx");
     return result;
   };
   proto.isHtmlTag = function(name) {
@@ -4168,7 +4168,7 @@ ${blockFactoriesCode}return ${lines.join(`
       factoryLines.push(`      disposers = [];`);
       for (const line of setupLines) {
         const localizedLine = localizeVar(line);
-        const wrappedLine = localizedLine.replace(/__effect\(\(\) => \{/g, "disposers.push(__effect(() => {").replace(/\}\);$/g, "}));");
+        const wrappedLine = localizedLine.replace(/__effect\(\(\) => \{/g, "disposers.push(__effect(() => {").replace(/\}\);$/gm, "}));");
         factoryLines.push(`      ${wrappedLine}`);
       }
     }
@@ -4252,7 +4252,7 @@ ${blockFactoriesCode}return ${lines.join(`
       factoryLines.push(`      disposers = [];`);
       for (const line of itemSetupLines) {
         const localizedLine = localizeVar(line);
-        const wrappedLine = localizedLine.replace(/__effect\(\(\) => \{/g, "disposers.push(__effect(() => {").replace(/\}\);$/g, "}));");
+        const wrappedLine = localizedLine.replace(/__effect\(\(\) => \{/g, "disposers.push(__effect(() => {").replace(/\}\);$/gm, "}));");
         factoryLines.push(`      ${wrappedLine}`);
       }
     }
@@ -7909,7 +7909,7 @@ function getComponentRuntime() {
 }
 // src/browser.js
 var VERSION = "3.8.10";
-var BUILD_DATE = "2026-02-17@02:53:39GMT";
+var BUILD_DATE = "2026-02-17@09:20:48GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }

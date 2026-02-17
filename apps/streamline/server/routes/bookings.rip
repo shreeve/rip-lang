@@ -1,0 +1,51 @@
+# Booking routes — list and create bookings (Stripe stubbed)
+
+import { get, post, prefix, read, session } from '@rip-lang/api'
+import { schema } from '../setup.rip'
+
+Booking = schema.model 'Booking'
+
+requireAuth = ->
+  throw Object.assign(new Error('Not authenticated'), { status: 401 }) unless session.userId
+
+prefix '/api/bookings', ->
+
+  # List user's bookings
+  get '' ->
+    requireAuth()
+    bookings = Booking.where!(user_id: session.userId).orderBy!('week').all!()
+    items = for b in bookings
+      { id: b.id, week: b.week, slot: b.slot, children: b.children }
+    { bookings: items }
+
+  # Create booking directly (Stripe stubbed — no payment)
+  post '/create' ->
+    requireAuth()
+    items = read 'items', 'json!'
+    bookingIds = []
+
+    for item in items
+      # Create the booking record
+      booking = Booking.create!({ user_id: session.userId, week: item.week, slot: item.slot, children: item.children or [] })
+      bookingIds.push booking.id
+
+      # Mark spots as booked
+      needed = item.children?.length or 1
+      result = fetch! 'http://localhost:4213/sql',
+        method: 'POST'
+        headers: { 'Content-Type': 'application/json' }
+        body: JSON.stringify
+          sql: 'SELECT id FROM spots WHERE week = ? AND slot = ? AND status = ? LIMIT ?'
+          params: [item.week, item.slot, 'available', needed]
+      data = result.json!
+
+      for row in (data.data or [])
+        spotId = row[0]
+        fetch! 'http://localhost:4213/sql',
+          method: 'POST'
+          headers: { 'Content-Type': 'application/json' }
+          body: JSON.stringify
+            sql: 'UPDATE spots SET status = ?, user_id = ?, booking_id = ? WHERE id = ?'
+            params: ['booked', session.userId, booking.id, spotId]
+
+    { bookingIds }

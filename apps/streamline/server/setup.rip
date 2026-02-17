@@ -1,0 +1,39 @@
+# Database setup — loads schema, connects to rip-db, bootstraps tables
+
+import { Schema } from '../../../packages/schema/orm.js'
+
+export schema = do ->
+  s = Schema.load './app.schema', import.meta.url
+  s.connect 'http://localhost:4213'
+  s
+
+dbFetch = (sql, params) ->
+  body = if params then { sql, params } else { sql }
+  res = fetch! 'http://localhost:4213/sql',
+    method: 'POST'
+    headers: { 'Content-Type': 'application/json' }
+    body: JSON.stringify body
+  data = res.json!
+  if data.error
+    console.warn "[setup] SQL warning: #{data.error}"
+  data
+
+export setup = ->
+  # Drop tables in reverse dependency order (DuckDB CASCADE is unreliable)
+  dbFetch! 'DROP TABLE IF EXISTS spots'
+  dbFetch! 'DROP TABLE IF EXISTS bookings'
+  dbFetch! 'DROP TABLE IF EXISTS users'
+  dbFetch! 'DROP TYPE IF EXISTS spot_status'
+
+  # Create tables from schema DDL
+  sql = schema.toSQL()
+  for statement in sql.split(';').filter((s) -> s.trim())
+    dbFetch! statement.trim() + ';'
+  console.log '[setup] Database tables created'
+
+  # Seed initial spots (weeks 1-4, 4 time slots each, 4 spots per slot)
+  for week in [1, 2, 3, 4]
+    for slot in ['09:00', '10:00', '11:00', '14:00']
+      for i in [1..4]
+        dbFetch! 'INSERT INTO spots (week, slot) VALUES (?, ?)', [week, slot]
+  console.log '[setup] Seeded spots for weeks 1-4'

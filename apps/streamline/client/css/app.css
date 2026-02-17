@@ -1,0 +1,616 @@
+/**
+ * Streamline Swim School — Styles
+ * Clean, modern UI with a water/blue theme
+ */
+
+/* ============================================
+   Design Tokens
+   ============================================ */
+
+:root {
+    --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+    --gray-50:  #f9fafb;
+    --gray-100: #f3f4f6;
+    --gray-200: #e5e7eb;
+    --gray-300: #d1d5db;
+    --gray-400: #9ca3af;
+    --gray-500: #6b7280;
+    --gray-600: #4b5563;
+    --gray-700: #374151;
+    --gray-800: #1f2937;
+    --gray-900: #111827;
+
+    --blue-50:  #eff6ff;
+    --blue-100: #dbeafe;
+    --blue-200: #bfdbfe;
+    --blue-500: #3b82f6;
+    --blue-600: #2563eb;
+    --blue-700: #1d4ed8;
+
+    --green-50:  #f0fdf4;
+    --green-500: #22c55e;
+    --green-600: #16a34a;
+
+    --red-50:   #fef2f2;
+    --red-500:  #ef4444;
+    --red-600:  #dc2626;
+
+    --cyan-50:  #ecfeff;
+    --cyan-500: #06b6d4;
+    --cyan-600: #0891b2;
+
+    --surface: #f0f7ff;
+    --card: #ffffff;
+    --text: var(--gray-900);
+    --text-secondary: var(--gray-500);
+    --text-muted: var(--gray-400);
+    --border: var(--gray-200);
+    --accent: var(--blue-600);
+    --accent-hover: var(--blue-700);
+    --accent-light: var(--blue-50);
+
+    --radius: 0.75rem;
+    --radius-lg: 1rem;
+    --shadow: 0 1px 3px rgb(0 0 0 / 0.08), 0 1px 2px rgb(0 0 0 / 0.04);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    --transition: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============================================
+   Reset & Base
+   ============================================ */
+
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: var(--font);
+    font-size: 0.9375rem;
+    line-height: 1.6;
+    color: var(--text);
+    background: var(--surface);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ============================================
+   Layout
+   ============================================ */
+
+.app-layout {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.nav-bar {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.nav-inner {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 3.5rem;
+}
+
+.nav-brand {
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--accent) !important;
+    text-decoration: none !important;
+    letter-spacing: -0.01em;
+}
+
+.nav-links {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.nav-link {
+    padding: 0.4rem 0.75rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--gray-600) !important;
+    text-decoration: none !important;
+    transition: background var(--transition), color var(--transition);
+}
+
+.nav-link:hover {
+    background: var(--accent-light);
+    color: var(--accent) !important;
+    text-decoration: none !important;
+}
+
+.main-content {
+    flex: 1;
+    max-width: 960px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+}
+
+/* ============================================
+   Pages
+   ============================================ */
+
+.page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.page-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.page-subtitle {
+    font-size: 0.9375rem;
+    color: var(--text-secondary);
+}
+
+.page-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40vh;
+}
+
+.section-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin: 1.5rem 0 0.75rem;
+    color: var(--gray-700);
+}
+
+/* ============================================
+   Cards
+   ============================================ */
+
+.card, .auth-card, .profile-card, .booking-card, .confirm-card, .slot-card, .cart-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    box-shadow: var(--shadow);
+}
+
+/* ============================================
+   Auth
+   ============================================ */
+
+.auth-card {
+    width: 100%;
+    max-width: 400px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.auth-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    text-align: center;
+    color: var(--accent);
+    margin-bottom: 0.25rem;
+}
+
+.auth-subtitle {
+    text-align: center;
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+}
+
+.auth-info {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    margin-bottom: 1rem;
+}
+
+.divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 1.25rem 0;
+}
+
+/* ============================================
+   Forms
+   ============================================ */
+
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-group label {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--gray-700);
+    margin-bottom: 0.35rem;
+}
+
+.input {
+    display: block;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    font-family: var(--font);
+    font-size: 0.9375rem;
+    color: var(--text);
+    background: var(--card);
+    outline: none;
+    transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--blue-100);
+}
+
+.input:disabled {
+    background: var(--gray-100);
+    color: var(--text-secondary);
+    cursor: not-allowed;
+}
+
+.input-sm {
+    padding: 0.35rem 0.5rem;
+    font-size: 0.8125rem;
+}
+
+/* ============================================
+   Buttons
+   ============================================ */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.55rem 1.25rem;
+    border-radius: 0.5rem;
+    font-family: var(--font);
+    font-size: 0.875rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all var(--transition);
+    text-decoration: none !important;
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background: var(--accent);
+    color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: var(--accent-hover);
+}
+
+.btn-outline {
+    background: transparent;
+    color: var(--accent);
+    border-color: var(--border);
+}
+
+.btn-outline:hover:not(:disabled) {
+    background: var(--accent-light);
+    border-color: var(--accent);
+}
+
+.btn-link {
+    background: transparent;
+    border: none;
+    color: var(--accent);
+    font-weight: 500;
+    padding: 0.35rem 0;
+    cursor: pointer;
+}
+
+.btn-link:hover { text-decoration: underline; }
+
+.btn-sm {
+    padding: 0.3rem 0.75rem;
+    font-size: 0.8125rem;
+}
+
+.btn-remove {
+    background: transparent;
+    border: none;
+    color: var(--red-500);
+    cursor: pointer;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    padding: 0.2rem 0.5rem;
+    border-radius: 0.25rem;
+    transition: background var(--transition);
+}
+
+.btn-remove:hover {
+    background: var(--red-50);
+}
+
+/* ============================================
+   Alerts
+   ============================================ */
+
+.alert {
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    margin-bottom: 1rem;
+}
+
+.alert-error {
+    background: var(--red-50);
+    color: var(--red-600);
+    border: 1px solid #fecaca;
+}
+
+.alert-success {
+    background: var(--green-50);
+    color: var(--green-600);
+    border: 1px solid #bbf7d0;
+}
+
+/* ============================================
+   Week Picker
+   ============================================ */
+
+.week-picker {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.week-btn {
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--border);
+    background: var(--card);
+    font-family: var(--font);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition);
+    color: var(--text);
+}
+
+.week-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.week-btn.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+
+/* ============================================
+   Slot Grid
+   ============================================ */
+
+.slots-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.slot-card {
+    cursor: pointer;
+    text-align: center;
+    transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.slot-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--blue-100);
+}
+
+.slot-time {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 0.25rem;
+}
+
+.slot-spots {
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+}
+
+/* ============================================
+   Cart
+   ============================================ */
+
+.cart-section {
+    border-top: 1px solid var(--border);
+    padding-top: 1rem;
+}
+
+.cart-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.cart-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.cart-children {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.child-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.child-row .input { flex: 1; }
+
+.cart-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border);
+}
+
+.cart-total {
+    font-size: 1.125rem;
+    font-weight: 700;
+}
+
+/* ============================================
+   Bookings List
+   ============================================ */
+
+.booking-list {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.booking-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.booking-past {
+    opacity: 0.6;
+}
+
+.booking-week {
+    font-weight: 700;
+    min-width: 5rem;
+}
+
+.booking-slot {
+    font-size: 0.9375rem;
+    color: var(--text-secondary);
+    min-width: 4rem;
+}
+
+.booking-children {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.child-tag {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    background: var(--cyan-50);
+    color: var(--cyan-600);
+    border-radius: 1rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+/* ============================================
+   Confirm
+   ============================================ */
+
+.confirm-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.confirm-header {
+    font-weight: 700;
+    margin-bottom: 0.35rem;
+}
+
+.confirm-children {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.confirm-footer {
+    border-top: 1px solid var(--border);
+    padding-top: 1rem;
+}
+
+.confirm-total {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.confirm-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+}
+
+/* ============================================
+   Profile
+   ============================================ */
+
+.profile-card {
+    max-width: 500px;
+}
+
+/* ============================================
+   Empty State
+   ============================================ */
+
+.empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--text-secondary);
+}
+
+.empty-state p {
+    margin-bottom: 1rem;
+    font-size: 1rem;
+}
+
+/* ============================================
+   Utility
+   ============================================ */
+
+.text-muted {
+    color: var(--text-muted);
+    font-size: 0.8125rem;
+}

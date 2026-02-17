@@ -1,0 +1,7 @@
+# Booking flow layout
+
+export Layout = component
+
+  render
+    .booking-layout
+      #content

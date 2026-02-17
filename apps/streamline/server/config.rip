@@ -1,0 +1,10 @@
+# App configuration
+
+export config =
+  appName:       'Streamline Swim School'
+  url:           'https://app.streamlineschool.com'
+  supportEmail:  'info@streamlineschool.com'
+  sessionPrice:  10000  # $100.00 in cents
+  priceDisplay:  '$100'
+  sessionDays:   'Tue–Fri'
+  location:      '2966 N 1400 E, North Logan, UT'

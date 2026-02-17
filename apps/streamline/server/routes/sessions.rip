@@ -1,0 +1,50 @@
+# Session routes — list available swim sessions and check availability
+
+import { get, post, prefix, read } from '@rip-lang/api'
+import { schema } from '../setup.rip'
+import { config } from '../config.rip'
+
+Spot = schema.model 'Spot'
+
+prefix '/api/sessions', ->
+
+  # List available sessions grouped by week
+  get '' ->
+    result = fetch! 'http://localhost:4213/sql',
+      method: 'POST'
+      headers: { 'Content-Type': 'application/json' }
+      body: JSON.stringify
+        sql: '''
+          SELECT week, slot, COUNT(*) as spots
+          FROM spots
+          WHERE status = 'available'
+          GROUP BY week, slot
+          ORDER BY week, slot
+        '''
+    data = result.json!
+
+    # Group by week
+    weeks = {}
+    for row in (data.data or [])
+      [week, slot, spots] = row
+      weeks[week] ?= { week, slots: [], price: config.sessionPrice }
+      weeks[week].slots.push { time: slot, spots }
+
+    { sessions: Object.values(weeks) }
+
+  # Check availability for requested sessions
+  post '/confirm-availability' ->
+    items = read 'sessions', 'json!'
+    for item in items
+      result = fetch! 'http://localhost:4213/sql',
+        method: 'POST'
+        headers: { 'Content-Type': 'application/json' }
+        body: JSON.stringify
+          sql: 'SELECT COUNT(*) FROM spots WHERE week = ? AND slot = ? AND status = ?'
+          params: [item.week, item.slot, 'available']
+      data = result.json!
+      available = data.data?[0]?[0] or 0
+      needed = item.children?.length or 1
+      if available < needed
+        return { available: false, week: item.week, slot: item.slot }
+    { available: true }

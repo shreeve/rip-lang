@@ -1,0 +1,76 @@
+# Auth routes — email magic code authentication
+
+import { get, post, prefix, read, session } from '@rip-lang/api'
+import { schema } from '../setup.rip'
+
+User = schema.model 'User'
+
+# Generate a random 6-digit code
+generateCode = -> String(Math.floor(100000 + Math.random() * 900000))
+
+prefix '/api/auth', ->
+
+  # Request sign-in code via email
+  post '/signinWithEmail' ->
+    email = read 'email', 'email!'
+    user = User.where!(email: email).first!()
+    if user
+      code = generateCode()
+      expires = new Date(Date.now() + 10 * 60 * 1000).toISOString()
+      user.code = code
+      user.codeExpiresAt = expires
+      user.save!()
+      console.log "[auth] Sign-in code for #{email}: #{code}"
+      { isUser: true }
+    else
+      { isUser: false }
+
+  # Verify sign-in code
+  post '/signin' ->
+    email = read 'email', 'email!'
+    code  = read 'code', 'text!'
+    user = User.where!(email: email).first!()
+    throw new Error('Invalid email') unless user
+    throw new Error('Invalid code') unless user.code is code
+    throw new Error('Code expired') if user.codeExpiresAt and new Date(user.codeExpiresAt) < new Date()
+    user.code = null
+    user.codeExpiresAt = null
+    user.save!()
+    session.userId = user.id
+    { ok: true }
+
+  # Create new account
+  post '/signup' ->
+    email     = read 'email', 'email!'
+    firstName = read 'firstName', 'text!'
+    lastName  = read 'lastName', 'text!'
+    phone     = read 'phone', 'text'
+    source    = read 'source', 'text'
+    user = User.create!({ email, firstName, lastName, phone, source })
+    session.userId = user.id
+    console.log "[auth] New user: #{email}"
+    { ok: true }
+
+  # Sign out
+  post '/signout' ->
+    delete session.userId
+    { ok: true }
+
+  # Stub: Google OAuth
+  post '/google' ->
+    @status = 501
+    { error: 'Google OAuth not implemented — use email sign-in' }
+
+  # Stub: Apple Sign-In
+  post '/apple' ->
+    @status = 501
+    { error: 'Apple Sign-In not implemented — use email sign-in' }
+
+  # Dev-only: sign in as test user
+  post '/dev' ->
+    email = 'test@streamlineschool.com'
+    user = User.where!(email: email).first!()
+    unless user
+      user = User.create!({ email, firstName: 'Test', lastName: 'User' })
+    session.userId = user.id
+    { ok: true }

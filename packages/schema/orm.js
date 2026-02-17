@@ -128,6 +128,9 @@ export class Model {
         if (field.constraints.default != null) def.default = field.constraints.default;
       }
       if (field.attrs?.primary) { def.primary = true; }
+      // Map camelCase field name → snake_case column name
+      const col = toSnakeCase(name);
+      if (col !== name) def.column = col;
       fields[name] = def;
     }
 
@@ -369,13 +372,21 @@ export class Model {
     const schema    = Ctor._schema;
     const columns   = Ctor._columns || {};
 
+    // Serialize JSON-typed values for DuckDB
+    const _serializeValue = (val, field) => {
+      if (field && field.type === 'json' && val != null && typeof val === 'object') {
+        return JSON.stringify(val);
+      }
+      return val;
+    };
+
     if (this._persisted) {
       // UPDATE — only dirty fields
       const sets = [], values = [];
       for (const name of this.$dirty) {
         const col = columns[name] || name;
         sets.push(`"${col}" = ?`);
-        values.push(this._data[col]);
+        values.push(_serializeValue(this._data[col], schema[name]));
       }
       if (sets.length === 0) return this;
 
@@ -392,7 +403,7 @@ export class Model {
         if (this._data[col] != null) {
           cols.push(`"${col}"`);
           placeholders.push('?');
-          values.push(this._data[col]);
+          values.push(_serializeValue(this._data[col], field));
         }
       }
 

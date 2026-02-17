@@ -1,0 +1,102 @@
+# Session picker — browse weeks, select time slots, manage cart
+
+export Time = component
+  sessions := []
+  loading := true
+  selectedWeek := null
+  cart := @app.data.cart or []
+  error := null
+
+  ~> @app.data.cart = cart
+
+  beforeMount: ->
+    try
+      res = await fetch('/api/sessions')
+      data = await res.json()
+      sessions = data.sessions or []
+      if sessions.length > 0
+        selectedWeek = sessions[0].week
+    catch
+      error = 'Failed to load sessions'
+    loading = false
+
+  currentSlots ~= do ->
+    found = sessions.find (s) -> s.week is selectedWeek
+    found?.slots or []
+  cartTotal ~= cart.length
+  priceDisplay ~= "$#{cart.length * 100}"
+
+  selectWeek: (week) ->
+    selectedWeek = week
+
+  addToCart: (slot) ->
+    existing = cart.find (c) -> c.week is selectedWeek and c.slot is slot.time
+    unless existing
+      cart = [...cart, { week: selectedWeek, slot: slot.time, children: [{ name: '', age: '' }] }]
+
+  removeFromCart: (idx) ->
+    cart = cart.filter (_, i) -> i isnt idx
+
+  addChild: (idx) ->
+    item = cart[idx]
+    item.children = [...item.children, { name: '', age: '' }]
+    cart = [...cart]
+
+  removeChild: (cartIdx, childIdx) ->
+    item = cart[cartIdx]
+    item.children = item.children.filter (_, i) -> i isnt childIdx
+    cart = [...cart]
+
+  updateChild: (cartIdx, childIdx, field, value) ->
+    item = cart[cartIdx]
+    item.children[childIdx][field] = value
+    cart = [...cart]
+
+  goToConfirm: ->
+    if cart.length > 0
+      @router.push '/booking/confirm'
+
+  render
+    div
+      .page-header
+        h1.page-title "Book a Session"
+        p.page-subtitle "Select a week and time slot"
+
+      if loading
+        .page-center
+          p "Loading sessions..."
+
+      if error
+        .alert.alert-error error
+
+      unless loading or error
+        # Week picker
+        .week-picker
+          for s in sessions
+            button.week-btn @click: (=> @selectWeek(s.week)),
+              class: (if s.week is selectedWeek then 'active' else ''),
+              "Week #{s.week}"
+
+        # Time slots
+        .slots-grid
+          for slot in currentSlots
+            .slot-card @click: (=> @addToCart(slot)),
+              "#{slot.time} — #{slot.spots} spots available"
+
+        # Cart
+        if cart.length > 0
+          .cart-section
+            h2.section-title "Your Cart (#{cartTotal})"
+            .cart-items
+              for item, idx in cart
+                .cart-item
+                  .cart-item-header
+                    span "Week #{item.week} — #{item.slot}"
+                    button.btn-remove @click: (=> @removeFromCart(idx)), "Remove"
+                  .cart-children
+                    span.text-muted "#{item.children.length} child(ren)"
+                    button.btn.btn-sm @click: (=> @addChild(idx)), "+ Add child"
+
+            .cart-footer
+              .cart-total "Total: #{priceDisplay}"
+              button.btn.btn-primary @click: @goToConfirm, "Continue"

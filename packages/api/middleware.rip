@@ -283,7 +283,7 @@ export sessions = (opts = {}) ->
 
     # Decode existing session
     raw = cookies[cookieName]
-    c.session = decodeSession raw, secret
+    c.session = decodeSession! raw, secret
 
     # Track original for change detection
     original = JSON.stringify(c.session)
@@ -293,7 +293,7 @@ export sessions = (opts = {}) ->
     # Save session if changed
     current = JSON.stringify(c.session)
     if current isnt original and c._response?
-      encoded = encodeSession c.session, secret
+      encoded = encodeSession! c.session, secret
       parts = ["#{cookieName}=#{encodeURIComponent(encoded)}"]
       parts.push "Path=/"
       parts.push "Max-Age=#{maxAge}"

@@ -1,0 +1,38 @@
+# Streamline Swim School — Data Schema
+
+@enum SpotStatus: available, booked
+
+@model User
+  email!#          email
+  firstName?       string, [1, 50]
+  lastName?        string, [1, 50]
+  phone?           string, [1, 20]
+  source?          string, [0, 100]
+  photo?           url
+  code?            string
+  codeExpiresAt?   datetime
+
+  @many Spot
+  @many Booking
+  @timestamps
+
+@model Spot
+  week!            integer
+  slot!            string, [5, 5]
+  status           SpotStatus, [available]
+  child?           json
+
+  @belongs_to User, { optional: true }
+  @belongs_to Booking, { optional: true }
+  @timestamps
+  @index [week, slot]
+
+@model Booking
+  week!            integer
+  slot!            string, [5, 5]
+  children         json, [[]]
+  meta?            json
+
+  @belongs_to User
+  @many Spot
+  @timestamps

@@ -1,0 +1,26 @@
+# Streamline Swim School — Server Entry Point
+
+import { get, use, start } from '@rip-lang/api'
+import { sessions } from '@rip-lang/api/middleware'
+import { ripUI } from '@rip-lang/ui/serve'
+import { setup } from './setup.rip'
+import './routes/auth.rip'
+import './routes/sessions.rip'
+import './routes/bookings.rip'
+import './routes/user.rip'
+
+dir = new URL('../client', import.meta.url).pathname
+
+# Session middleware for auth
+use sessions name: 'streamline', maxAge: 30 * 86400
+
+# Serve the rip-ui client
+use ripUI app: '', dir: dir, title: 'Streamline Swim School', watch: true
+get '/css/*' -> @send "#{dir}/css/#{@req.path.slice(5)}"
+
+# SPA fallback for client-side routing
+get '/*' -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
+
+# Bootstrap database then start
+setup!()
+start port: 8304
