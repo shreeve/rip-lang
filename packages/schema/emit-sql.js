@@ -127,6 +127,48 @@ function toIndexName(tableName, fields) {
 }
 
 // =============================================================================
+// Dependency ordering
+// =============================================================================
+
+// Topological sort: models that are referenced via belongs_to come first
+function topologicalSort(models) {
+  const byName = new Map()
+  for (const def of models) byName.set(def[1], def)
+
+  const deps = new Map()
+  for (const def of models) {
+    const name = def[1]
+    const body = def[3]
+    const refs = []
+    if (Array.isArray(body)) {
+      for (const member of body) {
+        if (Array.isArray(member) && member[0] === 'belongs_to' && byName.has(member[1])) {
+          refs.push(member[1])
+        }
+      }
+    }
+    deps.set(name, refs)
+  }
+
+  const sorted = []
+  const visited = new Set()
+  const visiting = new Set()
+
+  function visit(name) {
+    if (visited.has(name)) return
+    if (visiting.has(name)) return // circular ref — break cycle
+    visiting.add(name)
+    for (const dep of deps.get(name) || []) visit(dep)
+    visiting.delete(name)
+    visited.add(name)
+    sorted.push(byName.get(name))
+  }
+
+  for (const def of models) visit(def[1])
+  return sorted
+}
+
+// =============================================================================
 // SQL value formatting
 // =============================================================================
 
@@ -354,11 +396,16 @@ export function generateSQL(ast, options = {}) {
       }
     }
 
+    // Collect models and sort by dependency order (referenced tables first)
+    const models = []
     for (let i = 1; i < ast.length; i++) {
       const def = ast[i]
-      if (Array.isArray(def) && def[0] === 'model') {
-        blocks.push(emitTableSQL(def, enumNames))
-      }
+      if (Array.isArray(def) && def[0] === 'model') models.push(def)
+    }
+
+    const sorted = topologicalSort(models)
+    for (const def of sorted) {
+      blocks.push(emitTableSQL(def, enumNames))
     }
   }
 
