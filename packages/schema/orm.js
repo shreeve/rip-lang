@@ -59,6 +59,7 @@ export class Model {
   static primaryKey = 'id';
   static _schema    = {};
   static _computed  = {};
+  static _hooks     = {};
   static _columns   = null;
   static _relations = {};
   static _schemaRef = null;
@@ -324,10 +325,27 @@ export class Model {
   }
 
   // ---------------------------------------------------------------------------
+  // Lifecycle hooks
+  // ---------------------------------------------------------------------------
+
+  async _runHook(name) {
+    const fn = this.constructor._hooks[name];
+    if (fn) return await fn.call(this);
+  }
+
+  // ---------------------------------------------------------------------------
   // Persistence
   // ---------------------------------------------------------------------------
 
   async save() {
+    const isNew = !this._persisted;
+
+    // Before hooks (can normalize data, return false to abort)
+    if (await this._runHook('beforeSave') === false) return this;
+    if (isNew  && await this._runHook('beforeCreate') === false) return this;
+    if (!isNew && await this._runHook('beforeUpdate') === false) return this;
+
+    // Validate (after hooks have normalized data)
     const errors = this.$validate();
     if (errors) throw new Error(`Validation failed: ${JSON.stringify(errors)}`);
 
@@ -370,15 +388,23 @@ export class Model {
     }
 
     this._dirty = {};
+
+    // After hooks
+    if (isNew) await this._runHook('afterCreate');
+    else       await this._runHook('afterUpdate');
+    await this._runHook('afterSave');
+
     return this;
   }
 
   async delete() {
     if (!this._persisted) return this;
+    if (await this._runHook('beforeDelete') === false) return this;
     const Ctor = this.constructor;
     const pk = Ctor.primaryKey;
     await query(`DELETE FROM ${Ctor.tableName()} WHERE "${pk}" = ?`, [this._data[pk]]);
     this._persisted = false;
+    await this._runHook('afterDelete');
     return this;
   }
 
@@ -386,10 +412,12 @@ export class Model {
     if (!this._persisted) return this;
     const Ctor = this.constructor;
     if (!Ctor._softDelete) throw new Error(`${Ctor.name || 'Model'} does not have @softDelete`);
+    if (await this._runHook('beforeDelete') === false) return this;
     const pk = Ctor.primaryKey;
     const now = new Date().toISOString();
     await query(`UPDATE ${Ctor.tableName()} SET "deleted_at" = ? WHERE "${pk}" = ?`, [now, this._data[pk]]);
     this._data.deleted_at = now;
+    await this._runHook('afterDelete');
     return this;
   }
 
@@ -755,7 +783,17 @@ Schema.prototype.connect = function(url) {
 Schema.prototype.model = function(modelName, options = {}) {
   if (!this._models) this._models = new Map();
 
-  const { computed: computedDefs, faker: fakerFn, ...methods } = options;
+  const HOOKS = new Set([
+    'beforeSave', 'afterSave', 'beforeCreate', 'afterCreate',
+    'beforeUpdate', 'afterUpdate', 'beforeDelete', 'afterDelete',
+  ]);
+  const { computed: computedDefs, faker: fakerFn, ...rest } = options;
+
+  // Separate hooks from instance methods
+  const hooks = {}, methods = {};
+  for (const [name, fn] of Object.entries(rest)) {
+    if (HOOKS.has(name)) hooks[name] = fn; else methods[name] = fn;
+  }
 
   // Create a new class extending Model
   const ModelClass = class extends Model {};
@@ -773,6 +811,9 @@ Schema.prototype.model = function(modelName, options = {}) {
 
   // Set custom faker if provided
   if (fakerFn) ModelClass._faker = fakerFn;
+
+  // Register lifecycle hooks
+  ModelClass._hooks = hooks;
 
   // Return callable and register in schema for relation lookups
   const callable = makeCallable(ModelClass);

@@ -14,6 +14,7 @@
 #   - Eager loading (User.include('posts').all())
 #   - Soft delete (softDelete, restore, withDeleted)
 #   - Factory (schema-driven fake data generation)
+#   - Lifecycle hooks (beforeSave, afterCreate, etc.)
 #   - Dirty tracking and validation
 #
 # Prerequisites:
@@ -87,6 +88,8 @@ console.log 'Setup: tables created + 5 users + 3 posts seeded\n'
 User = schema.model 'User',
   greet: -> "Hello, #{@name}!"
   displayRole: -> @role.charAt(0).toUpperCase() + @role.slice(1)
+  beforeSave: -> @email = @email.toLowerCase()
+  afterCreate: -> console.log "  [hook] Created user: #{@name}"
   computed:
     identifier: -> "#{@name} <#{@email}>"
     isAdmin:    -> @role is 'admin'
@@ -161,6 +164,11 @@ usersWithPosts = User.include!('posts').where!(active: true).all!()
 for u in usersWithPosts
   posts = u.posts!()  # no query — returns pre-loaded data
   console.log "  #{u.name}: #{posts.length} posts"
+
+console.log '\n── Lifecycle hooks: beforeSave normalizes email ─────────────'
+# beforeSave lowercases email, afterCreate logs creation
+hookUser = User.create!(name: 'Zara', email: 'ZARA@EXAMPLE.COM', role: 'viewer')
+console.log "  Saved email: #{hookUser.email}"  # → zara@example.com (lowercased by hook)
 
 console.log '\n── Soft delete ─────────────────────────────────────────────'
 allPosts = Post.all!()

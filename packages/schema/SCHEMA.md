@@ -874,8 +874,8 @@ Native validation engine (replaces Zod for structural validation):
 - [x] Soft-delete awareness (`softDelete()`, `restore()`, `withDeleted()`)
 - [x] Factory (`User.factory!(5)` — schema-driven fake data)
 - [x] Eager loading (`User.include('posts').all()` — batch loading)
+- [x] Lifecycle hooks (`beforeSave`, `afterCreate`, `beforeDelete`, etc.)
 - [ ] Transactions
-- [ ] Lifecycle hooks (beforeSave, afterCreate)
 
 ### Phase 6: Widget System
 

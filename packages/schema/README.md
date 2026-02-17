@@ -676,6 +676,31 @@ post.restore!()
 Models without `@softDelete` are unaffected — `delete()` still performs a
 real `DELETE` as before.
 
+### Lifecycle Hooks
+
+Define hooks in your model to run logic before or after persistence:
+
+```coffee
+User = schema.model 'User',
+  beforeSave: ->
+    @email = @email.toLowerCase()
+  afterCreate: ->
+    console.log "Welcome, #{@name}!"
+  beforeDelete: ->
+    console.log "Goodbye, #{@name}"
+  computed:
+    identifier: -> "#{@name} <#{@email}>"
+```
+
+Available hooks: `beforeSave`, `afterSave`, `beforeCreate`, `afterCreate`,
+`beforeUpdate`, `afterUpdate`, `beforeDelete`, `afterDelete`.
+
+- Hooks are called with `this` bound to the instance
+- Before hooks run before validation — normalize data (lowercase, trim) and constraints are checked on the final values
+- Before hooks can return `false` to abort the operation
+- Hooks can be async
+- `beforeDelete`/`afterDelete` fire on both `delete()` and `softDelete()`
+
 ### Factory
 
 Schema-driven fake data generation — zero configuration, zero dependencies:
@@ -824,14 +849,15 @@ you can use the ORM without the code generators.
 | Soft-delete awareness (`@softDelete`) | Complete |
 | Factory (`User.factory!(5)`) | Complete |
 | Eager loading (`User.include('posts')`) | Complete |
+| Lifecycle hooks (`beforeSave`, `afterCreate`) | Complete |
 | `@computed` / `@validate` in DSL | Planned |
 | Migration diffing | Planned |
 
 The grammar, parser, validation engine, ORM, relation loading, eager loading,
-soft-delete, factory, and code generators are all working. One schema file
-generates TypeScript interfaces, runtime validators, and SQL DDL — and drives
-a fully-wired ORM with eager loading and schema-driven fake data — from a
-single source of truth.
+lifecycle hooks, soft-delete, factory, and code generators are all working.
+One schema file generates TypeScript interfaces, runtime validators, and SQL
+DDL — and drives a fully-wired ORM with eager loading, lifecycle hooks, and
+schema-driven fake data — from a single source of truth.
 
 ---
 
@@ -867,8 +893,8 @@ single source of truth.
 ### Phase 4: Depth — In Progress
 
 - ~~Eager loading (`User.include('posts').all()`)~~ — Complete
+- ~~Lifecycle hooks (`beforeSave`, `afterCreate`, etc.)~~ — Complete
 - Transaction support
-- Lifecycle hooks (`beforeSave`, `afterCreate`)
 - Schema diffing for migration generation
 - `@computed` and `@validate` blocks in the DSL
 

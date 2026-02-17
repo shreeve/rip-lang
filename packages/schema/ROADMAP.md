@@ -24,6 +24,7 @@ What works today, end-to-end:
 | Factory | `User.factory!(5)` — schema-driven fake data | Complete |
 | Derived types | `UserCreate`, `UserUpdate` generated per model | Complete |
 | Eager loading | `User.include('posts').all!()` — batch loading | Complete |
+| Lifecycle hooks | `beforeSave`, `afterCreate`, `beforeDelete`, etc. | Complete |
 | VS Code highlighting | `packages/vscode` | Complete |
 | CLI | `rip-schema generate app.schema` | Complete |
 
@@ -90,21 +91,13 @@ Error in app.schema at line 12:
 World-class tools (Elm, Rust, Prisma) are beloved for their error messages.
 This is what makes people trust a tool on first contact.
 
-### 6. Lifecycle Hooks
+### ~~6. Lifecycle Hooks~~ — Complete
 
-**Priority: Medium — needed for real business logic.**
-
-```coffee
-User = schema.model 'User',
-  beforeSave: ->
-    @updatedAt = new Date()
-    @email = @email.toLowerCase()
-  afterCreate: ->
-    sendWelcomeEmail @email
-```
-
-Every serious ORM has `beforeSave`, `afterCreate`, `beforeDelete`. Without
-hooks, people hack around the ORM instead of working with it.
+Eight hooks: `beforeSave`, `afterSave`, `beforeCreate`, `afterCreate`,
+`beforeUpdate`, `afterUpdate`, `beforeDelete`, `afterDelete`. Defined as
+options in `schema.model()`, called with `this` bound to the instance.
+Before hooks can return `false` to abort. Hooks run before validation so
+they can normalize data (lowercase, trim) before constraints are checked.
 
 ### 7. Transactions
 
@@ -220,6 +213,7 @@ rip packages/schema/examples/orm-example.rip
 | **Relation: hasMany**         | `user.posts()` returns related posts                       |
 | **Relation: belongsTo**       | `post.user()` returns the author                           |
 | **Eager loading**             | `User.include('posts').all()` batch-loads in 2 queries     |
+| **Lifecycle hooks**           | `beforeSave` normalizes email, `afterCreate` logs creation |
 | **Soft delete**               | `softDelete()` hides, `withDeleted()` includes, `restore()` recovers |
 | **Factory: build**            | `User.factory(0)` builds with realistic fake data (not persisted)    |
 | **Factory: batch create**     | `User.factory(3, role: 'editor')` creates 3 with overrides           |
