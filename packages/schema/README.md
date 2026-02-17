@@ -364,17 +364,12 @@ and lifecycle:
 
   @belongs_to Organization
   @has_many Post
-
-  @computed
-    displayName -> "#{@name} <#{@email}>"
-    isAdmin     -> @role is 'admin'
-
-  @validate
-    password -> @matches(/[A-Z]/) and @matches(/[0-9]/)
-    email    -> not @endsWith('@test.com') if @env is 'production'
 ```
 
 Models generate TypeScript interfaces, runtime validators, and SQL DDL.
+
+Computed properties and custom validation live in model code (see
+[Computed Fields](#computed-fields) and [Validation](#validation) below).
 
 ### Relationships
 
@@ -431,16 +426,16 @@ Computed fields are accessible as properties (no parens needed), appear in
 
 Type constraints (`!`, `#`, `?`, `[min, max]`, enum membership) are
 validated automatically by the runtime engine. Custom cross-field validation
-rules are planned:
+lives in your model code:
 
 ```coffee
-# Planned — not yet implemented in the schema DSL
-@validate
-  password -> @matches(/[A-Z]/) and @matches(/[0-9]/)
-  email    -> not @endsWith('@test.com') if @env is 'production'
+User = schema.model 'User',
+  beforeSave: ->
+    throw new Error('Password needs uppercase') unless /[A-Z]/.test(@password)
 ```
 
-For now, custom validation logic lives in your model methods.
+This keeps the `.schema` file focused on structural definitions and lets
+behavior live where it belongs — in code.
 
 ### Mixins
 
@@ -470,9 +465,10 @@ Reusable field groups:
 
 ## Beyond Data: Widgets, Forms, and State
 
-Rip Schema extends beyond the data layer to cover UI and application state. This
-is the same "define once, generate everything" principle applied to
-presentation:
+The schema language is designed to extend beyond the data layer into UI and
+application state — the same "define once, generate everything" principle
+applied to presentation. The syntax is defined; the code generators are
+future work (see [Future](#future) below).
 
 ### Widgets
 
@@ -919,89 +915,100 @@ you can use the ORM without the code generators.
 
 ---
 
-## Status
+## Testing
 
-| Component | Status |
-|-----------|--------|
-| Schema grammar (Solar) | Complete |
-| Schema parser (S-expressions) | Complete |
-| Runtime validation engine | Complete |
-| Schema-centric ORM (`schema.model`) | Complete |
-| DuckDB adapter | Complete |
-| TypeScript type generation | Complete |
-| SQL DDL generation | Complete |
-| CLI (`rip-schema generate`) | Complete |
-| VS Code syntax highlighting | Complete |
-| Relation loading (`user.posts()`) | Complete |
-| Soft-delete awareness (`@softDelete`) | Complete |
-| Factory (`User.factory!(5)`) | Complete |
-| Eager loading (`User.include('posts')`) | Complete |
-| Lifecycle hooks (`beforeSave`, `afterCreate`) | Complete |
-| Transactions (`schema.transaction!`) | Complete |
-| Zod schema generation (`schema.toZod()`) | Complete |
-| Parse error messages (contextual, with hints) | Complete |
-| `@link` temporal associations (`user.link!`, `User.linked!`) | Complete |
-| `@one`/`@many` aliases for `@has_one`/`@has_many` | Complete |
-| `@computed` / `@validate` in DSL | Planned |
-| Migration diffing | Planned |
+### Prerequisites
 
-The grammar, parser, validation engine, ORM, relation loading, eager loading,
-lifecycle hooks, soft-delete, factory, and code generators are all working.
-One schema file generates TypeScript interfaces, Zod validation schemas,
-runtime validators, and SQL DDL — and drives a fully-wired ORM with eager
-loading, lifecycle hooks, and schema-driven fake data — from a single source
-of truth.
+```bash
+bun bin/rip packages/db/db.rip :memory:   # start rip-db (in-memory)
+```
+
+### Code Generation (`examples/app-demo.rip`)
+
+Parses `app.schema` (a blog platform with enums, types, and models) and
+validates all three output targets from a single source file.
+
+```bash
+rip packages/schema/examples/app-demo.rip
+```
+
+| What                          | Validates                                                 |
+|-------------------------------|-----------------------------------------------------------|
+| **Parse**                     | `Schema.load` parses 2 enums, 1 type, 4 models            |
+| **TypeScript generation**     | `schema.toTypes()` produces interfaces, enums, JSDoc       |
+| **SQL DDL generation**        | `schema.toSQL()` produces CREATE TABLE / CREATE TYPE        |
+| **Valid instance**            | `schema.create('User', {...})` applies defaults, passes    |
+| **Missing required field**    | Catches missing `email`                                    |
+| **Invalid email**             | Catches `not-an-email` format                              |
+| **String max length**         | Catches name > 100 chars                                   |
+| **Invalid enum**              | Catches `superadmin` not in `Role` enum                    |
+| **Nested type validation**    | Catches multiple violations in `Address` sub-object        |
+| **Enum + integer defaults**   | `Post` gets correct `status` and `viewCount` defaults      |
+| **File output**               | Writes `generated/app.d.ts` and `generated/app.sql`        |
+
+### ORM with Live Database (`examples/orm-example.rip`)
+
+Connects to `rip-db`, creates tables from schema-generated DDL, seeds
+data, and exercises the full Schema-centric ORM.
+
+```bash
+rip packages/schema/examples/orm-example.rip
+```
+
+| What                          | Validates                                                 |
+|-------------------------------|-----------------------------------------------------------|
+| **Schema load**               | `Schema.load './app.schema'` parses and registers models   |
+| **DDL generation**            | `schema.toSQL()` produces dependency-ordered DDL           |
+| **Setup**                     | DROP/CREATE TABLE via `/sql` endpoint, seed users + posts  |
+| **Model definition**          | `schema.model 'User'` + `schema.model 'Post'` wire fields |
+| **Find first**                | `User.first()` returns a user with all schema fields       |
+| **Find by email**             | `User.where(email: ...)` filters correctly                 |
+| **Computed properties**       | `user.identifier` and `user.isAdmin` derive from fields    |
+| **All users**                 | `User.all()` returns all 5 records                         |
+| **Where (object style)**      | `User.where(role: 'editor')` filters correctly             |
+| **Where (SQL style)**         | `User.where('active = ?', true)` with parameterized query  |
+| **Chainable query**           | `.where().orderBy().limit()` chains produce correct SQL     |
+| **Count**                     | `User.count()` returns 5                                   |
+| **Instance methods**          | `user.greet()` and `user.displayRole()` work               |
+| **Dirty tracking**            | Mutation of `name` sets `$dirty` and `$changed`            |
+| **Relation: hasMany**         | `user.posts()` returns related posts                       |
+| **Relation: belongsTo**       | `post.user()` returns the author                           |
+| **Eager loading**             | `User.include('posts').all()` batch-loads in 2 queries     |
+| **Lifecycle hooks**           | `beforeSave` normalizes email, `afterCreate` logs creation |
+| **Transaction rollback**      | `schema.transaction!` rolls back on error, count unchanged |
+| **Soft delete**               | `softDelete()` hides, `withDeleted()` includes, `restore()` recovers |
+| **Factory: build**            | `User.factory(0)` builds with realistic fake data (not persisted)    |
+| **Factory: batch create**     | `User.factory(3, role: 'editor')` creates 3 with overrides           |
+| **Validation**                | Missing `name` and invalid `email` caught by `$validate()` |
+
+### Full Test Suite
+
+```bash
+bun test/runner.js test/rip     # 1243 tests, 100% passing
+```
 
 ---
 
-## Roadmap
+## Future
 
-### Phase 1: Foundation — Complete
+Features that would extend the system but aren't needed yet:
 
-- Schema grammar and S-expression parser
-- Type registry and validation engine
-- Runtime model factory with defaults
-- Nested types and enum validation
-
-### Phase 2: Code Generation — Complete
-
-- TypeScript type emission from S-expressions (`emit-types.js`)
-- SQL DDL emission from S-expressions (`emit-sql.js`)
-- Zod schema emission from S-expressions (`emit-zod.js`)
-- Built-in runtime validation (replaces Zod — `runtime.js`)
-- CLI tool for schema compilation (`generate.js`)
-
-### Phase 3: ORM — Complete
-
-- Schema-centric API: `Schema.load` → `schema.model` → queries
-- Query builder (where, orderBy, limit, offset, count)
-- Dirty tracking and persistence (INSERT, UPDATE, DELETE)
-- Computed properties (getters, no parens)
-- Schema-derived fields, types, constraints, FKs, timestamps
-- Relation loading: `user.posts()`, `post.user()` (lazy, async)
-- Soft-delete awareness: auto-filtered queries, `softDelete()`, `restore()`, `withDeleted()`
-- Factory: `User.factory!(5)` — schema-driven fake data with field-name hinting
-- Model registry — all `schema.model` calls are auto-discoverable
-- DuckDB integration via HTTP
-
-### Phase 4: Depth — In Progress
-
-- ~~Eager loading (`User.include('posts').all()`)~~ — Complete
-- ~~Lifecycle hooks (`beforeSave`, `afterCreate`, etc.)~~ — Complete
-- ~~Transactions (`schema.transaction!`)~~ — Complete
-- ~~Zod schema generation (`emit-zod.js`)~~ — Complete
-- ~~Parser error messages (`errors.js`)~~ — Complete
-- ~~`@link` temporal associations~~ — Complete
-- ~~`@one`/`@many` relationship aliases~~ — Complete
-- Schema diffing for migration generation
-- `@computed` and `@validate` blocks in the DSL
-
-### Phase 5: UI Integration
-
-- Widget definitions and component generation
-- Form binding with layout engine
-- Reactive state management
-- Hydration and serialization
+- **`@computed` / `@validate` in the DSL** — Cross-field validation and
+  computed properties work today in model code via `schema.model` options.
+  Moving them into the `.schema` file itself would allow code generators to
+  emit them too. Not urgent — the model-code approach is clean.
+- **Migration diffing** — The DDL generator produces target state, not
+  migration paths. Use dbmate, Flyway, or Prisma Migrate for now. Schema-
+  aware diffing (compare two ASTs, emit `ALTER TABLE`) is a natural extension.
+- **Widget / Form / State systems** — The schema language is designed to
+  extend beyond the data layer (see [SCHEMA.md](./SCHEMA.md) for the full
+  vision). Widget definitions, form layouts, and reactive state management
+  would apply the same "define once, generate everything" principle to UI.
+- **Per-schema connection state** — `schema.connect()` sets a module-level
+  URL. Two schemas can't connect to different databases. Not a problem for
+  single-database apps; revisit when multi-database support is needed.
+- **MySQL / SQLite / PostgreSQL** — DuckDB is the starting point. The SQL
+  emitter is a simple AST walker; adding dialect variants is straightforward.
 
 ---
 

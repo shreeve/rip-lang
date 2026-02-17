@@ -31,7 +31,7 @@ The goal: **Define once, generate everything.**
 9. [Forms (Model + Layout)](#forms)
 10. [State Management](#state-management)
 11. [Composition and Reuse](#composition-and-reuse)
-12. [Implementation Roadmap](#implementation-roadmap)
+12. [Future Work](#future-work)
 
 ---
 
@@ -170,7 +170,7 @@ This is exactly how Sage worked: the UI was "dumb" — it just rendered whatever
 | Integer with range | `age Integer Range(0..120)` | `@integer 'age', [0, 120]` | `age integer, [0, 120]` |
 | Integer with default | `count Integer Default 0` | `@integer 'count', [0]` | `count integer, [0]` |
 | Boolean with default | `active Boolean Default true` | `@boolean 'active', true` | `active boolean, [true]` |
-| Enum field | `role Enumerated { admin(0), user(1) }` | (planned) | `role Role, [user]` |
+| Enum field | `role Enumerated { admin(0), user(1) }` | `@enum Role: admin, user` | `role Role, [user]` |
 
 ### Type Definitions
 
@@ -872,91 +872,45 @@ app.set '/', saved
 
 ---
 
-## Implementation Roadmap
+## Future Work
 
-### Phase 1: Core Parser — Complete
+The data layer (parser, code generators, runtime validation, ORM) is
+complete. The schema language is designed to extend into UI and application
+state — applying the same "define once, generate everything" principle to
+presentation layers.
 
-- [x] Schema file parser (`.schema` extension)
-- [x] AST representation (S-expressions)
-- [x] Basic type checking
-- [x] Error reporting with line numbers
+### Widget System
 
-### Phase 2: TypeScript Generation — Complete
+Widget definition parser, prop type generation, event handler types,
+inheritance resolution, and component generation (Vue/React). The syntax
+and design are documented above in [Widgets](#widgets).
 
-- [x] Type definitions
-- [x] Enum definitions
-- [x] Interface generation (with JSDoc constraints)
-- [x] Export structure
+### Form System
 
-### Phase 3: Runtime Validation — Complete
+Form definition parser, layout engine (grid, flow, JGoodies-style),
+field placement, widget overrides, and validation integration. See
+[Forms](#forms) above.
 
-Native validation engine (replaces Zod for structural validation):
+### State Management
 
-- [x] Primitive type mapping
-- [x] Constraint checking (min, max, required, unique)
-- [x] Enum validation
-- [x] Nested type validation
-- [x] Default value application
-- [ ] Cross-field `@validate` blocks (planned)
+State definition parser, path-based access, computed properties,
+actions/mutations, hydration, and serialization. See
+[State Management](#state-management) above.
 
-### Phase 4: SQL Generation — Complete
+### Sage Compatibility
 
-- [x] CREATE TABLE statements
-- [x] Column types and constraints
-- [x] Index generation (unique + composite)
-- [x] Foreign key relationships
-- [x] Enum type generation
-- [x] Zod schema generation (`emit-zod.js` — third AST walker)
-- [x] Beautiful parse error messages (`errors.js` — contextual hints, "did you mean?")
-- [x] `@link` temporal associations — auto-generated `links` table with indexes
-- [x] `@one`/`@many` shorthand aliases for `@has_one`/`@has_many`
-- [ ] Migration diffing (use external tools for now)
+SDF output generation, SPOT format export, and widget library mapping
+for interoperability with existing Sage systems.
 
-### Phase 5: ORM — Complete
+### Other Extensions
 
-- [x] Schema-centric API (`Schema.load` → `schema.model` → queries)
-- [x] Query builder (where, orderBy, limit, offset, count)
-- [x] Dirty tracking and persistence (INSERT, UPDATE, DELETE)
-- [x] Computed properties (getters, no parens)
-- [x] Relation loading (`user.posts()`, `post.user()`)
-- [x] Soft-delete awareness (`softDelete()`, `restore()`, `withDeleted()`)
-- [x] Factory (`User.factory!(5)` — schema-driven fake data)
-- [x] Eager loading (`User.include('posts').all()` — batch loading)
-- [x] Lifecycle hooks (`beforeSave`, `afterCreate`, `beforeDelete`, etc.)
-- [x] Transactions (`schema.transaction!` — atomic BEGIN/COMMIT/ROLLBACK)
-- [x] `@link` ORM methods (`link()`, `unlink()`, `links()`, `linked()`)
-- [x] `@one`/`@many` relationship aliases (grammar-level desugaring)
-
-### Phase 6: Widget System
-
-- [ ] Widget definition parser
-- [ ] Prop type generation
-- [ ] Event handler types
-- [ ] Inheritance resolution
-- [ ] Component generation (Vue/React)
-
-### Phase 7: Form System
-
-- [ ] Form definition parser
-- [ ] Layout engine
-- [ ] Field placement
-- [ ] Widget overrides
-- [ ] Validation integration
-
-### Phase 8: State Management
-
-- [ ] State definition parser
-- [ ] Path-based access implementation
-- [ ] Computed properties
-- [ ] Actions/mutations
-- [ ] Hydration system
-- [ ] Serialization
-
-### Phase 9: Sage Compatibility
-
-- [ ] SDF output generation
-- [ ] SPOT format export
-- [ ] Widget library mapping
+- **`@computed` / `@validate` in the DSL** — These work in model code
+  today. Moving them into `.schema` files would let code generators emit
+  them across all targets.
+- **Migration diffing** — Compare two schema ASTs and emit `ALTER TABLE`
+  SQL. Use external tools (dbmate, Flyway) in the meantime.
+- **Additional SQL dialects** — PostgreSQL, MySQL, SQLite. The emitter
+  is a simple AST walker; adding dialects is straightforward.
 
 ---
 

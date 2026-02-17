@@ -86,7 +86,7 @@ Zod is the right choice for ad-hoc validation at API boundaries — parsing a we
 
 ### Q3: "Zod has a massive ecosystem — tRPC, react-hook-form, @tanstack/form, drizzle-zod, zod-to-json-schema. Your schema has none. When a developer needs to plug into react-hook-form, what do they do?"
 
-**Rip Schema**: We built our own runtime validation engine — `runtime.js` — that handles the structural validation Zod is typically used for: required fields, type checking, min/max constraints, email format, enum membership, nested type validation, and default application. It works today:
+**Rip Schema**: We did both. We built our own runtime validation engine — `runtime.js` — that handles structural validation with zero dependencies: required fields, type checking, min/max constraints, email format, enum membership, nested type validation, and default application:
 
 ```js
 import { Schema } from '@rip-lang/schema'
@@ -96,9 +96,13 @@ const user = schema.create('User', { name: 'Alice', email: 'alice@example.com' }
 const errors = user.$validate()  // null if valid, array of errors if not
 ```
 
-For teams that want Zod specifically — because tRPC or react-hook-form expects a Zod schema — generating Zod output is a natural future target. The schema AST contains all the information needed to produce `z.object({ ... })` definitions. But we chose to ship native validation first rather than introduce Zod as a runtime dependency. The result is a zero-dependency validator that covers the 90% case.
+And for teams that need Zod specifically — because tRPC or react-hook-form expects a Zod schema — we built `emit-zod.js`, the third AST walker. It generates complete Zod schemas with constraint validation (`.min()`, `.max()`, `.email()`, `.uuid()`, `.default()`), enum references, nested types, and Create/Update variants:
 
-For the 10% that needs deep Zod ecosystem integration, a `--zod` generation target is architecturally straightforward — the same way `emit-types.js` and `emit-sql.js` work, an `emit-zod.js` would walk the AST and produce Zod schemas. It's a when, not an if.
+```bash
+bun generate.js app.schema --zod              # → app.zod.ts
+```
+
+Three independent AST walkers (TypeScript, SQL, Zod) from one grammar. Adding a fourth — OpenAPI, JSON Schema, GraphQL — means writing one more walker. The schema definition never changes.
 
 ---
 
@@ -125,7 +129,7 @@ CREATE UNIQUE INDEX idx_users_email ON users (email);
 
 You're right that migrations, rollbacks, and connection pooling are hard problems. We don't try to solve them. For migrations, developers use whatever tool fits their stack — Prisma Migrate, dbmate, Flyway, or plain SQL diffs. Our DDL represents the target state; migration tools compute the path there.
 
-The key difference from Prisma: we're not locked to one database toolkit. Prisma schema only works with Prisma. Our SQL DDL works with any database that speaks SQL. And if a team specifically wants Prisma, generating `schema.prisma` from our AST is a natural future target — the information is all there.
+The key difference from Prisma: we're not locked to one database toolkit. Prisma schema only works with Prisma. Our SQL DDL works with any database that speaks SQL. And if a team specifically wants Prisma, generating `schema.prisma` from our AST is straightforward — the information is all there, and adding a new generation target is just one more AST walker.
 
 ### Q2: "But Prisma schema has features your DSL doesn't capture — `@db.VarChar`, `@map`, `@@map`, composite types, JSON filtering, full-text search indexes, database-specific column types. How do you handle the escape hatch?"
 
@@ -148,13 +152,7 @@ We won't capture every Prisma feature on day one. But the architecture supports 
 
 ### Q3: "The real value of Prisma isn't the schema file — it's Prisma Client. Type-safe queries, relation loading, transactions, middleware. `prisma.user.findMany({ where: { role: 'admin' }, include: { posts: true } })` — that's what developers actually use every day. Your schema generates DDL, but where's the query layer?"
 
-**Rip Schema**: This is the strongest argument against us, and we'll be direct about scope.
-
-Rip Schema is a definition language, not a query engine. For the query layer, we have two directions:
-
-1. **Use any query tool you like.** The generated TypeScript types and SQL DDL work with Prisma Client, Drizzle, Knex, or raw SQL. Since we generate standard `.d.ts` interfaces, any query library that accepts TypeScript types will work. The schema doesn't lock you into a specific ORM.
-
-2. **Rip's own ORM** — the schema object itself creates models. One call does everything — wires fields, types, constraints, methods, and computed properties from the `.schema` file:
+**Rip Schema**: We built one. The schema object itself creates models — one call wires fields, types, constraints, methods, and computed properties from the `.schema` file:
 
 ```coffee
 schema = Schema.load './app.schema', import.meta.url
@@ -167,16 +165,19 @@ User = schema.model 'User',
     isAdmin:    -> @role is 'admin'
 ```
 
-From there you get `find`, `findMany`, `where`, `orderBy`, `limit`, `count`, `create`, `build`, `all`, `first` — plus chainable queries, dirty tracking, computed properties, schema validation, **relation loading**, and **factory**:
+That's the entire model definition. Fields, types, constraints, table name, primary key, foreign keys, timestamps, soft-delete, and relations are all derived from the schema. You only write behavior.
+
+From there you get `find`, `findMany`, `where`, `orderBy`, `limit`, `count`, `create`, `build`, `all`, `first` — plus chainable queries, dirty tracking, computed properties, schema validation, relation loading, eager loading, lifecycle hooks, transactions, soft-delete, and factory:
 
 ```coffee
 posts  = user.posts!()           # hasMany — loads all of Alice's posts
 author = post.user!()            # belongsTo — loads the post's author
+users  = User.include!('posts').all!()  # eager loading — 2 queries, not N+1
 ```
 
 Relations are derived directly from the schema's `@belongs_to` and `@has_many` directives. Models are auto-registered, so related models discover each other at query time — no manual wiring.
 
-The ORM also includes a schema-driven **factory** for test data — zero configuration, zero dependencies:
+The ORM also includes a schema-driven factory for test data — zero configuration, zero dependencies:
 
 ```coffee
 users = User.factory!(5)                 # 5 realistic records from schema metadata
@@ -185,11 +186,11 @@ admins = User.factory!(3, role: 'admin') # with overrides
 
 The factory knows field types, constraints, enums, and defaults from the schema. Field-name hinting generates realistic data — `name` → person names, `email` → emails, `city` → cities. No faker library needed. Prisma requires manual seed scripts; Rails requires FactoryBot with per-model definitions. We do it for free.
 
-Eager loading is now built-in — `User.include('posts').all()` batch-loads relations in 2 queries instead of N+1, the same strategy Prisma and Rails use. Pre-loaded data returns instantly from relation methods; lazy loading still works for anything not pre-loaded.
+Lifecycle hooks (`beforeSave`, `afterCreate`, `beforeDelete`, etc.) run inline with persistence and can normalize data or abort operations. Transactions wrap callbacks in `BEGIN`/`COMMIT`/`ROLLBACK`. Temporal associations (`@link`) enable named, time-bounded, any-to-any relationships between models.
 
-Transactions are built-in — `schema.transaction!` wraps any callback in `BEGIN`/`COMMIT`/`ROLLBACK`. If any step throws, everything rolls back atomically.
+The honest position: Prisma Client is more mature for complex patterns — middleware, advanced aggregations, nested writes. But the core query loop — find, where, chain, relations, eager loading, hooks, transactions, soft-delete, factory — is solid and tested end-to-end against a live database. Our advantage is in the layers above and below the query — the unified definition that Prisma can't provide because Prisma doesn't generate your TypeScript interfaces or your runtime validators.
 
-The honest position: Prisma Client is still more mature for complex patterns — middleware, advanced aggregations, nested writes. But the core query loop — find, where, chain, relations, eager loading, hooks, transactions, soft-delete, factory — is solid. Our advantage is in the layers above and below the query — the unified definition that Prisma can't provide because Prisma doesn't generate your TypeScript interfaces or your runtime validators. A developer can use Rip Schema for the definition layer and Prisma Client for the query layer. They work together, not against each other.
+Developers can also use Rip Schema for the definition layer and Prisma Client for the query layer. The generated TypeScript types and SQL DDL work with any query tool — they're standard formats, not locked to our ORM.
 
 ---
 
@@ -201,18 +202,17 @@ The honest position: Prisma Client is still more mature for complex patterns —
 
 ### Dr. Z: "What about custom refinements? Zod lets me write `.refine(val => val.endDate > val.startDate)`. Can your schema express cross-field validation?"
 
-**Rip Schema**: Yes, through the `@validate` block:
+**Rip Schema**: Today, cross-field validation lives in model code — lifecycle hooks and instance methods:
 
-```
-@model Event
-  startDate! datetime
-  endDate!   datetime
-
-  @validate
-    dateRange -> @endDate > @startDate
+```coffee
+Event = schema.model 'Event',
+  beforeSave: ->
+    throw new Error('End must be after start') unless @endDate > @startDate
 ```
 
-The `@validate` block contains arbitrary Rip expressions — arrow functions that have access to the model's fields via `@field` syntax. These compile to JavaScript validation functions. They're not as flexible as arbitrary Zod refinements (you can't call external APIs or do async validation), but they handle the common cross-field cases. For truly custom logic, the runtime validator is designed to be composable — you can wrap or extend the generated `$validate()` method with additional checks in your application code.
+This runs before persistence, has full access to all fields, and can be async. For truly custom logic — calling external APIs, checking uniqueness against the database — model code is the right place.
+
+The schema DSL is designed to support a `@validate` block in the future, which would let cross-field rules live in the `.schema` file alongside the structural definitions. But the model-code approach is clean and covers the full range of validation needs.
 
 ### Dr. P: "What about database migrations? If I change a field from optional to required, I need a migration with a default value for existing rows. Your DDL generator just produces CREATE TABLE. Where's the migration story?"
 
@@ -247,9 +247,9 @@ The schema generates the data types. TypeScript composes them. Each tool does wh
 
 | Concern | TypeScript | Zod | Prisma | Rip Schema |
 |---------|-----------|-----|--------|------------|
-| Compile-time types | Native | Inferred | Generated client | **Generated .d.ts** (working) |
-| Runtime validation | None | Native | None | **Native** + **Generated Zod** (working) |
-| Database schema | None | None | Native | **Generated SQL DDL** (working) |
+| Compile-time types | Native | Inferred | Generated client | **Generated .d.ts** |
+| Runtime validation | None | Native | None | **Native** + **Generated Zod** |
+| Database schema | None | None | Native | **Generated SQL DDL** |
 | Query engine | None | None | Prisma Client | **ORM** (schema-driven — find, where, chain, relations, eager loading, hooks, transactions, soft-delete, factory, dirty tracking) |
 | IDE experience | Native | Via inference | Via client types | Via generated .d.ts |
 | Ecosystem size | Massive | Large | Large | Small (but compatible with theirs) |
@@ -257,9 +257,9 @@ The schema generates the data types. TypeScript composes them. Each tool does wh
 | Migration story | N/A | N/A | Mature | DDL target state (use external tools) |
 | Dependencies | N/A | zod (~60KB) | @prisma/client + engine | **Zero** (pure JS) |
 
-## What Works Today
+## What It Delivers
 
-Rip Schema delivers five capabilities from a single definition — today, not in a future roadmap:
+Rip Schema delivers six capabilities from a single definition:
 
 - **`schema.toTypes()`** — Generates TypeScript interfaces, enums, JSDoc constraints, relationship fields, and optional markers. Import the `.d.ts` file and your IDE gives you autocomplete, hover types, and go-to-definition.
 - **`schema.toSQL()`** — Generates `CREATE TABLE`, `CREATE INDEX`, `CREATE TYPE AS ENUM` with proper column types, constraints, foreign keys, Rails-style pluralized table names, and soft delete support.
@@ -295,10 +295,10 @@ The thesis is not "throw away your tools." The thesis is "define your data once,
 
 ## Panel Verdict
 
-**Dr. T**: "I was skeptical, but then I saw the generated `.d.ts` output — proper interfaces with JSDoc constraints, enum generation, optional markers, relationship arrays. It plugs into our LSP unchanged. The derived types (Create, Update, Public) from a single definition would be genuinely useful when implemented. The TypeScript output quality meets my bar. **Pass.**"
+**Dr. T**: "I was skeptical, but then I saw the generated `.d.ts` output — proper interfaces with JSDoc constraints, enum generation, optional markers, relationship arrays. It plugs into our LSP unchanged. The derived types — `UserCreate` (required fields only, defaults omitted) and `UserUpdate` (all fields optional) — are generated automatically from the schema metadata. One definition, three type variants. The TypeScript output quality meets my bar. **Pass.**"
 
 **Dr. Z**: "I expected them to generate Zod schemas and was ready to argue about generator correctness. They did both — built their own runtime validator (zero dependencies, handles nested types, enums, constraints, defaults) for the 90% case, *and* added `emit-zod.js` for the 10% that needs Zod ecosystem integration (tRPC, react-hook-form). The Zod output maps schema constraints directly to Zod refinements — `.min()`, `.max()`, `.email()`, `.uuid()`, `.default()` — and generates Create/Update variants with proper optionality. Three AST walkers from one grammar proves this isn't a one-trick generator. **Pass.**"
 
 **Dr. P**: "The SQL DDL output is solid — proper `CREATE TABLE` with constraints, foreign keys, indexes, enum types, Rails-style pluralization. It targets DuckDB today but the patterns are standard SQL. They're honest that they don't have migrations yet. The decision to generate standard SQL rather than locking into Prisma schema format is defensible — it means they work with any database tool, not just ours. The ORM is schema-driven — `schema.model('User', { ... })` wires everything from the `.schema` file in one call, including fields, types, constraints, methods, computed properties, dirty tracking, relation loading, eager loading, lifecycle hooks, soft-delete awareness, and a chainable query API. `user.posts()` and `post.user()` just work — derived from the schema, no manual wiring. `User.include('posts').all()` batch-loads in 2 queries — same strategy we use. Lifecycle hooks — `beforeSave`, `afterCreate`, `beforeDelete` — run inline with persistence, can normalize data and abort operations. The factory — `User.factory!(5)` generates realistic test data from schema metadata with zero configuration — is something Prisma doesn't offer at all. It runs end-to-end against a live database. **Pass — with the caveat that migration tooling is still ahead.**"
 
-**Chair**: "The candidate has moved from architecture to working software. TypeScript generation, SQL DDL generation, Zod schema generation, runtime validation, and a Schema-centric ORM — now with relation loading, eager loading, lifecycle hooks, transactions, soft-delete awareness, and a schema-driven factory — are all functional and tested, including an end-to-end smoke test against a live database. Three independent AST walkers (TypeScript, SQL, Zod) prove the extensibility claim. The API has been refined to a single entry point: `Schema.load` → `schema.model` → queries → relations → hooks → factory. The original conditions were: (1) demonstrate high-quality TypeScript output — **met**, (2) demonstrate high-quality SQL output — **met**, (3) provide a clear migration path for existing codebases — **partially met** (incremental adoption is supported, but schema inference from existing TypeScript types is not yet built), (4) demonstrate a query layer — **met** (schema-driven models with find, where, chainable queries, relation loading, eager loading, lifecycle hooks, transactions, soft-delete, factory, dirty tracking, computed properties, and validation against rip-db). The panel issues a **pass**, with the remaining work being migration tooling."
+**Chair**: "The candidate has delivered working software across the full stack. TypeScript generation, SQL DDL generation, Zod schema generation, runtime validation, and a Schema-centric ORM — with relation loading, eager loading, lifecycle hooks, transactions, soft-delete awareness, temporal associations, and a schema-driven factory — are all functional and tested end-to-end against a live database. Three independent AST walkers (TypeScript, SQL, Zod) prove the extensibility claim. The API is a single entry point: `Schema.load` → `schema.model` → queries → relations → hooks → factory. The original conditions were: (1) demonstrate high-quality TypeScript output — **met** (interfaces, enums, JSDoc, derived Create/Update variants), (2) demonstrate high-quality SQL output — **met** (dependency-ordered DDL, foreign keys, indexes, temporal association tables), (3) provide a clear migration path for existing codebases — **partially met** (incremental adoption is supported, but schema inference from existing TypeScript types is not yet built), (4) demonstrate a query layer — **met** (schema-driven models with find, where, chainable queries, relation loading, eager loading, lifecycle hooks, transactions, soft-delete, temporal links, factory, dirty tracking, computed properties, and validation). The panel issues a **pass**, with the remaining work being migration tooling and UI-layer extensions."
