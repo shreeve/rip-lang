@@ -36,3 +36,4 @@ notes.txt
 *.lock
 /linguist
 .manifest.json
+/apps/streamline/ARCHIVE
