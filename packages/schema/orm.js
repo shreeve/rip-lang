@@ -221,7 +221,8 @@ export class Model {
       });
     }
 
-    // Define relation methods (lazy loading)
+    // Define relation methods (lazy loading, with eager cache)
+    this._eagerLoaded = null;
     const relations = this.constructor._relations;
     const schemaRef = this.constructor._schemaRef;
     for (const name in relations) {
@@ -230,6 +231,9 @@ export class Model {
       Object.defineProperty(this, name, {
         enumerable: false,
         value: async () => {
+          // Return eager-loaded data if available (no query)
+          if (this._eagerLoaded?.has(name)) return this._eagerLoaded.get(name);
+          // Lazy load
           const RelModel = schemaRef._models?.get(rel.model);
           if (!RelModel) throw new Error(`Model '${rel.model}' not registered — define it with schema.model('${rel.model}', ...)`);
           const pk = this._data[this.constructor.primaryKey];
@@ -415,6 +419,11 @@ export class Model {
     const obj = {};
     for (const name in this.constructor._schema) obj[name] = this[name];
     for (const name in this.constructor._computed) obj[name] = this[name];
+    if (this._eagerLoaded) {
+      for (const [name, val] of this._eagerLoaded) {
+        obj[name] = Array.isArray(val) ? val.map(r => r.toJSON()) : val?.toJSON() ?? null;
+      }
+    }
     return obj;
   }
 
@@ -463,6 +472,10 @@ export class Model {
 
   static withDeleted() {
     return new Query(this, { includeDeleted: true });
+  }
+
+  static include(...names) {
+    return new Query(this).include(...names);
   }
 
   static count(conditions = null) {
@@ -556,6 +569,7 @@ class Query {
     this._order  = null;
     this._limit  = null;
     this._offset = null;
+    this._includes = [];
     this._includeDeleted = includeDeleted;
 
     // Auto-filter soft-deleted records unless explicitly included
@@ -569,6 +583,72 @@ class Query {
     this._where = this._where.filter(w => w !== '"deleted_at" IS NULL');
     this._includeDeleted = true;
     return this;
+  }
+
+  include(...names) {
+    this._includes.push(...names.flat());
+    return this;
+  }
+
+  // Batch-load included relations (2-query strategy, eliminates N+1)
+  async _loadIncludes(records) {
+    if (this._includes.length === 0 || records.length === 0) return records;
+
+    const model = this._model;
+    const relations = model._relations;
+    const schemaRef = model._schemaRef;
+
+    for (const relName of this._includes) {
+      const rel = relations[relName];
+      if (!rel) throw new Error(`Unknown relation '${relName}' on ${model.name || 'Model'}`);
+
+      const RelModel = schemaRef._models?.get(rel.model);
+      if (!RelModel) throw new Error(`Model '${rel.model}' not registered`);
+
+      if (rel.type === 'belongsTo') {
+        const fkValues = [...new Set(records.map(r => r._data[rel.foreignKey]).filter(v => v != null))];
+        if (fkValues.length === 0) {
+          for (const r of records) { (r._eagerLoaded ||= new Map()).set(relName, null); }
+          continue;
+        }
+        const related = await RelModel.findMany(fkValues);
+        const byPk = new Map(related.map(r => [r._data[RelModel.primaryKey], r]));
+        for (const r of records) {
+          (r._eagerLoaded ||= new Map()).set(relName, byPk.get(r._data[rel.foreignKey]) || null);
+        }
+
+      } else if (rel.type === 'hasMany' || rel.type === 'hasOne') {
+        const pk = model.primaryKey;
+        const pkValues = records.map(r => r._data[pk]);
+        const placeholders = pkValues.map(() => '?').join(', ');
+        const soft = RelModel._softDelete ? ' AND "deleted_at" IS NULL' : '';
+        const sql = `SELECT * FROM ${RelModel.tableName()} WHERE "${rel.foreignKey}" IN (${placeholders})${soft}`;
+        const result = await query(sql, pkValues);
+        const allRelated = result.data.map(row => RelModel._materialize(result.meta, row));
+
+        if (rel.type === 'hasMany') {
+          const byFk = new Map();
+          for (const r of allRelated) {
+            const fk = r._data[rel.foreignKey];
+            if (!byFk.has(fk)) byFk.set(fk, []);
+            byFk.get(fk).push(r);
+          }
+          for (const r of records) {
+            (r._eagerLoaded ||= new Map()).set(relName, byFk.get(r._data[pk]) || []);
+          }
+        } else {
+          const byFk = new Map();
+          for (const r of allRelated) {
+            const fk = r._data[rel.foreignKey];
+            if (!byFk.has(fk)) byFk.set(fk, r); // first match wins
+          }
+          for (const r of records) {
+            (r._eagerLoaded ||= new Map()).set(relName, byFk.get(r._data[pk]) || null);
+          }
+        }
+      }
+    }
+    return records;
   }
 
   where(conditions, ...params) {
@@ -615,7 +695,8 @@ class Query {
   async all() {
     const { sql, params } = this.toSQL();
     const result = await query(sql, params);
-    return result.data.map(row => this._model._materialize(result.meta, row));
+    const records = result.data.map(row => this._model._materialize(result.meta, row));
+    return this._loadIncludes(records);
   }
 
   async first() {

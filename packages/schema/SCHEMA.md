@@ -873,7 +873,7 @@ Native validation engine (replaces Zod for structural validation):
 - [x] Relation loading (`user.posts()`, `post.user()`)
 - [x] Soft-delete awareness (`softDelete()`, `restore()`, `withDeleted()`)
 - [x] Factory (`User.factory!(5)` — schema-driven fake data)
-- [ ] Eager loading / includes
+- [x] Eager loading (`User.include('posts').all()` — batch loading)
 - [ ] Transactions
 - [ ] Lifecycle hooks (beforeSave, afterCreate)
 

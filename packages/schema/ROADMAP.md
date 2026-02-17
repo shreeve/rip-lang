@@ -23,6 +23,7 @@ What works today, end-to-end:
 | Soft-delete awareness | `softDelete()`, `withDeleted()`, auto-filter | Complete |
 | Factory | `User.factory!(5)` — schema-driven fake data | Complete |
 | Derived types | `UserCreate`, `UserUpdate` generated per model | Complete |
+| Eager loading | `User.include('posts').all!()` — batch loading | Complete |
 | VS Code highlighting | `packages/vscode` | Complete |
 | CLI | `rip-schema generate app.schema` | Complete |
 
@@ -40,22 +41,14 @@ a tool people build real applications with.
 
 Lazy loading of `@belongs_to`, `@has_many`, and `@has_one` relations.
 Models are auto-registered on the schema instance, so `user.posts()` and
-`post.user()` resolve at query time. Eager loading (`include`) is next.
+`post.user()` resolve at query time.
 
-### 2. Eager Loading
+### ~~2. Eager Loading~~ — Complete
 
-**Priority: High — the #1 ORM gap.**
-
-Lazy loading works (`user.posts!()`) but fires a separate query per
-relation. Eager loading batches them:
-
-```coffee
-users = User.include('posts').all!()
-# → 2 queries instead of N+1
-# → user.posts is already populated (no await needed)
-```
-
-This eliminates N+1 problems and is the most-requested feature in any ORM.
+`User.include('posts').all!()` batch-loads relations in 2 queries
+instead of N+1. Works with `belongsTo`, `hasMany`, and `hasOne`.
+Chainable with `where`, `orderBy`, `limit`. Pre-loaded data is returned
+instantly from relation methods — no additional query fires.
 
 ### ~~3. Derived Type Generation~~ — Complete
 
@@ -226,6 +219,7 @@ rip packages/schema/examples/orm-example.rip
 | **Dirty tracking**            | Mutation of `name` sets `$dirty` and `$changed`            |
 | **Relation: hasMany**         | `user.posts()` returns related posts                       |
 | **Relation: belongsTo**       | `post.user()` returns the author                           |
+| **Eager loading**             | `User.include('posts').all()` batch-loads in 2 queries     |
 | **Soft delete**               | `softDelete()` hides, `withDeleted()` includes, `restore()` recovers |
 | **Factory: build**            | `User.factory(0)` builds with realistic fake data (not persisted)    |
 | **Factory: batch create**     | `User.factory(3, role: 'editor')` creates 3 with overrides           |

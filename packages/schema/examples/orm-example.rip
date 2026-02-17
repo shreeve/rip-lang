@@ -11,6 +11,7 @@
 #   - Computed properties (reactive)
 #   - Query API (find, where, orderBy, limit, count)
 #   - Relation loading (user.posts(), post.user())
+#   - Eager loading (User.include('posts').all())
 #   - Soft delete (softDelete, restore, withDeleted)
 #   - Factory (schema-driven fake data generation)
 #   - Dirty tracking and validation
@@ -153,6 +154,13 @@ console.log '\n── Relation loading: post.user() ─────────�
 post = Post.where!(slug: 'bobs-post').first!()
 author = post.user!()
 console.log "#{post.title} was written by #{author.name}"
+
+console.log '\n── Eager loading: include ──────────────────────────────────'
+# 2 queries instead of N+1 — all posts pre-loaded
+usersWithPosts = User.include!('posts').where!(active: true).all!()
+for u in usersWithPosts
+  posts = u.posts!()  # no query — returns pre-loaded data
+  console.log "  #{u.name}: #{posts.length} posts"
 
 console.log '\n── Soft delete ─────────────────────────────────────────────'
 allPosts = Post.all!()

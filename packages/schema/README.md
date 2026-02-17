@@ -621,17 +621,38 @@ directives in the schema. Each relation becomes an async method on instances:
 ```coffee
 # Given: User @has_many Post, Post @belongs_to User
 
-# Load related records (lazy, async)
+# Lazy loading — one query per call
 posts  = user.posts!()           # → [Post, Post, ...]
 author = post.user!()            # → User
-
-# Chain further queries on the result
-for p in user.posts!()
-  console.log p.title
 ```
 
 All models registered with `schema.model` are automatically discoverable — no
 manual wiring needed.
+
+### Eager Loading
+
+Eliminate N+1 queries by pre-loading relations in batch:
+
+```coffee
+# 2 queries instead of N+1
+users = User.include!('posts').all!()
+for u in users
+  posts = u.posts!()             # instant — no query, data already loaded
+  console.log "#{u.name}: #{posts.length} posts"
+
+# Chainable with other query methods
+active = User.include!('posts').where!(active: true).all!()
+
+# Multiple relations
+users = User.include!('posts', 'organization').all!()
+
+# Works with first() too
+user = User.include!('posts').first!()
+```
+
+Under the hood, `include` executes one batch query per relation using
+`WHERE fk IN (...)` — the standard 2-query strategy used by Rails and Prisma.
+Lazy loading still works for any relation not pre-loaded.
 
 ### Soft Delete
 
@@ -802,15 +823,15 @@ you can use the ORM without the code generators.
 | Relation loading (`user.posts()`) | Complete |
 | Soft-delete awareness (`@softDelete`) | Complete |
 | Factory (`User.factory!(5)`) | Complete |
+| Eager loading (`User.include('posts')`) | Complete |
 | `@computed` / `@validate` in DSL | Planned |
-| Eager loading / includes | Planned |
 | Migration diffing | Planned |
 
-The grammar, parser, validation engine, ORM, relation loading, soft-delete,
-factory, and code generators are all working. One schema file generates
-TypeScript interfaces, runtime validators, and SQL DDL — and drives a
-fully-wired ORM with relation loading and schema-driven fake data — from
-a single source of truth.
+The grammar, parser, validation engine, ORM, relation loading, eager loading,
+soft-delete, factory, and code generators are all working. One schema file
+generates TypeScript interfaces, runtime validators, and SQL DDL — and drives
+a fully-wired ORM with eager loading and schema-driven fake data — from a
+single source of truth.
 
 ---
 
@@ -843,11 +864,12 @@ a single source of truth.
 - Model registry — all `schema.model` calls are auto-discoverable
 - DuckDB integration via HTTP
 
-### Phase 4: Eager Loading and Migrations
+### Phase 4: Depth — In Progress
 
-- Eager loading / includes (`schema.model` with preloads)
-- Schema diffing for migration generation
+- ~~Eager loading (`User.include('posts').all()`)~~ — Complete
 - Transaction support
+- Lifecycle hooks (`beforeSave`, `afterCreate`)
+- Schema diffing for migration generation
 - `@computed` and `@validate` blocks in the DSL
 
 ### Phase 5: UI Integration
