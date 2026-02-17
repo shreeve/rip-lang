@@ -248,8 +248,9 @@ function readUUID(dataPtr, row) {
 
   // DuckDB stores UUID as hugeint with XOR on the upper bits
   // Upper 64 bits have sign bit flipped for sorting
-  const hi = BigInt(upper) ^ (1n << 63n);
-  const lo = BigInt(lower);
+  const mask64 = (1n << 64n) - 1n;
+  const hi = (BigInt(upper) ^ (1n << 63n)) & mask64;
+  const lo = BigInt(lower) & mask64;
 
   const hex = ((hi << 64n) | lo).toString(16).padStart(32, '0');
   return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
