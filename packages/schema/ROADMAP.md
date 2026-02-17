@@ -21,6 +21,7 @@ What works today, end-to-end:
 | Computed properties | `schema.model('User', { computed: ... })` | Complete |
 | Relation loading | `user.posts()`, `post.user()` | Complete |
 | Soft-delete awareness | `softDelete()`, `withDeleted()`, auto-filter | Complete |
+| Factory | `User.factory!(5)` — schema-driven fake data | Complete |
 | VS Code highlighting | `packages/vscode` | Complete |
 | CLI | `rip-schema generate app.schema` | Complete |
 
@@ -200,6 +201,8 @@ rip packages/schema/examples/orm-example.rip
 | **Relation: hasMany**         | `user.posts()` returns related posts                       |
 | **Relation: belongsTo**       | `post.user()` returns the author                           |
 | **Soft delete**               | `softDelete()` hides, `withDeleted()` includes, `restore()` recovers |
+| **Factory: build**            | `User.factory(0)` builds with realistic fake data (not persisted)    |
+| **Factory: batch create**     | `User.factory(3, role: 'editor')` creates 3 with overrides           |
 | **Validation**                | Missing `name` and invalid `email` caught by `$validate()` |
 
 ### 3. Compiler Regression Test (`test/rip/control.rip`)

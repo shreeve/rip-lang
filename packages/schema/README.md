@@ -655,6 +655,45 @@ post.restore!()
 Models without `@softDelete` are unaffected — `delete()` still performs a
 real `DELETE` as before.
 
+### Factory
+
+Schema-driven fake data generation — zero configuration, zero dependencies:
+
+```coffee
+# Single record
+user = User.factory!()              # create 1 (persisted)
+user = User.factory!(0)             # build 1 (not persisted)
+
+# Batch
+users = User.factory!(5)            # create 5 (persisted, array)
+users = User.factory!(-3)           # build 3 (not persisted, array)
+
+# With overrides
+admins = User.factory!(3, role: 'admin')
+```
+
+The factory knows what to generate from the schema — field names, types,
+constraints, enums, and defaults:
+
+| Field | Schema | Generated |
+|-------|--------|-----------|
+| `name!` | `string, [1, 100]` | `"Emma Diaz"` |
+| `email!#` | `email` | `"kate3@staging.app"` |
+| `role` | `Role, ["viewer"]` | `"viewer"` (uses default) |
+| `bio?` | `text, [0, 500]` | Lorem paragraph or null |
+| `active` | `boolean, [true]` | `true` (uses default) |
+
+Field-name hinting makes the data realistic — `name` generates person names,
+`email` generates emails, `city` generates cities, `slug` generates slugs.
+No faker library needed.
+
+For models that need custom logic, pass a `faker` function:
+
+```coffee
+User = schema.model 'User',
+  faker: -> { status: Fake.pick ["Active", "Active", "Active", "Closed"] }
+```
+
 ### Validation
 
 ```coffee
@@ -714,6 +753,7 @@ packages/schema/
 ├── emit-sql.js     # AST → SQL DDL (CREATE TABLE, INDEX, TYPE)
 ├── generate.js     # CLI: rip-schema generate app.schema
 ├── orm.js          # ActiveRecord-style ORM
+├── faker.js        # Compact fake data generator (field-name hinting)
 ├── index.js        # Public API entry point
 ├── SCHEMA.md       # Full specification and design details
 └── README.md       # This file
@@ -761,14 +801,16 @@ you can use the ORM without the code generators.
 | VS Code syntax highlighting | Complete |
 | Relation loading (`user.posts()`) | Complete |
 | Soft-delete awareness (`@softDelete`) | Complete |
+| Factory (`User.factory!(5)`) | Complete |
 | `@computed` / `@validate` in DSL | Planned |
 | Eager loading / includes | Planned |
 | Migration diffing | Planned |
 
-The grammar, parser, validation engine, ORM, relation loading, and code
-generators are all working. One schema file generates TypeScript interfaces,
-runtime validators, and SQL DDL — and drives a fully-wired ORM with relation
-loading — from a single source of truth.
+The grammar, parser, validation engine, ORM, relation loading, soft-delete,
+factory, and code generators are all working. One schema file generates
+TypeScript interfaces, runtime validators, and SQL DDL — and drives a
+fully-wired ORM with relation loading and schema-driven fake data — from
+a single source of truth.
 
 ---
 
@@ -797,6 +839,7 @@ loading — from a single source of truth.
 - Schema-derived fields, types, constraints, FKs, timestamps
 - Relation loading: `user.posts()`, `post.user()` (lazy, async)
 - Soft-delete awareness: auto-filtered queries, `softDelete()`, `restore()`, `withDeleted()`
+- Factory: `User.factory!(5)` — schema-driven fake data with field-name hinting
 - Model registry — all `schema.model` calls are auto-discoverable
 - DuckDB integration via HTTP
 

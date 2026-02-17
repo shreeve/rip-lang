@@ -830,39 +830,54 @@ app.set '/', saved
 
 ## Implementation Roadmap
 
-### Phase 1: Core Parser
+### Phase 1: Core Parser — Complete
 
-- [ ] Schema file parser (`.schema` extension)
-- [ ] AST representation
-- [ ] Basic type checking
-- [ ] Error reporting with line numbers
+- [x] Schema file parser (`.schema` extension)
+- [x] AST representation (S-expressions)
+- [x] Basic type checking
+- [x] Error reporting with line numbers
 
-### Phase 2: TypeScript Generation
+### Phase 2: TypeScript Generation — Complete
 
-- [ ] Type definitions
-- [ ] Enum definitions
-- [ ] Interface generation
-- [ ] Export structure
+- [x] Type definitions
+- [x] Enum definitions
+- [x] Interface generation (with JSDoc constraints)
+- [x] Export structure
 
-### Phase 3: Zod Generation
+### Phase 3: Runtime Validation — Complete
 
-- [ ] Primitive type mapping
-- [ ] Constraint mapping (min, max, pattern)
-- [ ] Enum schemas
-- [ ] Object schemas with nested types
-- [ ] Array schemas
-- [ ] Optional/nullable handling
-- [ ] Default values
+Native validation engine (replaces Zod for structural validation):
 
-### Phase 4: SQL Generation
+- [x] Primitive type mapping
+- [x] Constraint checking (min, max, required, unique)
+- [x] Enum validation
+- [x] Nested type validation
+- [x] Default value application
+- [ ] Cross-field `@validate` blocks (planned)
 
-- [ ] CREATE TABLE statements
-- [ ] Column types and constraints
-- [ ] Index generation
-- [ ] Foreign key relationships
-- [ ] Migration generation
+### Phase 4: SQL Generation — Complete
 
-### Phase 5: Widget System
+- [x] CREATE TABLE statements
+- [x] Column types and constraints
+- [x] Index generation (unique + composite)
+- [x] Foreign key relationships
+- [x] Enum type generation
+- [ ] Migration diffing (use external tools for now)
+
+### Phase 5: ORM — Complete
+
+- [x] Schema-centric API (`Schema.load` → `schema.model` → queries)
+- [x] Query builder (where, orderBy, limit, offset, count)
+- [x] Dirty tracking and persistence (INSERT, UPDATE, DELETE)
+- [x] Computed properties (getters, no parens)
+- [x] Relation loading (`user.posts()`, `post.user()`)
+- [x] Soft-delete awareness (`softDelete()`, `restore()`, `withDeleted()`)
+- [x] Factory (`User.factory!(5)` — schema-driven fake data)
+- [ ] Eager loading / includes
+- [ ] Transactions
+- [ ] Lifecycle hooks (beforeSave, afterCreate)
+
+### Phase 6: Widget System
 
 - [ ] Widget definition parser
 - [ ] Prop type generation
@@ -870,7 +885,7 @@ app.set '/', saved
 - [ ] Inheritance resolution
 - [ ] Component generation (Vue/React)
 
-### Phase 6: Form System
+### Phase 7: Form System
 
 - [ ] Form definition parser
 - [ ] Layout engine
@@ -878,7 +893,7 @@ app.set '/', saved
 - [ ] Widget overrides
 - [ ] Validation integration
 
-### Phase 7: State Management
+### Phase 8: State Management
 
 - [ ] State definition parser
 - [ ] Path-based access implementation
@@ -887,7 +902,7 @@ app.set '/', saved
 - [ ] Hydration system
 - [ ] Serialization
 
-### Phase 8: Sage Compatibility
+### Phase 9: Sage Compatibility
 
 - [ ] SDF output generation
 - [ ] SPOT format export
