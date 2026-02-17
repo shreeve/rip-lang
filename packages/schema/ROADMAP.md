@@ -19,6 +19,7 @@ What works today, end-to-end:
 | Query builder | `where`, `orderBy`, `limit`, `count` | Complete |
 | Dirty tracking | `$dirty`, `$changed`, `save()` | Complete |
 | Computed properties | `schema.model('User', { computed: ... })` | Complete |
+| Relation loading | `user.posts()`, `post.user()` | Complete |
 | VS Code highlighting | `packages/vscode` | Complete |
 | CLI | `rip-schema generate app.schema` | Complete |
 
@@ -32,26 +33,11 @@ The API design, architecture, DSL, and code generators are solid. What's
 missing is depth — the features that make the difference between a demo and
 a tool people build real applications with.
 
-### 1. Relation Loading
+### ~~1. Relation Loading~~ — Complete
 
-**Priority: Critical — the single biggest gap.**
-
-The schema already declares `@belongs_to` and `@has_many`. Foreign keys are
-generated in SQL. TypeScript types include relationship fields. But the ORM
-can't load them.
-
-```coffee
-# Lazy loading — should work
-user = User.first!()
-posts = user.posts!()
-
-# Eager loading — should work
-users = User.where!(active: true).include!('posts').all!()
-```
-
-Without this, the ORM is single-table only. Every real application has
-relationships. This is what separates "interesting prototype" from "I can
-actually use this."
+Lazy loading of `@belongs_to`, `@has_many`, and `@has_one` relations.
+Models are auto-registered on the schema instance, so `user.posts()` and
+`post.user()` resolve at query time. Eager loading (`include`) is next.
 
 ### 2. Parser Error Messages
 
@@ -207,8 +193,8 @@ rip packages/schema/examples/orm-example.rip
 |-------------------------------|-----------------------------------------------------------|
 | **Schema load**               | `Schema.load './app.schema'` parses and registers models   |
 | **DDL generation**            | `schema.toSQL()` produces dependency-ordered DDL           |
-| **Setup**                     | DROP/CREATE TABLE via `/sql` endpoint, seed 5 users        |
-| **Model definition**          | `schema.model 'User', { ... }` wires fields + behavior    |
+| **Setup**                     | DROP/CREATE TABLE via `/sql` endpoint, seed users + posts  |
+| **Model definition**          | `schema.model 'User'` + `schema.model 'Post'` wire fields |
 | **Find first**                | `User.first()` returns a user with all schema fields       |
 | **Find by email**             | `User.where(email: ...)` filters correctly                 |
 | **Computed properties**       | `user.identifier` and `user.isAdmin` derive from fields    |
@@ -219,6 +205,8 @@ rip packages/schema/examples/orm-example.rip
 | **Count**                     | `User.count()` returns 5                                   |
 | **Instance methods**          | `user.greet()` and `user.displayRole()` work               |
 | **Dirty tracking**            | Mutation of `name` sets `$dirty` and `$changed`            |
+| **Relation: hasMany**         | `user.posts()` returns related posts                       |
+| **Relation: belongsTo**       | `post.user()` returns the author                           |
 | **Validation**                | Missing `name` and invalid `email` caught by `$validate()` |
 
 ### 3. Compiler Regression Test (`test/rip/control.rip`)

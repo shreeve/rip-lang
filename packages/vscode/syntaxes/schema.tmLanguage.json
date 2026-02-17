@@ -31,8 +31,8 @@
           }
         },
         {
-          "comment": "Relationship directives: @belongs_to, @has_many, @has_one",
-          "match": "(@(?:belongs_to|has_many|has_one))\\s+([A-Z]\\w*)",
+          "comment": "Relationship directives: @belongs_to/@belongsTo, @has_many/@hasMany, @has_one/@hasOne",
+          "match": "(@(?:belongs_to|belongsTo|has_many|hasMany|has_one|hasOne))\\s+([A-Z]\\w*)",
           "captures": {
             "1": { "name": "keyword.other.directive.rip-schema" },
             "2": { "name": "entity.name.type.rip-schema" }
@@ -44,8 +44,8 @@
           "name": "keyword.other.directive.rip-schema"
         },
         {
-          "comment": "Standalone directives: @timestamps, @softDelete",
-          "match": "@(?:timestamps|softDelete)\\b",
+          "comment": "Standalone directives: @timestamps, @softDelete/@soft_delete",
+          "match": "@(?:timestamps|softDelete|soft_delete)\\b",
           "name": "keyword.other.directive.rip-schema"
         }
       ]

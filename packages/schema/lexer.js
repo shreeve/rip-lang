@@ -38,17 +38,21 @@ let AT_KEYWORDS = {
   'state':       'STATE',
   'import':      'IMPORT',
 
-  // Directives
+  // Directives (both snake_case and camelCase accepted)
   'timestamps':  'TIMESTAMPS',
   'softDelete':  'SOFT_DELETE',
+  'soft_delete': 'SOFT_DELETE',
   'include':     'INCLUDE',
   'computed':    'COMPUTED',
   'validate':    'VALIDATE',
   'index':       'INDEX',
   'pattern':     'PATTERN',
   'belongs_to':  'BELONGS_TO',
+  'belongsTo':   'BELONGS_TO',
   'has_one':     'HAS_ONE',
+  'hasOne':      'HAS_ONE',
   'has_many':    'HAS_MANY',
+  'hasMany':     'HAS_MANY',
   'events':      'EVENTS',
   'actions':     'ACTIONS',
 };

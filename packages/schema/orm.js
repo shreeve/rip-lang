@@ -59,6 +59,8 @@ export class Model {
   static _schema    = {};
   static _computed  = {};
   static _columns   = null;
+  static _relations = {};
+  static _schemaRef = null;
 
   // ---------------------------------------------------------------------------
   // Schema definition (called by subclass)
@@ -131,6 +133,29 @@ export class Model {
       fields.deleted_at = { type: 'datetime' };
     }
 
+    // Store relationship metadata for lazy loading
+    const relations = {};
+    if (model.directives?.belongsTo) {
+      for (const rel of model.directives.belongsTo) {
+        const name = rel.model[0].toLowerCase() + rel.model.slice(1);
+        relations[name] = { type: 'belongsTo', model: rel.model, foreignKey: toSnakeCase(rel.model) + '_id' };
+      }
+    }
+    if (model.directives?.hasMany) {
+      for (const rel of model.directives.hasMany) {
+        const name = pluralize(rel.model[0].toLowerCase() + rel.model.slice(1));
+        relations[name] = { type: 'hasMany', model: rel.model, foreignKey: toSnakeCase(modelName) + '_id' };
+      }
+    }
+    if (model.directives?.hasOne) {
+      for (const rel of model.directives.hasOne) {
+        const name = rel.model[0].toLowerCase() + rel.model.slice(1);
+        relations[name] = { type: 'hasOne', model: rel.model, foreignKey: toSnakeCase(modelName) + '_id' };
+      }
+    }
+    this._relations = relations;
+    this._schemaRef = schemaInstance;
+
     // Detect primary key from fields
     for (const [name, def] of Object.entries(fields)) {
       if (def.primary) { this.primaryKey = name; break; }
@@ -190,6 +215,30 @@ export class Model {
       Object.defineProperty(this, name, {
         enumerable: true,
         get() { return fn.call(this); },
+      });
+    }
+
+    // Define relation methods (lazy loading)
+    const relations = this.constructor._relations;
+    const schemaRef = this.constructor._schemaRef;
+    for (const name in relations) {
+      const rel = relations[name];
+      if (this[name] !== undefined) continue; // don't shadow schema fields (e.g., organization_id)
+      Object.defineProperty(this, name, {
+        enumerable: false,
+        value: async () => {
+          const RelModel = schemaRef._models?.get(rel.model);
+          if (!RelModel) throw new Error(`Model '${rel.model}' not registered — define it with schema.model('${rel.model}', ...)`);
+          const pk = this._data[this.constructor.primaryKey];
+          if (rel.type === 'belongsTo') {
+            const fk = this._data[rel.foreignKey];
+            return fk != null ? await RelModel.find(fk) : null;
+          } else if (rel.type === 'hasMany') {
+            return await RelModel.where({ [rel.foreignKey]: pk }).all();
+          } else if (rel.type === 'hasOne') {
+            return await RelModel.where({ [rel.foreignKey]: pk }).first();
+          }
+        },
       });
     }
   }
@@ -521,6 +570,8 @@ Schema.prototype.connect = function(url) {
 };
 
 Schema.prototype.model = function(modelName, options = {}) {
+  if (!this._models) this._models = new Map();
+
   const { computed: computedDefs, ...methods } = options;
 
   // Create a new class extending Model
@@ -531,12 +582,14 @@ Schema.prototype.model = function(modelName, options = {}) {
     ModelClass.prototype[name] = fn;
   }
 
-  // Load schema (table, fields, types, constraints, timestamps, FKs)
+  // Load schema (table, fields, types, constraints, timestamps, FKs, relations)
   ModelClass.fromSchema(this, modelName);
 
   // Add computed properties (getters, no parens needed)
   if (computedDefs) ModelClass.computed(computedDefs);
 
-  // Return callable: User(id) → User.find(id)
-  return makeCallable(ModelClass);
+  // Return callable and register in schema for relation lookups
+  const callable = makeCallable(ModelClass);
+  this._models.set(modelName, callable);
+  return callable;
 };

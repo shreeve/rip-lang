@@ -10,6 +10,7 @@
 #   - Class-based models with instance methods
 #   - Computed properties (reactive)
 #   - Query API (find, where, orderBy, limit, count)
+#   - Relation loading (user.posts(), post.user())
 #   - Dirty tracking and validation
 #
 # Prerequisites:
@@ -34,51 +35,47 @@ schema.connect 'http://localhost:4213'
 # Setup — Create tables from generated DDL
 # ==============================================================================
 
-setup = ->
-  ddl = schema.toSQL()
-
-  # Drop existing tables (reverse dependency order)
-  drops = """
-    DROP TABLE IF EXISTS comments CASCADE;
-    DROP TABLE IF EXISTS posts CASCADE;
-    DROP TABLE IF EXISTS users CASCADE;
-    DROP TABLE IF EXISTS organizations CASCADE;
-    DROP TYPE IF EXISTS post_status CASCADE;
-    DROP TYPE IF EXISTS role CASCADE;
-  """
-
-  res = fetch! 'http://localhost:4213/sql',
-    method: 'POST'
-    headers: { 'Content-Type': 'application/json' }
-    body: JSON.stringify sql: drops + ddl
-  data = res.json!
-  throw new Error "Setup failed: #{data.error}" if data.error
-  console.log 'Setup: created tables from app.schema DDL\n'
-
-setup!
-
-# ==============================================================================
-# Seed Data
-# ==============================================================================
-
-seed = ->
-  sql = """
-    INSERT INTO users (name, email, role, bio, active) VALUES
-      ('Alice',   'alice@example.com',   'admin',  'Platform administrator', true),
-      ('Bob',     'bob@example.com',     'editor', 'Content editor', true),
-      ('Charlie', 'charlie@example.com', 'viewer', NULL, true),
-      ('Dana',    'dana@example.com',    'editor', 'Technical writer', false),
-      ('Eve',     'eve@example.com',     'viewer', NULL, true);
-  """
+exec = (sql) ->
   res = fetch! 'http://localhost:4213/sql',
     method: 'POST'
     headers: { 'Content-Type': 'application/json' }
     body: JSON.stringify { sql }
   data = res.json!
-  throw new Error "Seed failed: #{data.error}" if data.error
-  console.log 'Seed: inserted 5 users\n'
+  throw new Error "SQL failed: #{data.error}" if data.error
+  data
 
-seed!
+# Drop existing tables (reverse dependency order), then create from DDL
+exec! """
+  DROP TABLE IF EXISTS comments CASCADE;
+  DROP TABLE IF EXISTS posts CASCADE;
+  DROP TABLE IF EXISTS users CASCADE;
+  DROP TABLE IF EXISTS organizations CASCADE;
+  DROP TYPE IF EXISTS post_status CASCADE;
+  DROP TYPE IF EXISTS role CASCADE;
+"""
+
+exec! schema.toSQL()
+
+# Seed users, then posts (separate requests ensure users exist before FK lookup)
+exec! """
+  INSERT INTO users (name, email, role, bio, active) VALUES
+    ('Alice',   'alice@example.com',   'admin',  'Platform administrator', true),
+    ('Bob',     'bob@example.com',     'editor', 'Content editor', true),
+    ('Charlie', 'charlie@example.com', 'viewer', NULL, true),
+    ('Dana',    'dana@example.com',    'editor', 'Technical writer', false),
+    ('Eve',     'eve@example.com',     'viewer', NULL, true);
+"""
+
+exec! """
+  INSERT INTO posts (title, slug, content, status, user_id)
+    SELECT 'First Post',  'first-post',  'Hello from Alice!',   'published', id FROM users WHERE email = 'alice@example.com'
+  UNION ALL
+    SELECT 'Second Post', 'second-post', 'Another from Alice.', 'draft',     id FROM users WHERE email = 'alice@example.com'
+  UNION ALL
+    SELECT 'Bobs Post',   'bobs-post',   'Hello from Bob!',     'published', id FROM users WHERE email = 'bob@example.com';
+"""
+
+console.log 'Setup: tables created + 5 users + 3 posts seeded\n'
 
 # ==============================================================================
 # Model Definition — one construct does everything
@@ -90,6 +87,10 @@ User = schema.model 'User',
   computed:
     identifier: -> "#{@name} <#{@email}>"
     isAdmin:    -> @role is 'admin'
+
+Post = schema.model 'Post',
+  computed:
+    summary: -> "#{@title} (#{@status})"
 
 # ==============================================================================
 # Query Examples
@@ -138,6 +139,18 @@ user = User.where!(name: 'Alice').first!()
 console.log "Before: #{user.name}, dirty=#{user.$dirty}"
 user.name = "Alice Updated"
 console.log "After:  #{user.name}, dirty=#{user.$dirty}, changed=#{user.$changed}"
+
+console.log '\n── Relation loading: user.posts() ──────────────────────────'
+alice = User.where!(name: 'Alice').first!()
+posts = alice.posts!()
+console.log "Alice has #{posts.length} posts:"
+for p in posts
+  console.log "  - #{p.summary}"
+
+console.log '\n── Relation loading: post.user() ───────────────────────────'
+post = Post.where!(slug: 'bobs-post').first!()
+author = post.user!()
+console.log "#{post.title} was written by #{author.name}"
 
 console.log '\n── Validation ──────────────────────────────────────────────'
 badUser = User.build email: 'not-valid'
