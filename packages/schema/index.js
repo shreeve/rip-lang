@@ -19,9 +19,21 @@
 //   Date: January 2026
 // ==============================================================================
 
-export { parse, parser, Parser } from './parser.js'
+import { parse as _rawParse, parser, Parser } from './parser.js'
+import { formatParseError } from './errors.js'
+
+export { parser, Parser }
 export { SchemaLexer } from './lexer.js'
 export { Schema } from './runtime.js'
 export { generateTypes } from './emit-types.js'
 export { generateSQL } from './emit-sql.js'
 export { generateZod } from './emit-zod.js'
+export { formatParseError } from './errors.js'
+
+export function parse(source, filename) {
+  try {
+    return _rawParse(source)
+  } catch (err) {
+    throw formatParseError(err, source, filename)
+  }
+}

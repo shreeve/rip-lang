@@ -97,14 +97,9 @@ for (const file of files) {
 
   let ast
   try {
-    ast = parse(source)
+    ast = parse(source, file)
   } catch (err) {
-    console.error(`Error parsing ${file}: ${err.message}`)
-    if (err.hash) {
-      console.error(`  Line: ${err.hash.line + 1}`)
-      console.error(`  Token: ${err.hash.token}`)
-      console.error(`  Expected: ${err.hash.expected?.join(', ')}`)
-    }
+    console.error(err.message)
     process.exit(1)
   }
 

@@ -27,6 +27,7 @@ What works today, end-to-end:
 | Lifecycle hooks | `beforeSave`, `afterCreate`, `beforeDelete`, etc. | Complete |
 | Transactions | `schema.transaction!` — atomic multi-model operations | Complete |
 | Zod generation | `schema.toZod()` / `--zod` CLI — third emit target | Complete |
+| Parse errors | Contextual hints, line context, "did you mean?" | Complete |
 | VS Code highlighting | `packages/vscode` | Complete |
 | CLI | `rip-schema generate app.schema` | Complete |
 
@@ -73,25 +74,17 @@ Models with `@softDelete` now auto-filter deleted records from all queries.
 opts out of the filter. The query builder, static methods (`find`, `all`,
 `first`), and count all respect the soft-delete flag automatically.
 
-### 5. Parser Error Messages
+### ~~5. Parser Error Messages~~ — Complete
 
-**Priority: Medium — first impressions matter.**
+Beautiful, contextual parse errors via `errors.js`. Raw SLR parser dumps are
+intercepted and reformatted with:
 
-When someone writes invalid `.schema` syntax, the error should be beautiful
-and contextual, not a raw SLR parser dump:
-
-```
-Error in app.schema at line 12:
-
-  @model User
-    name!     string, [1, 100]
-    email!#   emial
-              ^^^^^
-  Unknown type "emial". Did you mean "email"?
-```
-
-World-class tools (Elm, Rust, Prisma) are beloved for their error messages.
-This is what makes people trust a tool on first contact.
+- Source context with line numbers and `>` marker on the error line
+- Humanized token names (`end of line` instead of `TERMINATOR`)
+- Contextual hints: "Missing name after @model", "Missing type for field"
+- "Did you mean?" suggestions via Levenshtein distance (`@timstamps` → `@timestamps`)
+- Filename and line number in the header
+- Caret positioning for lexer-level character errors
 
 ### ~~6. Lifecycle Hooks~~ — Complete
 

@@ -863,6 +863,7 @@ Native validation engine (replaces Zod for structural validation):
 - [x] Foreign key relationships
 - [x] Enum type generation
 - [x] Zod schema generation (`emit-zod.js` — third AST walker)
+- [x] Beautiful parse error messages (`errors.js` — contextual hints, "did you mean?")
 - [ ] Migration diffing (use external tools for now)
 
 ### Phase 5: ORM — Complete

@@ -12,7 +12,8 @@
 // ==============================================================================
 
 import { readFileSync } from 'fs'
-import { parse } from './parser.js'
+import { parse as _rawParse } from './parser.js'
+import { formatParseError } from './errors.js'
 import { generateSQL } from './emit-sql.js'
 import { generateTypes } from './emit-types.js'
 import { generateZod } from './emit-zod.js'
@@ -75,7 +76,15 @@ export class Schema {
     this.validators = new Map() // Compiled validators per model
     this._ast = null            // Raw AST (retained for code generation)
 
-    if (source) this.register(parse(source))
+    if (source) this.register(this.constructor._parse(source))
+  }
+
+  static _parse(source, filename) {
+    try {
+      return _rawParse(source)
+    } catch (err) {
+      throw formatParseError(err, source, filename)
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -83,8 +92,12 @@ export class Schema {
   // ---------------------------------------------------------------------------
 
   static load(path, base) {
-    if (base) path = new URL(path, base)
-    return new Schema(readFileSync(path, 'utf-8'))
+    const resolved = base ? new URL(path, base) : path
+    const source = readFileSync(resolved, 'utf-8')
+    const filename = typeof resolved === 'string' ? resolved : resolved.pathname
+    const schema = new Schema()
+    schema.register(Schema._parse(source, filename))
+    return schema
   }
 
   // ---------------------------------------------------------------------------

@@ -847,6 +847,7 @@ packages/schema/
 ├── emit-types.js   # AST → TypeScript interfaces and enums
 ├── emit-sql.js     # AST → SQL DDL (CREATE TABLE, INDEX, TYPE)
 ├── emit-zod.js     # AST → Zod validation schemas
+├── errors.js       # Beautiful parse error formatting
 ├── generate.js     # CLI: rip-schema generate app.schema
 ├── orm.js          # ActiveRecord-style ORM
 ├── faker.js        # Compact fake data generator (field-name hinting)
@@ -903,6 +904,7 @@ you can use the ORM without the code generators.
 | Lifecycle hooks (`beforeSave`, `afterCreate`) | Complete |
 | Transactions (`schema.transaction!`) | Complete |
 | Zod schema generation (`schema.toZod()`) | Complete |
+| Parse error messages (contextual, with hints) | Complete |
 | `@computed` / `@validate` in DSL | Planned |
 | Migration diffing | Planned |
 
@@ -951,6 +953,7 @@ of truth.
 - ~~Lifecycle hooks (`beforeSave`, `afterCreate`, etc.)~~ — Complete
 - ~~Transactions (`schema.transaction!`)~~ — Complete
 - ~~Zod schema generation (`emit-zod.js`)~~ — Complete
+- ~~Parser error messages (`errors.js`)~~ — Complete
 - Schema diffing for migration generation
 - `@computed` and `@validate` blocks in the DSL
 
