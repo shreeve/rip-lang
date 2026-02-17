@@ -361,7 +361,7 @@ Rip includes optional packages for full-stack development:
 | [@rip-lang/ui](packages/ui/) | 0.3.2 | Zero-build reactive web framework (stash, router, hash routing) |
 | [@rip-lang/swarm](packages/swarm/) | 1.1.3 | Parallel job runner with worker pool |
 | [@rip-lang/csv](packages/csv/) | 1.1.3 | CSV parser + writer |
-| [@rip-lang/schema](packages/schema/) | 0.1.1 | ORM + validation |
+| [@rip-lang/schema](packages/schema/) | 0.2.0 | Unified schema → TypeScript types, SQL DDL, validation, ORM |
 | [VS Code Extension](packages/vscode/) | 0.3.1 | Syntax highlighting, type intelligence, source maps |
 
 ```bash

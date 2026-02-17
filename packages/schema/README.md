@@ -637,7 +637,7 @@ packages/schema/
 ├── emit-types.js   # AST → TypeScript interfaces and enums
 ├── emit-sql.js     # AST → SQL DDL (CREATE TABLE, INDEX, TYPE)
 ├── generate.js     # CLI: rip-schema generate app.schema
-├── orm.rip         # ActiveRecord-style ORM
+├── orm.js          # ActiveRecord-style ORM
 ├── index.js        # Public API entry point
 ├── SCHEMA.md       # Full specification and design details
 └── README.md       # This file
@@ -662,7 +662,7 @@ Everything is opt-in. You can use any layer independently:
 | Runtime validation | `schema.validate()` | None |
 | TypeScript types | `generateTypes()` | None |
 | SQL DDL | `generateSQL()` | None |
-| ORM with database | `orm.rip` + `@rip-lang/db` | DuckDB |
+| ORM with database | `orm.js` + `@rip-lang/db` | DuckDB |
 
 The ORM connects to the database over HTTP, keeping the layers cleanly
 separated. You can use schema parsing and code generation without the ORM, and
