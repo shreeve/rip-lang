@@ -957,3 +957,33 @@ code "postfix if else compiles to ternary", '''
 
   x = (cond ? "a" : "b")
   '''
+
+# ============================================================================
+# Regression: or-throw must not leak variables across sibling functions
+# ============================================================================
+
+# When "x = expr or throw" appears inside an exported function, the variable
+# must be declared locally in each sibling function that uses it — not leaked
+# into the program-level scope (which would suppress local declarations in
+# later sibling functions).
+
+code "or-throw in sibling exports hoists variable in each function", '''
+  export first = (data) ->
+    store = getData() or throw new Error 'no context'
+    store.value
+
+  export second = ->
+    store = getData()
+    store
+  ''', '''
+  export const first = (function(data) {
+    let store;
+    if (!(store = getData())) throw new Error('no context');
+    return store.value;
+  });
+  export const second = (function() {
+    let store;
+    store = getData();
+    return store;
+  });
+  '''

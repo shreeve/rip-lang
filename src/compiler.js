@@ -822,7 +822,6 @@ export class CodeGenerator {
       let ctrlOp = str(rawCtrlOp);
       let isReturn = ctrlSexpr[0] === 'return';
       let targetCode = this.generate(target, 'value');
-      if (typeof target === 'string') this.programVars.add(target);
       let exprCode = this.generate(expr, 'value');
       let ctrlValue = ctrlSexpr.length > 1 ? ctrlSexpr[1] : null;
       let ctrlCode = isReturn
