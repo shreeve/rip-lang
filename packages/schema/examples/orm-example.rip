@@ -1,3 +1,5 @@
+#!/usr/bin/env rip
+
 # ==============================================================================
 # ORM Example — Rich Domain Models with a Live Database
 # ==============================================================================
@@ -34,7 +36,7 @@ setup = ->
     method: 'POST'
     headers: { 'Content-Type': 'application/json' }
     body: JSON.stringify sql: """
-      DROP TABLE IF EXISTS users;
+      DROP TABLE IF EXISTS users CASCADE;
       CREATE TABLE users (
         id      INTEGER PRIMARY KEY,
         name    VARCHAR NOT NULL,

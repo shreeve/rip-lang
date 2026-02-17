@@ -5370,8 +5370,6 @@ function _setDataSection() {
       let ctrlOp = str(rawCtrlOp);
       let isReturn = ctrlSexpr[0] === "return";
       let targetCode2 = this.generate(target, "value");
-      if (typeof target === "string")
-        this.programVars.add(target);
       let exprCode = this.generate(expr, "value");
       let ctrlValue = ctrlSexpr.length > 1 ? ctrlSexpr[1] : null;
       let ctrlCode = isReturn ? ctrlValue ? `return ${this.generate(ctrlValue, "value")}` : "return" : ctrlValue ? `throw ${this.generate(ctrlValue, "value")}` : "throw new Error()";
@@ -7910,8 +7908,8 @@ function getComponentRuntime() {
   return new CodeGenerator({}).getComponentRuntime();
 }
 // src/browser.js
-var VERSION = "3.8.9";
-var BUILD_DATE = "2026-02-16@20:02:36GMT";
+var VERSION = "3.8.10";
+var BUILD_DATE = "2026-02-17@02:53:39GMT";
 if (typeof globalThis !== "undefined" && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
 }

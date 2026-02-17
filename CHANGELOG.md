@@ -7,6 +7,18 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.10] - 2026-02-17
+
+### Compiler — Bug Fix
+
+- **Fixed `or throw` variable hoisting bug** — The `x = expr or throw` pattern inside function bodies was erroneously adding the target variable to the program-level `programVars` set. This "poisoned" the variable filter for subsequent sibling functions, causing them to omit local `let` declarations and produce `ReferenceError` at runtime. Most notably, this broke `@rip-lang/api`'s `store` variable when multiple exported functions used the pattern. Fixed by removing the incorrect `programVars.add()` call from `generateAssignment`.
+
+### Schema — New Features
+
+- **`Model.fromSchema()` bridge** — ORM models can now auto-configure their schema, table name, and primary key directly from a parsed `.schema` AST via `Model.fromSchema(schema, 'ModelName')`, eliminating manual field re-declaration.
+- **Dependency-ordered SQL DDL** — `emit-sql.js` now topologically sorts tables so foreign key references are always defined before use.
+- **`app-demo.rip` example** — Rewrote the schema demo in Rip (was JavaScript), showcasing TypeScript generation, SQL DDL, and runtime validation from a single `.schema` file.
+
 ## [3.8.9] - 2026-02-16
 
 ### Compiler — Grammar Desugaring & Cleanup

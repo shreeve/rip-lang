@@ -33,8 +33,8 @@ bun run browser
 
 | Metric | Value |
 |--------|-------|
-| Version | 3.8.9 |
-| Tests | 1,241/1,241 (100%) |
+| Version | 3.8.10 |
+| Tests | 1,243/1,243 (100%) |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
 
@@ -71,7 +71,7 @@ rip-lang/
 │   ├── RIP-LANG.md      # Language reference (includes reactivity, future ideas)
 │   ├── RIP-TYPES.md     # Type system specification
 │   └── RIP-INTERNALS.md # Compiler architecture & design decisions
-├── test/rip/            # 25 test files (1,241 tests)
+├── test/rip/            # 25 test files (1,243 tests)
 └── scripts/             # Build utilities
 ```
 
@@ -373,7 +373,7 @@ code "name", "x + y", "(x + y)"
 fail "name", "invalid syntax"
 ```
 
-### Test Files (25 files, 1,241 tests)
+### Test Files (25 files, 1,243 tests)
 
 ```
 test/rip/

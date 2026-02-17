@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.8.9-blue.svg" alt="Version"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.8.10-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
   <a href="#"><img src="https://img.shields.io/badge/tests-1%2C242%2F1%2C242-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
@@ -354,7 +354,7 @@ Rip includes optional packages for full-stack development:
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| [rip-lang](https://www.npmjs.com/package/rip-lang) | 3.8.9 | Core language compiler |
+| [rip-lang](https://www.npmjs.com/package/rip-lang) | 3.8.10 | Core language compiler |
 | [@rip-lang/api](packages/api/) | 1.1.6 | HTTP framework (Sinatra-style routing, 37 validators) |
 | [@rip-lang/server](packages/server/) | 1.1.5 | Multi-worker app server (hot reload, HTTPS, mDNS) |
 | [@rip-lang/db](packages/db/) | 1.1.4 | DuckDB server with official UI (pure Bun FFI) |
