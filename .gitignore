@@ -29,6 +29,7 @@ yarn-error.log*
 .swarm
 
 # Misc
+.auth
 .env
 .env.local
 .tool-versions
