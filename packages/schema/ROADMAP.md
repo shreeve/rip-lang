@@ -22,6 +22,7 @@ What works today, end-to-end:
 | Relation loading | `user.posts()`, `post.user()` | Complete |
 | Soft-delete awareness | `softDelete()`, `withDeleted()`, auto-filter | Complete |
 | Factory | `User.factory!(5)` — schema-driven fake data | Complete |
+| Derived types | `UserCreate`, `UserUpdate` generated per model | Complete |
 | VS Code highlighting | `packages/vscode` | Complete |
 | CLI | `rip-schema generate app.schema` | Complete |
 
@@ -41,9 +42,44 @@ Lazy loading of `@belongs_to`, `@has_many`, and `@has_one` relations.
 Models are auto-registered on the schema instance, so `user.posts()` and
 `post.user()` resolve at query time. Eager loading (`include`) is next.
 
-### 2. Parser Error Messages
+### 2. Eager Loading
 
-**Priority: High — first impressions matter.**
+**Priority: High — the #1 ORM gap.**
+
+Lazy loading works (`user.posts!()`) but fires a separate query per
+relation. Eager loading batches them:
+
+```coffee
+users = User.include('posts').all!()
+# → 2 queries instead of N+1
+# → user.posts is already populated (no await needed)
+```
+
+This eliminates N+1 problems and is the most-requested feature in any ORM.
+
+### ~~3. Derived Type Generation~~ — Complete
+
+Each `@model` now generates three TypeScript interfaces:
+
+- **`User`** — Full record with all fields
+- **`UserCreate`** — Required fields required, fields with defaults optional,
+  no id/timestamps/relations
+- **`UserUpdate`** — All fields optional, same exclusions
+
+The generator reads required (`!`), defaults, and relationship metadata to
+determine which fields are required vs optional in each variant. Controlled
+via `{ derived: false }` option if not wanted.
+
+### ~~4. Soft-Delete Awareness~~ — Complete
+
+Models with `@softDelete` now auto-filter deleted records from all queries.
+`softDelete()` sets `deleted_at`, `restore()` clears it, and `withDeleted()`
+opts out of the filter. The query builder, static methods (`find`, `all`,
+`first`), and count all respect the soft-delete flag automatically.
+
+### 5. Parser Error Messages
+
+**Priority: Medium — first impressions matter.**
 
 When someone writes invalid `.schema` syntax, the error should be beautiful
 and contextual, not a raw SLR parser dump:
@@ -61,31 +97,7 @@ Error in app.schema at line 12:
 World-class tools (Elm, Rust, Prisma) are beloved for their error messages.
 This is what makes people trust a tool on first contact.
 
-### ~~3. Soft-Delete Awareness~~ — Complete
-
-Models with `@softDelete` now auto-filter deleted records from all queries.
-`softDelete()` sets `deleted_at`, `restore()` clears it, and `withDeleted()`
-opts out of the filter. The query builder, static methods (`find`, `all`,
-`first`), and count all respect the soft-delete flag automatically.
-
-### 4. Derived Type Generation
-
-**Priority: High — already promised, not yet built.**
-
-`emit-types.js` should generate variant interfaces from a single `@model`:
-
-```typescript
-export interface User { ... }         // full record
-export interface UserCreate { ... }   // required fields only, defaults omitted
-export interface UserUpdate { ... }   // all fields optional
-export interface UserPublic { ... }   // writeOnly fields excluded
-```
-
-The metadata is all there — required, optional, defaults, writeOnly. This
-is one of the strongest claims in the INQUISITION and README. It should be
-real.
-
-### 5. Lifecycle Hooks
+### 6. Lifecycle Hooks
 
 **Priority: Medium — needed for real business logic.**
 
@@ -101,9 +113,23 @@ User = schema.model 'User',
 Every serious ORM has `beforeSave`, `afterCreate`, `beforeDelete`. Without
 hooks, people hack around the ORM instead of working with it.
 
-### 6. One More Code Generation Target
+### 7. Transactions
 
-**Priority: Medium — proves the architecture.**
+**Priority: Medium — needed for multi-step operations.**
+
+```coffee
+schema.transaction! ->
+  user = User.create!(name: 'Alice', email: 'alice@co.com')
+  post = Post.create!(title: 'Hello', userId: user.id)
+  # If either fails, both roll back
+```
+
+Without transactions, any multi-model operation is unsafe. The HTTP-based
+query interface needs a way to batch statements atomically.
+
+### 8. One More Code Generation Target
+
+**Priority: Lower — proves the architecture.**
 
 The "any new target is just one more AST walker" claim is theoretical until
 there's a third walker. Candidates:
@@ -115,9 +141,9 @@ there's a third walker. Candidates:
 Each is a single file that walks the same S-expression AST. Writing one
 proves the extensibility story isn't just talk.
 
-### 7. Per-Schema Connection State
+### 9. Per-Schema Connection State
 
-**Priority: Medium — needed for testing and multi-database apps.**
+**Priority: Lower — needed for testing and multi-database apps.**
 
 `schema.connect('url')` currently sets a module-level `_dbUrl`. Two schemas
 can't connect to different databases. Tests can't run in isolation.
