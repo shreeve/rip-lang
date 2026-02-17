@@ -26,6 +26,7 @@ What works today, end-to-end:
 | Eager loading | `User.include('posts').all!()` — batch loading | Complete |
 | Lifecycle hooks | `beforeSave`, `afterCreate`, `beforeDelete`, etc. | Complete |
 | Transactions | `schema.transaction!` — atomic multi-model operations | Complete |
+| Zod generation | `schema.toZod()` / `--zod` CLI — third emit target | Complete |
 | VS Code highlighting | `packages/vscode` | Complete |
 | CLI | `rip-schema generate app.schema` | Complete |
 
@@ -107,19 +108,13 @@ All ORM operations inside the callback are atomic — if any step throws,
 everything rolls back. Works because rip-db uses a single persistent
 DuckDB connection.
 
-### 8. One More Code Generation Target
+### ~~8. One More Code Generation Target~~ — Complete
 
-**Priority: Lower — proves the architecture.**
-
-The "any new target is just one more AST walker" claim is theoretical until
-there's a third walker. Candidates:
-
-- **`emit-zod.js`** — For teams that need tRPC or react-hook-form integration
-- **`emit-openapi.js`** — For teams that need API documentation
-- **`emit-graphql.js`** — For teams using GraphQL
-
-Each is a single file that walks the same S-expression AST. Writing one
-proves the extensibility story isn't just talk.
+`emit-zod.js` — the third AST walker. Generates Zod schemas with full
+constraint validation, enum references, nested types, and Create/Update
+variants. Available via `schema.toZod()`, `generateZod(ast)`, or
+`--zod` CLI flag. Proves the "any new target is just one more walker"
+architecture claim.
 
 ### 9. Per-Schema Connection State
 

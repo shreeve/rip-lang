@@ -248,30 +248,31 @@ The schema generates the data types. TypeScript composes them. Each tool does wh
 | Concern | TypeScript | Zod | Prisma | Rip Schema |
 |---------|-----------|-----|--------|------------|
 | Compile-time types | Native | Inferred | Generated client | **Generated .d.ts** (working) |
-| Runtime validation | None | Native | None | **Native** (working) |
+| Runtime validation | None | Native | None | **Native** + **Generated Zod** (working) |
 | Database schema | None | None | Native | **Generated SQL DDL** (working) |
 | Query engine | None | None | Prisma Client | **ORM** (schema-driven — find, where, chain, relations, eager loading, hooks, transactions, soft-delete, factory, dirty tracking) |
 | IDE experience | Native | Via inference | Via client types | Via generated .d.ts |
 | Ecosystem size | Massive | Large | Large | Small (but compatible with theirs) |
-| Single source of truth | Types only | Types + validation | DB + types | **Types + validation + DB** |
+| Single source of truth | Types only | Types + validation | DB + types | **Types + validation + Zod + DB** |
 | Migration story | N/A | N/A | Mature | DDL target state (use external tools) |
 | Dependencies | N/A | zod (~60KB) | @prisma/client + engine | **Zero** (pure JS) |
 
 ## What Works Today
 
-Rip Schema delivers four capabilities from a single definition — today, not in a future roadmap:
+Rip Schema delivers five capabilities from a single definition — today, not in a future roadmap:
 
 - **`schema.toTypes()`** — Generates TypeScript interfaces, enums, JSDoc constraints, relationship fields, and optional markers. Import the `.d.ts` file and your IDE gives you autocomplete, hover types, and go-to-definition.
 - **`schema.toSQL()`** — Generates `CREATE TABLE`, `CREATE INDEX`, `CREATE TYPE AS ENUM` with proper column types, constraints, foreign keys, Rails-style pluralized table names, and soft delete support.
+- **`schema.toZod()`** — Generates Zod schemas with constraint validation (`.min()`, `.max()`, `.email()`, `.uuid()`, `.default()`), enum references, nested types, and Create/Update variants. Drop the `.zod.ts` file into any tRPC or react-hook-form project.
 - **`schema.create()` / `schema.validate()`** — Validates data at runtime: required fields, type checking, min/max constraints, email format, enum membership, nested type validation, and automatic default application.
 - **`schema.model()`** — Creates schema-driven ORM models with one call: fields, types, constraints, methods, computed properties, dirty tracking, relation loading, soft-delete awareness, factory, and a chainable query API — all wired from the `.schema` file. `user.posts()` and `post.user()` resolve from the schema's relationship directives. `User.factory!(5)` generates realistic test data from schema metadata with zero configuration.
-- **`generate.js`** — CLI that reads `.schema` files and writes `.d.ts` and `.sql` output.
+- **`generate.js`** — CLI that reads `.schema` files and writes `.d.ts`, `.sql`, and `.zod.ts` output.
 
 All of this runs with zero external dependencies on a single `npm install @rip-lang/schema`.
 
 ## The Honest Assessment
 
-Rip Schema **does not replace** TypeScript, Zod, or Prisma. It **generates TypeScript types**, **provides its own runtime validation**, and **generates SQL DDL** — from a single definition. Its value is not in being better at any one layer. It's in being the single place where all three layers agree.
+Rip Schema **does not replace** TypeScript, Zod, or Prisma. It **generates TypeScript types**, **generates Zod schemas**, **provides its own runtime validation**, and **generates SQL DDL** — from a single definition. Its value is not in being better at any one layer. It's in being the single place where all three layers agree.
 
 The weaknesses are real:
 - No migration engine — generates target state, not migration paths (use dbmate, Flyway, or Prisma Migrate)
@@ -282,7 +283,8 @@ The weaknesses are real:
 The strengths are also real:
 - Zero drift between types, validation, and persistence — proven with working generators and tests
 - One definition instead of three — demonstrated end-to-end in `examples/app-demo.rip` and `examples/orm-example.rip`
-- Schema-centric API — `Schema.load`, `schema.model`, `schema.toSQL()`, `schema.toTypes()` — everything flows from one object
+- Schema-centric API — `Schema.load`, `schema.model`, `schema.toSQL()`, `schema.toTypes()`, `schema.toZod()` — everything flows from one object
+- Three independent AST walkers (TypeScript, SQL, Zod) prove the extensibility architecture
 - Zero runtime dependencies — no Zod, no Prisma engine, no code generation framework
 - Richer metadata than any single tool captures alone — constraints, relationships, indexes, timestamps, and soft deletes in one definition
 - Incremental adoption — opt-in, model by model, alongside existing TypeScript/Zod/Prisma code
@@ -295,8 +297,8 @@ The thesis is not "throw away your tools." The thesis is "define your data once,
 
 **Dr. T**: "I was skeptical, but then I saw the generated `.d.ts` output — proper interfaces with JSDoc constraints, enum generation, optional markers, relationship arrays. It plugs into our LSP unchanged. The derived types (Create, Update, Public) from a single definition would be genuinely useful when implemented. The TypeScript output quality meets my bar. **Pass.**"
 
-**Dr. Z**: "I expected them to generate Zod schemas and was ready to argue about generator correctness. Instead, they built their own runtime validator — zero dependencies, handles nested types, enums, constraints, defaults. It's not Zod, but it covers the structural validation that accounts for 90% of Zod usage. For the 10% that needs Zod ecosystem integration (tRPC, react-hook-form), a `--zod` target is straightforward. The cross-field `@validate` blocks are reasonable. **Pass.**"
+**Dr. Z**: "I expected them to generate Zod schemas and was ready to argue about generator correctness. They did both — built their own runtime validator (zero dependencies, handles nested types, enums, constraints, defaults) for the 90% case, *and* added `emit-zod.js` for the 10% that needs Zod ecosystem integration (tRPC, react-hook-form). The Zod output maps schema constraints directly to Zod refinements — `.min()`, `.max()`, `.email()`, `.uuid()`, `.default()` — and generates Create/Update variants with proper optionality. Three AST walkers from one grammar proves this isn't a one-trick generator. **Pass.**"
 
 **Dr. P**: "The SQL DDL output is solid — proper `CREATE TABLE` with constraints, foreign keys, indexes, enum types, Rails-style pluralization. It targets DuckDB today but the patterns are standard SQL. They're honest that they don't have migrations yet. The decision to generate standard SQL rather than locking into Prisma schema format is defensible — it means they work with any database tool, not just ours. The ORM is schema-driven — `schema.model('User', { ... })` wires everything from the `.schema` file in one call, including fields, types, constraints, methods, computed properties, dirty tracking, relation loading, eager loading, lifecycle hooks, soft-delete awareness, and a chainable query API. `user.posts()` and `post.user()` just work — derived from the schema, no manual wiring. `User.include('posts').all()` batch-loads in 2 queries — same strategy we use. Lifecycle hooks — `beforeSave`, `afterCreate`, `beforeDelete` — run inline with persistence, can normalize data and abort operations. The factory — `User.factory!(5)` generates realistic test data from schema metadata with zero configuration — is something Prisma doesn't offer at all. It runs end-to-end against a live database. **Pass — with the caveat that migration tooling is still ahead.**"
 
-**Chair**: "The candidate has moved from architecture to working software. TypeScript generation, SQL DDL generation, runtime validation, and a Schema-centric ORM — now with relation loading, eager loading, lifecycle hooks, soft-delete awareness, and a schema-driven factory — are all functional and tested, including an end-to-end smoke test against a live database. The API has been refined to a single entry point: `Schema.load` → `schema.model` → queries → relations → hooks → factory. The original conditions were: (1) demonstrate high-quality TypeScript output — **met**, (2) demonstrate high-quality SQL output — **met**, (3) provide a clear migration path for existing codebases — **partially met** (incremental adoption is supported, but schema inference from existing TypeScript types is not yet built), (4) demonstrate a query layer — **met** (schema-driven models with find, where, chainable queries, relation loading, eager loading, lifecycle hooks, soft-delete, factory, dirty tracking, computed properties, and validation against rip-db). The panel issues a **pass**, with the remaining work being migration tooling and additional emit targets for teams that specifically need those formats."
+**Chair**: "The candidate has moved from architecture to working software. TypeScript generation, SQL DDL generation, Zod schema generation, runtime validation, and a Schema-centric ORM — now with relation loading, eager loading, lifecycle hooks, transactions, soft-delete awareness, and a schema-driven factory — are all functional and tested, including an end-to-end smoke test against a live database. Three independent AST walkers (TypeScript, SQL, Zod) prove the extensibility claim. The API has been refined to a single entry point: `Schema.load` → `schema.model` → queries → relations → hooks → factory. The original conditions were: (1) demonstrate high-quality TypeScript output — **met**, (2) demonstrate high-quality SQL output — **met**, (3) provide a clear migration path for existing codebases — **partially met** (incremental adoption is supported, but schema inference from existing TypeScript types is not yet built), (4) demonstrate a query layer — **met** (schema-driven models with find, where, chainable queries, relation loading, eager loading, lifecycle hooks, transactions, soft-delete, factory, dirty tracking, computed properties, and validation against rip-db). The panel issues a **pass**, with the remaining work being migration tooling."

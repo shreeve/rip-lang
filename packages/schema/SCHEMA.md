@@ -862,6 +862,7 @@ Native validation engine (replaces Zod for structural validation):
 - [x] Index generation (unique + composite)
 - [x] Foreign key relationships
 - [x] Enum type generation
+- [x] Zod schema generation (`emit-zod.js` — third AST walker)
 - [ ] Migration diffing (use external tools for now)
 
 ### Phase 5: ORM — Complete

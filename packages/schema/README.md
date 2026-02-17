@@ -36,6 +36,7 @@ const schema = Schema.load('app.schema')
 
 const ts  = schema.toTypes()    // → TypeScript declarations
 const sql = schema.toSQL()      // → SQL DDL (CREATE TABLE, INDEX, TYPE)
+const zod = schema.toZod()      // → Zod schemas (validation + type inference)
 
 const user = schema.create('User', { name: 'Alice', email: 'alice@co.com' })
 const errors = user.$validate() // → null if valid, array of errors if not
@@ -511,8 +512,9 @@ lightweight tree structure that any code generator can walk:
 
 ```
 app.schema  →  lexer  →  parser  →  S-expressions  →  ┬── emit-types.js  →  app.d.ts
-                                                       ├── runtime.js     →  validate()
-                                                       └── emit-sql.js    →  app.sql
+                                                       ├── emit-sql.js    →  app.sql
+                                                       ├── emit-zod.js    →  app.zod.ts
+                                                       └── runtime.js     →  validate()
 ```
 
 The S-expression for a model looks like:
@@ -716,6 +718,38 @@ If the callback throws, all changes are rolled back. If it succeeds, all
 changes are committed. The return value of the callback is returned from
 `transaction()`.
 
+### Zod Schemas
+
+Generate Zod validation schemas from the same source of truth:
+
+```coffee
+# Programmatic
+schema = Schema.load 'app.schema'
+zod = schema.toZod()     # → Zod source with all schemas
+
+# CLI
+bun generate.js app.schema --zod              # → app.zod.ts
+bun generate.js app.schema --zod --stdout     # → print to stdout
+```
+
+Each model produces three schemas:
+
+```typescript
+export const UserSchema       = z.object({ ... })  // Full record
+export const UserCreateSchema = z.object({ ... })  // Input for creation
+export const UserUpdateSchema = z.object({ ... })  // Input for updates (all optional)
+export type User       = z.infer<typeof UserSchema>
+export type UserCreate = z.infer<typeof UserCreateSchema>
+export type UserUpdate = z.infer<typeof UserUpdateSchema>
+```
+
+Constraints from the schema are mapped directly to Zod refinements:
+`string [1, 100]` becomes `z.string().min(1).max(100)`, email types get
+`.email()`, UUIDs get `.uuid()`, and defaults flow through as `.default()`.
+Enum types reference their Zod enum schema. Nested `@type` definitions are
+embedded as `z.object()` references. Relation `has_many`/`has_one` fields
+are omitted since Zod schemas target input validation, not query results.
+
 ### Factory
 
 Schema-driven fake data generation — zero configuration, zero dependencies:
@@ -812,6 +846,7 @@ packages/schema/
 ├── runtime.js      # Schema registry, validation, model factory
 ├── emit-types.js   # AST → TypeScript interfaces and enums
 ├── emit-sql.js     # AST → SQL DDL (CREATE TABLE, INDEX, TYPE)
+├── emit-zod.js     # AST → Zod validation schemas
 ├── generate.js     # CLI: rip-schema generate app.schema
 ├── orm.js          # ActiveRecord-style ORM
 ├── faker.js        # Compact fake data generator (field-name hinting)
@@ -827,7 +862,7 @@ packages/db/
 The schema package and database package are independent:
 
 - **@rip-lang/schema** — Parse schemas, validate data, generate TypeScript
-  types and SQL DDL, build domain models
+  types, SQL DDL, and Zod schemas, build domain models
 - **@rip-lang/db** — Database server (DuckDB with native FFI bindings, served
   over HTTP)
 
@@ -839,6 +874,7 @@ Everything is opt-in. You can use any layer independently:
 | Runtime validation | `schema.validate()`, `schema.create()` | None |
 | TypeScript types | `schema.toTypes()` | None |
 | SQL DDL | `schema.toSQL()` | None |
+| Zod schemas | `schema.toZod()` | None |
 | ORM with database | `schema.model()` + `@rip-lang/db` | DuckDB |
 
 The ORM connects to the database over HTTP, keeping the layers cleanly
@@ -866,14 +902,16 @@ you can use the ORM without the code generators.
 | Eager loading (`User.include('posts')`) | Complete |
 | Lifecycle hooks (`beforeSave`, `afterCreate`) | Complete |
 | Transactions (`schema.transaction!`) | Complete |
+| Zod schema generation (`schema.toZod()`) | Complete |
 | `@computed` / `@validate` in DSL | Planned |
 | Migration diffing | Planned |
 
 The grammar, parser, validation engine, ORM, relation loading, eager loading,
 lifecycle hooks, soft-delete, factory, and code generators are all working.
-One schema file generates TypeScript interfaces, runtime validators, and SQL
-DDL — and drives a fully-wired ORM with eager loading, lifecycle hooks, and
-schema-driven fake data — from a single source of truth.
+One schema file generates TypeScript interfaces, Zod validation schemas,
+runtime validators, and SQL DDL — and drives a fully-wired ORM with eager
+loading, lifecycle hooks, and schema-driven fake data — from a single source
+of truth.
 
 ---
 
@@ -890,6 +928,7 @@ schema-driven fake data — from a single source of truth.
 
 - TypeScript type emission from S-expressions (`emit-types.js`)
 - SQL DDL emission from S-expressions (`emit-sql.js`)
+- Zod schema emission from S-expressions (`emit-zod.js`)
 - Built-in runtime validation (replaces Zod — `runtime.js`)
 - CLI tool for schema compilation (`generate.js`)
 
@@ -911,6 +950,7 @@ schema-driven fake data — from a single source of truth.
 - ~~Eager loading (`User.include('posts').all()`)~~ — Complete
 - ~~Lifecycle hooks (`beforeSave`, `afterCreate`, etc.)~~ — Complete
 - ~~Transactions (`schema.transaction!`)~~ — Complete
+- ~~Zod schema generation (`emit-zod.js`)~~ — Complete
 - Schema diffing for migration generation
 - `@computed` and `@validate` blocks in the DSL
 

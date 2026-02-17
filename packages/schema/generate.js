@@ -2,12 +2,13 @@
 // ==============================================================================
 // generate.js - CLI for Rip Schema code generation
 //
-// Reads .schema files and generates TypeScript types and SQL DDL.
+// Reads .schema files and generates TypeScript types, SQL DDL, and Zod schemas.
 //
 // Usage:
 //   bun packages/schema/generate.js app.schema
 //   bun packages/schema/generate.js app.schema --types
 //   bun packages/schema/generate.js app.schema --sql
+//   bun packages/schema/generate.js app.schema --zod
 //   bun packages/schema/generate.js app.schema --outdir ./generated
 //   bun packages/schema/generate.js app.schema --drop  (prepend DROP TABLE)
 //   bun packages/schema/generate.js app.schema --stdout (print to stdout)
@@ -21,6 +22,7 @@ import * as path from 'path'
 import { parse } from './index.js'
 import { generateTypes } from './emit-types.js'
 import { generateSQL } from './emit-sql.js'
+import { generateZod } from './emit-zod.js'
 
 // =============================================================================
 // Parse CLI arguments
@@ -51,6 +53,7 @@ Usage: rip-schema <schema-file> [options]
 Options:
   --types     Generate TypeScript declarations only
   --sql       Generate SQL DDL only
+  --zod       Generate Zod schemas only
   --stdout    Print to stdout instead of writing files
   --outdir    Output directory (default: same as input file)
   --drop      Prepend DROP TABLE IF EXISTS (SQL only)
@@ -60,6 +63,7 @@ Examples:
   rip-schema app.schema                  Generate .d.ts and .sql files
   rip-schema app.schema --types          Generate .d.ts only
   rip-schema app.schema --sql --drop     Generate .sql with DROP statements
+  rip-schema app.schema --zod            Generate .zod.ts Zod schemas
   rip-schema app.schema --stdout         Print all output to stdout
 `.trim())
   process.exit(flags.has('help') ? 0 : 1)
@@ -69,8 +73,10 @@ Examples:
 // Determine what to generate
 // =============================================================================
 
-const wantTypes = flags.has('types') || (!flags.has('types') && !flags.has('sql'))
-const wantSQL   = flags.has('sql')   || (!flags.has('types') && !flags.has('sql'))
+const explicit  = flags.has('types') || flags.has('sql') || flags.has('zod')
+const wantTypes = flags.has('types') || !explicit
+const wantSQL   = flags.has('sql')   || !explicit
+const wantZod   = flags.has('zod')
 const toStdout  = flags.has('stdout')
 const dropFirst = flags.has('drop')
 
@@ -125,6 +131,19 @@ for (const file of files) {
       if (outdir) fs.mkdirSync(dir, { recursive: true })
       fs.writeFileSync(outPath, sql)
       console.log(`  sql   → ${path.relative(process.cwd(), outPath)}`)
+    }
+  }
+
+  // Generate Zod
+  if (wantZod) {
+    const zod = generateZod(ast)
+    if (toStdout) {
+      console.log(zod)
+    } else {
+      const outPath = path.join(dir, basename.replace(/\.schema$/, '.zod.ts'))
+      if (outdir) fs.mkdirSync(dir, { recursive: true })
+      fs.writeFileSync(outPath, zod)
+      console.log(`  zod   → ${path.relative(process.cwd(), outPath)}`)
     }
   }
 }

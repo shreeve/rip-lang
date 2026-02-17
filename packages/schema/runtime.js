@@ -15,6 +15,7 @@ import { readFileSync } from 'fs'
 import { parse } from './parser.js'
 import { generateSQL } from './emit-sql.js'
 import { generateTypes } from './emit-types.js'
+import { generateZod } from './emit-zod.js'
 
 // =============================================================================
 // Built-in Type Validators
@@ -128,6 +129,10 @@ export class Schema {
 
   toTypes() {
     return generateTypes(this._ast)
+  }
+
+  toZod() {
+    return generateZod(this._ast)
   }
 
   _registerEnum(def) {
