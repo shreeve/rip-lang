@@ -1,0 +1,163 @@
+# Stash - Config storage with deep path navigation
+#
+# Supports paths like: "foo.bar[0].baz", "users[0].name", "data['key']"
+
+import * as fs from 'fs'
+
+# ==============================================================================
+# Path Navigation
+# ==============================================================================
+
+# Regex to parse path segments: .key, /key, [0], [-1], ["key"], ['key']
+PATH_REGEX = /([.\/][^.\/\[\<\s]+|\[[-+]?\d+\]|\[(?:"[^"]+"|'[^']+')\])/
+
+# Check if value is a numeric string (including negative)
+isNumeric = (val) -> /^-?(\d+)$/.test val
+
+# Parse a path string into array of property names/indices
+walk = (path) ->
+  list = ('.' + path).split PATH_REGEX
+  list.shift()
+  result = []
+  for part, i in list
+    continue if i % 2 isnt 0
+    chr = part[0]
+    switch chr
+      when '.', '/'
+        result.push part.slice 1
+      when '['
+        if part[1] is '"' or part[1] is "'"
+          result.push part.slice 2, -2
+        else
+          result.push +(part.slice 1, -1)
+  result
+
+# Get a value from nested data using path notation
+# Returns default value if path doesn't exist
+getPath = (data, path, defaultValue) ->
+  list = walk path
+  for prop in list
+    return defaultValue unless data? and typeof data is 'object'
+    key = if isNumeric(prop) and Array.isArray(data) and +prop < 0
+      data.length + +prop
+    else
+      prop
+    data = data[key]
+  if data? then data else defaultValue
+
+# Set a value in nested data using path notation
+# Creates intermediate objects/arrays as needed
+setPath = (data, path, value) ->
+  list = walk path
+  last = list.length - 1
+  for prop, slot in list
+    key = if isNumeric(prop) and Array.isArray(data) and +prop < 0
+      data.length + +prop
+    else
+      prop
+    if slot is last
+      next = value
+    else
+      next = data[key]
+      next ?= undefined
+      if typeof next isnt 'object'
+        next = if isNumeric(list[slot + 1]) then [] else {}
+    data = data[key] = next
+  data
+
+# ==============================================================================
+# Stash - Config Storage Class
+# ==============================================================================
+
+class StashCore
+  constructor: (data = {}) ->
+    @data = data
+
+  # Get value at path, with optional default
+  get: (path, defaultValue) -> getPath @data, path, defaultValue
+
+  # Set value at path, returns the value
+  set: (path, value) -> setPath @data, path, value
+
+  # Check if path exists (not undefined/null)
+  has: (path) -> @get(path)?
+
+  # Delete value at path
+  del: (path) ->
+    list = walk path
+    return unless list.length > 0
+    parent = if list.length > 1 then @get(list.slice(0, -1).join('.')) else @data
+    delete parent[list[list.length - 1]] if parent?
+
+  # Get all keys at path (or root)
+  keys: (path) ->
+    target = if path then @get(path) else @data
+    return [] unless target? and typeof target is 'object'
+    Object.keys target
+
+  # Get all values at path (or root)
+  values: (path) ->
+    target = if path then @get(path) else @data
+    return [] unless target? and typeof target is 'object'
+    Object.values target
+
+  # Merge data into path (or root)
+  merge: (path, obj) ->
+    if typeof path is 'object'
+      obj = path
+      path = null
+    target = if path then @get(path) else @data
+    Object.assign target, obj if target? and typeof target is 'object'
+    @
+
+  # Return raw data
+  toJSON: -> @data
+
+  # Pretty print
+  toString: -> JSON.stringify @data, null, 2
+
+# ==============================================================================
+# Proxy wrapper for dot/bracket access: stash.one.two.three or stash['one.two']
+# ==============================================================================
+
+createStashProxy = (core) ->
+  new Proxy core,
+    get: (target, prop) ->
+      # Pass through methods and symbols
+      return target[prop] if typeof prop is 'symbol'
+      return target[prop] if prop in ['get', 'set', 'has', 'del', 'keys', 'values', 'merge', 'toJSON', 'toString', 'data']
+
+      # If prop contains . or / or [, treat as full path and return value
+      if /[.\/\[]/.test prop
+        return target.get prop
+
+      # Get the value directly from data
+      target.data[prop]
+
+    set: (target, prop, value) ->
+      target.data[prop] = value
+      true
+
+# ==============================================================================
+# Factory Function
+# ==============================================================================
+
+# Create a Stash from an object or module (handles default export)
+Stash = (data = {}) ->
+  # Handle ES module default export
+  data = data.default if data.default?
+  createStashProxy new StashCore(data)
+
+# Alias
+stash = Stash
+
+# Load Stash from a JSON file
+loadJSON = (filepath) ->
+  content = fs.readFileSync filepath, 'utf8'
+  Stash JSON.parse content
+
+# ==============================================================================
+# Exports
+# ==============================================================================
+
+export { Stash, stash, loadJSON, getPath, setPath, walk, isNumeric }

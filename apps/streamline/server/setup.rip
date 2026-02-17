@@ -1,15 +1,20 @@
 # Database setup — loads schema, connects to rip-db, bootstraps tables
 
 import { Schema } from '../../../packages/schema/orm.js'
+import { Stash } from './lib/stash.rip'
+import configData from './config.rip'
+
+config = Stash configData
+DB_URL = config.database.url
 
 export schema = do ->
   s = Schema.load './app.schema', import.meta.url
-  s.connect 'http://localhost:4213'
+  s.connect DB_URL
   s
 
 dbFetch = (sql, params) ->
   body = if params then { sql, params } else { sql }
-  res = fetch! 'http://localhost:4213/sql',
+  res = fetch! "#{DB_URL}/sql",
     method: 'POST'
     headers: { 'Content-Type': 'application/json' }
     body: JSON.stringify body

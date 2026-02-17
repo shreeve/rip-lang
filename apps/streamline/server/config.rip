@@ -1,10 +1,30 @@
-# App configuration
+# Application Configuration
+# Access via Stash: config.get('app.name') or config.app.name
 
-export config =
-  appName:       'Streamline Swim School'
-  url:           'https://app.streamlineschool.com'
-  supportEmail:  'info@streamlineschool.com'
-  sessionPrice:  10000  # $100.00 in cents
-  priceDisplay:  '$100'
-  sessionDays:   'Tue–Fri'
-  location:      '2966 N 1400 E, North Logan, UT'
+export default
+  app:
+    name: 'Streamline Swim School'
+    port: 8304
+    url: 'https://app.streamlineschool.com'
+    supportEmail: 'info@streamlineschool.com'
+
+  database:
+    url: process.env.DB_URL or 'http://localhost:4213'
+
+  session:
+    name: 'streamline'
+    maxAge: 30 * 86400
+    price: 10000
+    priceDisplay: '$100'
+
+  google:
+    oauth:
+      clientId: process.env.GOOGLE_CLIENT_ID
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET
+
+  apple:
+    clientId: process.env.APPLE_CLIENT_ID
+
+  location:
+    address: '2966 N 1400 E, North Logan, UT'
+    sessionDays: 'Tue–Fri'

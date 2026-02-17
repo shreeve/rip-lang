@@ -1,4 +1,4 @@
-# Session picker — browse weeks, select time slots, manage cart
+# Session picker — browse weeks, select time slots, cart sidebar
 
 export Time = component
   sessions := []
@@ -34,22 +34,15 @@ export Time = component
     unless existing
       cart = [...cart, { week: selectedWeek, slot: slot.time, children: [{ name: '', age: '' }] }]
 
+  isInCart: (slot) ->
+    cart.some (c) -> c.week is selectedWeek and c.slot is slot.time
+
   removeFromCart: (idx) ->
     cart = cart.filter (_, i) -> i isnt idx
 
   addChild: (idx) ->
     item = cart[idx]
     item.children = [...item.children, { name: '', age: '' }]
-    cart = [...cart]
-
-  removeChild: (cartIdx, childIdx) ->
-    item = cart[cartIdx]
-    item.children = item.children.filter (_, i) -> i isnt childIdx
-    cart = [...cart]
-
-  updateChild: (cartIdx, childIdx, field, value) ->
-    item = cart[cartIdx]
-    item.children[childIdx][field] = value
     cart = [...cart]
 
   goToConfirm: ->
@@ -70,33 +63,53 @@ export Time = component
         .alert.alert-error error
 
       unless loading or error
-        # Week picker
-        .week-picker
-          for s in sessions
-            button.week-btn @click: (=> @selectWeek(s.week)),
-              class: (if s.week is selectedWeek then 'active' else ''),
-              "Week #{s.week}"
+        .booking-two-col
 
-        # Time slots
-        .slots-grid
-          for slot in currentSlots
-            .slot-card @click: (=> @addToCart(slot)),
-              "#{slot.time} — #{slot.spots} spots available"
+          # Left column: week picker + time slots
+          .booking-main-col
 
-        # Cart
-        if cart.length > 0
-          .cart-section
-            h2.section-title "Your Cart (#{cartTotal})"
-            .cart-items
-              for item, idx in cart
-                .cart-item
-                  .cart-item-header
-                    span "Week #{item.week} — #{item.slot}"
-                    button.btn-remove @click: (=> @removeFromCart(idx)), "Remove"
-                  .cart-children
-                    span.text-muted "#{item.children.length} child(ren)"
-                    button.btn.btn-sm @click: (=> @addChild(idx)), "+ Add child"
+            # Week picker — horizontal scroll
+            .week-picker-section
+              .week-picker-header
+                span.week-picker-label "Select a week"
+              .week-picker-scroll
+                for s in sessions
+                  .week-picker-item
+                    button.week-btn @click: (=> @selectWeek(s.week)),
+                      class: (if s.week is selectedWeek then 'active' else ''),
+                      "Week #{s.week}"
+                    span.week-meta "Tue–Fri"
 
-            .cart-footer
-              .cart-total "Total: #{priceDisplay}"
-              button.btn.btn-primary @click: @goToConfirm, "Continue"
+            # Time slots — vertical list
+            .slots-list
+              for slot in currentSlots
+                button.slot-row @click: (=> @addToCart(slot)),
+                  class: (if @isInCart(slot) then 'slot-added' else '')
+                  span.slot-time slot.time
+                  span.slot-spots "#{slot.spots} spots left"
+
+          # Right column: cart sidebar
+          .cart-sidebar
+            .cart-sidebar-inner
+              h2.cart-title "Your Cart"
+              if cart.length is 0
+                p.text-muted "No sessions added yet"
+              if cart.length > 0
+                .cart-items
+                  for item, idx in cart
+                    .cart-item
+                      .cart-item-header
+                        .cart-item-info
+                          span.cart-item-week "Week #{item.week}"
+                          span.cart-item-slot item.slot
+                        button.btn-remove @click: (=> @removeFromCart(idx)), "✕"
+                      .cart-children
+                        span.text-muted "#{item.children.length} child(ren)"
+                        button.btn.btn-sm @click: (=> @addChild(idx)), "+ Add"
+
+              .cart-footer
+                .cart-total-row
+                  span "Total"
+                  span.cart-total priceDisplay
+                button.btn.btn-primary.btn-block @click: @goToConfirm, disabled: (cart.length is 0),
+                  "Continue"

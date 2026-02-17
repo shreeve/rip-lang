@@ -1,14 +1,27 @@
-# Auth routes — email magic code authentication
+# Auth routes — email, Google, Apple, and dev authentication
 
 import { get, post, prefix, read, session } from '@rip-lang/api'
+import { verifyIdToken as verifyAppleToken } from '../lib/apple.rip'
+import { authenticateWithCode as googleAuth } from '../lib/google.rip'
+import { Stash } from '../lib/stash.rip'
 import { schema } from '../setup.rip'
+import configData from '../config.rip'
 
+config = Stash configData
 User = schema.model 'User'
+
+# Concise error helper
+error = (note = 'Something went wrong', code = 400) ->
+  throw Object.assign(new Error(note), { status: code })
 
 # Generate a random 6-digit code
 generateCode = -> String(Math.floor(100000 + Math.random() * 900000))
 
 prefix '/api/auth', ->
+
+  # --------------------------------------------------------------------------
+  # Email Sign-in
+  # --------------------------------------------------------------------------
 
   # Request sign-in code via email
   post '/signinWithEmail' ->
@@ -30,16 +43,19 @@ prefix '/api/auth', ->
     email = read 'email', 'email!'
     code  = read 'code', 'text!'
     user = User.where!(email: email).first!()
-    throw new Error('Invalid email') unless user
-    throw new Error('Invalid code') unless user.code is code
-    throw new Error('Code expired') if user.codeExpiresAt and new Date(user.codeExpiresAt) < new Date()
+    error 'Invalid email', 401 unless user
+    error 'Invalid code', 401 unless user.code is code
+    error 'Code expired', 401 if user.codeExpiresAt and new Date(user.codeExpiresAt) < new Date()
     user.code = null
     user.codeExpiresAt = null
     user.save!()
     session.userId = user.id
     { ok: true }
 
-  # Create new account
+  # --------------------------------------------------------------------------
+  # Sign Up
+  # --------------------------------------------------------------------------
+
   post '/signup' ->
     email     = read 'email', 'email!'
     firstName = read 'firstName', 'text!'
@@ -51,22 +67,71 @@ prefix '/api/auth', ->
     console.log "[auth] New user: #{email}"
     { ok: true }
 
-  # Sign out
+  # --------------------------------------------------------------------------
+  # Sign Out
+  # --------------------------------------------------------------------------
+
   post '/signout' ->
     delete session.userId
     { ok: true }
 
-  # Stub: Google OAuth
+  # --------------------------------------------------------------------------
+  # Google OAuth
+  # --------------------------------------------------------------------------
+
   post '/google' ->
-    @status = 501
-    { error: 'Google OAuth not implemented — use email sign-in' }
+    code = read 'code', 'text!'
 
-  # Stub: Apple Sign-In
+    result = googleAuth! code,
+      clientId:     config.get 'google.oauth.clientId'
+      clientSecret: config.get 'google.oauth.clientSecret'
+      redirectUri:  'postmessage'
+
+    email = result.user.email
+    error 'No email from Google', 400 unless email
+
+    # Find or create user
+    user = User.where!(email: email).first!()
+    unless user
+      user = User.create!
+        email:     email
+        firstName: result.user.firstName or ''
+        lastName:  result.user.lastName or ''
+
+    session.userId = user.id
+    console.log "[auth] Google sign-in: #{email}"
+    { ok: true }
+
+  # --------------------------------------------------------------------------
+  # Apple Sign-In
+  # --------------------------------------------------------------------------
+
   post '/apple' ->
-    @status = 501
-    { error: 'Apple Sign-In not implemented — use email sign-in' }
+    idToken = read 'idToken', 'text!'
 
-  # Dev-only: sign in as test user
+    appleClientId = config.get 'apple.clientId'
+    verifyOptions = if appleClientId then { audience: appleClientId } else {}
+    payload = verifyAppleToken! idToken, verifyOptions
+
+    email = payload.email
+    error 'No email from Apple', 400 unless email
+
+    # Find or create user
+    user = User.where!(email: email).first!()
+    unless user
+      user = User.create!
+        email: email
+        firstName: ''
+        lastName: ''
+
+    session.userId = user.id
+    console.log "[auth] Apple sign-in: #{email}"
+    { ok: true }
+
+  # --------------------------------------------------------------------------
+  # Dev Login (quick test user)
+  # --------------------------------------------------------------------------
+
   post '/dev' ->
     email = 'test@streamlineschool.com'
     user = User.where!(email: email).first!()

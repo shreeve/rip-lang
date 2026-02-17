@@ -42,22 +42,40 @@ export Confirm = component
 
       if cart.length is 0
         .empty-state
+          .empty-icon "🛒"
           p "Your cart is empty"
           a.btn.btn-primary href: "/booking/time", "Browse Sessions"
 
-      else
-        .confirm-list
-          for item, idx in cart
-            .confirm-card
-              .confirm-header "Week #{item.week} — #{item.slot}"
-              .confirm-children
-                for child in item.children
-                  .child-tag "#{child.name or 'Unnamed'} (age #{child.age or '?'})"
+      unless cart.length is 0
+        .confirm-layout
+          # Left: cart summary
+          .confirm-main
+            .confirm-list
+              for item, idx in cart
+                .confirm-card
+                  .confirm-card-header
+                    span.confirm-session "🏊 Swim Lesson"
+                    span.confirm-week "Week #{item.week} · #{item.slot}"
+                  .confirm-children
+                    for child in item.children
+                      .child-tag "#{child.name or 'Unnamed'} (age #{child.age or '?'})"
 
-        .confirm-footer
-          .confirm-total "Total: #{priceDisplay}"
-          p.text-muted "Payment integration coming soon — booking is free for now."
-          .confirm-actions
-            button.btn.btn-outline @click: @goBack, "Back"
-            button.btn.btn-primary @click: @submit, disabled: submitting,
-              if submitting then "Booking..." else "Confirm Booking"
+          # Right: payment summary
+          .confirm-sidebar
+            .confirm-summary-card
+              h3.confirm-summary-title "Order Summary"
+              .confirm-line-items
+                for item, idx in cart
+                  .confirm-line
+                    span "Week #{item.week} · #{item.slot}"
+                    span "$100"
+              hr.divider
+              .confirm-total-row
+                span "Total"
+                span.confirm-total priceDisplay
+              .confirm-payment-note
+                p.text-muted "Payment integration coming soon — booking is free for now."
+              .confirm-actions
+                button.btn.btn-outline.btn-block @click: @goBack, "Back"
+                button.btn.btn-primary.btn-block @click: @submit, disabled: submitting,
+                  if submitting then "Booking..." else "Confirm Booking"

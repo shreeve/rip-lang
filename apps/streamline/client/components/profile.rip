@@ -55,18 +55,19 @@ export Profile = component
 
       if user and not loading
         .profile-card
+          .profile-form-grid
+            .form-group
+              label "First name"
+              input.input type: "text", value: firstName, placeholder: "First name"
+            .form-group
+              label "Last name"
+              input.input type: "text", value: lastName, placeholder: "Last name"
           .form-group
             label "Email"
             input.input type: "email", value: user.email, disabled: true
           .form-group
-            label "First name"
-            input.input type: "text", value: firstName
-          .form-group
-            label "Last name"
-            input.input type: "text", value: lastName
-          .form-group
             label "Phone"
-            input.input type: "tel", value: phone
+            input.input type: "tel", value: phone, placeholder: "Phone number"
 
           if error
             .alert.alert-error error
@@ -74,4 +75,4 @@ export Profile = component
             .alert.alert-success "Profile updated!"
 
           button.btn.btn-primary @click: @save, disabled: saving,
-            if saving then "Saving..." else "Save"
+            if saving then "Saving..." else "Save Changes"

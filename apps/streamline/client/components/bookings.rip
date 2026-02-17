@@ -1,9 +1,10 @@
-# Bookings list — upcoming and past bookings
+# Bookings list — two-column layout with detail panel
 
 export Bookings = component
   bookings := []
   loading := true
   error := null
+  selectedId := null
 
   beforeMount: ->
     try
@@ -20,12 +21,16 @@ export Bookings = component
   currentWeek ~= Math.ceil((Date.now() - new Date(new Date().getFullYear(), 0, 1)) / (7 * 24 * 60 * 60 * 1000))
   upcoming ~= bookings.filter (b) -> b.week >= currentWeek
   past ~= bookings.filter (b) -> b.week < currentWeek
+  selected ~= bookings.find (b) -> b.id is selectedId
+
+  selectBooking: (b) ->
+    selectedId = b.id
 
   render
     div
       .page-header
         h1.page-title "My Bookings"
-        a.btn.btn-primary href: "/booking/time", "Book a Session"
+        a.btn.btn-primary.btn-pill href: "/booking/time", "Book a Session"
 
       if loading
         .page-center
@@ -35,29 +40,71 @@ export Bookings = component
         .alert.alert-error error
 
       unless loading or error
-        if upcoming.length > 0
-          h2.section-title "Upcoming"
-          .booking-list
-            for b in upcoming
-              .booking-card
-                .booking-week "Week #{b.week}"
-                .booking-slot b.slot
-                .booking-children
-                  if b.children and b.children.length > 0
-                    for child in b.children
-                      span.child-tag "#{child.name} (age #{child.age})"
-                  else
-                    span.text-muted "No children listed"
-
-        if past.length > 0
-          h2.section-title "Past"
-          .booking-list
-            for b in past
-              .booking-card.booking-past
-                .booking-week "Week #{b.week}"
-                .booking-slot b.slot
-
         if bookings.length is 0
           .empty-state
+            .empty-icon "📋"
             p "No bookings yet"
             a.btn.btn-primary href: "/booking/time", "Book your first session"
+
+        unless bookings.length is 0
+          .bookings-layout
+
+            # Left column: booking list
+            .bookings-list-col
+
+              if upcoming.length > 0
+                h2.section-title "Upcoming"
+                .booking-list
+                  for b in upcoming
+                    .booking-card @click: (=> @selectBooking(b)),
+                      class: (if b.id is selectedId then 'booking-selected' else '')
+                      .booking-icon
+                        span "🏊"
+                      .booking-info
+                        .booking-title "Swim Lesson"
+                        .booking-meta "Week #{b.week} · #{b.slot}"
+                        .booking-children-row
+                          if b.children and b.children.length > 0
+                            for child in b.children
+                              span.child-tag "#{child.name or 'Child'}"
+                          else
+                            span.text-muted "No children listed"
+
+              if past.length > 0
+                h2.section-title "Past"
+                .booking-list
+                  for b in past
+                    .booking-card.booking-past @click: (=> @selectBooking(b)),
+                      class: (if b.id is selectedId then 'booking-selected' else '')
+                      .booking-icon
+                        span "🏊"
+                      .booking-info
+                        .booking-title "Swim Lesson"
+                        .booking-meta "Week #{b.week} · #{b.slot}"
+
+            # Right column: detail panel (desktop only)
+            if selected
+              .booking-detail-col
+                .detail-panel
+                  .detail-hero
+                    .detail-hero-icon "🏊‍♂️"
+                  .detail-body
+                    .detail-status
+                      span.status-badge.status-confirmed "Confirmed"
+                    h3.detail-title "One-on-One Swim Lesson"
+                    .detail-info
+                      .detail-row
+                        span.detail-label "Week"
+                        span "#{selected.week}"
+                      .detail-row
+                        span.detail-label "Time"
+                        span selected.slot
+                      .detail-row
+                        span.detail-label "Location"
+                        span "2966 N 1400 E, North Logan, UT"
+                    if selected.children and selected.children.length > 0
+                      .detail-children
+                        span.detail-label "Children"
+                        .detail-children-list
+                          for child in selected.children
+                            span.child-tag "#{child.name or 'Child'} (age #{child.age or '?'})"

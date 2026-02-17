@@ -2,7 +2,11 @@
 
 import { get, post, prefix, read, session } from '@rip-lang/api'
 import { schema } from '../setup.rip'
+import { Stash } from '../lib/stash.rip'
+import configData from '../config.rip'
 
+config = Stash configData
+DB_URL = config.database.url
 Booking = schema.model 'Booking'
 
 requireAuth = ->
@@ -31,7 +35,7 @@ prefix '/api/bookings', ->
 
       # Mark spots as booked
       needed = item.children?.length or 1
-      result = fetch! 'http://localhost:4213/sql',
+      result = fetch! "#{DB_URL}/sql",
         method: 'POST'
         headers: { 'Content-Type': 'application/json' }
         body: JSON.stringify
@@ -41,7 +45,7 @@ prefix '/api/bookings', ->
 
       for row in (data.data or [])
         spotId = row[0]
-        fetch! 'http://localhost:4213/sql',
+        fetch! "#{DB_URL}/sql",
           method: 'POST'
           headers: { 'Content-Type': 'application/json' }
           body: JSON.stringify

@@ -2,15 +2,18 @@
 
 import { get, post, prefix, read } from '@rip-lang/api'
 import { schema } from '../setup.rip'
-import { config } from '../config.rip'
+import { Stash } from '../lib/stash.rip'
+import configData from '../config.rip'
 
+config = Stash configData
+DB_URL = config.database.url
 Spot = schema.model 'Spot'
 
 prefix '/api/sessions', ->
 
   # List available sessions grouped by week
   get '' ->
-    result = fetch! 'http://localhost:4213/sql',
+    result = fetch! "#{DB_URL}/sql",
       method: 'POST'
       headers: { 'Content-Type': 'application/json' }
       body: JSON.stringify
@@ -27,7 +30,7 @@ prefix '/api/sessions', ->
     weeks = {}
     for row in (data.data or [])
       [week, slot, spots] = row
-      weeks[week] ?= { week, slots: [], price: config.sessionPrice }
+      weeks[week] ?= { week, slots: [], price: config.session.price }
       weeks[week].slots.push { time: slot, spots }
 
     { sessions: Object.values(weeks) }
@@ -36,7 +39,7 @@ prefix '/api/sessions', ->
   post '/confirm-availability' ->
     items = read 'sessions', 'json!'
     for item in items
-      result = fetch! 'http://localhost:4213/sql',
+      result = fetch! "#{DB_URL}/sql",
         method: 'POST'
         headers: { 'Content-Type': 'application/json' }
         body: JSON.stringify

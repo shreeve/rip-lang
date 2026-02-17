@@ -1,8 +1,9 @@
-# Root layout — nav bar + main content
+# Root layout — sidebar nav (desktop) + top bar (mobile)
 
 export Layout = component
   user := null
   loading := true
+  menuOpen := false
 
   beforeMount: ->
     try
@@ -18,18 +19,92 @@ export Layout = component
     user = null
     @router.push '/auth'
 
+  toggleMenu: ->
+    menuOpen = not menuOpen
+
+  closeMenu: ->
+    menuOpen = false
+
+  initials ~= do ->
+    return '' unless user
+    parts = (user.firstName or '').split(' ')
+    first = parts[0]?[0] or ''
+    last = (user.lastName or '')[0] or ''
+    (first + last).toUpperCase()
+
+  displayName ~= do ->
+    return '' unless user
+    [user.firstName, user.lastName].filter(Boolean).join(' ') or user.email
+
   render
     .app-layout
-      nav.nav-bar
-        .nav-inner
-          a.nav-brand href: "/", "Streamline Swim School"
-          .nav-links
-            if user
-              a.nav-link href: "/booking/time", "Book"
-              a.nav-link href: "/bookings", "My Bookings"
-              a.nav-link href: "/profile", "Profile"
-              button.nav-link.btn-link @click: @signOut, "Sign Out"
-            else unless loading
-              a.nav-link href: "/auth", "Sign In"
+
+      # ---- Desktop Sidebar (hidden on mobile) ----
+      aside.sidebar
+        .sidebar-top
+          a.sidebar-brand href: "/"
+            span.brand-icon "🏊"
+            span "Streamline"
+
+          if user
+            .sidebar-user
+              .user-avatar initials
+              .user-name displayName
+
+            nav.sidebar-nav
+              a.sidebar-link href: "/booking/time"
+                span.link-icon "📅"
+                span "Book a Session"
+              a.sidebar-link href: "/bookings"
+                span.link-icon "📋"
+                span "My Bookings"
+              a.sidebar-link href: "/profile"
+                span.link-icon "👤"
+                span "Profile"
+
+        .sidebar-bottom
+          if user
+            button.sidebar-link.btn-link @click: @signOut
+              span.link-icon "🚪"
+              span "Sign Out"
+
+      # ---- Mobile Top Bar (hidden on desktop) ----
+      header.mobile-bar
+        a.mobile-brand href: "/"
+          span.brand-icon "🏊"
+          span "Streamline"
+
+        if user
+          button.mobile-avatar-btn @click: @toggleMenu
+            .user-avatar.user-avatar-sm initials
+            span.mobile-chevron "▾"
+
+        else unless loading
+          a.nav-link href: "/auth", "Sign In"
+
+      # ---- Mobile Menu Dropdown ----
+      if menuOpen
+        .mobile-overlay @click: @closeMenu
+        .mobile-menu
+          .mobile-menu-user
+            .user-avatar initials
+            .user-name displayName
+          nav.mobile-nav
+            a.mobile-nav-link href: "/booking/time", @click: @closeMenu
+              span.link-icon "📅"
+              span "Book a Session"
+            a.mobile-nav-link href: "/bookings", @click: @closeMenu
+              span.link-icon "📋"
+              span "My Bookings"
+            a.mobile-nav-link href: "/profile", @click: @closeMenu
+              span.link-icon "👤"
+              span "Profile"
+          hr.divider
+          button.mobile-nav-link.btn-link @click: @signOut
+            span.link-icon "🚪"
+            span "Sign Out"
+
+      # ---- Main Content ----
       main.main-content
-        #content
+        .content-container
+          #content

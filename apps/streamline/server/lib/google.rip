@@ -1,0 +1,251 @@
+# Google Sign-in Authentication
+#
+# Minimal implementation for Google OAuth token exchange and verification.
+# Based on google-auth-library but clean Rip code (~200 lines vs ~1600 lines).
+#
+# ==============================================================================
+# EXPORTS
+# ==============================================================================
+#
+#   exchangeCode(code, options)      Exchange auth code for tokens
+#   verifyIdToken(idToken, options)  Verify ID token signature
+#   authenticateWithCode(code, opts) Combined: exchange + verify in one call
+#   prefetchKeys()                   Pre-warm the key cache on startup
+#
+# ==============================================================================
+# AUTHENTICATION FLOW
+# ==============================================================================
+#
+#   1. Frontend gets authorization code from Google (via popup or redirect)
+#   2. Frontend POSTs to /auth/google with { code }
+#   3. exchangeCode → POST https://oauth2.googleapis.com/token
+#   4. verifyIdToken → fetch keys from googleapis.com/oauth2/v3/certs
+#   5. Return verified user info (email, name, picture, etc.)
+#
+# ==============================================================================
+# USAGE EXAMPLES
+# ==============================================================================
+#
+#   # Option 1: Combined flow (recommended)
+#   import { authenticateWithCode } from './lib/google.rip'
+#
+#   result = authenticateWithCode! code,
+#     clientId:     'your-client-id.apps.googleusercontent.com'
+#     clientSecret: 'your-client-secret'
+#     redirectUri:  'postmessage'  # For popup flow
+#
+#   result.user.email      # User's email
+#   result.user.name       # Full name
+#   result.user.picture    # Profile picture URL
+#   result.tokens.id_token # Raw ID token (if needed)
+#
+#   # Option 2: Step by step
+#   import { exchangeCode, verifyIdToken } from './lib/google.rip'
+#
+#   tokens = exchangeCode! code, { clientId, clientSecret }
+#   payload = verifyIdToken! tokens.id_token
+#   email = payload.email
+#
+# ==============================================================================
+# ENVIRONMENT VARIABLES
+# ==============================================================================
+#
+#   GOOGLE_CLIENT_ID      Your Google OAuth client ID
+#   GOOGLE_CLIENT_SECRET  Your Google OAuth client secret
+#
+# ==============================================================================
+# KEY CACHING
+# ==============================================================================
+#
+#   Google's public keys are fetched on-demand and cached in memory.
+#   Keys rotate infrequently (~every few months). Cache is refreshed
+#   automatically when a token's key ID (kid) is not found in cache.
+#
+#   For multi-worker servers (like rip-server), each worker maintains
+#   its own cache. This is efficient because:
+#   - Keys are small (~3 keys, ~1KB total)
+#   - Fetch is fast (~100-150ms)
+#   - Only happens once per worker lifetime (until key rotation)
+#
+
+import { createPublicKey, verify } from 'node:crypto'
+
+# Google endpoints
+TOKEN_URL = 'https://oauth2.googleapis.com/token'
+CERTS_URL = 'https://www.googleapis.com/oauth2/v3/certs'
+ISSUERS   = ['accounts.google.com', 'https://accounts.google.com']
+
+# Cache for Google's public keys { kid: publicKey }
+keysCache = {}
+
+# ==============================================================================
+# Helpers
+# ==============================================================================
+
+# Base64URL decode (JWT uses base64url, not standard base64)
+base64UrlDecode = (str) ->
+  base64 = str.replace(/-/g, '+').replace(/_/g, '/')
+  pad = base64.length % 4
+  base64 += '=' for i in [0...pad] if pad
+  Buffer.from base64, 'base64'
+
+# Decode JWT without verification (to get header/payload)
+decodeJwt = (token) ->
+  parts = token.split '.'
+  if parts.length isnt 3
+    throw new Error 'Invalid JWT format'
+
+  header:  JSON.parse base64UrlDecode(parts[0]).toString()
+  payload: JSON.parse base64UrlDecode(parts[1]).toString()
+  signature: parts[2]
+
+# ==============================================================================
+# Google Public Keys
+# ==============================================================================
+
+# Fetch Google's public keys and cache them
+fetchGoogleKeys = ->
+  res = fetch! CERTS_URL
+  if not res.ok
+    throw new Error "Failed to fetch Google keys: #{res.status}"
+
+  data = res.json!
+  keysCache = {}  # Clear cache
+
+  for key in data.keys
+    jwk =
+      kty: key.kty
+      n: key.n
+      e: key.e
+      alg: key.alg
+      use: key.use
+
+    publicKey = createPublicKey { key: jwk, format: 'jwk' }
+    keysCache[key.kid] = publicKey
+
+  keysCache
+
+# Get public key for a specific kid, fetching if not cached
+getPublicKey = (kid) ->
+  return keysCache[kid] if keysCache[kid]
+
+  fetchGoogleKeys!
+
+  if not keysCache[kid]
+    throw new Error "Google public key not found for kid: #{kid}"
+  keysCache[kid]
+
+# ==============================================================================
+# Token Exchange
+# ==============================================================================
+
+# Exchange authorization code for tokens
+# Returns: { access_token, refresh_token, id_token, expires_in, token_type }
+export exchangeCode = (code, options = {}) ->
+  { clientId, clientSecret, redirectUri } = options
+
+  if not code
+    throw new Error 'code is required'
+  if not clientId
+    throw new Error 'clientId is required'
+  if not clientSecret
+    throw new Error 'clientSecret is required'
+
+  # Default redirectUri for popup/postmessage flow
+  redirectUri = redirectUri or 'postmessage'
+
+  params = new URLSearchParams
+    client_id: clientId
+    client_secret: clientSecret
+    code: code
+    grant_type: 'authorization_code'
+    redirect_uri: redirectUri
+
+  res = fetch! TOKEN_URL,
+    method: 'POST'
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    body: params.toString()
+
+  data = res.json!
+
+  if data.error
+    throw new Error "Google token error: #{data.error} - #{data.error_description}"
+
+  data
+
+# ==============================================================================
+# Token Verification
+# ==============================================================================
+
+# Verify a Google ID token and return the payload
+# Returns: { sub, email, email_verified, name, picture, given_name, family_name, ... }
+export verifyIdToken = (idToken, options = {}) ->
+  if not idToken
+    throw new Error 'idToken is required'
+
+  # Decode without verification first
+  decoded = decodeJwt idToken
+  { header, payload } = decoded
+
+  # Validate algorithm (Google uses RS256)
+  if header.alg isnt 'RS256'
+    throw new Error "Invalid algorithm: #{header.alg}"
+
+  # Get the public key for this token
+  publicKey = getPublicKey! header.kid
+
+  # Verify signature
+  parts = idToken.split '.'
+  signedData = "#{parts[0]}.#{parts[1]}"
+  signature = base64UrlDecode parts[2]
+
+  isValid = verify 'RSA-SHA256', Buffer.from(signedData), publicKey, signature
+  if not isValid
+    throw new Error 'Invalid token signature'
+
+  # Validate issuer
+  if payload.iss not in ISSUERS
+    throw new Error "Invalid issuer: #{payload.iss}"
+
+  # Validate audience if provided
+  if options.audience
+    audiences = if Array.isArray(options.audience) then options.audience else [options.audience]
+    if payload.aud not in audiences
+      throw new Error "Invalid audience: #{payload.aud}"
+
+  # Validate expiration (unless ignoreExpiration is set)
+  if not options.ignoreExpiration
+    now = Math.floor(Date.now() / 1000)
+    if payload.exp and payload.exp < now
+      throw new Error 'Token has expired'
+
+  payload
+
+# ==============================================================================
+# Convenience Functions
+# ==============================================================================
+
+# Full flow: exchange code and verify token in one call
+# Returns user info from the verified ID token
+export authenticateWithCode = (code, options = {}) ->
+  tokens = exchangeCode! code, options
+
+  if not tokens.id_token
+    throw new Error 'No ID token in response'
+
+  payload = verifyIdToken! tokens.id_token, { audience: options.clientId }
+
+  # Return combined result
+  tokens: tokens
+  user:
+    id:         payload.sub
+    email:      payload.email
+    verified:   payload.email_verified
+    name:       payload.name
+    firstName:  payload.given_name
+    lastName:   payload.family_name
+    picture:    payload.picture
+
+# Pre-fetch and cache Google's keys
+export prefetchKeys = ->
+  fetchGoogleKeys!

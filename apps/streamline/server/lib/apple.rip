@@ -1,0 +1,210 @@
+# Apple Sign-in Authentication
+#
+# Minimal implementation for verifying Apple ID tokens.
+# Based on apple-signin-auth but simplified for Rip (~150 lines vs ~450 lines).
+#
+# ==============================================================================
+# EXPORTS
+# ==============================================================================
+#
+#   verifyIdToken(idToken, options)  Verify ID token and return payload
+#   getEmail(idToken)                Convenience: verify and get email
+#   getUserId(idToken)               Convenience: verify and get user ID (sub)
+#   prefetchKeys()                   Pre-warm the key cache on startup
+#
+# ==============================================================================
+# AUTHENTICATION FLOW
+# ==============================================================================
+#
+#   Apple Sign-in is simpler than Google because the frontend handles
+#   the OAuth flow and sends you the ID token directly:
+#
+#   1. Frontend shows "Sign in with Apple" button (Apple JS SDK or native)
+#   2. User authenticates with Apple (Face ID, password, etc.)
+#   3. Apple returns ID token to frontend
+#   4. Frontend POSTs to /auth/apple with { idToken }
+#   5. verifyIdToken → fetch keys from appleid.apple.com/auth/keys
+#   6. Return verified user info (email, user ID)
+#
+#   Note: Unlike Google, there's no "code exchange" step — Apple's
+#   frontend SDK handles that and gives you the token directly.
+#
+# ==============================================================================
+# USAGE EXAMPLES
+# ==============================================================================
+#
+#   import { verifyIdToken } from './lib/apple.rip'
+#
+#   payload = verifyIdToken! idToken
+#
+#   payload.sub             # Unique user ID (stable across sessions)
+#   payload.email           # User's email (may be private relay)
+#   payload.email_verified  # Always true (Apple only returns verified emails)
+#   payload.is_private_email # true if using Apple's private relay
+#
+#   # With audience validation (recommended for production)
+#   payload = verifyIdToken! idToken, { audience: 'com.yourapp.bundle' }
+#
+# ==============================================================================
+# PAYLOAD FIELDS
+# ==============================================================================
+#
+#   sub              Unique user identifier (use this as your user ID)
+#   email            User's email address
+#   email_verified   Whether email is verified (always true for Apple)
+#   is_private_email Whether user is using Apple's private relay email
+#   iss              Issuer (always "https://appleid.apple.com")
+#   aud              Audience (your app's bundle ID / client ID)
+#   iat              Issued at (Unix timestamp)
+#   exp              Expiration (Unix timestamp, typically 5 minutes)
+#
+# ==============================================================================
+# KEY CACHING
+# ==============================================================================
+#
+#   Apple's public keys are fetched on-demand and cached in memory.
+#   Keys rotate infrequently (~every 3-6 months). Cache is refreshed
+#   automatically when a token's key ID (kid) is not found in cache.
+#
+#   For multi-worker servers (like rip-server), each worker maintains
+#   its own cache. This is efficient because:
+#   - Keys are small (~3 keys, ~1KB total)
+#   - Fetch is fast (~100-150ms)
+#   - Only happens once per worker lifetime (until key rotation)
+#
+
+import { createPublicKey, verify } from 'node:crypto'
+
+# Apple's public keys endpoint
+APPLE_KEYS_URL = 'https://appleid.apple.com/auth/keys'
+APPLE_ISSUER   = 'https://appleid.apple.com'
+
+# Cache for Apple's public keys { kid: publicKey }
+keysCache = {}
+
+# ==============================================================================
+# Helpers
+# ==============================================================================
+
+# Base64URL decode (JWT uses base64url, not standard base64)
+base64UrlDecode = (str) ->
+  # Replace URL-safe chars and add padding
+  base64 = str.replace(/-/g, '+').replace(/_/g, '/')
+  pad = base64.length % 4
+  base64 += '=' for i in [0...pad] if pad
+  Buffer.from base64, 'base64'
+
+# Decode JWT without verification (to get header)
+decodeJwt = (token) ->
+  parts = token.split '.'
+  if parts.length isnt 3
+    throw new Error 'Invalid JWT format'
+
+  header:  JSON.parse base64UrlDecode(parts[0]).toString()
+  payload: JSON.parse base64UrlDecode(parts[1]).toString()
+  signature: parts[2]
+
+# ==============================================================================
+# Apple Public Keys
+# ==============================================================================
+
+# Fetch Apple's public keys and cache them
+fetchAppleKeys = ->
+  res = fetch! APPLE_KEYS_URL
+  if not res.ok
+    throw new Error "Failed to fetch Apple keys: #{res.status}"
+
+  data = res.json!
+  keysCache = {}  # Clear cache
+
+  for key in data.keys
+    # Convert JWK to PEM format
+    jwk =
+      kty: key.kty
+      n: key.n
+      e: key.e
+      alg: key.alg
+      use: key.use
+
+    publicKey = createPublicKey { key: jwk, format: 'jwk' }
+    keysCache[key.kid] = publicKey
+
+  keysCache
+
+# Get public key for a specific kid, fetching if not cached
+getPublicKey = (kid) ->
+  return keysCache[kid] if keysCache[kid]
+
+  # Fetch fresh keys
+  fetchAppleKeys!
+
+  if not keysCache[kid]
+    throw new Error "Apple public key not found for kid: #{kid}"
+  keysCache[kid]
+
+# ==============================================================================
+# Token Verification
+# ==============================================================================
+
+# Verify an Apple ID token and return the payload
+# Returns: { sub, email, email_verified, iss, aud, iat, exp, ... }
+export verifyIdToken = (idToken, options = {}) ->
+  if not idToken
+    throw new Error 'idToken is required'
+
+  # Decode without verification first (to get kid from header)
+  decoded = decodeJwt idToken
+  { header, payload } = decoded
+
+  # Validate algorithm
+  if header.alg isnt 'RS256'
+    throw new Error "Invalid algorithm: #{header.alg}"
+
+  # Get the public key for this token
+  publicKey = getPublicKey! header.kid
+
+  # Verify signature
+  parts = idToken.split '.'
+  signedData = "#{parts[0]}.#{parts[1]}"
+  signature = base64UrlDecode parts[2]
+
+  isValid = verify 'RSA-SHA256', Buffer.from(signedData), publicKey, signature
+  if not isValid
+    throw new Error 'Invalid token signature'
+
+  # Validate issuer
+  if payload.iss isnt APPLE_ISSUER
+    throw new Error "Invalid issuer: #{payload.iss}"
+
+  # Validate audience if provided
+  if options.audience
+    audiences = if Array.isArray(options.audience) then options.audience else [options.audience]
+    if payload.aud not in audiences
+      throw new Error "Invalid audience: #{payload.aud}"
+
+  # Validate expiration (unless ignoreExpiration is set)
+  if not options.ignoreExpiration
+    now = Math.floor(Date.now() / 1000)
+    if payload.exp and payload.exp < now
+      throw new Error 'Token has expired'
+
+  # Return the verified payload
+  payload
+
+# ==============================================================================
+# Utility Exports
+# ==============================================================================
+
+# Pre-fetch and cache Apple's keys (call on startup for faster first request)
+export prefetchKeys = ->
+  fetchAppleKeys!
+
+# Get user email from token (convenience function)
+export getEmail = (idToken) ->
+  payload = verifyIdToken! idToken
+  payload.email
+
+# Get user ID from token (convenience function)
+export getUserId = (idToken) ->
+  payload = verifyIdToken! idToken
+  payload.sub
