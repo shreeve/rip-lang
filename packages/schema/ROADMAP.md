@@ -20,6 +20,7 @@ What works today, end-to-end:
 | Dirty tracking | `$dirty`, `$changed`, `save()` | Complete |
 | Computed properties | `schema.model('User', { computed: ... })` | Complete |
 | Relation loading | `user.posts()`, `post.user()` | Complete |
+| Soft-delete awareness | `softDelete()`, `withDeleted()`, auto-filter | Complete |
 | VS Code highlighting | `packages/vscode` | Complete |
 | CLI | `rip-schema generate app.schema` | Complete |
 
@@ -59,21 +60,12 @@ Error in app.schema at line 12:
 World-class tools (Elm, Rust, Prisma) are beloved for their error messages.
 This is what makes people trust a tool on first contact.
 
-### 3. Soft-Delete Awareness
+### ~~3. Soft-Delete Awareness~~ — Complete
 
-**Priority: High — the metadata is already there.**
-
-`@softDelete` generates the `deleted_at` column but doesn't affect queries.
-`User.all!()` still returns soft-deleted records. The fix:
-
-```coffee
-users = User.all!()                # excludes soft-deleted automatically
-users = User.withDeleted!().all!() # explicit opt-in
-user.softDelete!()                 # sets deleted_at, doesn't DELETE
-```
-
-The schema already knows which models have `@softDelete`. The query builder
-just needs to apply a default `WHERE deleted_at IS NULL` filter.
+Models with `@softDelete` now auto-filter deleted records from all queries.
+`softDelete()` sets `deleted_at`, `restore()` clears it, and `withDeleted()`
+opts out of the filter. The query builder, static methods (`find`, `all`,
+`first`), and count all respect the soft-delete flag automatically.
 
 ### 4. Derived Type Generation
 
@@ -207,6 +199,7 @@ rip packages/schema/examples/orm-example.rip
 | **Dirty tracking**            | Mutation of `name` sets `$dirty` and `$changed`            |
 | **Relation: hasMany**         | `user.posts()` returns related posts                       |
 | **Relation: belongsTo**       | `post.user()` returns the author                           |
+| **Soft delete**               | `softDelete()` hides, `withDeleted()` includes, `restore()` recovers |
 | **Validation**                | Missing `name` and invalid `email` caught by `$validate()` |
 
 ### 3. Compiler Regression Test (`test/rip/control.rip`)

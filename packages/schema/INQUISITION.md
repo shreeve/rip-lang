@@ -237,7 +237,7 @@ The schema generates the data types. TypeScript composes them. Each tool does wh
 | Compile-time types | Native | Inferred | Generated client | **Generated .d.ts** (working) |
 | Runtime validation | None | Native | None | **Native** (working) |
 | Database schema | None | None | Native | **Generated SQL DDL** (working) |
-| Query engine | None | None | Prisma Client | **ORM** (schema-driven — find, where, chain, relations, dirty tracking) |
+| Query engine | None | None | Prisma Client | **ORM** (schema-driven — find, where, chain, relations, soft-delete, dirty tracking) |
 | IDE experience | Native | Via inference | Via client types | Via generated .d.ts |
 | Ecosystem size | Massive | Large | Large | Small (but compatible with theirs) |
 | Single source of truth | Types only | Types + validation | DB + types | **Types + validation + DB** |
@@ -262,7 +262,7 @@ Rip Schema **does not replace** TypeScript, Zod, or Prisma. It **generates TypeS
 
 The weaknesses are real:
 - No migration engine — generates target state, not migration paths (use dbmate, Flyway, or Prisma Migrate)
-- No query client matching Prisma Client's depth — ORM is functional (find, where, chain, relations, dirty tracking, validation) but lacks eager loading, transactions, and middleware
+- No query client matching Prisma Client's depth — ORM is functional (find, where, chain, relations, soft-delete, dirty tracking, validation) but lacks eager loading, transactions, and middleware
 - Small ecosystem — but the generated outputs (`.d.ts`, `.sql`) are standard formats that work with existing tools
 - New DSL to learn — but it's ~15 keywords, not a programming language
 

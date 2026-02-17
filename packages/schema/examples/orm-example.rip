@@ -11,6 +11,8 @@
 #   - Computed properties (reactive)
 #   - Query API (find, where, orderBy, limit, count)
 #   - Relation loading (user.posts(), post.user())
+#   - Soft delete (softDelete, restore, withDeleted)
+#   - Factory (schema-driven fake data generation)
 #   - Dirty tracking and validation
 #
 # Prerequisites:
@@ -151,6 +153,41 @@ console.log '\n── Relation loading: post.user() ─────────�
 post = Post.where!(slug: 'bobs-post').first!()
 author = post.user!()
 console.log "#{post.title} was written by #{author.name}"
+
+console.log '\n── Soft delete ─────────────────────────────────────────────'
+allPosts = Post.all!()
+console.log "Total posts: #{allPosts.length}"
+
+# Soft-delete Bob's post (sets deleted_at, doesn't actually DELETE)
+bobs = Post.where!(slug: 'bobs-post').first!()
+bobs.softDelete!()
+console.log "Soft-deleted: #{bobs.title}"
+
+# Default queries now exclude it
+remaining = Post.all!()
+console.log "Visible posts: #{remaining.length}"
+
+# withDeleted() includes soft-deleted records
+everything = Post.withDeleted!().all!()
+console.log "Including deleted: #{everything.length}"
+
+# Restore it
+bobs.restore!()
+restored = Post.all!()
+console.log "After restore: #{restored.length}"
+
+console.log '\n── Factory: auto-generated data ────────────────────────────'
+fakeUser = User.factory!(0)
+console.log "Built (not saved):", fakeUser.toJSON()
+
+console.log '\n── Factory: batch create ───────────────────────────────────'
+editors = User.factory!(3, role: 'editor')
+console.log "Created #{editors.length} editors:"
+for e in editors
+  console.log "  - #{e.name} <#{e.email}> role=#{e.role}"
+
+console.log '\n── Factory: total after batch ──────────────────────────────'
+console.log "Total users now: #{User.count!()}"
 
 console.log '\n── Validation ──────────────────────────────────────────────'
 badUser = User.build email: 'not-valid'

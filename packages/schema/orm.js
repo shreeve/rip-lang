@@ -26,7 +26,8 @@
 
 import { Schema } from './runtime.js';
 import { toSnakeCase, pluralize } from './emit-sql.js';
-export { Schema };
+import { Fake } from './faker.js';
+export { Schema, Fake };
 
 let _dbUrl = process.env.DB_URL || 'http://localhost:4213';
 
@@ -61,6 +62,7 @@ export class Model {
   static _columns   = null;
   static _relations = {};
   static _schemaRef = null;
+  static _softDelete = false;
 
   // ---------------------------------------------------------------------------
   // Schema definition (called by subclass)
@@ -131,6 +133,7 @@ export class Model {
     // Add soft delete field
     if (model.directives?.softDelete) {
       fields.deleted_at = { type: 'datetime' };
+      this._softDelete = true;
     }
 
     // Store relationship metadata for lazy loading
@@ -375,6 +378,27 @@ export class Model {
     return this;
   }
 
+  async softDelete() {
+    if (!this._persisted) return this;
+    const Ctor = this.constructor;
+    if (!Ctor._softDelete) throw new Error(`${Ctor.name || 'Model'} does not have @softDelete`);
+    const pk = Ctor.primaryKey;
+    const now = new Date().toISOString();
+    await query(`UPDATE ${Ctor.tableName()} SET "deleted_at" = ? WHERE "${pk}" = ?`, [now, this._data[pk]]);
+    this._data.deleted_at = now;
+    return this;
+  }
+
+  async restore() {
+    if (!this._persisted) return this;
+    const Ctor = this.constructor;
+    if (!Ctor._softDelete) throw new Error(`${Ctor.name || 'Model'} does not have @softDelete`);
+    const pk = Ctor.primaryKey;
+    await query(`UPDATE ${Ctor.tableName()} SET "deleted_at" = NULL WHERE "${pk}" = ?`, [this._data[pk]]);
+    this._data.deleted_at = null;
+    return this;
+  }
+
   async reload() {
     if (!this._persisted) return this;
     const Ctor = this.constructor;
@@ -406,7 +430,8 @@ export class Model {
 
   static async find(id) {
     const pk = this.primaryKey;
-    const sql = `SELECT * FROM ${this.tableName()} WHERE "${pk}" = ? LIMIT 1`;
+    const soft = this._softDelete ? ' AND "deleted_at" IS NULL' : '';
+    const sql = `SELECT * FROM ${this.tableName()} WHERE "${pk}" = ?${soft} LIMIT 1`;
     const result = await query(sql, [id]);
     if (result.rows === 0) return null;
     return this._materialize(result.meta, result.data[0]);
@@ -416,27 +441,28 @@ export class Model {
     if (ids.length === 0) return [];
     const pk = this.primaryKey;
     const placeholders = ids.map(() => '?').join(', ');
-    const sql = `SELECT * FROM ${this.tableName()} WHERE "${pk}" IN (${placeholders})`;
+    const soft = this._softDelete ? ' AND "deleted_at" IS NULL' : '';
+    const sql = `SELECT * FROM ${this.tableName()} WHERE "${pk}" IN (${placeholders})${soft}`;
     const result = await query(sql, ids);
     return result.data.map(row => this._materialize(result.meta, row));
   }
 
   static async all(limit = null) {
-    let sql = `SELECT * FROM ${this.tableName()}`;
-    if (limit != null) sql += ` LIMIT ${limit}`;
-    const result = await query(sql);
-    return result.data.map(row => this._materialize(result.meta, row));
+    const q = new Query(this);
+    if (limit != null) q.limit(limit);
+    return q.all();
   }
 
   static async first() {
-    const sql = `SELECT * FROM ${this.tableName()} LIMIT 1`;
-    const result = await query(sql);
-    if (result.rows === 0) return null;
-    return this._materialize(result.meta, result.data[0]);
+    return new Query(this).first();
   }
 
   static where(conditions, ...params) {
     return new Query(this).where(conditions, ...params);
+  }
+
+  static withDeleted() {
+    return new Query(this, { includeDeleted: true });
   }
 
   static count(conditions = null) {
@@ -453,6 +479,69 @@ export class Model {
     return await this.build(data).save();
   }
 
+  // ---------------------------------------------------------------------------
+  // Factory — schema-driven fake data generation
+  // ---------------------------------------------------------------------------
+  //   User.factory()       → create 1 (persisted, single)
+  //   User.factory(0)      → build 1 (not persisted, single)
+  //   User.factory(3)      → create 3 (persisted, array)
+  //   User.factory(-3)     → build 3 (not persisted, array)
+  //   User.factory(3, {})  → create 3 with overrides (array)
+  // ---------------------------------------------------------------------------
+
+  static _fake(overrides = {}) {
+    const data = {};
+    const schema = this._schema;
+    const schemaRef = this._schemaRef;
+    const s = this._factorySeq = (this._factorySeq || 0) + 1;
+
+    for (const name in schema) {
+      if (overrides[name] != null) { data[name] = overrides[name]; continue; }
+
+      const field = schema[name];
+      if (field.primary) continue;
+      if (name === 'created_at' || name === 'updated_at' || name === 'deleted_at') continue;
+
+      // Use schema default if available
+      if (field.default != null) {
+        data[name] = typeof field.default === 'function' ? field.default() : field.default;
+        continue;
+      }
+
+      // Skip optional fields sometimes (30% chance of null)
+      if (!field.required && Math.random() < 0.3) continue;
+
+      // FK fields — leave for caller to set via overrides
+      if (field.type === 'uuid') continue;
+
+      // Skip nested/composite types (e.g. Address) — can't fake a struct
+      if (schemaRef?.types?.has(field.type)) continue;
+
+      // Resolve enum values if applicable
+      const enumVals = schemaRef?.enums?.has(field.type) ? schemaRef.enums.get(field.type) : null;
+
+      data[name] = Fake.value(name, field, s, enumVals);
+    }
+    return data;
+  }
+
+  static async factory(num, overrides = {}) {
+    // Custom faker on the model takes priority
+    const fake = (this._faker)
+      ? (ov) => ({ ...this._faker(ov), ...ov })
+      : (ov) => this._fake(ov);
+
+    if (num == null) {
+      return this.create(fake(overrides));
+    } else if (num === 0) {
+      return this.build(fake(overrides));
+    } else if (num > 0) {
+      return Promise.all(Array.from({ length: num }, () => this.create(fake(overrides))));
+    } else {
+      return Array.from({ length: -num }, () => this.build(fake(overrides)));
+    }
+  }
+
 }
 
 // =============================================================================
@@ -460,13 +549,26 @@ export class Model {
 // =============================================================================
 
 class Query {
-  constructor(model) {
+  constructor(model, { includeDeleted = false } = {}) {
     this._model  = model;
     this._where  = [];
     this._params = [];
     this._order  = null;
     this._limit  = null;
     this._offset = null;
+    this._includeDeleted = includeDeleted;
+
+    // Auto-filter soft-deleted records unless explicitly included
+    if (model._softDelete && !includeDeleted) {
+      this._where.push('"deleted_at" IS NULL');
+    }
+  }
+
+  withDeleted() {
+    // Remove the auto-added soft-delete filter
+    this._where = this._where.filter(w => w !== '"deleted_at" IS NULL');
+    this._includeDeleted = true;
+    return this;
   }
 
   where(conditions, ...params) {
@@ -572,7 +674,7 @@ Schema.prototype.connect = function(url) {
 Schema.prototype.model = function(modelName, options = {}) {
   if (!this._models) this._models = new Map();
 
-  const { computed: computedDefs, ...methods } = options;
+  const { computed: computedDefs, faker: fakerFn, ...methods } = options;
 
   // Create a new class extending Model
   const ModelClass = class extends Model {};
@@ -587,6 +689,9 @@ Schema.prototype.model = function(modelName, options = {}) {
 
   // Add computed properties (getters, no parens needed)
   if (computedDefs) ModelClass.computed(computedDefs);
+
+  // Set custom faker if provided
+  if (fakerFn) ModelClass._faker = fakerFn;
 
   // Return callable and register in schema for relation lookups
   const callable = makeCallable(ModelClass);

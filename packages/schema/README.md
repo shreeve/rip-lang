@@ -607,6 +607,8 @@ user.$data                   # Raw data snapshot
 user.$validate()             # → null or [{ field, error, message }]
 user.save()                  # INSERT or UPDATE (dirty fields only)
 user.delete()                # DELETE
+user.softDelete()            # Set deleted_at (if @softDelete)
+user.restore()               # Clear deleted_at
 user.reload()                # Refresh from database
 user.toJSON()                # Serialize (includes computed fields)
 ```
@@ -630,6 +632,28 @@ for p in user.posts!()
 
 All models registered with `schema.model` are automatically discoverable — no
 manual wiring needed.
+
+### Soft Delete
+
+Models with `@softDelete` in the schema automatically filter deleted records
+from all queries. No configuration needed — the ORM reads it from the schema:
+
+```coffee
+# Queries automatically exclude soft-deleted records
+posts = Post.all!()                  # only non-deleted posts
+
+# Soft-delete a record (sets deleted_at, no actual DELETE)
+post.softDelete!()
+
+# Explicitly include soft-deleted records
+all = Post.withDeleted!().all!()
+
+# Restore a soft-deleted record
+post.restore!()
+```
+
+Models without `@softDelete` are unaffected — `delete()` still performs a
+real `DELETE` as before.
 
 ### Validation
 
@@ -736,6 +760,7 @@ you can use the ORM without the code generators.
 | CLI (`rip-schema generate`) | Complete |
 | VS Code syntax highlighting | Complete |
 | Relation loading (`user.posts()`) | Complete |
+| Soft-delete awareness (`@softDelete`) | Complete |
 | `@computed` / `@validate` in DSL | Planned |
 | Eager loading / includes | Planned |
 | Migration diffing | Planned |
@@ -771,6 +796,7 @@ loading — from a single source of truth.
 - Computed properties (getters, no parens)
 - Schema-derived fields, types, constraints, FKs, timestamps
 - Relation loading: `user.posts()`, `post.user()` (lazy, async)
+- Soft-delete awareness: auto-filtered queries, `softDelete()`, `restore()`, `withDeleted()`
 - Model registry — all `schema.model` calls are auto-discoverable
 - DuckDB integration via HTTP
 
