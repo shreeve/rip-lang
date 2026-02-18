@@ -1,9 +1,1481 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Rip Playground</title>
-  <script>location.replace('playground-rip.html')</script>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg width='420' height='420' viewBox='0 0 420 420' fill='none' xmlns='http://www.w3.org/2000/svg'><circle cx='210' cy='210' r='210' fill='white'/><path d='M114.5 263C79.772 263 45.7872 275.051 34.271 283.579C33.4994 284.151 34.012 285.229 34.9656 285.117C73.1916 280.629 115.309 292.74 146.5 304C178.5 315.552 221 336 269 336C314.651 336 372.074 310.499 386.401 293.944C387.038 293.208 386.301 292.353 385.435 292.799C376.614 297.341 364.243 306.018 316.073 306.948C265.273 307.928 159 263 114.5 263Z' fill='%230389FF'/><path d='M223.46 84C239.53 84 253.592 86.9253 265.645 92.7754C277.697 98.6254 287.071 107.048 293.767 118.043C300.462 129.038 303.811 142.219 303.811 157.584C303.811 173.09 300.357 186.165 293.449 196.808C287.068 206.742 278.259 214.402 267.026 219.792L309.603 297.958C297.885 297.851 283.094 295.413 266.52 291.62C257.58 289.574 248.214 287.157 238.645 284.547L209.127 229.054H188.782V270.333C176.996 266.968 165.515 263.788 154.823 261.15C146.038 258.984 137.665 257.152 130 255.885V84H223.46ZM188.782 183.381H209.505C216.412 183.381 222.297 182.535 227.16 180.844C232.094 179.082 235.865 176.297 238.473 172.491C241.151 168.685 242.49 163.716 242.49 157.584C242.49 151.382 241.151 146.342 238.473 142.466C235.865 138.519 232.094 135.628 227.16 133.796C222.297 131.893 216.412 130.941 209.505 130.941H188.782V183.381Z' fill='%23BB0000'/></svg>">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    /* Hide body until fully initialized to prevent render flicker */
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1e1e1e;
+      color: #d4d4d4;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    body.ready {
+      visibility: visible;
+      opacity: 1;
+      transition: opacity 0.15s ease-in;
+    }
+
+    .header {
+      background: #252526;
+      padding: 15px 20px;
+      border-bottom: 1px solid #3e3e42;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .header-left {
+      display: flex;
+      flex-direction: column;
+    }
+
+    h1 {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 20px;
+      font-weight: 600;
+      color: #cccccc;
+      margin-bottom: 5px;
+    }
+
+    .logo {
+      height: 32px;
+      width: auto;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: #858585;
+    }
+
+    .github-link {
+      color: #858585;
+      transition: color 0.2s;
+      align-self: flex-start;
+      margin-top: 4px;
+    }
+
+    .github-link:hover {
+      color: #ffffff;
+    }
+
+    .github-link svg {
+      width: 24px;
+      height: 24px;
+      fill: currentColor;
+    }
+
+    .tabs {
+      display: flex;
+      background: #2d2d30;
+      border-bottom: 1px solid #3e3e42;
+    }
+
+    .tab {
+      padding: 12px 24px;
+      background: transparent;
+      border: none;
+      color: #858585;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .tab:hover {
+      color: #cccccc;
+      background: #2a2a2d;
+    }
+
+    .tab.active {
+      color: #ffffff;
+      border-bottom-color: #007acc;
+      background: #1e1e1e;
+    }
+
+    .content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .pane {
+      display: none;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .pane.active {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* REPL Styles */
+    .repl-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      overflow: hidden;
+    }
+
+    .repl-output {
+      flex: 1;
+      overflow-y: auto;
+      font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+      font-size: 14px;
+      line-height: 1.6;
+      padding: 10px;
+      background: #1e1e1e;
+      border: 1px solid #3e3e42;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+
+    .repl-line {
+      margin-bottom: 8px;
+    }
+
+    .prompt {
+      color: #4ec9b0;
+      font-weight: 600;
+    }
+
+    .repl-code {
+      display: inline;
+    }
+
+    .repl-code > span {
+      display: inline !important;
+      background: none !important;
+      padding: 0 !important;
+    }
+
+    .result {
+      color: #ce9178;
+      margin-left: 20px;
+    }
+
+    .error {
+      color: #f48771;
+      margin-left: 20px;
+    }
+
+    .command-output {
+      color: #858585;
+      margin-left: 20px;
+      white-space: pre-wrap;
+    }
+
+    .repl-input-area {
+      display: flex;
+      align-items: flex-start;
+      gap: 4px;
+      background: #2d2d30;
+      padding: 8px 10px;
+      border: 1px solid #3e3e42;
+      border-radius: 4px;
+    }
+
+    .repl-prompt-text {
+      color: #4ec9b0;
+      font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+      font-weight: 600;
+      font-size: 14px;
+      line-height: 24px;
+      margin-top: 0;
+    }
+
+    #repl-editor-container {
+      flex: 1;
+      overflow: hidden;
+      border-radius: 4px;
+    }
+
+    #repl-editor-container .monaco-editor,
+    #repl-editor-container .monaco-editor .focused,
+    #repl-editor-container .monaco-editor-background {
+      outline: none !important;
+      box-shadow: none !important;
+    }
+
+    #repl-editor-container .monaco-editor,
+    #repl-editor-container .monaco-editor .overflow-guard {
+      border-radius: 0;
+    }
+
+    #repl-editor-container .monaco-editor .lines-content {
+      padding-right: 0 !important;
+    }
+
+    /* Compiler Styles */
+    .compiler-container {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      background: #3e3e42;
+      padding: 20px;
+      position: relative;
+    }
+
+    .resizer {
+      width: 10px;
+      background: #3e3e42;
+      cursor: col-resize;
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .resizer:hover {
+      background: #007acc;
+    }
+
+    .resizer::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 4px;
+      height: 40px;
+      background: #888888;
+      border-radius: 2px;
+    }
+
+    .editor-pane {
+      display: flex;
+      flex-direction: column;
+      background: #1e1e1e;
+      border-radius: 4px;
+      overflow: hidden;
+      min-height: 0;
+      flex: 1;
+      min-width: 200px;
+    }
+
+    #editor-left {
+      flex-basis: 50%;
+    }
+
+    #editor-right {
+      flex-basis: 50%;
+    }
+
+    .pane-header {
+      background: #2d2d30;
+      padding: 10px 15px;
+      border-bottom: 1px solid #3e3e42;
+      font-size: 13px;
+      font-weight: 600;
+      color: #cccccc;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      min-height: 49px;
+      box-sizing: border-box;
+    }
+
+    .pane-header-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .pane-header button {
+      background: #5a5a5d;
+      color: #ffffff;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 3px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .pane-header button:hover {
+      background: #6e6e71;
+    }
+
+    .pane-header button.active {
+      background: #007acc;
+    }
+
+    .pane-header button.active:hover {
+      background: #005a9e;
+    }
+
+    .editor-wrapper {
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .theme-select {
+      background: #3c3c3c;
+      color: #cccccc;
+      border: 1px solid #5a5a5d;
+      padding: 4px 8px;
+      border-radius: 3px;
+      font-size: 12px;
+      cursor: pointer;
+      outline: none;
+    }
+
+    .theme-select:hover {
+      border-color: #007acc;
+    }
+
+    .label-short { display: none; }
+
+    @media (max-width: 960px) {
+      #theme-select { display: none; }
+      .label-full { display: none; }
+      .label-short { display: inline; }
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #1e1e1e;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #555555;
+      border-radius: 5px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #686868;
+    }
+
+    ::-webkit-scrollbar-corner {
+      background: #1e1e1e;
+    }
+
+    .monaco-editor .slider {
+      border-radius: 5px !important;
+    }
+
+    .monaco-editor .deprecated {
+      text-decoration: none !important;
+    }
+
+    /* Welcome message */
+    .welcome {
+      color: #858585;
+      font-style: italic;
+      margin-bottom: 15px;
+    }
+
+    .help-text {
+      color: #6a9955;
+    }
+
+    .command {
+      color: #4fc1ff;
+    }
+
+    .var-name {
+      color: #9cdcfe;
+    }
+
+    .var-value {
+      color: #ce9178;
+    }
+
+    /* Light/Dark mode toggle */
+    .mode-toggle {
+      background: none;
+      border: 1px solid #5a5a5d;
+      border-radius: 4px;
+      color: #858585;
+      cursor: pointer;
+      width: 32px;
+      height: 32px;
+      font-size: 16px;
+      line-height: 32px;
+      text-align: center;
+      padding: 0;
+      transition: all 0.2s;
+      margin-right: 8px;
+    }
+
+    .mode-toggle:hover {
+      color: #ffffff;
+      border-color: #007acc;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* Light mode overrides */
+    body.light {
+      background: #ffffff;
+      color: #1e1e1e;
+    }
+
+    body.light .header {
+      background: #f3f3f3;
+      border-bottom-color: #d4d4d4;
+    }
+
+    body.light h1 { color: #333333; }
+    body.light .subtitle { color: #666666; }
+    body.light .github-link { color: #666666; }
+    body.light .github-link:hover { color: #000000; }
+    body.light .mode-toggle { color: #666666; border-color: #cccccc; }
+    body.light .mode-toggle:hover { color: #000000; border-color: #007acc; }
+
+    body.light .tabs {
+      background: #f3f3f3;
+      border-bottom-color: #d4d4d4;
+    }
+
+    body.light .tab { color: #666666; }
+    body.light .tab:hover { color: #333333; background: #e8e8e8; }
+    body.light .tab.active { color: #333333; border-bottom-color: #007acc; background: #ffffff; }
+
+    body.light .compiler-container { background: #e0e0e0; }
+    body.light .editor-pane { background: #ffffff; border-color: #d4d4d4; }
+    body.light .content { background: #ffffff; }
+
+    body.light .pane-header {
+      background: #f3f3f3;
+      border-bottom-color: #d4d4d4;
+      color: #333333;
+    }
+
+    body.light .pane-header button { background: #cccccc; color: #333333; }
+    body.light .pane-header button:hover { background: #bbbbbb; }
+    body.light .pane-header button.active { background: #007acc; color: #ffffff; }
+    body.light .theme-select { background: #f3f3f3; color: #333333; border-color: #cccccc; }
+
+    body.light .resizer { background: #e0e0e0; }
+    body.light .resizer:hover { background: #007acc; }
+
+    body.light ::-webkit-scrollbar-track { background: #f3f3f3; }
+    body.light ::-webkit-scrollbar-thumb { background: #c1c1c1; }
+    body.light ::-webkit-scrollbar-thumb:hover { background: #a0a0a0; }
+    body.light ::-webkit-scrollbar-corner { background: #f3f3f3; }
+
+    body.light .repl-container { background: #e8e8e8; }
+    body.light .repl-output { background: #ffffff; border-color: #d4d4d4; color: #1e1e1e; }
+    body.light .repl-output .prompt { color: #007acc; }
+    body.light .repl-output .result { color: #a31515; }
+    body.light .repl-output .error { color: #d32f2f; }
+    body.light .repl-output .welcome { color: #666666; }
+    body.light .repl-output .command { color: #0070c1; }
+    body.light .repl-output .command-output { color: #555555; }
+    body.light .repl-input-area { background: #f3f3f3; border-color: #d4d4d4; border-radius: 6px; }
+    body.light .repl-prompt-text { color: #007acc; }
+  </style>
+  <link rel="preload" href="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs/loader.js" as="script">
+  <script type="module" src="dist/rip.browser.min.js"></script>
 </head>
-<body></body>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <h1>
+        <img src="rip.svg" alt="Rip" class="logo" style="background-color: #fff; border-radius: 5px; padding: 4px;">
+        Rip Playground
+      </h1>
+      <div class="subtitle"></div>
+    </div>
+    <div class="header-right">
+      <button id="mode-toggle" class="mode-toggle" title="Toggle light/dark mode">&#9790;</button>
+      <a href="https://github.com/shreeve/rip-lang" target="_blank" class="github-link" title="View on GitHub">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>
+      </a>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" data-tab="compiler">Live Compiler</button>
+    <button class="tab" data-tab="repl">REPL Console</button>
+    <button class="tab" data-tab="demo">Demo</button>
+    <button class="tab" data-tab="example">Example</button>
+  </div>
+
+  <!-- Content -->
+  <div class="content">
+
+    <!-- Compiler Pane -->
+    <div class="pane active" id="compiler-pane">
+      <div class="compiler-container">
+        <div class="editor-pane" id="editor-left">
+          <div class="pane-header">
+            <span>Source</span>
+            <div class="pane-header-buttons">
+              <select id="example-select" class="theme-select" title="Load example">
+                <option value="demo">Full Demo</option>
+                <option value="basics">Basics</option>
+                <option value="reactive">Reactive State</option>
+                <option value="classes">Classes</option>
+                <option value="regex">Regex & Strings</option>
+                <option value="async">Async & Dammit</option>
+                <option value="custom">Custom</option>
+              </select>
+              <select id="theme-select" class="theme-select" title="Editor theme">
+                <optgroup label="Dark Themes">
+                  <option value="vs-dark">Dark+ (default)</option>
+                  <option value="hc-black">High Contrast Dark</option>
+                  <option value="cdn:GitHub Dark">GitHub Dark</option>
+                  <option value="cdn:Dracula">Dracula</option>
+                  <option value="cdn:Monokai">Monokai</option>
+                  <option value="cdn:Nord">Nord</option>
+                </optgroup>
+                <optgroup label="Light Themes">
+                  <option value="vs">Light+</option>
+                  <option value="hc-light">High Contrast Light</option>
+                  <option value="cdn:GitHub Light">GitHub Light</option>
+                  <option value="cdn:Solarized-light">Solarized Light</option>
+                </optgroup>
+              </select>
+              <button id="clear-btn" title="Clear the editor">Clear</button>
+              <button class="active" id="run-btn" title="Execute code and output to browser console (F5, Cmd+Enter, Ctrl+Enter)">Run</button>
+            </div>
+          </div>
+          <div class="editor-wrapper" id="editor-container"></div>
+        </div>
+
+        <div class="resizer" id="resizer"></div>
+
+        <div class="editor-pane" id="editor-right">
+          <div class="pane-header">
+            <span>Output</span>
+            <div class="pane-header-buttons">
+              <button id="show-tokens" title="Toggle token stream display"><span class="label-full">Tokens</span><span class="label-short">Toks</span></button>
+              <button id="show-sexp" title="Toggle S-expression display"><span class="label-full">S-Expressions</span><span class="label-short">Sexp</span></button>
+              <button id="show-preamble" title="Toggle preamble code display"><span class="label-full">Preamble</span><span class="label-short">Pre</span></button>
+              <button id="show-types" title="Toggle .d.ts type declarations">Types</button>
+              <button id="show-js" title="Toggle JavaScript output">JS</button>
+            </div>
+          </div>
+          <div class="editor-wrapper" id="output-container"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- REPL Pane -->
+    <div class="pane" id="repl-pane">
+      <div class="repl-container">
+        <div class="repl-output" id="repl-output">
+          <div class="welcome">
+            <strong>Rip Playground</strong> - Interactive Environment<br>
+            Type <span class="command">.help</span> for commands, try Rip expressions!
+          </div>
+        </div>
+        <div class="repl-input-area">
+          <span class="repl-prompt-text" id="prompt">rip&gt;</span>
+          <div id="repl-editor-container" style="flex: 1; height: 24px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Demo Pane -->
+    <div class="pane" id="demo-pane">
+      <iframe id="demo-iframe" style="width: 100%; height: 100%; border: none;"></iframe>
+    </div>
+
+    <!-- Example Pane -->
+    <div class="pane" id="example-pane">
+      <iframe id="example-iframe" style="width: 100%; height: 100%; border: none;"></iframe>
+    </div>
+
+  </div>
+
+  <!-- ====================================================================
+       Monarch Tokenizer — Rip syntax highlighting for Monaco
+       Third-party configuration, kept as JS for clarity and maintainability
+       ==================================================================== -->
+  <script>
+    window.ripMonarch = {
+      defaultToken: '',
+      tokenPostfix: '.rip',
+
+      keywords: [
+        'if', 'else', 'unless', 'then', 'switch', 'when', 'for', 'while', 'until',
+        'loop', 'do', 'return', 'break', 'continue', 'throw', 'try', 'catch', 'finally',
+        'yield', 'await', 'import', 'export', 'from', 'default', 'delete', 'typeof',
+        'instanceof', 'new', 'super', 'debugger', 'use', 'own', 'extends', 'in', 'of',
+        'by', 'as', 'class', 'def', 'enum', 'interface', 'component', 'render',
+      ],
+
+      logicalWords: ['and', 'or', 'not', 'is', 'isnt'],
+      booleans: ['true', 'false', 'yes', 'no', 'on', 'off'],
+      constants: ['null', 'undefined', 'NaN', 'Infinity', 'this'],
+      typeKeywords: ['number', 'string', 'boolean', 'void', 'any', 'never', 'unknown', 'object', 'symbol', 'bigint'],
+
+      operators: [
+        '|>', '::=', '::', ':=', '~=', '~>', '<=>', '=!', '!?', '=~', '??', '?.', '...',
+        '..', '**', '//', '%%', '++', '--', '&&', '||', '===', '!==', '==', '!=',
+        '<=', '>=', '=>', '->', '+=', '-=', '*=', '/=', '%=', '**=', '&&=', '||=',
+        '??=', '<<=', '>>=', '>>>=', '&=', '|=', '^=', '>>>', '>>', '<<',
+        '+', '-', '*', '/', '%', '&', '|', '^', '~', '<', '>', '=', '!', '?',
+      ],
+
+      symbols: /[=><!~?:&|+\-*\/\^%\.#]+/,
+      escapes: /\\(?:[abfnrtv\\"']|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
+
+      tokenizer: {
+        root: [
+          // Block comments ###...###
+          [/###/, 'comment', '@blockComment'],
+
+          // Line comments
+          [/#(?!\{).*$/, 'comment'],
+
+          // Heredocs (before regular strings)
+          [/"""/, 'string', '@heredocDouble'],
+          [/'''/, 'string', '@heredocSingle'],
+
+          // Strings
+          [/"/, 'string', '@stringDouble'],
+          [/'/, 'string', '@stringSingle'],
+
+          // Heregex
+          [/\/\/\//, 'regexp', '@heregex'],
+
+          // Regex (after operator context)
+          [/\/(?![/*])(?:[^[\/\n\\]|\\.|\[(?:\\[^\n]|[^\]\n\\])*\])*(\/)([gimsuy]*)/, 'regexp'],
+
+          // Inline JavaScript
+          [/`[^`]*`/, 'string.other'],
+
+          // Instance variables @name
+          [/@[a-zA-Z_$][\w$]*/, 'variable.instance'],
+          [/@/, 'variable.instance'],
+
+          // Type names (PascalCase) — before identifiers
+          [/[A-Z][\w]*/, 'type.identifier'],
+
+          // Identifiers and keywords
+          [/[a-zA-Z_$][\w$]*[!?]?/, {
+            cases: {
+              '@keywords': 'keyword',
+              '@logicalWords': 'keyword.operator',
+              '@booleans': 'constant.language',
+              '@constants': 'constant.language',
+              '@typeKeywords': 'support.type',
+              '@default': 'identifier',
+            }
+          }],
+
+          // Numbers
+          [/0x[0-9a-fA-F](?:_?[0-9a-fA-F])*n?/, 'number.hex'],
+          [/0o[0-7](?:_?[0-7])*n?/, 'number.octal'],
+          [/0b[01](?:_?[01])*n?/, 'number.binary'],
+          [/\d[\d_]*(?:\.[\d][\d_]*)?(?:[eE][+-]?\d+)?n?/, 'number'],
+
+          // Operators (multi-char first)
+          [/::=/, 'keyword.operator.type'],
+          [/::(?!=)/, 'keyword.operator.type'],
+          [/~=|:=|~>|<=>/, 'keyword.operator.reactive'],
+          [/=!/, 'keyword.operator.readonly'],
+          [/!\?/, 'keyword.operator'],
+          [/=~/, 'keyword.operator'],
+          [/\?\?/, 'keyword.operator'],
+          [/\?\./, 'keyword.operator'],
+          [/\.\.\./, 'keyword.operator'],
+          [/\.\./, 'keyword.operator'],
+          [/===|!==|==|!=|<=|>=/, 'keyword.operator.comparison'],
+          [/=>|->/, 'keyword.operator.arrow'],
+          [/\*\*|\/\/|%%/, 'keyword.operator.arithmetic'],
+          [/&&=|\|\|=|\?\?=|\+=|-=|\*=|\/=|%=/, 'keyword.operator.assignment'],
+          [/&&|\|\|/, 'keyword.operator.logical'],
+          [/>>>|>>|<</, 'keyword.operator.bitwise'],
+          [/[+\-*\/%]/, 'keyword.operator.arithmetic'],
+          [/[&|^~]/, 'keyword.operator.bitwise'],
+          [/[<>]/, 'keyword.operator.comparison'],
+          [/=/, 'keyword.operator.assignment'],
+          [/!/, 'keyword.operator'],
+          [/\?/, 'keyword.operator'],
+
+          // Brackets
+          [/[{}()\[\]]/, '@brackets'],
+
+          // Delimiters
+          [/[;,.]/, 'delimiter'],
+        ],
+
+        blockComment: [
+          [/###/, 'comment', '@pop'],
+          [/./, 'comment'],
+        ],
+
+        heredocDouble: [
+          [/"""/, 'string', '@pop'],
+          [/#\{/, { token: 'string.interpolation', next: '@interpolation' }],
+          [/@escapes/, 'string.escape'],
+          [/./, 'string'],
+        ],
+
+        heredocSingle: [
+          [/'''/, 'string', '@pop'],
+          [/@escapes/, 'string.escape'],
+          [/./, 'string'],
+        ],
+
+        stringDouble: [
+          [/"/, 'string', '@pop'],
+          [/#\{/, { token: 'string.interpolation', next: '@interpolation' }],
+          [/@escapes/, 'string.escape'],
+          [/[^"\\#]+/, 'string'],
+          [/./, 'string'],
+        ],
+
+        stringSingle: [
+          [/'/, 'string', '@pop'],
+          [/@escapes/, 'string.escape'],
+          [/[^'\\]+/, 'string'],
+          [/./, 'string'],
+        ],
+
+        interpolation: [
+          [/\}/, { token: 'string.interpolation', next: '@pop' }],
+          { include: 'root' },
+        ],
+
+        heregex: [
+          [/\/\/\/[gimsuy]*/, 'regexp', '@pop'],
+          [/#.*$/, 'comment'],
+          [/@escapes/, 'regexp.escape'],
+          [/#\{/, { token: 'string.interpolation', next: '@interpolation' }],
+          [/./, 'regexp'],
+        ],
+      },
+    };
+
+    window.ripLanguageConfig = {
+      comments: { lineComment: '#', blockComment: ['###', '###'] },
+      brackets: [['{', '}'], ['[', ']'], ['(', ')']],
+      autoClosingPairs: [
+        { open: '{', close: '}' },
+        { open: '[', close: ']' },
+        { open: '(', close: ')' },
+        { open: '"', close: '"', notIn: ['string'] },
+        { open: "'", close: "'", notIn: ['string'] },
+      ],
+      surroundingPairs: [
+        { open: '{', close: '}' },
+        { open: '[', close: ']' },
+        { open: '(', close: ')' },
+        { open: '"', close: '"' },
+        { open: "'", close: "'" },
+      ],
+      indentationRules: {
+        increaseIndentPattern: /^\s*(?:def|class|component|render|if|unless|else|for|while|until|loop|switch|when|try|catch|finally|enum|interface)\b.*$|[-=]>\s*$/,
+        decreaseIndentPattern: /^\s*(else|catch|finally)\b/,
+      },
+      folding: { offSide: true },
+    };
+  </script>
+
+  <!-- Shared playground examples (loaded before main script) -->
+  <script type="text/rip" src="examples.rip"></script>
+
+  <!-- ====================================================================
+       Application Logic — written in Rip
+       ==================================================================== -->
+  <script type="text/rip">
+
+    # ====================================================================
+    # Load Compiler Exports + Monaco (in parallel)
+    # ====================================================================
+
+    { compile, formatSExpr, VERSION, BUILD_DATE, getReactiveRuntime } = window.__ripExports
+
+    MONACO_CDN =! 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0'
+
+    loadMonaco = ->
+      new Promise (resolve) ->
+        script = document.createElement 'script'
+        script.src = "#{MONACO_CDN}/min/vs/loader.js"
+        script.onload = ->
+          window.require.config paths: vs: "#{MONACO_CDN}/min/vs"
+          window.require ['vs/editor/editor.main'], (m) -> resolve m
+        document.head.appendChild script
+
+    # Start Monaco loading immediately (preload hint already fetching)
+    monacoPromise = loadMonaco()
+
+    # Update subtitle while Monaco loads
+    localDate = new Date(BUILD_DATE.replace('@', 'T').replace('GMT', 'Z'))
+      .toLocaleString undefined,
+        year: 'numeric', month: 'short', day: 'numeric'
+        hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+    document.querySelector('.subtitle').textContent =
+      "Interactive environment • Version #{VERSION} • Built #{localDate}"
+
+    # Reveal page immediately — layout is ready, editors will populate after Monaco loads
+    document.body.classList.add 'ready'
+
+    # Await Monaco
+    monaco = await monacoPromise
+
+    # Register Rip language
+    monaco.languages.register id: 'rip', extensions: ['.rip']
+    monaco.languages.setMonarchTokensProvider 'rip', window.ripMonarch
+    monaco.languages.setLanguageConfiguration 'rip', window.ripLanguageConfig
+
+    # ====================================================================
+    # Restore Persisted State
+    # ====================================================================
+
+    showTokens = localStorage.getItem('rip-repl-tokens') is 'true'
+    showSexp = localStorage.getItem('rip-repl-sexp') is 'true'
+    showPreamble = localStorage.getItem('rip-preamble') is 'true'
+    showTypes = localStorage.getItem('rip-types') is 'true'
+    showJS = localStorage.getItem('rip-repl-js') isnt 'false'
+
+    savedMode = localStorage.getItem 'rip-repl-mode'
+    isDark = if savedMode then savedMode isnt 'light' else not window.matchMedia('(prefers-color-scheme: light)').matches
+
+    # ====================================================================
+    # Create Editors
+    # ====================================================================
+
+    # Examples loaded from external examples.rip
+    examples = globalThis.ripExamples
+    defaultCode = examples.demo
+
+    # Restore saved source (or default)
+    savedSource = localStorage.getItem 'rip-playground-source'
+    savedExample = localStorage.getItem('rip-playground-example') or 'demo'
+    initialCode = savedSource ?? defaultCode
+
+    sharedConfig =
+      theme: 'vs-dark'
+      fontSize: 14
+      fontFamily: "'Monaco', 'Menlo', 'Consolas', monospace"
+      lineHeight: 22
+      minimap: { enabled: false }
+      scrollBeyondLastLine: false
+      automaticLayout: true
+      overviewRulerLanes: 0
+      hideCursorInOverviewRuler: true
+      renderWhitespace: 'none'
+      scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10, verticalSliderSize: 10, horizontalSliderSize: 10 }
+      padding: { top: 10 }
+
+    sourceEditor = monaco.editor.create document.getElementById('editor-container'), {
+      ...sharedConfig, value: initialCode, language: 'rip', tabSize: 2, insertSpaces: true
+    }
+
+    outputEditor = monaco.editor.create document.getElementById('output-container'), {
+      ...sharedConfig, value: '', language: 'javascript', readOnly: true, domReadOnly: true,
+      lineNumbers: 'off', folding: false, glyphMargin: false, contextmenu: false
+    }
+
+    # REPL input editor (single-line Monaco)
+    replEditor = monaco.editor.create document.getElementById('repl-editor-container'),
+      value: ''
+      language: 'rip'
+      theme: if isDark then 'vs-dark' else 'vs'
+      fontSize: 14
+      fontFamily: "'Monaco', 'Menlo', 'Consolas', monospace"
+      lineHeight: 24
+      minimap: { enabled: false }
+      scrollBeyondLastLine: false
+      automaticLayout: true
+      lineNumbers: 'off'
+      glyphMargin: false
+      folding: false
+      lineDecorationsWidth: 6
+      lineNumbersMinChars: 0
+      overviewRulerLanes: 0
+      hideCursorInOverviewRuler: true
+      scrollbar: { vertical: 'hidden', horizontal: 'hidden', handleMouseWheel: false, verticalScrollbarSize: 0, horizontalScrollbarSize: 0 }
+      overviewRulerBorder: false
+      renderLineHighlight: 'none'
+      wordWrap: 'off'
+      contextmenu: false
+      tabSize: 2
+      insertSpaces: true
+      padding: { top: 0, bottom: 0 }
+      quickSuggestions: false
+      suggestOnTriggerCharacters: false
+      acceptSuggestionOnEnter: 'off'
+      tabCompletion: 'off'
+      parameterHints: { enabled: false }
+      find: { addExtraSpaceOnTop: false, autoFindInSelection: 'never' }
+
+    # ====================================================================
+    # Theme Management
+    # ====================================================================
+
+    THEME_CDN =! 'https://cdn.jsdelivr.net/npm/monaco-themes@0.4.4/themes'
+    loadedThemes =! new Set ['vs', 'vs-dark', 'hc-black', 'hc-light']
+    themeSelect = document.getElementById 'theme-select'
+
+    def setTheme(value)
+      themeId = value
+      if value.startsWith 'cdn:'
+        themeName = value.slice 4
+        themeId = themeName.toLowerCase().replace /[\s_]+/g, '-'
+        unless loadedThemes.has themeId
+          try
+            res = fetch!("#{THEME_CDN}/#{encodeURIComponent(themeName)}.json")
+            data = res.json!
+            monaco.editor.defineTheme themeId, data
+            loadedThemes.add themeId
+          catch err
+            console.error "Failed to load theme: #{themeName}", err
+            return
+      monaco.editor.setTheme themeId
+      localStorage.setItem 'rip-repl-theme', value
+
+    themeSelect.addEventListener 'change', (e) -> setTheme! e.target.value
+
+    # ====================================================================
+    # Light/Dark Mode
+    # ====================================================================
+
+    modeToggle = document.getElementById 'mode-toggle'
+
+    def applyMode!
+      document.body.classList.toggle 'light', not isDark
+      modeToggle.innerHTML = if isDark then '&#9790;' else '&#9788;'
+      modeToggle.title = if isDark then 'Switch to light mode' else 'Switch to dark mode'
+      localStorage.setItem 'rip-repl-mode', if isDark then 'dark' else 'light'
+
+    applyMode()
+
+    modeToggle.addEventListener 'click', ->
+      isDark = not isDark
+      applyMode()
+      current = themeSelect.value
+      if current is 'vs' or current is 'vs-dark'
+        defaultTheme = if isDark then 'vs-dark' else 'vs'
+        themeSelect.value = defaultTheme
+        setTheme! defaultTheme
+
+    # ====================================================================
+    # Compilation Logic
+    # ====================================================================
+
+    SUPPRESS_VALUE =! new Set [
+      'DEF', 'IF', 'ELSE', 'UNLESS', 'FOR', 'WHILE', 'UNTIL', 'LOOP'
+      'SWITCH', 'WHEN', 'TRY', 'CATCH', 'FINALLY', 'THROW', 'RETURN'
+      'CLASS', 'EXTENDS', 'SUPER', 'NEW', 'DELETE', 'TYPEOF', 'INSTANCEOF'
+      'IMPORT', 'FROM', 'EXPORT', 'DEFAULT', 'ENUM', 'INTERFACE'
+      'AND', 'OR', 'NOT', 'IS', 'ISNT', 'IN', 'OF'
+      'TRUE', 'FALSE', 'NULL', 'UNDEFINED', 'YES', 'NO'
+      'CALL_START', 'CALL_END', 'PARAM_START', 'PARAM_END'
+      'INDEX_START', 'INDEX_END', 'TERMINATOR'
+    ]
+
+    def formatTokens(tokens)
+      maxTag = 0
+      for t in tokens
+        maxTag = Math.max maxTag, t[0].length
+      tokens.map((t) ->
+        tag = t[0]
+        val = t[1]
+        return tag if SUPPRESS_VALUE.has tag
+        return tag if tag is val or tag.toLowerCase() is val
+        return "#{tag.padEnd(maxTag)}  #{val}" if tag is 'INDENT' or tag is 'OUTDENT'
+        return "#{tag.padEnd(maxTag)}  #{val}" if tag is 'STRING' or tag is 'REGEX'
+        "#{tag.padEnd(maxTag)}  #{JSON.stringify(val)}"
+      ).join "\n"
+
+    def compileCode!
+      try
+        source = sourceEditor.getValue()
+        opts = {}
+        opts.skipPreamble = true unless showPreamble
+        opts.types = 'emit' if showTypes
+        result = compile source, opts
+
+        parts = []
+        parts.push formatTokens(result.tokens) if showTokens
+        parts.push formatSExpr(result.sexpr, 0, true) if showSexp
+        parts.push "// .d.ts\n#{result.dts.trim()}" if showTypes and result.dts
+        parts.push result.code if showJS
+
+        outputText = parts.join "\n\n"
+        model = outputEditor.getModel()
+        lang = if showTokens or showSexp then 'plaintext' else if showTypes and not showJS then 'typescript' else 'javascript'
+        monaco.editor.setModelLanguage model, lang
+        outputEditor.setValue outputText
+      catch error
+        model = outputEditor.getModel()
+        monaco.editor.setModelLanguage model, 'plaintext'
+        outputEditor.setValue "Error: #{error.message}"
+
+    # ====================================================================
+    # Source Persistence & Example Snippets
+    # ====================================================================
+
+    exampleSelect = document.getElementById 'example-select'
+    exampleSelect.value = savedExample
+    settingExample = false
+    saveTimer = null
+
+    # Debounced save (2 seconds)
+    def saveSource
+      clearTimeout saveTimer if saveTimer
+      saveTimer = setTimeout (->
+        localStorage.setItem 'rip-playground-source', sourceEditor.getValue()
+      ), 2000
+
+    # Auto-compile on change + persist + track example
+    sourceEditor.onDidChangeModelContent ->
+      compileCode()
+      saveSource()
+      unless settingExample
+        if exampleSelect.value isnt 'custom'
+          exampleSelect.value = 'custom'
+          localStorage.setItem 'rip-playground-example', 'custom'
+
+    # Example dropdown handler
+    exampleSelect.addEventListener 'change', (e) ->
+      name = e.target.value
+      if name is 'custom'
+        localStorage.setItem 'rip-playground-example', 'custom'
+      else if examples[name]
+        settingExample = true
+        sourceEditor.setValue examples[name]
+        settingExample = false
+        localStorage.setItem 'rip-playground-example', name
+        localStorage.setItem 'rip-playground-source', examples[name]
+
+    # ====================================================================
+    # Toggle Buttons
+    # ====================================================================
+
+    showTokensBtn = document.getElementById 'show-tokens'
+    showSexpBtn = document.getElementById 'show-sexp'
+    showPreambleBtn = document.getElementById 'show-preamble'
+    showTypesBtn = document.getElementById 'show-types'
+    showJSBtn = document.getElementById 'show-js'
+
+    setupToggle = (btn, key, getter, setter) ->
+      btn.classList.toggle 'active', getter()
+      btn.addEventListener 'click', ->
+        setter not getter()
+        btn.classList.toggle 'active', getter()
+        localStorage.setItem key, getter()
+        compileCode()
+
+    setupToggle showTokensBtn, 'rip-repl-tokens', (-> showTokens), (v) -> showTokens = v
+    setupToggle showSexpBtn, 'rip-repl-sexp', (-> showSexp), (v) -> showSexp = v
+    setupToggle showPreambleBtn, 'rip-preamble', (-> showPreamble), (v) -> showPreamble = v
+    setupToggle showTypesBtn, 'rip-types', (-> showTypes), (v) -> showTypes = v
+    setupToggle showJSBtn, 'rip-repl-js', (-> showJS), (v) -> showJS = v
+
+    # Clear button
+    document.getElementById('clear-btn').addEventListener 'click', ->
+      sourceEditor.setValue ''
+      compileCode()
+      sourceEditor.focus()
+
+    # Run button
+    def runCode
+      try
+        source = sourceEditor.getValue()
+        result = compile source
+        console.clear()
+        console.log '%c=== Rip Code Execution ===', 'color: #007acc; font-weight: bold'
+        await window.eval("(async()=>{\n#{result.code}\n})()")
+        console.log '%c=== Execution Complete ===', 'color: #4ec9b0; font-weight: bold'
+      catch error
+        console.error 'Execution Error:', error
+
+    document.getElementById('run-btn').addEventListener 'click', runCode
+
+    # Keyboard shortcuts
+    sourceEditor.addCommand (monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter), runCode
+
+    document.addEventListener 'keydown', (e) ->
+      if e.key is 'F5'
+        e.preventDefault()
+        runCode()
+
+    # ====================================================================
+    # Tab Switching
+    # ====================================================================
+
+    demoLoaded = false
+    exampleLoaded = false
+
+    def switchToTab(tabName)
+      window.location.hash = tabName
+      document.querySelectorAll('.tab').forEach (t) -> t.classList.remove 'active'
+      document.querySelector(".tab[data-tab='#{tabName}']").classList.add 'active'
+      document.querySelectorAll('.pane').forEach (p) -> p.classList.remove 'active'
+      document.getElementById("#{tabName}-pane").classList.add 'active'
+      if tabName is 'repl'
+        monaco.editor.setTheme if isDark then 'vs-dark' else 'vs'
+        replEditor.focus()
+      else if tabName is 'compiler'
+        setTheme! themeSelect.value
+        compileCode()
+      else if tabName is 'demo'
+        unless demoLoaded
+          document.getElementById('demo-iframe').src = 'sierpinski.html'
+          demoLoaded = true
+      else if tabName is 'example'
+        unless exampleLoaded
+          document.getElementById('example-iframe').src = 'example/'
+          exampleLoaded = true
+
+    document.querySelectorAll('.tab').forEach (tab) ->
+      tab.addEventListener 'click', -> switchToTab tab.dataset.tab
+
+    window.addEventListener 'hashchange', ->
+      hash = window.location.hash.slice 1
+      switchToTab hash if hash is 'compiler' or hash is 'repl' or hash is 'demo' or hash is 'example'
+
+    # ====================================================================
+    # Resizable Panes
+    # ====================================================================
+
+    resizer = document.getElementById 'resizer'
+    leftPane = document.getElementById 'editor-left'
+    rightPane = document.getElementById 'editor-right'
+
+    if resizer and leftPane and rightPane
+      isResizing = false
+
+      resizer.addEventListener 'mousedown', (e) ->
+        isResizing = true
+        document.body.style.cursor = 'col-resize'
+        e.preventDefault()
+
+      document.addEventListener 'mousemove', (e) ->
+        return unless isResizing
+        container = document.querySelector '.compiler-container'
+        containerRect = container.getBoundingClientRect()
+        offsetX = e.clientX - containerRect.left
+        leftPercent = (offsetX / containerRect.width) * 100
+        leftPercent = Math.max 20, Math.min(80, leftPercent)
+        leftPane.style.flexBasis = "#{leftPercent}%"
+        rightPane.style.flexBasis = "#{100 - leftPercent}%"
+
+      document.addEventListener 'mouseup', ->
+        if isResizing
+          isResizing = false
+          document.body.style.cursor = 'default'
+
+    # ====================================================================
+    # REPL Engine
+    # ====================================================================
+
+    replHistory = []
+    historyIndex = -1
+    replBuffer = ''
+    reactiveVars =! new Set()
+
+    replOutput = document.getElementById 'repl-output'
+    promptSpan = document.getElementById 'prompt'
+
+    # Create isolated iframe context for REPL
+    iframe = document.createElement 'iframe'
+    iframe.style.display = 'none'
+    document.body.appendChild iframe
+    replContext = iframe.contentWindow
+
+    # Inject reactive runtime from compiler (single source of truth)
+    replContext.console = console
+    replContext.showSexp = false
+    replContext.showTokens = false
+    replContext.__reactiveVars = {}
+    replContext.eval getReactiveRuntime()
+
+    # Built-in properties to preserve when clearing
+    replBuiltins =! new Set [
+      'console', 'showSexp', 'showTokens', 'eval', 'window', 'document'
+      'location', 'navigator', 'self', 'top', 'parent', 'frames'
+      '__state', '__computed', '__effect', '__batch', '__readonly'
+      '__currentEffect', '__pendingEffects', '__reactiveVars'
+      '__rip', '__flushEffects', '__primitiveCoercion'
+      '__setErrorHandler', '__handleError', '__catchErrors', '__errorHandler'
+      '__batching'
+    ]
+
+    # --- REPL Helpers ---
+
+    def escapeHtml(str)
+      String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+
+    def formatValue(val)
+      return 'null' if val is null
+      return 'undefined' if val is undefined
+      return val.toString() if val instanceof RegExp
+      return val.toString() if typeof val is 'function'
+      return JSON.stringify(val) if typeof val is 'string'
+      return String(val) if typeof val is 'number' or typeof val is 'boolean'
+      if Array.isArray val
+        try
+          return JSON.stringify val
+        catch
+          return '[Array]'
+      if typeof val is 'object'
+        try
+          return JSON.stringify val, null, 2
+        catch
+          return '[Object]'
+      String val
+
+    def addOutput(content, className = '')
+      line = document.createElement 'div'
+      line.className = "repl-line #{className}"
+      line.innerHTML = content
+      replOutput.appendChild line
+      replOutput.scrollTop = replOutput.scrollHeight
+
+    # --- REPL Evaluation ---
+
+    reactiveTransform = (match, varName, rhs) ->
+      "#{varName} = __reactiveVars['#{varName}'] ?? (__reactiveVars['#{varName}'] = #{rhs});"
+
+    def evaluateRip(code)
+      try
+        result = compile code, { reactiveVars, skipPreamble: true }
+        js = result.code
+
+        # Track new reactive variables
+        if result.reactiveVars
+          for v as result.reactiveVars
+            reactiveVars.add v
+
+        # Strip let declarations (bare assignments create globals in iframe)
+        js .= replace /^let\s+[^;]+;\s*\n+/m, ''
+
+        # Transform reactive declarations to persist in __reactiveVars
+        js .= replace /^const\s+(\w+)\s*=\s*((?:__state|__computed|__effect)\(.+\));?$/gm, reactiveTransform
+
+        # Remove remaining const
+        js .= replace /^const\s+(\w+)\s*=/gm, '$1 ='
+
+        # Evaluate in iframe context
+        evalResult = replContext.eval js
+
+        replContext._ = evalResult if evalResult isnt undefined
+
+        { success: true, value: evalResult, result }
+      catch error
+        { success: false, error: error.message }
+
+    # --- REPL Commands ---
+
+    def handleCommand(cmd)
+      switch cmd
+        when '.help'
+          addOutput '''
+            <span class="help-text">Rip Playground Commands:</span>
+
+            <span class="command">.help</span>     - Show this help
+            <span class="command">.clear</span>    - Clear output
+            <span class="command">.vars</span>     - Show variables
+            <span class="command">.sexp</span>     - Toggle s-expression display
+            <span class="command">.tokens</span>   - Toggle token display
+
+            <span class="help-text">Features:</span>
+            - Variables persist across evaluations
+            - Previous result in <span class="var-name">_</span> variable
+            - Shift+Enter for multi-line input
+            - All Rip features: heregex, regex+, classes, etc.
+            ''', 'command-output'
+
+        when '.clear'
+          replOutput.innerHTML = ''
+          reactiveVars.clear()
+          replContext.__reactiveVars = {}
+          for key as Object.keys(replContext)
+            unless replBuiltins.has(key) or key.startsWith('__')
+              try
+                delete replContext[key]
+              catch
+                null
+          addOutput '<div class="welcome">Output and context cleared.</div>'
+
+        when '.vars'
+          vars = Object.keys(replContext).filter (k) ->
+            not replBuiltins.has(k) and not k.startsWith('__') or k is '_'
+          if vars.length is 0 or (vars.length is 1 and vars[0] is '_' and replContext._ is undefined)
+            addOutput '<span class="help-text">No variables defined</span>', 'command-output'
+          else
+            output = '<span class="help-text">Variables:</span>\n'
+            vars.forEach (v) ->
+              try
+                val = replContext[v]
+                typeIndicator = '='
+                if val and typeof val is 'object' and 'value' of val
+                  if typeof val.markDirty is 'function'
+                    typeIndicator = '<span style="color:#c586c0">~=</span>'
+                  else if typeof val is 'function'
+                    typeIndicator = '<span style="color:#c586c0">~&gt;</span>'
+                  else
+                    typeIndicator = '<span style="color:#c586c0">:=</span>'
+                  val = val.value
+                formatted = formatValue val
+                output += "  <span class='var-name'>#{v}</span> #{typeIndicator} <span class='var-value'>#{escapeHtml(formatted)}</span>\n"
+              catch
+                output += "  <span class='var-name'>#{v}</span> = <span class='var-value'>[object]</span>\n"
+            addOutput output, 'command-output'
+
+        when '.sexp'
+          replContext.showSexp = not replContext.showSexp
+          addOutput "S-expression display: #{if replContext.showSexp then 'ON' else 'OFF'}", 'command-output'
+
+        when '.tokens'
+          replContext.showTokens = not replContext.showTokens
+          addOutput "Token display: #{if replContext.showTokens then 'ON' else 'OFF'}", 'command-output'
+
+        else
+          addOutput "Unknown command: #{cmd}", 'error'
+          addOutput 'Type .help for available commands', 'help-text'
+
+    # --- REPL Line Handling ---
+
+    def handleLine(line)
+      if line.trim() and (replHistory.length is 0 or replHistory[-1] isnt line)
+        replHistory.push line
+      historyIndex = replHistory.length
+
+      # Show input with syntax highlighting
+      promptText = if replBuffer then '....>' else 'rip>'
+      codeId = "repl-code-#{Date.now()}"
+      addOutput "<span class='prompt'>#{promptText}</span> <span class='repl-code' id='#{codeId}'>#{escapeHtml(line)}</span>"
+      monaco.editor.colorize(line, 'rip', {}).then (highlighted) ->
+        el = document.getElementById codeId
+        el.innerHTML = highlighted if el
+
+      # Handle commands
+      if line.startsWith '.'
+        handleCommand line
+        return
+
+      # Add to buffer
+      replBuffer = if replBuffer then replBuffer + "\n" + line else line
+
+      # Try to evaluate
+      evalResult = evaluateRip replBuffer
+
+      if evalResult.success
+        # Show debug info if enabled
+        if replContext.showTokens
+          addOutput formatTokens(evalResult.result.tokens).replace(/\n/g, '<br>'), 'command-output'
+
+        if replContext.showSexp
+          sexp = formatSExpr evalResult.result.sexpr, 0, true
+          formatted = sexp.replace(/\n/g, '<br>').replace(/ /g, '&nbsp;')
+          addOutput formatted, 'command-output'
+
+        # Show result (unwrap reactive values)
+        if evalResult.value isnt undefined
+          displayValue = evalResult.value
+          if displayValue and typeof displayValue is 'object' and 'value' of displayValue
+            displayValue = displayValue.value
+          formatted = formatValue displayValue
+          addOutput "<span class='result'>→ #{escapeHtml(formatted)}</span>"
+
+        replBuffer = ''
+        promptSpan.textContent = 'rip>'
+
+      else if evalResult.error.includes 'Unexpected end'
+        # Incomplete input — wait for more
+        promptSpan.textContent = '....>'
+
+      else
+        # Real error
+        addOutput "<span class='error'>✗ #{escapeHtml(evalResult.error)}</span>"
+        replBuffer = ''
+        promptSpan.textContent = 'rip>'
+
+    # --- REPL Input Handling ---
+
+    replEditorEl = document.getElementById 'repl-editor-container'
+    replLineHeight =! 24
+
+    def resizeReplInput!
+      lineCount = replEditor.getModel().getLineCount()
+      newHeight = Math.max replLineHeight, lineCount * replLineHeight
+      replEditorEl.style.height = "#{newHeight}px"
+      replEditor.layout()
+
+    replEditor.onDidChangeModelContent -> resizeReplInput()
+
+    replEditor.onKeyDown (e) ->
+      if e.keyCode is monaco.KeyCode.Enter and not e.shiftKey
+        e.preventDefault()
+        e.stopPropagation()
+        line = replEditor.getValue()
+        replEditor.setValue ''
+        resizeReplInput()
+        handleLine line if line.trim()
+      else if e.keyCode is monaco.KeyCode.Enter and e.shiftKey
+        return
+      else if e.keyCode is monaco.KeyCode.UpArrow
+        e.preventDefault()
+        e.stopPropagation()
+        if historyIndex > 0
+          historyIndex--
+          replEditor.setValue replHistory[historyIndex] or ''
+          model = replEditor.getModel()
+          replEditor.setPosition lineNumber: 1, column: model.getLineMaxColumn(1)
+      else if e.keyCode is monaco.KeyCode.DownArrow
+        e.preventDefault()
+        e.stopPropagation()
+        if historyIndex < replHistory.length
+          historyIndex++
+          replEditor.setValue replHistory[historyIndex] or ''
+          model = replEditor.getModel()
+          replEditor.setPosition lineNumber: 1, column: model.getLineMaxColumn(1)
+
+    # ====================================================================
+    # Initialize
+    # ====================================================================
+
+    # Restore saved theme
+    savedTheme = localStorage.getItem 'rip-repl-theme'
+    if savedTheme
+      themeSelect.value = savedTheme
+      setTheme! savedTheme
+    else
+      setTheme! if isDark then 'vs-dark' else 'vs'
+
+    # Initialize from URL hash (default to compiler)
+    initialTab = window.location.hash.slice 1
+    if initialTab is 'compiler' or initialTab is 'repl' or initialTab is 'demo' or initialTab is 'example'
+      switchToTab! initialTab
+    else
+      compileCode()
+
+  </script>
+</body>
 </html>
