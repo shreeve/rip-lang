@@ -1,0 +1,219 @@
+# ==============================================================================
+# @rip-lang/http — Zero-dependency HTTP client for Rip
+#
+# Author: Steve Shreeve (steve.shreeve@gmail.com)
+#   Date: February 18, 2026
+#
+# A ky-inspired convenience layer over native fetch. Method shortcuts, JSON
+# body/response handling, auto error throwing on non-2xx, retries with
+# exponential backoff and jitter, timeouts, lifecycle hooks, and reusable
+# instances with prefixUrl and default headers — all in pure Rip, zero deps.
+# ==============================================================================
+
+# ==[ Defaults ]==
+
+RETRY_METHODS =! ['GET', 'PUT', 'HEAD', 'DELETE', 'OPTIONS', 'TRACE']
+RETRY_CODES   =! [408, 413, 429, 500, 502, 503, 504]
+RETRY_LIMIT   =! 2
+BACKOFF_BASE  =! 0.3
+TIMEOUT_MS    =! 10000
+
+# ==[ Error Classes ]==
+
+class HTTPError extends Error
+  constructor: (@response, @request, @options) ->
+    super("Request failed with status #{@response.status}")
+    @name = 'HTTPError'
+
+class TimeoutError extends Error
+  constructor: (@request) ->
+    super('Request timed out')
+    @name = 'TimeoutError'
+
+# ==[ Helpers ]==
+
+def buildUrl(input, opts)
+  base = opts.prefixUrl
+  if base
+    unless base.endsWith('/')
+      base += '/'
+    input = input.slice(1) if typeof input is 'string' and input.startsWith('/')
+    url = new URL(input, base)
+  else
+    url = new URL(input)
+
+  sp = opts.searchParams
+  if sp
+    if sp instanceof URLSearchParams
+      sp.forEach (v, k) -> url.searchParams.set(k, v)
+    else if typeof sp is 'string'
+      new URLSearchParams(sp).forEach (v, k) -> url.searchParams.set(k, v)
+    else if typeof sp is 'object'
+      for own k, v of sp
+        url.searchParams.set(k, String(v)) if v?
+
+  url
+
+def mergeHeaders(a, b)
+  result = new Headers(a ?? {})
+  if b
+    h = new Headers(b)
+    h.forEach (v, k) -> result.set(k, v)
+  result
+
+def mergeHooks(a = {}, b = {})
+  merged = {}
+  for key in ['beforeRequest', 'beforeRetry', 'afterResponse', 'beforeError']
+    merged[key] = [...(a[key] ?? []), ...(b[key] ?? [])]
+  merged
+
+def mergeOptions(defaults, overrides)
+  opts = { ...defaults, ...overrides }
+  if defaults.headers or overrides.headers
+    opts.headers = mergeHeaders(defaults.headers, overrides.headers)
+  if defaults.hooks or overrides.hooks
+    opts.hooks = mergeHooks(defaults.hooks, overrides.hooks)
+  opts
+
+def normalizeRetry(retry)
+  return { limit: 0 } if retry is false
+  if typeof retry is 'number'
+    { limit: retry, methods: RETRY_METHODS, statusCodes: RETRY_CODES, backoffLimit: Infinity }
+  else if typeof retry is 'object'
+    limit:        retry.limit        ?? RETRY_LIMIT
+    methods:      retry.methods      ?? RETRY_METHODS
+    statusCodes:  retry.statusCodes  ?? RETRY_CODES
+    backoffLimit: retry.backoffLimit ?? Infinity
+    delay:        retry.delay        ?? null
+  else
+    { limit: RETRY_LIMIT, methods: RETRY_METHODS, statusCodes: RETRY_CODES, backoffLimit: Infinity }
+
+def delay(ms)
+  new Promise (resolve) -> setTimeout(resolve, ms)
+
+def backoff(attempt, cfg)
+  if cfg.delay
+    cfg.delay(attempt)
+  else
+    jitter = 1 + Math.random() * 0.1
+    Math.min(BACKOFF_BASE * (2 ** (attempt - 1)) * 1000 * jitter, cfg.backoffLimit)
+
+def retryDelay(attempt, res, cfg)
+  header = res?.headers.get('retry-after')
+  if header
+    secs = Number(header)
+    if Number.isNaN(secs)
+      Math.max(0, new Date(header) - Date.now())
+    else
+      secs * 1000
+  else
+    backoff(attempt, cfg)
+
+# ==[ Core Request ]==
+
+def request(input, opts = {})
+  method          = (opts.method ?? 'GET').toUpperCase()
+  timeout         = opts.timeout ?? TIMEOUT_MS
+  throwHttpErrors = opts.throwHttpErrors ?? true
+  retry           = normalizeRetry(opts.retry)
+  hooks           = opts.hooks ?? {}
+
+  # Build URL
+  url = buildUrl(input, opts)
+
+  # Build headers
+  headers = mergeHeaders(opts.headers)
+
+  # JSON body convenience
+  body = opts.body
+  if opts.json?
+    body = JSON.stringify(opts.json)
+    headers.set('content-type', 'application/json') unless headers.has('content-type')
+
+  # Assemble fetch options, passing through native fetch fields
+  fetchOpts = { method, headers, body }
+  for key in ['mode', 'credentials', 'cache', 'redirect', 'referrer', 'referrerPolicy', 'integrity', 'keepalive', 'signal']
+    fetchOpts[key] = opts[key] if opts[key]?
+
+  # Timeout via AbortSignal (unless caller provided their own signal)
+  if timeout and timeout isnt Infinity and not fetchOpts.signal
+    fetchOpts.signal = AbortSignal.timeout(timeout)
+
+  # Build Request
+  req = new Request(url, fetchOpts)
+
+  # Run beforeRequest hooks — may modify the request or short-circuit with a Response
+  if hooks.beforeRequest?.length
+    for hook in hooks.beforeRequest
+      result = hook!(req, opts)
+      if result instanceof Request
+        req = result
+      else if result instanceof Response
+        return result
+
+  # Retry loop
+  retryCount = 0
+  loop
+    res = null
+
+    try
+      res = fetch!(req.clone())
+    catch err
+      if err.name is 'AbortError' or err.name is 'TimeoutError'
+        throw new TimeoutError(req)
+
+      # Network error — retry if eligible
+      if retryCount >= retry.limit or not retry.methods.includes(method)
+        throw err
+
+      retryCount++
+      if hooks.beforeRetry?.length
+        for hook in hooks.beforeRetry
+          hook!({ request: req, options: opts, error: err, retryCount })
+      delay!(backoff(retryCount, retry))
+      continue
+
+    # Run afterResponse hooks — may replace the response
+    if hooks.afterResponse?.length
+      for hook in hooks.afterResponse
+        result = hook!(req, opts, res)
+        res = result if result instanceof Response
+
+    # Retryable HTTP status
+    if not res.ok and retryCount < retry.limit and retry.methods.includes(method) and retry.statusCodes.includes(res.status)
+      retryCount++
+      if hooks.beforeRetry?.length
+        for hook in hooks.beforeRetry
+          hook!({ request: req, options: opts, error: null, retryCount })
+      delay!(retryDelay(retryCount, res, retry))
+      continue
+
+    # Auto-throw on non-2xx
+    if throwHttpErrors and not res.ok
+      error = new HTTPError(res, req, opts)
+      if hooks.beforeError?.length
+        for hook in hooks.beforeError
+          error = hook!(error) ?? error
+      throw error
+
+    return res
+
+# ==[ Instance Factory ]==
+
+def makeInstance(defaults = {})
+  inst = (input, opts = {}) -> request(input, mergeOptions(defaults, opts))
+
+  for own m, name of { get: 'GET', post: 'POST', put: 'PUT', patch: 'PATCH', del: 'DELETE', head: 'HEAD' }
+    inst[m] = (input, opts = {}) -> inst(input, { ...opts, method: name })
+
+  inst.create = (opts = {}) -> makeInstance(opts)
+  inst.extend = (opts = {}) -> makeInstance(mergeOptions(defaults, opts))
+
+  inst.HTTPError    = HTTPError
+  inst.TimeoutError = TimeoutError
+
+  inst
+
+# ==[ Public API ]==
+
+export http = makeInstance()

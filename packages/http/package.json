@@ -1,0 +1,37 @@
+{
+  "name": "@rip-lang/http",
+  "version": "1.0.0",
+  "description": "Zero-dependency HTTP client for Rip — ky-inspired convenience over native fetch",
+  "type": "module",
+  "main": "http.rip",
+  "exports": {
+    ".": "./http.rip"
+  },
+  "keywords": [
+    "http",
+    "client",
+    "fetch",
+    "request",
+    "ky",
+    "bun",
+    "rip"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreeve/rip-lang.git",
+    "directory": "packages/http"
+  },
+  "homepage": "https://github.com/shreeve/rip-lang/tree/main/packages/http#readme",
+  "bugs": {
+    "url": "https://github.com/shreeve/rip-lang/issues"
+  },
+  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "rip-lang": "^3.9.1"
+  },
+  "files": [
+    "http.rip",
+    "README.md"
+  ]
+}
