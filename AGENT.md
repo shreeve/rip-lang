@@ -33,7 +33,7 @@ bun run browser
 
 | Metric | Value |
 |--------|-------|
-| Version | 3.9.0 |
+| Version | 3.9.1 |
 | Tests | 1,243/1,243 (100%) |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
@@ -45,15 +45,15 @@ bun run browser
 ```
 rip-lang/
 ├── src/
-│   ├── lexer.js         # Lexer + Rewriter (2,024 LOC)
-│   ├── compiler.js      # Compiler + Code Generator (3,289 LOC)
+│   ├── lexer.js         # Lexer + Rewriter (1,761 LOC)
+│   ├── compiler.js      # Compiler + Code Generator (3,291 LOC)
 │   ├── types.js         # Type System — sidecar for lexer (1,099 LOC)
-│   ├── components.js    # Component System — sidecar for compiler (1,250 LOC)
+│   ├── components.js    # Component System — sidecar for compiler (1,645 LOC)
 │   ├── sourcemaps.js    # Source Map V3 generator (121 LOC)
 │   ├── tags.js          # HTML tag classification (62 LOC)
 │   ├── parser.js        # Generated parser (359 LOC) — Don't edit!
 │   ├── repl.js          # Terminal REPL (601 LOC)
-│   ├── browser.js       # Browser integration (125 LOC)
+│   ├── browser.js       # Browser integration (150 LOC)
 │   └── grammar/
 │       ├── grammar.rip  # Grammar specification (944 LOC)
 │       ├── lunar.rip    # Recursive descent parser generator (2,412 LOC)

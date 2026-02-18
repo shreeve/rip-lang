@@ -34,7 +34,7 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": "^3.8.9"
+    "rip-lang": "^3.9.1"
   },
   "files": [
     "x12.rip",

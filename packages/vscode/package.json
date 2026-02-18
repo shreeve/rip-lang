@@ -2,7 +2,7 @@
   "name": "rip",
   "displayName": "Rip",
   "description": "Rip language support — syntax highlighting, types, and editor integration",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "publisher": "rip-lang",
   "license": "MIT",
   "main": "./src/extension.js",
@@ -61,6 +61,14 @@
         "language": "rip-schema",
         "scopeName": "source.rip-schema",
         "path": "./syntaxes/schema.tmLanguage.json"
+      },
+      {
+        "scopeName": "rip.injection.html",
+        "path": "./syntaxes/rip-html-injection.tmLanguage.json",
+        "injectTo": ["text.html.basic"],
+        "embeddedLanguages": {
+          "meta.embedded.block.rip": "rip"
+        }
       }
     ],
     "configurationDefaults": {

@@ -1,7 +1,7 @@
 {
   "name": "@rip-lang/print",
-  "version": "1.0.1",
-  "description": "Syntax-highlighted source code printer — Shiki-powered, serves once, auto-opens browser",
+  "version": "1.0.2",
+  "description": "Syntax-highlighted source code printer — highlight.js-powered, serves once, auto-opens browser",
   "type": "module",
   "main": "print.rip",
   "bin": {
@@ -29,7 +29,7 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": "^3.8.9",
+    "rip-lang": "^3.9.1",
     "highlight.js": "^11.11.1"
   },
   "files": [

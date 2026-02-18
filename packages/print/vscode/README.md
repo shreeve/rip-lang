@@ -37,12 +37,12 @@ Zig, Rip, CoffeeScript, Bash, YAML, JSON, HTML, CSS, SQL, Markdown, and more.
 ```sh
 cd packages/print/vscode
 npm install
-npm run package                  # produces print-1.0.0.vsix
+npm run package                  # produces print-1.0.2.vsix
 npx @vscode/vsce publish         # publishes to marketplace as rip-lang.print
 ```
 
 To install locally:
 
 ```sh
-code --install-extension print-1.0.0.vsix --force
+code --install-extension print-1.0.2.vsix --force
 ```

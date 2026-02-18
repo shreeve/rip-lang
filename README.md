@@ -9,15 +9,15 @@
 </p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.9.0-blue.svg" alt="Version"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.9.1-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
-  <a href="#"><img src="https://img.shields.io/badge/tests-1%2C242%2F1%2C242-brightgreen.svg" alt="Tests"></a>
+  <a href="#"><img src="https://img.shields.io/badge/tests-1%2C243%2F1%2C243-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
 </p>
 
 ---
 
-Rip is a modern language inspired by CoffeeScript. It compiles to **ES2022** (classes, `?.`, `??`, modules), adds about a **dozen new operators**, includes **built-in reactivity**, and sports a self-hosting compiler with **zero dependencies** — all in under 10,000 lines of code.
+Rip is a modern language inspired by CoffeeScript. It compiles to **ES2022** (classes, `?.`, `??`, modules), adds about a **dozen new operators**, includes **built-in reactivity**, and sports a self-hosting compiler with **zero dependencies** — all in about 11,000 lines of code.
 
 > **No imports. No hooks. No dependency arrays. Just write code.**
 
@@ -326,25 +326,25 @@ await rip("res = fetch! 'https://api.example.com/todos/1'; res.json!")  // → {
 
 ```
 Source  ->  Lexer  ->  emitTypes  ->  Parser  ->  S-Expressions  ->  Codegen  ->  JavaScript
-           (2,024)    (types.js)     (359)       ["=", "x", 42]     (3,431)      + source map
+           (1,761)    (types.js)     (359)       ["=", "x", 42]     (3,291)      + source map
 ```
 
 Simple arrays (with `.loc`) instead of AST node classes. The compiler is self-hosting — `bun run parser` rebuilds from source.
 
 | Component | File | Lines |
 |-----------|------|-------|
-| Lexer + Rewriter | `src/lexer.js` | 2,024 |
-| Compiler + Codegen | `src/compiler.js` | 3,431 |
+| Lexer + Rewriter | `src/lexer.js` | 1,761 |
+| Compiler + Codegen | `src/compiler.js` | 3,291 |
 | Type System | `src/types.js` | 1,099 |
-| Component System | `src/components.js` | 1,281 |
+| Component System | `src/components.js` | 1,645 |
 | Source Maps | `src/sourcemaps.js` | 121 |
 | Parser (generated) | `src/parser.js` | 359 |
 | Grammar | `src/grammar/grammar.rip` | 944 |
 | Parser Generator | `src/grammar/solar.rip` | 929 |
-| REPL | `src/repl.js` | 582 |
-| Browser Entry | `src/browser.js` | 125 |
+| REPL | `src/repl.js` | 601 |
+| Browser Entry | `src/browser.js` | 150 |
 | Tags | `src/tags.js` | 62 |
-| **Total** | | **~10,957** |
+| **Total** | | **~10,962** |
 
 ---
 
@@ -354,15 +354,15 @@ Rip includes optional packages for full-stack development:
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| [rip-lang](https://www.npmjs.com/package/rip-lang) | 3.8.10 | Core language compiler |
+| [rip-lang](https://www.npmjs.com/package/rip-lang) | 3.9.1 | Core language compiler |
 | [@rip-lang/api](packages/api/) | 1.1.6 | HTTP framework (Sinatra-style routing, 37 validators) |
 | [@rip-lang/server](packages/server/) | 1.1.5 | Multi-worker app server (hot reload, HTTPS, mDNS) |
-| [@rip-lang/db](packages/db/) | 1.1.4 | DuckDB server with official UI (pure Bun FFI) |
+| [@rip-lang/db](packages/db/) | 1.1.5 | DuckDB server with official UI (pure Bun FFI) |
 | [@rip-lang/ui](packages/ui/) | 0.3.2 | Zero-build reactive web framework (stash, router, hash routing) |
 | [@rip-lang/swarm](packages/swarm/) | 1.1.3 | Parallel job runner with worker pool |
 | [@rip-lang/csv](packages/csv/) | 1.1.3 | CSV parser + writer |
 | [@rip-lang/schema](packages/schema/) | 0.2.0 | Unified schema → TypeScript types, SQL DDL, validation, ORM |
-| [VS Code Extension](packages/vscode/) | 0.3.1 | Syntax highlighting, type intelligence, source maps |
+| [VS Code Extension](packages/vscode/) | 0.3.2 | Syntax highlighting, type intelligence, source maps |
 
 ```bash
 bun add -g @rip-lang/db    # Installs everything (rip-lang + api + db)

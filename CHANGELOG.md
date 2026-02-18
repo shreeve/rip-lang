@@ -7,6 +7,35 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.1] - 2026-02-18
+
+### Runtime — Reactivity & Reconciliation
+
+- **Auto-batching in event handlers** — DOM event callbacks now automatically batch reactive updates, preventing redundant renders during multi-stash mutations.
+- **Fixed list reconciliation** — Keyed list diffing now handles insert/remove/reorder correctly, resolving issues with fragment teardown and stale nodes.
+- **Fixed fragment teardown** — Components with multiple root elements now clean up all nodes on removal.
+- **Multi-statement computed blocks** — Computed properties can now contain multiple statements, not just a single expression.
+
+### Lexer — Render Rewriter Fix
+
+- **Fixed `STRING_END` in render rewriter** — Template strings inside render blocks now correctly handle the closing delimiter, fixing parse errors in components with interpolated template literals.
+
+### UI Framework
+
+- **`importRip` race fix** — Concurrent `importRip()` calls no longer produce duplicate module evaluations.
+- **ISO-8601 week numbers** — Added week number utilities for calendar-based components.
+- **Bare dot shorthand for div** — `.className` at the start of a line now implies `div.className`.
+
+### VS Code Extension (0.3.2)
+
+- **HTML injection grammar** — `<script type="text/rip">` blocks in HTML files now get Rip syntax highlighting automatically.
+
+### Documentation & Examples
+
+- **Sierpinski Triangle demo** — Interactive fractal demo showcasing reactive rendering at `docs/sierpinski.html`.
+- **Playground reorganization** — Consolidated playground into `docs/index.html` with Example tab, active nav highlighting, and View Source panel.
+- **Renamed `apps/` to `demos/`** — Clearer naming for example applications.
+
 ## [3.9.0] - 2026-02-17
 
 ### Architecture — Render Rewriter Extraction

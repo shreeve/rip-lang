@@ -4,7 +4,7 @@
 # Author: Steve Shreeve (steve.shreeve@gmail.com)
 #   Date: Feb 9, 2026
 #
-# Highlights source code using Shiki (VS Code's syntax engine) and serves
+# Highlights source code using highlight.js (190+ languages) and serves
 # the result in the browser for viewing and printing. Serves once and exits.
 # ==============================================================================
 
@@ -24,7 +24,7 @@ hljs.registerLanguage 'rip', ripLanguage
 args = process.argv.slice(2)
 
 if args.includes('-v') or args.includes('--version')
-  console.log "rip-print 1.0.0"
+  console.log "rip-print 1.0.2"
   process.exit(0)
 
 if args.includes('-h') or args.includes('--help')

@@ -1,0 +1,40 @@
+{
+  "scopeName": "rip.injection.html",
+  "injectionSelector": "L:text.html.basic",
+  "patterns": [
+    {
+      "include": "#rip-script-block"
+    }
+  ],
+  "repository": {
+    "rip-script-block": {
+      "begin": "(<)(script)\\b(?=[^>]*type\\s*=\\s*['\"]text/rip['\"])",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.html" },
+        "2": { "name": "entity.name.tag.script.html" }
+      },
+      "end": "(</)(script)(>)",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.html" },
+        "2": { "name": "entity.name.tag.script.html" },
+        "3": { "name": "punctuation.definition.tag.end.html" }
+      },
+      "patterns": [
+        {
+          "begin": "(>)",
+          "beginCaptures": {
+            "1": { "name": "punctuation.definition.tag.end.html" }
+          },
+          "end": "(?=</script>)",
+          "contentName": "meta.embedded.block.rip",
+          "patterns": [
+            { "include": "source.rip" }
+          ]
+        },
+        {
+          "include": "text.html.basic#attribute"
+        }
+      ]
+    }
+  }
+}

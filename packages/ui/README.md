@@ -290,7 +290,7 @@ compilation of the framework:
 ```html
 <script type="module" src="dist/rip-ui.min.js"></script>
 <script type="text/rip">
-  { launch } = importRip! 'dist/ui.rip'
+  { launch } = importRip! 'ui.rip'
 
   launch bundle:
     '/':        '''
