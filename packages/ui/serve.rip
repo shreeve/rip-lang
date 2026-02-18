@@ -12,8 +12,8 @@
 # Options:
 #   app:        string  — URL mount point (default: '')
 #   dir:        string  — app directory on disk (default: '.')
-#   components: string  — components subdirectory name (default: 'components')
-#   includes:   array   — extra directories to merge into bundle as components/_lib/
+#   components: string  — pages subdirectory name, relative to dir (default: 'components')
+#   includes:   array   — shared component directories, relative to dir (merged as _lib/)
 #   watch:      boolean — enable SSE hot-reload endpoint (default: false)
 #   debounce:   number  — ms to batch filesystem events (default: 250)
 #   state:      object  — initial app state passed via bundle
@@ -27,8 +27,8 @@ import { watch as fsWatch } from 'node:fs'
 export ripUI = (opts = {}) ->
   prefix        = opts.app or ''
   appDir        = opts.dir or '.'
-  componentsDir = opts.components or "#{appDir}/components"
-  includeDirs   = opts.includes or []
+  componentsDir = "#{appDir}/#{opts.components or 'components'}"
+  includeDirs   = (opts.includes or []).map (d) -> "#{appDir}/#{d}"
   enableWatch   = opts.watch or false
   debounceMs    = opts.debounce or 250
   appState      = opts.state or null
@@ -67,6 +67,9 @@ export ripUI = (opts = {}) ->
   if enableWatch
     fsWatch componentsDir, { recursive: true }, (event, filename) ->
       bundleDirty = true if filename?.endsWith('.rip')
+    for incDir in includeDirs
+      fsWatch incDir, { recursive: true }, (event, filename) ->
+        bundleDirty = true if filename?.endsWith('.rip')
 
   get "#{prefix}/bundle", (c) ->
     if bundleDirty or not bundleCache
@@ -102,11 +105,14 @@ export ripUI = (opts = {}) ->
       watcher  = null
       heartbeat = null
 
+      watchers = []
+
       cleanup = ->
-        watcher?.close()
+        w.close() for w in watchers
         clearTimeout(timer) if timer
         clearInterval(heartbeat) if heartbeat
-        watcher = heartbeat = timer = null
+        watchers = []
+        heartbeat = timer = null
 
       new Response new ReadableStream(
         start: (controller) ->
@@ -131,11 +137,16 @@ export ripUI = (opts = {}) ->
             timer = null
             send('changed', { paths }) if paths.length > 0
 
-          watcher = fsWatch componentsDir, { recursive: true }, (event, filename) ->
-            return unless filename?.endsWith('.rip')
-            pending.add "components/#{filename}"
-            clearTimeout(timer) if timer
-            timer = setTimeout(flush, debounceMs)
+          addWatcher = (dir, keyPrefix) ->
+            watchers.push fsWatch dir, { recursive: true }, (event, filename) ->
+              return unless filename?.endsWith('.rip')
+              pending.add "#{keyPrefix}#{filename}"
+              clearTimeout(timer) if timer
+              timer = setTimeout(flush, debounceMs)
+
+          addWatcher componentsDir, 'components/'
+          for incDir in includeDirs
+            addWatcher incDir, 'components/_lib/'
 
         cancel: -> cleanup()
       ),
