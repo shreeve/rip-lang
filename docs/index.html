@@ -343,12 +343,12 @@
       border-color: #007acc;
     }
 
-    .label-short { display: none; }
+    .label-short, .tab-short { display: none; }
 
     @media (max-width: 960px) {
       #theme-select { display: none; }
-      .label-full { display: none; }
-      .label-short { display: inline; }
+      .label-full, .tab-full { display: none; }
+      .label-short, .tab-short { display: inline; }
     }
 
     /* Scrollbar styling */
@@ -518,8 +518,8 @@
 
   <!-- Tabs -->
   <div class="tabs">
-    <button class="tab active" data-tab="compiler">Live Compiler</button>
-    <button class="tab" data-tab="repl">REPL Console</button>
+    <button class="tab active" data-tab="compiler"><span class="tab-full">Live Compiler</span><span class="tab-short">Compiler</span></button>
+    <button class="tab" data-tab="repl"><span class="tab-full">REPL Console</span><span class="tab-short">REPL</span></button>
     <button class="tab" data-tab="demo">Demo</button>
     <button class="tab" data-tab="example">Example</button>
   </div>
