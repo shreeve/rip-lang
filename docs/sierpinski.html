@@ -44,17 +44,17 @@
 <body>
   <div class="source-panel" id="source-panel">
     <div class="source-header">
-      <span class="source-label">SOURCE — 56 LINES OF RIP</span>
+      <span class="source-label">SOURCE — 58 LINES OF RIP</span>
       <button class="source-close" onclick="document.getElementById('source-panel').classList.remove('open')">&times;</button>
     </div>
     <pre class="source-code" id="source-code"></pre>
   </div>
   <script type="text/rip">
-    # Sierpinski Triangle — 729 reactive dots at 60fps
-    # No virtual DOM. No tree diffing. Just fine-grained reactivity.
+    # Sierpinski Triangle — 729 dots with GPU color cycling
+    # Static layout + CSS hue-rotate for smooth animation on any device.
 
     App = component
-      elapsed := 0
+      counter := 1
       fps := 0
 
       dots := do ->
@@ -74,9 +74,13 @@
         frames = 0
         last = start
         raf = null
+        container = document.querySelector('.container')
         tick = ->
           now = performance.now()
-          elapsed = (now - start) / 1000
+          secs = (now - start) / 1000
+          container.style.filter = "hue-rotate(" + (secs * 40 % 360) + "deg)"
+          c = Math.floor(secs % 10) + 1
+          counter = c if counter isnt c
           frames++
           if now - last >= 1000
             fps = frames
@@ -97,15 +101,14 @@
         .scene
           .stats
             .stats-title "Sierpinski Triangle"
-            .stats-line dots.length + " dots · " + dots.length * 2 + " reactive bindings"
-            .stats-line fps + " fps"
-            .stats-note "Each dot updates independently via fine-grained reactivity"
+            .stats-line dots.length + " dots · GPU color cycling · " + fps + " fps"
+            .stats-note "Color animation via CSS hue-rotate. Counter updates reactively once per second."
             button.source-toggle @click: (-> document.getElementById('source-panel').classList.toggle('open')), "View Source"
 
           .container
             for dot in dots
-              .dot style: "left:" + (dot.x - 12) + "px;top:" + (dot.y - 12) + "px;background:hsl(" + ((dot.id / 729 * 360 + elapsed * 40) % 360) + " 70% 50%)"
-                Math.floor(elapsed % 10) + 1
+              .dot style: "left:" + (dot.x - 12) + "px;top:" + (dot.y - 12) + "px;background:hsl(" + (dot.id / 729 * 360) + " 70% 50%)"
+                counter
 
     App.new().mount document.body
 
