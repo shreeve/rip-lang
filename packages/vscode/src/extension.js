@@ -1,5 +1,4 @@
 const vscode = require('vscode');
-const { exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
@@ -12,25 +11,6 @@ const debug = false;     // set to true for verbose output logging
 // ============================================================================
 // Compiler Loading
 // ============================================================================
-
-// Find the rip compiler binary (for CLI-based .d.ts generation)
-function findRipCompiler() {
-  const config = vscode.workspace.getConfiguration('rip');
-  const configPath = config.get('compiler.path');
-  if (configPath) return configPath;
-
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (workspaceFolders) {
-    for (const folder of workspaceFolders) {
-      const root = folder.uri.fsPath;
-      const devBin = path.join(root, 'bin', 'rip');
-      if (fs.existsSync(devBin)) return devBin;
-      const localBin = path.join(root, 'node_modules', '.bin', 'rip');
-      if (fs.existsSync(localBin)) return localBin;
-    }
-  }
-  return 'rip';
-}
 
 // Load the Rip compiler module (ESM) for in-process compilation
 async function loadCompiler() {
@@ -176,30 +156,38 @@ function mapToGenerated(filePath, position) {
 }
 
 // ============================================================================
-// Level 1: .d.ts Generation on Save
+// Level 1: .d.ts Generation — writes directly to .rip-cache/
 // ============================================================================
 
-function generateDts(filePath) {
-  const ripBin = findRipCompiler();
-  const dir = path.dirname(filePath);
-  const base = path.basename(filePath, '.rip');
-  const dtsPath = path.join(dir, `${base}.d.ts`);
+function getShadowDtsPath(ripFilePath) {
+  const shadowDir = getShadowDir();
+  if (!shadowDir) return null;
+  const workRoot = vscode.workspace.workspaceFolders[0].uri.fsPath;
+  const relative = path.relative(workRoot, ripFilePath).replace(/\.rip$/, '.d.ts');
+  return path.join(shadowDir, relative);
+}
 
-  return new Promise((resolve) => {
-    exec(`${ripBin} -d "${filePath}"`, { cwd: dir }, (error, stdout, stderr) => {
-      if (error) {
-        if (stderr && !stderr.includes('no types')) {
-          outputChannel.appendLine(`Error generating ${base}.d.ts: ${stderr}`);
-        }
-        resolve(false);
-      } else {
-        if (fs.existsSync(dtsPath)) {
-          outputChannel.appendLine(`Generated ${path.relative(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || dir, dtsPath)}`);
-        }
-        resolve(true);
-      }
-    });
-  });
+async function generateDts(filePath) {
+  const comp = await loadCompiler();
+  if (!comp) return false;
+
+  try {
+    const source = fs.readFileSync(filePath, 'utf-8');
+    const result = comp.compile(source);
+    if (!result.dts) return false;
+
+    const shadowDtsPath = getShadowDtsPath(filePath);
+    if (!shadowDtsPath) return false;
+
+    ensureShadowDir(shadowDtsPath);
+    fs.writeFileSync(shadowDtsPath, result.dts);
+    const rel = path.relative(vscode.workspace.workspaceFolders[0].uri.fsPath, filePath);
+    outputChannel.appendLine(`Generated ${rel.replace(/\.rip$/, '.d.ts')} → .rip-cache/`);
+    return true;
+  } catch (e) {
+    if (debug) outputChannel.appendLine(`Error generating .d.ts for ${path.basename(filePath)}: ${e.message}`);
+    return false;
+  }
 }
 
 // ============================================================================
@@ -287,7 +275,7 @@ function activate(context) {
   // Initialize shadow directory and tsconfig
   ensureTsConfig();
 
-  // Level 1: Generate .d.ts on save
+  // Level 1: Generate .d.ts on save (written directly to .rip-cache/)
   const saveWatcher = vscode.workspace.onDidSaveTextDocument(async (document) => {
     if (document.languageId !== 'rip') return;
     const config = vscode.workspace.getConfiguration('rip');
