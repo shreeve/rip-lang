@@ -1,0 +1,12 @@
+# app.rip — imports typed functions from math.rip
+#
+# After saving math.rip, open this file and try:
+#   - Type "add(" to see parameter hints
+#   - Hover over "greet" to see its signature
+#   - Autocomplete after "PI." or "User"
+
+import { add, greet, PI, User } from './math.rip'
+
+result = add(10, 20)
+message = greet("World")
+area = PI * 5 * 5

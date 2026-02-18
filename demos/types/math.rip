@@ -1,0 +1,15 @@
+# math.rip — typed utility functions
+
+export def add(a:: number, b:: number):: number
+  a + b
+
+export def greet(name:: string):: string
+  "Hello, " + name
+
+PI:: number =! 3.14159
+export { PI }
+
+export User ::= type
+  id: number
+  name: string
+  email?: string
