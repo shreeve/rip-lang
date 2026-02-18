@@ -311,6 +311,30 @@ See `docs/demo.html` for a complete example — the full Rip UI Demo app
 (6 components, router, reactive state, persistence) in 337 lines of
 static HTML.
 
+## Tailwind CSS Autocompletion
+
+To get Tailwind class autocompletion inside `.()` CLSX helpers in render
+templates, install the
+[Tailwind CSS IntelliSense](https://marketplace.visualstudio.com/items?itemName=bradlc.vscode-tailwindcss)
+extension and add these to your VS Code / Cursor settings:
+
+```json
+{
+  "tailwindCSS.includeLanguages": { "rip": "html" },
+  "tailwindCSS.experimental.classRegex": [
+    ["\\.\\(([\\s\\S]*?)\\)", "'([^']*)'"]
+  ]
+}
+```
+
+This gives you autocompletion, hover previews, and linting for Tailwind
+classes in expressions like:
+
+```coffee
+h1.('text-3xl font-semibold') "Hello"
+button.('flex items-center px-4 py-2 rounded-full') "Click"
+```
+
 ## License
 
 MIT

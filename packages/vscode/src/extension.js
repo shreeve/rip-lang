@@ -2,6 +2,15 @@ const vscode = require('vscode');
 const path = require('path');
 const fs = require('fs');
 
+// Tailwind CSS IntelliSense — to enable autocompletion for Tailwind classes
+// inside .() CLSX helpers in Rip render templates, add these to your VS Code
+// or Cursor user/workspace settings:
+//
+//   "tailwindCSS.includeLanguages": { "rip": "html" },
+//   "tailwindCSS.experimental.classRegex": [
+//     ["\\.\\(([\\s\\S]*?)\\)", "'([^']*)'"]
+//   ]
+
 let outputChannel;
 let compiler = null;    // lazy-loaded Rip compiler module
 let shadowCache = {};   // filePath → { code, reverseMap, shadowUri }
