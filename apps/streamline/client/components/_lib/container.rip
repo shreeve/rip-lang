@@ -1,0 +1,10 @@
+# Container - responsive max-width wrapper with horizontal padding
+
+export Container = component
+  narrow := false
+
+  render
+    div.('px-5')
+      div.('mx-auto',
+        if narrow then 'max-w-[940px]' else 'max-w-[1120px]')
+        #content

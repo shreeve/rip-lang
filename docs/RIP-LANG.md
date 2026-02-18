@@ -708,6 +708,15 @@ Rip's reactive features are **language-level operators**, not library imports.
 | `~>` | Effect | "always calls" | Side effect on dependency change |
 | `=!` | Readonly | "equals, dammit!" | Constant (`const`) |
 
+## Reactive Behavior
+
+|  | `:=` state | `~=` computed | `~>` effect |
+|---|---|---|---|
+| **Purpose** | Hold a mutable value | Derive a value | Perform a side effect |
+| **When it runs** | On write | Lazily, on read | Eagerly, on dependency change |
+| **Caching** | N/A (stores directly) | Yes, memoized | No, always re-runs |
+| **Returns** | A readable/writable value | A readable value | A cleanup function (optional) |
+
 ## State (`:=`)
 
 ```coffee
@@ -1530,4 +1539,4 @@ Each would need design discussion before building.
 
 ---
 
-*Rip 3.8 — 1,241 tests passing — Zero dependencies — Self-hosting — ~11,000 LOC*
+*Rip 3.9 — 1,241 tests passing — Zero dependencies — Self-hosting — ~11,000 LOC*

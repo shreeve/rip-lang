@@ -1,4 +1,4 @@
-# Root layout — sidebar nav (desktop) + top bar (mobile)
+# Root layout - sidebar nav (desktop) + top bar (mobile)
 
 export Layout = component
   user := null
@@ -25,14 +25,14 @@ export Layout = component
   closeMenu: ->
     menuOpen = false
 
-  initials ~= do ->
+  initials ~=
     return '' unless user
     parts = (user.firstName or '').split(' ')
     first = parts[0]?[0] or ''
     last = (user.lastName or '')[0] or ''
     (first + last).toUpperCase()
 
-  displayName ~= do ->
+  displayName ~=
     return '' unless user
     [user.firstName, user.lastName].filter(Boolean).join(' ') or user.email
 
@@ -61,7 +61,7 @@ export Layout = component
 
         div.('mb-1 flex flex-col gap-y-4')
           if user
-            button.('ml-3.5 flex items-center gap-x-3 text-sm-plus font-medium text-secondary transition-colors hover:text-brand') @click: @signOut
+            button.('ml-3.5 flex items-center gap-x-3 text-sm-plus font-medium text-secondary transition-colors hover:text-brand active:pointer-coarse:text-brand active:pointer-fine:opacity-70') @click: @signOut
               span.('text-base w-5 text-center') "🚪"
               span "Sign Out"
 
@@ -79,7 +79,7 @@ export Layout = component
               span.('px-3 text-lg text-secondary') "▾"
 
           else unless loading
-            a.('text-sm-plus font-medium text-secondary transition-colors hover:text-brand') href: "/auth", "Sign In"
+            a.('text-sm-plus font-medium text-secondary transition-colors hover:text-brand active:pointer-coarse:text-brand active:pointer-fine:opacity-70') href: "/auth", "Sign In"
 
         # ---- Mobile Menu Dropdown ----
         if menuOpen
@@ -98,7 +98,7 @@ export Layout = component
                 span.('text-base w-5 text-center') "👤"
                 span "Profile"
             div.('mx-3.5 mt-6 mb-5 border-t border-primary')
-            button.('ml-3.5 flex items-center gap-x-3 text-sm-plus font-medium text-secondary transition-colors hover:text-brand') @click: @signOut
+            button.('ml-3.5 flex items-center gap-x-3 text-sm-plus font-medium text-secondary transition-colors hover:text-brand active:pointer-coarse:text-brand active:pointer-fine:opacity-70') @click: @signOut
               span.('text-base w-5 text-center') "🚪"
               span "Sign Out"
 

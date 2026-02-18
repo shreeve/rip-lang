@@ -1,4 +1,4 @@
-# Home page — redirects to bookings or auth
+# Home page - redirects to bookings or auth
 
 export Home = component
 

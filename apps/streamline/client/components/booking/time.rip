@@ -1,4 +1,4 @@
-# Session picker — browse weeks, select time slots, cart sidebar
+# Session picker - browse weeks, select time slots, cart sidebar
 
 export Time = component
   sessions := []
@@ -20,7 +20,7 @@ export Time = component
       error = 'Failed to load sessions'
     loading = false
 
-  currentSlots ~= do ->
+  currentSlots ~=
     found = sessions.find (s) -> s.week is selectedWeek
     found?.slots or []
   cartTotal ~= cart.length
@@ -37,8 +37,8 @@ export Time = component
   isInCart: (slot) ->
     cart.some (c) -> c.week is selectedWeek and c.slot is slot.time
 
-  removeFromCart: (idx) ->
-    cart = cart.filter (_, i) -> i isnt idx
+  removeFromCart: (week, slot) ->
+    cart = cart.filter (c) -> c.week isnt week or c.slot isnt slot
 
   addChild: (idx) ->
     item = cart[idx]
@@ -51,11 +51,6 @@ export Time = component
 
   render
     div
-      div.('flex items-center justify-between')
-        div
-          h1.('text-3xl font-semibold') "Book a Session"
-          p.('mt-1 text-sm-plus text-tertiary') "Select a week and time slot"
-
       if loading
         div.('flex items-center justify-center py-20')
           p.('text-tertiary') "Loading sessions..."
@@ -64,12 +59,12 @@ export Time = component
         div.('mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-error') error
 
       unless loading or error
-        div.('mt-8 lg:flex lg:gap-x-8')
+        div.('mt-6 md:mt-8 lg:flex lg:gap-x-8')
 
           # Left column: week picker + time slots
           div.('lg:w-0 lg:flex-auto')
 
-            # Week picker — horizontal scroll
+            # Week picker - horizontal scroll
             div
               div.('flex items-center justify-between gap-x-4')
                 div.('text-base-plus font-semibold text-secondary') "Select a week"
@@ -81,16 +76,16 @@ export Time = component
                       "Week #{s.week}"
                     span.('text-sm font-medium text-tertiary') "Tue–Fri"
 
-            # Time slots — vertical list
+            # Time slots - vertical list
             div.('mt-8 flex flex-col gap-y-4 md:mt-9 md:gap-y-5')
               for slot in currentSlots
-                button.('flex h-14 items-center justify-between rounded-lg border px-4 transition hover:bg-secondary active:bg-tertiary md:px-5',
-                  if @isInCart(slot) then 'border-brand ring ring-brand' else 'border-primary hover:border-secondary') @click: (=> @addToCart(slot))
+                button.('flex h-14 items-center justify-between rounded-lg border px-4 transition enabled:hover:bg-secondary enabled:active:bg-tertiary disabled:opacity-50 md:px-5',
+                  if @isInCart(slot) then 'border-brand ring ring-brand' else 'border-primary enabled:hover:border-secondary') @click: (=> @addToCart(slot))
                   span.('font-medium text-secondary') slot.time
                   span.('text-sm-plus text-tertiary') "#{slot.spots} spots left"
 
-          # Right column: cart sidebar
-          div.('mt-8 lg:mt-0 lg:w-[360px]')
+          # Right column: cart sidebar (desktop only)
+          div.('hidden lg:block lg:w-[360px]')
             div.('flex flex-col justify-between gap-y-3 rounded-lg-plus border border-primary bg-primary p-6')
               div.('flex flex-col gap-y-6')
                 div
@@ -109,7 +104,7 @@ export Time = component
                           div.('flex flex-col gap-y-1')
                             span.('text-sm font-semibold') "Week #{item.week}"
                             span.('text-sm text-tertiary') item.slot
-                          button.('rounded-lg px-2 py-1 text-tertiary transition-colors hover:text-brand active:opacity-70') @click: (=> @removeFromCart(idx)), "✕"
+                          button.('rounded-lg px-2 py-1 text-tertiary transition-colors hover:text-brand active:pointer-coarse:text-brand active:pointer-fine:opacity-70') @click: (=> @removeFromCart(item.week, item.slot)), "✕"
                         div.('flex items-center gap-x-2')
                           span.('text-sm text-tertiary') "#{item.children.length} child(ren)"
                           button.('flex items-center gap-x-1.5 rounded-lg border border-dashed border-secondary bg-tertiary px-3 py-1.5 text-sm font-medium text-secondary transition-colors hover:border-tertiary active:bg-quaternary/65') @click: (=> @addChild(idx)), "+ Add"
@@ -121,3 +116,13 @@ export Time = component
 
               button.('flex w-full items-center justify-center rounded-lg bg-brand px-4 py-2.5 text-sm-plus font-semibold text-white transition-colors hover:bg-brand-hover active:bg-brand-active disabled:opacity-50') @click: @goToConfirm, disabled: (cart.length is 0),
                 "Continue"
+
+      # Mobile sticky cart footer
+      unless loading or error
+        div.('fixed right-0 bottom-0 left-0 z-40 flex h-20 items-center justify-between border-t border-primary bg-primary px-5 lg:hidden')
+          div
+            div.('text-sm text-tertiary') "Added"
+            div.('-mt-0.5 text-sm-plus font-medium') "#{cart.length} session#{if cart.length is 1 then '' else 's'}"
+          button.('flex w-46 items-center justify-center rounded-lg bg-brand px-4 py-2.5 text-sm-plus font-semibold text-white transition-colors hover:bg-brand-hover active:bg-brand-active disabled:opacity-50 md:w-56') @click: @goToConfirm, disabled: (cart.length is 0),
+            "Continue"
+        div.('h-20 lg:hidden')

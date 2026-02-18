@@ -43,13 +43,10 @@ const uiJS = compileToJS(readFileSync('./packages/ui/ui.rip', 'utf-8'));
 writeFileSync('./docs/dist/_ui.js', uiJS);
 
 // Step 3: Rip + UI combined bundle
-const ripUiEntry = `export * from '../../src/browser.js';
+const ripUiEntry = `import { importRip } from '../../src/browser.js';
+export * from '../../src/browser.js';
 import * as __uiExports from './_ui.js';
-const _origImportRip = globalThis.importRip;
-globalThis.importRip = async function(url) {
-  if (url.includes('ui.rip')) return __uiExports;
-  return _origImportRip(url);
-};
+importRip.modules['ui.rip'] = __uiExports;
 `;
 writeFileSync('./docs/dist/_rip-ui-entry.js', ripUiEntry);
 

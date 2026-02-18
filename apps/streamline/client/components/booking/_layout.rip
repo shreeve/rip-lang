@@ -1,7 +1,20 @@
-# Booking flow layout
+# Booking flow layout - step navigation header
 
 export Layout = component
+  isTimePage ~= @router.path is '/booking/time' or @router.path is '/booking'
 
   render
-    .booking-layout
+    div
+      nav.('flex items-center')
+        a.('font-medium mr-4 transition-colors',
+          if isTimePage then 'text-secondary' else 'text-quaternary hover:text-tertiary') href: "/booking/time"
+          span "Time"
+          span.('pl-4') "›"
+        span.('font-medium',
+          if isTimePage then 'text-quaternary' else 'text-secondary')
+          "Confirm"
+
+      h2.('mt-2 text-3xl font-semibold md:mt-3 md:text-4xl lg:mt-4')
+        if isTimePage then "Select time" else "Review and confirm"
+
       #content

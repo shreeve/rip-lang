@@ -197,7 +197,7 @@ grammar =
   ComputedAssign: [
     o 'Assignable COMPUTED_ASSIGN Expression'               , '["computed", 1, 3]'
     o 'Assignable COMPUTED_ASSIGN TERMINATOR Expression'    , '["computed", 1, 4]'
-    o 'Assignable COMPUTED_ASSIGN INDENT Expression OUTDENT', '["computed", 1, 4]'
+    o 'Assignable COMPUTED_ASSIGN Block'                    , '["computed", 1, 3]'
   ]
 
   # Reactive readonly (=!) — constants that cannot be reassigned
@@ -443,7 +443,7 @@ grammar =
   Invocation: [
     o 'Value String'                       , '["tagged-template", 1, 2]'  # Tagged template
     o 'Value Arguments'                    , '[1, ...2]'                  # Regular call
-    o 'Value ES6_OPTIONAL_CALL Arguments'  , '["optcall", 1, ...3]'      # Optional call: x?.(args)
+    o 'Value ES6_OPTIONAL_CALL Arguments'  , '["optcall", 1, ...3]'       # Optional call: x?.(args)
     o 'SUPER Arguments'                    , '["super", ...2]'            # Super call
     o 'DYNAMIC_IMPORT Arguments'           , '[1, ...2]'                  # Dynamic import()
   ]

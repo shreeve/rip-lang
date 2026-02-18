@@ -614,8 +614,14 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
     // Computed (derived)
     for (const { name, expr } of derivedVars) {
-      const val = this.generateInComponent(expr, 'value');
-      lines.push(`    this.${name} = __computed(() => ${val});`);
+      if (this.is(expr, 'block') && expr.length > 2) {
+        const transformed = this.transformComponentMembers(expr);
+        const body = this.generateFunctionBody(transformed);
+        lines.push(`    this.${name} = __computed(() => ${body});`);
+      } else {
+        const val = this.generateInComponent(expr, 'value');
+        lines.push(`    this.${name} = __computed(() => ${val});`);
+      }
     }
 
     // Effects

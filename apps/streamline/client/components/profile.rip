@@ -1,4 +1,4 @@
-# Profile page — view and edit user info
+# Profile page - view and edit user info
 
 export Profile = component
   user := null

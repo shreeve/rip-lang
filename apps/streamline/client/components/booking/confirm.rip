@@ -1,4 +1,4 @@
-# Confirm booking — review cart and submit (Stripe stubbed)
+# Confirm booking - review cart and submit (Stripe stubbed)
 
 export Confirm = component
   cart := @app.data.cart or []
@@ -33,16 +33,11 @@ export Confirm = component
 
   render
     div
-      div.('flex items-center justify-between')
-        div
-          h1.('text-3xl font-semibold') "Confirm Booking"
-          p.('mt-1 text-sm-plus text-tertiary') "Review your selections"
-
       if error
         div.('mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-error') error
 
       if cart.length is 0
-        div.('mt-8 flex flex-col items-center gap-y-7 rounded-lg-plus border border-primary px-6 py-8 md:py-10')
+        div.('mt-6 flex flex-col items-center gap-y-7 rounded-lg-plus border border-primary px-6 py-8 md:mt-8 md:py-10')
           div.('text-[50px] text-quaternary/40') "🛒"
           div.('flex flex-col items-center gap-y-2 text-center')
             div.('text-xl font-semibold') "Your cart is empty"
@@ -50,7 +45,7 @@ export Confirm = component
           a.('inline-flex items-center rounded-full border border-primary bg-primary px-4 py-2 text-sm font-semibold text-secondary shadow-xs transition-colors hover:border-secondary hover:bg-secondary active:bg-tertiary') href: "/booking/time", "Browse Sessions"
 
       unless cart.length is 0
-        div.('mt-8 lg:flex lg:gap-x-8')
+        div.('mt-6 md:mt-8 lg:flex lg:gap-x-8')
           # Left: cart summary
           div.('lg:w-0 lg:flex-auto')
             div.('flex max-w-[500px] flex-col gap-y-6')
@@ -70,8 +65,8 @@ export Confirm = component
                 div.('text-base-plus font-semibold leading-none lg:text-base') "Total"
                 div.('text-base-plus font-semibold leading-none lg:text-base') priceDisplay
 
-          # Right: payment summary sidebar
-          div.('mt-8 lg:mt-0 lg:w-[360px]')
+          # Right: order summary sidebar (desktop only)
+          div.('hidden lg:block lg:w-[360px]')
             div.('flex flex-col justify-between gap-y-9 rounded-lg-plus border border-primary bg-primary p-6')
               div.('flex flex-col gap-y-4')
                 h3.('text-lg font-semibold') "Order Summary"
@@ -84,9 +79,19 @@ export Confirm = component
                 div.('flex items-center justify-between')
                   span.('text-base-plus font-semibold leading-none') "Total"
                   span.('text-base-plus font-semibold leading-none') priceDisplay
-                p.('text-sm text-tertiary') "Payment integration coming soon — booking is free for now."
+                p.('text-sm text-tertiary') "Payment integration coming soon - booking is free for now."
 
               div.('flex flex-col gap-y-3')
                 button.('flex w-full items-center justify-center rounded-lg border border-primary bg-primary px-4 py-2.5 text-sm-plus font-semibold text-secondary shadow-xs transition-colors hover:border-secondary hover:bg-secondary active:bg-tertiary') @click: @goBack, "Back"
                 button.('flex w-full items-center justify-center rounded-lg bg-brand px-4 py-2.5 text-sm-plus font-semibold text-white transition-colors hover:bg-brand-hover active:bg-brand-active disabled:opacity-50') @click: @submit, disabled: submitting,
                   if submitting then "Booking..." else "Confirm Booking"
+
+      # Mobile sticky footer
+      unless cart.length is 0
+        div.('fixed right-0 bottom-0 left-0 z-40 flex h-20 items-center justify-between border-t border-primary bg-primary px-5 lg:hidden')
+          div
+            div.('text-sm text-tertiary') "Added"
+            div.('-mt-0.5 text-sm-plus font-medium') "#{cart.length} session#{if cart.length is 1 then '' else 's'}"
+          button.('flex w-46 items-center justify-center rounded-lg bg-brand px-4 py-2.5 text-sm-plus font-semibold text-white transition-colors hover:bg-brand-hover active:bg-brand-active disabled:opacity-50 md:w-56') @click: @submit, disabled: submitting,
+            if submitting then "Booking..." else "Confirm"
+        div.('h-20 lg:hidden')

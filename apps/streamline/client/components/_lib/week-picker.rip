@@ -1,0 +1,142 @@
+# WeekPicker - calendar popover for selecting a week
+#
+# Usage:
+#   WeekPicker selected: selectedWeek, minWeek: 1, maxWeek: 12, @select: (=> selectedWeek = e.detail)
+#     button "Pick a week"
+
+export WeekPicker = component
+  selected := null
+  minWeek := 1
+  maxWeek := 52
+  sessionStartDay := 1
+  sessionEndDay := 5
+
+  popoverOpen := false
+  viewDate := null
+  calendarDays := []
+  weekDayLabels := ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
+
+  onMount: ->
+    if selected
+      d = new Date()
+      d.setDate(d.getDate() + (selected - @getWeek(d)) * 7)
+      viewDate = new Date(d.getFullYear(), d.getMonth(), 1)
+    else
+      viewDate = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+    @buildCalendar()
+
+  getWeek: (date) ->
+    d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+    dayNum = d.getUTCDay() or 7
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum)
+    yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+    Math.ceil((((d - yearStart) / 86400000) + 1) / 7)
+
+  buildCalendar: ->
+    year = viewDate.getFullYear()
+    month = viewDate.getMonth()
+    firstDay = new Date(year, month, 1)
+    lastDay = new Date(year, month + 1, 0)
+
+    # Monday-based: 0=Mon, 6=Sun
+    startOffset = (firstDay.getDay() + 6) % 7
+    days = []
+
+    # Previous month padding
+    for i in [startOffset - 1 .. 0] by -1
+      d = new Date(year, month, -i)
+      days.push { date: d, outside: true, week: @getWeek(d) }
+
+    # Current month
+    for i in [1 .. lastDay.getDate()]
+      d = new Date(year, month, i)
+      days.push { date: d, outside: false, week: @getWeek(d) }
+
+    # Next month padding (fill to 6 rows)
+    while days.length % 7 isnt 0
+      d = new Date(year, month + 1, days.length - startOffset - lastDay.getDate() + 1)
+      days.push { date: d, outside: true, week: @getWeek(d) }
+
+    calendarDays = days
+
+  monthLabel ~=
+    return '' unless viewDate
+    months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+    "#{months[viewDate.getMonth()]} #{viewDate.getFullYear()}"
+
+  prevMonth: ->
+    viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth() - 1, 1)
+    @buildCalendar()
+
+  nextMonth: ->
+    viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1)
+    @buildCalendar()
+
+  selectWeek: (week) ->
+    popoverOpen = false
+    @emit 'select', week
+
+  isInSelectedWeek: (day) ->
+    return false unless selected
+    day.week is selected
+
+  isWeekStart: (day, idx) ->
+    return false unless selected
+    day.week is selected and (idx % 7 is 0 or day.date.getDate() is 1)
+
+  isWeekEnd: (day, idx) ->
+    return false unless selected
+    day.week is selected and (idx % 7 is 6 or day.date.getDate() is new Date(day.date.getFullYear(), day.date.getMonth() + 1, 0).getDate())
+
+  isDayDisabled: (day) ->
+    dayOfWeek = (day.date.getDay() + 6) % 7
+    day.week < minWeek or day.week > maxWeek or dayOfWeek < (sessionStartDay - 1) or dayOfWeek > (sessionEndDay - 1)
+
+  togglePopover: ->
+    popoverOpen = not popoverOpen
+
+  closePopover: (e) ->
+    popoverOpen = false if popoverOpen and not e.currentTarget.contains(e.relatedTarget)
+
+  render
+    div.('relative inline-block') @focusout: @closePopover,
+      # Trigger - wraps the slotted content
+      div @click: @togglePopover,
+        #content
+
+      # Popover calendar
+      if popoverOpen
+        div.('absolute left-0 z-50 mt-2 origin-top-left rounded-lg-plus border border-primary bg-primary p-5 shadow-xl/7 animate-[menuFadeIn_150ms_ease-out]')
+
+          # Month navigation header
+          div.('mb-3 flex items-center justify-between')
+            button.('size-9 rounded-lg transition-colors hover:bg-tertiary active:bg-quaternary/70') @click: @prevMonth,
+              svg.('mx-auto h-4 w-4 text-secondary') viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", 'stroke-width': "2.5", 'stroke-linecap': "round", 'stroke-linejoin': "round"
+                path d: "M15 18l-6-6 6-6"
+            span.('text-base-plus font-semibold') monthLabel
+            button.('size-9 rounded-lg transition-colors hover:bg-tertiary active:bg-quaternary/70') @click: @nextMonth,
+              svg.('mx-auto h-4 w-4 text-secondary') viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", 'stroke-width': "2.5", 'stroke-linecap': "round", 'stroke-linejoin': "round"
+                path d: "M9 18l6-6-6-6"
+
+          # Weekday headers
+          div.('mb-1 grid grid-cols-8 text-center')
+            div.('py-1.5 text-xs-plus font-medium text-tertiary') "Wk"
+            for label in weekDayLabels
+              div.('py-1.5 text-xs-plus font-medium text-tertiary') label
+
+          # Calendar grid with week numbers
+          div.('grid grid-cols-8')
+            for day, idx in calendarDays
+              # Week number column (first column of each row)
+              if idx % 7 is 0
+                button.('flex items-center justify-center rounded-none bg-tertiary py-1.5 text-xs-plus font-medium text-tertiary transition-colors enabled:hover:text-primary enabled:active:text-quaternary disabled:opacity-50') @click: (=> @selectWeek(day.week)), disabled: (day.week < minWeek or day.week > maxWeek),
+                  "#{day.week}"
+
+              # Day cell
+              button.('flex items-center justify-center py-1.5 text-sm-plus font-medium transition-colors',
+                if @isDayDisabled(day) then 'text-quaternary cursor-default' else '',
+                if day.outside then 'text-quaternary' else '',
+                if @isInSelectedWeek(day) then 'bg-brand/10 text-brand' else '',
+                if @isWeekStart(day, idx) then 'rounded-l-md' else '',
+                if @isWeekEnd(day, idx) then 'rounded-r-md' else '') @click: (=> @selectWeek(day.week)), disabled: @isDayDisabled(day),
+                "#{day.date.getDate()}"

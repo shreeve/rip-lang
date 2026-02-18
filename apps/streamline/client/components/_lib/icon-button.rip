@@ -1,0 +1,9 @@
+# IconButton - square button with an icon, hover/active states
+
+export IconButton = component
+  icon := ''
+  disabled := false
+
+  render
+    button.('inline-flex items-center justify-center size-9 rounded-lg transition-colors enabled:hover:bg-tertiary enabled:active:bg-quaternary/70 disabled:opacity-50') disabled: disabled,
+      #content

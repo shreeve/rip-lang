@@ -71,8 +71,14 @@ export { processRipScripts };
  * Import a .rip file as an ES module
  * Fetches the URL, compiles Rip→JS, dynamically imports via Blob URL
  * Usage: const { launch } = await importRip('/ui.rip')
+ *
+ * Pre-compiled modules can be registered on importRip.modules to skip fetching.
+ * The rip-ui bundle uses this to embed ui.rip without a server round-trip.
  */
 export async function importRip(url) {
+  for (const [key, mod] of Object.entries(importRip.modules)) {
+    if (url.includes(key)) return mod;
+  }
   const source = await fetch(url).then(r => {
     if (!r.ok) throw new Error(`importRip: ${url} (${r.status})`);
     return r.text();
@@ -86,6 +92,7 @@ export async function importRip(url) {
     URL.revokeObjectURL(blobUrl);
   }
 }
+importRip.modules = {};
 
 /**
  * Browser Console REPL
@@ -128,14 +135,16 @@ if (typeof globalThis !== 'undefined') {
   globalThis.__ripExports = { compile, compileToJS, formatSExpr, VERSION, BUILD_DATE, getReactiveRuntime, getComponentRuntime };
 }
 
-// Auto-process scripts when this module loads
-// Expose __ripScriptsReady promise so other modules can await completion
+// Auto-process <script type="text/rip"> blocks.
+// Deferred via queueMicrotask so bundled entry code (e.g. rip-ui.min.js registering
+// importRip.modules) runs before script processing begins.
 if (typeof document !== 'undefined') {
-  if (document.readyState === 'loading') {
-    globalThis.__ripScriptsReady = new Promise(resolve => {
-      document.addEventListener('DOMContentLoaded', () => processRipScripts().then(resolve));
-    });
-  } else {
-    globalThis.__ripScriptsReady = processRipScripts();
-  }
+  globalThis.__ripScriptsReady = new Promise(resolve => {
+    const run = () => processRipScripts().then(resolve);
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => queueMicrotask(run));
+    } else {
+      queueMicrotask(run);
+    }
+  });
 }

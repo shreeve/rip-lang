@@ -1,4 +1,4 @@
-# Auth page — email magic code sign-in flow
+# Auth page - email magic code sign-in flow
 
 export Auth = component
   step := 'email'        # email | code | signup
@@ -105,7 +105,7 @@ export Auth = component
                 input.('block w-full rounded-lg border border-primary bg-primary px-3.5 py-2.5 text-sm-plus text-primary shadow-xs transition-colors focus:border-brand focus:ring-1 focus:ring-brand outline-none') type: "text", value: code, placeholder: "123456", @keydown: @handleCodeKey
               button.('flex w-full items-center justify-center rounded-lg bg-brand px-4 py-2.5 text-sm-plus font-semibold text-white transition-colors hover:bg-brand-hover active:bg-brand-active disabled:opacity-50') @click: @submitCode, disabled: submitting,
                 if submitting then "Verifying..." else "Sign In"
-              button.('mt-3 text-sm-plus font-medium text-brand transition-opacity hover:opacity-70') @click: (-> step = 'email'), "Use a different email"
+              button.('mt-3 text-sm-plus font-medium text-brand transition-opacity hover:opacity-70 active:pointer-coarse:opacity-100 active:pointer-coarse:text-brand-active') @click: (-> step = 'email'), "Use a different email"
 
           if step is 'signup'
             div.('mt-6')
@@ -122,4 +122,4 @@ export Auth = component
                 input.('block w-full rounded-lg border border-primary bg-primary px-3.5 py-2.5 text-sm-plus text-primary shadow-xs transition-colors focus:border-brand focus:ring-1 focus:ring-brand outline-none') type: "tel", value: phone, placeholder: "Phone number"
               button.('mt-4 flex w-full items-center justify-center rounded-lg bg-brand px-4 py-2.5 text-sm-plus font-semibold text-white transition-colors hover:bg-brand-hover active:bg-brand-active disabled:opacity-50') @click: @submitSignup, disabled: submitting,
                 if submitting then "Creating account..." else "Create Account"
-              button.('mt-3 text-sm-plus font-medium text-brand transition-opacity hover:opacity-70') @click: (-> step = 'email'), "Use a different email"
+              button.('mt-3 text-sm-plus font-medium text-brand transition-opacity hover:opacity-70 active:pointer-coarse:opacity-100 active:pointer-coarse:text-brand-active') @click: (-> step = 'email'), "Use a different email"

@@ -1,0 +1,10 @@
+# NotFound - 404 page content
+
+export NotFound = component
+  render
+    div.('flex min-h-[60dvh] items-center justify-center')
+      div.('flex flex-col items-center text-center')
+        h1.('text-3xl font-semibold') "Not found"
+        div.('mt-6 text-base-plus text-secondary') "This page could not be found."
+        a.('mt-8 inline-flex min-w-42 items-center justify-center rounded-lg bg-brand px-4 py-2.5 text-sm-plus font-semibold text-white transition-colors hover:bg-brand-hover active:bg-brand-active') href: "/",
+          "Back to home"

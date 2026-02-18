@@ -1094,6 +1094,9 @@ export class CodeGenerator {
     if (!this.reactiveVars) this.reactiveVars = new Set();
     let varName = str(name) ?? name;
     this.reactiveVars.add(varName);
+    if (this.is(expr, 'block') && expr.length > 2) {
+      return `const ${varName} = __computed(() => ${this.generateFunctionBody(expr)})`;
+    }
     return `const ${varName} = __computed(() => ${this.generate(expr, 'value')})`;
   }
 

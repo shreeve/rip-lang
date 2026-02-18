@@ -360,6 +360,10 @@ buildRoutes = (components, root = 'components') ->
 
     continue if name.startsWith('_')
 
+    # Skip files in _-prefixed directories (shared components, not pages)
+    segs = rel.split('/')
+    continue if segs.length > 1 and segs.some((s, i) -> i < segs.length - 1 and s.startsWith('_'))
+
     urlPattern = fileToPattern(rel)
     regex = patternToRegex(urlPattern)
     routes.push { pattern: urlPattern, regex, file: filePath, rel }
@@ -811,6 +815,9 @@ export createRenderer = (opts = {}) ->
 # ==============================================================================
 
 export launch = (appBase = '', opts = {}) ->
+  if typeof appBase is 'object'
+    opts = appBase
+    appBase = ''
   appBase = appBase.replace(/\/+$/, '')  # strip trailing slashes
   target = opts.target or '#app'
   compile = opts.compile or null

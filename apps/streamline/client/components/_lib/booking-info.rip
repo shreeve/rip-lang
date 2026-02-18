@@ -1,0 +1,29 @@
+# BookingInfo - displays booking details (week, slot, children)
+
+export BookingInfo = component
+  week := 0
+  slot := ''
+  children := []
+  context := 'listItem'
+
+  classes ~=
+    base = 'flex items-center gap-x-2 leading-none'
+    if context is 'listItem' then "#{base} text-sm-plus text-tertiary"
+    else if context is 'details' then "#{base} text-tertiary"
+    else if context is 'cartItem' or context is 'cartSummary' then "#{base} text-tertiary lg:text-sm-plus"
+    else base
+
+  childrenDisplay ~=
+    if not children or children.length is 0 then ''
+    else if children.length is 1 then children[0]
+    else children.slice(0, -1).join(', ') + ' & ' + children[children.length - 1]
+
+  render
+    div.('flex flex-col gap-y-1.5')
+      div.(classes)
+        span "Week #{week}"
+      div.(classes)
+        span slot
+      if childrenDisplay
+        div.(classes)
+          span childrenDisplay

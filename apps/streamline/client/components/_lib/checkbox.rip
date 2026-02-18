@@ -1,0 +1,27 @@
+# Checkbox - styled checkbox with label and optional error state
+
+export Checkbox = component
+  checked := false
+  compact := false
+  error := null
+
+  toggle: ->
+    checked = not checked
+
+  render
+    fieldset
+      div.('flex items-start gap-x-3')
+        button.('shrink-0 rounded-md border shadow-xs transition',
+          if compact then 'size-5.5 lg:size-4.5 text-xs-plus' else 'size-6 lg:size-5 text-sm',
+          if checked then 'border-brand bg-brand' else '',
+          if error then 'border-error ring ring-error' else 'border-primary hover:border-secondary',
+          unless checked then 'bg-primary hover:bg-secondary active:bg-tertiary' else '') @click: @toggle, role: "checkbox", 'aria-checked': (if checked then 'true' else 'false'),
+          if checked
+            svg.('mx-auto text-white') viewBox: "0 0 12 12", fill: "currentColor", width: "12", height: "12"
+              path d: "M10.28 2.28a.75.75 0 0 1 0 1.06l-5.5 5.5a.75.75 0 0 1-1.06 0l-2.5-2.5a.75.75 0 0 1 1.06-1.06L4.5 7.56l4.97-4.97a.75.75 0 0 1 1.06 0z"
+        label.('cursor-pointer') @click: @toggle,
+          #content
+
+      if error
+        div.('mt-2 leading-none text-error',
+          if compact then 'text-sm' else 'text-sm-plus') error

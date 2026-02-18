@@ -1,4 +1,4 @@
-# Bookings list — two-column layout with detail panel
+# Bookings list - two-column layout with detail panel
 
 export Bookings = component
   bookings := []

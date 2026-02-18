@@ -13,6 +13,7 @@
 #   app:        string  — URL mount point (default: '')
 #   dir:        string  — app directory on disk (default: '.')
 #   components: string  — components subdirectory name (default: 'components')
+#   includes:   array   — extra directories to merge into bundle as components/_lib/
 #   watch:      boolean — enable SSE hot-reload endpoint (default: false)
 #   debounce:   number  — ms to batch filesystem events (default: 250)
 #   state:      object  — initial app state passed via bundle
@@ -27,26 +28,26 @@ export ripUI = (opts = {}) ->
   prefix        = opts.app or ''
   appDir        = opts.dir or '.'
   componentsDir = opts.components or "#{appDir}/components"
+  includeDirs   = opts.includes or []
   enableWatch   = opts.watch or false
   debounceMs    = opts.debounce or 250
   appState      = opts.state or null
   appTitle      = opts.title or null
   uiDir         = import.meta.dir
 
-  # Resolve compiler (rip.browser.js)
-  compilerPath = null
+  # Resolve rip-ui.min.js (compiler + UI framework bundled)
+  bundlePath = null
   try
-    compilerPath = Bun.fileURLToPath(import.meta.resolve('rip-lang/docs/dist/rip.browser.js'))
+    bundlePath = Bun.fileURLToPath(import.meta.resolve('rip-lang/docs/dist/rip-ui.min.js'))
   catch
-    compilerPath = "#{uiDir}/../../docs/dist/rip.browser.js"
+    bundlePath = "#{uiDir}/../../docs/dist/rip-ui.min.js"
 
   # ----------------------------------------------------------------------------
-  # Route: /rip/* — framework files (compiler + ui.rip), registered once
+  # Route: /rip/* — framework files, registered once
   # ----------------------------------------------------------------------------
 
   unless ripUI._registered
-    get "/rip/browser.js", (c) -> c.send compilerPath, 'application/javascript'
-    get "/rip/ui.rip", (c) -> c.send "#{uiDir}/ui.rip", 'text/plain; charset=UTF-8'
+    get "/rip/rip-ui.min.js", (c) -> c.send bundlePath, 'application/javascript'
     ripUI._registered = true
 
   # ----------------------------------------------------------------------------
@@ -74,6 +75,13 @@ export ripUI = (opts = {}) ->
       paths = Array.from(glob.scanSync(componentsDir))
       for path in paths
         components["components/#{path}"] = Bun.file("#{componentsDir}/#{path}").text!
+
+      # Merge external include directories into components/_lib/
+      for dir in includeDirs
+        incPaths = Array.from(glob.scanSync(dir))
+        for path in incPaths
+          key = "components/_lib/#{path}"
+          components[key] = Bun.file("#{dir}/#{path}").text! unless components[key]
 
       data = {}
       data.title = appTitle if appTitle
