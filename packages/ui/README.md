@@ -16,7 +16,7 @@ import { get, use, start, notFound } from '@rip-lang/api'
 import { ripUI } from '@rip-lang/ui/serve'
 
 dir = import.meta.dir
-use ripUI dir: dir, components: 'pages', includes: ['ui'], watch: true, title: 'My App'
+use ripUI dir: dir, components: 'routes', includes: ['ui'], watch: true, title: 'My App'
 get '/css/*', -> @send "#{dir}/css/#{@req.path.slice(5)}"
 notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 start port: 3000
@@ -155,7 +155,7 @@ The `ripUI` middleware registers routes for the framework files, the app
 bundle, and optional SSE hot-reload:
 
 ```coffee
-use ripUI dir: dir, components: 'pages', includes: ['ui'], watch: true, title: 'My App'
+use ripUI dir: dir, components: 'routes', includes: ['ui'], watch: true, title: 'My App'
 ```
 
 | Option | Default | Description |

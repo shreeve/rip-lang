@@ -449,7 +449,7 @@ directly — one signal graph shared between framework and components.
 | `serve.rip` | ~160 | Server middleware: framework bundle, app bundle, SSE hot-reload |
 
 Key concepts:
-- **`ripUI` middleware** — `use ripUI dir: dir, components: 'pages', includes: ['ui']` registers routes for the framework bundle (`/rip/rip-ui.min.js`), app bundle (`/{app}/bundle`), and SSE hot-reload (`/{app}/watch`)
+- **`ripUI` middleware** — `use ripUI dir: dir, components: 'routes', includes: ['ui']` registers routes for the framework bundle (`/rip/rip-ui.min.js`), app bundle (`/{app}/bundle`), and SSE hot-reload (`/{app}/watch`)
 - **`launch(appBase)`** — Client-side: fetches the app bundle, hydrates the stash, starts the router and renderer
 - **`component` / `render`** — Two keywords added to Rip for defining components with reactive state (`:=`), computed (`~=`), effects (`~>`)
 - **File-based routing** — `pages/users/[id].rip` → `/users/:id` (Next.js-style). Shared components go in `ui/` via `includes`.
@@ -462,7 +462,7 @@ import { get, use, start, notFound } from '@rip-lang/api'
 import { ripUI } from '@rip-lang/ui/serve'
 
 dir = import.meta.dir
-use ripUI dir: dir, components: 'pages', includes: ['ui'], watch: true, title: 'My App'
+use ripUI dir: dir, components: 'routes', includes: ['ui'], watch: true, title: 'My App'
 get '/css/*', -> @send "#{dir}/css/#{@req.path.slice(5)}"
 notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 start port: 3000

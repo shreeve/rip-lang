@@ -12,14 +12,14 @@ import './routes/bookings.rip'
 import './routes/user.rip'
 
 config = Stash configData
-dir = new URL('../client', import.meta.url).pathname
+dir = new URL('../app', import.meta.url).pathname
 
 # Middleware
 use prettyJson
 use sessions name: config.session.name, maxAge: config.session.maxAge
 
 # Serve the rip-ui client
-use ripUI app: '', dir: dir, components: 'pages', includes: ['ui'], title: config.app.name, watch: true
+use ripUI app: '', dir: dir, components: 'routes', includes: ['ui'], title: config.app.name, watch: true
 get '/css/*' -> @send "#{dir}/css/#{@req.path.slice(5)}"
 
 # Diagnostic routes

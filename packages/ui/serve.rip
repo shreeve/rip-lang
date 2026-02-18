@@ -7,7 +7,7 @@
 #
 # Usage:
 #   import { ripUI } from '@rip-lang/ui/serve'
-#   use ripUI dir: dir, components: 'pages', includes: ['ui'], watch: true, title: 'My App'
+#   use ripUI dir: dir, components: 'routes', includes: ['ui'], watch: true, title: 'My App'
 #
 # Options:
 #   app:        string  — URL mount point (default: '')
