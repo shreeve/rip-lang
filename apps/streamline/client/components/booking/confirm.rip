@@ -32,66 +32,66 @@ export Confirm = component
       submitting = false
 
   render
-    div
+    .
       if error
-        div.('mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-error') error
+        .('mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-error') error
 
       if cart.length is 0
-        div.('mt-6 flex flex-col items-center gap-y-7 rounded-lg-plus border border-primary px-6 py-8 md:mt-8 md:py-10')
-          div.('text-[50px] text-quaternary/40') "🛒"
-          div.('flex flex-col items-center gap-y-2 text-center')
-            div.('text-xl font-semibold') "Your cart is empty"
-            div.('text-sm-plus text-tertiary') "Add sessions to get started"
+        .('mt-6 flex flex-col items-center gap-y-7 rounded-lg-plus border border-primary px-6 py-8 md:mt-8 md:py-10')
+          .('text-[50px] text-quaternary/40') "🛒"
+          .('flex flex-col items-center gap-y-2 text-center')
+            .('text-xl font-semibold') "Your cart is empty"
+            .('text-sm-plus text-tertiary') "Add sessions to get started"
           a.('inline-flex items-center rounded-full border border-primary bg-primary px-4 py-2 text-sm font-semibold text-secondary shadow-xs transition-colors hover:border-secondary hover:bg-secondary active:bg-tertiary') href: "/booking/time", "Browse Sessions"
 
       unless cart.length is 0
-        div.('mt-6 md:mt-8 lg:flex lg:gap-x-8')
+        .('mt-6 md:mt-8 lg:flex lg:gap-x-8')
           # Left: cart summary
-          div.('lg:w-0 lg:flex-auto')
-            div.('flex max-w-[500px] flex-col gap-y-6')
-              div
-                div.('text-xl leading-none font-semibold lg:text-lg') "One-on-One Swim Lesson"
-                div.('mt-2.5 text-base-plus leading-none text-tertiary lg:text-base') "Streamline Swim School"
+          .('lg:w-0 lg:flex-auto')
+            .('flex max-w-[500px] flex-col gap-y-6')
+              .
+                .('text-xl leading-none font-semibold lg:text-lg') "One-on-One Swim Lesson"
+                .('mt-2.5 text-base-plus leading-none text-tertiary lg:text-base') "Streamline Swim School"
 
               for item, idx in cart
-                div.('flex flex-col gap-y-2.5')
+                .('flex flex-col gap-y-2.5')
                   span.('text-sm font-semibold text-secondary') "Week #{item.week} · #{item.slot}"
-                  div.('flex flex-wrap gap-1.5')
+                  .('flex flex-wrap gap-1.5')
                     for child in item.children
                       span.('inline-flex items-center rounded-full bg-cyan-50 px-2.5 py-0.5 text-xs font-medium text-cyan-700') "#{child.name or 'Unnamed'} (age #{child.age or '?'})"
-                div.('border-t border-primary')
+                .('border-t border-primary')
 
-              div.('flex items-center justify-between')
-                div.('text-base-plus font-semibold leading-none lg:text-base') "Total"
-                div.('text-base-plus font-semibold leading-none lg:text-base') priceDisplay
+              .('flex items-center justify-between')
+                .('text-base-plus font-semibold leading-none lg:text-base') "Total"
+                .('text-base-plus font-semibold leading-none lg:text-base') priceDisplay
 
           # Right: order summary sidebar (desktop only)
-          div.('hidden lg:block lg:w-[360px]')
-            div.('flex flex-col justify-between gap-y-9 rounded-lg-plus border border-primary bg-primary p-6')
-              div.('flex flex-col gap-y-4')
+          .('hidden lg:block lg:w-[360px]')
+            .('flex flex-col justify-between gap-y-9 rounded-lg-plus border border-primary bg-primary p-6')
+              .('flex flex-col gap-y-4')
                 h3.('text-lg font-semibold') "Order Summary"
-                div.('flex flex-col gap-y-2')
+                .('flex flex-col gap-y-2')
                   for item, idx in cart
-                    div.('flex justify-between text-sm text-tertiary')
+                    .('flex justify-between text-sm text-tertiary')
                       span "Week #{item.week} · #{item.slot}"
                       span "$100"
-                div.('border-t border-primary')
-                div.('flex items-center justify-between')
+                .('border-t border-primary')
+                .('flex items-center justify-between')
                   span.('text-base-plus font-semibold leading-none') "Total"
                   span.('text-base-plus font-semibold leading-none') priceDisplay
                 p.('text-sm text-tertiary') "Payment integration coming soon - booking is free for now."
 
-              div.('flex flex-col gap-y-3')
+              .('flex flex-col gap-y-3')
                 button.('flex w-full items-center justify-center rounded-lg border border-primary bg-primary px-4 py-2.5 text-sm-plus font-semibold text-secondary shadow-xs transition-colors hover:border-secondary hover:bg-secondary active:bg-tertiary') @click: @goBack, "Back"
                 button.('flex w-full items-center justify-center rounded-lg bg-brand px-4 py-2.5 text-sm-plus font-semibold text-white transition-colors hover:bg-brand-hover active:bg-brand-active disabled:opacity-50') @click: @submit, disabled: submitting,
                   if submitting then "Booking..." else "Confirm Booking"
 
       # Mobile sticky footer
       unless cart.length is 0
-        div.('fixed right-0 bottom-0 left-0 z-40 flex h-20 items-center justify-between border-t border-primary bg-primary px-5 lg:hidden')
-          div
-            div.('text-sm text-tertiary') "Added"
-            div.('-mt-0.5 text-sm-plus font-medium') "#{cart.length} session#{if cart.length is 1 then '' else 's'}"
+        .('fixed right-0 bottom-0 left-0 z-40 flex h-20 items-center justify-between border-t border-primary bg-primary px-5 lg:hidden')
+          .
+            .('text-sm text-tertiary') "Added"
+            .('-mt-0.5 text-sm-plus font-medium') "#{cart.length} session#{if cart.length is 1 then '' else 's'}"
           button.('flex w-46 items-center justify-center rounded-lg bg-brand px-4 py-2.5 text-sm-plus font-semibold text-white transition-colors hover:bg-brand-hover active:bg-brand-active disabled:opacity-50 md:w-56') @click: @submit, disabled: submitting,
             if submitting then "Booking..." else "Confirm"
-        div.('h-20 lg:hidden')
+        .('h-20 lg:hidden')

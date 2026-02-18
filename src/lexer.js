@@ -758,6 +758,16 @@ export class Lexer {
     if (this.inRenderBlock && LINE_CONTINUER_RE.test(this.chunk) && /^\s*\./.test(this.chunk)) {
       return false;
     }
+    // Inside render blocks, a bare . at line start is div shorthand, not continuation
+    if (this.inRenderBlock && this.prevTag() === '.') {
+      let len = this.tokens.length;
+      if (len >= 2) {
+        let beforeDot = this.tokens[len - 2][0];
+        if (beforeDot === 'INDENT' || beforeDot === 'TERMINATOR' || beforeDot === 'OUTDENT') {
+          return false;
+        }
+      }
+    }
     return LINE_CONTINUER_RE.test(this.chunk) || UNFINISHED.has(this.prevTag());
   }
 

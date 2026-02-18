@@ -75,32 +75,32 @@ export Auth = component
     @submitCode() if e.key is 'Enter'
 
   render
-    div.('flex min-h-[60vh] items-center justify-center py-8 md:py-10 lg:py-12')
-      div.('w-full max-w-[420px]')
-        div.('mb-6 text-center')
-          div.('text-lg font-bold text-brand') "🏊 Streamline"
+    .('flex min-h-[60vh] items-center justify-center py-8 md:py-10 lg:py-12')
+      .('w-full max-w-[420px]')
+        .('mb-6 text-center')
+          .('text-lg font-bold text-brand') "🏊 Streamline"
 
-        div.('rounded-2xl border border-primary/50 bg-primary p-6 pt-8 shadow-lg/6 xs:px-8 md:p-11')
+        .('rounded-2xl border border-primary/50 bg-primary p-6 pt-8 shadow-lg/6 xs:px-8 md:p-11')
           h1.('text-xl-plus font-semibold text-center') "Welcome"
           p.('mt-2 text-sm-plus text-tertiary text-center') "Sign in or create an account to book and manage your swim lessons."
 
           if error
-            div.('mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-error') error
+            .('mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-error') error
 
           if step is 'email'
-            div.('mt-6')
-              div.('mb-4')
+            .('mt-6')
+              .('mb-4')
                 label.('block text-sm font-medium text-secondary mb-1.5') "Email address"
                 input.('block w-full rounded-lg border border-primary bg-primary px-3.5 py-2.5 text-sm-plus text-primary shadow-xs transition-colors focus:border-brand focus:ring-1 focus:ring-brand outline-none') type: "email", value: email, placeholder: "you@example.com", @keydown: @handleEmailKey
               button.('flex w-full items-center justify-center rounded-lg bg-brand px-4 py-2.5 text-sm-plus font-semibold text-white transition-colors hover:bg-brand-hover active:bg-brand-active disabled:opacity-50') @click: @submitEmail, disabled: submitting,
                 if submitting then "Checking..." else "Continue"
-              div.('my-6 border-t border-primary')
+              .('my-6 border-t border-primary')
               button.('flex w-full items-center justify-center rounded-lg border border-primary bg-primary px-4 py-2.5 text-sm-plus font-semibold text-secondary shadow-xs transition-colors hover:border-secondary hover:bg-secondary active:bg-tertiary') @click: @devSignIn, "Sign in as Test User"
 
           if step is 'code'
-            div.('mt-6')
+            .('mt-6')
               p.('mb-4 text-sm-plus text-tertiary') "We sent a 6-digit code to #{email}"
-              div.('mb-4')
+              .('mb-4')
                 label.('block text-sm font-medium text-secondary mb-1.5') "Verification code"
                 input.('block w-full rounded-lg border border-primary bg-primary px-3.5 py-2.5 text-sm-plus text-primary shadow-xs transition-colors focus:border-brand focus:ring-1 focus:ring-brand outline-none') type: "text", value: code, placeholder: "123456", @keydown: @handleCodeKey
               button.('flex w-full items-center justify-center rounded-lg bg-brand px-4 py-2.5 text-sm-plus font-semibold text-white transition-colors hover:bg-brand-hover active:bg-brand-active disabled:opacity-50') @click: @submitCode, disabled: submitting,
@@ -108,16 +108,16 @@ export Auth = component
               button.('mt-3 text-sm-plus font-medium text-brand transition-opacity hover:opacity-70 active:pointer-coarse:opacity-100 active:pointer-coarse:text-brand-active') @click: (-> step = 'email'), "Use a different email"
 
           if step is 'signup'
-            div.('mt-6')
+            .('mt-6')
               p.('mb-4 text-sm-plus text-tertiary') "Create your account"
-              div.('grid gap-4 sm:grid-cols-2')
-                div
+              .('grid gap-4 sm:grid-cols-2')
+                .
                   label.('block text-sm font-medium text-secondary mb-1.5') "First name"
                   input.('block w-full rounded-lg border border-primary bg-primary px-3.5 py-2.5 text-sm-plus text-primary shadow-xs transition-colors focus:border-brand focus:ring-1 focus:ring-brand outline-none') type: "text", value: firstName, placeholder: "First name"
-                div
+                .
                   label.('block text-sm font-medium text-secondary mb-1.5') "Last name"
                   input.('block w-full rounded-lg border border-primary bg-primary px-3.5 py-2.5 text-sm-plus text-primary shadow-xs transition-colors focus:border-brand focus:ring-1 focus:ring-brand outline-none') type: "text", value: lastName, placeholder: "Last name"
-              div.('mt-4')
+              .('mt-4')
                 label.('block text-sm font-medium text-secondary mb-1.5') "Phone"
                 input.('block w-full rounded-lg border border-primary bg-primary px-3.5 py-2.5 text-sm-plus text-primary shadow-xs transition-colors focus:border-brand focus:ring-1 focus:ring-brand outline-none') type: "tel", value: phone, placeholder: "Phone number"
               button.('mt-4 flex w-full items-center justify-center rounded-lg bg-brand px-4 py-2.5 text-sm-plus font-semibold text-white transition-colors hover:bg-brand-hover active:bg-brand-active disabled:opacity-50') @click: @submitSignup, disabled: submitting,

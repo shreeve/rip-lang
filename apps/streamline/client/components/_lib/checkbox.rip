@@ -10,7 +10,7 @@ export Checkbox = component
 
   render
     fieldset
-      div.('flex items-start gap-x-3')
+      .('flex items-start gap-x-3')
         button.('shrink-0 rounded-md border shadow-xs transition',
           if compact then 'size-5.5 lg:size-4.5 text-xs-plus' else 'size-6 lg:size-5 text-sm',
           if checked then 'border-brand bg-brand' else '',
@@ -23,5 +23,5 @@ export Checkbox = component
           #content
 
       if error
-        div.('mt-2 leading-none text-error',
+        .('mt-2 leading-none text-error',
           if compact then 'text-sm' else 'text-sm-plus') error

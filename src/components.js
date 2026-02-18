@@ -240,11 +240,11 @@ export function installComponentSupport(CodeGenerator, Lexer) {
             tokens.splice(i, 0, divToken);
             return 2;
           }
-          // Bare . → div (skip when followed by ( — handled by dynamic classes)
+          // Skip .('classes') — handled by dynamic classes handler below
           if (!nextToken || nextToken[0] !== '(') {
             token[0] = 'IDENTIFIER';
             token[1] = 'div';
-            return 0; // re-process so implicit nesting sees div + INDENT
+            return 0;
           }
         }
       }

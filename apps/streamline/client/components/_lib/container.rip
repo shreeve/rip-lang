@@ -4,7 +4,7 @@ export Container = component
   narrow := false
 
   render
-    div.('px-5')
-      div.('mx-auto',
+    .('px-5')
+      .('mx-auto',
         if narrow then 'max-w-[940px]' else 'max-w-[1120px]')
         #content

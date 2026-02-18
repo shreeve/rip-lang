@@ -4,7 +4,7 @@ export Layout = component
   isTimePage ~= @router.path is '/booking/time' or @router.path is '/booking'
 
   render
-    div
+    .
       nav.('flex items-center')
         a.('font-medium mr-4 transition-colors',
           if isTimePage then 'text-secondary' else 'text-quaternary hover:text-tertiary') href: "/booking/time"

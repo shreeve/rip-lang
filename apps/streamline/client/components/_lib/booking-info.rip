@@ -19,11 +19,11 @@ export BookingInfo = component
     else children.slice(0, -1).join(', ') + ' & ' + children[children.length - 1]
 
   render
-    div.('flex flex-col gap-y-1.5')
-      div.(classes)
+    .('flex flex-col gap-y-1.5')
+      .(classes)
         span "Week #{week}"
-      div.(classes)
+      .(classes)
         span slot
       if childrenDisplay
-        div.(classes)
+        .(classes)
           span childrenDisplay

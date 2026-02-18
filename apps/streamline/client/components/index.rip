@@ -14,5 +14,5 @@ export Home = component
       @router.push '/auth'
 
   render
-    div.('flex items-center justify-center py-20')
+    .('flex items-center justify-center py-20')
       p.('text-tertiary') "Loading..."
