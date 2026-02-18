@@ -57,7 +57,7 @@
       counter := 1
       fps := 0
 
-      dots := do ->
+      dots = do ->
         result = []
         build = (x, y, s) ->
           if s <= 25
@@ -115,8 +115,7 @@
     # Populate source panel with this page's own Rip source
     ripScript = document.querySelector('script[type="text/rip"]')
     lines = ripScript.textContent.split("\n")
-    while lines.length and lines[0].trim() is ''
-      lines.shift()
+    lines.shift() while lines.length and lines[0].trim() is ''
     cutoff = lines.findIndex((l) -> l.includes('Populate source panel'))
     lines = lines.slice(0, cutoff).filter((l, i, a) -> i < a.length - 1 or l.trim() isnt '')
     sourceEl = document.getElementById('source-code')
