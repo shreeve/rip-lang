@@ -1020,10 +1020,10 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         const eventName = key[2];
         // Bind method references to this
         if (typeof value === 'string' && this.componentMembers?.has(value)) {
-          this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => this.${value}(e));`);
+          this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => __batch(() => this.${value}(e)));`);
         } else {
           const handlerCode = this.generateInComponent(value, 'value');
-          this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => (${handlerCode})(e));`);
+          this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => __batch(() => (${handlerCode})(e)));`);
         }
         continue;
       }
@@ -1347,9 +1347,16 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     }
     factoryLines.push(`    },`);
 
-    // m() - mount
+    // m() - mount (also repositions already-mounted blocks)
+    const loopFragChildren = getFragChildren(itemNode, itemCreateLines, localizeVar);
     factoryLines.push(`    m(target, anchor) {`);
-    factoryLines.push(`      target.insertBefore(${localizeVar(itemNode)}, anchor);`);
+    if (loopFragChildren) {
+      for (const child of loopFragChildren) {
+        factoryLines.push(`      target.insertBefore(${child}, anchor);`);
+      }
+    } else {
+      factoryLines.push(`      target.insertBefore(${localizeVar(itemNode)}, anchor);`);
+    }
     factoryLines.push(`    },`);
 
     // p() - update
@@ -1376,7 +1383,6 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     if (hasEffects) {
       factoryLines.push(`      disposers.forEach(d => d());`);
     }
-    const loopFragChildren = getFragChildren(itemNode, itemCreateLines, localizeVar);
     if (loopFragChildren) {
       for (const child of loopFragChildren) {
         factoryLines.push(`      if (detaching) ${child}.remove();`);
@@ -1406,14 +1412,12 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     setupLines.push(`      const ${itemVar} = items[${indexVar}];`);
     setupLines.push(`      const key = ${keyExpr};`);
     setupLines.push(`      let block = map.get(key);`);
-    setupLines.push(`      if (block) {`);
-    setupLines.push(`        block.p(this, ${itemVar}, ${indexVar});`);
-    setupLines.push(`      } else {`);
+    setupLines.push(`      if (!block) {`);
     setupLines.push(`        block = ${blockName}(this, ${itemVar}, ${indexVar});`);
     setupLines.push(`        block.c();`);
-    setupLines.push(`        block.m(parent, anchor);`);
-    setupLines.push(`        block.p(this, ${itemVar}, ${indexVar});`);
     setupLines.push(`      }`);
+    setupLines.push(`      block.m(parent, anchor);`);
+    setupLines.push(`      block.p(this, ${itemVar}, ${indexVar});`);
     setupLines.push(`      newMap.set(key, block);`);
     setupLines.push(`    }`);
     setupLines.push(``);
