@@ -1,6 +1,6 @@
 {
   "scopeName": "rip.injection.html",
-  "injectionSelector": "L:text.html.basic",
+  "injectionSelector": "L:text.html.basic, L:text.html.derivative",
   "patterns": [
     {
       "include": "#rip-script-block"
