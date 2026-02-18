@@ -24,21 +24,27 @@ dbFetch = (sql, params) ->
   data
 
 export setup = ->
-  # Drop tables in reverse dependency order (DuckDB CASCADE is unreliable)
-  dbFetch! 'DROP TABLE IF EXISTS spots'
-  dbFetch! 'DROP TABLE IF EXISTS bookings'
-  dbFetch! 'DROP TABLE IF EXISTS users'
-  dbFetch! 'DROP TYPE IF EXISTS spot_status'
+  # Check if another worker already initialized the database
+  check = dbFetch! "SELECT count(*) FROM information_schema.tables WHERE table_name = 'spots'"
+  if check.data and check.data[0] and check.data[0][0] > 0
+    return
 
-  # Create tables from schema DDL
-  sql = schema.toSQL()
-  for statement in sql.split(';').filter((s) -> s.trim())
-    dbFetch! statement.trim() + ';'
+  # Create tables from schema DDL (IF NOT EXISTS handles concurrent workers)
+  ddl = schema.toSQL()
+  for statement in ddl.split(';').filter((s) -> s.trim())
+    safe = statement.trim()
+    safe = safe.replace 'CREATE TABLE ', 'CREATE TABLE IF NOT EXISTS '
+    safe = safe.replace 'CREATE TYPE ', 'CREATE TYPE IF NOT EXISTS '
+    safe = safe.replace 'CREATE INDEX ', 'CREATE INDEX IF NOT EXISTS '
+    safe = safe.replace 'CREATE UNIQUE INDEX ', 'CREATE UNIQUE INDEX IF NOT EXISTS '
+    dbFetch! safe + ';'
   console.log '[setup] Database tables created'
 
-  # Seed initial spots (weeks 1-4, 4 time slots each, 4 spots per slot)
-  for week in [1, 2, 3, 4]
-    for slot in ['09:00', '10:00', '11:00', '14:00']
-      for i in [1..4]
-        dbFetch! 'INSERT INTO spots (week, slot) VALUES (?, ?)', [week, slot]
-  console.log '[setup] Seeded spots for weeks 1-4'
+  # Seed spots only if table is empty (another worker may have already seeded)
+  check = dbFetch! 'SELECT count(*) FROM spots'
+  if check.data and check.data[0] and check.data[0][0] is 0
+    for week in [1, 2, 3, 4]
+      for slot in ['09:00', '10:00', '11:00', '14:00']
+        for i in [1..4]
+          dbFetch! 'INSERT INTO spots (week, slot) VALUES (?, ?)', [week, slot]
+    console.log '[setup] Seeded spots for weeks 1-4'
