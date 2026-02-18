@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sierpinski Triangle — Rip UI</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0a0a; color: white; font-family: 'JetBrains Mono', monospace; overflow: hidden; }
+    .scene { position: relative; width: 100vw; height: 100vh; }
+    .stats { position: fixed; top: 20px; left: 24px; z-index: 10; }
+    .stats-title { font-size: 18px; font-weight: bold; }
+    .stats-line { font-size: 13px; color: rgba(255,255,255,0.45); margin-top: 3px; }
+    .stats-note { font-size: 11px; color: rgba(255,255,255,0.25); margin-top: 8px; max-width: 280px; line-height: 1.5; }
+    .container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -45%); width: 1000px; height: 870px; }
+    .dot {
+      position: absolute; width: 24px; height: 24px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: bold; color: rgba(255,255,255,0.9);
+      user-select: none; cursor: default; transition: transform 0.1s;
+    }
+    .dot:hover { transform: scale(2.5); z-index: 1; }
+  </style>
+  <script type="module" src="https://shreeve.github.io/rip-lang/dist/rip-ui.min.js"></script>
+</head>
+<body>
+  <script type="text/rip">
+    # Sierpinski Triangle — 729 reactive dots at 60fps
+    # No virtual DOM. No tree diffing. Just fine-grained reactivity.
+
+    App = component
+      elapsed := 0
+      fps := 0
+
+      dots := do ->
+        result = []
+        build = (x, y, s) ->
+          if s <= 25
+            result.push { x, y, id: result.length }
+          else
+            build x, y - s / 4, s / 2
+            build x - s / 2, y + s / 4, s / 2
+            build x + s / 2, y + s / 4, s / 2
+        build 500, 435, 1000
+        result
+
+      mounted: ->
+        start = performance.now()
+        frames = 0
+        last = start
+        tick = ->
+          now = performance.now()
+          elapsed = (now - start) / 1000
+          frames++
+          if now - last >= 1000
+            fps = frames
+            frames = 0
+            last = now
+          requestAnimationFrame tick
+        requestAnimationFrame tick
+
+      render
+        .('scene')
+          .('stats')
+            .('stats-title') "Sierpinski Triangle"
+            .('stats-line') dots.length + " dots \xB7 " + dots.length * 2 + " reactive bindings"
+            .('stats-line') fps + " fps"
+            .('stats-note') "Each dot updates independently via fine-grained reactivity"
+
+          .('container')
+            for dot in dots
+              .('dot') style: "left:" + (dot.x - 12) + "px;top:" + (dot.y - 12) + "px;background:hsl(" + ((dot.id / 729 * 360 + elapsed * 40) % 360) + " 70% 50%)"
+                Math.floor(elapsed % 10) + 1
+
+    app = new App()
+    app.mount document.body
+  </script>
+</body>
+</html>

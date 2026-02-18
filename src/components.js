@@ -366,7 +366,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
           isTemplateElement = true;
         } else if (tag === 'IDENTIFIER' && isTemplateTag(token[1]) && !isAfterControlFlow) {
           isTemplateElement = true;
-        } else if (tag === 'PROPERTY' || tag === 'STRING' || tag === 'CALL_END' || tag === ')') {
+        } else if (tag === 'PROPERTY' || tag === 'STRING' || tag === 'STRING_END' || tag === 'CALL_END' || tag === ')') {
           isTemplateElement = startsWithTag(tokens, i);
         }
         else if (tag === 'IDENTIFIER' && i > 1 && tokens[i - 1][0] === '...') {
