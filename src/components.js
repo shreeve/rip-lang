@@ -51,6 +51,23 @@ function getMemberName(target) {
   return null;
 }
 
+/**
+ * Detect fragment root and collect direct child variables for proper removal.
+ * After insertBefore, a DocumentFragment is empty — .remove() is a no-op.
+ * Callers must remove each child element individually.
+ */
+function getFragChildren(rootVar, createLines, localizeVar) {
+  const root = localizeVar(rootVar);
+  if (!/_frag\d+$/.test(root)) return null;
+  const children = [];
+  const re = new RegExp(`^${root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.appendChild\\(([^)]+)\\);`);
+  for (const line of createLines) {
+    const m = localizeVar(line).match(re);
+    if (m) children.push(m[1]);
+  }
+  return children.length > 0 ? children : null;
+}
+
 // ============================================================================
 // Prototype Installation
 // ============================================================================
@@ -1227,7 +1244,14 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     if (hasEffects) {
       factoryLines.push(`      disposers.forEach(d => d());`);
     }
-    factoryLines.push(`      if (detaching) ${localizeVar(rootVar)}.remove();`);
+    const condFragChildren = getFragChildren(rootVar, createLines, localizeVar);
+    if (condFragChildren) {
+      for (const child of condFragChildren) {
+        factoryLines.push(`      if (detaching) ${child}.remove();`);
+      }
+    } else {
+      factoryLines.push(`      if (detaching) ${localizeVar(rootVar)}.remove();`);
+    }
     factoryLines.push(`    }`);
 
     factoryLines.push(`  };`);
@@ -1346,7 +1370,14 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     if (hasEffects) {
       factoryLines.push(`      disposers.forEach(d => d());`);
     }
-    factoryLines.push(`      if (detaching) ${localizeVar(itemNode)}.remove();`);
+    const loopFragChildren = getFragChildren(itemNode, itemCreateLines, localizeVar);
+    if (loopFragChildren) {
+      for (const child of loopFragChildren) {
+        factoryLines.push(`      if (detaching) ${child}.remove();`);
+      }
+    } else {
+      factoryLines.push(`      if (detaching) ${localizeVar(itemNode)}.remove();`);
+    }
     factoryLines.push(`    }`);
 
     factoryLines.push(`  };`);

@@ -25,6 +25,24 @@ export Time = component
     found?.slots or []
   cartTotal ~= cart.length
   priceDisplay ~= "$#{cart.length * 100}"
+  weekDates ~=
+    months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    today = new Date()
+    offset = (2 - today.getDay() + 7) % 7
+    base = new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset)
+    result = {}
+    for s in sessions
+      tue = new Date(base)
+      tue.setDate(tue.getDate() + (s.week - 1) * 7)
+      fri = new Date(tue)
+      fri.setDate(fri.getDate() + 3)
+      sm = months[tue.getMonth()]
+      fm = months[fri.getMonth()]
+      if sm is fm
+        result[s.week] = "#{sm} #{tue.getDate()}–#{fri.getDate()}"
+      else
+        result[s.week] = "#{sm} #{tue.getDate()} – #{fm} #{fri.getDate()}"
+    result
 
   selectWeek: (week) ->
     selectedWeek = week
@@ -74,14 +92,14 @@ export Time = component
                     button.('h-12 w-[145px] snap-start rounded-lg border font-semibold transition-colors',
                       if s.week is selectedWeek then 'border-brand bg-brand text-white' else 'border-primary bg-primary text-secondary hover:border-secondary hover:bg-secondary active:bg-tertiary') @click: (=> @selectWeek(s.week)),
                       "Week #{s.week}"
-                    span.('text-sm font-medium text-tertiary') "Tue–Fri"
+                    span.('text-sm font-medium text-tertiary') "#{weekDates[s.week] or 'Tue–Fri'}"
 
             # Time slots - vertical list
             div.('mt-8 flex flex-col gap-y-4 md:mt-9 md:gap-y-5')
               for slot in currentSlots
                 button.('flex h-14 items-center justify-between rounded-lg border px-4 transition enabled:hover:bg-secondary enabled:active:bg-tertiary disabled:opacity-50 md:px-5',
                   if @isInCart(slot) then 'border-brand ring ring-brand' else 'border-primary enabled:hover:border-secondary') @click: (=> @addToCart(slot))
-                  span.('font-medium text-secondary') slot.time
+                  span.('font-medium text-secondary') "#{slot.time}"
                   span.('text-sm-plus text-tertiary') "#{slot.spots} spots left"
 
           # Right column: cart sidebar (desktop only)
