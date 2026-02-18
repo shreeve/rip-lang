@@ -17,6 +17,12 @@ const BIND_PREFIX = '__bind_';
 const BIND_SUFFIX = '__';
 
 const LIFECYCLE_HOOKS = new Set(['beforeMount', 'mounted', 'updated', 'beforeUnmount', 'unmounted']);
+const BOOLEAN_ATTRS = new Set([
+  'disabled', 'hidden', 'readonly', 'required', 'checked', 'selected',
+  'autofocus', 'autoplay', 'controls', 'loop', 'muted', 'multiple',
+  'novalidate', 'open', 'reversed', 'defer', 'async', 'formnovalidate',
+  'allowfullscreen', 'inert',
+]);
 
 // ============================================================================
 // Standalone Utilities
@@ -1077,7 +1083,13 @@ export function installComponentSupport(CodeGenerator, Lexer) {
           continue;
         }
 
-        if (this.hasReactiveDeps(value)) {
+        if (BOOLEAN_ATTRS.has(key)) {
+          if (this.hasReactiveDeps(value)) {
+            this._setupLines.push(`__effect(() => { ${elVar}.toggleAttribute('${key}', !!${valueCode}); });`);
+          } else {
+            this._createLines.push(`if (${valueCode}) ${elVar}.setAttribute('${key}', '');`);
+          }
+        } else if (this.hasReactiveDeps(value)) {
           this._setupLines.push(`__effect(() => { ${elVar}.setAttribute('${key}', ${valueCode}); });`);
         } else {
           this._createLines.push(`${elVar}.setAttribute('${key}', ${valueCode});`);
