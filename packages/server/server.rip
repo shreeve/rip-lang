@@ -509,7 +509,7 @@ class Manager
           @currentMtime = mt
           @isRolling = true
           @lastRollAt = now
-          @rollingRestart!.finally => @isRolling = false
+          @rollingRestart().finally => @isRolling = false
       , 50
 
       # Watch files in app directory - touch entry file on changes (opt-in via -w/--watch)
