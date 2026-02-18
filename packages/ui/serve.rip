@@ -7,13 +7,13 @@
 #
 # Usage:
 #   import { ripUI } from '@rip-lang/ui/serve'
-#   use ripUI app: '/demo', dir: dir, title: 'My App'
+#   use ripUI dir: dir, components: 'pages', includes: ['ui'], watch: true, title: 'My App'
 #
 # Options:
 #   app:        string  — URL mount point (default: '')
 #   dir:        string  — app directory on disk (default: '.')
-#   components: string  — pages subdirectory name, relative to dir (default: 'components')
-#   includes:   array   — shared component directories, relative to dir (merged as _lib/)
+#   components: string  — directory for page components, relative to dir (default: 'components')
+#   includes:   array   — directories for shared components, relative to dir (default: [])
 #   watch:      boolean — enable SSE hot-reload endpoint (default: false)
 #   debounce:   number  — ms to batch filesystem events (default: 250)
 #   state:      object  — initial app state passed via bundle

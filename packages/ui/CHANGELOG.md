@@ -22,7 +22,7 @@ All notable changes to `@rip-lang/ui` will be documented in this file.
 
 ### Component Composition
 
-- **Cross-file component resolution** — Components in `components/` are automatically available by PascalCase name (`card.rip` → `Card`). App-scoped, lazy-compiled, cached after first use. No imports needed.
+- **Cross-file component resolution** — Page components in `pages/` and shared components in `ui/` (via `includes`) are automatically available by PascalCase name (`card.rip` → `Card`). App-scoped, lazy-compiled, cached after first use. No imports needed.
 - **Reactive props via signal passthrough** — Parent passes `:=` signals directly to children. Child's `__state` passthrough returns the signal as-is. Two-way binding for free.
 - **Children blocks** — `Card title: "Hello" -> p "content"` passes children as a DOM node via the `@children` slot.
 - **Child unmounting cascade** — Parent tracks child instances in `_children`. `unmount()` cascades depth-first.

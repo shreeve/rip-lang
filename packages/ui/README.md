@@ -16,7 +16,7 @@ import { get, use, start, notFound } from '@rip-lang/api'
 import { ripUI } from '@rip-lang/ui/serve'
 
 dir = import.meta.dir
-use ripUI dir: dir, watch: true, title: 'My App'
+use ripUI dir: dir, components: 'pages', includes: ['ui'], watch: true, title: 'My App'
 get '/css/*', -> @send "#{dir}/css/#{@req.path.slice(5)}"
 notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 start port: 3000
@@ -25,20 +25,20 @@ start port: 3000
 **`index.html`** — the page:
 
 ```html
-<script type="module" src="/rip/browser.js"></script>
+<script type="module" src="/rip/rip-ui.min.js"></script>
 <script type="text/rip">
-  { launch } = importRip! '/rip/ui.rip'
+  { launch } = importRip! 'ui.rip'
   launch()
 </script>
 ```
 
-**`components/index.rip`** — a component:
+**`pages/index.rip`** — a page component:
 
 ```coffee
 export Home = component
   @count := 0
   render
-    div
+    .
       h1 "Hello from Rip UI"
       button @click: (-> @count += 1), "Clicked #{@count} times"
 ```
@@ -47,23 +47,24 @@ Run `bun index.rip`, open `http://localhost:3000`.
 
 ## Component Composition
 
-Components in `components/` are automatically available by PascalCase name.
-No imports needed:
+Page components in `pages/` map to routes via file-based routing. Shared
+components in `ui/` (or any `includes` directory) are available by PascalCase
+name. No imports needed:
 
 ```coffee
-# components/card.rip
+# ui/card.rip
 export Card = component
   title =! ""
   render
-    div.card
+    .card
       if title
         h3 "#{title}"
       @children
 
-# components/about.rip
+# pages/about.rip
 export About = component
   render
-    div
+    .
       h1 "About"
       Card title: "The Idea"
         p "Components compose naturally."
@@ -76,20 +77,11 @@ Children blocks passed as DOM nodes via `@children`.
 
 ## How It Works
 
-**Server mode** — the browser loads from the `/rip/` namespace:
-
-- `/rip/browser.js` — the Rip compiler (~47KB Brotli, cached forever)
-- `/rip/ui.rip` — the UI framework (~948 lines, compiled in the browser in ~10-20ms)
+The browser loads one file — `rip-ui.min.js` (~52KB Brotli) — which bundles the
+Rip compiler and the pre-compiled UI framework. No runtime compilation of the
+framework, no extra network requests.
 
 Then `launch()` fetches the app bundle, hydrates the stash, and renders.
-
-**Static mode** — a single combined bundle does everything:
-
-- `rip-ui.min.js` — compiler + pre-compiled UI framework (~52KB Brotli)
-
-The UI framework is compiled to JavaScript at build time, so there's no runtime
-compilation overhead and no extra network request. The `importRip('ui.rip')` call
-is intercepted and returns the pre-compiled module instantly.
 
 ### Browser Execution Contexts
 
@@ -109,7 +101,7 @@ so the Rip compiler handles implicit return and auto-async natively.
 
 ### globalThis Exports
 
-When `rip.browser.js` loads, it registers these on `globalThis`:
+When `rip-ui.min.js` loads, it registers these on `globalThis`:
 
 | Function | Purpose |
 |----------|---------|
@@ -122,16 +114,12 @@ When `rip.browser.js` loads, it registers these on `globalThis`:
 
 ## The Stash
 
-Everything lives in one reactive tree:
+App state lives in one reactive tree:
 
 ```
 app
-├── components/          ← component source files
-│   ├── index.rip
-│   ├── counter.rip
-│   └── _layout.rip
-├── routes          ← navigation state (path, params, query, hash)
-└── data            ← reactive app state (title, theme, user, etc.)
+├── routes    ← navigation state (path, params, query, hash)
+└── data      ← reactive app state (title, theme, user, etc.)
 ```
 
 Writing to `app.data.theme` updates any component reading it. The stash
@@ -140,13 +128,14 @@ uses Rip's built-in reactive primitives — the same signals that power
 
 ## The App Bundle
 
-The bundle is JSON served at `/{app}/bundle`. It populates the stash:
+The bundle is JSON served at `/{app}/bundle`:
 
 ```json
 {
   "components": {
     "components/index.rip": "export Home = component...",
-    "components/counter.rip": "export Counter = component..."
+    "components/counter.rip": "export Counter = component...",
+    "components/_lib/card.rip": "export Card = component..."
   },
   "data": {
     "title": "My App",
@@ -155,20 +144,26 @@ The bundle is JSON served at `/{app}/bundle`. It populates the stash:
 }
 ```
 
+On disk you organize your app into `pages/` and `ui/`. The middleware
+maps them into a flat `components/` namespace in the bundle — pages go
+under `components/`, shared components under `components/_lib/`. The `_`
+prefix tells the router to skip `_lib/` entries when generating routes.
+
 ## Server Middleware
 
 The `ripUI` middleware registers routes for the framework files, the app
 bundle, and optional SSE hot-reload:
 
 ```coffee
-use ripUI app: '/demo', dir: dir, title: 'My App'
+use ripUI dir: dir, components: 'pages', includes: ['ui'], watch: true, title: 'My App'
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `app` | `''` | URL mount point |
 | `dir` | `'.'` | App directory on disk |
-| `components` | `'components'` | Components subdirectory within `dir` |
+| `components` | `'components'` | Directory for page components (file-based routing) |
+| `includes` | `[]` | Directories for shared components (no routes) |
 | `watch` | `false` | Enable SSE hot-reload |
 | `debounce` | `250` | Milliseconds to batch file change events |
 | `state` | `null` | Initial app state |
@@ -177,11 +172,10 @@ use ripUI app: '/demo', dir: dir, title: 'My App'
 Routes registered:
 
 ```
-/rip/browser.js      — Rip compiler
-/rip/ui.rip          — UI framework
+/rip/rip-ui.min.js   — Rip compiler + pre-compiled UI framework
 /{app}/bundle        — app bundle (components + data as JSON)
 /{app}/watch         — SSE hot-reload stream (when watch: true)
-/{app}/components/*       — individual component files (for hot-reload refetch)
+/{app}/components/*  — individual component files (for hot-reload refetch)
 ```
 
 ## State Preservation (Keep-Alive)
@@ -250,7 +244,6 @@ get '/', -> Response.redirect('/demo/', 302)
 start port: 3002
 ```
 
-Each app is a directory with `components/`, `css/`, `index.html`, and `index.rip`.
 The `/rip/` namespace is shared — all apps use the same compiler and framework.
 
 ## File Structure
@@ -259,15 +252,21 @@ The `/rip/` namespace is shared — all apps use the same compiler and framework
 my-app/
 ├── index.rip            # Server
 ├── index.html           # HTML page
-├── components/
+├── pages/               # Page components (file-based routing)
 │   ├── _layout.rip      # Root layout
 │   ├── index.rip        # Home          → /
 │   ├── about.rip        # About         → /about
 │   └── users/
 │       └── [id].rip     # User profile  → /users/:id
+├── ui/                  # Shared components (no routes)
+│   └── card.rip         # Card          → available as Card
 └── css/
     └── styles.css       # Styles
 ```
+
+Files starting with `_` don't generate routes (`_layout.rip` is a layout,
+not a page). Directories starting with `_` are also excluded, which is how
+shared components from `includes` stay out of the router.
 
 ## Hash Routing
 

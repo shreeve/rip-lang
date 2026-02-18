@@ -436,23 +436,23 @@ notFound -> @send 'index.html', 'text/html; charset=UTF-8'
 start port: 3000
 ```
 
-### @rip-lang/ui (v0.3.1) — Reactive Web Framework
+### @rip-lang/ui (v0.3.2) — Reactive Web Framework
 
-Zero-build reactive web framework. The browser loads the Rip compiler,
-compiles the UI framework (`ui.rip`), fetches an app bundle, and renders
+Zero-build reactive web framework. The browser loads `rip-ui.min.js`
+(compiler + pre-compiled UI framework), fetches an app bundle, and renders
 with fine-grained DOM updates. Uses Rip's built-in reactive primitives
 directly — one signal graph shared between framework and components.
 
 | File | Lines | Role |
 |------|-------|------|
 | `ui.rip` | ~948 | Unified framework: stash, router (path + hash), renderer, launch |
-| `serve.rip` | ~140 | Server middleware: framework files, bundle, SSE hot-reload |
+| `serve.rip` | ~160 | Server middleware: framework bundle, app bundle, SSE hot-reload |
 
 Key concepts:
-- **`ripUI` middleware** — `use ripUI app: '/demo', dir: dir` registers routes for framework files (`/rip/browser.js`, `/rip/ui.rip`), app bundle (`/{app}/bundle`), and SSE hot-reload (`/{app}/watch`)
+- **`ripUI` middleware** — `use ripUI dir: dir, components: 'pages', includes: ['ui']` registers routes for the framework bundle (`/rip/rip-ui.min.js`), app bundle (`/{app}/bundle`), and SSE hot-reload (`/{app}/watch`)
 - **`launch(appBase)`** — Client-side: fetches the app bundle, hydrates the stash, starts the router and renderer
 - **`component` / `render`** — Two keywords added to Rip for defining components with reactive state (`:=`), computed (`~=`), effects (`~>`)
-- **File-based routing** — `parts/users/[id].rip` → `/users/:id` (Next.js-style)
+- **File-based routing** — `pages/users/[id].rip` → `/users/:id` (Next.js-style). Shared components go in `ui/` via `includes`.
 - **Unified stash** — Deep reactive proxy with path navigation, uses `__state` from Rip's built-in reactive runtime
 - **Hot reload** — Server sends notify-only SSE events, browser invalidates + refetches + remounts
 
@@ -462,7 +462,7 @@ import { get, use, start, notFound } from '@rip-lang/api'
 import { ripUI } from '@rip-lang/ui/serve'
 
 dir = import.meta.dir
-use ripUI dir: dir, watch: true, title: 'My App'
+use ripUI dir: dir, components: 'pages', includes: ['ui'], watch: true, title: 'My App'
 get '/css/*', -> @send "#{dir}/css/#{@req.path.slice(5)}"
 notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 start port: 3000
