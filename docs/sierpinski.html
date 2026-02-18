@@ -44,7 +44,7 @@
 <body>
   <div class="source-panel" id="source-panel">
     <div class="source-header">
-      <span class="source-label">SOURCE — 48 LINES OF RIP</span>
+      <span class="source-label">SOURCE — 56 LINES OF RIP</span>
       <button class="source-close" onclick="document.getElementById('source-panel').classList.remove('open')">&times;</button>
     </div>
     <pre class="source-code" id="source-code"></pre>
@@ -73,6 +73,7 @@
         start = performance.now()
         frames = 0
         last = start
+        raf = null
         tick = ->
           now = performance.now()
           elapsed = (now - start) / 1000
@@ -81,8 +82,16 @@
             fps = frames
             frames = 0
             last = now
-          requestAnimationFrame tick
-        requestAnimationFrame tick
+          raf = requestAnimationFrame tick
+        raf = requestAnimationFrame tick
+        document.addEventListener 'visibilitychange', ->
+          if document.hidden
+            cancelAnimationFrame raf
+            raf = null
+          else
+            last = performance.now()
+            frames = 0
+            raf = requestAnimationFrame tick
 
       render
         .scene
