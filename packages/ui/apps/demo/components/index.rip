@@ -5,7 +5,7 @@ export Home = component
   render
     div
       .page-header
-        h1.page-title "Rip UI Framework!"
+        h1.page-title "Rip UI Framework"
         p.page-subtitle "Zero-build reactive web apps"
 
       .feature-grid

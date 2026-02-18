@@ -343,6 +343,14 @@
       border-color: #007acc;
     }
 
+    .label-short { display: none; }
+
+    @media (max-width: 960px) {
+      #theme-select { display: none; }
+      .label-full { display: none; }
+      .label-short { display: inline; }
+    }
+
     /* Scrollbar styling */
     ::-webkit-scrollbar {
       width: 10px;
@@ -513,6 +521,7 @@
     <button class="tab active" data-tab="compiler">Live Compiler</button>
     <button class="tab" data-tab="repl">REPL Console</button>
     <button class="tab" data-tab="demo">Demo</button>
+    <button class="tab" data-tab="example">Example</button>
   </div>
 
   <!-- Content -->
@@ -523,7 +532,7 @@
       <div class="compiler-container">
         <div class="editor-pane" id="editor-left">
           <div class="pane-header">
-            <span>Rip Source</span>
+            <span>Source</span>
             <div class="pane-header-buttons">
               <select id="example-select" class="theme-select" title="Load example">
                 <option value="demo">Full Demo</option>
@@ -563,9 +572,9 @@
           <div class="pane-header">
             <span>Output</span>
             <div class="pane-header-buttons">
-              <button id="show-tokens" title="Toggle token stream display">Tokens</button>
-              <button id="show-sexp" title="Toggle S-expression display">S-Expressions</button>
-              <button id="show-preamble" title="Toggle preamble code display">Preamble</button>
+              <button id="show-tokens" title="Toggle token stream display"><span class="label-full">Tokens</span><span class="label-short">Toks</span></button>
+              <button id="show-sexp" title="Toggle S-expression display"><span class="label-full">S-Expressions</span><span class="label-short">Sexp</span></button>
+              <button id="show-preamble" title="Toggle preamble code display"><span class="label-full">Preamble</span><span class="label-short">Pre</span></button>
               <button id="show-types" title="Toggle .d.ts type declarations">Types</button>
               <button id="show-js" title="Toggle JavaScript output">JS</button>
             </div>
@@ -594,6 +603,11 @@
     <!-- Demo Pane -->
     <div class="pane" id="demo-pane">
       <iframe id="demo-iframe" style="width: 100%; height: 100%; border: none;"></iframe>
+    </div>
+
+    <!-- Example Pane -->
+    <div class="pane" id="example-pane">
+      <iframe id="example-iframe" style="width: 100%; height: 100%; border: none;"></iframe>
     </div>
 
   </div>
@@ -1111,6 +1125,7 @@
     # ====================================================================
 
     demoLoaded = false
+    exampleLoaded = false
 
     def switchToTab(tabName)
       window.location.hash = tabName
@@ -1128,13 +1143,17 @@
         unless demoLoaded
           document.getElementById('demo-iframe').src = 'sierpinski.html'
           demoLoaded = true
+      else if tabName is 'example'
+        unless exampleLoaded
+          document.getElementById('example-iframe').src = 'example/'
+          exampleLoaded = true
 
     document.querySelectorAll('.tab').forEach (tab) ->
       tab.addEventListener 'click', -> switchToTab tab.dataset.tab
 
     window.addEventListener 'hashchange', ->
       hash = window.location.hash.slice 1
-      switchToTab hash if hash is 'compiler' or hash is 'repl' or hash is 'demo'
+      switchToTab hash if hash is 'compiler' or hash is 'repl' or hash is 'demo' or hash is 'example'
 
     # ====================================================================
     # Resizable Panes
@@ -1452,7 +1471,7 @@
 
     # Initialize from URL hash (default to compiler)
     initialTab = window.location.hash.slice 1
-    if initialTab is 'compiler' or initialTab is 'repl' or initialTab is 'demo'
+    if initialTab is 'compiler' or initialTab is 'repl' or initialTab is 'demo' or initialTab is 'example'
       switchToTab! initialTab
     else
       compileCode()
