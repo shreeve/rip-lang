@@ -47,7 +47,7 @@
           if s <= 25
             result.push { x, y, id: result.length }
           else
-            build x, y - s / 4, s / 2
+            build x        , y - s / 4, s / 2
             build x - s / 2, y + s / 4, s / 2
             build x + s / 2, y + s / 4, s / 2
         build 500, 435, 1000
@@ -69,20 +69,19 @@
         requestAnimationFrame tick
 
       render
-        .('scene')
-          .('stats')
-            .('stats-title') "Sierpinski Triangle"
-            .('stats-line') dots.length + " dots \xB7 " + dots.length * 2 + " reactive bindings"
-            .('stats-line') fps + " fps"
-            .('stats-note') "Each dot updates independently via fine-grained reactivity"
+        .scene
+          .stats
+            .stats-title "Sierpinski Triangle"
+            .stats-line dots.length + " dots · " + dots.length * 2 + " reactive bindings"
+            .stats-line fps + " fps"
+            .stats-note "Each dot updates independently via fine-grained reactivity"
 
-          .('container')
+          .container
             for dot in dots
-              .('dot') style: "left:" + (dot.x - 12) + "px;top:" + (dot.y - 12) + "px;background:hsl(" + ((dot.id / 729 * 360 + elapsed * 40) % 360) + " 70% 50%)"
+              .dot style: "left:" + (dot.x - 12) + "px;top:" + (dot.y - 12) + "px;background:hsl(" + ((dot.id / 729 * 360 + elapsed * 40) % 360) + " 70% 50%)"
                 Math.floor(elapsed % 10) + 1
 
-    app = new App()
-    app.mount document.body
+    App.new().mount document.body
   </script>
 </body>
 </html>
