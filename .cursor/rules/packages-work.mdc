@@ -63,9 +63,9 @@ data = db.query(sql)!
 Production server — multi-worker, hot reload, TLS.
 
 ```bash
-bun server apps/myapp           # Start with defaults
-bun server apps/myapp@api       # With .local alias
-bun server w:auto apps/myapp    # Auto workers
+bun server demos/myapp          # Start with defaults
+bun server demos/myapp@api      # With .local alias
+bun server w:auto demos/myapp   # Auto workers
 ```
 
 ### @rip-lang/schema
