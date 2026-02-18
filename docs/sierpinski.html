@@ -28,6 +28,7 @@
       display: flex; align-items: center; justify-content: center;
       font-size: 10px; font-weight: bold; color: rgba(255,255,255,0.9);
       user-select: none; cursor: default; transition: transform 0.1s;
+      background: hsl(calc(var(--h) + var(--off, 0)) 70% 50%);
     }
     .dot:hover { transform: scale(2.5); z-index: 1; }
   </style>
@@ -50,8 +51,8 @@
     <pre class="source-code" id="source-code"></pre>
   </div>
   <script type="text/rip">
-    # Sierpinski Triangle — 729 dots with GPU color cycling
-    # Static layout + CSS hue-rotate for smooth animation on any device.
+    # Sierpinski Triangle — 729 dots with CSS custom property color cycling
+    # Static layout + one CSS variable update per frame for smooth animation.
 
     App = component
       counter := 1
@@ -78,7 +79,7 @@
         tick = ->
           now = performance.now()
           secs = (now - start) / 1000
-          container.style.filter = "hue-rotate(" + (secs * 40 % 360) + "deg)"
+          container.style.setProperty '--off', String(secs * 40 % 360)
           c = Math.floor(secs % 10) + 1
           counter = c if counter isnt c
           frames++
@@ -101,13 +102,13 @@
         .scene
           .stats
             .stats-title "Sierpinski Triangle"
-            .stats-line dots.length + " dots · GPU color cycling · " + fps + " fps"
-            .stats-note "Color animation via CSS hue-rotate. Counter updates reactively once per second."
+            .stats-line dots.length + " dots · CSS color cycling · " + fps + " fps"
+            .stats-note "True HSL color cycling via CSS custom properties. Counter updates reactively once per second."
             button.source-toggle @click: (-> document.getElementById('source-panel').classList.toggle('open')), "View Source"
 
           .container
             for dot in dots
-              .dot style: "left:" + (dot.x - 12) + "px;top:" + (dot.y - 12) + "px;background:hsl(" + (dot.id / 729 * 360) + " 70% 50%)"
+              .dot style: "left:" + (dot.x - 12) + "px;top:" + (dot.y - 12) + "px;--h:" + (dot.id / 729 * 360)
                 counter
 
     App.new().mount document.body
