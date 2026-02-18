@@ -228,8 +228,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       }
 
       // ─────────────────────────────────────────────────────────────────────
-      // Implicit div for class-only selectors
-      // .card → div.card
+      // Implicit div for class-only or bare dot selectors
+      // .card → div.card    |  . (with children) → div
       // ─────────────────────────────────────────────────────────────────────
       if (tag === '.') {
         let prevToken = i > 0 ? tokens[i - 1] : null;
@@ -239,6 +239,12 @@ export function installComponentSupport(CodeGenerator, Lexer) {
             let divToken = gen('IDENTIFIER', 'div', token);
             tokens.splice(i, 0, divToken);
             return 2;
+          }
+          // Bare . → div (skip when followed by ( — handled by dynamic classes)
+          if (!nextToken || nextToken[0] !== '(') {
+            token[0] = 'IDENTIFIER';
+            token[1] = 'div';
+            return 0; // re-process so implicit nesting sees div + INDENT
           }
         }
       }

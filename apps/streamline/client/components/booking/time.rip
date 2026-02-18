@@ -25,7 +25,13 @@ export Time = component
     found?.slots or []
   cartTotal ~= cart.length
   priceDisplay ~= "$#{cart.length * 100}"
-  weekDates ~=
+  isoWeek = (date) ->
+    d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() or 7))
+    y = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+    Math.ceil(((d - y) / 86400000 + 1) / 7)
+
+  weekInfo ~=
     months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     today = new Date()
     offset = (2 - today.getDay() + 7) % 7
@@ -36,12 +42,11 @@ export Time = component
       tue.setDate(tue.getDate() + (s.week - 1) * 7)
       fri = new Date(tue)
       fri.setDate(fri.getDate() + 3)
+      wn = @isoWeek(tue)
       sm = months[tue.getMonth()]
       fm = months[fri.getMonth()]
-      if sm is fm
-        result[s.week] = "#{sm} #{tue.getDate()}–#{fri.getDate()}"
-      else
-        result[s.week] = "#{sm} #{tue.getDate()} – #{fm} #{fri.getDate()}"
+      dates = if sm is fm then "#{sm} #{tue.getDate()}–#{fri.getDate()}" else "#{sm} #{tue.getDate()} – #{fm} #{fri.getDate()}"
+      result[s.week] = { wn, dates }
     result
 
   selectWeek: (week) ->
@@ -91,8 +96,8 @@ export Time = component
                   div.('flex flex-col items-center gap-y-2')
                     button.('h-12 w-[145px] snap-start rounded-lg border font-semibold transition-colors',
                       if s.week is selectedWeek then 'border-brand bg-brand text-white' else 'border-primary bg-primary text-secondary hover:border-secondary hover:bg-secondary active:bg-tertiary') @click: (=> @selectWeek(s.week)),
-                      "Week #{s.week}"
-                    span.('text-sm font-medium text-tertiary') "#{weekDates[s.week] or 'Tue–Fri'}"
+                      "Week #{weekInfo[s.week]?.wn or s.week}"
+                    span.('text-sm font-medium text-tertiary') "#{weekInfo[s.week]?.dates or 'Tue–Fri'}"
 
             # Time slots - vertical list
             div.('mt-8 flex flex-col gap-y-4 md:mt-9 md:gap-y-5')
