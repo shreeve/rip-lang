@@ -2,7 +2,7 @@
   "name": "rip",
   "displayName": "Rip",
   "description": "Rip language support — syntax highlighting, types, and editor integration",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "publisher": "rip-lang",
   "license": "MIT",
   "main": "./src/extension.js",
@@ -104,11 +104,6 @@
           "type": "boolean",
           "default": true,
           "description": "Enable type intelligence (autocomplete, hover, go-to-definition) from third-party .d.ts files"
-        },
-        "rip.compiler.path": {
-          "type": "string",
-          "default": "",
-          "description": "Path to the rip compiler binary (auto-detected if empty)"
         }
       }
     }
