@@ -13,7 +13,7 @@
     .stats-title { font-size: 18px; font-weight: bold; }
     .stats-line { font-size: 13px; color: rgba(255,255,255,0.45); margin-top: 3px; }
     .stats-note { font-size: 11px; color: rgba(255,255,255,0.25); margin-top: 8px; max-width: 280px; line-height: 1.5; }
-    .container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -45%); width: 1000px; height: 870px; }
+    .container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(var(--scale, 1)); width: 1000px; height: 870px; transform-origin: center center; }
     .dot {
       position: absolute; width: 24px; height: 24px; border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
@@ -23,6 +23,14 @@
     .dot:hover { transform: scale(2.5); z-index: 1; }
   </style>
   <script type="module" src="https://shreeve.github.io/rip-lang/dist/rip-ui.min.js"></script>
+  <script>
+    function updateScale() {
+      var s = Math.min(window.innerWidth / 1350, window.innerHeight / 1250, 1);
+      document.documentElement.style.setProperty('--scale', s);
+    }
+    updateScale();
+    window.addEventListener('resize', updateScale);
+  </script>
 </head>
 <body>
   <script type="text/rip">

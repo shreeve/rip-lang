@@ -512,6 +512,7 @@
   <div class="tabs">
     <button class="tab active" data-tab="compiler">Live Compiler</button>
     <button class="tab" data-tab="repl">REPL Console</button>
+    <button class="tab" data-tab="demo">Demo</button>
   </div>
 
   <!-- Content -->
@@ -588,6 +589,11 @@
           <div id="repl-editor-container" style="flex: 1; height: 24px;"></div>
         </div>
       </div>
+    </div>
+
+    <!-- Demo Pane -->
+    <div class="pane" id="demo-pane">
+      <iframe id="demo-iframe" style="width: 100%; height: 100%; border: none;"></iframe>
     </div>
 
   </div>
@@ -1104,6 +1110,8 @@
     # Tab Switching
     # ====================================================================
 
+    demoLoaded = false
+
     def switchToTab(tabName)
       window.location.hash = tabName
       document.querySelectorAll('.tab').forEach (t) -> t.classList.remove 'active'
@@ -1116,13 +1124,17 @@
       else if tabName is 'compiler'
         setTheme! themeSelect.value
         compileCode()
+      else if tabName is 'demo'
+        unless demoLoaded
+          document.getElementById('demo-iframe').src = 'sierpinski.html'
+          demoLoaded = true
 
     document.querySelectorAll('.tab').forEach (tab) ->
       tab.addEventListener 'click', -> switchToTab tab.dataset.tab
 
     window.addEventListener 'hashchange', ->
       hash = window.location.hash.slice 1
-      switchToTab hash if hash is 'compiler' or hash is 'repl'
+      switchToTab hash if hash is 'compiler' or hash is 'repl' or hash is 'demo'
 
     # ====================================================================
     # Resizable Panes
@@ -1440,7 +1452,7 @@
 
     # Initialize from URL hash (default to compiler)
     initialTab = window.location.hash.slice 1
-    if initialTab is 'compiler' or initialTab is 'repl'
+    if initialTab is 'compiler' or initialTab is 'repl' or initialTab is 'demo'
       switchToTab! initialTab
     else
       compileCode()
