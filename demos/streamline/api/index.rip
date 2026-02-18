@@ -29,7 +29,7 @@ get '/ping' ->
 get '/config' ->
   now: new Date().toISOString()
   app: config.app
-  dbUrl: config.database.url
+  dbUrl: config['database.url']
 
 # SPA fallback for client-side routing
 get '/*' -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
