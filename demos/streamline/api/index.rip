@@ -19,7 +19,7 @@ use prettyJson
 use sessions name: config.session.name, maxAge: config.session.maxAge
 
 # Serve the rip-ui client
-use ripUI app: '', dir: dir, components: 'routes', includes: ['ui'], title: config.app.name, watch: true
+use ripUI app: '', dir: dir, components: 'routes', includes: ['components'], title: config.app.name, watch: true
 get '/css/*' -> @send "#{dir}/css/#{@req.path.slice(5)}"
 
 # Diagnostic routes
