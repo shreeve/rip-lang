@@ -1,9 +1,9 @@
 # Test: Comprehensions (2 node types)
 # Tests "comprehension" and "object-comprehension" node types
 
-# ============================================================================
+# ==============================================================================
 # Array Comprehensions: "comprehension"
-# ============================================================================
+# ==============================================================================
 
 # Basic array comprehension
 test "simple comprehension", "(x * 2 for x in [1, 2, 3])", [2, 4, 6]
@@ -71,9 +71,9 @@ code "nested comprehension plain loops", '''
 # Code generation
 code "comprehension", "(x * 2 for x in arr)", "(() => {\n  const result = [];\n  for (const x of arr) {\n    result.push((x * 2));\n  }\n  return result;\n})()"
 
-# ============================================================================
+# ==============================================================================
 # Object Comprehensions: "object-comprehension"
-# ============================================================================
+# ==============================================================================
 
 # Basic object comprehension
 test "object comprehension", "{k: v * 2 for k, v of {a: 1, b: 2}}", {a: 2, b: 4}
@@ -96,9 +96,9 @@ test 'object comprehension key-value', '''
 # Code generation
 code "object comprehension", "{k: v * 2 for k, v of obj}", "(() => {\n  const result = {};\n  for (const k in obj) {\n    const v = obj[k];\n    result[k] = (v * 2);\n  }\n  return result;\n})()"
 
-# ============================================================================
+# ==============================================================================
 # Function-Local Comprehension Assignment (direct array building, no IIFE)
-# ============================================================================
+# ==============================================================================
 
 code "function comprehension assignment", '''
   def makeList

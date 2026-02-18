@@ -1,9 +1,9 @@
 # Test: Optional Chaining, Existence Check, and Nullish Coalescing
 # Tests postfix ? existence, ES6 optional chaining (?.), and ?? operators
 
-# ============================================================================
+# ==============================================================================
 # Existence Check: "?" (postfix)
-# ============================================================================
+# ==============================================================================
 
 # Pattern: expr? → (expr != null)
 test "existence check value", "x = 42\nx?", true
@@ -34,9 +34,9 @@ code "existence call gen", "fn()?", "(fn() != null)"
 test "existence deep subscript", "obj = {a: [1, 2]}; obj.a[0]?", true
 test "existence deep subscript null", "obj = {a: [null]}; obj.a[0]?", false
 
-# ============================================================================
+# ==============================================================================
 # DOT-BASED ?. - ES6 Optional Chaining (Native Passthrough)
-# ============================================================================
+# ==============================================================================
 
 # Optional property: "?."
 # Pattern: obj?.prop → obj?.prop (ES6 native)
@@ -70,9 +70,9 @@ test "optional call no dot null", "fn = null\nfn?(5)", undefined
 test "optional call no dot chain", "obj = {fn: (x) -> x}\nobj?.fn?(42)", 42
 code "optional call no dot gen", "fn?(42)", "fn?.(42)"
 
-# ============================================================================
+# ==============================================================================
 # Optional Chaining in Expressions
-# ============================================================================
+# ==============================================================================
 
 test "optional with default", "obj = {val: 5}\nobj?.val ?? 10", 5
 test "optional null with default", "obj = null\nobj?.val ?? 10", 10
@@ -80,18 +80,18 @@ test "optional null with default", "obj = null\nobj?.val ?? 10", 10
 # Optional in assignments
 test "optional assign", "obj = {val: 42}\nx = obj?.val\nx", 42
 
-# ============================================================================
+# ==============================================================================
 # CODE GENERATION TESTS
-# ============================================================================
+# ==============================================================================
 
 # ES6 optional chaining (?.) - Passthrough to native
 code "optional property gen", "obj?.prop", "obj?.prop"
 code "es6 optional index gen", "arr?.[0]", "arr?.[0]"
 code "es6 optional call gen", "fn?.(42)", "fn?.(42)"
 
-# ============================================================================
+# ==============================================================================
 # Nullish Coalescing (??)
-# ============================================================================
+# ==============================================================================
 
 # These tests are Rip-specific, showing how to use ?? (ES2020)
 

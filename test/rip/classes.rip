@@ -1,9 +1,9 @@
 # Test: Classes (2 node types)
 # Tests "class" and "super" node types
 
-# ============================================================================
+# ==============================================================================
 # Class Definitions: "class"
-# ============================================================================
+# ==============================================================================
 
 # Basic class
 test "basic class", "class Animal\n  constructor: (@name) ->\n  speak: -> @name\na = new Animal('Dog'); a.speak()", "Dog"
@@ -23,9 +23,9 @@ test "constructor logic", "class Counter\n  constructor: ->\n    @count = 0\n  i
 # Code generation
 code "simple class", "class Animal\n  constructor: (@name) ->", "class Animal { constructor(name) { this.name = name; } }"
 
-# ============================================================================
+# ==============================================================================
 # Super Calls: "super"
-# ============================================================================
+# ==============================================================================
 
 # Super in constructor
 test "super in constructor", "class Animal\n  constructor: (@name) ->\nclass Dog extends Animal\n  constructor: (name, @breed) ->\n    super(name)\nd = new Dog('Spot', 'Terrier'); d.name", "Spot"
@@ -75,9 +75,9 @@ test "@param default no args", '''
 code "super call", "super(arg)", "super(arg)"
 code "super method", "super.method()", "super.method()"
 
-# ============================================================================
+# ==============================================================================
 # More Class Features
-# ============================================================================
+# ==============================================================================
 
 # Class expressions
 test 'class expression', '''
@@ -161,9 +161,9 @@ test 'four-level inheritance', '''
   new D().val()
   ''', 'a'
 
-# ============================================================================
+# ==============================================================================
 # Ruby-style Constructor: XXX.new()
-# ============================================================================
+# ==============================================================================
 
 # Ruby-style new
 test 'ruby-style new', '''
@@ -185,9 +185,9 @@ code "ruby-style new", "Counter.new()", "new Counter()"
 code "ruby-style new args", "Counter.new(1, 2)", "new Counter(1, 2)"
 code "ruby-style new expression", "getClass().new(x)", "new (getClass())(x)"
 
-# ============================================================================
+# ==============================================================================
 # Meta Properties
-# ============================================================================
+# ==============================================================================
 
 # new.target (ES6 meta property)
 test "new.target in constructor", '''

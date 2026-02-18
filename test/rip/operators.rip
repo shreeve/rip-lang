@@ -1,9 +1,9 @@
 # Test: Operators (24 node types)
 # Systematically tests all operator node types from grammar
 
-# ============================================================================
+# ==============================================================================
 # Arithmetic Operators
-# ============================================================================
+# ==============================================================================
 
 # Addition: "+"
 test "addition integers", "5 + 3", 8
@@ -37,9 +37,9 @@ test "exponentiation", "2 ** 3", 8
 test "exponentiation decimal", "4 ** 0.5", 2
 code "exponentiation parens", "a ** b", "(a ** b)"
 
-# ============================================================================
+# ==============================================================================
 # Comparison Operators
-# ============================================================================
+# ==============================================================================
 
 # Equality: "==" (compiles to strict ===)
 test "equality true", "5 == 5", true
@@ -85,9 +85,9 @@ test "greater than or equal true", "5 >= 3", true
 test "greater than or equal equal", "5 >= 5", true
 code "greater than or equal parens", "a >= b", "(a >= b)"
 
-# ============================================================================
+# ==============================================================================
 # Logical Operators
-# ============================================================================
+# ==============================================================================
 
 # Logical NOT: "!"
 test "logical not true", "!false", true
@@ -126,9 +126,9 @@ test "otherwise first value", "5 !? 10 !? 15", 5
 test "otherwise second value", "undefined !? 10 !? 15", 10
 code "otherwise operator parens", "a !? b", "(a !== undefined ? a : b)"
 
-# ============================================================================
+# ==============================================================================
 # Bitwise Operators
-# ============================================================================
+# ==============================================================================
 
 # Bitwise AND: "&"
 test "bitwise and", "5 & 3", 1
@@ -146,9 +146,9 @@ code "bitwise xor parens", "a ^ b", "(a ^ b)"
 test "bitwise not", "~5", -6
 code "bitwise not parens", "~a", "(~a)"
 
-# ============================================================================
+# ==============================================================================
 # Increment/Decrement: "++" / "--"
-# ============================================================================
+# ==============================================================================
 
 # Prefix increment: "++"
 test "prefix increment", "x = 5\n++x", 6
@@ -162,9 +162,9 @@ test "prefix decrement", "x = 5\n--x", 4
 # Postfix decrement: "--"
 test "postfix decrement", "x = 5\nx--\nx", 4
 
-# ============================================================================
+# ==============================================================================
 # In operator with string literals (critical for bootstrap!)
-# ============================================================================
+# ==============================================================================
 
 # String literal in object (use in operator)
 test "in operator object", "obj = {a: 1}\n'a' in obj", true
@@ -180,10 +180,10 @@ test "newline in string", "str = 'line1\\nline2'\n'\\n' in str", true
 code "string literal in variable uses runtime check", "'\\n' in action", "(Array.isArray(action) || typeof action === 'string' ? action.includes('\\n') : ('\\n' in action))"
 code "property in identifier also uses runtime check", "'key' in obj", "(Array.isArray(obj) || typeof obj === 'string' ? obj.includes('key') : ('key' in obj))"
 
-# ============================================================================
+# ==============================================================================
 # Array Membership Tests (Issue #60)
 # The 'in' operator should check VALUES in arrays, not INDICES
-# ============================================================================
+# ==============================================================================
 
 # Variable in array variable (primary bug case)
 test "variable in array variable", "list = ['apple', 'banana']\nval = 'apple'\nval in list", true
@@ -216,9 +216,9 @@ code "variable in literal uses runtime check", "val in ['a', 'b']", "(Array.isAr
 # Object literal should still use JavaScript 'in'
 code "property in object literal", "'key' in {key: 1}", "('key' in {key: 1})"
 
-# ============================================================================
+# ==============================================================================
 # Ternary Operator: "? :"
-# ============================================================================
+# ==============================================================================
 
 # Basic ternary
 test "ternary true branch", "true ? 'yes' : 'no'", 'yes'
@@ -245,9 +245,9 @@ code "ternary with expression", "a ? b + 1 : c", "(a ? (b + 1) : c)"
 test "ternary subscript with parens", "arr = [1, 2, 3]\ntrue ? (arr[0]) : 0", 1
 code "ternary subscript with parens", "a ? (b[0]) : c", "(a ? b[0] : c)"
 
-# ============================================================================
+# ==============================================================================
 # String Repeat — "str" * n
-# ============================================================================
+# ==============================================================================
 
 test "string repeat", '"-" * 3', "---"
 test "string repeat longer", '"ha" * 4', "hahahaha"
@@ -256,9 +256,9 @@ test "string repeat zero", '"x" * 0', ""
 test "string repeat one", '"abc" * 1', "abc"
 code "string repeat compiles to repeat", '"-" * 40', '"-".repeat(40)'
 
-# ============================================================================
+# ==============================================================================
 # Chained Comparisons — a < b < c
-# ============================================================================
+# ==============================================================================
 
 test "chained less than", "x = 5; 1 < x < 10", true
 test "chained less than false low", "x = 0; 1 < x < 10", false
@@ -269,9 +269,9 @@ test "chained greater than", "x = 5; 10 > x > 1", true
 test "chained mixed", "x = 5; 0 <= x < 10", true
 code "chained compiles to conjunction", "1 < x < 10", "((1 < x) && (x < 10))"
 
-# ============================================================================
+# ==============================================================================
 # Pipe Operator — |>
-# ============================================================================
+# ==============================================================================
 
 test "pipe single arg", '''
   double = (x) -> x * 2
@@ -309,9 +309,9 @@ code "pipe multi-arg compiles correctly", "x |> fn(y)", "fn(x, y)"
 code "pipe dotted reference compiles", "x |> console.log", "console.log(x)"
 code "pipe dotted call compiles", "x |> obj.method(y)", "obj.method(x, y)"
 
-# ============================================================================
+# ==============================================================================
 # Negative Indexing
-# ============================================================================
+# ==============================================================================
 
 test "negative index last element", '''
   arr = [10, 20, 30]
@@ -331,9 +331,9 @@ test "negative index on string", '''
 code "negative index compiles to .at()", "arr[-1]", "arr.at(-1)"
 code "negative index -2 compiles to .at()", "arr[-2]", "arr.at(-2)"
 
-# ============================================================================
+# ==============================================================================
 # Prototype Operator — ::
-# ============================================================================
+# ==============================================================================
 
 test "prototype access", '''
   String::starts = String::startsWith
@@ -347,9 +347,9 @@ test "prototype method assignment", '''
 
 code "prototype compiles to .prototype.", "String::trim", "String.prototype.trim"
 
-# ============================================================================
+# ==============================================================================
 # Method Assignment — .=
-# ============================================================================
+# ==============================================================================
 
 test "method assign trim", '''
   x = "  hello  "
@@ -385,9 +385,9 @@ test "method assign on property chain", '''
 code "method assign compiles", "x .= trim()", "let x;\n\nx = x.trim();"
 code "method assign chain compiles", "a.b .= trim()", "a.b = a.b.trim();"
 
-# ============================================================================
+# ==============================================================================
 # Merge Assignment — *obj = { ... }
-# ============================================================================
+# ==============================================================================
 
 test "merge assign basic", '''
   config = {host: "old"}

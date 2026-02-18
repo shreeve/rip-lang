@@ -2,9 +2,9 @@
 # Tests automatic comma insertion before -> and => in function calls
 # Allows: get '/users' -> ... instead of: get '/users', -> ...
 
-# ============================================================================
+# ==============================================================================
 # STRING -> (route handlers, event handlers)
-# ============================================================================
+# ==============================================================================
 
 # Basic string to arrow (thin)
 code "string arrow thin", "get '/users' -> 1", "get('/users', function() {\n  return 1;\n});"
@@ -27,9 +27,9 @@ code "explicit comma still works", "get '/users', -> 1", "get('/users', function
 test "string arrow runtime", "handler = (path, fn) -> fn()\nhandler '/test' -> 42", 42
 test "string fat arrow runtime", "handler = (path, fn) -> fn()\nhandler '/test' => 42", 42
 
-# ============================================================================
+# ==============================================================================
 # REGEX -> (pattern matching routes)
-# ============================================================================
+# ==============================================================================
 
 # Basic regex to arrow
 code "regex arrow thin", "get /^\\/api/ -> 1", "get(/^\\/api/, function() {\n  return 1;\n});"
@@ -42,9 +42,9 @@ code "regex complex", "match /^user-(\\d+)$/ -> 1", "match(/^user-(\\d+)$/, func
 test "regex arrow runtime", "handler = (pattern, fn) -> fn()\nhandler /test/ -> 42", 42
 test "regex fat arrow runtime", "handler = (pattern, fn) -> fn()\nhandler /test/ => 42", 42
 
-# ============================================================================
+# ==============================================================================
 # NUMBER -> (status codes, priorities, indexes)
-# ============================================================================
+# ==============================================================================
 
 # Basic number to arrow
 code "number arrow thin", "handle 404 -> 1", "handle(404, function() {\n  return 1;\n});"
@@ -57,9 +57,9 @@ code "multiple number handlers", "handle 404 -> 1\nhandle 500 -> 2", "handle(404
 test "number arrow runtime", "handler = (code, fn) -> fn()\nhandler 404 -> 'not found'", "not found"
 test "number fat arrow runtime", "handler = (code, fn) -> fn()\nhandler 500 => 'error'", "error"
 
-# ============================================================================
+# ==============================================================================
 # Mixed scenarios
-# ============================================================================
+# ==============================================================================
 
 # Object return
 code "arrow with object", "get '/config' -> { port: 3000 }", "get('/config', function() {\n  return {port: 3000};\n});"
@@ -70,50 +70,50 @@ test "arrow expression body", "run = (name, fn) -> fn(10)\nrun 'double', (x) -> 
 # Multiple arguments before arrow still need comma
 code "multi arg needs comma", "get '/users', opts, -> 1", "get('/users', opts, function() {\n  return 1;\n});"
 
-# ============================================================================
+# ==============================================================================
 # BOOL -> (conditional handlers)
-# ============================================================================
+# ==============================================================================
 
 code "bool true arrow", "check true -> 1", "check(true, function() {\n  return 1;\n});"
 code "bool false arrow", "check false -> 0", "check(false, function() {\n  return 0;\n});"
 test "bool arrow runtime", "handler = (flag, fn) -> fn()\nhandler true -> 'yes'", "yes"
 
-# ============================================================================
+# ==============================================================================
 # NULL / UNDEFINED -> (default handlers)
-# ============================================================================
+# ==============================================================================
 
 code "null arrow", "handle null -> 'default'", "handle(null, function() {\n  return 'default';\n});"
 code "undefined arrow", "handle undefined -> 'missing'", "handle(undefined, function() {\n  return 'missing';\n});"
 test "null arrow runtime", "handler = (val, fn) -> fn()\nhandler null -> 'null!'", "null!"
 test "undefined arrow runtime", "handler = (val, fn) -> fn()\nhandler undefined -> 'undef!'", "undef!"
 
-# ============================================================================
+# ==============================================================================
 # INFINITY / NAN -> (edge case handlers)
-# ============================================================================
+# ==============================================================================
 
 code "infinity arrow", "handle Infinity -> 'overflow'", "handle(Infinity, function() {\n  return 'overflow';\n});"
 code "nan arrow", "handle NaN -> 'invalid'", "handle(NaN, function() {\n  return 'invalid';\n});"
 test "infinity arrow runtime", "handler = (val, fn) -> fn()\nhandler Infinity -> 'inf!'", "inf!"
 
-# ============================================================================
+# ==============================================================================
 # Arrays -> (pattern matching)
-# ============================================================================
+# ==============================================================================
 
 code "array arrow", "match [1, 2, 3] -> 'found'", "match([1, 2, 3], function() {\n  return 'found';\n});"
 code "empty array arrow", "match [] -> 'empty'", "match([], function() {\n  return 'empty';\n});"
 test "array arrow runtime", "handler = (arr, fn) -> fn()\nhandler [1, 2] -> 'got array'", "got array"
 
-# ============================================================================
+# ==============================================================================
 # Objects -> (shape matching)
-# ============================================================================
+# ==============================================================================
 
 code "object arrow", "match {x: 1} -> 'found'", "match({x: 1}, function() {\n  return 'found';\n});"
 code "empty object arrow", "match {} -> 'empty'", "match({}, function() {\n  return 'empty';\n});"
 test "object arrow runtime", "handler = (obj, fn) -> fn()\nhandler {a: 1} -> 'got object'", "got object"
 
-# ============================================================================
+# ==============================================================================
 # NO comma insertion (these are function params, not call args)
-# ============================================================================
+# ==============================================================================
 
 # IDENTIFIER before arrow - note: x -> gets parsed as x( -> ), not as (x) ->
 # Single param needs parens: (x) -> or use fat arrow for implicit param

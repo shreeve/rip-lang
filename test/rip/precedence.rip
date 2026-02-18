@@ -2,9 +2,9 @@
 # Tests that || and && end implicit function calls
 # Allows: read 'x' or '' instead of: read('x' || '')
 
-# ============================================================================
+# ==============================================================================
 # or (||) ends implicit calls - Runtime tests
-# ============================================================================
+# ==============================================================================
 
 # Basic: or after implicit call returns call result when truthy
 test "or returns call result when truthy", "fn = (x) -> x\nfn 'hello' or 'default'", "hello"
@@ -18,9 +18,9 @@ test "or with multiple args", "fn = (a, b) -> a + b\nfn 'a', 'b' or 'default'", 
 # Chained or expressions
 test "chained or", "get = (x) -> null\nset = (x, v) -> v\nget 'x' or set 'x', 42 or 0", 42
 
-# ============================================================================
+# ==============================================================================
 # and (&&) ends implicit calls - Runtime tests
-# ============================================================================
+# ==============================================================================
 
 # and returns second value when first is truthy
 test "and returns second when first truthy", "fn = (x) -> x\nfn 'hello' and 'yes'", "yes"
@@ -31,26 +31,26 @@ test "and returns first when first falsy", "fn = (x) -> x\nfn '' and 'yes'", ""
 # and with multiple arguments
 test "and with multiple args", "fn = (a, b) -> a + b\nfn 'a', 'b' and 'result'", "result"
 
-# ============================================================================
+# ==============================================================================
 # Explicit parens preserve grouping (when you WANT || inside args)
-# ============================================================================
+# ==============================================================================
 
 # Parens make or part of the argument
 test "parens preserve or in args", "fn = (x) -> x\nfn (true || false)", true
 test "parens preserve and in args", "fn = (x) -> x\nfn (true && false)", false
 
-# ============================================================================
+# ==============================================================================
 # Real-world patterns from rip-api
-# ============================================================================
+# ==============================================================================
 
 test "read with string default", "read = (k, t) -> null\nread 'body', 'string' or ''", ""
 test "read with number default", "read = (k, t) -> null\nread 'count', 'number' or 0", 0
 test "read with boolean default", "read = (k, t) -> null\nread 'flag', 'boolean' or false", false
 test "read returns value when present", "read = (k, t) -> 'value'\nread 'body', 'string' or ''", "value"
 
-# ============================================================================
+# ==============================================================================
 # Edge cases
-# ============================================================================
+# ==============================================================================
 
 # Nested function calls
 test "nested calls with or", "outer = (x) -> x\ninner = (x) -> x\nouter inner 'test' or 'fallback'", "test"
@@ -61,9 +61,9 @@ test "method call with or", "obj = { get: (x) -> x }\nobj.get 'value' or 'defaul
 # Multiple or in chain
 test "multiple or chain", "fn = (x) -> null\nfn 'a' or fn 'b' or 'c'", "c"
 
-# ============================================================================
+# ==============================================================================
 # or/and INSIDE implicit objects (should NOT end the object)
-# ============================================================================
+# ==============================================================================
 
 # or inside object value should stay in object
 test "or in object value", "foo = null\nx = { a: foo or 'default' }\nx.a", "default"
@@ -106,9 +106,9 @@ test "headers with or defaults", """
   headers['Access-Control-Allow-Origin']
 """, "*"
 
-# ============================================================================
+# ==============================================================================
 # or/and in function call arguments with more args after
-# ============================================================================
+# ==============================================================================
 
 # or in first arg, more args after - or stays in args
 test "or in first arg with more", "fn = (a, b) -> a + ':' + b\nfn 'x' or 'y', 'z'", "x:z"
@@ -124,9 +124,9 @@ test "and in first arg with more", "fn = (a, b) -> b\nfn true and 'x', 'y'", "y"
 # Multiple ors with commas - complex case
 test "mixed or comma pattern", "fn = (a, b, c) -> a + b + c\nfn 'a' or 'A', 'b' or 'B', 'c' or 'C'", "abc"
 
-# ============================================================================
+# ==============================================================================
 # Postfix if/unless with implicit function calls
-# ============================================================================
+# ==============================================================================
 
 # return X unless Y - should only return when condition fails
 test "return unless falsy", "fn = (sql) ->\n  return 'error' unless sql\n  'success'\nfn null", "error"
@@ -153,9 +153,9 @@ code "return if generates if statement", """
 if (notFound) return handleError('Not found');
 """
 
-# ============================================================================
+# ==============================================================================
 # Parenthesized sequences (multiple statements)
-# ============================================================================
+# ==============================================================================
 
 # Sequence returns last value
 test "paren sequence returns last", "x = (1; 2; 3)\nx", 3
