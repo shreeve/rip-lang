@@ -746,7 +746,7 @@ class Server
       port = p
       while port < p + 100
         try
-          return Bun.serve(Object.assign({ port, idleTimeout: 8, fetch: fetchFn }, opts))
+          return Bun.serve(Object.assign({ port, idleTimeout: 255, fetch: fetchFn }, opts))
         catch e
           throw e unless e?.code is 'EADDRINUSE'
           port++
@@ -755,7 +755,7 @@ class Server
     if httpOnly
       if @flags.httpPort is 0
         try
-          @server = Bun.serve({ port: 80, idleTimeout: 8, fetch: fetchFn })
+          @server = Bun.serve({ port: 80, idleTimeout: 255, fetch: fetchFn })
         catch e
           throw e unless e?.code in ['EADDRINUSE', 'EACCES']
           @server = startOnPort(5700)
@@ -767,7 +767,7 @@ class Server
 
       if not @flags.httpsPort or @flags.httpsPort is 0
         try
-          @httpsServer = Bun.serve({ port: 443, idleTimeout: 8, tls, fetch: fetchFn })
+          @httpsServer = Bun.serve({ port: 443, idleTimeout: 255, tls, fetch: fetchFn })
         catch e
           throw e unless e?.code in ['EADDRINUSE', 'EACCES']
           @httpsServer = startOnPort(5700, { tls })
@@ -872,19 +872,6 @@ class Server
   registerWatch: (prefix) ->
     return if @watchGroups.has(prefix)
     @watchGroups.set prefix, { sseClients: new Set() }
-    @startHeartbeat()
-
-  startHeartbeat: ->
-    return if @_heartbeat
-    @_heartbeat = setInterval @pingAll.bind(@), 5000
-
-  pingAll: ->
-    for [prefix, group] as @watchGroups
-      dead = []
-      for client as group.sseClients
-        try client.ping()
-        catch then dead.push(client)
-      group.sseClients.delete(c) for c in dead
 
   handleWatch: (prefix) ->
     group = @watchGroups.get(prefix)
@@ -893,14 +880,12 @@ class Server
     client = null
     new Response new ReadableStream(
       start: (controller) ->
-        write = (data) ->
-          try controller.enqueue encoder.encode(data)
+        send = (event) ->
+          try controller.enqueue encoder.encode("event: #{event}\n\n")
           catch then null
-        client =
-          send: (event) -> write "event: #{event}\n\n"
-          ping: -> write ":\n\n"
+        client = { send }
         group.sseClients.add(client)
-        client.send('connected')
+        send('connected')
       cancel: ->
         group.sseClients.delete(client) if client
     ),
