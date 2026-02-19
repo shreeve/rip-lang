@@ -64,33 +64,33 @@ export DateRangePicker = component
           input.('rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500')
             type: 'date'
             value: fromValue
-            onchange: @handleFrom
+            @change: @handleFrom
         span.('text-gray-400 mt-4') "–"
         .('inline-flex flex-col gap-1')
           label.('text-xs font-medium text-gray-500') toName
           input.('rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500')
             type: 'date'
             value: toValue
-            onchange: @handleTo
+            @change: @handleTo
       .('flex gap-1 flex-wrap')
         button.('rounded px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600')
-          onclick: -> @setPreset(0)
+          @click: -> @setPreset(0)
           "Today"
         button.('rounded px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600')
-          onclick: -> @setPreset(7)
+          @click: -> @setPreset(7)
           "Last 7d"
         button.('rounded px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600')
-          onclick: -> @setPreset(30)
+          @click: -> @setPreset(30)
           "Last 30d"
         button.('rounded px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600')
-          onclick: -> @setPreset(90)
+          @click: -> @setPreset(90)
           "Last 3mo"
         button.('rounded px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600')
-          onclick: -> @setPreset(180)
+          @click: -> @setPreset(180)
           "Last 6mo"
         button.('rounded px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600')
-          onclick: -> @setMonthToDate()
+          @click: -> @setMonthToDate()
           "MTD"
         button.('rounded px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600')
-          onclick: -> @setYearToDate()
+          @click: -> @setYearToDate()
           "YTD"

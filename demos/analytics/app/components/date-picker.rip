@@ -34,4 +34,4 @@ export DatePicker = component
       input.('rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500')
         type: 'date'
         value: value
-        onchange: @handleChange
+        @change: @handleChange

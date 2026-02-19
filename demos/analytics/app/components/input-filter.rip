@@ -38,4 +38,4 @@ export InputFilter = component
         type: 'text'
         placeholder: placeholder
         value: value
-        oninput: @handleInput
+        @input: @handleInput

@@ -53,22 +53,22 @@ export DropdownMulti = component
       if varName
         label.('text-xs font-medium text-gray-500') varName
       button.('rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm text-left min-w-[140px] flex items-center justify-between gap-2')
-        onclick: @toggleExpanded
+        @click: -> @toggleExpanded()
         span selectedLabel
         span.('text-gray-400 text-xs') "▼"
       if expanded
         .('absolute top-full left-0 mt-1 w-56 rounded-md border border-gray-200 bg-white shadow-lg z-50 py-1 max-h-60 overflow-y-auto')
           .('flex gap-2 px-3 py-1 border-b border-gray-100')
             button.('text-xs text-blue-600 hover:underline')
-              onclick: @selectAll
+              @click: -> @selectAll()
               "All"
             button.('text-xs text-blue-600 hover:underline')
-              onclick: @selectNone
+              @click: -> @selectNone()
               "None"
           for opt in options
             label.('flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer text-sm')
               input
                 type: 'checkbox'
                 checked: selected.includes(opt)
-                onchange: -> @toggleOption(opt)
+                @change: -> @toggleOption(opt)
               span opt
