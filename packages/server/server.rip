@@ -881,7 +881,7 @@ class Server
     new Response new ReadableStream(
       start: (controller) ->
         send = (event) ->
-          try controller.enqueue encoder.encode("event: #{event}\n\n")
+          try controller.enqueue encoder.encode("event: #{event}\ndata:\n\n")
           catch then null
         client = { send }
         group.sseClients.add(client)

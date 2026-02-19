@@ -75,7 +75,7 @@ export ripUI = (opts = {}) ->
     if appState
       data[k] = v for k, v of appState
 
-    new Response JSON.stringify({ components, data }), headers: { 'Content-Type': 'application/json' }
+    new Response JSON.stringify({ components, data }), headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
 
   # ----------------------------------------------------------------------------
   # Register watch directories with rip-server via control socket
