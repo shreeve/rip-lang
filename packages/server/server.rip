@@ -817,11 +817,14 @@ class Server
 
     return @status() if url.pathname is '/status'
 
-    # SSE hot-reload: intercept /{prefix}/watch for registered watch groups
+    # SSE hot-reload: intercept /{prefix}/watch
     path = url.pathname
     if path.endsWith('/watch')
       watchPrefix = path.slice(0, -6)  # strip '/watch'
-      return @handleWatch(watchPrefix) if @watchGroups.has(watchPrefix)
+      if @watchGroups.has(watchPrefix)
+        return @handleWatch(watchPrefix)
+      else
+        return new Response('', { status: 503, headers: { 'Retry-After': '2' } })
 
     if url.pathname is '/server'
       headers = new Headers({ 'content-type': 'text/plain' })
