@@ -1,10 +1,16 @@
-# math.rip — typed utility functions
+# math.rip — utility functions for type intelligence testing
 
 export def add(a:: number, b:: number):: number
   a + b
 
 export def greet(name:: string):: string
   "Hello, " + name
+
+export def getUsers()
+  [
+    { id: 1, name: "Alice", email: "alice@test.com" }
+    { id: 2, name: "Bob" }
+  ]
 
 PI:: number =! 3.14159
 export { PI }
