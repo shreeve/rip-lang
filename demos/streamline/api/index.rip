@@ -4,6 +4,7 @@ import { get, use, start } from '@rip-lang/api'
 import { prettyJson, sessions } from '@rip-lang/api/middleware'
 import { ripUI } from '@rip-lang/ui/serve'
 import { Stash } from './lib/stash.rip'
+import { setup } from './setup.rip'
 import configData from './config.rip'
 import './routes/auth.rip'
 import './routes/sessions.rip'
@@ -40,4 +41,5 @@ get '/config' ->
 # SPA fallback for client-side routing
 get '/*' -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 
+setup!
 start port: config.app.port
