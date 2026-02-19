@@ -876,14 +876,15 @@ class Server
 
   startHeartbeat: ->
     return if @_heartbeat
-    @_heartbeat = setInterval =>
-      for [prefix, group] as @watchGroups
-        dead = []
-        for client as group.sseClients
-          try client.ping()
-          catch then dead.push(client)
-        group.sseClients.delete(c) for c in dead
-    , 5000
+    @_heartbeat = setInterval @pingAll.bind(@), 5000
+
+  pingAll: ->
+    for [prefix, group] as @watchGroups
+      dead = []
+      for client as group.sseClients
+        try client.ping()
+        catch then dead.push(client)
+      group.sseClients.delete(c) for c in dead
 
   handleWatch: (prefix) ->
     group = @watchGroups.get(prefix)
