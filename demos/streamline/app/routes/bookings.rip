@@ -1,10 +1,11 @@
-# Bookings list - two-column layout with detail panel
+# Bookings list - two-column layout with detail panel and mobile drawer
 
 export Bookings = component
   bookings := []
   loading := true
   error := null
   selectedId := null
+  drawerOpen := false
 
   beforeMount: ->
     try
@@ -23,14 +24,27 @@ export Bookings = component
   past ~= bookings.filter (b) -> b.week < currentWeek
   selected ~= bookings.find (b) -> b.id is selectedId
 
+  selectedStatus ~=
+    return '' unless selected
+    if selected.week >= currentWeek then 'Confirmed' else 'Completed'
+
   selectBooking: (b) ->
     selectedId = b.id
+    drawerOpen = true
+
+  closeDrawer: ->
+    drawerOpen = false
+    selectedId = null
+
+  childNames: (b) ->
+    (b.children or []).map (c) -> c.name or 'Child'
 
   render
     .('py-12')
       .('flex justify-between')
         h1.('text-3xl font-semibold') "Bookings"
-        a.('inline-flex items-center rounded-full border border-primary bg-primary px-4 py-2 text-sm font-semibold text-secondary shadow-xs transition-colors hover:border-secondary hover:bg-secondary active:bg-tertiary') href: "/booking/time", "Book session"
+        if upcoming.length > 0
+          a.('inline-flex items-center rounded-full border border-primary bg-primary px-4 py-2 text-sm font-semibold text-secondary shadow-xs transition-colors hover:border-secondary hover:bg-secondary active:bg-tertiary') href: "/booking/time", "Book session"
 
       if loading
         .('flex items-center justify-center py-20')
@@ -42,7 +56,7 @@ export Bookings = component
       unless loading or error
         if bookings.length is 0
           .('mt-8 flex flex-col items-center gap-y-7 rounded-lg-plus border border-primary px-6 py-8 md:py-10 lg:min-w-[460px] lg:py-12')
-            .('text-[50px] text-quaternary/40') "📋"
+            .('text-[50px] text-quaternary/40') "📅"
             .('flex flex-col items-center gap-y-2 text-center')
               .('text-xl font-semibold') "No upcoming bookings"
               .('text-sm-plus text-tertiary') "Your upcoming sessions will appear here"
@@ -62,13 +76,18 @@ export Bookings = component
                       .('flex flex-col gap-y-3.5 p-5 text-left')
                         .('leading-none font-semibold') "One-on-One Swim Lesson"
                         .('flex flex-col gap-y-2.5')
-                          span.('text-sm text-tertiary') "Week #{b.week} · #{b.slot}"
-                          if b.children and b.children.length > 0
-                            .('flex flex-wrap gap-1')
-                              for child in b.children
-                                span.('inline-flex items-center rounded-full bg-cyan-50 px-2.5 py-0.5 text-xs font-medium text-cyan-700') "#{child.name or 'Child'}"
-                          else
-                            span.('text-xs text-quaternary') "No children listed"
+                          BookingInfo
+                            week: b.week
+                            slot: b.slot
+                            children: @childNames(b)
+                            context: 'listItem'
+              else
+                .('mt-5 flex flex-col items-center gap-y-7 rounded-lg-plus border border-primary px-6 py-8 md:py-10 lg:min-w-[460px] lg:py-12')
+                  .('text-[50px] text-quaternary/40') "📅"
+                  .('flex flex-col items-center gap-y-2 text-center')
+                    .('text-xl font-semibold') "No upcoming bookings"
+                    .('text-sm-plus text-tertiary') "Your upcoming sessions will appear here"
+                  a.('inline-flex items-center rounded-full border border-primary bg-primary px-4 py-2 text-sm font-semibold text-secondary shadow-xs transition-colors hover:border-secondary hover:bg-secondary active:bg-tertiary') href: "/booking/time", "Book session"
 
               if past.length > 0
                 h2.('mt-10 text-xl font-semibold') "Past"
@@ -80,25 +99,54 @@ export Bookings = component
                         span.('text-[35px] text-quaternary/40 md:text-[45px]') "🏊"
                       .('flex flex-col gap-y-3.5 p-5 text-left')
                         .('leading-none font-semibold') "One-on-One Swim Lesson"
-                        span.('text-sm text-tertiary') "Week #{b.week} · #{b.slot}"
+                        .('flex flex-col gap-y-2.5')
+                          BookingInfo
+                            week: b.week
+                            slot: b.slot
+                            children: @childNames(b)
+                            context: 'listItem'
 
             # Right column: detail panel (desktop only)
             if selected
               .('hidden overflow-hidden rounded-lg-plus border border-primary bg-primary lg:block lg:flex-auto')
                 .('h-[250px] bg-gradient-to-br from-blue-100 to-cyan-50 flex items-center justify-center')
                   span.('text-[56px]') "🏊‍♂️"
-                .('flex flex-col gap-y-8 px-6 py-7 md:p-7 lg:p-8')
+                .('flex flex-col gap-y-8 px-6 py-7 xs:min-w-[380px] md:p-7 lg:p-8')
                   .('flex flex-col gap-y-5')
-                    span.('flex h-9 items-center justify-center self-start rounded-full px-3.5 text-sm-plus font-medium text-white bg-info') "Confirmed"
+                    span.('flex h-9 items-center justify-center self-start rounded-full px-3.5 text-sm-plus font-medium text-white',
+                      if selectedStatus is 'Confirmed' then 'bg-info' else 'bg-success') selectedStatus
                     .('text-2xl leading-none font-semibold') "One-on-One Swim Lesson"
                   .('flex flex-col gap-y-4')
-                    .('flex items-center gap-x-2 text-sm-plus text-tertiary')
-                      span "Week #{selected.week} · #{selected.slot}"
-                    .('flex items-center gap-x-2 text-sm-plus text-tertiary')
-                      span "2966 N 1400 E, North Logan, UT"
-                  if selected.children and selected.children.length > 0
-                    .('flex flex-col gap-y-2')
-                      span.('text-sm font-semibold text-secondary') "Children"
-                      .('flex flex-wrap gap-1.5')
-                        for child in selected.children
-                          span.('inline-flex items-center rounded-full bg-cyan-50 px-2.5 py-0.5 text-xs font-medium text-cyan-700') "#{child.name or 'Child'} (age #{child.age or '?'})"
+                    BookingInfo
+                      week: selected.week
+                      slot: selected.slot
+                      children: @childNames(selected)
+                      context: 'details'
+                    a.('flex items-center gap-x-2 leading-none text-tertiary transition-colors hover:text-brand active:opacity-70 active:pointer-coarse:opacity-50') href: "https://maps.app.goo.gl/twXsy3Eo8yQEeTyj6", target: "_blank"
+                      .('flex flex-col gap-y-1')
+                        span "2966 N 1400 E"
+                        span "North Logan, UT 84341"
+
+      # Mobile drawer for booking details
+      if selected
+        Drawer open: drawerOpen, @close: @closeDrawer
+          .('relative')
+            button.('group absolute top-3 right-3 flex size-[30px] items-center justify-center rounded-full bg-primary/70 backdrop-blur-sm') @click: @closeDrawer
+              span.('text-[18px] text-tertiary group-active:opacity-50') "✕"
+            .('h-[250px] bg-gradient-to-br from-blue-100 to-cyan-50 flex items-center justify-center')
+              span.('text-[56px]') "🏊‍♂️"
+            .('flex flex-col gap-y-8 px-6 py-7 md:p-7')
+              .('flex flex-col gap-y-5')
+                span.('flex h-9 items-center justify-center self-start rounded-full px-3.5 text-sm-plus font-medium text-white',
+                  if selectedStatus is 'Confirmed' then 'bg-info' else 'bg-success') selectedStatus
+                .('text-2xl leading-none font-semibold') "One-on-One Swim Lesson"
+              .('flex flex-col gap-y-4')
+                BookingInfo
+                  week: selected.week
+                  slot: selected.slot
+                  children: @childNames(selected)
+                  context: 'details'
+                a.('flex items-center gap-x-2 leading-none text-tertiary transition-colors hover:text-brand active:opacity-70 active:pointer-coarse:opacity-50') href: "https://maps.app.goo.gl/twXsy3Eo8yQEeTyj6", target: "_blank"
+                  .('flex flex-col gap-y-1')
+                    span "2966 N 1400 E"
+                    span "North Logan, UT 84341"

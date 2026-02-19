@@ -7,6 +7,7 @@ export Auth = component
   firstName := ''
   lastName := ''
   phone := ''
+  referral := ''
   error := null
   submitting := false
 
@@ -54,7 +55,7 @@ export Auth = component
       res = await fetch '/api/auth/signup',
         method: 'POST'
         headers: { 'Content-Type': 'application/json' }
-        body: JSON.stringify { ["email"]: email, ["firstName"]: firstName, ["lastName"]: lastName, ["phone"]: phone }
+        body: JSON.stringify { ["email"]: email, ["firstName"]: firstName, ["lastName"]: lastName, ["phone"]: phone, ["referral"]: referral }
       data = await res.json()
       if data.error
         error = data.error
@@ -75,10 +76,11 @@ export Auth = component
     @submitCode() if e.key is 'Enter'
 
   render
-    .('flex min-h-[60vh] items-center justify-center py-8 md:py-10 lg:py-12')
+    .('flex items-center justify-center bg-secondary py-8 md:py-12 lg:py-16')
       .('w-full max-w-[420px]')
-        .('mb-6 text-center')
-          .('text-lg font-bold text-brand') "🏊 Streamline"
+        .('my-4 flex justify-center md:my-0 md:mb-8 lg:mb-10')
+          .('w-[80px] md:w-[100px] lg:w-auto')
+            Logo
 
         .('rounded-2xl border border-primary/50 bg-primary p-6 pt-8 shadow-lg/6 xs:px-8 md:p-11')
           h1.('text-xl-plus font-semibold text-center') "Welcome"
@@ -120,6 +122,16 @@ export Auth = component
               .('mt-4')
                 label.('block text-sm font-medium text-secondary mb-1.5') "Phone"
                 input.('block w-full rounded-lg border border-primary bg-primary px-3.5 py-2.5 text-sm-plus text-primary shadow-xs transition-colors focus:border-brand focus:ring-1 focus:ring-brand outline-none') type: "tel", value: phone, placeholder: "Phone number"
-              button.('mt-4 flex w-full items-center justify-center rounded-lg bg-brand px-4 py-2.5 text-sm-plus font-semibold text-white transition-colors hover:bg-brand-hover active:bg-brand-active disabled:opacity-50') @click: @submitSignup, disabled: submitting,
+              .('mt-4')
+                label.('block text-sm font-medium text-secondary mb-1.5') "How did you hear about us?"
+                select.('block w-full rounded-lg border border-primary bg-primary px-3.5 py-2.5 text-sm-plus text-primary shadow-xs transition-colors focus:border-brand focus:ring-1 focus:ring-brand outline-none')
+                  value: referral
+                  option value: "", "Select..."
+                  option value: "Word of mouth", "Word of mouth"
+                  option value: "Best of Logan", "Best of Logan"
+                  option value: "Facebook", "Facebook"
+                  option value: "Yard sign", "Yard sign"
+                  option value: "Other", "Other"
+              button.('mt-6 flex w-full items-center justify-center rounded-lg bg-brand px-4 py-2.5 text-sm-plus font-semibold text-white transition-colors hover:bg-brand-hover active:bg-brand-active disabled:opacity-50') @click: @submitSignup, disabled: submitting,
                 if submitting then "Creating account..." else "Create Account"
               button.('mt-3 text-sm-plus font-medium text-brand transition-opacity hover:opacity-70 active:pointer-coarse:opacity-100 active:pointer-coarse:text-brand-active') @click: (-> step = 'email'), "Use a different email"

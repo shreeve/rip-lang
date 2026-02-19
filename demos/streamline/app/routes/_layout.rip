@@ -42,24 +42,24 @@ export Layout = component
       # ---- Desktop Sidebar (hidden below xl) ----
       aside.('hidden xl:sticky xl:top-0 xl:left-0 xl:flex xl:h-dvh xl:w-[250px] xl:flex-col xl:justify-between xl:border-r xl:border-primary xl:bg-primary xl:px-4 xl:py-5')
         .
-          a.('mb-7 ml-3.5 block text-lg font-bold text-brand') href: "/"
-            span "🏊 Streamline"
+          a.('mb-7 ml-3.5 block') href: "/"
+            Logo
 
           if user
             .('ml-3.5 overflow-hidden text-base-plus leading-tight font-semibold text-ellipsis')
               displayName
             nav.('mt-3 flex flex-col gap-y-0.5')
-              a.('flex h-11 items-center gap-x-3 rounded-lg px-3.5 text-sm-plus font-medium transition-colors hover:bg-tertiary/70 active:bg-quaternary/60') href: "/booking/time"
-                span.('text-base w-5 text-center') "📅"
-                span "Book a Session"
-              a.('flex h-11 items-center gap-x-3 rounded-lg px-3.5 text-sm-plus font-medium transition-colors hover:bg-tertiary/70 active:bg-quaternary/60') href: "/bookings"
-                span.('text-base w-5 text-center') "📋"
-                span "My Bookings"
               a.('flex h-11 items-center gap-x-3 rounded-lg px-3.5 text-sm-plus font-medium transition-colors hover:bg-tertiary/70 active:bg-quaternary/60') href: "/profile"
                 span.('text-base w-5 text-center') "👤"
                 span "Profile"
+              a.('flex h-11 items-center gap-x-3 rounded-lg px-3.5 text-sm-plus font-medium transition-colors hover:bg-tertiary/70 active:bg-quaternary/60') href: "/bookings"
+                span.('text-base w-5 text-center') "📋"
+                span "Bookings"
 
         .('mb-1 flex flex-col gap-y-4')
+          a.('ml-3.5 flex items-center gap-x-3 text-sm-plus font-medium text-secondary transition-colors hover:text-brand active:pointer-coarse:text-brand active:pointer-fine:opacity-70') href: "https://streamlineschool.com", target: "_blank"
+            span.('text-base w-5 text-center') "🏠"
+            span "Homepage"
           if user
             button.('ml-3.5 flex items-center gap-x-3 text-sm-plus font-medium text-secondary transition-colors hover:text-brand active:pointer-coarse:text-brand active:pointer-fine:opacity-70') @click: @signOut
               span.('text-base w-5 text-center') "🚪"
@@ -68,8 +68,8 @@ export Layout = component
       # ---- Mobile Top Bar (hidden on desktop) ----
       .('min-h-dvh bg-secondary xl:w-0 xl:flex-auto xl:min-h-0')
         header.('flex xl:hidden h-[80px] items-center justify-between border-b border-primary bg-primary px-5')
-          a.('text-base-plus font-bold text-brand') href: "/"
-            span "🏊 Streamline"
+          a.('w-[65px]') href: "/"
+            Logo
 
           if user
             button.('flex h-12 items-center rounded-full border border-primary bg-primary p-0.5 transition-colors hover:border-secondary hover:bg-secondary active:bg-tertiary') @click: @toggleMenu
@@ -88,19 +88,20 @@ export Layout = component
             .('ml-3.5 overflow-hidden text-base-plus leading-tight font-semibold text-ellipsis')
               displayName
             nav.('mt-3 flex flex-col gap-y-0.5')
-              a.('flex h-11 items-center gap-x-3 rounded-lg px-3.5 text-sm-plus font-medium transition-colors hover:bg-tertiary/70 active:bg-quaternary/60') href: "/booking/time", @click: @closeMenu
-                span.('text-base w-5 text-center') "📅"
-                span "Book a Session"
-              a.('flex h-11 items-center gap-x-3 rounded-lg px-3.5 text-sm-plus font-medium transition-colors hover:bg-tertiary/70 active:bg-quaternary/60') href: "/bookings", @click: @closeMenu
-                span.('text-base w-5 text-center') "📋"
-                span "My Bookings"
               a.('flex h-11 items-center gap-x-3 rounded-lg px-3.5 text-sm-plus font-medium transition-colors hover:bg-tertiary/70 active:bg-quaternary/60') href: "/profile", @click: @closeMenu
                 span.('text-base w-5 text-center') "👤"
                 span "Profile"
+              a.('flex h-11 items-center gap-x-3 rounded-lg px-3.5 text-sm-plus font-medium transition-colors hover:bg-tertiary/70 active:bg-quaternary/60') href: "/bookings", @click: @closeMenu
+                span.('text-base w-5 text-center') "📋"
+                span "Bookings"
             .('mx-3.5 mt-6 mb-5 border-t border-primary')
-            button.('ml-3.5 flex items-center gap-x-3 text-sm-plus font-medium text-secondary transition-colors hover:text-brand active:pointer-coarse:text-brand active:pointer-fine:opacity-70') @click: @signOut
-              span.('text-base w-5 text-center') "🚪"
-              span "Sign Out"
+            .('flex flex-col gap-y-4')
+              a.('ml-3.5 flex items-center gap-x-3 text-sm-plus font-medium text-secondary transition-colors hover:text-brand active:pointer-coarse:text-brand active:pointer-fine:opacity-70') href: "https://streamlineschool.com", target: "_blank", @click: @closeMenu
+                span.('text-base w-5 text-center') "🏠"
+                span "Homepage"
+              button.('ml-3.5 flex items-center gap-x-3 text-sm-plus font-medium text-secondary transition-colors hover:text-brand active:pointer-coarse:text-brand active:pointer-fine:opacity-70') @click: @signOut
+                span.('text-base w-5 text-center') "🚪"
+                span "Sign Out"
 
         # ---- Main Content ----
         .('px-5')

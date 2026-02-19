@@ -50,5 +50,6 @@ export Drawer = component
               .('h-1.5 w-10 rounded-full bg-quaternary')
 
           # Scrollable content
-          .('h-full overflow-y-auto') style: "max-height: calc(100dvh - 40px); scrollbar-width: none",
+          .('h-full overflow-y-auto')
+            style: "max-height: calc(100dvh - 40px); scrollbar-width: none"
             #content
