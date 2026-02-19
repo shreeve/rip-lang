@@ -36,7 +36,7 @@ export Home = component
         # Charts
         `"SELECT month AS "xaxis:Month", revenue AS "linechart:Revenue", costs AS "linechart:Costs", profit AS "linechart:Profit" FROM monthly_sales"`
         `"SELECT month AS "xaxis:Month", revenue AS "barchart_stacked:Revenue", costs AS "barchart_stacked:Costs" FROM monthly_sales"`
-        `"SELECT product AS "xaxis:Product", sum(amount) AS "barchart:Revenue" FROM orders GROUP BY product ORDER BY product"`
+        `"SELECT product AS "category:Product", sum(amount) AS "donutchart:Revenue" FROM orders GROUP BY product ORDER BY product"`
         `"SELECT category AS "category:Category", amount AS "donutchart:Amount" FROM categories"`
         `"SELECT status AS "category:Status", count(*) AS "piechart:Orders" FROM orders GROUP BY status"`
         `"SELECT product AS "xaxis:Product", min(amount) AS "boxplot:Min", quantile_cont(amount, 0.25) AS "boxplot:Q1", median(amount) AS "boxplot:Median", quantile_cont(amount, 0.75) AS "boxplot:Q3", max(amount) AS "boxplot:Max" FROM orders GROUP BY product ORDER BY product"`
