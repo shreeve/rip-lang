@@ -5,7 +5,7 @@ bun.lockb
 # Build output
 zig-out/
 .zig-cache/
-.rip-cache/
+packages/vscode/dist/
 
 # OS files
 .DS_Store
