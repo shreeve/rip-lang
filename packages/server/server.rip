@@ -71,7 +71,7 @@ scale = (value, unit, pad = true) ->
     maxSlot = span.length - 1
     slot = base
 
-    while value < 0.05 and slot <= maxSlot
+    while value < 0.995 and slot <= maxSlot
       value *= 1000
       slot++
     while value >= 999.5 and slot >= minSlot
