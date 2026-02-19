@@ -906,7 +906,7 @@ export launch = (appBase = '', opts = {}) ->
 
   # Connect SSE watch if enabled
   if bundle.data?.watch
-    connectWatch appComponents, router, renderer, "#{appBase}/watch", appBase
+    connectWatch '/watch'
 
   # Expose for console and dev tools
   if typeof window isnt 'undefined'
@@ -925,7 +925,7 @@ export launch = (appBase = '', opts = {}) ->
 # SSE Watch — hot-reload connection
 # ==============================================================================
 
-connectWatch = (components, router, renderer, url, base = '') ->
+connectWatch = (url) ->
   retryDelay = 1000
   maxDelay = 30000
 
@@ -933,31 +933,15 @@ connectWatch = (components, router, renderer, url, base = '') ->
     es = new EventSource(url)
 
     es.addEventListener 'connected', ->
-      retryDelay = 1000  # reset backoff on successful connection
+      retryDelay = 1000
       console.log '[Rip] Hot reload connected'
 
-    es.addEventListener 'changed', (e) ->
-      { paths } = JSON.parse(e.data)
-      components.del(path) for path in paths
-      router.rebuild()
-
-      current = router.current
-      toFetch = paths.filter (p) ->
-        p is current.route?.file or current.layouts?.includes(p)
-
-      if toFetch.length > 0
-        results = await Promise.allSettled(toFetch.map (path) ->
-          res = await fetch(base + '/' + path)
-          content = res.text!
-          components.write path, content
-        )
-        failed = results.filter (r) -> r.status is 'rejected'
-        console.error '[Rip] Hot reload fetch error:', r.reason for r in failed
-        renderer.remount()
+    es.addEventListener 'reload', ->
+      console.log '[Rip] Reloading...'
+      location.reload()
 
     es.onerror = ->
       es.close()
-      console.log "[Rip] Hot reload reconnecting in #{retryDelay / 1000}s..."
       setTimeout connect, retryDelay
       retryDelay = Math.min(retryDelay * 2, maxDelay)
 
