@@ -180,14 +180,12 @@ async function main() {
     }
   }
 
-  // If no compile flags → execute the script instead of compiling it
-  const hasCompileFlag = showCompiled || showTokens || showSExpr || generateDts || generateMap || outputFile;
-  if (inputFile && !hasCompileFlag) {
-    if (!existsSync(inputFile)) {
-      console.error(`Error: File not found: ${inputFile}`);
-      process.exit(1);
-    }
+  // Helper to check if path is a regular file (not a directory)
+  const isFile = (path) => existsSync(path) && statSync(path).isFile();
 
+  // If no compile flags and file exists → execute the script instead of compiling it
+  const hasCompileFlag = showCompiled || showTokens || showSExpr || generateDts || generateMap || outputFile;
+  if (inputFile && !hasCompileFlag && isFile(inputFile)) {
     const loaderPath = join(__dirname, '../rip-loader.js');
 
     if (inputFile.endsWith('.rip')) {
@@ -216,9 +214,6 @@ async function main() {
       process.exit(exitCode);
     }
   }
-
-  // Helper to check if path is a regular file (not a directory)
-  const isFile = (path) => existsSync(path) && statSync(path).isFile();
 
   // Fallback: Check for bin/ script in git repo root
   // Allows `rip migrate --status` to find and run {repo}/bin/migrate
