@@ -1,7 +1,7 @@
 # Auth page - email magic code sign-in flow
 
 export Auth = component
-  step := 'email'        # email | code | signup
+  step := 'email' # email | code | signup
   email := ''
   code := ''
   firstName := ''
