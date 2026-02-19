@@ -582,7 +582,7 @@ class Manager
       timer = setTimeout =>
         timer = null
         @server?.broadcastChange(prefix)
-      , 250
+      , 100
     for dir in dirs
       try
         w = watch dir, { recursive: true }, (event, filename) ->

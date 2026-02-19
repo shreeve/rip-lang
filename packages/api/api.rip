@@ -155,7 +155,7 @@ createContext = (req, params = {}) ->
       file = Bun.file(path)
       etag = "W/\"#{file.lastModified}-#{file.size}\""
       if req.headers.get('if-none-match') is etag
-        return new Response(null, { status: 304 })
+        return new Response(null, { status: 304, headers: { 'ETag': etag } })
       out.set 'Content-Type', (type or mimeType(path))
       out.set 'ETag', etag
       new Response file, { status: 200, headers: out }
