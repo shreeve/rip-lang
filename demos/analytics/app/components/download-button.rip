@@ -1,0 +1,73 @@
+# DownloadButton - CSV/image export button
+# Driven by download_csv: or download_xlsx: annotation
+# Exports data columns as CSV (skips the trigger annotation column)
+
+export DownloadButton = component
+  @chartData := []
+  @columns := []
+  @filename := 'export'
+
+  downloadType ~=
+    col = columns.find((c) -> c.type is 'download_csv' or c.type is 'download_xlsx')
+    if col then col.type else 'download_csv'
+
+  label ~=
+    col = columns.find((c) -> c.type is 'download_csv' or c.type is 'download_xlsx')
+    if col then col.label else 'Download'
+
+  dataCols ~=
+    result = []
+    for col, idx in columns
+      unless col.type is 'download_csv' or col.type is 'download_xlsx'
+        result.push { col: col, idx: idx }
+    result
+
+  toCsv: ->
+    return '' unless chartData and chartData.length > 0 and dataCols.length > 0
+    headers = dataCols.map((c) -> c.col.label)
+    lines = [headers.join(',')]
+    for row in chartData
+      cells = dataCols.map (c) ->
+        val = if row[c.idx] is null or row[c.idx] is undefined then '' else "#{row[c.idx]}"
+        if val.includes(',') or val.includes('"') or val.includes('\n')
+          "\"#{val.replace(/"/g, '""')}\""
+        else
+          val
+      lines.push cells.join(',')
+    lines.join('\n')
+
+  handleDownload: ->
+    csv = @toCsv()
+    return unless csv
+    blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    url = URL.createObjectURL(blob)
+    a = document.createElement('a')
+    a.href = url
+    a.download = "#{filename}.csv"
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+
+  render
+    button.('inline-flex items-center gap-1.5 rounded-md bg-white border border-gray-300 px-3 py-1.5 text-sm text-gray-700 shadow-sm hover:bg-gray-50 active:bg-gray-100 transition-colors')
+      onclick: @handleDownload
+      svg
+        width: '14'
+        height: '14'
+        viewBox: '0 0 24 24'
+        fill: 'none'
+        stroke: 'currentColor'
+        stroke-width: '2'
+        stroke-linecap: 'round'
+        stroke-linejoin: 'round'
+        path
+          d: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'
+        polyline
+          points: '7 10 12 15 17 10'
+        line
+          x1: '12'
+          y1: '15'
+          x2: '12'
+          y2: '3'
+      span label

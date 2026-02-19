@@ -1,0 +1,58 @@
+# GaugeChart - ECharts semi-circular gauge driven by annotated SQL results
+# Expects columns: gauge:Label (value), optionally label:Label (text below)
+
+export GaugeChart = component
+  @chartData := []
+  @columns := []
+  @title := ''
+  @height := 300
+  @min := 0
+  @max := 100
+
+  inst := null
+
+  initChart: ->
+    return if inst
+    el = @_el0
+    return unless el
+    inst = echarts.init(el)
+    window.addEventListener 'resize', -> inst.resize() if inst
+    @renderChart()
+
+  renderChart: ->
+    return unless inst
+    return unless chartData and chartData.length > 0
+
+    valIdx = columns.findIndex((c) -> c.type is 'gauge')
+    return if valIdx < 0
+
+    val = chartData[0][valIdx]
+    gaugeLabel = columns[valIdx].label
+
+    option =
+      series: [{
+        type: 'gauge'
+        startAngle: 180
+        endAngle: 0
+        min: min
+        max: max
+        pointer: { show: true, length: '60%', width: 6 }
+        progress: { show: true, width: 14, roundCap: true }
+        axisLine: { lineStyle: { width: 14 } }
+        axisTick: { show: false }
+        splitLine: { length: 10, lineStyle: { width: 2, color: '#999' } }
+        axisLabel: { distance: 20, fontSize: 11, color: '#666' }
+        detail: { valueAnimation: true, fontSize: 24, fontWeight: 'bold', offsetCenter: [0, '30%'], formatter: '{value}' }
+        data: [{ value: val, name: gaugeLabel }]
+        title: { offsetCenter: [0, '55%'], fontSize: 13, color: '#888' }
+      }]
+    option.title = { text: title, left: 'center', textStyle: { fontSize: 14, fontWeight: 500 } } if title
+
+    inst.setOption(option, true)
+
+  ~> requestAnimationFrame -> @initChart()
+  chartData ~> @renderChart()
+
+  render
+    div
+      style: "height: #{height}px; width: 100%"

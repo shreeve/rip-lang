@@ -1,0 +1,38 @@
+# Dropdown - single-select filter driven by annotated SQL results
+# Expects a column with type dropdown: whose label becomes the variable name
+# Calls onChange(varName, selectedValue) when selection changes
+
+export Dropdown = component
+  @chartData := []
+  @columns := []
+  @onChange := null
+
+  varName ~=
+    col = columns.find((c) -> c.type is 'dropdown')
+    if col then col.label else ''
+
+  options ~=
+    idx = columns.findIndex((c) -> c.type is 'dropdown')
+    return [] if idx < 0 or not chartData
+    chartData.map((r) -> r[idx])
+
+  selected := ''
+
+  handleChange: (e) ->
+    selected = e.target.value
+    onChange(varName, selected) if onChange
+
+  render
+    .('inline-flex flex-col gap-1')
+      if varName
+        label.('text-xs font-medium text-gray-500') varName
+      select.('rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500')
+        onchange: @handleChange
+        option
+          value: ''
+          "All"
+        for opt in options
+          option
+            value: "#{opt}"
+            selected: selected is "#{opt}"
+            "#{opt}"

@@ -1,10 +1,13 @@
 # BarChart - ECharts bar chart driven by annotated SQL results
+# Supports stacked mode and horizontal/vertical layout
 
 export BarChart = component
   @chartData := []
   @columns := []
   @title := ''
   @height := 400
+  @stacked := false
+  @layout := 'vertical'
 
   inst := null
 
@@ -25,17 +28,25 @@ export BarChart = component
 
     xValues = chartData.map((r) -> r[xIdx])
     series = []
+    stackGroup = if stacked then 'stack' else null
 
     for col, idx in columns
       if col.type is 'barchart'
-        series.push { name: col.label, type: 'bar', data: chartData.map((r) -> r[idx]), barMaxWidth: 40 }
+        s = { name: col.label, type: 'bar', data: chartData.map((r) -> r[idx]), barMaxWidth: 40 }
+        s.stack = stackGroup if stackGroup
+        series.push s
+
+    isHorizontal = layout is 'horizontal'
+
+    catAxis = { type: 'category', data: xValues }
+    valAxis = { type: 'value' }
 
     option =
       tooltip: { trigger: 'axis' }
       legend: { bottom: 0 }
       grid: { left: 60, right: 20, top: (if title then 40 else 20), bottom: 40 }
-      xAxis: { type: 'category', data: xValues }
-      yAxis: { type: 'value' }
+      xAxis: (if isHorizontal then valAxis else catAxis)
+      yAxis: (if isHorizontal then catAxis else valAxis)
       series: series
     option.title = { text: title, left: 'center', textStyle: { fontSize: 14, fontWeight: 500 } }
 

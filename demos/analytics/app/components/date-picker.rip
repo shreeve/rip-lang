@@ -1,0 +1,37 @@
+# DatePicker - single date picker using native HTML input
+# Expects a column with type datepicker: whose label becomes the variable name
+# Calls onChange(varName, 'YYYY-MM-DD') when date changes
+
+export DatePicker = component
+  @chartData := []
+  @columns := []
+  @onChange := null
+
+  varName ~=
+    col = columns.find((c) -> c.type is 'datepicker')
+    if col then col.label else ''
+
+  defaultValue ~=
+    idx = columns.findIndex((c) -> c.type is 'datepicker')
+    if idx >= 0 and chartData and chartData.length > 0
+      "#{chartData[0][idx]}"
+    else
+      ''
+
+  value := ''
+
+  ~> value = defaultValue if defaultValue
+  defaultValue ~> value = defaultValue if defaultValue and not value
+
+  handleChange: (e) ->
+    value = e.target.value
+    onChange(varName, value) if onChange
+
+  render
+    .('inline-flex flex-col gap-1')
+      if varName
+        label.('text-xs font-medium text-gray-500') varName
+      input.('rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500')
+        type: 'date'
+        value: value
+        onchange: @handleChange

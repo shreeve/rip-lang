@@ -1,7 +1,11 @@
-# Dashboard - orchestrates SQL execution and chart rendering
+# Dashboard - orchestrates SQL execution, variable system, and chart rendering
 #
 # Usage:
 #   Dashboard queries: [...], endpoint: '/sql'
+#
+# Supports two-pass execution: control queries (dropdowns, date pickers)
+# run first, chart queries run second with variable substitution via
+# getvariable('name') replacement in SQL strings.
 
 export Dashboard = component
   @queries := []
@@ -10,11 +14,54 @@ export Dashboard = component
   sections := []
   loading := true
   error := null
+  vars := {}
+
   valueCards ~= sections.filter((s) -> s.chartType is 'value')
   lineCharts ~= sections.filter((s) -> s.chartType is 'linechart')
   barCharts ~= sections.filter((s) -> s.chartType is 'barchart')
   pieCharts ~= sections.filter((s) -> s.chartType is 'piechart')
+  gaugeCharts ~= sections.filter((s) -> s.chartType is 'gauge')
+  boxplots ~= sections.filter((s) -> s.chartType is 'boxplot')
+  dropdowns ~= sections.filter((s) -> s.chartType is 'dropdown')
+  dropdownMultis ~= sections.filter((s) -> s.chartType is 'dropdown_multi')
+  inputFilters ~= sections.filter((s) -> s.chartType is 'input')
+  datePickers ~= sections.filter((s) -> s.chartType is 'datepicker')
+  dateRanges ~= sections.filter((s) -> s.chartType is 'daterange')
+  downloads ~= sections.filter((s) -> s.chartType is 'download')
   tables ~= sections.filter((s) -> s.chartType is 'table')
+  hasControls ~= dropdowns.length > 0 or dropdownMultis.length > 0 or inputFilters.length > 0 or datePickers.length > 0 or dateRanges.length > 0
+  hasDownloads ~= downloads.length > 0
+
+  isControl: (ct) ->
+    ct is 'dropdown' or ct is 'dropdown_multi' or ct is 'input' or ct is 'datepicker' or ct is 'daterange'
+
+  substituteVars: (sql) ->
+    result = sql
+    keys = Object.keys(vars)
+    for key in keys
+      val = vars[key]
+      quoted = if typeof val is 'number' then "#{val}" else "'" + String(val).split("'").join("''") + "'"
+      pattern = new RegExp("getvariable\\('" + key + "'\\)", 'gi')
+      result = result.replace(pattern, quoted)
+    result
+
+  handleVarChange: (name, value) ->
+    newVars = Object.assign({}, vars)
+    newVars[name] = value
+    vars = newVars
+    @reloadCharts()
+
+  reloadCharts: ->
+    newSections = []
+    for section, idx in sections
+      if @isControl(section.chartType)
+        newSections.push section
+      else
+        sql = @substituteVars(queries[idx])
+        resp = await fetch endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sql }) }
+        res = await resp.json()
+        newSections.push @classify(res)
+    sections = newSections
 
   loadDashboard: ->
     return unless queries and queries.length > 0
@@ -24,7 +71,8 @@ export Dashboard = component
     try
       results = []
       for sql in queries
-        resp = await fetch endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sql }) }
+        actualSql = @substituteVars(sql)
+        resp = await fetch endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sql: actualSql }) }
         res = await resp.json()
         results.push @classify(res)
 
@@ -54,16 +102,53 @@ export Dashboard = component
     types = cols.filter((c) -> c.type).map((c) -> c.type)
 
     ct = 'table'
-    if types.includes('value')
+    stacked = false
+    donut = false
+
+    if types.includes('dropdown')
+      ct = 'dropdown'
+    else if types.includes('dropdown_multi')
+      ct = 'dropdown_multi'
+    else if types.includes('input')
+      ct = 'input'
+    else if types.includes('datepicker_from') or types.includes('datepicker_to')
+      ct = 'daterange'
+    else if types.includes('datepicker')
+      ct = 'datepicker'
+    else if types.includes('download_csv') or types.includes('download_xlsx')
+      ct = 'download'
+    else if types.includes('value')
       ct = 'value'
+    else if types.includes('gauge')
+      ct = 'gauge'
+    else if types.includes('boxplot')
+      ct = 'boxplot'
     else if types.includes('linechart') and types.includes('xaxis')
       ct = 'linechart'
+    else if types.includes('barchart_stacked') and types.includes('xaxis')
+      ct = 'barchart'
+      stacked = true
     else if types.includes('barchart') and types.includes('xaxis')
       ct = 'barchart'
-    else if types.includes('piechart') and (types.includes('category') or types.includes('xaxis'))
+    else if (types.includes('donutchart') or types.includes('piechart')) and (types.includes('category') or types.includes('xaxis'))
       ct = 'piechart'
+      donut = true if types.includes('donutchart')
 
-    { chartType: ct, columns: cols, rows: result.data, time: result.time }
+    normCols = cols.map (col) ->
+      t = col.type
+      if t is 'barchart_stacked'
+        nc = { type: 'barchart', label: col.label, dataType: col.dataType }
+        nc
+      else if t is 'donutchart'
+        nc = { type: 'piechart', label: col.label, dataType: col.dataType }
+        nc
+      else
+        col
+
+    section = { chartType: ct, columns: normCols, rows: result.data, time: result.time }
+    section.stacked = true if stacked
+    section.donut = true if donut
+    section
 
   ~> requestAnimationFrame -> @loadDashboard()
   queries ~> @loadDashboard()
@@ -76,6 +161,19 @@ export Dashboard = component
       if error
         .('rounded-xl bg-red-50 border border-red-200 p-6 text-red-700') error
 
+      if hasControls
+        .('flex items-center gap-4 flex-wrap mb-6 p-4 rounded-xl bg-gray-50 border border-gray-200')
+          for dd in dropdowns
+            Dropdown chartData: dd.rows, columns: dd.columns, onChange: @handleVarChange
+          for ddm in dropdownMultis
+            DropdownMulti chartData: ddm.rows, columns: ddm.columns, onChange: @handleVarChange
+          for inp in inputFilters
+            InputFilter chartData: inp.rows, columns: inp.columns, onChange: @handleVarChange
+          for dp in datePickers
+            DatePicker chartData: dp.rows, columns: dp.columns, onChange: @handleVarChange
+          for dr in dateRanges
+            DateRangePicker chartData: dr.rows, columns: dr.columns, onChange: @handleVarChange
+
       .('grid grid-cols-2 md:grid-cols-4 gap-4')
         for card in valueCards
           ValueCard chartData: card.rows, columns: card.columns
@@ -86,12 +184,26 @@ export Dashboard = component
 
       for chart in barCharts
         .('rounded-xl bg-white border border-gray-200 shadow-sm p-4 mt-6')
-          BarChart chartData: chart.rows, columns: chart.columns
+          BarChart chartData: chart.rows, columns: chart.columns, stacked: (chart.stacked or false), layout: (chart.layout or 'vertical')
 
       for chart in pieCharts
         .('rounded-xl bg-white border border-gray-200 shadow-sm p-4 mt-6')
-          PieChart chartData: chart.rows, columns: chart.columns, height: 350
+          PieChart chartData: chart.rows, columns: chart.columns, height: 350, donut: (chart.donut or false)
+
+      .('grid grid-cols-1 md:grid-cols-2 gap-6 mt-6')
+        for chart in gaugeCharts
+          .('rounded-xl bg-white border border-gray-200 shadow-sm p-4')
+            GaugeChart chartData: chart.rows, columns: chart.columns
+
+      for chart in boxplots
+        .('rounded-xl bg-white border border-gray-200 shadow-sm p-4 mt-6')
+          BoxplotChart chartData: chart.rows, columns: chart.columns
 
       for tbl in tables
         .('mt-6')
           DataTable chartData: tbl.rows, columns: tbl.columns
+
+      if hasDownloads
+        .('flex gap-2 mt-6')
+          for dl in downloads
+            DownloadButton chartData: dl.rows, columns: dl.columns

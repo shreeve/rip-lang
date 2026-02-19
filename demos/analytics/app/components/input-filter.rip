@@ -1,0 +1,41 @@
+# InputFilter - text input with debounced filtering
+# Expects a column with type input: whose label becomes the variable name
+# Optional hint: column for placeholder text
+# Calls onChange(varName, value) after 500ms debounce
+
+export InputFilter = component
+  @chartData := []
+  @columns := []
+  @onChange := null
+
+  varName ~=
+    col = columns.find((c) -> c.type is 'input')
+    if col then col.label else ''
+
+  placeholder ~=
+    col = columns.find((c) -> c.type is 'hint')
+    if col and chartData and chartData.length > 0
+      idx = columns.indexOf(col)
+      "#{chartData[0][idx]}"
+    else
+      "Filter..."
+
+  value := ''
+  timer := null
+
+  handleInput: (e) ->
+    value = e.target.value
+    clearTimeout(timer) if timer
+    timer = setTimeout(->
+      onChange(varName, value) if onChange
+    , 500)
+
+  render
+    .('inline-flex flex-col gap-1')
+      if varName
+        label.('text-xs font-medium text-gray-500') varName
+      input.('rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500')
+        type: 'text'
+        placeholder: placeholder
+        value: value
+        oninput: @handleInput

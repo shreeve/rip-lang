@@ -16,14 +16,34 @@ export Home = component
         seeded = true
 
       queries = [
+        # Controls
+        `"SELECT DISTINCT status AS "dropdown:Status" FROM orders"`
+        `"SELECT DISTINCT product AS "dropdown_multi:Product" FROM orders"`
+        `"SELECT '' AS "input:Customer", 'Search customers...' AS "hint:Hint""`
+        `"SELECT CAST('2026-01-01' AS DATE) AS "datepicker:As Of Date""`
+        `"SELECT '' AS "datepicker_from:From Date", '' AS "datepicker_to:To Date""`
+
+        # Value cards
         `"SELECT count(*) AS "value:Orders", 'Orders' AS "label:Label" FROM orders"`
         `"SELECT sum(revenue) AS "value:Total Revenue", 'Total Revenue' AS "label:Label" FROM monthly_sales"`
         `"SELECT sum(costs) AS "value:Total Costs", 'Total Costs' AS "label:Label" FROM monthly_sales"`
         `"SELECT sum(profit) AS "value:Total Profit", 'Total Profit' AS "label:Label" FROM monthly_sales"`
+
+        # Gauges
+        `"SELECT round(100.0 * sum(profit) / sum(revenue), 1) AS "gauge:Profit Margin %" FROM monthly_sales"`
+        `"SELECT round(100.0 * sum(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) / count(*), 1) AS "gauge:Completion Rate %" FROM orders"`
+
+        # Charts
         `"SELECT month AS "xaxis:Month", revenue AS "linechart:Revenue", costs AS "linechart:Costs", profit AS "linechart:Profit" FROM monthly_sales"`
-        `"SELECT month AS "xaxis:Month", revenue AS "barchart:Revenue", costs AS "barchart:Costs" FROM monthly_sales"`
-        `"SELECT category AS "category:Category", amount AS "piechart:Amount" FROM categories"`
+        `"SELECT month AS "xaxis:Month", revenue AS "barchart_stacked:Revenue", costs AS "barchart_stacked:Costs" FROM monthly_sales"`
+        `"SELECT product AS "xaxis:Product", sum(amount) AS "barchart:Revenue" FROM orders GROUP BY product ORDER BY product"`
+        `"SELECT category AS "category:Category", amount AS "donutchart:Amount" FROM categories"`
+        `"SELECT status AS "category:Status", count(*) AS "piechart:Orders" FROM orders GROUP BY status"`
+        `"SELECT product AS "xaxis:Product", min(amount) AS "boxplot:Min", quantile_cont(amount, 0.25) AS "boxplot:Q1", median(amount) AS "boxplot:Median", quantile_cont(amount, 0.75) AS "boxplot:Q3", max(amount) AS "boxplot:Max" FROM orders GROUP BY product ORDER BY product"`
+
+        # Table and export
         `"SELECT id, customer, product, amount, status, order_date FROM orders ORDER BY order_date DESC"`
+        `"SELECT customer, product, amount, status, '' AS "download_csv:Export Orders" FROM orders"`
       ]
 
     catch err
