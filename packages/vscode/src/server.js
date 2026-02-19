@@ -53,26 +53,152 @@ documents.onDidChangeContent(({ document }) => {
   if (fp.endsWith('.rip') && compiler) compileRip(fp, document.getText());
 });
 
-documents.onDidClose(({ document }) => compiled.delete(uriToPath(document.uri)));
+documents.onDidClose(({ document }) => {
+  const fp = uriToPath(document.uri);
+  compiled.delete(fp);
+  connection.sendDiagnostics({ uri: document.uri, diagnostics: [] });
+});
 
 function compileRip(filePath, source) {
   try {
     const result = compiler.compile(source, { sourceMap: true, types: true });
-    const code = result.code || '';
-    const dts = result.dts ? result.dts.trimEnd() + '\n' : '';
-    const tsContent = '// @ts-nocheck\n' + dts + '\n' + code;
-    const headerLines = countLines('// @ts-nocheck\n' + dts + '\n');
+    let code = result.code || '';
+    let dts = result.dts ? result.dts.trimEnd() + '\n' : '';
+
+    // Remove .d.ts imports — the compiled JS already has them
+    dts = dts.replace(/^import\s.*;\s*\n/gm, '');
+
+    // Merge function type signatures from .d.ts into the JS code.  Leaving
+    // them as bare declarations causes TypeScript to treat them as overload
+    // signatures that conflict with the async implementations below.
+    const funcSigs = new Map();
+    dts = dts.replace(
+      /^(?:export|declare)\s+function\s+(\w+)\(([^)]*)\):\s*(.+);\s*$/gm,
+      (_m, name, params, ret) => { funcSigs.set(name, { params, ret }); return ''; },
+    );
+    dts = dts.replace(/^\s*\n/gm, ''); // clean up blank lines
+
+    // Remove any remaining declare/export function declarations that weren't
+    // matched above.  The compiler emits malformed multi-line declarations for
+    // untyped functions whose param lists span multiple lines.
+    dts = dts.replace(/(?:export|declare)\s+function\s+\w+\([\s\S]*?\);\s*/g, '');
+    dts = dts.replace(/^\s*\n/gm, '');
+
+    for (const [name, { params, ret }] of funcSigs) {
+      // Build a map of parameter → type from the .d.ts signature
+      const paramTypes = new Map();
+      if (params.trim()) {
+        for (const p of params.split(',')) {
+          const colon = p.indexOf(':');
+          if (colon !== -1) paramTypes.set(p.slice(0, colon).trim(), p.slice(colon + 1).trim());
+        }
+      }
+
+      // Annotate the corresponding function in the compiled JS
+      const funcRe = new RegExp(
+        `((?:export\\s+)?(?:async\\s+)?function\\s+${name})\\(([^)]*)\\)(\\s*\\{)`,
+      );
+      code = code.replace(funcRe, (match, prefix, codeParams, brace) => {
+        const typed = codeParams.split(',').map(p => {
+          const n = p.trim();
+          const t = paramTypes.get(n);
+          return t ? `${n}: ${t}` : n;
+        }).join(', ');
+        // Use the raw declared return type even for async functions.
+        // Rip treats async calls transparently (no await at call site),
+        // so callers need to see `User` not `Promise<User>`.
+        return `${prefix}(${typed}): ${ret}${brace}`;
+      });
+    }
+
+    // Type-check files that have type annotations (::) or import from typed
+    // .rip modules.  A .rip import is "typed" if the imported file itself has
+    // :: annotations.  This avoids false positives on plain untyped files while
+    // still checking files that consume typed APIs.
+    const hasOwnTypes = /::/.test(source);
+    let importsTyped = false;
+    if (!hasOwnTypes) {
+      const ripImports = [...source.matchAll(/from\s+['"]([^'"]*\.rip)['"]/g)];
+      for (const m of ripImports) {
+        const imported = path.resolve(path.dirname(filePath), m[1]);
+        try {
+          const impSrc = fs.readFileSync(imported, 'utf8');
+          if (/::/.test(impSrc)) { importsTyped = true; break; }
+        } catch {}
+      }
+    }
+    const hasTypes = hasOwnTypes || importsTyped;
+    if (!hasTypes) code = '// @ts-nocheck\n' + code;
+
+    const tsContent = (hasTypes ? dts + '\n' : '') + code;
+    const headerLines = hasTypes ? countLines(dts + '\n') : 1; // 1 for @ts-nocheck
     const { srcToGen, genToSrc } = buildLineMap(result.reverseMap, headerLines);
     const prev = compiled.get(filePath);
 
     compiled.set(filePath, {
       version: (prev?.version || 0) + 1,
-      source, tsContent, headerLines, srcToGen, genToSrc,
+      source, tsContent, headerLines, srcToGen, genToSrc, hasTypes,
     });
 
     connection.console.log(`[rip] compiled ${path.basename(filePath)}: ${tsContent.length} chars, ${srcToGen.size} mapped lines`);
+    publishDiagnostics(filePath);
   } catch (e) {
     connection.console.log(`[rip] compile error ${path.basename(filePath)}: ${e.message}`);
+  }
+}
+
+function publishDiagnostics(filePath) {
+  if (!service) return;
+  const c = compiled.get(filePath);
+  if (!c) return;
+
+  // Skip diagnostics entirely for untyped files — @ts-nocheck only suppresses
+  // semantic errors, but syntactic errors (e.g. from component template code)
+  // would still leak through.
+  if (!c.hasTypes) {
+    connection.sendDiagnostics({ uri: pathToUri(filePath), diagnostics: [] });
+    return;
+  }
+
+  try {
+    patchTypes();
+    const vf = toVirtual(filePath);
+    const semanticDiags = service.getSemanticDiagnostics(vf);
+    const syntacticDiags = service.getSyntacticDiagnostics(vf);
+    const allDiags = [...syntacticDiags, ...semanticDiags];
+
+    const diagnostics = [];
+    for (const d of allDiags) {
+      if (d.start === undefined) continue;
+
+      // Map generated TS position back to Rip source position
+      const startPos = genToSrcPos(filePath, d.start);
+      const endPos = genToSrcPos(filePath, d.start + (d.length || 1));
+
+      // Skip diagnostics that map to the header (dts declarations)
+      if (startPos.line < 0) continue;
+
+      // Skip errors about missing modules (Rip files resolve differently)
+      if (d.code === 2307 || d.code === 2304) continue;
+
+      // Skip "return type of async function must be Promise" — we use raw
+      // types intentionally because Rip treats async calls transparently
+      if (d.code === 1064) continue;
+
+      const message = ts.flattenDiagnosticMessageText(d.messageText, '\n');
+      diagnostics.push({
+        range: { start: startPos, end: endPos },
+        severity: d.category === 1 ? 1 : d.category === 0 ? 2 : d.category === 2 ? 4 : 3, // TS Error→LSP Error, Warning→Warning, Suggestion→Hint
+        code: d.code,
+        source: 'rip',
+        message,
+      });
+    }
+
+    connection.sendDiagnostics({ uri: pathToUri(filePath), diagnostics });
+    connection.console.log(`[rip] diagnostics ${path.basename(filePath)}: ${diagnostics.length} issues`);
+  } catch (e) {
+    connection.console.log(`[rip] diagnostics error: ${e.message}`);
   }
 }
 
