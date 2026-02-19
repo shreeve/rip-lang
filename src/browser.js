@@ -32,6 +32,7 @@ async function processRipScripts() {
 
   for (const script of scripts) {
     if (script.hasAttribute('data-rip-processed')) continue;
+    if (script.hasAttribute('data-name')) continue;
 
     try {
       let ripCode;

@@ -209,7 +209,8 @@ The browser loads one file — `rip-ui.min.js` (~52KB Brotli) — which bundles 
 Rip compiler and the pre-compiled UI framework. No runtime compilation of the
 framework, no extra network requests.
 
-Then `launch()` fetches the app bundle, hydrates the stash, and renders.
+Then `launch()` loads component sources (from a server bundle, static files, or
+inline DOM), hydrates the stash, and renders.
 
 ### Browser Execution Contexts
 
@@ -276,6 +277,66 @@ On disk you organize your app into `pages/` and `ui/`. The middleware
 maps them into a flat `components/` namespace in the bundle — pages go
 under `components/`, shared components under `components/_lib/`. The `_`
 prefix tells the router to skip `_lib/` entries when generating routes.
+
+## Component Loading Modes
+
+`launch()` supports three ways to load component sources, checked in priority
+order. All three produce the same internal bundle format — everything downstream
+(compilation, routing, rendering) works identically regardless of source.
+
+### 1. Static File URLs — `launch components: [...]`
+
+Fetch individual `.rip` files as plain text from any static server:
+
+```coffee
+launch components: [
+  'components/index.rip'
+  'components/dashboard.rip'
+  'components/line-chart.rip'
+]
+```
+
+No server middleware needed. Serve `.rip` files as static text from any HTTP
+server, CDN, or `file://` path. Each URL is fetched individually and compiled
+in the browser.
+
+### 2. Inline DOM — `<script type="text/rip" data-name="...">`
+
+Embed component source directly in the HTML page:
+
+```html
+<script type="text/rip" data-name="index">
+  export Home = component
+    render
+      h1 "Hello from inline"
+</script>
+
+<script type="text/rip" data-name="counter">
+  export Counter = component
+    @count := 0
+    render
+      button @click: (-> count += 1), "#{count}"
+</script>
+
+<script type="text/rip">
+  { launch } = importRip! '/rip/ui.rip'
+  launch()
+</script>
+```
+
+The `data-name` attribute maps to the component filename (`.rip` extension is
+added automatically if omitted). Scripts with `data-name` are collected as
+component sources and are not executed as top-level code.
+
+### 3. Server Bundle (default)
+
+When neither `components` nor inline `data-name` scripts are present, `launch()`
+fetches the app bundle from the server at `/{app}/bundle`. This is the default
+mode when using the `ripUI` server middleware.
+
+```coffee
+launch()  # fetches /bundle automatically
+```
 
 ## Server Middleware
 
@@ -408,12 +469,46 @@ launch '/app', hash: true
 This switches from `/about` to `page.html#/about`. Back/forward navigation,
 direct URL loading, and `href="#/path"` links all work correctly.
 
-## Static Deployment — `launch bundle:`
+## Static Deployment
 
-Inline all components in a single HTML file for zero-server deployment.
-Use `rip-ui.min.js` (~52KB Brotli) — a combined bundle with the compiler
-and pre-compiled UI framework. No extra network requests, no runtime
-compilation of the framework:
+For zero-server deployment, use inline `data-name` scripts or a `components`
+URL list. Both work with `rip-ui.min.js` (~52KB Brotli) from a CDN — no
+server middleware needed.
+
+**Inline mode** — everything in one HTML file:
+
+```html
+<script type="module" src="dist/rip-ui.min.js"></script>
+
+<script type="text/rip" data-name="index">
+  export Home = component
+    render
+      h1 "Hello"
+</script>
+
+<script type="text/rip" data-name="about">
+  export About = component
+    render
+      h1 "About"
+</script>
+
+<script type="text/rip">
+  { launch } = importRip! 'ui.rip'
+  launch hash: true
+</script>
+```
+
+**Static files mode** — `.rip` files served from any HTTP server or CDN:
+
+```html
+<script type="module" src="dist/rip-ui.min.js"></script>
+<script type="text/rip">
+  { launch } = importRip! 'ui.rip'
+  launch components: ['components/index.rip', 'components/about.rip'], hash: true
+</script>
+```
+
+**Explicit bundle** — pass a bundle object directly:
 
 ```html
 <script type="module" src="dist/rip-ui.min.js"></script>

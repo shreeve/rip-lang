@@ -834,9 +834,24 @@ export launch = (appBase = '', opts = {}) ->
     el.id = target.replace(/^#/, '')
     document.body.prepend el
 
-  # Get the app bundle — inline, from DOM, or fetch from server
+  # Get the app bundle — explicit, static files, inline DOM, or server fetch
   if opts.bundle
     bundle = opts.bundle
+  else if opts.components and Array.isArray(opts.components)
+    components = {}
+    for url in opts.components
+      res = await fetch(url)
+      if res.ok
+        name = url.split('/').pop()
+        components["components/#{name}"] = await res.text()
+    bundle = { components, data: {} }
+  else if typeof document isnt 'undefined' and document.querySelectorAll('script[type="text/rip"][data-name]').length > 0
+    components = {}
+    for script in document.querySelectorAll('script[type="text/rip"][data-name]')
+      name = script.getAttribute('data-name')
+      name += '.rip' unless name.endsWith('.rip')
+      components["components/#{name}"] = script.textContent
+    bundle = { components, data: {} }
   else
     bundleUrl = "#{appBase}/bundle"
     res = await fetch(bundleUrl)
