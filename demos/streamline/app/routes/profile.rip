@@ -73,5 +73,11 @@ export Profile = component
           if saved
             .('mt-5 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700') "Profile updated!"
 
-          button.('mt-7 flex w-full items-center justify-center rounded-lg bg-brand px-4 py-2.5 text-sm-plus font-semibold text-white transition-colors hover:bg-brand-hover active:bg-brand-active disabled:opacity-50 sm:max-w-[50%] md:mt-8 lg:mt-9') @click: @save, disabled: saving,
+          button.(
+            'mt-7 flex w-full items-center justify-center rounded-lg bg-brand px-4 py-2.5 text-sm-plus',
+            'font-semibold text-white transition-colors hover:bg-brand-hover active:bg-brand-active disabled:opacity-50',
+          )
+            class: .('sm:max-w-[50%] md:mt-8 lg:mt-9')
+            disabled: saving
+            @click: @save
             if saving then "Saving..." else "Update Profile"
