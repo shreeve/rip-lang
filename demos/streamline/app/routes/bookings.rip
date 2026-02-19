@@ -10,6 +10,9 @@ export Bookings = component
   beforeMount: ->
     try
       res = await fetch('/api/bookings')
+      unless res.ok
+        @router.push '/auth'
+        return
       data = await res.json()
       if data.error
         @router.push '/auth'
