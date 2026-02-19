@@ -8,7 +8,7 @@ const fs = require('fs');
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 
-let ts, compiler, service, rootPath;
+let ts, compiler, service, rootPath, lastPatchedProgram;
 
 // Real .rip path → { version, source, tsContent, srcToGen, genToSrc }
 const compiled = new Map();
@@ -132,6 +132,50 @@ function createService() {
   return ts.createLanguageService(host, ts.createDocumentRegistry());
 }
 
+// ── Type inference patching ────────────────────────────────────────
+// Rip hoists locals as `let x; x = expr;` which TypeScript infers as `any`.
+// We exploit the Transient flag: getSymbolLinks(symbol) returns symbol.links
+// directly when symbol.flags & Transient, bypassing the closured symbolLinks
+// array. Setting symbol.links = { type } before any type resolution makes
+// TypeScript see the correct type through all 67+ internal checker functions.
+
+function patchTypes() {
+  if (!service) return;
+  const program = service.getProgram();
+  if (!program || program === lastPatchedProgram) return;
+  lastPatchedProgram = program;
+
+  const checker = program.getTypeChecker();
+  for (const [filePath] of compiled) {
+    const sf = program.getSourceFile(toVirtual(filePath));
+    if (!sf) continue;
+
+    const uninitialized = new Map();
+    for (const stmt of sf.statements) {
+      if (ts.isVariableStatement(stmt)) {
+        for (const decl of stmt.declarationList.declarations) {
+          if (!decl.initializer && ts.isIdentifier(decl.name)) {
+            const sym = checker.getSymbolAtLocation(decl.name);
+            if (sym) uninitialized.set(decl.name.text, sym);
+          }
+        }
+      }
+      if (ts.isExpressionStatement(stmt) && ts.isBinaryExpression(stmt.expression) &&
+          stmt.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+          ts.isIdentifier(stmt.expression.left)) {
+        const name = stmt.expression.left.text;
+        const sym = uninitialized.get(name);
+        if (sym) {
+          const rhsType = checker.getTypeAtLocation(stmt.expression.right);
+          sym.flags |= ts.SymbolFlags.Transient;
+          sym.links = { type: rhsType };
+          uninitialized.delete(name);
+        }
+      }
+    }
+  }
+}
+
 // ── Position mapping ───────────────────────────────────────────────
 
 function buildLineMap(reverseMap, headerLines) {
@@ -156,6 +200,18 @@ function srcToOffset(filePath, line, col) {
     for (const [s] of c.srcToGen) if (s <= line && s > best) best = s;
     if (best < 0) return undefined;
     genLine = c.srcToGen.get(best) + (line - best);
+  }
+  const srcLines = c.source.split('\n');
+  const genLines = c.tsContent.split('\n');
+  if (srcLines[line] && genLines[genLine]) {
+    const srcText = srcLines[line];
+    const genText = genLines[genLine];
+    const wordMatch = srcText.substring(col).match(/^\w+/) || srcText.substring(0, col).match(/\w+$/);
+    if (wordMatch) {
+      const word = wordMatch[0];
+      const genCol = genText.indexOf(word);
+      if (genCol >= 0) return lineColToOffset(c.tsContent, genLine, genCol);
+    }
   }
   return lineColToOffset(c.tsContent, genLine, col);
 }
@@ -190,6 +246,7 @@ connection.onCompletion((params) => {
 
   connection.console.log(`[rip] completion ${params.position.line}:${params.position.character} → offset ${offset}`);
   try {
+    patchTypes();
     const r = service.getCompletionsAtPosition(toVirtual(fp), offset, { includeExternalModuleExports: true, includeInsertTextCompletions: true });
     if (!r) return [];
     connection.console.log(`[rip] → ${r.entries.length} items, first 5: ${r.entries.slice(0, 5).map(e => e.name + '(' + e.kind + ')').join(', ')}`);
@@ -208,6 +265,7 @@ connection.onHover((params) => {
   if (offset === undefined) return null;
 
   try {
+    patchTypes();
     const info = service.getQuickInfoAtPosition(toVirtual(fp), offset);
     if (!info) return null;
     const display = ts.displayPartsToString(info.displayParts);
@@ -224,13 +282,27 @@ connection.onDefinition((params) => {
   if (offset === undefined) return null;
 
   try {
+    patchTypes();
     const defs = service.getDefinitionAtPosition(toVirtual(fp), offset);
     if (!defs) return null;
     return defs.map((d) => {
       const realPath = isVirtual(d.fileName) ? fromVirtual(d.fileName) : d.fileName;
-      const pos = compiled.has(realPath)
-        ? genToSrcPos(realPath, d.textSpan.start)
-        : offsetToLineCol(fs.readFileSync(d.fileName, 'utf8'), d.textSpan.start);
+      const c = compiled.get(realPath);
+      if (c) {
+        const { line: genLine } = offsetToLineCol(c.tsContent, d.textSpan.start);
+        if (!c.genToSrc.has(genLine)) {
+          const name = c.tsContent.substring(d.textSpan.start, d.textSpan.start + d.textSpan.length);
+          const pat = new RegExp(`^[^#\\n]*\\b(def\\s+)?${name}\\s*(::=|=|\\()`, 'm');
+          const m = pat.exec(c.source);
+          if (m) {
+            const pos = offsetToLineCol(c.source, m.index + m[0].indexOf(name));
+            return { uri: pathToUri(realPath), range: { start: pos, end: pos } };
+          }
+        }
+        const pos = genToSrcPos(realPath, d.textSpan.start);
+        return { uri: pathToUri(realPath), range: { start: pos, end: pos } };
+      }
+      const pos = offsetToLineCol(fs.readFileSync(d.fileName, 'utf8'), d.textSpan.start);
       return { uri: pathToUri(realPath), range: { start: pos, end: pos } };
     });
   } catch { return null; }
@@ -244,6 +316,7 @@ connection.onSignatureHelp((params) => {
   if (offset === undefined) return null;
 
   try {
+    patchTypes();
     const sig = service.getSignatureHelpItems(toVirtual(fp), offset, {});
     if (!sig) return null;
     return {

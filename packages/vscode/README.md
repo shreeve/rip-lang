@@ -27,6 +27,16 @@ The extension runs a lightweight language server that compiles `.rip` files to v
 
 The Rip compiler is loaded from the workspace (`src/compiler.js` in a dev repo, or `node_modules/rip-lang` otherwise). TypeScript is loaded from the workspace or the editor's built-in copy. The server runs under Bun for fast startup.
 
+## Type Inference for Hoisted Variables
+
+The Rip compiler hoists local variable declarations to the top of their scope (`let x; x = expr;` instead of `let x = expr;`). TypeScript sees the uninitialized `let` and infers `any`, which kills IntelliSense — no completions, no hover types, no signature help.
+
+We explored several approaches: inlining `let` in the compiler (broke `eval` semantics in tests), post-processing the virtual TypeScript (complex source map adjustments), and monkey-patching the TypeScript checker's public API (fixed hover but not completions, because the completions pipeline uses internal functions that bypass patched methods).
+
+The solution exploits TypeScript's own `getSymbolLinks()` function, which is the internal gateway used by 67+ checker functions. It checks `symbol.flags & Transient` first — and if set, reads type information from `symbol.links` on the object itself instead of an inaccessible closured array. By setting these two properties on each hoisted variable's symbol before any type resolution occurs, TypeScript sees the correct inferred type through every code path: hover, completions, signature help, and go-to-definition.
+
+This is 35 lines of code in the language server — no compiler changes, no source map changes, no generated files.
+
 ## Tailwind CSS Autocompletion
 
 To enable Tailwind CSS autocompletion inside `.()` CLSX helpers in Rip render templates, add these to your VS Code or Cursor settings:
