@@ -333,6 +333,10 @@ export function installComponentSupport(CodeGenerator, Lexer) {
           tokens.splice(i, 0, divToken);
           tokens.splice(i + 2, 0, cxToken);
           return 3;
+        } else if (prevTag === ':') {
+          // class: .('active', ...) → class: __clsx('active', ...)
+          tokens[i] = gen('IDENTIFIER', '__clsx', token);
+          return 1;
         } else {
           tokens.splice(i + 1, 0, cxToken);
           return 2;
@@ -939,8 +943,12 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         const block = arg[2];
         if (this.is(block, 'block')) {
           for (const child of block.slice(1)) {
-            const childVar = this.generateNode(child);
-            this._createLines.push(`${elVar}.appendChild(${childVar});`);
+            if (this.is(child, 'object')) {
+              this.generateAttributes(elVar, child);
+            } else {
+              const childVar = this.generateNode(child);
+              this._createLines.push(`${elVar}.appendChild(${childVar});`);
+            }
           }
         } else if (block) {
           const childVar = this.generateNode(block);
@@ -999,15 +1007,22 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     const elVar = this.newElementVar();
     this._createLines.push(`${elVar} = document.createElement('${tag}');`);
 
-    if (classExprs.length > 0) {
-      const classArgs = classExprs.map(e => this.generateInComponent(e, 'value')).join(', ');
-      // Dynamic classes are always wrapped in __effect — the .() syntax exists
-      // precisely for reactive class expressions. If a class were static, you'd
-      // just write div.foo.bar instead. The effect tracks signal reads at runtime.
-      this._setupLines.push(`__effect(() => { ${elVar}.className = __clsx(${classArgs}); });`);
-    }
+    // Defer className emission so class: attributes can merge with .() classes
+    const classArgs = classExprs.map(e => this.generateInComponent(e, 'value'));
+    const prevClassArgs = this._pendingClassArgs;
+    const prevClassEl = this._pendingClassEl;
+    this._pendingClassArgs = classArgs;
+    this._pendingClassEl = elVar;
 
     this.appendChildren(elVar, children);
+
+    if (this._pendingClassArgs.length > 0) {
+      const combined = this._pendingClassArgs.join(', ');
+      this._setupLines.push(`__effect(() => { ${elVar}.className = __clsx(${combined}); });`);
+    }
+    this._pendingClassArgs = prevClassArgs;
+    this._pendingClassEl = prevClassEl;
+
     return elVar;
   };
 
@@ -1039,6 +1054,19 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         // Strip quotes from string keys (e.g., "data-slot" → data-slot)
         if (key.startsWith('"') && key.endsWith('"')) {
           key = key.slice(1, -1);
+        }
+
+        // Class merging: class: values merge with .() dynamic classes
+        if (key === 'class' || key === 'className') {
+          const valueCode = this.generateInComponent(value, 'value');
+          if (this._pendingClassArgs && this._pendingClassEl === elVar) {
+            this._pendingClassArgs.push(valueCode);
+          } else if (this.hasReactiveDeps(value)) {
+            this._setupLines.push(`__effect(() => { ${elVar}.className = __clsx(${valueCode}); });`);
+          } else {
+            this._createLines.push(`${elVar}.className = ${valueCode};`);
+          }
+          continue;
         }
 
         // Element ref: ref: "name" → this.name = element

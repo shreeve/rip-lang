@@ -75,6 +75,85 @@ export About = component
 Reactive props via `:=` signal passthrough. Readonly props via `=!`.
 Children blocks passed as DOM nodes via `@children`.
 
+## Render Block Syntax
+
+Inside a `render` block, elements are declared by tag name. Classes, attributes,
+and children can be expressed inline or across multiple indented lines.
+
+### Classes with `.(...)`
+
+The `.()` helper applies classes using CLSX semantics — strings are included
+directly, and object keys are conditionally included based on their values:
+
+```coffee
+button.('px-4 py-2 rounded-full') "Click"
+button.('px-4 py-2', active: isActive) "Click"
+```
+
+Arguments can span multiple lines, just like a normal function call:
+
+```coffee
+input.(
+  'block w-full rounded-lg border border-primary',
+  'text-sm-plus text-tertiary shadow-xs'
+)
+```
+
+### Indented Attributes
+
+Attributes can be placed on separate indented lines after the element:
+
+```coffee
+input.('rounded-lg border px-3.5 py-2.5')
+  type: "email"
+  value: user.email
+  disabled: true
+```
+
+This is equivalent to the inline form:
+
+```coffee
+input.('rounded-lg border px-3.5 py-2.5') type: "email", value: user.email, disabled: true
+```
+
+### The `class:` Attribute
+
+The `class:` attribute works like `.()` and merges cumulatively with any
+existing `.()` classes on the same element:
+
+```coffee
+input.('block w-full rounded-lg')
+  class: 'text-sm text-tertiary'
+  type: "email"
+```
+
+This produces a single combined class expression: `block w-full rounded-lg text-sm text-tertiary`.
+
+The `class:` value also supports `.()` syntax for conditional classes:
+
+```coffee
+div.('mt-4 p-4')
+  class: .('ring-1', highlighted: isHighlighted)
+  span "Content"
+```
+
+### Attributes and Children Together
+
+Attributes and children can coexist at the same indentation level. Attributes
+(key-value pairs) are listed first, followed by child elements:
+
+```coffee
+button.('flex items-center rounded-lg')
+  type: "submit"
+  disabled: saving
+
+  span.('font-bold') "Submit"
+  span.('text-sm text-secondary') "or press Enter"
+```
+
+Blank lines between attributes and children are fine — they don't break the
+structure.
+
 ## How It Works
 
 The browser loads one file — `rip-ui.min.js` (~52KB Brotli) — which bundles the
