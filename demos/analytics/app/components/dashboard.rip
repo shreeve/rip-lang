@@ -1,0 +1,97 @@
+# Dashboard - orchestrates SQL execution and chart rendering
+#
+# Usage:
+#   Dashboard queries: [...], endpoint: '/sql'
+
+export Dashboard = component
+  @queries := []
+  @endpoint := '/sql'
+
+  sections := []
+  loading := true
+  error := null
+  valueCards ~= sections.filter((s) -> s.chartType is 'value')
+  lineCharts ~= sections.filter((s) -> s.chartType is 'linechart')
+  barCharts ~= sections.filter((s) -> s.chartType is 'barchart')
+  pieCharts ~= sections.filter((s) -> s.chartType is 'piechart')
+  tables ~= sections.filter((s) -> s.chartType is 'table')
+
+  loadDashboard: ->
+    return unless queries and queries.length > 0
+    loading = true
+    error = null
+
+    try
+      results = []
+      for sql in queries
+        resp = await fetch endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sql }) }
+        res = await resp.json()
+        results.push @classify(res)
+
+      sections = results
+      loading = false
+    catch err
+      error = err.message
+      loading = false
+
+  parseCol: (name) ->
+    idx = name.indexOf(":")
+    if idx > 0
+      { type: name.slice(0, idx).toLowerCase(), label: name.slice(idx + 1) }
+    else
+      { type: null, label: name }
+
+  classify: (result) ->
+    if result.error
+      errResult = { chartType: 'error' }
+      errResult.error = result.error
+      return errResult
+
+    cols = result.meta.map (col) ->
+      parsed = @parseCol(col.name)
+      { type: parsed.type, label: parsed.label, dataType: col.type }
+
+    types = cols.filter((c) -> c.type).map((c) -> c.type)
+
+    ct = 'table'
+    if types.includes('value')
+      ct = 'value'
+    else if types.includes('linechart') and types.includes('xaxis')
+      ct = 'linechart'
+    else if types.includes('barchart') and types.includes('xaxis')
+      ct = 'barchart'
+    else if types.includes('piechart') and (types.includes('category') or types.includes('xaxis'))
+      ct = 'piechart'
+
+    { chartType: ct, columns: cols, rows: result.data, time: result.time }
+
+  ~> requestAnimationFrame -> @loadDashboard()
+  queries ~> @loadDashboard()
+
+  render
+    if loading
+      .('flex items-center justify-center py-20')
+        .('text-gray-400 text-lg') "Loading dashboard..."
+    else
+      if error
+        .('rounded-xl bg-red-50 border border-red-200 p-6 text-red-700') error
+
+      .('grid grid-cols-2 md:grid-cols-4 gap-4')
+        for card in valueCards
+          ValueCard chartData: card.rows, columns: card.columns
+
+      for chart in lineCharts
+        .('rounded-xl bg-white border border-gray-200 shadow-sm p-4 mt-6')
+          LineChart chartData: chart.rows, columns: chart.columns
+
+      for chart in barCharts
+        .('rounded-xl bg-white border border-gray-200 shadow-sm p-4 mt-6')
+          BarChart chartData: chart.rows, columns: chart.columns
+
+      for chart in pieCharts
+        .('rounded-xl bg-white border border-gray-200 shadow-sm p-4 mt-6')
+          PieChart chartData: chart.rows, columns: chart.columns, height: 350
+
+      for tbl in tables
+        .('mt-6')
+          DataTable chartData: tbl.rows, columns: tbl.columns

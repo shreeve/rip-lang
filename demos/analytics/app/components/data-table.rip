@@ -1,0 +1,23 @@
+# DataTable - tabular display of SQL results
+
+export DataTable = component
+  @chartData := []
+  @columns := []
+  @title := ''
+
+  render
+    .('rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden')
+      if title
+        .('px-6 py-4 border-b border-gray-100')
+          .('text-sm font-semibold text-gray-700') title
+      .('overflow-x-auto')
+        table.('w-full text-sm')
+          thead
+            tr.('border-b border-gray-100 bg-gray-50/50')
+              for col in columns
+                th.('px-4 py-3 text-left font-medium text-gray-500') col.label
+          tbody
+            for row in chartData
+              tr.('border-b border-gray-50 hover:bg-gray-50/50 transition-colors')
+                for cell in row
+                  td.('px-4 py-3 text-gray-700') "#{cell ? cell : '—'}"

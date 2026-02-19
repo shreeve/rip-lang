@@ -1,0 +1,49 @@
+# BarChart - ECharts bar chart driven by annotated SQL results
+
+export BarChart = component
+  @chartData := []
+  @columns := []
+  @title := ''
+  @height := 400
+
+  inst := null
+
+  initChart: ->
+    return if inst
+    el = @_el0
+    return unless el
+    inst = echarts.init(el)
+    window.addEventListener 'resize', -> inst.resize() if inst
+    @renderChart()
+
+  renderChart: ->
+    return unless inst
+    return unless chartData and chartData.length > 0
+
+    xIdx = columns.findIndex((c) -> c.type is 'xaxis')
+    return if xIdx < 0
+
+    xValues = chartData.map((r) -> r[xIdx])
+    series = []
+
+    for col, idx in columns
+      if col.type is 'barchart'
+        series.push { name: col.label, type: 'bar', data: chartData.map((r) -> r[idx]), barMaxWidth: 40 }
+
+    option =
+      tooltip: { trigger: 'axis' }
+      legend: { bottom: 0 }
+      grid: { left: 60, right: 20, top: (if title then 40 else 20), bottom: 40 }
+      xAxis: { type: 'category', data: xValues }
+      yAxis: { type: 'value' }
+      series: series
+    option.title = { text: title, left: 'center', textStyle: { fontSize: 14, fontWeight: 500 } }
+
+    inst.setOption(option, true)
+
+  ~> requestAnimationFrame -> @initChart()
+  chartData ~> @renderChart()
+
+  render
+    div
+      style: "height: #{height}px; width: 100%"

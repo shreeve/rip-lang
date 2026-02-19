@@ -1,0 +1,44 @@
+# PieChart - ECharts pie/donut chart driven by annotated SQL results
+
+export PieChart = component
+  @chartData := []
+  @columns := []
+  @title := ''
+  @height := 400
+
+  inst := null
+
+  initChart: ->
+    return if inst
+    el = @_el0
+    return unless el
+    inst = echarts.init(el)
+    window.addEventListener 'resize', -> inst.resize() if inst
+    @renderChart()
+
+  renderChart: ->
+    return unless inst
+    return unless chartData and chartData.length > 0
+
+    catIdx = columns.findIndex((c) -> c.type is 'category' or c.type is 'xaxis')
+    valIdx = columns.findIndex((c) -> c.type is 'piechart')
+    return if catIdx < 0 or valIdx < 0
+
+    pieData = chartData.map (r) ->
+      item = { name: r[catIdx], value: r[valIdx] }
+      item
+
+    option =
+      tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' }
+      legend: { bottom: 0 }
+      series: [{ type: 'pie', radius: ['35%', '65%'], center: ['50%', '50%'], data: pieData, label: { show: true, formatter: '{b}' } }]
+    option.title = { text: title, left: 'center', textStyle: { fontSize: 14, fontWeight: 500 } }
+
+    inst.setOption(option, true)
+
+  ~> requestAnimationFrame -> @initChart()
+  chartData ~> @renderChart()
+
+  render
+    div
+      style: "height: #{height}px; width: 100%"

@@ -1,0 +1,35 @@
+# ValueCard - single KPI metric display
+
+export ValueCard = component
+  @chartData := []
+  @columns := []
+  @title := ''
+
+  mainValue ~=
+    valIdx = columns.findIndex((c) -> c.type is 'value')
+    return '' if valIdx < 0 or not chartData or chartData.length is 0
+    v = chartData[0][valIdx]
+    if typeof v is 'number'
+      v.toLocaleString()
+    else
+      String(v or '')
+
+  label ~=
+    labelIdx = columns.findIndex((c) -> c.type is 'label')
+    if labelIdx >= 0 and chartData and chartData.length > 0
+      chartData[0][labelIdx]
+    else
+      title
+
+  compareValue ~=
+    cmpIdx = columns.findIndex((c) -> c.type is 'compare')
+    return null if cmpIdx < 0 or not chartData or chartData.length is 0
+    chartData[0][cmpIdx]
+
+  render
+    .('rounded-xl border border-gray-200 bg-white p-6 shadow-sm')
+      if label
+        .('text-sm font-medium text-gray-500 mb-1') label
+      .('text-3xl font-bold text-gray-900') mainValue
+      if compareValue isnt null
+        .('mt-2 text-sm text-gray-400') "vs #{compareValue}"

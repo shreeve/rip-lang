@@ -1,0 +1,59 @@
+# Analytics Demo — Server
+#
+# Serves the Rip UI client and proxies SQL queries to rip-db.
+# Start rip-db first: rip-db :memory: --port 4213
+# Then: rip api/index.rip
+
+import { get, post, use, start, read } from '@rip-lang/api'
+import { ripUI } from '@rip-lang/ui/serve'
+
+dir = new URL('../app', import.meta.url).pathname
+dbUrl = process.env.RIPDB_URL or 'http://localhost:4213'
+
+# Serve the rip-ui client
+use ripUI
+  app: ''
+  dir: dir
+  components: 'routes'
+  includes: ['components']
+  title: 'Rip Analytics Demo'
+  watch: false
+
+# Proxy SQL queries to rip-db
+post '/sql', ->
+  sql = read('sql')
+  resp = await fetch "#{dbUrl}/sql",
+    method: 'POST'
+    headers: { 'Content-Type': 'application/json' }
+    body: JSON.stringify({ sql })
+  await resp.json()
+
+# Seed sample data
+post '/seed', ->
+  statements = [
+    "DROP TABLE IF EXISTS monthly_sales"
+    "CREATE TABLE monthly_sales (month VARCHAR, revenue DOUBLE, costs DOUBLE, profit DOUBLE)"
+    "INSERT INTO monthly_sales VALUES ('Jan', 42000, 31000, 11000), ('Feb', 48000, 33000, 15000), ('Mar', 51000, 35000, 16000), ('Apr', 55000, 34000, 21000), ('May', 62000, 38000, 24000), ('Jun', 58000, 36000, 22000), ('Jul', 65000, 40000, 25000), ('Aug', 71000, 42000, 29000), ('Sep', 68000, 41000, 27000), ('Oct', 74000, 44000, 30000), ('Nov', 79000, 46000, 33000), ('Dec', 85000, 48000, 37000)"
+    "DROP TABLE IF EXISTS categories"
+    "CREATE TABLE categories (category VARCHAR, amount DOUBLE)"
+    "INSERT INTO categories VALUES ('Product A', 340000), ('Product B', 215000), ('Product C', 180000), ('Product D', 95000), ('Other', 60000)"
+    "DROP TABLE IF EXISTS orders"
+    "CREATE TABLE orders (id INTEGER, customer VARCHAR, product VARCHAR, amount DOUBLE, status VARCHAR, order_date DATE)"
+    "INSERT INTO orders VALUES (1, 'Acme Corp', 'Product A', 12500, 'completed', '2025-12-15'), (2, 'Globex', 'Product B', 8700, 'completed', '2025-12-18'), (3, 'Initech', 'Product A', 15200, 'pending', '2026-01-05'), (4, 'Umbrella', 'Product C', 6300, 'completed', '2026-01-10'), (5, 'Stark Industries', 'Product A', 22000, 'completed', '2026-01-15'), (6, 'Wayne Enterprises', 'Product B', 11500, 'pending', '2026-01-22'), (7, 'Oscorp', 'Product D', 4800, 'cancelled', '2026-02-01'), (8, 'Daily Planet', 'Product C', 9100, 'completed', '2026-02-08')"
+  ]
+
+  for stmt in statements
+    res = await fetch "#{dbUrl}/sql",
+      method: 'POST'
+      headers: { 'Content-Type': 'application/json' }
+      body: JSON.stringify({ sql: stmt })
+    result = await res.json()
+    if result.error
+      return { error: result.error, sql: stmt }
+
+  { ok: true, tables: ['monthly_sales', 'categories', 'orders'] }
+
+# SPA fallback
+get '/*' -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
+
+start port: 3000

@@ -1,0 +1,43 @@
+# Analytics Demo — Dashboard Page
+
+export Home = component
+  seeded := false
+  error := null
+  queries := []
+
+  seedAndLoad: ->
+    try
+      unless seeded
+        seedResp = await fetch('/seed', { method: 'POST' })
+        seedRes = await seedResp.json()
+        if seedRes.error
+          error = "Seed error: #{seedRes.error}"
+          return
+        seeded = true
+
+      queries = [
+        "SELECT count(*) AS \"value:Orders\", 'Orders' AS \"label:Label\" FROM orders"
+        "SELECT sum(revenue) AS \"value:Total Revenue\", 'Total Revenue' AS \"label:Label\" FROM monthly_sales"
+        "SELECT sum(costs) AS \"value:Total Costs\", 'Total Costs' AS \"label:Label\" FROM monthly_sales"
+        "SELECT sum(profit) AS \"value:Total Profit\", 'Total Profit' AS \"label:Label\" FROM monthly_sales"
+        "SELECT month AS \"xaxis:Month\", revenue AS \"linechart:Revenue\", costs AS \"linechart:Costs\", profit AS \"linechart:Profit\" FROM monthly_sales"
+        "SELECT month AS \"xaxis:Month\", revenue AS \"barchart:Revenue\", costs AS \"barchart:Costs\" FROM monthly_sales"
+        "SELECT category AS \"category:Category\", amount AS \"piechart:Amount\" FROM categories"
+        "SELECT id, customer, product, amount, status, order_date FROM orders ORDER BY order_date DESC"
+      ]
+
+    catch err
+      error = err.message
+
+  ~> requestAnimationFrame -> @seedAndLoad()
+
+  render
+    .('max-w-6xl mx-auto px-6 py-8')
+      .('mb-8')
+        h1.('text-2xl font-bold text-gray-900') "Rip Analytics Demo"
+        .('text-gray-500 mt-1') "SQL-driven dashboards powered by DuckDB + ECharts"
+
+      if error
+        .('rounded-xl bg-red-50 border border-red-200 p-6 text-red-700') error
+      else
+        Dashboard queries: queries, endpoint: '/sql'
