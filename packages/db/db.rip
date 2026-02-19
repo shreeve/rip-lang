@@ -125,9 +125,8 @@ isSelectQuery = (sql) ->
 
 # Log SQL query (truncated if long)
 logSQL = (sql) ->
-  preview = sql.replace(/\s+/g, ' ').trim()
-  preview = "#{preview.slice(0, 100)}..." if preview.length > 100
-  console.log "SQL: #{preview}"
+  query = sql.replace(/\s+/g, ' ').trim()
+  console.log "SQL: #{query}"
 
 # Execute SQL and return result (uses persistent connection)
 executeSQL = (sql, params = []) ->
