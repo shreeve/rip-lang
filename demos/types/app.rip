@@ -1,12 +1,21 @@
-# app.rip — imports typed functions from math.rip
+# app.rip — demonstrates TypeScript IntelliSense in Rip
 #
-# After saving math.rip, open this file and try:
-#   - Type "add(" to see parameter hints
-#   - Hover over "greet" to see its signature
-#   - Autocomplete after "PI." or "User"
+# Open this file and try:
+#   - Hover over `user` to see its type
+#   - Type `user.` to see property completions
+#   - Type `formatName(` to see signature help
+#   - Ctrl+click `fetchUser` to go to its definition
 
-import { add, greet, PI, User } from './math.rip'
+import { User, Booking, Child } from './models.rip'
+import { fetchUser, fetchBookings, formatName, upcomingBookings } from './api.rip'
 
-result = add(10, 20)
-message = greet("World")
-area = PI * 5 * 5
+user = fetchUser(1)
+name = formatName(user)
+
+bookings = fetchBookings(user.id)
+upcoming = upcomingBookings(bookings, 10)
+
+for booking in upcoming
+  console.log "Week #{booking.week}: #{booking.slot}"
+  for child in booking.children
+    console.log "  #{child.name}, age #{child.age}"

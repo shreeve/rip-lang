@@ -1,0 +1,23 @@
+# api.rip — typed API functions
+
+import { User, Booking, Session } from './models.rip'
+
+export def fetchUser(id:: number):: User
+  res = await fetch('/api/users/' + id)
+  res.json()
+
+export def fetchBookings(userId:: number):: Booking[]
+  res = await fetch('/api/users/' + userId + '/bookings')
+  data = await res.json()
+  data.bookings
+
+export def fetchSessions():: Session[]
+  res = await fetch('/api/sessions')
+  data = await res.json()
+  data.sessions
+
+export def formatName(user:: User):: string
+  [user.firstName, user.lastName].filter(Boolean).join(' ')
+
+export def upcomingBookings(bookings:: Booking[], currentWeek:: number):: Booking[]
+  bookings.filter (b) -> b.week >= currentWeek

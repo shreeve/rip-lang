@@ -1,0 +1,28 @@
+# models.rip — shared type definitions
+
+export User ::= type
+  id: number
+  firstName: string
+  lastName: string
+  email: string
+  phone?: string
+
+export Child ::= type
+  name: string
+  age: number
+
+export Booking ::= type
+  id: number
+  week: number
+  slot: string
+  children: Child[]
+
+export Session ::= type
+  week: number
+  day: string
+  slots: Slot[]
+
+export Slot ::= type
+  time: string
+  spots: number
+  maxSpots: number
