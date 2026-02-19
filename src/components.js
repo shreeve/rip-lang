@@ -1521,26 +1521,50 @@ export function installComponentSupport(CodeGenerator, Lexer) {
           }
         }
       } else if (Array.isArray(arg) && (arg[0] === '->' || arg[0] === '=>')) {
-        const block = arg[2];
+        let block = arg[2];
         if (block) {
-          const savedCreateLines = this._createLines;
-          const savedSetupLines = this._setupLines;
-          this._createLines = [];
-          this._setupLines = [];
-
-          childrenVar = this.generateTemplateBlock(block);
-
-          const childCreateLines = this._createLines;
-          const childSetupLinesCopy = this._setupLines;
-
-          this._createLines = savedCreateLines;
-          this._setupLines = savedSetupLines;
-
-          for (const line of childCreateLines) {
-            this._createLines.push(line);
+          // Indented attributes: extract object nodes from block as props
+          if (this.is(block, 'block')) {
+            const domChildren = [];
+            for (const child of block.slice(1)) {
+              if (this.is(child, 'object')) {
+                for (let i = 1; i < child.length; i++) {
+                  const [key, value] = child[i];
+                  if (typeof key === 'string') {
+                    const prevReactive = this.reactiveMembers;
+                    this.reactiveMembers = new Set();
+                    const valueCode = this.generateInComponent(value, 'value');
+                    this.reactiveMembers = prevReactive;
+                    props.push(`${key}: ${valueCode}`);
+                  }
+                }
+              } else {
+                domChildren.push(child);
+              }
+            }
+            block = domChildren.length > 0 ? ['block', ...domChildren] : null;
           }
-          childrenSetupLines.push(...childSetupLinesCopy);
-          props.push(`children: ${childrenVar}`);
+
+          if (block) {
+            const savedCreateLines = this._createLines;
+            const savedSetupLines = this._setupLines;
+            this._createLines = [];
+            this._setupLines = [];
+
+            childrenVar = this.generateTemplateBlock(block);
+
+            const childCreateLines = this._createLines;
+            const childSetupLinesCopy = this._setupLines;
+
+            this._createLines = savedCreateLines;
+            this._setupLines = savedSetupLines;
+
+            for (const line of childCreateLines) {
+              this._createLines.push(line);
+            }
+            childrenSetupLines.push(...childSetupLinesCopy);
+            props.push(`children: ${childrenVar}`);
+          }
         }
       }
     }
