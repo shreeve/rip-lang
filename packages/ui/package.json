@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/ui",
-  "version": "0.3.12",
+  "version": "0.3.13",
   "description": "Zero-build reactive web framework — rip.js + ui.rip + launch(url)",
   "type": "module",
   "main": "ui.rip",
