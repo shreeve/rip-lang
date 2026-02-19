@@ -36,6 +36,9 @@ Options:
   -v, --version       Show version number
   -w, --web           Launch browser REPL (auto-opens + auto-shutdown)
 
+Subcommands:
+  rip check [dir]               Type-check all .rip files in directory
+
 Examples:
   rip                           # Interactive REPL (terminal)
   rip script.rip                # Execute script directly
@@ -93,6 +96,13 @@ async function main() {
   }
 
   // Launch local browser REPL (starts server + opens browser)
+  if (args[0] === 'check') {
+    const targetDir = args[1] || '.';
+    const { runCheck } = await import('../src/check.js');
+    const exitCode = await runCheck(targetDir, { quiet: args.includes('-q') || args.includes('--quiet') });
+    process.exit(exitCode);
+  }
+
   if (ripOptions.includes('-w') || ripOptions.includes('--web')) {
     console.log('🚀 Starting Rip browser REPL...\n');
 
