@@ -111,6 +111,15 @@ function compileRip(filePath, source) {
       });
     }
 
+    // Remove bare `let x;` declarations from code when the DTS already
+    // declares `let x: Type;` — avoids "Cannot redeclare" conflicts.
+    const dtsVars = new Set();
+    for (const m of dts.matchAll(/^(?:let|var)\s+(\w+)\s*:/gm)) dtsVars.add(m[1]);
+    if (dtsVars.size) {
+      const varPat = new RegExp(`^(let|var)\\s+(${[...dtsVars].join('|')})\\s*;[ \\t]*$`, 'gm');
+      code = code.replace(varPat, '');
+    }
+
     // Type-check files that have type annotations (::) or import from typed
     // .rip modules.  A .rip import is "typed" if the imported file itself has
     // :: annotations.  This avoids false positives on plain untyped files while
@@ -130,9 +139,35 @@ function compileRip(filePath, source) {
     const hasTypes = hasOwnTypes || importsTyped;
     if (!hasTypes) code = '// @ts-nocheck\n' + code;
 
+    // Ensure every file is treated as a module (not a global script)
+    if (!/\bexport\b/.test(code) && !/\bimport\b/.test(code)) code += '\nexport {};\n';
+
     const tsContent = (hasTypes ? dts + '\n' : '') + code;
     const headerLines = hasTypes ? countLines(dts + '\n') : 1; // 1 for @ts-nocheck
-    const { srcToGen, genToSrc } = buildLineMap(result.reverseMap, headerLines);
+    const { srcToGen, genToSrc } = buildLineMap(result.reverseMap, result.map, headerLines);
+
+    // Map DTS variable declaration lines back to their source lines.
+    // TypeScript may report errors (e.g. TS2741) on the `let x: Type;`
+    // declaration in the DTS header.  Those lines have no entry in
+    // genToSrc because they aren't generated code, so genToSrcPos would
+    // fall back to line 0.  Fix by scanning the DTS for `let/var x:`
+    // lines and matching variable names to source lines with `x::`.
+    if (hasTypes && dts) {
+      const dtsLines = dts.split('\n');
+      const srcLines = source.split('\n');
+      for (let i = 0; i < dtsLines.length; i++) {
+        const m = dtsLines[i].match(/^(?:let|var)\s+(\w+)\s*:/);
+        if (!m) continue;
+        const varName = m[1];
+        for (let s = 0; s < srcLines.length; s++) {
+          if (new RegExp('\\b' + varName + '\\s*::').test(srcLines[s])) {
+            genToSrc.set(i, s);
+            break;
+          }
+        }
+      }
+    }
+
     const prev = compiled.get(filePath);
 
     compiled.set(filePath, {
@@ -140,7 +175,7 @@ function compileRip(filePath, source) {
       source, tsContent, headerLines, srcToGen, genToSrc, hasTypes,
     });
 
-    connection.console.log(`[rip] compiled ${path.basename(filePath)}: ${tsContent.length} chars, ${srcToGen.size} mapped lines`);
+    connection.console.log(`[rip] compiled ${path.basename(filePath)}: hasTypes=${hasTypes}, headerLines=${headerLines}`);
     publishDiagnostics(filePath);
   } catch (e) {
     connection.console.log(`[rip] compile error ${path.basename(filePath)}: ${e.message}`);
@@ -281,7 +316,10 @@ function patchTypes() {
     for (const stmt of sf.statements) {
       if (ts.isVariableStatement(stmt)) {
         for (const decl of stmt.declarationList.declarations) {
-          if (!decl.initializer && ts.isIdentifier(decl.name)) {
+          // Only patch untyped declarations (e.g. `let x;` from Rip hoisting).
+          // Skip declarations that already have a type annotation (e.g. `let user: User;`
+          // from the DTS) — overriding those would suppress real type errors.
+          if (!decl.initializer && !decl.type && ts.isIdentifier(decl.name)) {
             const sym = checker.getSymbolAtLocation(decl.name);
             if (sym) uninitialized.set(decl.name.text, sym);
           }
@@ -305,16 +343,58 @@ function patchTypes() {
 
 // ── Position mapping ───────────────────────────────────────────────
 
-function buildLineMap(reverseMap, headerLines) {
+const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+function vlqDecode(str) {
+  const values = []; let i = 0;
+  while (i < str.length) {
+    let value = 0, shift = 0, digit;
+    do { digit = B64.indexOf(str[i++]); value |= (digit & 0x1F) << shift; shift += 5; } while (digit & 0x20);
+    values.push(value & 1 ? -(value >> 1) : value >> 1);
+  }
+  return values;
+}
+function parseSourceMap(mapJSON) {
+  const map = JSON.parse(mapJSON);
+  const genToSrc = new Map();
+  let srcLine = 0, srcCol = 0, genCol = 0;
+  const lines = map.mappings.split(';');
+  for (let genLine = 0; genLine < lines.length; genLine++) {
+    genCol = 0; if (!lines[genLine]) continue;
+    for (const seg of lines[genLine].split(',')) {
+      const fields = vlqDecode(seg);
+      if (fields.length < 4) continue;
+      genCol += fields[0]; srcLine += fields[2]; srcCol += fields[3];
+      if (!genToSrc.has(genLine)) genToSrc.set(genLine, srcLine);
+    }
+  }
+  return genToSrc;
+}
+
+function buildLineMap(reverseMap, mapJSON, headerLines) {
   const srcToGen = new Map();
   const genToSrc = new Map();
+
+  // Try reverseMap first (detailed mapping from compiler)
+  let hasEntries = false;
   if (reverseMap) {
     for (const [srcLine, { genLine }] of reverseMap) {
       const adj = genLine + headerLines;
       srcToGen.set(srcLine, adj);
       genToSrc.set(adj, srcLine);
+      hasEntries = true;
     }
   }
+
+  // Fall back to VLQ source map when reverseMap is empty
+  if (!hasEntries && mapJSON) {
+    const vlqMap = parseSourceMap(mapJSON);
+    for (const [genLine, srcLine] of vlqMap) {
+      const adj = genLine + headerLines;
+      srcToGen.set(srcLine, adj);
+      genToSrc.set(adj, srcLine);
+    }
+  }
+
   return { srcToGen, genToSrc };
 }
 
@@ -371,12 +451,10 @@ connection.onCompletion((params) => {
   const offset = srcToOffset(fp, params.position.line, params.position.character);
   if (offset === undefined) return [];
 
-  connection.console.log(`[rip] completion ${params.position.line}:${params.position.character} → offset ${offset}`);
   try {
     patchTypes();
     const r = service.getCompletionsAtPosition(toVirtual(fp), offset, { includeExternalModuleExports: true, includeInsertTextCompletions: true });
     if (!r) return [];
-    connection.console.log(`[rip] → ${r.entries.length} items, first 5: ${r.entries.slice(0, 5).map(e => e.name + '(' + e.kind + ')').join(', ')}`);
     const vf = toVirtual(fp);
     return {
       isIncomplete: false,

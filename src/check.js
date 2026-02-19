@@ -113,6 +113,15 @@ function compileFile(filePath, source, compiler, allFiles) {
     });
   }
 
+  // Remove bare `let x;` declarations from code when the DTS already
+  // declares `let x: Type;` — avoids "Cannot redeclare" conflicts.
+  const dtsVars = new Set();
+  for (const m of dts.matchAll(/^(?:let|var)\s+(\w+)\s*:/gm)) dtsVars.add(m[1]);
+  if (dtsVars.size) {
+    const varPat = new RegExp(`^(let|var)\\s+(${[...dtsVars].join('|')})\\s*;[ \\t]*$`, 'gm');
+    code = code.replace(varPat, '');
+  }
+
   // Determine if this file should be type-checked
   const hasOwnTypes = hasTypeAnnotations(source);
   let importsTyped = false;
@@ -128,6 +137,9 @@ function compileFile(filePath, source, compiler, allFiles) {
   }
   const hasTypes = hasOwnTypes || importsTyped;
   if (!hasTypes) code = '// @ts-nocheck\n' + code;
+
+  // Ensure every file is treated as a module (not a global script)
+  if (!/\bexport\b/.test(code) && !/\bimport\b/.test(code)) code += '\nexport {};\n';
 
   const tsContent = (hasTypes ? dts + '\n' : '') + code;
   const headerLines = hasTypes ? countLines(dts + '\n') : 1;
