@@ -11,6 +11,7 @@
 //   type errors mapped back to Rip source positions.
 
 import { Compiler } from './compiler.js';
+import { createRequire } from 'module';
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import { resolve, relative, dirname } from 'path';
 import { buildLineMap } from './sourcemaps.js';
@@ -210,8 +211,18 @@ const dim     = (s) => isColor ? `\x1b[2m${s}\x1b[0m`  : s;
 const bold    = (s) => isColor ? `\x1b[1m${s}\x1b[0m`  : s;
 
 export async function runCheck(targetDir, opts = {}) {
-  const ts = await import('typescript').then(m => m.default || m);
   const rootPath = resolve(targetDir);
+
+  let ts;
+  try {
+    const req = createRequire(resolve(rootPath, 'package.json'));
+    ts = req('typescript');
+  } catch {
+    try { ts = await import('typescript').then(m => m.default || m); } catch {
+      console.error('TypeScript is required for type checking. Install with: bun add -d typescript');
+      return 1;
+    }
+  }
 
   if (!existsSync(rootPath)) {
     console.error(red(`Error: directory not found: ${targetDir}`));
