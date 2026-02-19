@@ -362,7 +362,10 @@ export async function runCheck(targetDir, opts = {}) {
   const totalFiles = compiled.size;
 
   if (totalErrors === 0 && totalWarnings === 0) {
-    console.log(`\n${bold('✓')} ${typedFiles} typed file${typedFiles !== 1 ? 's' : ''} checked, no errors found`);
+    const summary = typedFiles > 0
+      ? `${typedFiles} typed file${typedFiles !== 1 ? 's' : ''} checked, no errors found`
+      : `${totalFiles} file${totalFiles !== 1 ? 's' : ''} found, none have type annotations`;
+    console.log(`\n${bold('✓')} ${summary}`);
     if (compileErrors > 0) {
       console.log(dim(`  (${compileErrors} file${compileErrors !== 1 ? 's' : ''} had compile errors)`));
     }
