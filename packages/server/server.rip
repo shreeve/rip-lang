@@ -352,6 +352,18 @@ parseFlags = (argv) ->
 # Worker Mode
 # ==============================================================================
 
+runSetup = ->
+  setupFile = process.env.RIP_SETUP_FILE
+  try
+    mod = import!(setupFile)
+    await Promise.resolve()
+    fn = mod?.setup or mod?.default
+    if typeof fn is 'function'
+      await fn()
+  catch e
+    console.error "rip-server: setup failed:", e
+    process.exit(1)
+
 runWorker = ->
   workerId = parseInt(process.env.WORKER_ID or '0')
   maxRequests = parseInt(process.env.MAX_REQUESTS or '10000')
@@ -493,6 +505,24 @@ class Manager
 
   start: ->
     @stop!
+
+    # Run one-time setup if setup.rip exists next to the entry file
+    setupFile = join(dirname(@flags.appEntry), 'setup.rip')
+    if existsSync(setupFile)
+      setupEnv = Object.assign {}, process.env,
+        RIP_SETUP_MODE: '1'
+        RIP_SETUP_FILE: setupFile
+      proc = Bun.spawn ['rip', import.meta.path],
+        stdout: 'inherit'
+        stderr: 'inherit'
+        stdin: 'ignore'
+        cwd: process.cwd()
+        env: setupEnv
+      code = await proc.exited
+      if code isnt 0
+        console.error "rip-server: setup exited with code #{code}"
+        process.exit(1)
+
     @workers = []
     for i in [0...@flags.workers]
       w = @spawnWorker!(@currentVersion)
@@ -1281,7 +1311,9 @@ main = ->
 # Entry Point
 # ==============================================================================
 
-if process.env.RIP_WORKER_MODE
+if process.env.RIP_SETUP_MODE
+  runSetup()
+else if process.env.RIP_WORKER_MODE
   runWorker()
 else
   main!

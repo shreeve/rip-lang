@@ -5,7 +5,6 @@ import { prettyJson, sessions } from '@rip-lang/api/middleware'
 import { ripUI } from '@rip-lang/ui/serve'
 import { Stash } from './lib/stash.rip'
 import configData from './config.rip'
-import { setup } from './setup.rip'
 import './routes/auth.rip'
 import './routes/sessions.rip'
 import './routes/bookings.rip'
@@ -19,7 +18,14 @@ use prettyJson
 use sessions name: config.session.name, maxAge: config.session.maxAge
 
 # Serve the rip-ui client
-use ripUI app: '', dir: dir, components: 'routes', includes: ['components'], title: config.app.name, watch: true
+use ripUI
+  app: ''
+  dir: dir
+  components: 'routes'
+  includes: ['components']
+  title: config.app.name
+  watch: true
+
 get '/css/*' -> @send "#{dir}/css/#{@req.path.slice(5)}"
 
 # Diagnostic routes
@@ -34,6 +40,4 @@ get '/config' ->
 # SPA fallback for client-side routing
 get '/*' -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 
-# Bootstrap database then start
-setup!()
 start port: config.app.port

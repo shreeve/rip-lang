@@ -24,7 +24,6 @@ dbFetch = (sql, params) ->
   data
 
 export setup = ->
-  # Check if another worker already initialized the database
   check = dbFetch! "SELECT count(*) FROM information_schema.tables WHERE table_name = 'spots'"
   if check.data and check.data[0] and check.data[0][0] > 0
     return

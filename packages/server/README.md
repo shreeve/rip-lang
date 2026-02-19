@@ -311,7 +311,12 @@ The server uses a single-file, self-spawning architecture:
 └─────────────────────────────────────────────────┘
 ```
 
-When `RIP_WORKER_MODE=1` is set, the same `server.rip` file runs as a worker instead of the main server.
+When `RIP_SETUP_MODE=1` is set, the same file runs the one-time setup phase. When `RIP_WORKER_MODE=1` is set, it runs as a worker.
+
+### Startup Lifecycle
+
+1. **Setup** — If `setup.rip` exists next to the entry file, it runs once in a temporary process before any workers spawn. Use this for database migrations, table creation, and seeding.
+2. **Workers** — N worker processes are spawned, each loading the entry file and serving requests.
 
 ### Request Flow
 
@@ -323,12 +328,10 @@ When `RIP_WORKER_MODE=1` is set, the same `server.rip` file runs as a worker ins
 
 ### Hot Reloading
 
-In development mode, the server watches for file changes:
+Two layers of hot reload work together in development:
 
-- **Default**: Only the entry file is watched
-- **With `-w`**: All matching files in the app directory are watched
-
-When a change is detected, a rolling restart of all workers is triggered — zero downtime.
+- **API changes** (`-w` flag) — The Manager watches for `.rip` file changes in the API directory and triggers rolling worker restarts (zero downtime, server-side).
+- **UI changes** (`watch: true` in `ripUI`) — Workers register their app's component directories with the Manager via the control socket. The Manager watches those directories and broadcasts SSE reload events to connected browsers (client-side). SSE connections are held by the long-lived Server process, not by workers.
 
 Use `--static` in production to disable hot reload entirely.
 
@@ -408,6 +411,24 @@ export default (req) ->
 export default
   fetch: (req) -> new Response('Hello!')
 ```
+
+## One-Time Setup
+
+If a `setup.rip` file exists next to your entry file, rip-server runs it
+automatically **once** before spawning any workers. This is ideal for database
+migrations, table creation, and seeding.
+
+```coffee
+# setup.rip — runs once before workers start
+export setup = ->
+  await createTables()
+  await seedData()
+  console.log 'Database ready'
+```
+
+The setup function can export as `setup` or `default`. If the file doesn't
+exist, the setup phase is skipped entirely (no overhead). If setup fails,
+the server exits immediately.
 
 ## Environment Variables
 
@@ -501,14 +522,16 @@ This gives you:
 
 When running with `-w`, two layers of hot reload work together:
 
-1. **rip-server file watching** (`-w` flag) — watches for `.rip` file changes
-   and triggers rolling worker restarts (server-side reload)
-2. **ripUI SSE watching** (`watch: true`) — watches the `pages/` and `includes`
-   directories and notifies connected browsers via SSE (client-side reload)
+1. **API hot reload** (`-w` flag) — The Manager watches for `.rip` file changes
+   in the API directory and triggers rolling worker restarts (server-side).
+2. **UI hot reload** (`watch: true`) — Workers register their component
+   directories with the Manager via the control socket. The Manager watches
+   those directories and tells the Server to broadcast SSE reload events to
+   connected browsers (client-side).
 
-For development, the SSE hot-reload is usually sufficient — it recompiles
-components in the browser without restarting workers. The `-w` flag is useful
-when server-side code changes (routes, middleware, etc.).
+SSE connections are held by the long-lived Server process, not by recyclable
+workers, ensuring stable hot-reload connections. Each app prefix gets its own
+SSE pool for multi-app isolation.
 
 ## Comparison with Other Servers
 
