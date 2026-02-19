@@ -878,15 +878,21 @@ class Server
     return new Response('not-found', { status: 404 }) unless group
     encoder = new TextEncoder()
     client = null
+    heartbeat = null
     new Response new ReadableStream(
       start: (controller) ->
         send = (event) ->
           try controller.enqueue encoder.encode("event: #{event}\n\n")
           catch then null
+        ping = ->
+          try controller.enqueue encoder.encode(":\n\n")
+          catch then null
         client = { send }
         group.sseClients.add(client)
+        heartbeat = setInterval ping, 5000
         send('connected')
       cancel: ->
+        clearInterval(heartbeat) if heartbeat
         group.sseClients.delete(client) if client
     ),
       headers:
