@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { readFileSync, writeFileSync, unlinkSync } from 'fs';
+import { readFileSync, writeFileSync, unlinkSync, copyFileSync } from 'fs';
 import { brotliCompressSync } from 'zlib';
 import { compileToJS } from '../src/compiler.js';
 
@@ -55,6 +55,10 @@ const ripUi = await buildBundle(['./docs/dist/_rip-ui-entry.js'], 'rip-ui.min.js
 // Clean up intermediates
 try { unlinkSync('./docs/dist/_ui.js'); } catch {}
 try { unlinkSync('./docs/dist/_rip-ui-entry.js'); } catch {}
+
+// Copy rip-ui bundle to @rip-lang/ui package (canonical location)
+copyFileSync('./docs/dist/rip-ui.min.js', './packages/ui/dist/rip-ui.min.js');
+copyFileSync('./docs/dist/rip-ui.min.js.br', './packages/ui/dist/rip-ui.min.js.br');
 
 // Summary
 console.log(`\n✨ Browser bundles ready • Version ${version} • ${buildDate}`);

@@ -33,11 +33,7 @@ export ripUI = (opts = {}) ->
   uiDir         = import.meta.dir
 
   # Resolve rip-ui.min.js (compiler + UI framework bundled)
-  bundlePath = null
-  try
-    bundlePath = Bun.fileURLToPath(import.meta.resolve('rip-lang/docs/dist/rip-ui.min.js'))
-  catch
-    bundlePath = "#{uiDir}/../../docs/dist/rip-ui.min.js"
+  bundlePath = "#{uiDir}/dist/rip-ui.min.js"
 
   # ----------------------------------------------------------------------------
   # Route: /rip/* — framework files, registered once
