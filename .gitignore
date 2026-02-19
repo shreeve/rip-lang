@@ -38,3 +38,4 @@ notes.txt
 /linguist
 .manifest.json
 /demos/streamline/ARCHIVE
+*.local.*
