@@ -248,8 +248,8 @@ smart = (fn) ->
         return new Response(null, { status: 204 })
       result
     catch err
-      console.error 'Handler error:', err
       status = err?.status or 500
+      console.error 'Handler error:', err if status >= 500
       message = err?.message or 'Internal Server Error'
       new Response message, { status, headers: { 'Content-Type': 'text/plain' } }
 
@@ -362,7 +362,7 @@ runHandler = (c, handler) ->
     compose!(_middlewares, _beforeFilters, _afterFilters, handler)(c)
     c._response or new Response('', { status: 204 })
   catch err
-    console.error 'Request error:', err
+    console.error 'Request error:', err if not err?.status or err.status >= 500
     if _errorHandler?
       _errorHandler.call!(c, err, c)
     else
