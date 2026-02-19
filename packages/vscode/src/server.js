@@ -85,6 +85,7 @@ function createService() {
     moduleResolution: ts.ModuleResolutionKind.Bundler,
     allowJs: true,
     strict: false,
+    strictNullChecks: true,
     noEmit: true,
     skipLibCheck: true,
   };
@@ -250,9 +251,30 @@ connection.onCompletion((params) => {
     const r = service.getCompletionsAtPosition(toVirtual(fp), offset, { includeExternalModuleExports: true, includeInsertTextCompletions: true });
     if (!r) return [];
     connection.console.log(`[rip] → ${r.entries.length} items, first 5: ${r.entries.slice(0, 5).map(e => e.name + '(' + e.kind + ')').join(', ')}`);
+    const vf = toVirtual(fp);
     return {
       isIncomplete: false,
-      items: r.entries.map((e) => ({ label: e.name, kind: tsToLspKind(e.kind), detail: e.kind, sortText: e.sortText })),
+      items: r.entries.map((e) => {
+        const item = {
+          label: e.name,
+          kind: tsToLspKind(e.kind),
+          sortText: e.sortText,
+        };
+        try {
+          const d = service.getCompletionEntryDetails(vf, offset, e.name, undefined, undefined, undefined, undefined);
+          if (d) {
+            const display = ts.displayPartsToString(d.displayParts);
+            // Show full signature like native TS: "(property) email: string"
+            item.detail = display.replace(/\((\w+)\)\s*\S+\./, '($1) ');
+            // Mark optional properties with ? in the label
+            if (display.includes('?:')) item.label = e.name + '?';
+            if (d.documentation?.length) {
+              item.documentation = ts.displayPartsToString(d.documentation);
+            }
+          }
+        } catch {}
+        return item;
+      }),
     };
   } catch (e) { connection.console.log(`[rip] completion error: ${e.message}`); return []; }
 });
@@ -334,7 +356,7 @@ connection.onSignatureHelp((params) => {
 
 const KIND = {
   keyword: 14, method: 2, function: 3, 'local function': 3, constructor: 4,
-  property: 10, getter: 10, setter: 10, 'JSX attribute': 10,
+  property: 5, getter: 5, setter: 5, 'JSX attribute': 5,
   'var': 6, variable: 6, 'local var': 6, let: 6, parameter: 6,
   'const': 21, 'enum member': 20,
   class: 7, 'local class': 7,

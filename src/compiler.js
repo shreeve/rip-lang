@@ -3141,7 +3141,9 @@ export class Compiler {
     this.options = { showTokens: false, showSExpr: false, ...options };
   }
 
-  compile(source) {
+  compile(source, options) {
+    if (options) this.options = { ...this.options, ...options };
+
     // Handle __DATA__ marker
     let dataSection = null;
     let lines = source.split('\n');
