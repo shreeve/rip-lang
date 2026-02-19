@@ -872,27 +872,35 @@ class Server
   registerWatch: (prefix) ->
     return if @watchGroups.has(prefix)
     @watchGroups.set prefix, { sseClients: new Set() }
+    @startHeartbeat()
+
+  startHeartbeat: ->
+    return if @_heartbeat
+    @_heartbeat = setInterval =>
+      for [prefix, group] as @watchGroups
+        dead = []
+        for client as group.sseClients
+          try client.ping()
+          catch then dead.push(client)
+        group.sseClients.delete(c) for c in dead
+    , 5000
 
   handleWatch: (prefix) ->
     group = @watchGroups.get(prefix)
     return new Response('not-found', { status: 404 }) unless group
     encoder = new TextEncoder()
     client = null
-    heartbeat = null
     new Response new ReadableStream(
       start: (controller) ->
-        send = (event) ->
-          try controller.enqueue encoder.encode("event: #{event}\n\n")
+        write = (data) ->
+          try controller.enqueue encoder.encode(data)
           catch then null
-        ping = ->
-          try controller.enqueue encoder.encode(":\n\n")
-          catch then null
-        client = { send }
+        client =
+          send: (event) -> write "event: #{event}\n\n"
+          ping: -> write ":\n\n"
         group.sseClients.add(client)
-        heartbeat = setInterval ping, 5000
-        send('connected')
+        client.send('connected')
       cancel: ->
-        clearInterval(heartbeat) if heartbeat
         group.sseClients.delete(client) if client
     ),
       headers:
