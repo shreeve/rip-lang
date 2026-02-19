@@ -5,7 +5,7 @@
   "version": "0.3.4",
   "publisher": "rip-lang",
   "license": "MIT",
-  "main": "./src/extension.js",
+  "main": "./dist/extension.js",
   "repository": {
     "type": "git",
     "url": "https://github.com/shreeve/rip-lang.git",
@@ -18,15 +18,8 @@
     "onLanguage:rip",
     "onLanguage:rip-schema"
   ],
-  "categories": [
-    "Programming Languages"
-  ],
-  "keywords": [
-    "rip",
-    "reactive",
-    "types",
-    "compiler"
-  ],
+  "categories": ["Programming Languages"],
+  "keywords": ["rip", "reactive", "types", "compiler"],
   "icon": "icon.png",
   "contributes": {
     "languages": [
@@ -81,31 +74,19 @@
         "editor.tabSize": 2,
         "editor.insertSpaces": true
       }
-    },
-    "commands": [
-      {
-        "command": "rip.generateDts",
-        "title": "Rip: Generate .d.ts for Current File"
-      },
-      {
-        "command": "rip.generateAllDts",
-        "title": "Rip: Generate .d.ts for All Files"
-      }
-    ],
-    "configuration": {
-      "title": "Rip",
-      "properties": {
-        "rip.types.generateOnSave": {
-          "type": "boolean",
-          "default": true,
-          "description": "Automatically generate .d.ts files when saving .rip files"
-        },
-        "rip.types.intellisense": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable type intelligence (autocomplete, hover, go-to-definition) from third-party .d.ts files"
-        }
-      }
     }
+  },
+  "scripts": {
+    "build": "esbuild src/extension.js --bundle --outfile=dist/extension.js --format=cjs --platform=node --external:vscode --minify && esbuild src/server.js --bundle --outfile=dist/server.js --format=cjs --platform=node --external:typescript --minify",
+    "package": "bun run build && npx @vscode/vsce package --no-dependencies",
+    "install-ext": "bun run package && cursor --install-extension rip-*.vsix --force"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1",
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.12"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.3"
   }
 }

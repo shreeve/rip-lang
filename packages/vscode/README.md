@@ -2,73 +2,46 @@
 
 # Rip - VS Code Extension
 
-> **Syntax highlighting, type generation, and editor integration for Rip**
+> **Syntax highlighting, type intelligence, and editor integration for Rip**
 
-Full language support for [Rip](https://github.com/shreeve/rip-lang), a modern reactive language that compiles to JavaScript. Provides syntax highlighting, comment toggling, bracket matching, code folding, type annotation support, and automatic `.d.ts` generation.
+Full language support for [Rip](https://github.com/shreeve/rip-lang), a modern reactive language that compiles to JavaScript. Provides syntax highlighting, an in-memory TypeScript language server, comment toggling, bracket matching, and code folding.
 
 ## Features
 
 - Full syntax highlighting for `.rip` files
+- TypeScript-powered IntelliSense (completions, hover, go-to-definition)
+- No `.rip-cache/` or shadow files — everything is in-memory
 - Comment toggling (`#` line, `###` block)
 - Bracket matching and auto-closing
 - Indentation-based code folding
 - Type annotation highlighting (`::`, `::=`)
 - Reactive operator highlighting (`:=`, `~=`, `~>`)
-- Auto-generate `.d.ts` files on save
-- Commands: generate types for current file or entire workspace
 
-## Type Generation
+## How It Works
 
-Rip's optional type system emits `.d.ts` files for TypeScript interoperability. The extension automatically generates these files when you save a `.rip` file with type annotations.
+The extension runs a lightweight language server that compiles `.rip` files to virtual TypeScript in memory. The TypeScript language service reads these virtual files to provide completions, hover info, go-to-definition, and signature help — without ever writing to disk.
 
-### How It Works
-
-1. Add type annotations to your Rip code using `::` and `::=`
-2. Save the file — the extension runs `rip -d` to generate a `.d.ts` alongside it
-3. TypeScript/JavaScript consumers of your package get full autocomplete and type checking
-
-### Example
-
-```coffee
-# greet.rip — types are optional, compile-time only
-def greet(name:: string):: string
-  "Hello, #{name}!"
-
-User ::= type
-  id: number
-  name: string
-  email?: string
-
-export { greet, User }
+```
+.rip file → Rip compiler → virtual .ts (in-memory) → TypeScript service → IntelliSense
 ```
 
-Saving generates `greet.d.ts`:
+The Rip compiler is loaded from the workspace (`src/compiler.js` in a dev repo, or `node_modules/rip-lang` otherwise). TypeScript is loaded from the workspace or the editor's built-in copy. The server runs under Bun for fast startup.
 
-```typescript
-export declare function greet(name: string): string;
-export interface User {
-  id: number;
-  name: string;
-  email?: string;
-}
+## Tailwind CSS Autocompletion
+
+To enable Tailwind CSS autocompletion inside `.()` CLSX helpers in Rip render templates, add these to your VS Code or Cursor settings:
+
+```json
+"tailwindCSS.includeLanguages": { "rip": "html" },
+"tailwindCSS.experimental.classRegex": [
+  ["\\.\\(([\\s\\S]*?)\\)", "'([^']*)'"]
+]
 ```
-
-### Commands
-
-- **Rip: Generate .d.ts for Current File** — generate types for the active `.rip` file
-- **Rip: Generate .d.ts for All Files** — generate types for all `.rip` files in the workspace
-
-### Settings
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `rip.types.generateOnSave` | `true` | Auto-generate `.d.ts` on save |
-| `rip.compiler.path` | (auto) | Path to the `rip` compiler binary |
 
 ## Rip at a Glance
 
 ```coffee
-# Types (optional, emit .d.ts)
+# Types (optional, compile-time only)
 def greet(name:: string):: string
   "Hello, #{name}!"
 
@@ -89,30 +62,45 @@ str =~ /Hello, (\w+)/              # Regex match
 
 ## Requirements
 
-The Rip compiler (`rip-lang` npm package) must be installed for type generation. Syntax highlighting works without it.
+The Rip compiler (`rip-lang` npm package) must be available in the workspace for type intelligence. Syntax highlighting works without it.
 
 ```bash
-npm install -g rip-lang    # global install
+npm install rip-lang       # local install (recommended)
 # or
-npm install rip-lang       # local install (auto-detected)
+npm install -g rip-lang    # global install
 ```
 
-## Development
+## Building the Extension
 
-### Install Locally
+The extension manages its own dependencies and builds into self-contained bundles via esbuild.
 
 ```bash
 cd packages/vscode
-npx @vscode/vsce package --no-dependencies
-cursor --install-extension rip-0.3.1.vsix --force
-# Then: Cmd+Shift+P -> "Developer: Reload Window"
+
+# Install dependencies (only needed once, or after updating package.json)
+bun install
+
+# Build the bundled dist/ files
+bun run build
+
+# Build + package into a .vsix
+bun run package
+
+# Build + package + install into Cursor
+bun run install-ext
+
+# Then reload the window: Cmd+Shift+P → "Developer: Reload Window"
 ```
 
-### Test in Extension Development Host
+### What the build does
 
-Open `packages/vscode/` as a workspace folder, then press **F5** to launch a new window with the extension loaded. Open `test/sample.rip` to verify syntax highlighting.
+1. **`esbuild src/extension.js`** → `dist/extension.js` (~345KB) — the LSP client, bundled with `vscode-languageclient`
+2. **`esbuild src/server.js`** → `dist/server.js` (~177KB) — the language server, bundled with `vscode-languageserver`
+3. **`vsce package`** → `rip-*.vsix` — the installable extension package
 
-### Publishing
+Both `vscode` and `typescript` are external (not bundled) — `vscode` is provided by the editor, `typescript` is loaded at runtime from the workspace or editor.
+
+## Publishing
 
 ```bash
 cd packages/vscode
@@ -125,5 +113,4 @@ Bump `version` in `package.json` before each publish.
 ## Links
 
 - [Rip Language](https://github.com/shreeve/rip-lang)
-- [Rip Types Documentation](https://github.com/shreeve/rip-lang/blob/main/docs/RIP-TYPES.md)
 - [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=rip-lang.rip)

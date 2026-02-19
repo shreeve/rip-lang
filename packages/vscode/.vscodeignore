@@ -1,8 +1,10 @@
 **/*
 !language-configuration.json
+!schema-language-configuration.json
 !package.json
 !README.md
 !icon.png
+!dist/**
 !src/**
 !syntaxes/**
 !test/**
