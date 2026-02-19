@@ -17,7 +17,7 @@ async function activate(context) {
   const outputChannel = vscode.window.createOutputChannel('Rip');
   outputChannel.appendLine('Rip extension activated');
 
-  const serverModule = path.join(context.extensionPath, 'dist', 'server.js');
+  const serverModule = path.join(context.extensionPath, 'dist', 'lsp.js');
 
   const serverOptions = {
     run: { command: 'bun', args: [serverModule], transport: TransportKind.stdio },

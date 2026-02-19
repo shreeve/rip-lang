@@ -2,7 +2,7 @@
   "name": "print",
   "displayName": "Rip Print",
   "description": "Syntax-highlighted source code printing — beautifully formatted with themes and line numbers",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "publisher": "rip-lang",
   "license": "MIT",
   "main": "./src/extension.js",

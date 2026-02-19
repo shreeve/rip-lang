@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/x12",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "X12 EDI parser, editor, and query engine — path-based addressing, separator auto-detection, zero dependencies",
   "type": "module",
   "main": "x12.rip",
@@ -34,7 +34,7 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": "^3.9.1"
+    "rip-lang": "^3.10.0"
   },
   "files": [
     "x12.rip",

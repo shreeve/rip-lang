@@ -98,7 +98,7 @@ async function main() {
   // Launch local browser REPL (starts server + opens browser)
   if (args[0] === 'check') {
     const targetDir = args[1] || '.';
-    const { runCheck } = await import('../src/check.js');
+    const { runCheck } = await import('../src/typecheck.js');
     const exitCode = await runCheck(targetDir, { quiet: args.includes('-q') || args.includes('--quiet') });
     process.exit(exitCode);
   }

@@ -2,7 +2,7 @@
   "name": "rip",
   "displayName": "Rip",
   "description": "Rip language support — syntax highlighting, types, and editor integration",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "publisher": "rip-lang",
   "license": "MIT",
   "main": "./dist/extension.js",
@@ -77,7 +77,7 @@
     }
   },
   "scripts": {
-    "build": "esbuild src/extension.js --bundle --outfile=dist/extension.js --format=cjs --platform=node --external:vscode --minify && esbuild src/server.js --bundle --outfile=dist/server.js --format=cjs --platform=node --external:typescript --minify",
+    "build": "esbuild src/extension.js --bundle --outfile=dist/extension.js --format=cjs --platform=node --external:vscode --minify && esbuild src/lsp.js --bundle --outfile=dist/lsp.js --format=cjs --platform=node --external:typescript --minify",
     "package": "bun run build && npx @vscode/vsce package --no-dependencies",
     "install-ext": "bun run package && cursor --install-extension rip-*.vsix --force"
   },

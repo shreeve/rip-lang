@@ -1,8 +1,8 @@
-// Source Map V3 Generator — zero dependencies
+// Source Map V3 — zero dependencies
 //
 // Implements the ECMA-426 Source Map specification (V3).
-// Generates .map JSON files that map compiled JavaScript
-// back to original Rip source positions.
+// Generates and parses .map JSON files that map compiled
+// JavaScript back to original Rip source positions.
 
 const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
@@ -118,4 +118,72 @@ class SourceMapGenerator {
   }
 }
 
-export { SourceMapGenerator, vlqEncode };
+// Decode a Base64-VLQ string back to signed integers
+function vlqDecode(str) {
+  const values = [];
+  let i = 0;
+  while (i < str.length) {
+    let value = 0, shift = 0, digit;
+    do {
+      digit = B64.indexOf(str[i++]);
+      value |= (digit & 0x1F) << shift;
+      shift += 5;
+    } while (digit & 0x20);
+    values.push(value & 1 ? -(value >> 1) : value >> 1);
+  }
+  return values;
+}
+
+// Parse a Source Map V3 JSON string into a generated-line → source-line Map
+function parseSourceMap(mapJSON) {
+  const map = JSON.parse(mapJSON);
+  const genToSrc = new Map();
+  let srcLine = 0, srcCol = 0, genCol = 0;
+
+  const lines = map.mappings.split(';');
+  for (let genLine = 0; genLine < lines.length; genLine++) {
+    genCol = 0;
+    if (!lines[genLine]) continue;
+    for (const seg of lines[genLine].split(',')) {
+      const fields = vlqDecode(seg);
+      if (fields.length < 4) continue;
+      genCol += fields[0];
+      srcLine += fields[2];
+      srcCol += fields[3];
+      if (!genToSrc.has(genLine)) genToSrc.set(genLine, srcLine);
+    }
+  }
+  return genToSrc;
+}
+
+// Build bidirectional line maps from compiler output.
+// Tries reverseMap first (detailed mapping from the compiler), falls back
+// to decoding the VLQ source map JSON. Keys in the returned maps are
+// adjusted by headerLines so they correspond to tsContent line numbers.
+function buildLineMap(reverseMap, mapJSON, headerLines) {
+  const srcToGen = new Map();
+  const genToSrc = new Map();
+
+  let hasEntries = false;
+  if (reverseMap) {
+    for (const [srcLine, { genLine }] of reverseMap) {
+      const adj = genLine + headerLines;
+      srcToGen.set(srcLine, adj);
+      genToSrc.set(adj, srcLine);
+      hasEntries = true;
+    }
+  }
+
+  if (!hasEntries && mapJSON) {
+    const vlqMap = parseSourceMap(mapJSON);
+    for (const [genLine, srcLine] of vlqMap) {
+      const adj = genLine + headerLines;
+      srcToGen.set(srcLine, adj);
+      genToSrc.set(adj, srcLine);
+    }
+  }
+
+  return { srcToGen, genToSrc };
+}
+
+export { SourceMapGenerator, vlqEncode, vlqDecode, parseSourceMap, buildLineMap };

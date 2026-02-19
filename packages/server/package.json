@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/server",
-  "version": "1.1.18",
+  "version": "1.1.19",
   "description": "Pure Rip application server — multi-worker, hot reload, HTTPS, mDNS",
   "type": "module",
   "main": "server.rip",
@@ -38,8 +38,8 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": "^3.9.1",
-    "@rip-lang/api": "^1.1.6"
+    "rip-lang": "^3.10.0",
+    "@rip-lang/api": "^1.1.10"
   },
   "files": [
     "bin/",

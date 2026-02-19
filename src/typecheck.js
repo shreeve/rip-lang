@@ -1,78 +1,69 @@
-// rip check — CLI type-checker for Rip projects
+// Shared type-checking infrastructure for Rip
 //
-// Compiles all .rip files with type annotations, creates an in-process
-// TypeScript language service, and reports type errors mapped back to
-// Rip source positions.
+// Used by both the CLI type-checker (bin/rip check) and the
+// VS Code language server (packages/vscode/src/lsp.js).
+//
+// compileForCheck() — the shared compilation pipeline that transforms
+//   .rip source into TypeScript content suitable for type-checking.
+//
+// runCheck() — the CLI batch type-checker that compiles all .rip files
+//   in a directory, creates a TypeScript language service, and reports
+//   type errors mapped back to Rip source positions.
 
 import { Compiler } from './compiler.js';
-import { readFileSync, existsSync, statSync, readdirSync } from 'fs';
-import { resolve, relative, dirname, basename } from 'path';
+import { readFileSync, existsSync, readdirSync } from 'fs';
+import { resolve, relative, dirname } from 'path';
+import { buildLineMap } from './sourcemaps.js';
 
-// ── Helpers ────────────────────────────────────────────────────────
+// ── Shared helpers ─────────────────────────────────────────────────
 
-const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-
-function vlqDecode(str) {
-  const values = [];
-  let i = 0;
-  while (i < str.length) {
-    let value = 0, shift = 0, digit;
-    do {
-      digit = B64.indexOf(str[i++]);
-      value |= (digit & 0x1F) << shift;
-      shift += 5;
-    } while (digit & 0x20);
-    values.push(value & 1 ? -(value >> 1) : value >> 1);
-  }
-  return values;
+// Detect type annotations (:: followed by space or =) ignoring comments
+// and prototype syntax (Class::method).
+export function hasTypeAnnotations(source) {
+  return source.split('\n').some(line => /::[ \t=]/.test(line.replace(/#.*$/, '')));
 }
 
-function parseSourceMap(mapJSON) {
-  const map = JSON.parse(mapJSON);
-  const genToSrc = new Map();
-  let srcLine = 0, srcCol = 0, genCol = 0;
-
-  const lines = map.mappings.split(';');
-  for (let genLine = 0; genLine < lines.length; genLine++) {
-    genCol = 0;
-    if (!lines[genLine]) continue;
-    for (const seg of lines[genLine].split(',')) {
-      const fields = vlqDecode(seg);
-      if (fields.length < 4) continue;
-      genCol += fields[0];
-      srcLine += fields[2];
-      srcCol += fields[3];
-      if (!genToSrc.has(genLine)) genToSrc.set(genLine, srcLine);
-    }
-  }
-  return genToSrc;
-}
-
-function findRipFiles(dir, files = []) {
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
-    const full = resolve(dir, entry.name);
-    if (entry.isDirectory()) findRipFiles(full, files);
-    else if (entry.name.endsWith('.rip')) files.push(full);
-  }
-  return files;
-}
-
-function countLines(str) {
+export function countLines(str) {
   let n = 0;
   for (let i = 0; i < str.length; i++) if (str[i] === '\n') n++;
   return n;
 }
 
-// Detect type annotations (:: followed by space or =) ignoring comments
-// and prototype syntax (Class::method).
-function hasTypeAnnotations(source) {
-  return source.split('\n').some(line => /::[ \t=]/.test(line.replace(/#.*$/, '')));
+export function toVirtual(p) { return p + '.ts'; }
+export function fromVirtual(p) { return p.endsWith('.rip.ts') ? p.slice(0, -3) : p; }
+
+// TS error codes to skip — Rip resolves modules differently and
+// treats async return types transparently.
+export const SKIP_CODES = new Set([
+  2307, // Cannot find module
+  2304, // Cannot find name
+  1064, // Return type of async function must be Promise
+  2582, // Cannot find name 'test' (test runner globals)
+  2593, // Cannot find name 'describe' (test runner globals)
+]);
+
+// Base TypeScript compiler settings for type-checking. Callers can
+// pass overrides (e.g. { noImplicitAny: true } for the CLI).
+export function createTypeCheckSettings(ts, overrides = {}) {
+  return {
+    target: ts.ScriptTarget.ESNext,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    allowJs: true,
+    strict: false,
+    strictNullChecks: true,
+    noEmit: true,
+    skipLibCheck: true,
+    ...overrides,
+  };
 }
 
-// ── Compilation (mirrors server.js logic) ──────────────────────────
+// ── Shared compilation pipeline ────────────────────────────────────
 
-function compileFile(filePath, source, compiler, allFiles) {
+// Compile a .rip file for type-checking. Merges .d.ts declarations into
+// the compiled JS, detects type annotations, and builds bidirectional
+// source maps. Returns everything both the CLI and LSP need.
+export function compileForCheck(filePath, source, compiler) {
   const result = compiler.compile(source, { sourceMap: true, types: true });
   let code = result.code || '';
   let dts = result.dts ? result.dts.trimEnd() + '\n' : '';
@@ -80,7 +71,9 @@ function compileFile(filePath, source, compiler, allFiles) {
   // Strip .d.ts imports — compiled JS already has them
   dts = dts.replace(/^import\s.*;\s*\n/gm, '');
 
-  // Extract well-formed function signatures and merge into JS
+  // Extract well-formed function signatures and merge into JS.
+  // Leaving them as bare declarations causes TypeScript to treat
+  // them as overload signatures that conflict with the implementations.
   const funcSigs = new Map();
   dts = dts.replace(
     /^(?:export|declare)\s+function\s+(\w+)\(([^)]*)\):\s*(.+);\s*$/gm,
@@ -103,7 +96,7 @@ function compileFile(filePath, source, compiler, allFiles) {
     const funcRe = new RegExp(
       `((?:export\\s+)?(?:async\\s+)?function\\s+${name})\\(([^)]*)\\)(\\s*\\{)`,
     );
-    code = code.replace(funcRe, (match, prefix, codeParams, brace) => {
+    code = code.replace(funcRe, (_match, prefix, codeParams, brace) => {
       const typed = codeParams.split(',').map(p => {
         const n = p.trim();
         const t = paramTypes.get(n);
@@ -113,13 +106,13 @@ function compileFile(filePath, source, compiler, allFiles) {
     });
   }
 
-  // Remove bare `let x;` declarations from code when the DTS already
-  // declares `let x: Type;` — avoids "Cannot redeclare" conflicts.
-  // Handles both single (`let x;`) and comma-separated (`let x, y;`) forms.
+  // Remove bare `let x;` declarations when the DTS already declares
+  // `let x: Type;` — avoids "Cannot redeclare" conflicts. Handles
+  // both single (`let x;`) and comma-separated (`let x, y;`) forms.
   const dtsVars = new Set();
   for (const m of dts.matchAll(/^(?:let|var)\s+(\w+)\s*:/gm)) dtsVars.add(m[1]);
   if (dtsVars.size) {
-    code = code.replace(/^(let|var)\s+([\w\s,]+);[ \t]*$/gm, (m, kw, vars) => {
+    code = code.replace(/^(let|var)\s+([\w\s,]+);[ \t]*$/gm, (_m, kw, vars) => {
       const kept = vars.split(',').map(v => v.trim()).filter(v => !dtsVars.has(v));
       return kept.length ? `${kw} ${kept.join(', ')};` : '';
     });
@@ -147,15 +140,35 @@ function compileFile(filePath, source, compiler, allFiles) {
   const tsContent = (hasTypes ? dts + '\n' : '') + code;
   const headerLines = hasTypes ? countLines(dts + '\n') : 1;
 
-  // Parse source map for gen→src line mapping
-  const genToSrc = result.map ? parseSourceMap(result.map) : new Map();
+  // Build bidirectional line maps
+  const { srcToGen, genToSrc } = buildLineMap(result.reverseMap, result.map, headerLines);
 
-  return { tsContent, headerLines, hasTypes, genToSrc, source };
+  // Map DTS variable declaration lines back to their source lines.
+  // TypeScript may report errors on the `let x: Type;` line in the
+  // DTS header, which has no entry in genToSrc. Fix by matching
+  // variable names to source lines with `x::`.
+  if (hasTypes && dts) {
+    const dtsLines = dts.split('\n');
+    const srcLines = source.split('\n');
+    for (let i = 0; i < dtsLines.length; i++) {
+      const m = dtsLines[i].match(/^(?:let|var)\s+(\w+)\s*:/);
+      if (!m) continue;
+      const varName = m[1];
+      for (let s = 0; s < srcLines.length; s++) {
+        if (new RegExp('\\b' + varName + '\\s*::').test(srcLines[s])) {
+          genToSrc.set(i, s);
+          break;
+        }
+      }
+    }
+  }
+
+  return { tsContent, headerLines, hasTypes, srcToGen, genToSrc, source };
 }
 
-// ── Source mapping ─────────────────────────────────────────────────
+// ── Source mapping helpers ──────────────────────────────────────────
 
-function offsetToLine(text, offset) {
+export function offsetToLine(text, offset) {
   let line = 0;
   for (let i = 0; i < offset && i < text.length; i++) {
     if (text[i] === '\n') line++;
@@ -163,25 +176,31 @@ function offsetToLine(text, offset) {
   return line;
 }
 
-function mapToSource(entry, offset) {
+// Map a TypeScript diagnostic offset back to a Rip source line number.
+// Returns -1 if the offset falls in the DTS header.
+export function mapToSource(entry, offset) {
   const tsLine = offsetToLine(entry.tsContent, offset);
   if (tsLine < entry.headerLines) return -1;
 
-  // Generated code line (0-based, relative to code portion)
-  const codeLine = tsLine - entry.headerLines;
-
-  // Look up in source map
-  if (entry.genToSrc.has(codeLine)) return entry.genToSrc.get(codeLine);
-  // Search nearby lines
+  if (entry.genToSrc.has(tsLine)) return entry.genToSrc.get(tsLine);
   for (let d = 1; d <= 3; d++) {
-    if (entry.genToSrc.has(codeLine - d)) return entry.genToSrc.get(codeLine - d);
-    if (entry.genToSrc.has(codeLine + d)) return entry.genToSrc.get(codeLine + d);
+    if (entry.genToSrc.has(tsLine - d)) return entry.genToSrc.get(tsLine - d);
+    if (entry.genToSrc.has(tsLine + d)) return entry.genToSrc.get(tsLine + d);
   }
-  // Fallback: use the code line directly
-  return codeLine;
+  return tsLine - entry.headerLines;
 }
 
-// ── ANSI colors ────────────────────────────────────────────────────
+// ── CLI batch type-checker ─────────────────────────────────────────
+
+function findRipFiles(dir, files = []) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+    const full = resolve(dir, entry.name);
+    if (entry.isDirectory()) findRipFiles(full, files);
+    else if (entry.name.endsWith('.rip')) files.push(full);
+  }
+  return files;
+}
 
 const isColor = process.stdout.isTTY !== false;
 const red     = (s) => isColor ? `\x1b[31m${s}\x1b[0m` : s;
@@ -189,8 +208,6 @@ const yellow  = (s) => isColor ? `\x1b[33m${s}\x1b[0m` : s;
 const cyan    = (s) => isColor ? `\x1b[36m${s}\x1b[0m` : s;
 const dim     = (s) => isColor ? `\x1b[2m${s}\x1b[0m`  : s;
 const bold    = (s) => isColor ? `\x1b[1m${s}\x1b[0m`  : s;
-
-// ── Main ───────────────────────────────────────────────────────────
 
 export async function runCheck(targetDir, opts = {}) {
   const ts = await import('typescript').then(m => m.default || m);
@@ -215,7 +232,7 @@ export async function runCheck(targetDir, opts = {}) {
   for (const fp of allFiles) {
     try {
       const source = readFileSync(fp, 'utf8');
-      compiled.set(fp, compileFile(fp, source, compiler, allFiles));
+      compiled.set(fp, compileForCheck(fp, source, compiler));
     } catch (e) {
       compileErrors++;
       const rel = relative(rootPath, fp);
@@ -226,34 +243,20 @@ export async function runCheck(targetDir, opts = {}) {
   // Also compile any .rip files imported from typed files that aren't in rootPath
   for (const [fp, entry] of [...compiled.entries()]) {
     if (!entry.hasTypes) continue;
-    const source = entry.source;
-    const ripImports = [...source.matchAll(/from\s+['"]([^'"]*\.rip)['"]/g)];
+    const ripImports = [...entry.source.matchAll(/from\s+['"]([^'"]*\.rip)['"]/g)];
     for (const m of ripImports) {
       const imported = resolve(dirname(fp), m[1]);
       if (!compiled.has(imported) && existsSync(imported)) {
         try {
           const impSrc = readFileSync(imported, 'utf8');
-          compiled.set(imported, compileFile(imported, impSrc, compiler, allFiles));
+          compiled.set(imported, compileForCheck(imported, impSrc, compiler));
         } catch {}
       }
     }
   }
 
   // Create TypeScript language service
-  const toVirtual = (p) => p + '.ts';
-  const fromVirtual = (p) => p.endsWith('.rip.ts') ? p.slice(0, -3) : p;
-
-  const settings = {
-    target: ts.ScriptTarget.ESNext,
-    module: ts.ModuleKind.ESNext,
-    moduleResolution: ts.ModuleResolutionKind.Bundler,
-    allowJs: true,
-    strict: false,
-    strictNullChecks: true,
-    noImplicitAny: true,
-    noEmit: true,
-    skipLibCheck: true,
-  };
+  const settings = createTypeCheckSettings(ts, { noImplicitAny: true });
 
   const host = {
     getScriptFileNames: () => [...compiled.keys()].map(toVirtual),
@@ -299,15 +302,6 @@ export async function runCheck(targetDir, opts = {}) {
   let totalWarnings = 0;
   const fileResults = [];
 
-  // Skipped TS error codes
-  const skipCodes = new Set([
-    2307, // Cannot find module
-    2304, // Cannot find name
-    1064, // Return type of async function must be Promise
-    2582, // Cannot find name 'test' (test runner globals)
-    2593, // Cannot find name 'describe' (test runner globals)
-  ]);
-
   for (const [fp, entry] of compiled) {
     if (!entry.hasTypes) continue;
 
@@ -324,10 +318,10 @@ export async function runCheck(targetDir, opts = {}) {
     const errors = [];
     for (const d of diags) {
       if (d.start === undefined) continue;
-      if (skipCodes.has(d.code)) continue;
+      if (SKIP_CODES.has(d.code)) continue;
 
       const srcLine = mapToSource(entry, d.start);
-      if (srcLine < 0) continue; // mapped to header
+      if (srcLine < 0) continue;
 
       const message = ts.flattenDiagnosticMessageText(d.messageText, '\n');
       const severity = d.category === 1 ? 'error' : d.category === 0 ? 'warning' : 'info';
@@ -343,8 +337,6 @@ export async function runCheck(targetDir, opts = {}) {
   }
 
   // Print results
-  const relRoot = relative(process.cwd(), rootPath) || '.';
-
   for (const { file, errors } of fileResults) {
     const rel = relative(rootPath, file);
     for (const e of errors) {

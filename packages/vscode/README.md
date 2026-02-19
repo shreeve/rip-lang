@@ -106,7 +106,7 @@ bun run install-ext
 ### What the build does
 
 1. **`esbuild src/extension.js`** → `dist/extension.js` (~345KB) — the LSP client, bundled with `vscode-languageclient`
-2. **`esbuild src/server.js`** → `dist/server.js` (~177KB) — the language server, bundled with `vscode-languageserver`
+2. **`esbuild src/lsp.js`** → `dist/lsp.js` (~179KB) — the language server, bundled with `vscode-languageserver`
 3. **`vsce package`** → `rip-*.vsix` — the installable extension package
 
 Both `vscode` and `typescript` are external (not bundled) — `vscode` is provided by the editor, `typescript` is loaded at runtime from the workspace or editor.
