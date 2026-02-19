@@ -2,7 +2,8 @@
 # @rip-lang/ui/serve — Rip UI Server Middleware
 # ==============================================================================
 #
-# Serves the Rip UI runtime and auto-generated app bundles.
+# Serves the Rip UI runtime, auto-generated app bundles, and component files.
+# Hot-reload SSE is handled by rip-server; this middleware registers watch dirs.
 #
 # Usage:
 #   import { ripUI } from '@rip-lang/ui/serve'
@@ -13,14 +14,13 @@
 #   dir:        string  — app directory on disk (default: '.')
 #   components: string  — directory for page components, relative to dir (default: 'components')
 #   includes:   array   — directories for shared components, relative to dir (default: [])
-#   watch:      boolean — enable bundle cache invalidation on file changes (default: false)
+#   watch:      boolean — enable hot-reload (registers watch dirs with rip-server)
 #   state:      object  — initial app state passed via bundle
 #   title:      string  — document title
 #
 # ==============================================================================
 
 import { get } from '@rip-lang/api'
-import { watch as fsWatch } from 'node:fs'
 
 export ripUI = (opts = {}) ->
   prefix        = opts.app or ''
@@ -48,7 +48,7 @@ export ripUI = (opts = {}) ->
     ripUI._registered = true
 
   # ----------------------------------------------------------------------------
-  # Route: {prefix}/components/* — individual .rip component files (for hot-reload)
+  # Route: {prefix}/components/* — individual .rip component files
   # Route: {prefix}/bundle  — app bundle (components + data as JSON)
   # ----------------------------------------------------------------------------
 
@@ -56,42 +56,37 @@ export ripUI = (opts = {}) ->
     name = c.req.path.slice("#{prefix}/components/".length)
     c.send "#{componentsDir}/#{name}", 'text/plain; charset=UTF-8'
 
-  bundleCache = null
-  bundleDirty = true
-
-  # Invalidate bundle cache when components change
-  if enableWatch
-    fsWatch componentsDir, { recursive: true }, (event, filename) ->
-      bundleDirty = true if filename?.endsWith('.rip')
-    for incDir in includeDirs
-      fsWatch incDir, { recursive: true }, (event, filename) ->
-        bundleDirty = true if filename?.endsWith('.rip')
-
   get "#{prefix}/bundle", (c) ->
-    if bundleDirty or not bundleCache
-      glob = new Bun.Glob("**/*.rip")
-      components = {}
-      paths = Array.from(glob.scanSync(componentsDir))
-      for path in paths
-        components["components/#{path}"] = Bun.file("#{componentsDir}/#{path}").text!
+    glob = new Bun.Glob("**/*.rip")
+    components = {}
+    paths = Array.from(glob.scanSync(componentsDir))
+    for path in paths
+      components["components/#{path}"] = Bun.file("#{componentsDir}/#{path}").text!
 
-      # Merge external include directories into components/_lib/
-      for dir in includeDirs
-        incPaths = Array.from(glob.scanSync(dir))
-        for path in incPaths
-          key = "components/_lib/#{path}"
-          components[key] = Bun.file("#{dir}/#{path}").text! unless components[key]
+    for dir in includeDirs
+      incPaths = Array.from(glob.scanSync(dir))
+      for path in incPaths
+        key = "components/_lib/#{path}"
+        components[key] = Bun.file("#{dir}/#{path}").text! unless components[key]
 
-      data = {}
-      data.title = appTitle if appTitle
-      data.watch = enableWatch
-      if appState
-        data[k] = v for k, v of appState
+    data = {}
+    data.title = appTitle if appTitle
+    data.watch = enableWatch
+    if appState
+      data[k] = v for k, v of appState
 
-      bundleCache = JSON.stringify({ components, data })
-      bundleDirty = false
+    new Response JSON.stringify({ components, data }), headers: { 'Content-Type': 'application/json' }
 
-    new Response bundleCache, headers: { 'Content-Type': 'application/json' }
+  # ----------------------------------------------------------------------------
+  # Register watch directories with rip-server via control socket
+  # ----------------------------------------------------------------------------
+
+  if enableWatch and process.env.SOCKET_PREFIX
+    ctl = "/tmp/#{process.env.SOCKET_PREFIX}.ctl.sock"
+    dirs = [componentsDir, ...includeDirs]
+    body = JSON.stringify({ op: 'watch', prefix, dirs })
+    fetch('http://localhost/watch', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl }).catch (e) ->
+      console.warn "rip-ui: watch registration failed: #{e.message}"
 
   # Return pass-through middleware
   (c, next) -> next!()

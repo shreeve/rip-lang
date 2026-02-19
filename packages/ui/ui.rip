@@ -906,7 +906,7 @@ export launch = (appBase = '', opts = {}) ->
 
   # Connect SSE watch if enabled
   if bundle.data?.watch
-    connectWatch '/watch'
+    connectWatch "#{appBase}/watch"
 
   # Expose for console and dev tools
   if typeof window isnt 'undefined'

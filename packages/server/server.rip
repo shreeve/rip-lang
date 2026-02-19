@@ -485,8 +485,8 @@ class Manager
     @nextWorkerId = -1
     @retiringIds = new Set()
     @currentVersion = 1
-    @onFileChange = null
-    @_broadcastTimer = null
+    @server = null
+    @appWatchers = new Map()
 
     process.on 'SIGTERM', => @shutdown!
     process.on 'SIGINT', => @shutdown!
@@ -534,13 +534,6 @@ class Manager
               utimesSync(entryFile, now, now)
             catch
               null
-            # Debounced SSE broadcast to connected clients
-            if @onFileChange
-              clearTimeout(@_broadcastTimer) if @_broadcastTimer
-              @_broadcastTimer = setTimeout =>
-                @_broadcastTimer = null
-                @onFileChange()
-              , debounceMs
         catch e
           console.warn "rip-server: directory watch failed: #{e.message}"
 
@@ -549,6 +542,25 @@ class Manager
       try w.process.kill() catch then null
       try unlinkSync(w.socketPath) catch then null
     @workers = []
+
+  watchDirs: (prefix, dirs) ->
+    return if @appWatchers.has(prefix)
+    timer = null
+    watchers = []
+    broadcast = =>
+      clearTimeout(timer) if timer
+      timer = setTimeout =>
+        timer = null
+        @server?.broadcastChange(prefix)
+      , 250
+    for dir in dirs
+      try
+        w = watch dir, { recursive: true }, (event, filename) ->
+          broadcast() if filename?.endsWith('.rip')
+        watchers.push(w)
+      catch e
+        console.warn "rip-server: watch failed for #{dir}: #{e.message}"
+    @appWatchers.set prefix, { watchers, timer }
 
   spawnWorker: (version) ->
     workerId = ++@nextWorkerId
@@ -683,7 +695,8 @@ class Server
     @httpsActive = false
     @hostRegistry = new Set(['localhost', '127.0.0.1', 'rip.local'])
     @mdnsProcesses = new Map()
-    @sseClients = new Set()
+    @watchGroups = new Map()
+    @manager = null
     try
       pkg = JSON.parse(readFileSync(import.meta.dir + '/package.json', 'utf8'))
       @serverVersion = pkg.version
@@ -773,7 +786,12 @@ class Server
       return new Response Bun.file(import.meta.dir + '/server.html')
 
     return @status() if url.pathname is '/status'
-    return @watch() if url.pathname is '/watch'
+
+    # SSE hot-reload: intercept /{prefix}/watch for registered watch groups
+    path = url.pathname
+    if path.endsWith('/watch')
+      watchPrefix = path.slice(0, -6)  # strip '/watch'
+      return @handleWatch(watchPrefix) if @watchGroups.has(watchPrefix)
 
     if url.pathname is '/server'
       headers = new Headers({ 'content-type': 'text/plain' })
@@ -818,31 +836,39 @@ class Server
     @maybeAddSecurityHeaders(headers)
     new Response(body, { headers })
 
-  watch: ->
+  registerWatch: (prefix) ->
+    return if @watchGroups.has(prefix)
+    @watchGroups.set prefix, { sseClients: new Set() }
+
+  handleWatch: (prefix) ->
+    group = @watchGroups.get(prefix)
+    return new Response('not-found', { status: 404 }) unless group
     encoder = new TextEncoder()
     client = null
     new Response new ReadableStream(
-      start: (controller) =>
+      start: (controller) ->
         send = (event) ->
           try controller.enqueue encoder.encode("event: #{event}\n\n")
           catch then null
         client = { send }
-        @sseClients.add(client)
+        group.sseClients.add(client)
         send('connected')
-      cancel: =>
-        @sseClients.delete(client) if client
+      cancel: ->
+        group.sseClients.delete(client) if client
     ),
       headers:
         'Content-Type': 'text/event-stream'
         'Cache-Control': 'no-cache'
         'Connection': 'keep-alive'
 
-  broadcastChange: ->
+  broadcastChange: (prefix) ->
+    group = @watchGroups.get(prefix)
+    return unless group
     dead = []
-    for client as @sseClients
+    for client as group.sseClients
       try client.send('reload')
       catch then dead.push(client)
-    @sseClients.delete(c) for c in dead
+    group.sseClients.delete(c) for c in dead
 
   getNextAvailableSocket: ->
     while @availableWorkers.length > 0
@@ -974,6 +1000,17 @@ class Server
         if j?.op is 'quit' and typeof j.workerId is 'number'
           @sockets = @sockets.filter((x) -> x.workerId isnt j.workerId)
           @availableWorkers = @availableWorkers.filter((x) -> x.workerId isnt j.workerId)
+          return new Response(JSON.stringify({ ok: true }), { headers: { 'content-type': 'application/json' } })
+      catch
+        null
+      return new Response(JSON.stringify({ ok: false }), { status: 400, headers: { 'content-type': 'application/json' } })
+
+    if req.method is 'POST' and url.pathname is '/watch'
+      try
+        j = req.json!
+        if j?.op is 'watch' and typeof j.prefix is 'string' and Array.isArray(j.dirs)
+          @registerWatch(j.prefix)
+          @manager?.watchDirs(j.prefix, j.dirs) if j.dirs.length > 0
           return new Response(JSON.stringify({ ok: true }), { headers: { 'content-type': 'application/json' } })
       catch
         null
@@ -1214,7 +1251,8 @@ main = ->
 
   svr = new Server(flags)
   mgr = new Manager(flags)
-  mgr.onFileChange = -> svr.broadcastChange()
+  svr.manager = mgr
+  mgr.server = svr
 
   cleanup = ->
     console.log 'rip-server: shutting down...'
