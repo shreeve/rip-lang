@@ -115,11 +115,14 @@ function compileFile(filePath, source, compiler, allFiles) {
 
   // Remove bare `let x;` declarations from code when the DTS already
   // declares `let x: Type;` — avoids "Cannot redeclare" conflicts.
+  // Handles both single (`let x;`) and comma-separated (`let x, y;`) forms.
   const dtsVars = new Set();
   for (const m of dts.matchAll(/^(?:let|var)\s+(\w+)\s*:/gm)) dtsVars.add(m[1]);
   if (dtsVars.size) {
-    const varPat = new RegExp(`^(let|var)\\s+(${[...dtsVars].join('|')})\\s*;[ \\t]*$`, 'gm');
-    code = code.replace(varPat, '');
+    code = code.replace(/^(let|var)\s+([\w\s,]+);[ \t]*$/gm, (m, kw, vars) => {
+      const kept = vars.split(',').map(v => v.trim()).filter(v => !dtsVars.has(v));
+      return kept.length ? `${kw} ${kept.join(', ')};` : '';
+    });
   }
 
   // Determine if this file should be type-checked
