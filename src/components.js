@@ -535,6 +535,19 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       return ['=>', ...sexpr.slice(1).map(item => this.transformComponentMembers(item))];
     }
 
+    // Object literals: transform values but leave bare string keys untouched
+    if (sexpr[0] === 'object') {
+      return ['object', ...sexpr.slice(1).map(pair => {
+        if (Array.isArray(pair) && pair.length >= 2) {
+          let key = pair[0];
+          let newKey = Array.isArray(key) ? this.transformComponentMembers(key) : key;
+          let newValue = this.transformComponentMembers(pair[1]);
+          return [newKey, newValue, pair[2]];
+        }
+        return this.transformComponentMembers(pair);
+      })];
+    }
+
     return sexpr.map(item => this.transformComponentMembers(item));
   };
 
