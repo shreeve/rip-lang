@@ -9,8 +9,8 @@ Full language support for [Rip](https://github.com/shreeve/rip-lang), a modern r
 ## Features
 
 - Full syntax highlighting for `.rip` files
-- TypeScript-powered IntelliSense (completions, hover, go-to-definition)
-- No `.rip-cache/` or shadow files — everything is in-memory
+- TypeScript-powered IntelliSense (completions, hover, go-to-definition, signature help)
+- All type intelligence runs in-memory — no generated files on disk
 - Comment toggling (`#` line, `###` block)
 - Bracket matching and auto-closing
 - Indentation-based code folding
@@ -62,12 +62,13 @@ str =~ /Hello, (\w+)/              # Regex match
 
 ## Requirements
 
+[Bun](https://bun.sh/) must be installed — the language server runs under Bun for fast startup.
+
 The Rip compiler (`rip-lang` npm package) must be available in the workspace for type intelligence. Syntax highlighting works without it.
 
 ```bash
-npm install rip-lang       # local install (recommended)
-# or
-npm install -g rip-lang    # global install
+curl -fsSL https://bun.sh/install | bash   # install Bun (if needed)
+npm install rip-lang                        # install Rip compiler
 ```
 
 ## Building the Extension

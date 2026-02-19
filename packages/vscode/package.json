@@ -2,7 +2,7 @@
   "name": "rip",
   "displayName": "Rip",
   "description": "Rip language support — syntax highlighting, types, and editor integration",
-  "version": "0.3.4",
+  "version": "0.4.0",
   "publisher": "rip-lang",
   "license": "MIT",
   "main": "./dist/extension.js",
