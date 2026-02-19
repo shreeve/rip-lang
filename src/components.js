@@ -1125,14 +1125,17 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
         // Smart two-way binding for value/checked when bound to reactive state
         if ((key === 'value' || key === 'checked') && this.hasReactiveDeps(value)) {
-          // Reactive effect: signal → DOM property
           this._setupLines.push(`__effect(() => { ${elVar}.${key} = ${valueCode}; });`);
-          // Event listener: DOM → signal (two-way)
-          const event = key === 'checked' ? 'change' : 'input';
-          const accessor = key === 'checked' ? 'e.target.checked'
-            : (inputType === 'number' || inputType === 'range') ? 'e.target.valueAsNumber'
-            : 'e.target.value';
-          this._createLines.push(`${elVar}.addEventListener('${event}', (e) => { ${valueCode} = ${accessor}; });`);
+          // Only generate reverse binding when the value is a simple assignable
+          // target (plain reactive member or @prop), not a complex expression
+          // like selected.includes(opt) which can't be assigned to.
+          if (this.isSimpleAssignable(value)) {
+            const event = key === 'checked' ? 'change' : 'input';
+            const accessor = key === 'checked' ? 'e.target.checked'
+              : (inputType === 'number' || inputType === 'range') ? 'e.target.valueAsNumber'
+              : 'e.target.value';
+            this._createLines.push(`${elVar}.addEventListener('${event}', (e) => { ${valueCode} = ${accessor}; });`);
+          }
           continue;
         }
 
@@ -1627,6 +1630,19 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       if (this.hasReactiveDeps(child)) return true;
     }
 
+    return false;
+  };
+
+  // isSimpleAssignable — check if value is a plain reactive member (assignable target)
+  // --------------------------------------------------------------------------
+
+  proto.isSimpleAssignable = function(sexpr) {
+    if (typeof sexpr === 'string') {
+      return !!(this.reactiveMembers && this.reactiveMembers.has(sexpr));
+    }
+    if (Array.isArray(sexpr) && sexpr[0] === '.' && sexpr[1] === 'this' && typeof sexpr[2] === 'string') {
+      return !!(this.reactiveMembers && this.reactiveMembers.has(sexpr[2]));
+    }
     return false;
   };
 

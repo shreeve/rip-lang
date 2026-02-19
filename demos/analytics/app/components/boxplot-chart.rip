@@ -1,0 +1,61 @@
+# BoxplotChart - ECharts box plot driven by annotated SQL results
+# Expects columns: xaxis:Label (category), boxplot:Label (min, Q1, median, Q3, max as JSON array)
+# Or 5 separate boxplot columns for min, Q1, median, Q3, max per category row
+
+export BoxplotChart = component
+  @chartData := []
+  @columns := []
+  @title := ''
+  @height := 400
+
+  inst := null
+
+  initChart: ->
+    return if inst
+    el = @_el0
+    return unless el
+    inst = echarts.init(el)
+    window.addEventListener 'resize', -> inst.resize() if inst
+    @renderChart()
+
+  renderChart: ->
+    return unless inst
+    return unless chartData and chartData.length > 0
+
+    xIdx = columns.findIndex((c) -> c.type is 'xaxis')
+    boxCols = []
+    for col, idx in columns
+      boxCols.push idx if col.type is 'boxplot'
+
+    return if boxCols.length < 1
+
+    xValues = if xIdx >= 0 then chartData.map((r) -> r[xIdx]) else chartData.map((r, i) -> "#{i + 1}")
+
+    boxData = []
+    if boxCols.length >= 5
+      for row in chartData
+        boxData.push [row[boxCols[0]], row[boxCols[1]], row[boxCols[2]], row[boxCols[3]], row[boxCols[4]]]
+    else
+      for row in chartData
+        val = row[boxCols[0]]
+        if Array.isArray(val)
+          boxData.push val
+        else
+          boxData.push [val, val, val, val, val]
+
+    option =
+      tooltip: { trigger: 'item' }
+      grid: { left: 60, right: 20, top: (if title then 40 else 20), bottom: 40 }
+      xAxis: { type: 'category', data: xValues, boundaryGap: true }
+      yAxis: { type: 'value' }
+      series: [{ type: 'boxplot', data: boxData }]
+    option.title = { text: title, left: 'center', textStyle: { fontSize: 14, fontWeight: 500 } } if title
+
+    inst.setOption(option, true)
+
+  ~> requestAnimationFrame -> @initChart()
+  chartData ~> @renderChart()
+
+  render
+    div
+      style: "height: #{height}px; width: 100%"

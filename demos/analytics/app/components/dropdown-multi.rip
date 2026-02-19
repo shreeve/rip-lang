@@ -1,0 +1,74 @@
+# DropdownMulti - multi-select dropdown with checkboxes
+# Expects a column with type dropdown_multi: whose label becomes the variable name
+# Calls onChange(varName, commaSeparatedValues) when selection changes
+
+export DropdownMulti = component
+  @chartData := []
+  @columns := []
+  @onChange := null
+
+  varName ~=
+    col = columns.find((c) -> c.type is 'dropdown_multi')
+    if col then col.label else ''
+
+  options ~=
+    idx = columns.findIndex((c) -> c.type is 'dropdown_multi')
+    return [] if idx < 0 or not chartData
+    chartData.map((r) -> "#{r[idx]}")
+
+  selected := []
+  expanded := false
+
+  toggleExpanded: -> expanded = !expanded
+
+  selectAll: ->
+    selected = options.slice()
+    @emitChange()
+
+  selectNone: ->
+    selected = []
+    @emitChange()
+
+  toggleOption: (val) ->
+    idx = selected.indexOf(val)
+    if idx >= 0
+      selected = selected.filter((v) -> v isnt val)
+    else
+      selected = selected.concat([val])
+    @emitChange()
+
+  emitChange: ->
+    onChange(varName, selected.join(',')) if onChange
+
+  selectedLabel ~=
+    if selected.length is 0
+      'All'
+    else if selected.length is 1
+      selected[0]
+    else
+      "#{selected.length} selected"
+
+  render
+    .('inline-flex flex-col gap-1 relative')
+      if varName
+        label.('text-xs font-medium text-gray-500') varName
+      button.('rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm text-left min-w-[140px] flex items-center justify-between gap-2')
+        @click: -> @toggleExpanded()
+        span selectedLabel
+        span.('text-gray-400 text-xs') "▼"
+      if expanded
+        .('absolute top-full left-0 mt-1 w-56 rounded-md border border-gray-200 bg-white shadow-lg z-50 py-1 max-h-60 overflow-y-auto')
+          .('flex gap-2 px-3 py-1 border-b border-gray-100')
+            button.('text-xs text-blue-600 hover:underline')
+              @click: -> @selectAll()
+              "All"
+            button.('text-xs text-blue-600 hover:underline')
+              @click: -> @selectNone()
+              "None"
+          for opt in options
+            label.('flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer text-sm')
+              input
+                type: 'checkbox'
+                checked: selected.includes(opt)
+                @change: -> @toggleOption(opt)
+              span opt

@@ -1,0 +1,96 @@
+# DateRangePicker - date range picker with preset buttons
+# Expects columns: datepicker_from:Label and datepicker_to:Label
+# Calls onChange(varName, 'YYYY-MM-DD') for each date when changed
+
+export DateRangePicker = component
+  @chartData := []
+  @columns := []
+  @onChange := null
+
+  fromName ~=
+    col = columns.find((c) -> c.type is 'datepicker_from')
+    if col then col.label else 'From'
+
+  toName ~=
+    col = columns.find((c) -> c.type is 'datepicker_to')
+    if col then col.label else 'To'
+
+  fromValue := ''
+  toValue := ''
+
+  fmtDate: (d) ->
+    y = d.getFullYear()
+    m = String(d.getMonth() + 1).padStart(2, '0')
+    day = String(d.getDate()).padStart(2, '0')
+    "#{y}-#{m}-#{day}"
+
+  setPreset: (days) ->
+    now = new Date()
+    toValue = @fmtDate(now)
+    past = new Date(now.getTime() - days * 86400000)
+    fromValue = @fmtDate(past)
+    @emitBoth()
+
+  setMonthToDate: ->
+    now = new Date()
+    toValue = @fmtDate(now)
+    fromValue = @fmtDate(new Date(now.getFullYear(), now.getMonth(), 1))
+    @emitBoth()
+
+  setYearToDate: ->
+    now = new Date()
+    toValue = @fmtDate(now)
+    fromValue = @fmtDate(new Date(now.getFullYear(), 0, 1))
+    @emitBoth()
+
+  emitBoth: ->
+    if onChange
+      onChange(fromName, fromValue)
+      onChange(toName, toValue)
+
+  handleFrom: (e) ->
+    fromValue = e.target.value
+    @emitBoth()
+
+  handleTo: (e) ->
+    toValue = e.target.value
+    @emitBoth()
+
+  render
+    .('inline-flex flex-col gap-2')
+      .('flex items-center gap-2 flex-wrap')
+        .('inline-flex flex-col gap-1')
+          label.('text-xs font-medium text-gray-500') fromName
+          input.('rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500')
+            type: 'date'
+            value: fromValue
+            @change: @handleFrom
+        span.('text-gray-400 mt-4') "–"
+        .('inline-flex flex-col gap-1')
+          label.('text-xs font-medium text-gray-500') toName
+          input.('rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500')
+            type: 'date'
+            value: toValue
+            @change: @handleTo
+      .('flex gap-1 flex-wrap')
+        button.('rounded px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600')
+          @click: -> @setPreset(0)
+          "Today"
+        button.('rounded px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600')
+          @click: -> @setPreset(7)
+          "Last 7d"
+        button.('rounded px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600')
+          @click: -> @setPreset(30)
+          "Last 30d"
+        button.('rounded px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600')
+          @click: -> @setPreset(90)
+          "Last 3mo"
+        button.('rounded px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600')
+          @click: -> @setPreset(180)
+          "Last 6mo"
+        button.('rounded px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600')
+          @click: -> @setMonthToDate()
+          "MTD"
+        button.('rounded px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600')
+          @click: -> @setYearToDate()
+          "YTD"

@@ -1,10 +1,12 @@
 # PieChart - ECharts pie/donut chart driven by annotated SQL results
+# Set donut: true for a ring chart, false for a solid pie
 
 export PieChart = component
   @chartData := []
   @columns := []
   @title := ''
   @height := 400
+  @donut := false
 
   inst := null
 
@@ -21,17 +23,19 @@ export PieChart = component
     return unless chartData and chartData.length > 0
 
     catIdx = columns.findIndex((c) -> c.type is 'category' or c.type is 'xaxis')
-    valIdx = columns.findIndex((c) -> c.type is 'piechart')
+    valIdx = columns.findIndex((c) -> c.type is 'piechart' or c.type is 'donutchart')
     return if catIdx < 0 or valIdx < 0
 
     pieData = chartData.map (r) ->
       item = { name: r[catIdx], value: r[valIdx] }
       item
 
+    rad = if donut then ['35%', '65%'] else '65%'
+
     option =
       tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' }
       legend: { bottom: 0 }
-      series: [{ type: 'pie', radius: ['35%', '65%'], center: ['50%', '50%'], data: pieData, label: { show: true, formatter: '{b}' } }]
+      series: [{ type: 'pie', radius: rad, center: ['50%', '50%'], data: pieData, label: { show: true, formatter: '{b}' } }]
     option.title = { text: title, left: 'center', textStyle: { fontSize: 14, fontWeight: 500 } }
 
     inst.setOption(option, true)
