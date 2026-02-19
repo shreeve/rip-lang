@@ -58,6 +58,14 @@ function getMemberName(target) {
 }
 
 /**
+ * Check if target uses @property syntax (public prop).
+ * [".", "this", name] = @prop (public), plain string = private.
+ */
+function isPublicProp(target) {
+  return Array.isArray(target) && target[0] === '.' && target[1] === 'this';
+}
+
+/**
  * Detect fragment root and collect direct child variables for proper removal.
  * After insertBefore, a DocumentFragment is empty — .remove() is a no-op.
  * Callers must remove each child element individually.
@@ -566,7 +574,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       if (op === 'state') {
         const varName = getMemberName(stmt[1]);
         if (varName) {
-          stateVars.push({ name: varName, value: stmt[2] });
+          stateVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]) });
           memberNames.add(varName);
           reactiveMembers.add(varName);
         }
@@ -580,7 +588,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       } else if (op === 'readonly') {
         const varName = getMemberName(stmt[1]);
         if (varName) {
-          readonlyVars.push({ name: varName, value: stmt[2] });
+          readonlyVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]) });
           memberNames.add(varName);
         }
       } else if (op === '=') {
@@ -594,7 +602,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
               methods.push({ name: varName, func: val });
               memberNames.add(varName);
             } else {
-              stateVars.push({ name: varName, value: val });
+              stateVars.push({ name: varName, value: val, isPublic: isPublicProp(stmt[1]) });
               memberNames.add(varName);
               reactiveMembers.add(varName);
             }
@@ -634,15 +642,19 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     lines.push('  _init(props) {');
 
     // Constants (readonly)
-    for (const { name, value } of readonlyVars) {
+    for (const { name, value, isPublic } of readonlyVars) {
       const val = this.generateInComponent(value, 'value');
-      lines.push(`    this.${name} = props.${name} ?? ${val};`);
+      lines.push(isPublic
+        ? `    this.${name} = props.${name} ?? ${val};`
+        : `    this.${name} = ${val};`);
     }
 
     // State variables (__state handles signal passthrough)
-    for (const { name, value } of stateVars) {
+    for (const { name, value, isPublic } of stateVars) {
       const val = this.generateInComponent(value, 'value');
-      lines.push(`    this.${name} = __state(props.${name} ?? ${val});`);
+      lines.push(isPublic
+        ? `    this.${name} = __state(props.${name} ?? ${val});`
+        : `    this.${name} = __state(${val});`);
     }
 
     // Computed (derived)
