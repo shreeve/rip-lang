@@ -5,11 +5,11 @@
 #     button "Pick a week"
 
 export WeekPicker = component
-  selected := null
-  minWeek := 1
-  maxWeek := 52
-  sessionStartDay := 1
-  sessionEndDay := 5
+  @selected := null
+  @minWeek := 1
+  @maxWeek := 52
+  @sessionStartDay := 1
+  @sessionEndDay := 5
 
   popoverOpen := false
   viewDate := null

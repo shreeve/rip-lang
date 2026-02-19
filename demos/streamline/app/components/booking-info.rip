@@ -1,10 +1,10 @@
 # BookingInfo - displays booking details (week, slot, children)
 
 export BookingInfo = component
-  week := 0
-  slot := ''
-  children := []
-  context := 'listItem'
+  @week := 0
+  @slot := ''
+  @children := []
+  @context := 'listItem'
 
   classes ~=
     base = 'flex items-center gap-x-2 leading-none'

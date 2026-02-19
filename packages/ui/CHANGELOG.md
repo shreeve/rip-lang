@@ -2,6 +2,12 @@
 
 All notable changes to `@rip-lang/ui` will be documented in this file.
 
+## [0.3.10] - 2026-02-19
+
+### Public Props via `@`
+
+- **`@` prop contract** — The `@` prefix on member declarations (`@open := false`) marks them as public props settable by parent components. Members without `@` are private state and ignore parent-passed values. The compiler enforces the boundary: `@open := false` compiles to `this.open = __state(props.open ?? false)`, while `count := 0` compiles to `this.count = __state(0)`. Works for both reactive (`:=`) and readonly (`=!`) members.
+
 ## [0.3.2] - 2026-02-14
 
 ### Loading Optimization

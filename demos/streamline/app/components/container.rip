@@ -1,7 +1,7 @@
 # Container - responsive max-width wrapper with horizontal padding
 
 export Container = component
-  narrow := false
+  @narrow := false
 
   render
     .('px-5')

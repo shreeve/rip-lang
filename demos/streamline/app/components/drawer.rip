@@ -5,8 +5,8 @@
 #     div "Drawer content here"
 
 export Drawer = component
-  open := false
-  breakpoint := 480
+  @open := false
+  @breakpoint := 480
 
   isRight := false
   closing := false

@@ -75,6 +75,55 @@ export About = component
 Reactive props via `:=` signal passthrough. Readonly props via `=!`.
 Children blocks passed as DOM nodes via `@children`.
 
+## Props — The `@` Contract
+
+The `@` prefix on a member declaration marks it as a **public prop** — settable
+by a parent component. Members without `@` are **private state** and ignore
+any value a parent tries to pass in.
+
+```coffee
+export Drawer = component
+  @open := false        # public — parent can pass `open: true`
+  @breakpoint := 480    # public — parent can pass `breakpoint: 768`
+  isRight := false      # private — always starts as false
+  closing := false      # private — always starts as false
+
+  render
+    if open
+      div "Drawer is open"
+```
+
+The compiler enforces the boundary:
+
+```javascript
+// @open := false  →  accepts parent value
+this.open = __state(props.open ?? false);
+
+// isRight := false  →  ignores parent, always uses default
+this.isRight = __state(false);
+```
+
+This works for all member types:
+
+| Declaration | Visibility | Meaning |
+|-------------|-----------|---------|
+| `@title := 'Hello'` | Public | Reactive state, settable by parent |
+| `@label =! 'Default'` | Public | Readonly prop, settable by parent |
+| `count := 0` | Private | Reactive state, internal only |
+| `cache =! null` | Private | Readonly, internal only |
+| `total ~= items.length` | — | Computed (always derived, never a prop) |
+
+A parent passes props as key-value pairs when using a component:
+
+```coffee
+Drawer open: showDrawer, breakpoint: 768
+  div "Content here"
+```
+
+The `@` declarations at the top of a component are its public API. Everything
+else is an implementation detail. No separate type files, no prop validation
+boilerplate — one character that says "this is settable from outside."
+
 ## Render Block Syntax
 
 Inside a `render` block, elements are declared by tag name. Classes, attributes,

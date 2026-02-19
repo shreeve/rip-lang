@@ -1,9 +1,9 @@
 # Checkbox - styled checkbox with label and optional error state
 
 export Checkbox = component
-  checked := false
-  compact := false
-  error := null
+  @checked := false
+  @compact := false
+  @error := null
 
   toggle: ->
     checked = not checked
