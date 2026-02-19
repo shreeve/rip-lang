@@ -746,7 +746,7 @@ class Server
       port = p
       while port < p + 100
         try
-          return Bun.serve(Object.assign({ port, idleTimeout: 255, fetch: fetchFn }, opts))
+          return Bun.serve(Object.assign({ port, idleTimeout: 0, fetch: fetchFn }, opts))
         catch e
           throw e unless e?.code is 'EADDRINUSE'
           port++
@@ -755,7 +755,7 @@ class Server
     if httpOnly
       if @flags.httpPort is 0
         try
-          @server = Bun.serve({ port: 80, idleTimeout: 255, fetch: fetchFn })
+          @server = Bun.serve({ port: 80, idleTimeout: 0, fetch: fetchFn })
         catch e
           throw e unless e?.code in ['EADDRINUSE', 'EACCES']
           @server = startOnPort(5700)
@@ -767,7 +767,7 @@ class Server
 
       if not @flags.httpsPort or @flags.httpsPort is 0
         try
-          @httpsServer = Bun.serve({ port: 443, idleTimeout: 255, tls, fetch: fetchFn })
+          @httpsServer = Bun.serve({ port: 443, idleTimeout: 0, tls, fetch: fetchFn })
         catch e
           throw e unless e?.code in ['EADDRINUSE', 'EACCES']
           @httpsServer = startOnPort(5700, { tls })

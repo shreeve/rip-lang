@@ -152,8 +152,13 @@ createContext = (req, params = {}) ->
       new Response data, { status, headers: out }
 
     send: (path, type) ->
+      file = Bun.file(path)
+      etag = "W/\"#{file.lastModified}-#{file.size}\""
+      if req.headers.get('if-none-match') is etag
+        return new Response(null, { status: 304 })
       out.set 'Content-Type', (type or mimeType(path))
-      new Response Bun.file(path), { status: 200, headers: out }
+      out.set 'ETag', etag
+      new Response file, { status: 200, headers: out }
 
     header: (name, value, opts = {}) ->
       if value?

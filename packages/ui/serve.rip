@@ -75,7 +75,11 @@ export ripUI = (opts = {}) ->
     if appState
       data[k] = v for k, v of appState
 
-    new Response JSON.stringify({ components, data }), headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
+    json = JSON.stringify({ components, data })
+    etag = "W/\"#{Bun.hash(json).toString(36)}\""
+    if c.req.header('if-none-match') is etag
+      return new Response(null, { status: 304 })
+    new Response json, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'ETag': etag }
 
   # ----------------------------------------------------------------------------
   # Register watch directories with rip-server via control socket
