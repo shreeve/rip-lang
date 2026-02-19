@@ -45,6 +45,72 @@ export Home = component
 
 Run `bun index.rip`, open `http://localhost:3000`.
 
+## The Two Keywords
+
+Rip UI adds two keywords to the language: `component` and `render`. Each
+serves a distinct role, and together they form a complete reactive UI model.
+
+### `component` — the model
+
+Raw Rip Lang has no concept of a self-contained, reusable UI unit. The
+`component` keyword adds everything needed to manage interactive state:
+
+- **Reactive state** (`:=`) — assignments create signals that trigger
+  updates automatically. `count := 0` is not a plain variable; changing
+  it updates the DOM.
+- **Computed values** (`~=`) — derived values that recalculate when their
+  dependencies change. `remaining ~= todos.filter((t) -> not t.done).length`
+- **Effects** (`~>`) — side effects that run whenever reactive dependencies
+  change. `~> @app.data.count = count`
+- **Props** (`@` prefix, `=!` for readonly) — a public API for parent
+  components to pass data in, with signal passthrough for shared reactivity.
+- **Lifecycle hooks** — `beforeMount`, `mounted`, `updated`, `beforeUnmount`,
+  `unmounted` for running code at specific points in a component's life.
+- **Context API** — `setContext` and `getContext` for ancestor-to-descendant
+  data sharing without prop drilling.
+- **Mount/unmount mechanics** — attaching to the DOM, cascading teardown
+  to children, and keep-alive caching across navigation.
+- **Encapsulation** — each component is a class with its own scope, state,
+  and methods. No global variable collisions, no leaking internals.
+
+A component without a render block can still hold state, run effects, and
+participate in the component tree — it just has no visual output.
+
+### `render` — the view
+
+The `render` keyword provides a declarative template DSL for describing DOM
+structure. It has its own lexer pass and syntax rules distinct from regular
+Rip code:
+
+- **Element creation** — tag names become DOM nodes: `div`, `h1`, `button`
+- **CSS-selector shortcuts** — `div.card.active`, `#main`, `.card` (implicit `div`)
+- **Dynamic classes** — `div.('card', active && 'active')` with CLSX semantics
+- **Event handlers** — `@click: handler` compiles to `addEventListener`
+- **Two-way binding** — `value <=> username` wires reactive read and write
+- **Conditionals and loops** — `if`/`else` and `for item in items` with
+  anchor-based DOM insertion and keyed reconciliation
+- **Children/slots** — `@children` receives child nodes, `#content` marks
+  layout insertion points
+- **Component instantiation** — PascalCase names like `Card title: "Hello"`
+  resolve to components automatically, no imports needed
+
+Render compiles to two methods: `_create()` builds the DOM tree once, and
+`_setup()` wires reactive effects for fine-grained updates. There is no
+virtual DOM — each reactive binding creates a direct DOM effect that updates
+the specific text node or attribute that depends on it.
+
+A render block can only exist inside a component. It needs the component's
+signals, computed values, and lifecycle to have something to render and
+react to.
+
+### Together
+
+`component` provides the **model** — state, reactivity, lifecycle, identity.
+`render` provides the **view** — a concise way to describe what the DOM
+should look like and how it stays in sync with that state. One defines
+behavior, the other defines structure. Neither is useful without the other
+in practice, but they are separate concerns with separate syntax.
+
 ## Component Composition
 
 Page components in `pages/` map to routes via file-based routing. Shared
