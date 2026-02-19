@@ -164,15 +164,15 @@ export Dashboard = component
       if hasControls
         .('flex items-center gap-4 flex-wrap mb-6 p-4 rounded-xl bg-gray-50 border border-gray-200')
           for dd in dropdowns
-            Dropdown chartData: dd.rows, columns: dd.columns, onChange: @handleVarChange
+            Dropdown chartData: dd.rows, columns: dd.columns, onChange: (n, v) -> @handleVarChange(n, v)
           for ddm in dropdownMultis
-            DropdownMulti chartData: ddm.rows, columns: ddm.columns, onChange: @handleVarChange
+            DropdownMulti chartData: ddm.rows, columns: ddm.columns, onChange: (n, v) -> @handleVarChange(n, v)
           for inp in inputFilters
-            InputFilter chartData: inp.rows, columns: inp.columns, onChange: @handleVarChange
+            InputFilter chartData: inp.rows, columns: inp.columns, onChange: (n, v) -> @handleVarChange(n, v)
           for dp in datePickers
-            DatePicker chartData: dp.rows, columns: dp.columns, onChange: @handleVarChange
+            DatePicker chartData: dp.rows, columns: dp.columns, onChange: (n, v) -> @handleVarChange(n, v)
           for dr in dateRanges
-            DateRangePicker chartData: dr.rows, columns: dr.columns, onChange: @handleVarChange
+            DateRangePicker chartData: dr.rows, columns: dr.columns, onChange: (n, v) -> @handleVarChange(n, v)
 
       .('grid grid-cols-2 md:grid-cols-4 gap-4')
         for card in valueCards
