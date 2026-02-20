@@ -65,7 +65,7 @@ export function createTypeCheckSettings(ts, overrides = {}) {
 // the compiled JS, detects type annotations, and builds bidirectional
 // source maps. Returns everything both the CLI and LSP need.
 export function compileForCheck(filePath, source, compiler) {
-  const result = compiler.compile(source, { sourceMap: true, types: true });
+  const result = compiler.compile(source, { sourceMap: true, types: true, skipPreamble: true });
   let code = result.code || '';
   let dts = result.dts ? result.dts.trimEnd() + '\n' : '';
 
@@ -105,6 +105,24 @@ export function compileForCheck(filePath, source, compiler) {
       }).join(', ');
       return `${prefix}(${typed}): ${ret}${brace}`;
     });
+  }
+
+  // Extract reactive const declarations (state, computed, readonly, effect)
+  // from DTS and merge their types into the code — same pattern as functions.
+  // DTS: `declare const clicks: Signal<number>;`  →  removed
+  // Code: `const clicks = __state(0);`  →  `const clicks: Signal<number> = __state(0);`
+  const reactiveConsts = new Map();
+  dts = dts.replace(
+    /^(?:export\s+)?(?:declare\s+)?const\s+(\w+)\s*:\s*(.+?);\s*$/gm,
+    (_m, name, type) => { reactiveConsts.set(name, type); return ''; },
+  );
+  dts = dts.replace(/^\s*\n/gm, '');
+
+  for (const [name, type] of reactiveConsts) {
+    code = code.replace(
+      new RegExp(`(const\\s+${name})\\s*=`),
+      (_, prefix) => `${prefix}: ${type} =`,
+    );
   }
 
   // Remove bare `let x;` declarations when the DTS already declares
