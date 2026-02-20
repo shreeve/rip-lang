@@ -202,9 +202,10 @@ body {
 <script type="text/rip" data-name="index">
 export Home = component
 
-  ROW_HEIGHT = 32
-  OVERSCAN   = 5
-  ROW_COUNT  = 100000
+  ROW_HEIGHT    = 32
+  HEADER_HEIGHT = 36
+  OVERSCAN      = 5
+  ROW_COUNT     = 100000
 
   columns := [
     { key: 'id',     title: '#',      width: 60,  align: 'right' }
@@ -280,24 +281,115 @@ export Home = component
         scrollTop = @_nextST
         @_rafPending = false
 
+  scrollToRow: (row) ->
+    el = @_container
+    if el
+      top = row * ROW_HEIGHT
+      if top < el.scrollTop
+        el.scrollTop = top
+      else if top + ROW_HEIGHT + HEADER_HEIGHT > el.scrollTop + containerHeight
+        el.scrollTop = top + ROW_HEIGHT + HEADER_HEIGHT - containerHeight
+
   handleClick: (e) ->
     td = e.target.closest('td')
     if td and not td.parentElement.classList.contains('spacer')
-      container = e.currentTarget
-      rect = container.getBoundingClientRect()
-      ri = Math.floor((e.clientY - rect.top + container.scrollTop - 36) / ROW_HEIGHT)
+      el = e.currentTarget
+      rect = el.getBoundingClientRect()
+      ri = Math.floor((e.clientY - rect.top + el.scrollTop - HEADER_HEIGHT) / ROW_HEIGHT)
       if ri >= 0 and ri < totalRows
         activeRow = ri
         activeCol = td.cellIndex
 
+  handleKeydown: (e) ->
+    numCols = columns.length
+    switch e.key
+      when 'ArrowDown'
+        e.preventDefault()
+        if activeRow < 0
+          activeRow = 0
+          activeCol = 0 if activeCol < 0
+        else if activeRow < totalRows - 1
+          activeRow = activeRow + 1
+        @scrollToRow(activeRow)
+      when 'ArrowUp'
+        e.preventDefault()
+        if activeRow > 0
+          activeRow = activeRow - 1
+          @scrollToRow(activeRow)
+      when 'ArrowRight'
+        e.preventDefault()
+        if activeCol < 0
+          activeCol = 0
+          activeRow = 0 if activeRow < 0
+        else if activeCol < numCols - 1
+          activeCol = activeCol + 1
+      when 'ArrowLeft'
+        e.preventDefault()
+        if activeCol > 0
+          activeCol = activeCol - 1
+      when 'Home'
+        e.preventDefault()
+        if e.ctrlKey or e.metaKey
+          activeRow = 0
+          activeCol = 0
+          @scrollToRow(0)
+        else
+          activeCol = 0
+      when 'End'
+        e.preventDefault()
+        if e.ctrlKey or e.metaKey
+          activeRow = totalRows - 1
+          activeCol = numCols - 1
+          @scrollToRow(activeRow)
+        else
+          activeCol = numCols - 1
+      when 'Tab'
+        e.preventDefault()
+        if e.shiftKey
+          if activeCol > 0
+            activeCol = activeCol - 1
+          else if activeRow > 0
+            activeRow = activeRow - 1
+            activeCol = numCols - 1
+            @scrollToRow(activeRow)
+        else
+          if activeCol < numCols - 1
+            activeCol = activeCol + 1
+          else if activeRow < totalRows - 1
+            activeRow = activeRow + 1
+            activeCol = 0
+            @scrollToRow(activeRow)
+      when 'Enter'
+        e.preventDefault()
+        if e.shiftKey
+          if activeRow > 0
+            activeRow = activeRow - 1
+            @scrollToRow(activeRow)
+        else
+          if activeRow < totalRows - 1
+            activeRow = activeRow + 1
+            @scrollToRow(activeRow)
+      when 'PageDown'
+        e.preventDefault()
+        rows = Math.floor(containerHeight / ROW_HEIGHT)
+        activeRow = Math.min(totalRows - 1, activeRow + rows)
+        activeCol = 0 if activeCol < 0
+        @scrollToRow(activeRow)
+      when 'PageUp'
+        e.preventDefault()
+        rows = Math.floor(containerHeight / ROW_HEIGHT)
+        activeRow = Math.max(0, activeRow - rows)
+        @scrollToRow(activeRow)
+
   mounted: ->
-    el = document.querySelector('.grid-container')
-    if el
+    @_container = document.querySelector('.grid-container')
+    if @_container
       handler = (entries) =>
         for entry in entries
           containerHeight = entry.contentRect.height
       @_resizeObs = new ResizeObserver(handler)
-      @_resizeObs.observe(el)
+      @_resizeObs.observe(@_container)
+      @_container.focus()
 
   unmounted: ->
     if @_resizeObs
@@ -312,7 +404,7 @@ export Home = component
             "R#{activeRow + 1}:C#{activeCol + 1} | "
           "#{totalRows.toLocaleString()} rows"
 
-      .grid-container @scroll: @handleScroll, @click: @handleClick
+      .grid-container tabindex: 0, @scroll: @handleScroll, @click: @handleClick, @keydown: @handleKeydown
         table.rip-grid
           colgroup
             for c in columns
