@@ -314,10 +314,14 @@ export Home = component
       else if top + ROW_HEIGHT + HEADER_HEIGHT > el.scrollTop + containerHeight
         el.scrollTop = top + ROW_HEIGHT + HEADER_HEIGHT - containerHeight
 
-  handleClick: (e) ->
+  handleMousedown: (e) ->
+    if e.button isnt 0
+      return
     td = e.target.closest('td')
     if td and not td.parentElement.classList.contains('spacer')
-      el = e.currentTarget
+      e.preventDefault()
+      @_container.focus() if @_container
+      el = @_container
       rect = el.getBoundingClientRect()
       ri = Math.floor((e.clientY - rect.top + el.scrollTop - HEADER_HEIGHT) / ROW_HEIGHT)
       if ri >= 0 and ri < totalRows
@@ -326,6 +330,19 @@ export Home = component
         if not e.shiftKey
           anchorRow = ri
           anchorCol = td.cellIndex
+
+  handleMousemove: (e) ->
+    if e.buttons isnt 1 or anchorRow < 0
+      return
+    el = @_container
+    rect = el.getBoundingClientRect()
+    ri = Math.floor((e.clientY - rect.top + el.scrollTop - HEADER_HEIGHT) / ROW_HEIGHT)
+    ri = Math.max(0, Math.min(totalRows - 1, ri))
+    td = e.target.closest('td')
+    ci = if td and not td.parentElement.classList.contains('spacer') then td.cellIndex else activeCol
+    activeRow = ri
+    activeCol = ci
+    @scrollToRow(ri)
 
   handleKeydown: (e) ->
     numCols = columns.length
@@ -475,7 +492,7 @@ export Home = component
             " | "
           "#{totalRows.toLocaleString()} rows"
 
-      .grid-container tabindex: 0, @scroll: @handleScroll, @click: @handleClick, @keydown: @handleKeydown
+      .grid-container tabindex: 0, @scroll: @handleScroll, @mousedown: @handleMousedown, @mousemove: @handleMousemove, @keydown: @handleKeydown
         table.rip-grid
           colgroup
             for c in columns
