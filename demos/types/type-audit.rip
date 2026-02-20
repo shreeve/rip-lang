@@ -487,29 +487,37 @@ clickLogger:: Function ~> console.log "clicks changed:", clicks
 # In rip, the @ prefix marks public props. Types on @ props define the
 # component's public API.
 #
-# What's broken:
-#   - .d.ts emission mangles @prop names (e.g. @variant emits as
-#     ".,this,variant: any") and loses type annotations entirely
-#   - @props with =! (readonly) are not emitted at all
 
-# export Button = component
-#   @variant:: "primary" | "secondary" := "primary"
-#   @compact:: boolean := false
-#   @loading:: boolean := false
-#   @label:: string =! "Click me"
-#   disabled:: boolean := false
-#
-#   render
-#     button.btn.("btn-#{@variant}").("compact" if @compact)
-#       if @loading
-#         span.spinner
-#       @label
+export Button = component
+  @variant:: "primary" | "secondary" := "primary"
+  @compact:: boolean := false
+  @loading:: boolean := false
+  @label:: string =! "Click me"
+  @notes:: string
+  disabled:: boolean := false
 
-# export Select = component
-#   @options:: string[] =! []
-#   @value:: string := ""
-#   @error:: string | boolean := false
-#
+  # NOTE: The above generates this via "rip -d type-audit.rip"
+  # export declare class Button {
+  #   constructor(Props: {
+  #     variant?: "primary" | "secondary";
+  #     compact?: boolean;
+  #     loading?: boolean;
+  #     label?: string;
+  #     notes: string;
+  #   });
+  # }
+
+  # render
+  #   button.btn.("btn-#{@variant}").("compact" if @compact)
+  #     if @loading
+  #       span.spinner
+  #     @label
+
+export Select = component
+  @options:: string[] =! []
+  @value:: string := ""
+  @error:: string | boolean := false
+
 #   render
 #     select @change: (e -> @value = e.target.value)
 #       for opt in @options
