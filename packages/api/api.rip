@@ -592,6 +592,7 @@ export read = (name = null, type = null, miss = null) ->
   # get value from store
   v = store.data or {}
   v = v[name] if name?
+  return v if type is 'raw'
   v = v.trim() if typeof v is 'string'
 
   # value only, no validator
