@@ -52,6 +52,7 @@ body {
   max-width: 1200px;
   margin: 0 auto;
   padding: 24px;
+  user-select: none;
 }
 
 .grid-toolbar {
@@ -79,11 +80,37 @@ body {
 }
 
 .grid-container {
+  position: relative;
   overflow: auto;
   height: calc(100vh - 120px);
   background: white;
-  border-radius: 8px;
+  border-radius: 3px;
   box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+}
+
+.rip-grid-editor {
+  position: absolute;
+  z-index: 10;
+  box-sizing: border-box;
+  border: 2px solid #3b82f6;
+  border-radius: 0;
+  font: 13px system-ui, -apple-system, sans-serif;
+  padding: 0 8px;
+  outline: none;
+  background: white;
+  color: #1e293b;
+}
+
+.rip-grid-editor[type="number"] { -moz-appearance: textfield; }
+.rip-grid-editor::-webkit-inner-spin-button,
+.rip-grid-editor::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+select.rip-grid-editor { cursor: pointer; }
+
+.rip-grid tbody td .cell-checkbox {
+  pointer-events: none;
+  margin: 0;
+  vertical-align: middle;
 }
 
 .grid-container:focus {
@@ -198,6 +225,11 @@ body {
     outline-color: #64748b;
     background: rgba(100, 116, 139, 0.1);
   }
+  .rip-grid-editor {
+    background: #1e293b;
+    color: #e2e8f0;
+    border-color: #60a5fa;
+  }
 }
   </style>
 </head>
@@ -210,21 +242,22 @@ export Home = component
   HEADER_HEIGHT = 36
   OVERSCAN      = 5
   ROW_COUNT     = 100000
+  ROLES         = ['Engineer', 'Designer', 'Manager', 'Analyst', 'Director', 'Intern', 'VP', 'Lead']
 
   columns := [
-    { key: 'id',     title: '#',      width: 60,  align: 'right' }
-    { key: 'name',   title: 'Name',   width: 200 }
-    { key: 'age',    title: 'Age',    width: 80,  align: 'right' }
-    { key: 'role',   title: 'Role',   width: 150 }
-    { key: 'salary', title: 'Salary', width: 120, align: 'right' }
-    { key: 'email',  title: 'Email',  width: 250 }
+    { key: 'id',     title: '#',       width: 60,  align: 'right', type: 'number' }
+    { key: 'name',   title: 'Name',    width: 200 }
+    { key: 'active', title: 'Active',  width: 70,  align: 'center', type: 'checkbox' }
+    { key: 'age',    title: 'Age',     width: 80,  align: 'right', type: 'number' }
+    { key: 'role',   title: 'Role',    width: 150, type: 'select', source: ROLES }
+    { key: 'salary', title: 'Salary',  width: 120, align: 'right' }
+    { key: 'email',  title: 'Email',   width: 250 }
   ]
 
   data := do ->
-    fns   = ['Alice', 'Bob', 'Carol', 'Dave', 'Eve', 'Frank', 'Grace', 'Hank', 'Iris', 'Jack']
-    lns   = ['Smith', 'Jones', 'Brown', 'Davis', 'Wilson', 'Clark', 'Lewis', 'Hall', 'Young', 'King']
-    roles = ['Engineer', 'Designer', 'Manager', 'Analyst', 'Director', 'Intern', 'VP', 'Lead']
-    fmt   = (n) -> n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+    fns = ['Alice', 'Bob', 'Carol', 'Dave', 'Eve', 'Frank', 'Grace', 'Hank', 'Iris', 'Jack']
+    lns = ['Smith', 'Jones', 'Brown', 'Davis', 'Wilson', 'Clark', 'Lewis', 'Hall', 'Young', 'King']
+    fmt = (n) -> n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
     result = new Array(ROW_COUNT)
     idx = 0
     while idx < ROW_COUNT
@@ -233,8 +266,9 @@ export Home = component
       result[idx] =
         id: idx + 1
         name: "#{fn} #{ln}"
+        active: idx % 3 isnt 0
         age: 22 + (idx % 45)
-        role: roles[idx % roles.length]
+        role: ROLES[idx % ROLES.length]
         salary: "$#{fmt(50000 + (idx * 137 % 100000))}"
         email: "#{fn.toLowerCase()}.#{ln.toLowerCase()}@example.com"
       idx++
@@ -246,6 +280,9 @@ export Home = component
   activeCol       := -1
   anchorRow       := -1
   anchorCol       := -1
+  selecting       := false
+  editing         := false
+  editValue       := ''
 
   totalRows   ~= data.length
   totalHeight ~= totalRows * ROW_HEIGHT
@@ -270,6 +307,7 @@ export Home = component
   ~>
     for el in document.querySelectorAll('.rip-grid td.active, .rip-grid td.selected')
       el.classList.remove('active', 'selected')
+      el.style.boxShadow = ''
 
     trs = document.querySelectorAll('.rip-grid tbody tr:not(.spacer)')
 
@@ -278,6 +316,7 @@ export Home = component
       maxR = Math.max(anchorRow, activeRow)
       minC = Math.min(anchorCol, activeCol)
       maxC = Math.max(anchorCol, activeCol)
+      multi = minR isnt maxR or minC isnt maxC
       r = Math.max(minR, startRow)
       while r <= Math.min(maxR, endRow)
         tr = trs[r - startRow]
@@ -287,6 +326,13 @@ export Home = component
             td = tr.children[c]
             if td
               td.classList.add('selected')
+              if multi and not selecting
+                shadows = []
+                shadows.push('inset 0 1px 0 0 #3b82f6') if r is minR
+                shadows.push('inset 0 -1px 0 0 #3b82f6') if r is maxR
+                shadows.push('inset 1px 0 0 0 #3b82f6') if c is minC
+                shadows.push('inset -1px 0 0 0 #3b82f6') if c is maxC
+                td.style.boxShadow = shadows.join(', ') if shadows.length > 0
             c++
         r++
 
@@ -297,7 +343,112 @@ export Home = component
         if td
           td.classList.add('active')
 
+  openEditor: (initial, cursorEnd) ->
+    if activeRow < 0 or activeCol < 0 or editing
+      return
+    col = columns[activeCol]
+    editorType = col.type or 'text'
+    if editorType is 'checkbox'
+      data[activeRow][col.key] = not data[activeRow][col.key]
+      return
+    val = data[activeRow][col.key]
+    orig = String(if val? then val else '')
+    selectAll = false
+    if initial isnt undefined and editorType isnt 'select'
+      editValue = initial
+    else
+      editValue = orig
+      selectAll = not cursorEnd
+    editing = true
+    requestAnimationFrame =>
+      el = document.querySelector('.rip-grid-editor')
+      if el
+        trs = document.querySelectorAll('.rip-grid tbody tr:not(.spacer)')
+        tr = trs[activeRow - startRow]
+        if tr
+          td = tr.children[activeCol]
+          if td
+            tdRect = td.getBoundingClientRect()
+            cRect = @_container.getBoundingClientRect()
+            el.style.top = "#{tdRect.top - cRect.top + @_container.scrollTop}px"
+            el.style.left = "#{tdRect.left - cRect.left + @_container.scrollLeft}px"
+            el.style.width = "#{tdRect.width}px"
+            el.style.height = "#{tdRect.height}px"
+            if selectAll and el.select and el.tagName is 'INPUT'
+              el.select()
+            else if el.selectionStart isnt undefined
+              el.selectionStart = el.value.length
+              el.selectionEnd = el.value.length
+            el.focus()
+
+  commitEditor: ->
+    if editing
+      col = columns[activeCol]
+      val = editValue
+      if (col.type or 'text') is 'number'
+        parsed = Number(val)
+        val = if isNaN(parsed) then 0 else parsed
+      data[activeRow][col.key] = val
+      editing = false
+      @_container.focus() if @_container
+
+  cancelEditor: ->
+    editing = false
+    @_container.focus() if @_container
+
+  handleEditorInput: (e) ->
+    editValue = e.target.value
+
+  handleSelectChange: (e) ->
+    editValue = e.target.value
+    @commitEditor()
+
+  handleEditorKeydown: (e) ->
+    numCols = columns.length
+    switch e.key
+      when 'Enter'
+        e.preventDefault()
+        @commitEditor()
+        if e.shiftKey
+          if activeRow > 0
+            activeRow = activeRow - 1
+            @scrollToRow(activeRow)
+        else
+          if activeRow < totalRows - 1
+            activeRow = activeRow + 1
+            @scrollToRow(activeRow)
+        anchorRow = activeRow
+        anchorCol = activeCol
+      when 'Tab'
+        e.preventDefault()
+        @commitEditor()
+        if e.shiftKey
+          if activeCol > 0
+            activeCol = activeCol - 1
+          else if activeRow > 0
+            activeRow = activeRow - 1
+            activeCol = numCols - 1
+            @scrollToRow(activeRow)
+        else
+          if activeCol < numCols - 1
+            activeCol = activeCol + 1
+          else if activeRow < totalRows - 1
+            activeRow = activeRow + 1
+            activeCol = 0
+            @scrollToRow(activeRow)
+        anchorRow = activeRow
+        anchorCol = activeCol
+      when 'Escape'
+        e.preventDefault()
+        @cancelEditor()
+
+  handleDblclick: (e) ->
+    td = e.target.closest('td')
+    if td and not td.parentElement.classList.contains('spacer')
+      @openEditor()
+
   handleScroll: (e) ->
+    @commitEditor() if editing
     @_nextST = e.currentTarget.scrollTop
     if not @_rafPending
       @_rafPending = true
@@ -314,10 +465,18 @@ export Home = component
       else if top + ROW_HEIGHT + HEADER_HEIGHT > el.scrollTop + containerHeight
         el.scrollTop = top + ROW_HEIGHT + HEADER_HEIGHT - containerHeight
 
-  handleClick: (e) ->
+  handleMousedown: (e) ->
+    if e.button isnt 0
+      return
+    if e.target.classList.contains('rip-grid-editor')
+      return
+    @commitEditor() if editing
     td = e.target.closest('td')
     if td and not td.parentElement.classList.contains('spacer')
-      el = e.currentTarget
+      e.preventDefault()
+      @_container.focus() if @_container
+      selecting = true
+      el = @_container
       rect = el.getBoundingClientRect()
       ri = Math.floor((e.clientY - rect.top + el.scrollTop - HEADER_HEIGHT) / ROW_HEIGHT)
       if ri >= 0 and ri < totalRows
@@ -327,7 +486,25 @@ export Home = component
           anchorRow = ri
           anchorCol = td.cellIndex
 
+  handleMouseup: (e) ->
+    selecting = false
+
+  handleMousemove: (e) ->
+    if e.buttons isnt 1 or anchorRow < 0
+      return
+    el = @_container
+    rect = el.getBoundingClientRect()
+    ri = Math.floor((e.clientY - rect.top + el.scrollTop - HEADER_HEIGHT) / ROW_HEIGHT)
+    ri = Math.max(0, Math.min(totalRows - 1, ri))
+    td = e.target.closest('td')
+    ci = if td and not td.parentElement.classList.contains('spacer') then td.cellIndex else anchorCol
+    anchorRow = ri
+    anchorCol = ci
+    @scrollToRow(ri)
+
   handleKeydown: (e) ->
+    if editing
+      return
     numCols = columns.length
     key = e.key
     switch key
@@ -407,14 +584,14 @@ export Home = component
         if activeRow < 0 or activeCol < 0
           activeRow = 0
           activeCol = 0
-        else if e.shiftKey
-          if activeRow > 0
-            activeRow = activeRow - 1
-            @scrollToRow(activeRow)
         else
-          if activeRow < totalRows - 1
-            activeRow = activeRow + 1
-            @scrollToRow(activeRow)
+          @openEditor()
+          return
+      when 'F2'
+        e.preventDefault()
+        if activeRow >= 0 and activeCol >= 0
+          @openEditor(undefined, true)
+        return
       when 'PageDown'
         e.preventDefault()
         rows = Math.floor(containerHeight / ROW_HEIGHT)
@@ -431,6 +608,25 @@ export Home = component
         anchorRow = activeRow
         anchorCol = activeCol
         return
+      when ' '
+        if activeRow >= 0 and activeCol >= 0
+          col = columns[activeCol]
+          if (col.type or 'text') is 'checkbox'
+            e.preventDefault()
+            data[activeRow][col.key] = not data[activeRow][col.key]
+        return
+      when 'Delete', 'Backspace'
+        if activeRow >= 0 and activeCol >= 0 and not e.ctrlKey and not e.metaKey
+          e.preventDefault()
+          col = columns[activeCol]
+          editorType = col.type or 'text'
+          if editorType is 'checkbox'
+            data[activeRow][col.key] = false
+          else if editorType is 'number'
+            data[activeRow][col.key] = 0
+          else
+            data[activeRow][col.key] = ''
+        return
       when 'a'
         if e.ctrlKey or e.metaKey
           e.preventDefault()
@@ -440,6 +636,12 @@ export Home = component
           activeCol = numCols - 1
         return
       else
+        if key.length is 1 and not e.ctrlKey and not e.metaKey and not e.altKey
+          if activeRow >= 0 and activeCol >= 0
+            editorType = (columns[activeCol].type or 'text')
+            if editorType is 'text' or editorType is 'number'
+              e.preventDefault()
+              @openEditor(key)
         return
 
     extending = e.shiftKey and key isnt 'Tab' and key isnt 'Enter'
@@ -475,7 +677,16 @@ export Home = component
             " | "
           "#{totalRows.toLocaleString()} rows"
 
-      .grid-container tabindex: 0, @scroll: @handleScroll, @click: @handleClick, @keydown: @handleKeydown
+      .grid-container tabindex: 0, @scroll: @handleScroll, @mousedown: @handleMousedown, @mousemove: @handleMousemove, @mouseup: @handleMouseup, @keydown: @handleKeydown, @dblclick: @handleDblclick
+        if editing
+          editorType = columns[activeCol].type or 'text'
+          if editorType is 'select'
+            select.rip-grid-editor @change: @handleSelectChange, @keydown: @handleEditorKeydown
+              for opt in (columns[activeCol].source or [])
+                option value: opt, selected: (opt is editValue)
+                  "#{opt}"
+          else
+            input.rip-grid-editor type: editorType, value: editValue, @input: @handleEditorInput, @keydown: @handleEditorKeydown
         table.rip-grid
           colgroup
             for c in columns
@@ -505,7 +716,10 @@ export GridRow = component
     tr.(row.idx % 2 is 0 and 'even')
       for c, ci in columns
         td style: "text-align: #{c.align or 'left'}"
-          row.cells[ci]
+          if c.type is 'checkbox'
+            input.cell-checkbox type: 'checkbox', checked: row.cells[ci]
+          else
+            row.cells[ci]
 </script>
 
 </body>
