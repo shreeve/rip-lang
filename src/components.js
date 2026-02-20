@@ -792,6 +792,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     this._createLines = [];
     this._setupLines = [];
     this._blockFactories = [];
+    this._loopVarStack = [];
 
     const statements = this.is(body, 'block') ? body.slice(1) : [body];
 
@@ -1194,6 +1195,10 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
     const condCode = this.generateInComponent(condition, 'value');
 
+    // Collect loop variables from enclosing for-loops
+    const loopParams = this._loopVarStack.map(v => `${v.itemVar}, ${v.indexVar}`).join(', ');
+    const extraArgs = loopParams ? `, ${loopParams}` : '';
+
     const thenBlockName = this.newBlockVar();
     this.generateConditionBranch(thenBlockName, thenBlock);
 
@@ -1221,17 +1226,17 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     setupLines.push(`    showing = want;`);
     setupLines.push(``);
     setupLines.push(`    if (want === 'then') {`);
-    setupLines.push(`      currentBlock = ${thenBlockName}(this);`);
+    setupLines.push(`      currentBlock = ${thenBlockName}(this${extraArgs});`);
     setupLines.push(`      currentBlock.c();`);
     setupLines.push(`      currentBlock.m(anchor.parentNode, anchor.nextSibling);`);
-    setupLines.push(`      currentBlock.p(this);`);
+    setupLines.push(`      currentBlock.p(this${extraArgs});`);
     setupLines.push(`    }`);
     if (elseBlock) {
       setupLines.push(`    if (want === 'else') {`);
-      setupLines.push(`      currentBlock = ${elseBlockName}(this);`);
+      setupLines.push(`      currentBlock = ${elseBlockName}(this${extraArgs});`);
       setupLines.push(`      currentBlock.c();`);
       setupLines.push(`      currentBlock.m(anchor.parentNode, anchor.nextSibling);`);
-      setupLines.push(`      currentBlock.p(this);`);
+      setupLines.push(`      currentBlock.p(this${extraArgs});`);
       setupLines.push(`    }`);
     }
     setupLines.push(`  });`);
@@ -1262,8 +1267,12 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
     const localizeVar = (line) => this.localizeVar(line);
 
+    // Include enclosing loop variables in the factory signature
+    const loopParams = this._loopVarStack.map(v => `${v.itemVar}, ${v.indexVar}`).join(', ');
+    const extraParams = loopParams ? `, ${loopParams}` : '';
+
     const factoryLines = [];
-    factoryLines.push(`function ${blockName}(ctx) {`);
+    factoryLines.push(`function ${blockName}(ctx${extraParams}) {`);
 
     // Declare local variables
     const localVars = new Set();
@@ -1295,7 +1304,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     factoryLines.push(`    },`);
 
     // p() - update/patch
-    factoryLines.push(`    p(ctx) {`);
+    factoryLines.push(`    p(ctx${extraParams}) {`);
     if (hasEffects) {
       factoryLines.push(`      disposers.forEach(d => d());`);
       factoryLines.push(`      disposers = [];`);
@@ -1379,7 +1388,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     this._createLines = [];
     this._setupLines = [];
 
+    this._loopVarStack.push({ itemVar, indexVar });
     const itemNode = this.generateTemplateBlock(body);
+    this._loopVarStack.pop();
     const itemCreateLines = this._createLines;
     const itemSetupLines = this._setupLines;
 
@@ -1469,32 +1480,32 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     const setupLines = [];
     setupLines.push(`// Loop: ${blockName}`);
     setupLines.push(`{`);
-    setupLines.push(`  const anchor = ${anchorVar};`);
-    setupLines.push(`  const map = new Map();`);
+    setupLines.push(`  const __anchor = ${anchorVar};`);
+    setupLines.push(`  const __map = new Map();`);
     setupLines.push(`  __effect(() => {`);
-    setupLines.push(`    const items = ${collectionCode};`);
-    setupLines.push(`    const parent = anchor.parentNode;`);
-    setupLines.push(`    const newMap = new Map();`);
+    setupLines.push(`    const __items = ${collectionCode};`);
+    setupLines.push(`    const __parent = __anchor.parentNode;`);
+    setupLines.push(`    const __newMap = new Map();`);
     setupLines.push(``);
-    setupLines.push(`    for (let ${indexVar} = 0; ${indexVar} < items.length; ${indexVar}++) {`);
-    setupLines.push(`      const ${itemVar} = items[${indexVar}];`);
-    setupLines.push(`      const key = ${keyExpr};`);
-    setupLines.push(`      let block = map.get(key);`);
-    setupLines.push(`      if (!block) {`);
-    setupLines.push(`        block = ${blockName}(this, ${itemVar}, ${indexVar});`);
-    setupLines.push(`        block.c();`);
+    setupLines.push(`    for (let ${indexVar} = 0; ${indexVar} < __items.length; ${indexVar}++) {`);
+    setupLines.push(`      const ${itemVar} = __items[${indexVar}];`);
+    setupLines.push(`      const __key = ${keyExpr};`);
+    setupLines.push(`      let __block = __map.get(__key);`);
+    setupLines.push(`      if (!__block) {`);
+    setupLines.push(`        __block = ${blockName}(this, ${itemVar}, ${indexVar});`);
+    setupLines.push(`        __block.c();`);
     setupLines.push(`      }`);
-    setupLines.push(`      block.m(parent, anchor);`);
-    setupLines.push(`      block.p(this, ${itemVar}, ${indexVar});`);
-    setupLines.push(`      newMap.set(key, block);`);
+    setupLines.push(`      __block.m(__parent, __anchor);`);
+    setupLines.push(`      __block.p(this, ${itemVar}, ${indexVar});`);
+    setupLines.push(`      __newMap.set(__key, __block);`);
     setupLines.push(`    }`);
     setupLines.push(``);
-    setupLines.push(`    for (const [key, block] of map) {`);
-    setupLines.push(`      if (!newMap.has(key)) block.d(true);`);
+    setupLines.push(`    for (const [__k, __b] of __map) {`);
+    setupLines.push(`      if (!__newMap.has(__k)) __b.d(true);`);
     setupLines.push(`    }`);
     setupLines.push(``);
-    setupLines.push(`    map.clear();`);
-    setupLines.push(`    for (const [k, v] of newMap) map.set(k, v);`);
+    setupLines.push(`    __map.clear();`);
+    setupLines.push(`    for (const [__k, __v] of __newMap) __map.set(__k, __v);`);
     setupLines.push(`  });`);
     setupLines.push(`}`);
 
@@ -1539,13 +1550,19 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         for (let i = 1; i < arg.length; i++) {
           const [key, value] = arg[i];
           if (typeof key === 'string') {
-            // Pass reactive members as signals (not values) for reactive prop binding.
-            // Child's __state passthrough returns the signal as-is — shared reactivity.
-            const prevReactive = this.reactiveMembers;
-            this.reactiveMembers = new Set();
-            const valueCode = this.generateInComponent(value, 'value');
-            this.reactiveMembers = prevReactive;
-            props.push(`${key}: ${valueCode}`);
+            // Simple reactive identifier — pass signal directly for shared reactivity.
+            // Complex expressions — use normal .value unwrapping to compute the value.
+            const isSimpleReactive = this.reactiveMembers && (
+              (typeof value === 'string' && this.reactiveMembers.has(value)) ||
+              (Array.isArray(value) && value[0] === '.' && value[1] === 'this' && typeof value[2] === 'string' && this.reactiveMembers.has(value[2]))
+            );
+            if (isSimpleReactive) {
+              const member = typeof value === 'string' ? value : value[2];
+              props.push(`${key}: this.${member}`);
+            } else {
+              const valueCode = this.generateInComponent(value, 'value');
+              props.push(`${key}: ${valueCode}`);
+            }
           }
         }
       } else if (Array.isArray(arg) && (arg[0] === '->' || arg[0] === '=>')) {
@@ -1559,11 +1576,17 @@ export function installComponentSupport(CodeGenerator, Lexer) {
                 for (let i = 1; i < child.length; i++) {
                   const [key, value] = child[i];
                   if (typeof key === 'string') {
-                    const prevReactive = this.reactiveMembers;
-                    this.reactiveMembers = new Set();
-                    const valueCode = this.generateInComponent(value, 'value');
-                    this.reactiveMembers = prevReactive;
-                    props.push(`${key}: ${valueCode}`);
+                    const isSimpleReactive = this.reactiveMembers && (
+                      (typeof value === 'string' && this.reactiveMembers.has(value)) ||
+                      (Array.isArray(value) && value[0] === '.' && value[1] === 'this' && typeof value[2] === 'string' && this.reactiveMembers.has(value[2]))
+                    );
+                    if (isSimpleReactive) {
+                      const member = typeof value === 'string' ? value : value[2];
+                      props.push(`${key}: this.${member}`);
+                    } else {
+                      const valueCode = this.generateInComponent(value, 'value');
+                      props.push(`${key}: ${valueCode}`);
+                    }
                   }
                 }
               } else {
