@@ -11,6 +11,12 @@
 #
 # Variables (${name} or #{name}) resolve as: CLI args > .auth > .env
 
+VERSION = '1.0.0'
+
+if Bun.argv[2] in ['-v', '--version']
+  console.log "curl.rip #{VERSION}"
+  process.exit(0)
+
 # Load key=value file into an object (skips comments and blank lines)
 load = (path) ->
   file = Bun.file(path)
@@ -24,24 +30,33 @@ load = (path) ->
     obj[line.slice(0, eq)] = line.slice(eq + 1) if eq > 0
   obj
 
-# Parse args: key=value pairs are vars, last arg is the payload
+# Parse args: key=value pairs are vars, non-key=val arg is the payload
 argv = Bun.argv.slice(2)
-payload = argv.pop()?.trim()
-
-unless payload
-  console.error "Usage: rip curl.rip [key=val ...] 'payload'"
-  process.exit(1)
-
 cli = {}
+payload = null
+
 for arg in argv
   eq = arg.indexOf('=')
-  cli[arg.slice(0, eq)] = arg.slice(eq + 1) if eq > 0
+  if eq > 0
+    cli[arg.slice(0, eq)] = arg.slice(eq + 1)
+  else
+    payload = arg
 
+# Fall back to stdin (for heredoc / pipe usage)
+import { readFileSync } from 'fs'
+payload ?= readFileSync('/dev/stdin', 'utf-8')
+payload = payload.trim()
+
+unless payload
+  console.error "Usage: curl.rip [key=val ...] 'payload'  — or pipe/heredoc"
+  process.exit(1)
+
+env  = load! '.env'
 auth = load! '.auth'
 
 # Interpolate ${VAR} and #{VAR}
 text = payload.replace /[#$]\{([^}]+)\}/g, (_, name) ->
-  val = cli[name] ?? auth[name] ?? Bun.env[name]
+  val = cli[name] ?? auth[name] ?? env[name] ?? Bun.env[name]
   unless val?
     console.error "curl.rip: undefined '#{name}'"
     process.exit(1)
