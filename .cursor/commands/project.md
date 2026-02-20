@@ -4,4 +4,4 @@ description: Load project context
 
 Read `AGENT.md` for project overview, structure, and quick start commands.
 
-Read https://bit.ly/rip-lang for a guide to the Rip platform.
+Read https://raw.githubusercontent.com/shreeve/rip-lang/refs/heads/main/docs/RIP-LANG.md for a guide to the Rip platform.
