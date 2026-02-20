@@ -200,7 +200,12 @@ export Home = component
     result
 
   handleScroll: (e) ->
-    scrollTop = e.currentTarget.scrollTop
+    @_nextST = e.currentTarget.scrollTop
+    if not @_rafPending
+      @_rafPending = true
+      requestAnimationFrame =>
+        scrollTop = @_nextST
+        @_rafPending = false
 
   mounted: ->
     el = document.querySelector('.grid-container')
