@@ -1,0 +1,45 @@
+{
+  "name": "@rip-lang/grid",
+  "version": "0.1.0",
+  "description": "High-performance reactive data grid for Rip UI",
+  "type": "module",
+  "main": "grid.rip",
+  "exports": {
+    ".": "./grid.rip"
+  },
+  "scripts": {
+    "test": "echo \"Tests coming soon\" && exit 0"
+  },
+  "keywords": [
+    "grid",
+    "datagrid",
+    "table",
+    "virtual-scroll",
+    "reactive",
+    "rip",
+    "rip-lang"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shreeve/rip-lang.git",
+    "directory": "packages/grid"
+  },
+  "homepage": "https://github.com/shreeve/rip-lang/tree/main/packages/grid#readme",
+  "bugs": {
+    "url": "https://github.com/shreeve/rip-lang/issues"
+  },
+  "author": "Steve Shreeve <steve.shreeve@gmail.com>",
+  "license": "MIT",
+  "files": [
+    "grid.rip",
+    "README.md"
+  ],
+  "peerDependencies": {
+    "@rip-lang/ui": ">=0.3.19"
+  },
+  "peerDependenciesMeta": {
+    "@rip-lang/ui": {
+      "optional": false
+    }
+  }
+}
