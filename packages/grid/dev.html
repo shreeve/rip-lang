@@ -347,14 +347,14 @@ export Home = component
     if activeRow < 0 or activeCol < 0 or editing
       return
     col = columns[activeCol]
-    editorType = col.type or 'text'
-    if editorType is 'checkbox'
+    colType = col.type or 'text'
+    if colType is 'checkbox'
       data[activeRow][col.key] = not data[activeRow][col.key]
       return
     val = data[activeRow][col.key]
     orig = String(if val? then val else '')
     selectAll = false
-    if initial isnt undefined and editorType isnt 'select'
+    if initial isnt undefined and colType isnt 'select'
       editValue = initial
     else
       editValue = orig
@@ -385,7 +385,7 @@ export Home = component
     if editing
       col = columns[activeCol]
       val = editValue
-      if (col.type or 'text') is 'number'
+      if col.type is 'number'
         parsed = Number(val)
         val = if isNaN(parsed) then 0 else parsed
       data[activeRow][col.key] = val
@@ -611,7 +611,7 @@ export Home = component
       when ' '
         if activeRow >= 0 and activeCol >= 0
           col = columns[activeCol]
-          if (col.type or 'text') is 'checkbox'
+          if col.type is 'checkbox'
             e.preventDefault()
             data[activeRow][col.key] = not data[activeRow][col.key]
         return
@@ -619,10 +619,10 @@ export Home = component
         if activeRow >= 0 and activeCol >= 0 and not e.ctrlKey and not e.metaKey
           e.preventDefault()
           col = columns[activeCol]
-          editorType = col.type or 'text'
-          if editorType is 'checkbox'
+          colType = col.type or 'text'
+          if colType is 'checkbox'
             data[activeRow][col.key] = false
-          else if editorType is 'number'
+          else if colType is 'number'
             data[activeRow][col.key] = 0
           else
             data[activeRow][col.key] = ''
@@ -638,8 +638,8 @@ export Home = component
       else
         if key.length is 1 and not e.ctrlKey and not e.metaKey and not e.altKey
           if activeRow >= 0 and activeCol >= 0
-            editorType = (columns[activeCol].type or 'text')
-            if editorType is 'text' or editorType is 'number'
+            colType = columns[activeCol].type or 'text'
+            if colType is 'text' or colType is 'number'
               e.preventDefault()
               @openEditor(key)
         return
@@ -679,14 +679,13 @@ export Home = component
 
       .grid-container tabindex: 0, @scroll: @handleScroll, @mousedown: @handleMousedown, @mousemove: @handleMousemove, @mouseup: @handleMouseup, @keydown: @handleKeydown, @dblclick: @handleDblclick
         if editing
-          editorType = columns[activeCol].type or 'text'
-          if editorType is 'select'
+          if columns[activeCol].type is 'select'
             select.rip-grid-editor @change: @handleSelectChange, @keydown: @handleEditorKeydown
               for opt in (columns[activeCol].source or [])
                 option value: opt, selected: (opt is editValue)
                   "#{opt}"
           else
-            input.rip-grid-editor type: editorType, value: editValue, @input: @handleEditorInput, @keydown: @handleEditorKeydown
+            input.rip-grid-editor type: (columns[activeCol].type or 'text'), value: editValue, @input: @handleEditorInput, @keydown: @handleEditorKeydown
         table.rip-grid
           colgroup
             for c in columns
