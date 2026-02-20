@@ -569,7 +569,7 @@ body {
 @page { size: letter; margin: 0; }
 
 @media print {
-  body { margin: 0; background: white; }
+  body { margin: 0; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
   .header, .sidebar, .drawer, .drawer-overlay, .btn-primary,
   .settings__section { display: none !important; }
