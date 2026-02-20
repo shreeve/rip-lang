@@ -153,6 +153,13 @@ select.rip-grid-editor { cursor: pointer; padding-left: 4px; }
   user-select: none;
 }
 
+.sort-arrow { color: #94a3b8; font-size: 11px; margin-left: 3px; vertical-align: middle; }
+.sort-badge {
+  display: inline-block; font-size: 9px; color: #64748b;
+  background: #e2e8f0; border-radius: 50%; width: 14px; height: 14px;
+  line-height: 14px; text-align: center; margin-left: 2px; vertical-align: middle;
+}
+
 .rip-grid tbody td {
   height: var(--row-height);
   padding: var(--cell-padding);
@@ -226,6 +233,8 @@ select.rip-grid-editor { cursor: pointer; padding-left: 4px; }
     color: #e2e8f0;
     border-color: #60a5fa;
   }
+  .sort-arrow { color: #64748b; }
+  .sort-badge { background: #334155; color: #94a3b8; }
 }
   </style>
 </head>
@@ -313,6 +322,41 @@ export Grid = component
   editing         := false
   editValue       := ''
   dataVersion     := 0
+  sortKeys        := []
+
+  cmp = (a, b) -> (a > b) - (a < b)
+
+  sortIndex ~=
+    dataVersion
+    len = data.length
+    idx = new Array(len)
+    i = 0
+    while i < len
+      idx[i] = i
+      i++
+    if sortKeys.length > 0
+      idx.sort (a, b) ->
+        ki = 0
+        while ki < sortKeys.length
+          sk = sortKeys[ki]
+          va = data[a][columns[sk.col].key]
+          vb = data[b][columns[sk.col].key]
+          result = if sk.dir is 'asc' then cmp(va, vb) else cmp(vb, va)
+          if result isnt 0 then return result
+          ki++
+        a - b
+    idx
+
+  sortInfo ~=
+    arrows = new Array(columns.length).fill('')
+    ranks = new Array(columns.length).fill(0)
+    ki = 0
+    while ki < sortKeys.length
+      sk = sortKeys[ki]
+      arrows[sk.col] = if sk.dir is 'asc' then " ↓" else " ↑"
+      ranks[sk.col] = ki + 1
+      ki++
+    { arrows, ranks }
 
   totalRows   ~= data.length
   totalHeight ~= totalRows * ROW_HEIGHT
@@ -327,11 +371,12 @@ export Grid = component
     n = startRow
     while n <= endRow
       if n >= 0 and n < totalRows
-        row = data[n]
+        di = sortIndex[n]
+        row = data[di]
         vals = []
         for c, ci in columns
           v = row[c.key]
-          fmt = cellFormat(n, ci)
+          fmt = cellFormat(di, ci)
           vals.push(if fmt then fmt.format(v) else v)
         result.push({ idx: n, cells: vals })
       n++
@@ -386,10 +431,10 @@ export Grid = component
       return
     col = columns[activeCol]
     if col.type is 'checkbox'
-      data[activeRow][col.key] = not data[activeRow][col.key]
+      data[sortIndex[activeRow]][col.key] = not data[sortIndex[activeRow]][col.key]
       dataVersion++
       return
-    val = data[activeRow][col.key]
+    val = data[sortIndex[activeRow]][col.key]
     orig = String(if val? then val else '')
     numeric = col.align is 'right'
     selectAll = false
@@ -447,22 +492,23 @@ export Grid = component
 
   commitEditor: ->
     if editing
+      di = sortIndex[activeRow]
       col = columns[activeCol]
-      oldVal = data[activeRow][col.key]
+      oldVal = data[di][col.key]
       val = editValue
-      fmt = cellFormat(activeRow, activeCol)
+      fmt = cellFormat(di, activeCol)
       if fmt and fmt.parse
         val = fmt.parse(val)
       if @beforeEdit
-        val = @beforeEdit(activeRow, activeCol, oldVal, val)
+        val = @beforeEdit(di, activeCol, oldVal, val)
         if val is false then return @cancelEditor()
-      data[activeRow][col.key] = val
+      data[di][col.key] = val
       dataVersion++
       editing = false
       @_removeEditor()
       @_container.focus() if @_container
       if @afterEdit
-        @afterEdit(activeRow, activeCol, oldVal, val)
+        @afterEdit(di, activeCol, oldVal, val)
 
   cancelEditor: ->
     @_removeEditor()
@@ -510,6 +556,31 @@ export Grid = component
         e.preventDefault()
         e.stopPropagation()
         @cancelEditor()
+
+  handleHeaderClick: (e) ->
+    th = e.target.closest('th')
+    if not th then return
+    ci = th.cellIndex
+    if e.shiftKey
+      existing = sortKeys.findIndex (sk) -> sk.col is ci
+      if existing >= 0
+        if sortKeys[existing].dir is 'asc'
+          sortKeys = sortKeys.map (sk, i) -> if i is existing then { col: sk.col, dir: 'desc' } else sk
+        else if sortKeys.length > 1
+          sortKeys = sortKeys.map (sk, i) -> if i is existing then { col: sk.col, dir: 'asc' } else sk
+        else
+          sortKeys = sortKeys.filter (_, i) -> i isnt existing
+      else
+        sortKeys = sortKeys.concat({ col: ci, dir: 'asc' })
+    else
+      if sortKeys.length is 1 and sortKeys[0].col is ci
+        if sortKeys[0].dir is 'asc'
+          sortKeys = [{ col: ci, dir: 'desc' }]
+        else
+          sortKeys = []
+      else
+        sortKeys = [{ col: ci, dir: 'asc' }]
+    dataVersion++
 
   handleDblclick: (e) ->
     td = e.target.closest('td')
@@ -688,7 +759,7 @@ export Grid = component
           col = columns[activeCol]
           if col.type is 'checkbox'
             e.preventDefault()
-            data[activeRow][col.key] = not data[activeRow][col.key]
+            data[sortIndex[activeRow]][col.key] = not data[sortIndex[activeRow]][col.key]
             dataVersion++
         return
       when 'Delete', 'Backspace'
@@ -696,10 +767,10 @@ export Grid = component
           e.preventDefault()
           col = columns[activeCol]
           if col.type is 'checkbox'
-            data[activeRow][col.key] = false
+            data[sortIndex[activeRow]][col.key] = false
           else
-            fmt = cellFormat(activeRow, activeCol)
-            data[activeRow][col.key] = if fmt and fmt.parse then fmt.parse('') else ''
+            fmt = cellFormat(sortIndex[activeRow], activeCol)
+            data[sortIndex[activeRow]][col.key] = if fmt and fmt.parse then fmt.parse('') else ''
           dataVersion++
         return
       when 'a'
@@ -756,10 +827,15 @@ export Grid = component
             for c in columns
               col style: "width: #{c.width}px"
           thead
-            tr
-              for c in columns
-                th style: "text-align: #{c.align or 'left'}"
+            tr @click: @handleHeaderClick
+              for c, ci in columns
+                th style: "text-align: #{c.align or 'left'}; cursor: pointer"
                   "#{c.title}"
+                  span.sort-arrow
+                    sortInfo.arrows[ci]
+                  if sortKeys.length > 1 and sortInfo.ranks[ci] > 0
+                    span.sort-badge
+                      "#{sortInfo.ranks[ci]}"
           tbody
             if offsetY > 0
               tr.spacer
