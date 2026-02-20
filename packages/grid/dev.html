@@ -247,6 +247,7 @@ export Home = component
   activeCol       := -1
   anchorRow       := -1
   anchorCol       := -1
+  selecting       := false
 
   totalRows   ~= data.length
   totalHeight ~= totalRows * ROW_HEIGHT
@@ -271,6 +272,7 @@ export Home = component
   ~>
     for el in document.querySelectorAll('.rip-grid td.active, .rip-grid td.selected')
       el.classList.remove('active', 'selected')
+      el.style.boxShadow = ''
 
     trs = document.querySelectorAll('.rip-grid tbody tr:not(.spacer)')
 
@@ -279,6 +281,7 @@ export Home = component
       maxR = Math.max(anchorRow, activeRow)
       minC = Math.min(anchorCol, activeCol)
       maxC = Math.max(anchorCol, activeCol)
+      multi = minR isnt maxR or minC isnt maxC
       r = Math.max(minR, startRow)
       while r <= Math.min(maxR, endRow)
         tr = trs[r - startRow]
@@ -288,6 +291,13 @@ export Home = component
             td = tr.children[c]
             if td
               td.classList.add('selected')
+              if multi and not selecting
+                shadows = []
+                shadows.push('inset 0 1px 0 0 #3b82f6') if r is minR
+                shadows.push('inset 0 -1px 0 0 #3b82f6') if r is maxR
+                shadows.push('inset 1px 0 0 0 #3b82f6') if c is minC
+                shadows.push('inset -1px 0 0 0 #3b82f6') if c is maxC
+                td.style.boxShadow = shadows.join(', ') if shadows.length > 0
             c++
         r++
 
@@ -322,6 +332,7 @@ export Home = component
     if td and not td.parentElement.classList.contains('spacer')
       e.preventDefault()
       @_container.focus() if @_container
+      selecting = true
       el = @_container
       rect = el.getBoundingClientRect()
       ri = Math.floor((e.clientY - rect.top + el.scrollTop - HEADER_HEIGHT) / ROW_HEIGHT)
@@ -331,6 +342,9 @@ export Home = component
         if not e.shiftKey
           anchorRow = ri
           anchorCol = td.cellIndex
+
+  handleMouseup: (e) ->
+    selecting = false
 
   handleMousemove: (e) ->
     if e.buttons isnt 1 or anchorRow < 0
@@ -493,7 +507,7 @@ export Home = component
             " | "
           "#{totalRows.toLocaleString()} rows"
 
-      .grid-container tabindex: 0, @scroll: @handleScroll, @mousedown: @handleMousedown, @mousemove: @handleMousemove, @keydown: @handleKeydown
+      .grid-container tabindex: 0, @scroll: @handleScroll, @mousedown: @handleMousedown, @mousemove: @handleMousemove, @mouseup: @handleMouseup, @keydown: @handleKeydown
         table.rip-grid
           colgroup
             for c in columns
