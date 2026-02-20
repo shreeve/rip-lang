@@ -4,6 +4,38 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Rip Grid — Dev</title>
+  <script>
+  (function() {
+    // ?disable=index,grid-row — disable specific scripts to isolate errors
+    var params = new URLSearchParams(location.search);
+    var disable = (params.get('disable') || '').split(',').filter(Boolean);
+    if (disable.length) {
+      document.querySelectorAll('script[type="text/rip"]').forEach(function(s) {
+        if (disable.includes(s.dataset.name)) {
+          s.type = 'text/x-rip-disabled';
+          console.warn('[rip] disabled: ' + s.dataset.name);
+        }
+      });
+    }
+
+    window.addEventListener('error', function(ev) {
+      if (!ev.message || !ev.message.includes('Parse error')) return;
+      var scripts = document.querySelectorAll('script[type="text/rip"]');
+      var names = [];
+      scripts.forEach(function(s) { names.push(s.dataset.name || '?'); });
+      var msg = '[rip] Parse error in one of: ' + names.join(', ') +
+        '\n  ' + ev.message +
+        '\n  Isolate with: ?disable=NAME (where NAME is one of: ' + names.join(', ') + ')';
+      console.error(msg);
+
+      var el = document.createElement('div');
+      el.style.cssText = 'position:fixed;top:0;left:0;right:0;padding:16px 20px;background:#fef2f2;color:#991b1b;font:14px/1.5 monospace;z-index:9999;border-bottom:2px solid #f87171';
+      el.textContent = 'Rip parse error — check console. Isolate: ?disable=' + names[0];
+      document.body.prepend(el);
+      ev.preventDefault();
+    });
+  })();
+  </script>
   <script type="module" src="/rip/rip-ui.min.js"></script>
   <style>
 *, *::before, *::after { box-sizing: border-box; }
@@ -48,9 +80,14 @@ body {
 
 .grid-container {
   overflow: auto;
+  height: calc(100vh - 120px);
   background: white;
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+}
+
+.grid-container:focus {
+  outline: none;
 }
 
 .rip-grid {
@@ -100,6 +137,20 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: cell;
+}
+
+.rip-grid tbody td.active {
+  background: rgba(59, 130, 246, 0.12);
+  outline: 2px solid #3b82f6;
+  outline-offset: -2px;
+  position: relative;
+  z-index: 1;
+}
+
+.grid-container:not(:focus) .rip-grid tbody td.active {
+  outline-color: #94a3b8;
+  background: rgba(100, 116, 139, 0.06);
 }
 
 .rip-grid tbody tr:hover td {
@@ -134,6 +185,14 @@ body {
     --cell-color: #e2e8f0;
     --stripe-bg: rgba(255,255,255,.02);
     --hover-bg: rgba(59, 130, 246, 0.08);
+  }
+  .rip-grid tbody td.active {
+    background: rgba(59, 130, 246, 0.2);
+    outline-color: #60a5fa;
+  }
+  .grid-container:not(:focus) .rip-grid tbody td.active {
+    outline-color: #64748b;
+    background: rgba(100, 116, 139, 0.1);
   }
 }
   </style>
@@ -227,7 +286,7 @@ export Home = component
         span.grid-info
           "#{totalRows.toLocaleString()} rows | Rows #{startRow}-#{endRow} | #{visibleRows.length} DOM rows"
 
-      .grid-container @scroll: @handleScroll, style: "height: #{containerHeight}px"
+      .grid-container @scroll: @handleScroll
         table.rip-grid
           colgroup
             for c in columns
