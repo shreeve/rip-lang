@@ -138,9 +138,22 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: cell;
+  user-select: none;
 }
 
-.rip-grid tbody td.active {
+.rip-grid tbody tr.even td {
+  background: var(--stripe-bg);
+}
+
+.rip-grid tbody tr:hover td {
+  background: var(--hover-bg);
+}
+
+.rip-grid tbody tr td.selected {
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.rip-grid tbody tr td.active {
   background: rgba(59, 130, 246, 0.12);
   outline: 2px solid #3b82f6;
   outline-offset: -2px;
@@ -148,21 +161,9 @@ body {
   z-index: 1;
 }
 
-.grid-container:not(:focus) .rip-grid tbody td.active {
+.grid-container:not(:focus) .rip-grid tbody tr td.active {
   outline-color: #94a3b8;
   background: rgba(100, 116, 139, 0.06);
-}
-
-.rip-grid tbody tr:hover td {
-  background: var(--hover-bg);
-}
-
-.rip-grid tbody tr.even td {
-  background: var(--stripe-bg);
-}
-
-.rip-grid tbody tr.even:hover td {
-  background: var(--hover-bg);
 }
 
 .rip-grid tr.spacer td {
@@ -186,11 +187,14 @@ body {
     --stripe-bg: rgba(255,255,255,.02);
     --hover-bg: rgba(59, 130, 246, 0.08);
   }
-  .rip-grid tbody td.active {
+  .rip-grid tbody tr td.selected {
+    background: rgba(59, 130, 246, 0.15);
+  }
+  .rip-grid tbody tr td.active {
     background: rgba(59, 130, 246, 0.2);
     outline-color: #60a5fa;
   }
-  .grid-container:not(:focus) .rip-grid tbody td.active {
+  .grid-container:not(:focus) .rip-grid tbody tr td.active {
     outline-color: #64748b;
     background: rgba(100, 116, 139, 0.1);
   }
@@ -240,6 +244,8 @@ export Home = component
   containerHeight := 600
   activeRow       := -1
   activeCol       := -1
+  anchorRow       := -1
+  anchorCol       := -1
 
   totalRows   ~= data.length
   totalHeight ~= totalRows * ROW_HEIGHT
@@ -262,11 +268,29 @@ export Home = component
     result
 
   ~>
-    prev = document.querySelector('.rip-grid td.active')
-    if prev
-      prev.classList.remove('active')
+    for el in document.querySelectorAll('.rip-grid td.active, .rip-grid td.selected')
+      el.classList.remove('active', 'selected')
+
+    trs = document.querySelectorAll('.rip-grid tbody tr:not(.spacer)')
+
+    if anchorRow >= 0 and activeRow >= 0 and anchorCol >= 0 and activeCol >= 0
+      minR = Math.min(anchorRow, activeRow)
+      maxR = Math.max(anchorRow, activeRow)
+      minC = Math.min(anchorCol, activeCol)
+      maxC = Math.max(anchorCol, activeCol)
+      r = Math.max(minR, startRow)
+      while r <= Math.min(maxR, endRow)
+        tr = trs[r - startRow]
+        if tr
+          c = minC
+          while c <= maxC
+            td = tr.children[c]
+            if td
+              td.classList.add('selected')
+            c++
+        r++
+
     if activeRow >= startRow and activeRow <= endRow and activeCol >= 0
-      trs = document.querySelectorAll('.rip-grid tbody tr:not(.spacer)')
       tr = trs[activeRow - startRow]
       if tr
         td = tr.children[activeCol]
@@ -299,10 +323,14 @@ export Home = component
       if ri >= 0 and ri < totalRows
         activeRow = ri
         activeCol = td.cellIndex
+        if not e.shiftKey
+          anchorRow = ri
+          anchorCol = td.cellIndex
 
   handleKeydown: (e) ->
     numCols = columns.length
-    switch e.key
+    key = e.key
+    switch key
       when 'ArrowDown'
         e.preventDefault()
         if activeRow < 0
@@ -317,6 +345,7 @@ export Home = component
         e.preventDefault()
         if e.ctrlKey or e.metaKey
           activeRow = 0
+          activeCol = 0 if activeCol < 0
         else if activeRow > 0
           activeRow = activeRow - 1
         @scrollToRow(activeRow)
@@ -333,6 +362,7 @@ export Home = component
         e.preventDefault()
         if e.ctrlKey or e.metaKey
           activeCol = 0
+          activeRow = 0 if activeRow < 0
         else if activeCol > 0
           activeCol = activeCol - 1
       when 'Home'
@@ -342,6 +372,7 @@ export Home = component
           activeCol = 0
           @scrollToRow(0)
         else
+          activeRow = 0 if activeRow < 0
           activeCol = 0
       when 'End'
         e.preventDefault()
@@ -350,10 +381,14 @@ export Home = component
           activeCol = numCols - 1
           @scrollToRow(activeRow)
         else
+          activeRow = 0 if activeRow < 0
           activeCol = numCols - 1
       when 'Tab'
         e.preventDefault()
-        if e.shiftKey
+        if activeRow < 0 or activeCol < 0
+          activeRow = 0
+          activeCol = 0
+        else if e.shiftKey
           if activeCol > 0
             activeCol = activeCol - 1
           else if activeRow > 0
@@ -369,7 +404,10 @@ export Home = component
             @scrollToRow(activeRow)
       when 'Enter'
         e.preventDefault()
-        if e.shiftKey
+        if activeRow < 0 or activeCol < 0
+          activeRow = 0
+          activeCol = 0
+        else if e.shiftKey
           if activeRow > 0
             activeRow = activeRow - 1
             @scrollToRow(activeRow)
@@ -387,7 +425,27 @@ export Home = component
         e.preventDefault()
         rows = Math.floor(containerHeight / ROW_HEIGHT)
         activeRow = Math.max(0, activeRow - rows)
+        activeCol = 0 if activeCol < 0
         @scrollToRow(activeRow)
+      when 'Escape'
+        anchorRow = activeRow
+        anchorCol = activeCol
+        return
+      when 'a'
+        if e.ctrlKey or e.metaKey
+          e.preventDefault()
+          anchorRow = 0
+          anchorCol = 0
+          activeRow = totalRows - 1
+          activeCol = numCols - 1
+        return
+      else
+        return
+
+    extending = e.shiftKey and key isnt 'Tab' and key isnt 'Enter'
+    if not extending
+      anchorRow = activeRow
+      anchorCol = activeCol
 
   mounted: ->
     @_container = document.querySelector('.grid-container')
@@ -409,7 +467,12 @@ export Home = component
         h1 "Rip Grid"
         span.grid-info
           if activeRow >= 0
-            "R#{activeRow + 1}:C#{activeCol + 1} | "
+            "R#{activeRow + 1}:C#{activeCol + 1}"
+            if anchorRow >= 0 and (anchorRow isnt activeRow or anchorCol isnt activeCol)
+              h = Math.abs(activeRow - anchorRow) + 1
+              w = Math.abs(activeCol - anchorCol) + 1
+              " [#{h}×#{w}]"
+            " | "
           "#{totalRows.toLocaleString()} rows"
 
       .grid-container tabindex: 0, @scroll: @handleScroll, @click: @handleClick, @keydown: @handleKeydown
