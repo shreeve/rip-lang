@@ -108,6 +108,178 @@ Response format:
 | `/tables` | GET | List all tables |
 | `/schema/:table` | GET | Table schema |
 
+## Database Client
+
+Rip DB includes an ActiveRecord-style database client for use in Rip
+applications. Import it from `@rip-lang/db/client` — it talks to a running
+`rip-db` server over HTTP with parameterized queries.
+
+```rip
+import { connect, query, findOne, findAll, Model } from '@rip-lang/db/client'
+
+connect 'http://localhost:4213'   # optional — defaults to DB_URL env or localhost:4213
+```
+
+### Low-Level Queries
+
+Every query uses parameterized placeholders (`$1`, `$2`, ...) to prevent SQL
+injection. Results are automatically materialized into plain objects.
+
+```rip
+# Raw result (meta + data arrays)
+result = query! "SELECT * FROM users WHERE active = $1", [true]
+
+# Single object or null
+user = findOne! "SELECT * FROM users WHERE id = $1", [42]
+
+# Array of objects
+users = findAll! "SELECT * FROM users WHERE role = $1", ['admin']
+```
+
+### Model Factory
+
+Create a Model for any table to get a full set of CRUD operations and a
+chainable query builder.
+
+```rip
+User = Model 'users'
+```
+
+#### Find & Count
+
+```rip
+user  = User.find! 42           # SELECT * FROM "users" WHERE id = $1
+count = User.count!              # SELECT COUNT(*) ...
+users = User.all!                # SELECT * FROM "users"
+users = User.all! 10             # SELECT * FROM "users" LIMIT 10
+```
+
+#### Chainable Queries
+
+All query methods return a new builder — chains are immutable and reusable.
+
+```rip
+User.where(active: true).order('name').limit(10).all!
+User.where(active: true).offset(20).limit(10).all!
+User.where('age > $1', [21]).all!
+User.select('id, name').where(role: 'admin').first!
+```
+
+#### Where, Or, Not
+
+```rip
+# Object-style (null-aware — generates IS NULL / IS NOT NULL)
+User.where(role: 'admin').all!
+User.where(deleted_at: null).all!          # WHERE "deleted_at" IS NULL
+
+# String-style with params
+User.where('age > $1', [21]).all!
+
+# OR conditions
+User.where(active: true).or(role: 'admin').all!
+User.where(active: true).or('role = $1', ['admin']).all!
+
+# NOT conditions
+User.where(active: true).not(role: 'banned').all!
+User.not(deleted_at: null).all!            # WHERE "deleted_at" IS NOT NULL
+```
+
+#### Group & Having
+
+```rip
+User.group('role').select('role, count(*) as n').all!
+User.group('role').having('count(*) > $1', [5]).select('role, count(*) as n').all!
+```
+
+#### Insert, Update, Upsert, Destroy
+
+All mutations return the affected row(s) via `RETURNING *`.
+
+```rip
+# Insert — returns the new record
+user = User.insert! { first_name: 'Alice', email: 'alice@example.com' }
+
+# Update by id — returns the updated record
+user = User.update! 42, { email: 'newemail@example.com' }
+
+# Upsert — insert or update on conflict
+user = User.upsert! { email: 'alice@example.com', name: 'Alice' }, on: 'email'
+
+# Destroy by id — returns the deleted record
+user = User.destroy! 42
+```
+
+#### Bulk Update & Destroy via Query Builder
+
+Chain `.where()` with `.update!` or `.destroy!` for bulk operations.
+
+```rip
+# Update all matching rows
+User.where(role: 'guest').update! { role: 'member' }
+
+# Delete all matching rows
+User.where(active: false).destroy!
+```
+
+#### Raw Parameterized Queries
+
+For anything the builder doesn't cover, drop down to raw SQL.
+
+```rip
+users = User.query! "SELECT * FROM users WHERE dob > $1", ['2000-01-01']
+```
+
+#### Cross-Database Queries
+
+Pass a database name to query attached DuckDB databases.
+
+```rip
+Archive = Model 'orders', 'archive_db'
+order = Archive.find! 99    # SELECT * FROM "archive_db"."orders" WHERE id = $1
+```
+
+### Query Builder Reference
+
+| Method | Description |
+|--------|-------------|
+| `.where(obj)` | AND conditions from object (`null` becomes `IS NULL`) |
+| `.where(sql, params)` | AND with raw SQL fragment |
+| `.or(obj)` | OR conditions from object |
+| `.or(sql, params)` | OR with raw SQL fragment |
+| `.not(obj)` | AND NOT conditions (`null` becomes `IS NOT NULL`) |
+| `.not(sql, params)` | AND NOT with raw SQL fragment |
+| `.select(cols)` | Columns to select (string or array) |
+| `.order(expr)` | ORDER BY expression |
+| `.group(expr)` | GROUP BY expression |
+| `.having(sql, params)` | HAVING clause with params |
+| `.limit(n)` | LIMIT |
+| `.offset(n)` | OFFSET |
+| `.all!` | Execute, return array of objects |
+| `.first!` | Execute with LIMIT 1, return object or null |
+| `.count!` | Execute COUNT(*), return number |
+| `.update!(data)` | Bulk UPDATE matching rows, return array |
+| `.destroy!` | Bulk DELETE matching rows, return array |
+
+### Model Reference
+
+| Method | Description |
+|--------|-------------|
+| `Model.find!(id)` | Find by primary key |
+| `Model.all!(limit?)` | All rows, optional limit |
+| `Model.count!` | Count all rows |
+| `Model.where(...)` | Start a query chain |
+| `Model.or(...)` | Start a chain with OR |
+| `Model.not(...)` | Start a chain with NOT |
+| `Model.select(...)` | Start a chain with SELECT |
+| `Model.order(...)` | Start a chain with ORDER BY |
+| `Model.group(...)` | Start a chain with GROUP BY |
+| `Model.limit(n)` | Start a chain with LIMIT |
+| `Model.insert!(data)` | Insert and return new row |
+| `Model.update!(id, data)` | Update by id and return row |
+| `Model.upsert!(data, on:)` | Insert or update on conflict |
+| `Model.destroy!(id)` | Delete by id and return row |
+| `Model.query!(sql, params)` | Raw parameterized query |
+
 ## DuckDB UI
 
 The official DuckDB UI is available at the root URL. It provides:

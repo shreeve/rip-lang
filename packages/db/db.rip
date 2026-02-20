@@ -125,8 +125,8 @@ isSelectQuery = (sql) ->
 
 # Log SQL query (truncated if long)
 logSQL = (sql) ->
-  query = sql.replace(/\s+/g, ' ').trim()
-  console.log "SQL: #{query}"
+  # sql = sql.replace(/\s+/g, ' ').trim()
+  console.log sql
 
 # Execute SQL and return result (uses persistent connection)
 executeSQL = (sql, params = []) ->
@@ -224,7 +224,7 @@ getUIParams = (req) ->
 # POST /ddb/run — Execute SQL and return binary result (DuckDB UI protocol)
 post '/ddb/run' ->
   try
-    sql = read 'body', 'string'
+    sql = read 'body', 'raw'
     return binaryResponse serializeErrorResult 'Empty query' unless sql
 
     logSQL sql

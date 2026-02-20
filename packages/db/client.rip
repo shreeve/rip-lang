@@ -1,0 +1,289 @@
+# @rip-lang/db/client — Database client with chainable Model factory
+#
+# Connects to a rip-db server over HTTP. Provides parameterized queries
+# and an ActiveRecord-style Model for common CRUD operations.
+#
+# Usage:
+#   import { query, findOne, findAll, Model } from '@rip-lang/db/client'
+#
+#   # Low-level
+#   result = query! "SELECT * FROM users WHERE id = $1", [42]
+#   user   = findOne! "SELECT * FROM users WHERE id = $1", [42]
+#   users  = findAll! "SELECT * FROM users WHERE active = $1", [true]
+#
+#   # Model
+#   User = Model 'users'
+#   user  = User.find! 42
+#   users = User.where(active: true).order('name').limit(10).all!
+#   user  = User.insert! { name: 'Alice', email: 'alice@example.com' }
+#   user  = User.upsert! { email: 'alice@example.com', name: 'Alice' }, on: 'email'
+#   user  = User.update! 42, { name: 'Bob' }
+#   User.destroy! 42
+#   users = User.where(active: true).or('role = $1', ['admin']).all!
+#   users = User.where(active: true).not(role: 'banned').all!
+#   stats = User.group('role').select('role, count(*) as n').all!
+
+# ==============================================================================
+# Connection
+# ==============================================================================
+
+_dbUrl = null
+
+export connect = (url) -> _dbUrl = url
+
+dbUrl = -> _dbUrl or process.env.DB_URL or 'http://localhost:4213'
+
+# ==============================================================================
+# Low-Level Helpers
+# ==============================================================================
+
+export esc = (v) ->
+  return 'NULL' unless v?
+  return String(v) if typeof v is 'number'
+  "'" + String(v).replace(/'/g, "''") + "'"
+
+export query = (sql, params = []) ->
+  body = if params.length > 0 then { sql, params } else { sql }
+  res = fetch! "#{dbUrl()}/sql",
+    method: 'POST'
+    headers: { 'Content-Type': 'application/json' }
+    body: JSON.stringify body
+  data = res.json!
+  throw new Error data.error if data.error
+  data
+
+materialize = (meta, row) ->
+  obj = {}
+  for col, i in meta
+    obj[col.name] = row[i]
+  obj
+
+export materializeAll = (result) ->
+  return [] if result.rows is 0
+  result.data.map (row) -> materialize result.meta, row
+
+export findOne = (sql, params = []) ->
+  result = query! sql, params
+  return null if result.rows is 0
+  materialize result.meta, result.data[0]
+
+export findAll = (sql, params = []) ->
+  result = query! sql, params
+  materializeAll result
+
+# ==============================================================================
+# Query Builder
+# ==============================================================================
+
+class QueryBuilder
+  constructor: (@table, @database = null) ->
+    @_tableName = if @database then "\"#{@database}\".\"#{@table}\"" else "\"#{@table}\""
+    @_wheres  = []
+    @_params  = []
+    @_order   = null
+    @_group   = null
+    @_having  = null
+    @_limit   = null
+    @_offset  = null
+    @_select  = '*'
+
+  select: (cols) ->
+    b = @_clone()
+    b._select = if Array.isArray(cols) then cols.join(', ') else cols
+    b
+
+  where: (conditions, params = []) ->
+    b = @_clone()
+    if typeof conditions is 'string'
+      b._wheres.push { clause: conditions, join: 'AND' }
+      b._params = b._params.concat params
+    else if typeof conditions is 'object'
+      for own key, val of conditions
+        if val is null
+          b._wheres.push { clause: "\"#{key}\" IS NULL", join: 'AND' }
+        else
+          b._wheres.push { clause: "\"#{key}\" = $#{b._params.length + 1}", join: 'AND' }
+          b._params.push val
+    b
+
+  or: (conditions, params = []) ->
+    b = @_clone()
+    if typeof conditions is 'string'
+      b._wheres.push { clause: conditions, join: 'OR' }
+      b._params = b._params.concat params
+    else if typeof conditions is 'object'
+      parts = []
+      for own key, val of conditions
+        if val is null
+          parts.push "\"#{key}\" IS NULL"
+        else
+          parts.push "\"#{key}\" = $#{b._params.length + 1}"
+          b._params.push val
+      b._wheres.push { clause: "(#{parts.join(' AND ')})", join: 'OR' }
+    b
+
+  not: (conditions, params = []) ->
+    b = @_clone()
+    if typeof conditions is 'string'
+      b._wheres.push { clause: "NOT (#{conditions})", join: 'AND' }
+      b._params = b._params.concat params
+    else if typeof conditions is 'object'
+      for own key, val of conditions
+        if val is null
+          b._wheres.push { clause: "\"#{key}\" IS NOT NULL", join: 'AND' }
+        else
+          b._wheres.push { clause: "\"#{key}\" != $#{b._params.length + 1}", join: 'AND' }
+          b._params.push val
+    b
+
+  order: (expr) ->
+    b = @_clone()
+    b._order = expr
+    b
+
+  group: (expr) ->
+    b = @_clone()
+    b._group = expr
+    b
+
+  having: (clause, params = []) ->
+    b = @_clone()
+    b._having = clause
+    b._params = b._params.concat params
+    b
+
+  limit: (n) ->
+    b = @_clone()
+    b._limit = n
+    b
+
+  offset: (n) ->
+    b = @_clone()
+    b._offset = n
+    b
+
+  _buildWhere: ->
+    return '' if @_wheres.length is 0
+    parts = []
+    for w, i in @_wheres
+      if i is 0
+        parts.push w.clause
+      else
+        parts.push "#{w.join} #{w.clause}"
+    " WHERE #{parts.join(' ')}"
+
+  _toSQL: ->
+    sql = "SELECT #{@_select} FROM #{@_tableName}"
+    sql += @_buildWhere()
+    sql += " GROUP BY #{@_group}" if @_group
+    sql += " HAVING #{@_having}" if @_having
+    sql += " ORDER BY #{@_order}" if @_order
+    sql += " LIMIT #{@_limit}" if @_limit?
+    sql += " OFFSET #{@_offset}" if @_offset?
+    sql
+
+  all: ->
+    findAll! @_toSQL(), @_params
+
+  first: ->
+    b = @_clone()
+    b._limit = 1
+    findOne! b._toSQL(), b._params
+
+  count: ->
+    sql = "SELECT COUNT(*) as count FROM #{@_tableName}"
+    sql += @_buildWhere()
+    sql += " GROUP BY #{@_group}" if @_group
+    sql += " HAVING #{@_having}" if @_having
+    result = query! sql, @_params
+    result.data[0][0]
+
+  update: (data) ->
+    keys = Object.keys(data).filter (k) -> data[k] isnt undefined
+    sets = keys.map((k, i) -> "\"#{k}\" = $#{@_params.length + i + 1}").join(', ')
+    vals = keys.map (k) -> data[k]
+    allParams = [...@_params, ...vals]
+    sql = "UPDATE #{@_tableName} SET #{sets}"
+    sql += @_buildWhere()
+    sql += " RETURNING *"
+    findAll! sql, allParams
+
+  destroy: ->
+    sql = "DELETE FROM #{@_tableName}"
+    sql += @_buildWhere()
+    sql += " RETURNING *"
+    findAll! sql, @_params
+
+  _clone: ->
+    b = new QueryBuilder(@table, @database)
+    b._wheres = [...@_wheres]
+    b._params = [...@_params]
+    b._order  = @_order
+    b._group  = @_group
+    b._having = @_having
+    b._limit  = @_limit
+    b._offset = @_offset
+    b._select = @_select
+    b
+
+# ==============================================================================
+# Model Factory
+# ==============================================================================
+
+export Model = (table, database = null) ->
+  tableName = if database then "\"#{database}\".\"#{table}\"" else "\"#{table}\""
+  _qb = -> new QueryBuilder(table, database)
+
+  find: (id) ->
+    findOne! "SELECT * FROM #{tableName} WHERE id = $1", [id]
+
+  all: (limit = null) ->
+    sql = "SELECT * FROM #{tableName}"
+    sql += " LIMIT #{limit}" if limit?
+    findAll! sql
+
+  where: (conditions, params = []) -> _qb().where(conditions, params)
+  or:    (conditions, params = []) -> _qb().or(conditions, params)
+  not:   (conditions, params = []) -> _qb().not(conditions, params)
+  select: (cols) -> _qb().select(cols)
+  order:  (expr) -> _qb().order(expr)
+  group:  (expr) -> _qb().group(expr)
+  limit:  (n)    -> _qb().limit(n)
+
+  count: ->
+    result = query! "SELECT COUNT(*) as count FROM #{tableName}"
+    result.data[0][0]
+
+  query: (sql, params = []) ->
+    findAll! sql, params
+
+  insert: (data) ->
+    keys = Object.keys(data).filter (k) -> data[k] isnt undefined
+    cols = keys.map((k) -> "\"#{k}\"").join(', ')
+    refs = keys.map((_, i) -> "$#{i + 1}").join(', ')
+    vals = keys.map (k) -> data[k]
+    findOne! "INSERT INTO #{tableName} (#{cols}) VALUES (#{refs}) RETURNING *", vals
+
+  update: (id, data) ->
+    keys = Object.keys(data).filter (k) -> data[k] isnt undefined
+    sets = keys.map((k, i) -> "\"#{k}\" = $#{i + 2}").join(', ')
+    vals = keys.map (k) -> data[k]
+    findOne! "UPDATE #{tableName} SET #{sets} WHERE id = $1 RETURNING *", [id, ...vals]
+
+  upsert: (data, opts = {}) ->
+    keys = Object.keys(data).filter (k) -> data[k] isnt undefined
+    cols = keys.map((k) -> "\"#{k}\"").join(', ')
+    refs = keys.map((_, i) -> "$#{i + 1}").join(', ')
+    vals = keys.map (k) -> data[k]
+
+    conflict = opts.on or opts.conflict
+    sql = "INSERT INTO #{tableName} (#{cols}) VALUES (#{refs})"
+    if conflict
+      updateCols = keys.filter((k) -> k isnt conflict)
+      sets = updateCols.map((k) -> "\"#{k}\" = EXCLUDED.\"#{k}\"").join(', ')
+      sql += " ON CONFLICT (\"#{conflict}\") DO UPDATE SET #{sets}"
+    sql += " RETURNING *"
+    findOne! sql, vals
+
+  destroy: (id) ->
+    findOne! "DELETE FROM #{tableName} WHERE id = $1 RETURNING *", [id]

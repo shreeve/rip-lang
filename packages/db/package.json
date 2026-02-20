@@ -1,9 +1,13 @@
 {
   "name": "@rip-lang/db",
-  "version": "1.1.8",
+  "version": "1.2.0",
   "description": "DuckDB server with official DuckDB UI — pure Bun FFI",
   "type": "module",
   "main": "db.rip",
+  "exports": {
+    ".": "./db.rip",
+    "./client": "./client.rip"
+  },
   "bin": {
     "rip-db": "./bin/rip-db"
   },
@@ -39,6 +43,7 @@
   },
   "files": [
     "db.rip",
+    "client.rip",
     "lib/",
     "bin/",
     "README.md"
