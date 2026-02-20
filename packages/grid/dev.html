@@ -339,9 +339,9 @@ export Home = component
     ri = Math.floor((e.clientY - rect.top + el.scrollTop - HEADER_HEIGHT) / ROW_HEIGHT)
     ri = Math.max(0, Math.min(totalRows - 1, ri))
     td = e.target.closest('td')
-    ci = if td and not td.parentElement.classList.contains('spacer') then td.cellIndex else activeCol
-    activeRow = ri
-    activeCol = ci
+    ci = if td and not td.parentElement.classList.contains('spacer') then td.cellIndex else anchorCol
+    anchorRow = ri
+    anchorCol = ci
     @scrollToRow(ri)
 
   handleKeydown: (e) ->
