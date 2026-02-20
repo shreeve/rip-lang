@@ -1309,14 +1309,14 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     setupLines.push(`    if (want === 'then') {`);
     setupLines.push(`      currentBlock = ${thenBlockName}(this${extraArgs});`);
     setupLines.push(`      currentBlock.c();`);
-    setupLines.push(`      currentBlock.m(anchor.parentNode, anchor.nextSibling);`);
+    setupLines.push(`      if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);`);
     setupLines.push(`      currentBlock.p(this${extraArgs});`);
     setupLines.push(`    }`);
     if (elseBlock) {
       setupLines.push(`    if (want === 'else') {`);
       setupLines.push(`      currentBlock = ${elseBlockName}(this${extraArgs});`);
       setupLines.push(`      currentBlock.c();`);
-      setupLines.push(`      currentBlock.m(anchor.parentNode, anchor.nextSibling);`);
+      setupLines.push(`      if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);`);
       setupLines.push(`      currentBlock.p(this${extraArgs});`);
       setupLines.push(`    }`);
     }
@@ -1411,10 +1411,10 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     const condFragChildren = getFragChildren(rootVar, createLines, localizeVar);
     if (condFragChildren) {
       for (const child of condFragChildren) {
-        factoryLines.push(`      if (detaching) ${child}.remove();`);
+        factoryLines.push(`      if (detaching && ${child}) ${child}.remove();`);
       }
     } else {
-      factoryLines.push(`      if (detaching) ${localizeVar(rootVar)}.remove();`);
+      factoryLines.push(`      if (detaching && ${localizeVar(rootVar)}) ${localizeVar(rootVar)}.remove();`);
     }
     factoryLines.push(`    }`);
 
@@ -1512,10 +1512,10 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     factoryLines.push(`    m(target, anchor) {`);
     if (loopFragChildren) {
       for (const child of loopFragChildren) {
-        factoryLines.push(`      target.insertBefore(${child}, anchor);`);
+        factoryLines.push(`      if (target) target.insertBefore(${child}, anchor);`);
       }
     } else {
-      factoryLines.push(`      target.insertBefore(${localizeVar(itemNode)}, anchor);`);
+      factoryLines.push(`      if (target) target.insertBefore(${localizeVar(itemNode)}, anchor);`);
     }
     factoryLines.push(`    },`);
 
@@ -1545,10 +1545,10 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     }
     if (loopFragChildren) {
       for (const child of loopFragChildren) {
-        factoryLines.push(`      if (detaching) ${child}.remove();`);
+        factoryLines.push(`      if (detaching && ${child}) ${child}.remove();`);
       }
     } else {
-      factoryLines.push(`      if (detaching) ${localizeVar(itemNode)}.remove();`);
+      factoryLines.push(`      if (detaching && ${localizeVar(itemNode)}) ${localizeVar(itemNode)}.remove();`);
     }
     factoryLines.push(`    }`);
 
