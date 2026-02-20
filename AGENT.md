@@ -33,7 +33,7 @@ bun run browser
 
 | Metric | Value |
 |--------|-------|
-| Version | 3.10.5 |
+| Version | 3.10.6 |
 | Tests | 1,243 |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
@@ -507,7 +507,7 @@ are correct. Key patterns:
 
 ## Browser Runtime
 
-`src/browser.js` (~120 LOC) provides the browser entry point. When loaded,
+`src/browser.js` (~151 LOC) provides the browser entry point. When loaded,
 it registers key functions on `globalThis` and processes inline Rip scripts.
 
 ### Key Features

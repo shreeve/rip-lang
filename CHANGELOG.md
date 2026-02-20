@@ -7,6 +7,17 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.10.6] - 2026-02-20
+
+### CLI — Fix Multiline Argument Corruption
+
+- **`execSync` → `spawnSync` in `bin/rip`** — The CLI runner was passing script arguments through a shell via `execSync` with string interpolation. Any argument containing a newline (JSON payloads, heredoc content, multiline strings) was silently split into separate shell commands. Replaced all three `execSync` call sites (`.rip` file execution, compiled temp file execution, and `bin/` script fallback) with `spawnSync` using argument arrays, bypassing the shell entirely. Exit codes use `?? 1` (nullish coalescing) instead of `|| 0` for correct signal-kill handling.
+
+### Utilities — `curl.rip` Improvements
+
+- **Stdin TTY guard** — `curl.rip` no longer hangs when run interactively without a payload argument. Added `process.stdin.isTTY` check to only read from stdin when piped or heredoc'd.
+- **Documented inline and heredoc modes** — Updated header comments to clearly show both usage patterns.
+
 ## [3.9.1] - 2026-02-18
 
 ### Runtime — Reactivity & Reconciliation

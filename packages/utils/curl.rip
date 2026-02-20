@@ -2,14 +2,24 @@
 
 # curl.rip — HTTP client with variable interpolation
 #
-#   rip curl.rip [key=val ...] '
-#   POST https://api.example.com/endpoint
+# Inline mode (single-quoted argument):
+#   curl.rip [key=val ...] 'POST https://api.example.com/endpoint
 #   Authorization: Bearer ${token}
 #   Content-Type: application/json
+#
+#   { "body": "${key}" }'
+#
+# Heredoc mode (stdin):
+#   curl.rip [key=val ...] <<'EOF'
+#   POST https://api.example.com/endpoint
+#   Content-Type: application/json
+#
 #   { "body": "${key}" }
-#   '
+#   EOF
 #
 # Variables (${name} or #{name}) resolve as: CLI args > .auth > .env
+
+import { readFileSync } from 'fs'
 
 VERSION = '1.0.0'
 
@@ -42,13 +52,17 @@ for arg in argv
   else
     payload = arg
 
-# Fall back to stdin (for heredoc / pipe usage)
-import { readFileSync } from 'fs'
-payload ?= readFileSync('/dev/stdin', 'utf-8')
+# Fall back to stdin if piped/heredoc (not a TTY)
+unless payload
+  if process.stdin.isTTY
+    console.error "Usage: curl.rip [key=val ...] 'METHOD URL\\n...'  — or pipe/heredoc"
+    process.exit(1)
+  payload = readFileSync('/dev/stdin', 'utf-8')
+
 payload = payload.trim()
 
 unless payload
-  console.error "Usage: curl.rip [key=val ...] 'payload'  — or pipe/heredoc"
+  console.error "Usage: curl.rip [key=val ...] 'METHOD URL\\n...'  — or pipe/heredoc"
   process.exit(1)
 
 env  = load! '.env'

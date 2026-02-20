@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { readFileSync, writeFileSync, existsSync, statSync, unlinkSync } from 'fs';
-import { execSync, spawn } from 'child_process';
+import { execSync, spawnSync, spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, basename, join } from 'path';
 import { Compiler } from '../src/compiler.js';
@@ -189,14 +189,10 @@ async function main() {
     const loaderPath = join(__dirname, '../rip-loader.js');
 
     if (inputFile.endsWith('.rip')) {
-      try {
-        execSync(`bun --preload ${loaderPath} ${inputFile} ${scriptArgs.join(' ')}`, {
-          stdio: 'inherit'
-        });
-        process.exit(0);
-      } catch (error) {
-        process.exit(error.status || 1);
-      }
+      const result = spawnSync('bun', ['--preload', loaderPath, inputFile, ...scriptArgs], {
+        stdio: 'inherit'
+      });
+      process.exit(result.status ?? 1);
     } else {
       // Non-.rip files (e.g. shebang scripts): compile, write temp file, execute
       const source = readFileSync(inputFile, 'utf-8');
@@ -206,7 +202,8 @@ async function main() {
       let exitCode = 0;
       try {
         writeFileSync(tmp, result.code);
-        execSync(`bun --preload ${loaderPath} "${tmp}" ${scriptArgs.join(' ')}`, { stdio: 'inherit' });
+        const r = spawnSync('bun', ['--preload', loaderPath, tmp, ...scriptArgs], { stdio: 'inherit' });
+        exitCode = r.status ?? 1;
       } catch (error) {
         exitCode = error.status || 1;
       }
@@ -230,16 +227,8 @@ async function main() {
       const binScript = join(repoRoot, 'bin', inputFile);
 
       if (existsSync(binScript)) {
-        // Found it! Execute with remaining args
-        try {
-          execSync(`"${binScript}" ${scriptArgs.join(' ')}`, {
-            stdio: 'inherit',
-            shell: true
-          });
-          process.exit(0);
-        } catch (error) {
-          process.exit(error.status || 1);
-        }
+        const r = spawnSync(binScript, scriptArgs, { stdio: 'inherit' });
+        process.exit(r.status ?? 1);
       }
     } catch {
       // Not in a git repo, or git not available - fall through to normal error
