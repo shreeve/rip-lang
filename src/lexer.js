@@ -1156,7 +1156,7 @@ export class Lexer {
     else if (val === '~=') tag = 'COMPUTED_ASSIGN';
     else if (val === ':=') tag = 'REACTIVE_ASSIGN';
     else if (val === '<=>') tag = 'BIND';
-    else if (val === '~>') tag = 'REACT_ASSIGN';
+    else if (val === '~>') tag = 'EFFECT';
     else if (val === '=!') tag = 'READONLY_ASSIGN';
     // Merge assignment: *config = {a: 1} → Object.assign(config, {a: 1})
     // Also supports *@ = props → Object.assign(this, props)

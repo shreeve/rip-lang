@@ -73,7 +73,7 @@ grammar =
     o 'ReactiveAssign'
     o 'ComputedAssign'
     o 'ReadonlyAssign'
-    o 'ReactAssign'
+    o 'Effect'
     o 'If'
     o 'Try'
     o 'While'
@@ -208,13 +208,13 @@ grammar =
   ]
 
   # Reactive effect (~>) — side effects that run when dependencies change
-  ReactAssign: [
-    o 'Assignable REACT_ASSIGN Expression'               , '["effect", 1, 3]'
-    o 'Assignable REACT_ASSIGN TERMINATOR Expression'    , '["effect", 1, 4]'
-    o 'Assignable REACT_ASSIGN INDENT Expression OUTDENT', '["effect", 1, 4]'
-    o 'REACT_ASSIGN Expression'                          , '["effect", null, 2]'
-    o 'REACT_ASSIGN TERMINATOR Expression'               , '["effect", null, 3]'
-    o 'REACT_ASSIGN INDENT Expression OUTDENT'           , '["effect", null, 3]'
+  Effect: [
+    o 'Assignable EFFECT Expression'               , '["effect", 1, 3]'
+    o 'Assignable EFFECT TERMINATOR Expression'    , '["effect", 1, 4]'
+    o 'Assignable EFFECT Block'                    , '["effect", 1, 3]'
+    o 'EFFECT Expression'                          , '["effect", null, 2]'
+    o 'EFFECT TERMINATOR Expression'               , '["effect", null, 3]'
+    o 'EFFECT Block'                               , '["effect", null, 3]'
   ]
 
   # ============================================================================
@@ -802,7 +802,7 @@ grammar =
     o 'EXPORT ReactiveAssign'                              , '["export", 2]'
     o 'EXPORT ComputedAssign'                              , '["export", 2]'
     o 'EXPORT ReadonlyAssign'                              , '["export", 2]'
-    o 'EXPORT ReactAssign'                                 , '["export", 2]'
+    o 'EXPORT Effect'                                 , '["export", 2]'
     o 'EXPORT DEFAULT Expression'                          , '["export-default", 3]'
     o 'EXPORT DEFAULT INDENT Object OUTDENT'               , '["export-default", 4]'
     o 'EXPORT EXPORT_ALL FROM String'                      , '["export-all", 4]'

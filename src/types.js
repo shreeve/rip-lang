@@ -257,7 +257,7 @@ function collectTypeExpression(tokens, j) {
     if (depth === 0) {
       if (tTag === '=' || tTag === 'REACTIVE_ASSIGN' ||
           tTag === 'COMPUTED_ASSIGN' || tTag === 'READONLY_ASSIGN' ||
-          tTag === 'REACT_ASSIGN' || tTag === 'TERMINATOR' ||
+          tTag === 'EFFECT' || tTag === 'TERMINATOR' ||
           tTag === 'INDENT' || tTag === 'OUTDENT' ||
           tTag === '->' || tTag === ',') {
         break;
@@ -874,7 +874,7 @@ export function emitTypes(tokens, sexpr = null) {
         } else if (next[0] === 'COMPUTED_ASSIGN') {
           usesComputed = true;
           lines.push(`${indent()}${exp}${declare}const ${varName}: Computed<${type}>;`);
-        } else if (next[0] === 'REACT_ASSIGN') {
+        } else if (next[0] === 'EFFECT') {
           lines.push(`${indent()}${exp}${declare}const ${varName}: () => void;`);
         } else if (next[0] === '=') {
           // Check if RHS is an arrow function with return type

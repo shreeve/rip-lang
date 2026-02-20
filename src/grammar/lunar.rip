@@ -437,7 +437,7 @@ export install = (Generator) ->
     # Statement tokens handled by parseUnary (for 'break if done', 'return x unless err')
     @_exprHandledTokens.add 'STATEMENT'
     @_exprHandledTokens.add 'RETURN'
-    @_exprHandledTokens.add 'REACT_ASSIGN'
+    @_exprHandledTokens.add 'EFFECT'
 
   Generator::_findKeywordTokens = (type, dispatchName, handledTokens, visited) ->
     return if visited.has type.name
@@ -2271,7 +2271,7 @@ export install = (Generator) ->
     lines.push "  if (token === 'STATEMENT') { const v = tokenText; advance(); return v; }"
     lines.push "  if (token === 'RETURN') return parseReturn();"
     # Fire-and-forget effect (~> expr) — prefix form without left-hand side
-    lines.push "  if (token === 'REACT_ASSIGN') return parseReactAssign();"
+    lines.push "  if (token === 'EFFECT') return parseEffect();"
     lines.push "  throw new Error('Parse error: unexpected token ' + token + ' at line ' + ((tokenLoc && tokenLoc.r || 0) + 1));"
     lines.push "}"
     lines.join '\n'
