@@ -26,10 +26,6 @@ start port: 3000
 
 ```html
 <script type="module" src="/rip/rip-ui.min.js"></script>
-<script type="text/rip">
-  { launch } = importRip! 'ui.rip'
-  launch()
-</script>
 ```
 
 **`pages/index.rip`** — a page component:
@@ -365,12 +361,14 @@ dramatically cleaner to use than their React equivalents.
 
 ## How It Works
 
-The browser loads one file — `rip-ui.min.js` (~52KB Brotli) — which bundles the
+The browser loads one file — `rip-ui.min.js` (~53KB Brotli) — which bundles the
 Rip compiler and the pre-compiled UI framework. No runtime compilation of the
 framework, no extra network requests.
 
-Then `launch()` loads component sources (from a server bundle, static files, or
-inline DOM), hydrates the stash, and renders.
+The runtime auto-detects `<script type="text/rip" data-name="...">` components
+on the page and calls `launch()` automatically with hash routing enabled by
+default. For server-rendered apps, `launch()` fetches the app bundle from the
+server. Either way, it hydrates the stash and renders.
 
 ### Browser Execution Contexts
 
@@ -465,6 +463,8 @@ in the browser.
 Embed component source directly in the HTML page:
 
 ```html
+<script type="module" src="rip-ui.min.js"></script>
+
 <script type="text/rip" data-name="index">
   export Home = component
     render
@@ -477,16 +477,13 @@ Embed component source directly in the HTML page:
     render
       button @click: (-> count += 1), "#{count}"
 </script>
-
-<script type="text/rip">
-  { launch } = importRip! '/rip/ui.rip'
-  launch()
-</script>
 ```
 
-The `data-name` attribute maps to the component filename (`.rip` extension is
-added automatically if omitted). Scripts with `data-name` are collected as
-component sources and are not executed as top-level code.
+The runtime auto-detects `data-name` scripts and launches automatically — no
+bootstrap script needed. The `data-name` attribute maps to the component
+filename (`.rip` extension is added automatically if omitted). Scripts with
+`data-name` are collected as component sources and are not executed as
+top-level code.
 
 ### 3. Server Bundle (default)
 
@@ -619,26 +616,34 @@ shared components from `includes` stay out of the router.
 
 ## Hash Routing
 
-For static hosting (GitHub Pages, S3, etc.) where the server can't handle
-SPA fallback routing, use hash-based URLs:
+Hash routing is **enabled by default** for auto-launched apps — ideal for
+static hosting (GitHub Pages, S3, etc.) where the server can't handle SPA
+fallback routing. URLs use `page.html#/about` instead of `/about`.
+Back/forward navigation, direct URL loading, and `href="#/path"` links all
+work correctly.
 
-```coffee
-launch '/app', hash: true
+To disable hash routing (e.g., for server-rendered apps with proper fallback):
+
+```html
+<script type="module" src="rip-ui.min.js" data-hash="false"></script>
 ```
 
-This switches from `/about` to `page.html#/about`. Back/forward navigation,
-direct URL loading, and `href="#/path"` links all work correctly.
+Or when calling `launch()` manually:
+
+```coffee
+launch hash: false
+```
 
 ## Static Deployment
 
 For zero-server deployment, use inline `data-name` scripts or a `components`
-URL list. Both work with `rip-ui.min.js` (~52KB Brotli) from a CDN — no
-server middleware needed.
+URL list. Both work with `rip-ui.min.js` (~53KB Brotli) from a CDN — no
+server middleware needed, no bootstrap script needed.
 
 **Inline mode** — everything in one HTML file:
 
 ```html
-<script type="module" src="dist/rip-ui.min.js"></script>
+<script type="module" src="rip-ui.min.js"></script>
 
 <script type="text/rip" data-name="index">
   export Home = component
@@ -651,48 +656,40 @@ server middleware needed.
     render
       h1 "About"
 </script>
-
-<script type="text/rip">
-  { launch } = importRip! 'ui.rip'
-  launch hash: true
-</script>
 ```
 
-**Static files mode** — `.rip` files served from any HTTP server or CDN:
+The runtime auto-detects the `data-name` components and launches with hash
+routing. That's it — no bootstrap, no config.
+
+**Remote bundle** — fetch components from a URL:
 
 ```html
-<script type="module" src="dist/rip-ui.min.js"></script>
-<script type="text/rip">
-  { launch } = importRip! 'ui.rip'
-  launch components: ['components/index.rip', 'components/about.rip'], hash: true
-</script>
+<script type="module" src="rip-ui.min.js" data-url="https://example.com/app/"></script>
 ```
 
-**Explicit bundle** — pass a bundle object directly:
+The `data-url` attribute tells the runtime to fetch the app bundle from the
+given URL (appending `/bundle` to the path).
+
+**Manual launch** — for full control, use a bare `<script type="text/rip">`:
 
 ```html
-<script type="module" src="dist/rip-ui.min.js"></script>
+<script type="module" src="rip-ui.min.js"></script>
 <script type="text/rip">
   { launch } = importRip! 'ui.rip'
-
-  launch bundle:
-    '/':        '''
-                  export Home = component
-                    render
-                      h1 "Hello"
-                '''
-    '/about':   '''
-                  export About = component
-                    render
-                      h1 "About"
-                '''
-  , hash: true
+  launch components: ['components/index.rip', 'components/about.rip']
 </script>
 ```
 
-See `docs/demo.html` for a complete example — the full Rip UI Demo app
-(6 components, router, reactive state, persistence) in 337 lines of
-static HTML.
+**Inline Rip** — run arbitrary Rip code alongside auto-launched apps:
+
+```html
+<script type="text/rip">
+  alert "Free cheese rollups for the girls!"
+</script>
+```
+
+See `docs/results/index.html` for a complete example — a full Lab Results
+brochure app with 7 components, SVG gauges, and inline CSS in one HTML file.
 
 ## Tailwind CSS Autocompletion
 

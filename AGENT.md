@@ -46,14 +46,14 @@ bun run browser
 rip-lang/
 ├── src/
 │   ├── lexer.js         # Lexer + Rewriter (1,761 LOC)
-│   ├── compiler.js      # Compiler + Code Generator (3,293 LOC)
+│   ├── compiler.js      # Compiler + Code Generator (3,303 LOC)
 │   ├── types.js         # Type System — sidecar for lexer (1,099 LOC)
-│   ├── components.js    # Component System — sidecar for compiler (1,750 LOC)
+│   ├── components.js    # Component System — sidecar for compiler (1,877 LOC)
 │   ├── sourcemaps.js    # Source Map V3 generator (189 LOC)
 │   ├── tags.js          # HTML tag classification (62 LOC)
-│   ├── parser.js        # Generated parser (359 LOC) — Don't edit!
+│   ├── parser.js        # Generated parser (357 LOC) — Don't edit!
 │   ├── repl.js          # Terminal REPL (601 LOC)
-│   ├── browser.js       # Browser integration (151 LOC)
+│   ├── browser.js       # Browser integration (167 LOC)
 │   └── grammar/
 │       ├── grammar.rip  # Grammar specification (944 LOC)
 │       ├── lunar.rip    # Recursive descent parser generator (2,412 LOC)
@@ -475,19 +475,20 @@ notFound -> @send 'index.html', 'text/html; charset=UTF-8'
 start port: 3000
 ```
 
-### @rip-lang/ui (v0.3.14) — Reactive Web Framework
+### @rip-lang/ui (v0.3.19) — Reactive Web Framework
 
 Zero-build reactive web framework. The browser loads `rip-ui.min.js`
-(compiler + pre-compiled UI framework), fetches an app bundle, and renders
-with fine-grained DOM updates. Uses Rip's built-in reactive primitives
-directly — one signal graph shared between framework and components.
+(compiler + pre-compiled UI framework), auto-detects inline components,
+and renders with fine-grained DOM updates. Uses Rip's built-in reactive
+primitives directly — one signal graph shared between framework and components.
 
 | File | Lines | Role |
 |------|-------|------|
-| `ui.rip` | ~964 | Unified framework: stash, router (path + hash), renderer, launch |
+| `ui.rip` | ~965 | Unified framework: stash, router (path + hash), renderer, launch |
 | `serve.rip` | ~93 | Server middleware: framework bundle, app bundle, SSE hot-reload |
 
 Key concepts:
+- **Auto-launch** — `rip-ui.min.js` auto-detects `<script type="text/rip" data-name="...">` components and calls `launch()` automatically. Hash routing is on by default. Configure via `data-url` and `data-hash` attributes on the script tag. No bootstrap script needed.
 - **`ripUI` middleware** — `use ripUI dir: dir, components: 'routes', includes: ['ui']` registers routes for the framework bundle (`/rip/rip-ui.min.js`), app bundle (`/{app}/bundle`), and SSE hot-reload (`/{app}/watch`)
 - **`launch(appBase)`** — Client-side: fetches the app bundle, hydrates the stash, starts the router and renderer
 - **`component` / `render`** — Two keywords added to Rip for defining components with reactive state (`:=`), computed (`~=`), effects (`~>`)
@@ -546,13 +547,19 @@ are correct. Key patterns:
 
 ## Browser Runtime
 
-`src/browser.js` (~151 LOC) provides the browser entry point. When loaded,
+`src/browser.js` (~167 LOC) provides the browser entry point. When loaded,
 it registers key functions on `globalThis` and processes inline Rip scripts.
 
 ### Key Features
 
+- **Auto-launch** — When bundled as `rip-ui.min.js`, auto-detects
+  `<script type="text/rip" data-name="...">` component scripts and calls
+  `launch()` automatically with hash routing enabled by default. Configure
+  via `data-url` and `data-hash` attributes on the script tag. A
+  `__ripLaunched` flag prevents double-launch if `launch()` is called manually.
 - **`<script type="text/rip">`** — Inline Rip code compiled and executed on
   `DOMContentLoaded`. Uses an async IIFE wrapper so `!` (await) works.
+  Scripts with `data-name` are reserved as component sources (not executed).
 - **`rip()` console REPL** — Wraps code in a Rip `do ->` block before
   compiling, so the compiler handles implicit return and auto-async natively.
   Sync code returns values directly; async code returns a Promise.

@@ -262,20 +262,23 @@ Rip's reactivity is framework-agnostic — use it with React, Vue, Svelte, or va
 
 ## Rip UI
 
-Load `rip-ui.min.js` (~52KB Brotli) — the Rip compiler and pre-compiled UI framework in one file. Components are `.rip` source files, compiled on demand, rendered with fine-grained reactivity. No build step. No bundler.
+Load `rip-ui.min.js` (~53KB Brotli) — the Rip compiler and pre-compiled UI framework in one file. Components are `.rip` source files, compiled on demand, rendered with fine-grained reactivity. No build step. No bundler.
 
-```coffee
-Counter = component
+```html
+<script type="module" src="rip-ui.min.js"></script>
+
+<script type="text/rip" data-name="index">
+export Home = component
   @count := 0
-
   render
     div.counter
       h1 "Count: #{@count}"
       button @click: (-> @count++), "+"
       button @click: (-> @count--), "-"
+</script>
 ```
 
-Two keywords — `component` and `render` — are all the language adds. Everything else (`:=` state, `~=` computed, methods, lifecycle) is standard Rip.
+That's it. The runtime auto-detects inline `data-name` components, compiles them, and launches the app with hash routing — no bootstrap script needed. Two keywords (`component` and `render`) are all the language adds. Everything else (`:=` state, `~=` computed, methods, lifecycle) is standard Rip.
 
 See [@rip-lang/ui](packages/ui/) for the full framework: file-based router, reactive stash, component store, and renderer. **[Try the demo](https://shreeve.github.io/rip-lang/demo.html)** — a complete app in one HTML file.
 
@@ -291,7 +294,7 @@ See [@rip-lang/ui](packages/ui/) for the full framework: file-based router, reac
 | **Self-hosting** | No | Yes |
 | **Lexer** | 3,558 LOC | 2,024 LOC |
 | **Compiler** | 10,346 LOC | 3,293 LOC |
-| **Total** | 17,760 LOC | ~11,100 LOC |
+| **Total** | 17,760 LOC | ~11,300 LOC |
 
 Smaller codebase, modern output, built-in reactivity.
 
@@ -302,7 +305,7 @@ Smaller codebase, modern output, built-in reactivity.
 Run Rip directly in the browser — inline scripts and the console REPL both support `await` via the `!` operator:
 
 ```html
-<script type="module" src="/rip/browser.js"></script>
+<script type="module" src="rip-ui.min.js"></script>
 <script type="text/rip">
   res = fetch! 'https://api.example.com/data'
   data = res.json!
@@ -334,17 +337,17 @@ Simple arrays (with `.loc`) instead of AST node classes. The compiler is self-ho
 | Component | File | Lines |
 |-----------|------|-------|
 | Lexer + Rewriter | `src/lexer.js` | 1,761 |
-| Compiler + Codegen | `src/compiler.js` | 3,293 |
+| Compiler + Codegen | `src/compiler.js` | 3,303 |
 | Type System | `src/types.js` | 1,099 |
-| Component System | `src/components.js` | 1,750 |
+| Component System | `src/components.js` | 1,877 |
 | Source Maps | `src/sourcemaps.js` | 189 |
-| Parser (generated) | `src/parser.js` | 359 |
+| Parser (generated) | `src/parser.js` | 357 |
 | Grammar | `src/grammar/grammar.rip` | 944 |
 | Parser Generator | `src/grammar/solar.rip` | 929 |
 | REPL | `src/repl.js` | 601 |
-| Browser Entry | `src/browser.js` | 151 |
+| Browser Entry | `src/browser.js` | 167 |
 | Tags | `src/tags.js` | 62 |
-| **Total** | | **~11,138** |
+| **Total** | | **~11,289** |
 
 ---
 
@@ -354,11 +357,11 @@ Rip includes optional packages for full-stack development:
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| [rip-lang](https://www.npmjs.com/package/rip-lang) | 3.10.6 | Core language compiler |
+| [rip-lang](https://www.npmjs.com/package/rip-lang) | 3.10.10 | Core language compiler |
 | [@rip-lang/api](packages/api/) | 1.1.10 | HTTP framework (Sinatra-style routing, 37 validators) |
 | [@rip-lang/server](packages/server/) | 1.1.19 | Multi-worker app server (hot reload, HTTPS, mDNS) |
 | [@rip-lang/db](packages/db/) | 1.2.0 | DuckDB server with official UI + ActiveRecord-style client |
-| [@rip-lang/ui](packages/ui/) | 0.3.14 | Zero-build reactive web framework (stash, router, hash routing) |
+| [@rip-lang/ui](packages/ui/) | 0.3.19 | Zero-build reactive web framework (auto-launch, stash, router) |
 | [@rip-lang/swarm](packages/swarm/) | 1.1.4 | Parallel job runner with worker pool |
 | [@rip-lang/csv](packages/csv/) | 1.1.4 | CSV parser + writer |
 | [@rip-lang/schema](packages/schema/) | 0.2.1 | Unified schema → TypeScript types, SQL DDL, validation, ORM |
@@ -400,7 +403,7 @@ rip file.rip           # Run
 rip -c file.rip        # Compile
 rip -t file.rip        # Tokens
 rip -s file.rip        # S-expressions
-bun run test           # 1241 tests
+bun run test           # 1243 tests
 bun run parser         # Rebuild parser
 bun run browser        # Build browser bundle
 ```
