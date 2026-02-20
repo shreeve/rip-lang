@@ -2980,6 +2980,16 @@ function __state(initialValue) {
     },
 
     read() { return value; },
+    touch() {
+      if (dead || notifying) return;
+      notifying = true;
+      for (const sub of subscribers) {
+        if (sub.markDirty) sub.markDirty();
+        else __pendingEffects.add(sub);
+      }
+      if (!__batching) __flushEffects();
+      notifying = false;
+    },
     lock() { locked = true; return state; },
     free() { subscribers.clear(); return state; },
     kill() { dead = true; subscribers.clear(); return value; },

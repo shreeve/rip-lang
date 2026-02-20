@@ -7,7 +7,7 @@
 //
 // Naming: All render-tree generators use generate* (consistent with compiler).
 
-import { TEMPLATE_TAGS } from './tags.js';
+import { TEMPLATE_TAGS, SVG_TAGS } from './tags.js';
 
 // ============================================================================
 // Constants
@@ -23,6 +23,8 @@ const BOOLEAN_ATTRS = new Set([
   'novalidate', 'open', 'reversed', 'defer', 'async', 'formnovalidate',
   'allowfullscreen', 'inert',
 ]);
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
 
 // ============================================================================
 // Standalone Utilities
@@ -856,7 +858,12 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       // Static tag without content (possibly with #id)
       const [tagStr, idStr] = str.split('#');
       const elVar = this.newElementVar();
-      this._createLines.push(`${elVar} = document.createElement('${tagStr || 'div'}');`);
+      const actualTag = tagStr || 'div';
+      if (SVG_TAGS.has(actualTag) || this._svgDepth > 0) {
+        this._createLines.push(`${elVar} = document.createElementNS('${SVG_NS}', '${actualTag}');`);
+      } else {
+        this._createLines.push(`${elVar} = document.createElement('${actualTag}');`);
+      }
       if (idStr) this._createLines.push(`${elVar}.id = '${idStr}';`);
       return elVar;
     }
@@ -1012,16 +1019,27 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
   proto.generateTag = function(tag, classes, args, id) {
     const elVar = this.newElementVar();
-    this._createLines.push(`${elVar} = document.createElement('${tag}');`);
+    const isSvg = SVG_TAGS.has(tag) || this._svgDepth > 0;
+    if (isSvg) {
+      this._createLines.push(`${elVar} = document.createElementNS('${SVG_NS}', '${tag}');`);
+    } else {
+      this._createLines.push(`${elVar} = document.createElement('${tag}');`);
+    }
 
     if (id) {
       this._createLines.push(`${elVar}.id = '${id}';`);
     }
     if (classes.length > 0) {
-      this._createLines.push(`${elVar}.className = '${classes.join(' ')}';`);
+      if (isSvg) {
+        this._createLines.push(`${elVar}.setAttribute('class', '${classes.join(' ')}');`);
+      } else {
+        this._createLines.push(`${elVar}.className = '${classes.join(' ')}';`);
+      }
     }
 
+    if (tag === 'svg') this._svgDepth = (this._svgDepth || 0) + 1;
     this.appendChildren(elVar, args);
+    if (tag === 'svg') this._svgDepth--;
     return elVar;
   };
 
@@ -1031,7 +1049,11 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
   proto.generateDynamicTag = function(tag, classExprs, children) {
     const elVar = this.newElementVar();
-    this._createLines.push(`${elVar} = document.createElement('${tag}');`);
+    if (SVG_TAGS.has(tag) || this._svgDepth > 0) {
+      this._createLines.push(`${elVar} = document.createElementNS('${SVG_NS}', '${tag}');`);
+    } else {
+      this._createLines.push(`${elVar} = document.createElement('${tag}');`);
+    }
 
     // Defer className emission so class: attributes can merge with .() classes
     const classArgs = classExprs.map(e => this.generateInComponent(e, 'value'));
@@ -1040,11 +1062,18 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     this._pendingClassArgs = classArgs;
     this._pendingClassEl = elVar;
 
+    if (tag === 'svg') this._svgDepth = (this._svgDepth || 0) + 1;
     this.appendChildren(elVar, children);
+    if (tag === 'svg') this._svgDepth--;
 
     if (this._pendingClassArgs.length > 0) {
       const combined = this._pendingClassArgs.join(', ');
-      this._setupLines.push(`__effect(() => { ${elVar}.className = __clsx(${combined}); });`);
+      const isSvg = SVG_TAGS.has(tag) || this._svgDepth > 0;
+      if (isSvg) {
+        this._setupLines.push(`__effect(() => { ${elVar}.setAttribute('class', __clsx(${combined})); });`);
+      } else {
+        this._setupLines.push(`__effect(() => { ${elVar}.className = __clsx(${combined}); });`);
+      }
     }
     this._pendingClassArgs = prevClassArgs;
     this._pendingClassEl = prevClassEl;
@@ -1088,9 +1117,17 @@ export function installComponentSupport(CodeGenerator, Lexer) {
           if (this._pendingClassArgs && this._pendingClassEl === elVar) {
             this._pendingClassArgs.push(valueCode);
           } else if (this.hasReactiveDeps(value)) {
-            this._setupLines.push(`__effect(() => { ${elVar}.className = __clsx(${valueCode}); });`);
+            if (this._svgDepth > 0) {
+              this._setupLines.push(`__effect(() => { ${elVar}.setAttribute('class', __clsx(${valueCode})); });`);
+            } else {
+              this._setupLines.push(`__effect(() => { ${elVar}.className = __clsx(${valueCode}); });`);
+            }
           } else {
-            this._createLines.push(`${elVar}.className = ${valueCode};`);
+            if (this._svgDepth > 0) {
+              this._createLines.push(`${elVar}.setAttribute('class', ${valueCode});`);
+            } else {
+              this._createLines.push(`${elVar}.className = ${valueCode};`);
+            }
           }
           continue;
         }
@@ -1118,7 +1155,12 @@ export function installComponentSupport(CodeGenerator, Lexer) {
           }
 
           this._setupLines.push(`__effect(() => { ${elVar}.${prop} = ${valueCode}; });`);
-          this._createLines.push(`${elVar}.addEventListener('${event}', (e) => ${valueCode} = ${valueAccessor});`);
+          let assignCode = `${valueCode} = ${valueAccessor}`;
+          const rootMember = !this.isSimpleAssignable(value) && this.findRootReactiveMember(value);
+          if (rootMember) {
+            assignCode += `; this.${rootMember}.touch?.()`;
+          }
+          this._createLines.push(`${elVar}.addEventListener('${event}', (e) => { ${assignCode}; });`);
           continue;
         }
 
@@ -1127,15 +1169,19 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         // Smart two-way binding for value/checked when bound to reactive state
         if ((key === 'value' || key === 'checked') && this.hasReactiveDeps(value)) {
           this._setupLines.push(`__effect(() => { ${elVar}.${key} = ${valueCode}; });`);
-          // Only generate reverse binding when the value is a simple assignable
-          // target (plain reactive member or @prop), not a complex expression
-          // like selected.includes(opt) which can't be assigned to.
-          if (this.isSimpleAssignable(value)) {
+          // Generate reverse binding for simple assignable targets or nested
+          // reactive paths (with touch() for Svelte-style invalidation)
+          const rootMemberImplicit = !this.isSimpleAssignable(value) && this.findRootReactiveMember(value);
+          if (this.isSimpleAssignable(value) || rootMemberImplicit) {
             const event = key === 'checked' ? 'change' : 'input';
             const accessor = key === 'checked' ? 'e.target.checked'
               : (inputType === 'number' || inputType === 'range') ? 'e.target.valueAsNumber'
               : 'e.target.value';
-            this._createLines.push(`${elVar}.addEventListener('${event}', (e) => { ${valueCode} = ${accessor}; });`);
+            let assignCode = `${valueCode} = ${accessor}`;
+            if (rootMemberImplicit) {
+              assignCode += `; this.${rootMemberImplicit}.touch?.()`;
+            }
+            this._createLines.push(`${elVar}.addEventListener('${event}', (e) => { ${assignCode}; });`);
           }
           continue;
         }
@@ -1521,13 +1567,17 @@ export function installComponentSupport(CodeGenerator, Lexer) {
   proto.generateChildComponent = function(componentName, args) {
     const instVar = this.newElementVar('inst');
     const elVar = this.newElementVar('el');
-    const { propsCode, childrenSetupLines } = this.buildComponentProps(args);
+    const { propsCode, reactiveProps, childrenSetupLines } = this.buildComponentProps(args);
 
     this._createLines.push(`${instVar} = new ${componentName}(${propsCode});`);
     this._createLines.push(`${elVar} = ${instVar}._create();`);
     this._createLines.push(`(this._children || (this._children = [])).push(${instVar});`);
 
     this._setupLines.push(`if (${instVar}._setup) ${instVar}._setup();`);
+
+    for (const { key, valueCode } of reactiveProps) {
+      this._setupLines.push(`__effect(() => { if (${instVar}.${key}) ${instVar}.${key}.value = ${valueCode}; });`);
+    }
 
     for (const line of childrenSetupLines) {
       this._setupLines.push(line);
@@ -1542,6 +1592,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
   proto.buildComponentProps = function(args) {
     const props = [];
+    const reactiveProps = [];
     let childrenVar = null;
     const childrenSetupLines = [];
 
@@ -1562,6 +1613,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
             } else {
               const valueCode = this.generateInComponent(value, 'value');
               props.push(`${key}: ${valueCode}`);
+              if (this.hasReactiveDeps(value)) {
+                reactiveProps.push({ key, valueCode });
+              }
             }
           }
         }
@@ -1586,6 +1640,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
                     } else {
                       const valueCode = this.generateInComponent(value, 'value');
                       props.push(`${key}: ${valueCode}`);
+                      if (this.hasReactiveDeps(value)) {
+                        reactiveProps.push({ key, valueCode });
+                      }
                     }
                   }
                 }
@@ -1621,7 +1678,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     }
 
     const propsCode = props.length > 0 ? `{ ${props.join(', ')} }` : '{}';
-    return { propsCode, childrenSetupLines };
+    return { propsCode, reactiveProps, childrenSetupLines };
   };
 
   // --------------------------------------------------------------------------
@@ -1667,6 +1724,24 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       return !!(this.reactiveMembers && this.reactiveMembers.has(sexpr[2]));
     }
     return false;
+  };
+
+  // findRootReactiveMember — walk a nested access chain to find the root reactive member
+  // e.g. (. ([] history 0) triglycerides) → 'history'
+  // --------------------------------------------------------------------------
+
+  proto.findRootReactiveMember = function(sexpr) {
+    if (typeof sexpr === 'string') {
+      return this.reactiveMembers?.has(sexpr) ? sexpr : null;
+    }
+    if (!Array.isArray(sexpr)) return null;
+    if (sexpr[0] === '.' && sexpr[1] === 'this' && typeof sexpr[2] === 'string') {
+      return this.reactiveMembers?.has(sexpr[2]) ? sexpr[2] : null;
+    }
+    if (sexpr[0] === '.' || sexpr[0] === '[]') {
+      return this.findRootReactiveMember(sexpr[1]);
+    }
+    return null;
   };
 
   // _rootsAtThis — check if a property-access chain is rooted at 'this'
