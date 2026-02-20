@@ -33,8 +33,8 @@ bun run browser
 
 | Metric | Value |
 |--------|-------|
-| Version | 3.9.1 |
-| Tests | 1,243/1,243 (100%) |
+| Version | 3.10.5 |
+| Tests | 1,243 |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
 
@@ -46,14 +46,14 @@ bun run browser
 rip-lang/
 ├── src/
 │   ├── lexer.js         # Lexer + Rewriter (1,761 LOC)
-│   ├── compiler.js      # Compiler + Code Generator (3,291 LOC)
+│   ├── compiler.js      # Compiler + Code Generator (3,293 LOC)
 │   ├── types.js         # Type System — sidecar for lexer (1,099 LOC)
-│   ├── components.js    # Component System — sidecar for compiler (1,645 LOC)
-│   ├── sourcemaps.js    # Source Map V3 generator (121 LOC)
+│   ├── components.js    # Component System — sidecar for compiler (1,750 LOC)
+│   ├── sourcemaps.js    # Source Map V3 generator (189 LOC)
 │   ├── tags.js          # HTML tag classification (62 LOC)
 │   ├── parser.js        # Generated parser (359 LOC) — Don't edit!
 │   ├── repl.js          # Terminal REPL (601 LOC)
-│   ├── browser.js       # Browser integration (150 LOC)
+│   ├── browser.js       # Browser integration (151 LOC)
 │   └── grammar/
 │       ├── grammar.rip  # Grammar specification (944 LOC)
 │       ├── lunar.rip    # Recursive descent parser generator (2,412 LOC)
@@ -96,7 +96,7 @@ rip-lang/
 
 ```
 Rip Source  ->  Lexer  ->  emitTypes  ->  Parser  ->  S-Expressions  ->  Codegen  ->  JavaScript
-               (2,024)     (types.js)     (359)       (arrays + .loc)     (3,289)      + source map
+               (1,761)     (types.js)     (359)       (arrays + .loc)     (3,293)      + source map
                               ↓
                            file.d.ts (when types: "emit")
 ```
@@ -399,7 +399,7 @@ test/rip/
 | File | Purpose |
 |------|---------|
 | **README.md** | User guide, features, installation |
-| **docs/RIP-LANG.md** | Full language reference (syntax, operators, reactivity, future ideas) |
+| **docs/RIP-LANG.md** | Full language reference (syntax, operators, reactivity, packages, future ideas) |
 | **docs/RIP-TYPES.md** | Type system specification |
 | **docs/RIP-INTERNALS.md** | Compiler architecture, design decisions, S-expressions |
 
@@ -411,15 +411,15 @@ The `packages/` directory contains optional packages that extend Rip for
 full-stack development. All are written in Rip, have zero dependencies, and
 run on Bun.
 
-### @rip-lang/api (v1.1.4) — Web Framework
+### @rip-lang/api (v1.1.10) — Web Framework
 
-Hono-compatible web framework with Sinatra-style routing, magic `@` context,
-37 built-in validators, file serving (`@send`), and middleware composition.
+Sinatra-style web framework with magic `@` context,
+built-in validators, file serving (`@send`), and middleware composition.
 
 | File | Lines | Role |
 |------|-------|------|
-| `api.rip` | ~655 | Core framework: routing, validation, `read()`, `session`, `@send`, server |
-| `middleware.rip` | ~463 | Built-in middleware: cors, logger, sessions, compression, security |
+| `api.rip` | ~662 | Core framework: routing, validation, `read()`, `session`, `@send`, server |
+| `middleware.rip` | ~464 | Built-in middleware: cors, logger, sessions, compression, security |
 
 Key concepts:
 - **`@` magic** — Handlers use `@req`, `@json()`, `@send()`, `@session` (bound via `this`)
@@ -436,7 +436,7 @@ notFound -> @send 'index.html', 'text/html; charset=UTF-8'
 start port: 3000
 ```
 
-### @rip-lang/ui (v0.3.2) — Reactive Web Framework
+### @rip-lang/ui (v0.3.14) — Reactive Web Framework
 
 Zero-build reactive web framework. The browser loads `rip-ui.min.js`
 (compiler + pre-compiled UI framework), fetches an app bundle, and renders
@@ -445,8 +445,8 @@ directly — one signal graph shared between framework and components.
 
 | File | Lines | Role |
 |------|-------|------|
-| `ui.rip` | ~948 | Unified framework: stash, router (path + hash), renderer, launch |
-| `serve.rip` | ~160 | Server middleware: framework bundle, app bundle, SSE hot-reload |
+| `ui.rip` | ~964 | Unified framework: stash, router (path + hash), renderer, launch |
+| `serve.rip` | ~93 | Server middleware: framework bundle, app bundle, SSE hot-reload |
 
 Key concepts:
 - **`ripUI` middleware** — `use ripUI dir: dir, components: 'routes', includes: ['ui']` registers routes for the framework bundle (`/rip/rip-ui.min.js`), app bundle (`/{app}/bundle`), and SSE hot-reload (`/{app}/watch`)
@@ -468,7 +468,7 @@ notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 start port: 3000
 ```
 
-### @rip-lang/server (v1.1.3) — Production Server
+### @rip-lang/server (v1.1.19) — Production Server
 
 Multi-worker process manager with hot reloading, automatic HTTPS, mDNS service
 discovery, and request queueing. Serves any `@rip-lang/api` app (including
@@ -476,7 +476,7 @@ Rip UI apps with SSE hot-reload).
 
 | File | Lines | Role |
 |------|-------|------|
-| `server.rip` | ~1,211 | CLI, workers, load balancing, TLS, mDNS |
+| `server.rip` | ~1,323 | CLI, workers, load balancing, TLS, mDNS |
 | `server.html` | ~420 | Built-in dashboard UI |
 
 ```bash
@@ -485,10 +485,10 @@ rip-server -w    # Start with file watching + hot-reload
 
 ### Other Packages
 
-- **@rip-lang/db** — HTTP server for DuckDB queries (~225 lines)
-- **@rip-lang/schema** — ORM + validation with declarative syntax (~420 lines)
-- **@rip-lang/swarm** — Parallel job runner with worker threads (~330 lines)
-- **@rip-lang/csv** — CSV parser + writer with indexOf ratchet engine (~300 lines)
+- **@rip-lang/db** — DuckDB server with official UI + ActiveRecord-style client (`db.rip` ~388 lines, `client.rip` ~290 lines)
+- **@rip-lang/schema** — ORM + validation with declarative syntax (~505 lines)
+- **@rip-lang/swarm** — Parallel job runner with worker threads (~379 lines)
+- **@rip-lang/csv** — CSV parser + writer with indexOf ratchet engine (~432 lines)
 
 ### Package Development
 

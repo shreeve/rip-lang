@@ -2,7 +2,7 @@
 
 # Rip Language Reference
 
-Rip is a modern reactive language that compiles to ES2022 JavaScript. It combines CoffeeScript's elegant syntax with built-in reactivity primitives. Zero dependencies, self-hosting, ~10,800 LOC.
+Rip is a modern reactive language that compiles to ES2022 JavaScript. It combines CoffeeScript's elegant syntax with built-in reactivity primitives. Zero dependencies, self-hosting, ~13,500 LOC.
 
 ---
 
@@ -17,7 +17,7 @@ Rip is a modern reactive language that compiles to ES2022 JavaScript. It combine
 7. [Async Patterns](#7-async-patterns)
 8. [Modules & Imports](#8-modules--imports)
 9. [Regex Features](#9-regex-features)
-10. [Server-Side Development](#10-server-side-development)
+10. [Packages](#10-packages)
 11. [CLI Tools & Scripts](#11-cli-tools--scripts)
 12. [Types](#12-types)
 13. [JavaScript Interop](#13-javascript-interop)
@@ -663,6 +663,19 @@ counter = Counter.new(initial: 5)
 # Same as: new Counter({initial: 5})
 ```
 
+## Implicit Commas
+
+When a literal value is followed by an arrow function, Rip inserts a comma automatically:
+
+```coffee
+# Clean route handlers
+get '/users' -> User.all!
+get '/users/:id' -> User.find params.id
+post '/users' -> User.create body
+```
+
+This enables Sinatra-style routing and other DSLs where functions take a value and a callback.
+
 ---
 
 # 5. Classes
@@ -1087,98 +1100,218 @@ text =~ /line2/m        # Works with /m flag
 
 ---
 
-# 10. Server-Side Development
+# 10. Packages
 
-## HTTP Server
+Rip includes optional packages for full-stack development. All are written in Rip, have zero dependencies, and run on Bun.
 
-```coffee
-import { serve } from "bun"
-
-serve
-  port: 3000
-  fetch: (req) ->
-    url = new URL(req.url)
-    switch url.pathname
-      when "/"
-        new Response("Hello from Rip!")
-      when "/api/users"
-        Response.json([{id: 1, name: "Alice"}])
-      else
-        new Response("Not Found", status: 404)
-
-console.log "Server running on http://localhost:3000"
+```bash
+bun add @rip-lang/api            # Web framework
+bun add @rip-lang/server         # Production server
+bun add @rip-lang/ui             # Reactive web UI
+bun add @rip-lang/db             # DuckDB server + client
+bun add @rip-lang/schema         # ORM + validation
+bun add @rip-lang/swarm          # Parallel job runner
+bun add @rip-lang/csv            # CSV parser + writer
 ```
 
-## REST API
+## @rip-lang/api — Web Framework
+
+Sinatra-style routing with `@` context magic and built-in validators.
 
 ```coffee
-import { serve } from "bun"
+import { get, post, use, read, start, notFound } from '@rip-lang/api'
 
-db = {
-  users: [
-    {id: 1, name: "Alice", email: "alice@example.com"}
-    {id: 2, name: "Bob", email: "bob@example.com"}
-  ]
-  nextId: 3
-}
+# Routes — return data directly
+get '/' -> { message: 'Hello!' }
+get '/users/:id' -> User.find!(read 'id', 'id!')
 
-def parseBody(req)
-  try
-    req.json!
-  catch
-    null
+# Form validation with read()
+post '/signup' ->
+  email = read 'email', 'email!'           # required email
+  age   = read 'age', 'int', [18, 120]     # integer between 18-120
+  role  = read 'role', ['admin', 'user']   # enum
+  { success: true, email, age, role }
 
-serve
-  port: 3000
-  fetch: (req) ->
-    {pathname} = new URL(req.url)
-    method = req.method
+# File serving
+get '/css/*' -> @send "public/#{@req.path.slice(5)}"
+notFound -> @send 'index.html', 'text/html; charset=UTF-8'
 
-    switch "#{method} #{pathname}"
-      when "GET /api/users"
-        Response.json(db.users)
+# Middleware
+import { cors, logger, sessions } from '@rip-lang/api/middleware'
 
-      when /^GET \/api\/users\/(\d+)$/
-        id = parseInt(_[1])
-        user = db.users.find (u) -> u.id is id
-        if user then Response.json(user)
-        else Response.json({error: "Not found"}, status: 404)
+use logger()
+use cors origin: '*'
+use sessions secret: process.env.SECRET
 
-      when "POST /api/users"
-        body = parseBody!(req)
-        user = {id: db.nextId++, ...body}
-        db.users.push(user)
-        Response.json(user, status: 201)
+# Lifecycle hooks
+before -> @start = Date.now()
+after -> console.log "#{@req.method} #{@req.path} - #{Date.now() - @start}ms"
 
-      else
-        Response.json({error: "Not found"}, status: 404)
+start port: 3000
 ```
 
-## WebSocket Server
+### read() Validators
 
 ```coffee
-import { serve } from "bun"
+id    = read 'id', 'id!'        # positive integer (required)
+count = read 'count', 'whole'   # non-negative integer
+price = read 'price', 'money'   # cents (multiplies by 100)
+name  = read 'name', 'string'   # collapses whitespace
+email = read 'email', 'email'   # valid email format
+phone = read 'phone', 'phone'   # US phone → (555) 123-4567
+state = read 'state', 'state'   # two-letter → uppercase
+zip   = read 'zip', 'zip'       # 5-digit zip
+url   = read 'url', 'url'       # valid URL
+uuid  = read 'id', 'uuid'       # UUID format
+date  = read 'date', 'date'     # YYYY-MM-DD
+time  = read 'time', 'time'     # HH:MM or HH:MM:SS
+flag  = read 'flag', 'bool'     # boolean
+tags  = read 'tags', 'array'    # must be array
+ids   = read 'ids', 'ids'       # "1,2,3" → [1, 2, 3]
+slug  = read 'slug', 'slug'     # URL-safe slug
+```
 
-clients = new Set()
+## @rip-lang/server — Production Server
 
-serve
-  port: 3000
-  fetch: (req, server) ->
-    if server.upgrade(req)
-      return
-    new Response("WebSocket server")
+Multi-worker process manager with hot reload, automatic HTTPS, and mDNS.
 
-  websocket:
-    open: (ws) ->
-      clients.add(ws)
-      console.log "Client connected (#{clients.size} total)"
+```bash
+rip-server                # Start (uses ./index.rip)
+rip-server -w             # With file watching + hot-reload
+rip-server myapp          # Named (accessible at myapp.local)
+rip-server http:3000      # HTTP on specific port
+```
 
-    message: (ws, message) ->
-      for client in clients
-        client.send(message) unless client is ws
+## @rip-lang/ui — Reactive Web Framework
 
-    close: (ws) ->
-      clients.delete(ws)
+Zero-build reactive framework. Ships the compiler to the browser and compiles `.rip` components on demand. File-based routing, unified reactive stash, and SSE hot reload.
+
+```coffee
+# Server setup (index.rip)
+import { get, use, start, notFound } from '@rip-lang/api'
+import { ripUI } from '@rip-lang/ui/serve'
+
+dir = import.meta.dir
+use ripUI dir: dir, components: 'routes', includes: ['ui'], watch: true
+get '/css/*' -> @send "#{dir}/css/#{@req.path.slice(5)}"
+notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
+start port: 3000
+```
+
+```coffee
+# Component (routes/counter.rip)
+Counter = component
+  @count := 0
+  doubled ~= @count * 2
+
+  increment: -> @count += 1
+
+  render
+    div.counter
+      h1 "Count: #{@count}"
+      p "Doubled: #{doubled}"
+      button @click: @increment, "+"
+```
+
+## @rip-lang/db — DuckDB Server + Client
+
+HTTP server for DuckDB with the official DuckDB UI built in, plus an ActiveRecord-style client library.
+
+```bash
+rip-db                          # In-memory database
+rip-db mydata.duckdb            # File-based database
+```
+
+```coffee
+# Client library
+import { connect, query, findAll, Model } from '@rip-lang/db/client'
+
+connect 'http://localhost:4213'
+
+users = findAll! "SELECT * FROM users WHERE role = $1", ['admin']
+
+User = Model 'users'
+user = User.find! 42
+User.where(active: true).order('name').limit(10).all!
+```
+
+## @rip-lang/swarm — Parallel Job Runner
+
+```coffee
+import { swarm, init, retry, todo } from '@rip-lang/swarm'
+
+setup = ->
+  unless retry()
+    init()
+    for i in [1..100] then todo(i)
+
+perform = (task, ctx) ->
+  await Bun.sleep(Math.random() * 1000)
+
+swarm { setup, perform }
+```
+
+## @rip-lang/csv — CSV Parser + Writer
+
+```coffee
+import { CSV } from '@rip-lang/csv'
+
+# Parse
+rows = CSV.read "name,age\nAlice,30\nBob,25\n", headers: true
+# [{name: 'Alice', age: '30'}, {name: 'Bob', age: '25'}]
+
+# Write
+CSV.save! 'output.csv', rows
+```
+
+## @rip-lang/schema — ORM + Validation
+
+```coffee
+import { Model } from '@rip-lang/schema'
+
+class User extends Model
+  @table = 'users'
+  @schema
+    name:  { type: 'string', required: true }
+    email: { type: 'email', unique: true }
+
+user = User.find!(25)
+user.name = 'Alice'
+user.save!()
+```
+
+## Full-Stack Example
+
+A complete API server in Rip:
+
+```coffee
+import { get, post, use, read, start, notFound } from '@rip-lang/api'
+import { cors, logger } from '@rip-lang/api/middleware'
+
+use logger()
+use cors origin: '*'
+
+# In-memory store
+users = []
+nextId = 1
+
+get '/api/users' -> users
+
+get '/api/users/:id' ->
+  id = read 'id', 'id!'
+  user = users.find (u) -> u.id is id
+  user or throw { status: 404, message: 'Not found' }
+
+post '/api/users' ->
+  name = read 'name', 'string!'
+  email = read 'email', 'email!'
+  user = { id: nextId++, name, email }
+  users.push user
+  user
+
+notFound -> { error: 'Not found' }
+
+start port: 3000
 ```
 
 ---
@@ -1539,4 +1672,19 @@ Each would need design discussion before building.
 
 ---
 
-*Rip 3.9 — 1,241 tests passing — Zero dependencies — Self-hosting — ~11,000 LOC*
+## Resources
+
+- [Rip Playground](https://shreeve.github.io/rip-lang/) — Try Rip in the browser
+- [VS Code Extension](https://marketplace.visualstudio.com/items?itemName=rip-lang.rip) — IDE support
+- [GitHub](https://github.com/shreeve/rip-lang) — Source code
+
+| Document | Purpose |
+|----------|---------|
+| **[RIP-LANG.md](RIP-LANG.md)** | Full language reference (this file) |
+| **[RIP-TYPES.md](RIP-TYPES.md)** | Type system specification |
+| **[RIP-INTERNALS.md](RIP-INTERNALS.md)** | Compiler architecture & design decisions |
+| **[AGENT.md](../AGENT.md)** | AI agent guide for working on the compiler |
+
+---
+
+*Rip 3.10 — 1,243 tests — Zero dependencies — Self-hosting — ~13,500 LOC*

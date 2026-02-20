@@ -45,7 +45,7 @@ class BinaryOp {
 ["+", left, right]  // That's it!
 ```
 
-**Result:** CoffeeScript's compiler is 17,760 LOC. Rip's is ~10,800 LOC — smaller, yet includes a complete reactive runtime, type system, component system, and source maps.
+**Result:** CoffeeScript's compiler is 17,760 LOC. Rip's is ~10,400 LOC — smaller, yet includes a complete reactive runtime, type system, component system, and source maps.
 
 > **Transform the IR (s-expressions), not the output (strings).**
 
@@ -77,7 +77,7 @@ console.log(code);
 | Dependencies | Multiple | **Zero** |
 | Parser generator | External (Jison) | **Built-in (Solar)** |
 | Self-hosting | No | **Yes** |
-| Total LOC | 17,760 | ~10,800 |
+| Total LOC | 17,760 | ~10,400 |
 
 ## Design Principles
 
@@ -93,7 +93,7 @@ console.log(code);
 
 ```
 Source Code  →  Lexer  →  emitTypes  →  Parser  →  S-Expressions  →  Codegen  →  JavaScript
-                (1,958)    (types.js)    (359)       (arrays + .loc)     (3,378)      + source map
+                (1,761)    (types.js)    (359)       (arrays + .loc)     (3,293)      + source map
                               ↓
                            file.d.ts (when types: "emit")
 ```
@@ -102,15 +102,15 @@ Source Code  →  Lexer  →  emitTypes  →  Parser  →  S-Expressions  →  C
 
 | File | Purpose | Lines | Modify? |
 |------|---------|-------|---------|
-| `src/lexer.js` | Lexer + Rewriter | 1,958 | Yes |
-| `src/compiler.js` | Compiler + Code Generator | 3,378 | Yes |
+| `src/lexer.js` | Lexer + Rewriter | 1,761 | Yes |
+| `src/compiler.js` | Compiler + Code Generator | 3,293 | Yes |
 | `src/types.js` | Type System (lexer sidecar) | 1,099 | Yes |
-| `src/components.js` | Component System (compiler sidecar) | 1,240 | Yes |
-| `src/sourcemaps.js` | Source Map V3 Generator | 122 | Yes |
-| `src/tags.js` | HTML Tag Classification | 63 | Yes |
-| `src/parser.js` | Generated parser | 357 | No (auto-gen) |
-| `src/grammar/grammar.rip` | Grammar specification | 945 | Yes (carefully) |
-| `src/grammar/solar.rip` | Parser generator | 916 | No |
+| `src/components.js` | Component System (compiler sidecar) | 1,750 | Yes |
+| `src/sourcemaps.js` | Source Map V3 Generator | 189 | Yes |
+| `src/tags.js` | HTML Tag Classification | 62 | Yes |
+| `src/parser.js` | Generated parser | 359 | No (auto-gen) |
+| `src/grammar/grammar.rip` | Grammar specification | 944 | Yes (carefully) |
+| `src/grammar/solar.rip` | Parser generator | 929 | No |
 
 ## Example Flow
 
@@ -275,7 +275,7 @@ S-expressions are simple arrays that serve as Rip's intermediate representation 
 
 # 4. Lexer & Rewriter
 
-The lexer (`src/lexer.js`) is a clean reimplementation that replaces the old lexer (3,260 lines) with ~1,870 lines producing the same token vocabulary the parser expects.
+The lexer (`src/lexer.js`) is a clean reimplementation that replaces the old lexer (3,260 lines) with ~1,760 lines producing the same token vocabulary the parser expects.
 
 ## Architecture
 
@@ -439,7 +439,7 @@ REGEX tokens store `delimiter` and optional `heregex` flags in `token.data`.
 
 # 6. Compiler
 
-The compiler (`src/compiler.js`) is a clean reimplementation replacing the old compiler (6,016 lines) with ~3,290 lines producing identical JavaScript output.
+The compiler (`src/compiler.js`) is a clean reimplementation replacing the old compiler (6,016 lines) with ~3,293 lines producing identical JavaScript output.
 
 ## Structure
 
@@ -577,4 +577,4 @@ rip> .js      # Toggle JS display
 
 ---
 
-*Rip 3.8 — 1,241 tests passing — Zero dependencies — Self-hosting — ~11,000 LOC*
+*Rip 3.10 — 1,243 tests — Zero dependencies — Self-hosting — ~13,500 LOC*
