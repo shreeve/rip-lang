@@ -219,6 +219,45 @@ Rip provides reactivity as **language-level operators**, not library imports:
 
 The reactive runtime is embedded in compiler.js and only included when needed.
 
+### Two-Way Binding (`<=>`)
+
+In Rip UI render blocks, the `<=>` operator creates bidirectional reactive bindings between parent state and child elements or components. This is a Rip original — it eliminates React's verbose controlled component pattern entirely.
+
+```coffee
+# HTML elements
+input value <=> @name               # text input
+input type: "number", value <=> @age # number input (uses valueAsNumber)
+input type: "checkbox", checked <=> @active # checkbox
+
+# Custom components — same operator, same mental model
+Dialog open <=> @showConfirm
+Select value <=> @role
+Switch checked <=> @darkMode
+Combobox query <=> @search, value <=> @selected
+```
+
+`value <=> username` compiles to two things:
+1. **State → DOM**: `__effect(() => { el.value = username; })`
+2. **DOM → State**: `el.addEventListener('input', (e) => { username = e.target.value; })`
+
+The compiler auto-detects types — `checked` uses the `change` event, number inputs use `valueAsNumber`. Smart auto-binding also works: `value: @name` where `@name` is reactive generates two-way binding automatically without needing `<=>`.
+
+This is what Vue has with `v-model` and Svelte has with `bind:`, but Rip's version works uniformly across HTML elements and custom components with one operator. React cannot do this — every bindable property requires an explicit `value` prop + `onChange` callback pair. The `<=>` operator makes interactive component usage dramatically cleaner:
+
+```coffee
+# React: 8 lines of ceremony
+# const [name, setName] = useState('');
+# const [show, setShow] = useState(false);
+# <input value={name} onChange={e => setName(e.target.value)} />
+# <Dialog open={show} onOpenChange={setShow} />
+
+# Rip: 2 lines, done
+input value <=> @name
+Dialog open <=> @show
+```
+
+Implementation: lexer tokenizes `<=>` as `BIND`, the render rewriter transforms `value <=> x` to `__bind_value__: x`, and the component code generator emits the effect + event listener pair. See `src/components.js`.
+
 ---
 
 ## Type System (Rip Types)
@@ -634,6 +673,7 @@ rip> .js      # Toggle JS display
 | `%%` | True mod | `-1 %% 3` — 2 |
 | `:=` | State | `count := 0` — reactive state |
 | `~=` | Computed | `doubled ~= count * 2` — computed |
+| `<=>` | Two-way bind | `value <=> name` — bidirectional reactive binding (Rip original) |
 | `=~` | Match | `str =~ /pat/` — Ruby-style regex |
 | `.new()` | Constructor | `User.new()` — Ruby-style new |
 | `::` | Prototype | `String::trim` — `String.prototype.trim` |
