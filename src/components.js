@@ -492,7 +492,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       }
       current = current[1];
     }
-    let raw = typeof current === 'string' ? current : (current instanceof String ? current.valueOf() : 'div');
+    let raw = typeof current === 'string' ? current : (current instanceof String ? current.valueOf() : null);
+    if (raw === null) return { tag: null, classes, id: undefined };
     // Split tag#id — e.g. "div#content" → tag: "div", id: "content"
     let [tag, id] = raw.split('#');
     if (!tag) tag = 'div';  // bare #id → div
@@ -1029,17 +1030,39 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     if (id) {
       this._createLines.push(`${elVar}.id = '${id}';`);
     }
+
+    // Defer class emission when selector classes exist so class: attributes merge
+    const prevClassArgs = this._pendingClassArgs;
+    const prevClassEl = this._pendingClassEl;
     if (classes.length > 0) {
-      if (isSvg) {
-        this._createLines.push(`${elVar}.setAttribute('class', '${classes.join(' ')}');`);
-      } else {
-        this._createLines.push(`${elVar}.className = '${classes.join(' ')}';`);
-      }
+      this._pendingClassArgs = [`'${classes.join(' ')}'`];
+      this._pendingClassEl = elVar;
     }
 
     if (tag === 'svg') this._svgDepth = (this._svgDepth || 0) + 1;
     this.appendChildren(elVar, args);
     if (tag === 'svg') this._svgDepth--;
+
+    // Emit final class: if only selector classes (no dynamic additions), set statically
+    if (classes.length > 0) {
+      if (this._pendingClassArgs.length === 1) {
+        if (isSvg) {
+          this._createLines.push(`${elVar}.setAttribute('class', '${classes.join(' ')}');`);
+        } else {
+          this._createLines.push(`${elVar}.className = '${classes.join(' ')}';`);
+        }
+      } else {
+        const combined = this._pendingClassArgs.join(', ');
+        if (isSvg) {
+          this._setupLines.push(`__effect(() => { ${elVar}.setAttribute('class', __clsx(${combined})); });`);
+        } else {
+          this._setupLines.push(`__effect(() => { ${elVar}.className = __clsx(${combined}); });`);
+        }
+      }
+      this._pendingClassArgs = prevClassArgs;
+      this._pendingClassEl = prevClassEl;
+    }
+
     return elVar;
   };
 
@@ -1186,7 +1209,13 @@ export function installComponentSupport(CodeGenerator, Lexer) {
           continue;
         }
 
-        if (BOOLEAN_ATTRS.has(key)) {
+        if (key === 'innerHTML' || key === 'textContent' || key === 'innerText') {
+          if (this.hasReactiveDeps(value)) {
+            this._setupLines.push(`__effect(() => { ${elVar}.${key} = ${valueCode}; });`);
+          } else {
+            this._createLines.push(`${elVar}.${key} = ${valueCode};`);
+          }
+        } else if (BOOLEAN_ATTRS.has(key)) {
           if (this.hasReactiveDeps(value)) {
             this._setupLines.push(`__effect(() => { ${elVar}.toggleAttribute('${key}', !!${valueCode}); });`);
           } else {
