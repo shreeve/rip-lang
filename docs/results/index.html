@@ -617,6 +617,8 @@ export Home = component
     cholesterolHdlRatio: 4.3
     glucose: 75
     a1c: 5.2
+    waistCircumference: 36
+    bloodPressure: '118/76'
   ]
 
   ranges :=
@@ -719,7 +721,9 @@ export Home = component
       drawerOpen = false
     mq.addEventListener 'change', handler
 
-  ~> @setupResize()
+  ~>
+    @setupResize()
+    window.app = { history, ranges, firstName, lastName, age, gender }
 
   render
     .app
@@ -917,6 +921,13 @@ export Summary = component
   checkIcon := '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>'
   warnIcon  := '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>'
 
+  sections ~=
+    s = []
+    s.push { label: 'Heart Health', keys: ['triglycerides', 'hdlCholesterol', 'totalCholesterol', 'cholesterolHdlRatio'] }
+    s.push { label: 'Pancreas Health', keys: ['glucose', 'a1c'] }
+    s.push { label: 'Physical Measurements', keys: ['waistCircumference', 'bloodPressure'] } if history?[0]?.waistCircumference
+    s
+
   rowClass: (k) ->
     val = history[0]?[k]
     return '' unless val?
@@ -945,49 +956,18 @@ export Summary = component
 
         .summary__copy "This report serves as an easy reference to review all of your testing results, including data from previous years. We encourage you to use this information in conjunction with an exam by your doctor, not as a replacement for one. We hope this summary will be a good starting point for conversations with your doctor about improving your overall health."
 
-      table.summary-table
-        thead
-          tr
-            th ""
-            th historyDate
-        tbody
-          tr
-            td "Heart Health"
-            td
-          for k in ['triglycerides', 'hdlCholesterol', 'totalCholesterol', 'cholesterolHdlRatio']
-            tr
-              class: @rowClass(k)
-              td
-                .status-icon
-                  innerHTML: @rowIcon(k)
-                div
-                  .name ranges[k].name
-                  .desc ranges[k].desc
-              td.value history[0]?[k]
-
-      table.summary-table
-        tbody
-          tr
-            td "Pancreas Health"
-            td
-          for k in ['glucose', 'a1c']
-            tr
-              class: @rowClass(k)
-              td
-                .status-icon
-                  innerHTML: @rowIcon(k)
-                div
-                  .name ranges[k].name
-                  .desc ranges[k].desc
-              td.value history[0]?[k]
-
-      if history and history[0] and history[0].waistCircumference?
+      for section, i in sections
         table.summary-table
+          unless i
+            thead
+              tr
+                th
+                th historyDate
           tbody
             tr
-              td "Physical Measurements"
+              td section.label
               td
-            for k in ['waistCircumference', 'bloodPressure']
+            for k in section.keys
               tr
                 class: @rowClass(k)
                 td
