@@ -433,7 +433,7 @@ console.log "address:", formatAddress(addr)
 console.log "\n✓ All type-safe code executed successfully"
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
-# ║ Tier 1 — Foundational (blocks nearly everything)                         ║
+# ║ Tier 1 — Foundational (blocks nearly everything)                           ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
 # ==============================================================================
@@ -547,7 +547,7 @@ console.log "\n✓ All type-safe code executed successfully"
 #   new Map()
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
-# ║ Tier 3 — Important but deferrable                                        ║
+# ║ Tier 3 — Important but deferrable                                          ║
 # ╚════════════════════════════════════════════════════════════════════════════╝
 
 # ==============================================================================
