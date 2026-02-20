@@ -688,8 +688,14 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     // Effects
     for (const effect of effects) {
       const effectBody = effect[2];
-      const effectCode = this.generateInComponent(effectBody, 'value');
-      lines.push(`    __effect(() => { ${effectCode}; });`);
+      if (this.is(effectBody, 'block') && effectBody.length > 2) {
+        const transformed = this.transformComponentMembers(effectBody);
+        const body = this.generateFunctionBody(transformed, [], true);
+        lines.push(`    __effect(() => ${body});`);
+      } else {
+        const effectCode = this.generateInComponent(effectBody, 'value');
+        lines.push(`    __effect(() => { ${effectCode}; });`);
+      }
     }
 
     lines.push('  }');
