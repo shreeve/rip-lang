@@ -520,7 +520,8 @@
   <div class="tabs">
     <button class="tab active" data-tab="compiler"><span class="tab-full">Live Compiler</span><span class="tab-short">Compiler</span></button>
     <button class="tab" data-tab="repl"><span class="tab-full">REPL Console</span><span class="tab-short">REPL</span></button>
-    <button class="tab" data-tab="demo">Demo</button>
+    <button class="tab" data-tab="sierpinski">Sierpinski</button>
+    <button class="tab" data-tab="demo" title="Opens in new tab">Demo ↗</button>
     <button class="tab" data-tab="example">Example</button>
   </div>
 
@@ -600,9 +601,9 @@
       </div>
     </div>
 
-    <!-- Demo Pane -->
-    <div class="pane" id="demo-pane">
-      <iframe id="demo-iframe" style="width: 100%; height: 100%; border: none;"></iframe>
+    <!-- Sierpinski Pane -->
+    <div class="pane" id="sierpinski-pane">
+      <iframe id="sierpinski-iframe" style="width: 100%; height: 100%; border: none;"></iframe>
     </div>
 
     <!-- Example Pane -->
@@ -1124,10 +1125,13 @@
     # Tab Switching
     # ====================================================================
 
-    demoLoaded = false
+    sierpinskiLoaded = false
     exampleLoaded = false
 
     def switchToTab(tabName)
+      if tabName is 'demo'
+        window.open 'https://shreeve.github.io/rip-lang/results/', '_blank'
+        return
       window.location.hash = tabName
       document.querySelectorAll('.tab').forEach (t) -> t.classList.remove 'active'
       document.querySelector(".tab[data-tab='#{tabName}']").classList.add 'active'
@@ -1139,10 +1143,10 @@
       else if tabName is 'compiler'
         setTheme! themeSelect.value
         compileCode()
-      else if tabName is 'demo'
-        unless demoLoaded
-          document.getElementById('demo-iframe').src = 'sierpinski.html'
-          demoLoaded = true
+      else if tabName is 'sierpinski'
+        unless sierpinskiLoaded
+          document.getElementById('sierpinski-iframe').src = 'sierpinski.html'
+          sierpinskiLoaded = true
       else if tabName is 'example'
         unless exampleLoaded
           document.getElementById('example-iframe').src = 'example/'
@@ -1153,7 +1157,7 @@
 
     window.addEventListener 'hashchange', ->
       hash = window.location.hash.slice 1
-      switchToTab hash if hash is 'compiler' or hash is 'repl' or hash is 'demo' or hash is 'example'
+      switchToTab hash if hash is 'compiler' or hash is 'repl' or hash is 'sierpinski' or hash is 'example'
 
     # ====================================================================
     # Resizable Panes
@@ -1471,7 +1475,7 @@
 
     # Initialize from URL hash (default to compiler)
     initialTab = window.location.hash.slice 1
-    if initialTab is 'compiler' or initialTab is 'repl' or initialTab is 'demo' or initialTab is 'example'
+    if initialTab is 'compiler' or initialTab is 'repl' or initialTab is 'sierpinski' or initialTab is 'example'
       switchToTab! initialTab
     else
       compileCode()
