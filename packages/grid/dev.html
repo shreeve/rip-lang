@@ -80,11 +80,25 @@ body {
 }
 
 .grid-container {
+  position: relative;
   overflow: auto;
   height: calc(100vh - 120px);
   background: white;
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+}
+
+.rip-grid-editor {
+  position: absolute;
+  z-index: 10;
+  box-sizing: border-box;
+  border: 2px solid #3b82f6;
+  border-radius: 0;
+  font: 13px system-ui, -apple-system, sans-serif;
+  padding: 0 9px;
+  outline: none;
+  background: white;
+  color: #1e293b;
 }
 
 .grid-container:focus {
@@ -199,6 +213,11 @@ body {
     outline-color: #64748b;
     background: rgba(100, 116, 139, 0.1);
   }
+  .rip-grid-editor {
+    background: #1e293b;
+    color: #e2e8f0;
+    border-color: #60a5fa;
+  }
 }
   </style>
 </head>
@@ -248,6 +267,8 @@ export Home = component
   anchorRow       := -1
   anchorCol       := -1
   selecting       := false
+  editing         := false
+  editValue       := ''
 
   totalRows   ~= data.length
   totalHeight ~= totalRows * ROW_HEIGHT
@@ -308,7 +329,106 @@ export Home = component
         if td
           td.classList.add('active')
 
+  ~>
+    el = document.querySelector('.rip-grid-editor')
+    if editing and el and activeRow >= startRow and activeRow <= endRow
+      trs = document.querySelectorAll('.rip-grid tbody tr:not(.spacer)')
+      tr = trs[activeRow - startRow]
+      if tr
+        td = tr.children[activeCol]
+        if td
+          tdRect = td.getBoundingClientRect()
+          cRect = @_container.getBoundingClientRect()
+          el.style.top = "#{tdRect.top - cRect.top + @_container.scrollTop}px"
+          el.style.left = "#{tdRect.left - cRect.left}px"
+          el.style.width = "#{tdRect.width}px"
+          el.style.height = "#{tdRect.height}px"
+          if @_selectAll
+            el.select()
+            @_selectAll = false
+          else if @_cursorEnd
+            el.selectionStart = el.value.length
+            el.selectionEnd = el.value.length
+            @_cursorEnd = false
+          el.focus()
+
+  openEditor: (initial, cursorEnd) ->
+    if activeRow < 0 or activeCol < 0 or editing
+      return
+    col = columns[activeCol]
+    val = data[activeRow][col.key]
+    orig = String(if val? then val else '')
+    @_editOriginal = orig
+    if initial isnt undefined
+      editValue = initial
+      @_selectAll = false
+      @_cursorEnd = false
+    else
+      editValue = orig
+      @_selectAll = not cursorEnd
+      @_cursorEnd = !!cursorEnd
+    editing = true
+
+  commitEditor: ->
+    if editing
+      col = columns[activeCol]
+      data[activeRow][col.key] = editValue
+      editing = false
+      @_container.focus() if @_container
+
+  cancelEditor: ->
+    editing = false
+    @_container.focus() if @_container
+
+  handleEditorInput: (e) ->
+    editValue = e.target.value
+
+  handleEditorKeydown: (e) ->
+    numCols = columns.length
+    switch e.key
+      when 'Enter'
+        e.preventDefault()
+        @commitEditor()
+        if e.shiftKey
+          if activeRow > 0
+            activeRow = activeRow - 1
+            @scrollToRow(activeRow)
+        else
+          if activeRow < totalRows - 1
+            activeRow = activeRow + 1
+            @scrollToRow(activeRow)
+        anchorRow = activeRow
+        anchorCol = activeCol
+      when 'Tab'
+        e.preventDefault()
+        @commitEditor()
+        if e.shiftKey
+          if activeCol > 0
+            activeCol = activeCol - 1
+          else if activeRow > 0
+            activeRow = activeRow - 1
+            activeCol = numCols - 1
+            @scrollToRow(activeRow)
+        else
+          if activeCol < numCols - 1
+            activeCol = activeCol + 1
+          else if activeRow < totalRows - 1
+            activeRow = activeRow + 1
+            activeCol = 0
+            @scrollToRow(activeRow)
+        anchorRow = activeRow
+        anchorCol = activeCol
+      when 'Escape'
+        e.preventDefault()
+        @cancelEditor()
+
+  handleDblclick: (e) ->
+    td = e.target.closest('td')
+    if td and not td.parentElement.classList.contains('spacer')
+      @openEditor()
+
   handleScroll: (e) ->
+    @commitEditor() if editing
     @_nextST = e.currentTarget.scrollTop
     if not @_rafPending
       @_rafPending = true
@@ -328,6 +448,9 @@ export Home = component
   handleMousedown: (e) ->
     if e.button isnt 0
       return
+    if e.target.classList.contains('rip-grid-editor')
+      return
+    @commitEditor() if editing
     td = e.target.closest('td')
     if td and not td.parentElement.classList.contains('spacer')
       e.preventDefault()
@@ -360,6 +483,8 @@ export Home = component
     @scrollToRow(ri)
 
   handleKeydown: (e) ->
+    if editing
+      return
     numCols = columns.length
     key = e.key
     switch key
@@ -439,14 +564,14 @@ export Home = component
         if activeRow < 0 or activeCol < 0
           activeRow = 0
           activeCol = 0
-        else if e.shiftKey
-          if activeRow > 0
-            activeRow = activeRow - 1
-            @scrollToRow(activeRow)
         else
-          if activeRow < totalRows - 1
-            activeRow = activeRow + 1
-            @scrollToRow(activeRow)
+          @openEditor()
+          return
+      when 'F2'
+        e.preventDefault()
+        if activeRow >= 0 and activeCol >= 0
+          @openEditor(undefined, true)
+        return
       when 'PageDown'
         e.preventDefault()
         rows = Math.floor(containerHeight / ROW_HEIGHT)
@@ -463,6 +588,12 @@ export Home = component
         anchorRow = activeRow
         anchorCol = activeCol
         return
+      when 'Delete', 'Backspace'
+        if activeRow >= 0 and activeCol >= 0 and not e.ctrlKey and not e.metaKey
+          e.preventDefault()
+          col = columns[activeCol]
+          data[activeRow][col.key] = ''
+        return
       when 'a'
         if e.ctrlKey or e.metaKey
           e.preventDefault()
@@ -472,6 +603,10 @@ export Home = component
           activeCol = numCols - 1
         return
       else
+        if key.length is 1 and not e.ctrlKey and not e.metaKey and not e.altKey
+          if activeRow >= 0 and activeCol >= 0
+            e.preventDefault()
+            @openEditor(key)
         return
 
     extending = e.shiftKey and key isnt 'Tab' and key isnt 'Enter'
@@ -507,7 +642,9 @@ export Home = component
             " | "
           "#{totalRows.toLocaleString()} rows"
 
-      .grid-container tabindex: 0, @scroll: @handleScroll, @mousedown: @handleMousedown, @mousemove: @handleMousemove, @mouseup: @handleMouseup, @keydown: @handleKeydown
+      .grid-container tabindex: 0, @scroll: @handleScroll, @mousedown: @handleMousedown, @mousemove: @handleMousemove, @mouseup: @handleMouseup, @keydown: @handleKeydown, @dblclick: @handleDblclick
+        if editing
+          input.rip-grid-editor type: 'text', value: editValue, @input: @handleEditorInput, @keydown: @handleEditorKeydown
         table.rip-grid
           colgroup
             for c in columns
