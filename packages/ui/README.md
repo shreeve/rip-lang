@@ -87,6 +87,7 @@ Rip code:
 - **Dynamic classes** — `div.('card', active && 'active')` with CLSX semantics
 - **Event handlers** — `@click: handler` compiles to `addEventListener`
 - **Two-way binding** — `value <=> username` wires reactive read and write
+  (see [Two-Way Binding](#two-way-binding--the--operator) below)
 - **Conditionals and loops** — `if`/`else` and `for item in items` with
   anchor-based DOM insertion and keyed reconciliation
 - **Children/slots** — `@children` receives child nodes, `#content` marks
@@ -268,6 +269,99 @@ button.('flex items-center rounded-lg')
 
 Blank lines between attributes and children are fine — they don't break the
 structure.
+
+## Two-Way Binding — The `<=>` Operator
+
+The `<=>` operator is one of Rip UI's most powerful features. It creates a
+bidirectional reactive binding between a parent's state and a child element
+or component — changes flow in both directions automatically.
+
+### The Problem It Solves
+
+In React, wiring state to interactive elements requires explicit value props
+and callback handlers for every bindable property:
+
+```jsx
+// React: verbose, repetitive ceremony
+const [name, setName] = useState('');
+const [role, setRole] = useState('viewer');
+const [notify, setNotify] = useState(true);
+const [showConfirm, setShowConfirm] = useState(false);
+
+<input value={name} onChange={e => setName(e.target.value)} />
+<Select value={role} onValueChange={setRole} />
+<Switch checked={notify} onCheckedChange={setNotify} />
+<Dialog open={showConfirm} onOpenChange={setShowConfirm} />
+```
+
+Every bindable property needs a state declaration AND a setter callback.
+This is the single most tedious pattern in React development.
+
+### The Rip Way
+
+In Rip, `<=>` replaces all of that with a single operator:
+
+```coffee
+export UserForm = component
+  @name := ''
+  @role := 'viewer'
+  @notify := true
+  @showConfirm := false
+
+  render
+    input value <=> @name
+    Select value <=> @role
+      Option value: "viewer", "Viewer"
+      Option value: "editor", "Editor"
+      Option value: "admin",  "Admin"
+    Switch checked <=> @notify
+    Dialog open <=> @showConfirm
+      p "Save changes?"
+```
+
+No `onChange`. No `onValueChange`. No `onOpenChange`. No `setName`, `setRole`,
+`setNotify`, `setShowConfirm`. The reactive system handles everything — state
+flows down, user interactions flow back up.
+
+### How It Works
+
+`value <=> username` compiles to two things:
+
+1. **State → DOM** (reactive effect): `__effect(() => { el.value = username; })`
+2. **DOM → State** (event listener): `el.addEventListener('input', (e) => { username = e.target.value; })`
+
+The compiler is smart about types:
+- `value <=>` on text inputs uses the `input` event and `e.target.value`
+- `value <=>` on number/range inputs uses `e.target.valueAsNumber`
+- `checked <=>` uses the `change` event and `e.target.checked`
+
+For custom components, `<=>` passes the reactive signal itself, enabling the
+child to both read and write the parent's state directly — no callback
+indirection.
+
+### Auto-Detection
+
+Even without `<=>`, the compiler auto-detects when `value:` or `checked:` is
+bound to a reactive expression and generates two-way binding automatically:
+
+```coffee
+# These are equivalent:
+input value <=> @name           # explicit two-way binding
+input value: @name              # auto-detected (name is reactive)
+```
+
+### Why This Matters
+
+Two-way binding is what Vue has with `v-model`, what Svelte has with `bind:`,
+and what Angular has with `[(ngModel)]`. React is the only major framework
+that deliberately omits it, forcing the verbose controlled component pattern
+instead.
+
+Rip's `<=>` goes further than Vue or Svelte — it works uniformly across HTML
+elements and custom components with the same syntax. A `Dialog open <=> show`
+and an `input value <=> name` use the same operator, the same mental model,
+and the same compilation strategy. This makes headless interactive components
+dramatically cleaner to use than their React equivalents.
 
 ## How It Works
 

@@ -322,6 +322,7 @@ Multiple lines
 | `*` | Merge assign | `*obj = {a: 1}` | `Object.assign(obj, {a: 1})` |
 | `not in` | Not in | `x not in arr` | Negated membership test |
 | `not of` | Not of | `k not of obj` | Negated key existence |
+| `<=>` | Two-way bind | `value <=> name` | Bidirectional reactive binding (render blocks) |
 
 ## Assignment Operators
 
@@ -913,6 +914,110 @@ Type annotations are erased from `.js` output. In `.d.ts` output, reactive state
 ```ts
 declare const count: Signal<number>;
 declare const doubled: Computed<number>;
+```
+
+## Two-Way Binding (`<=>`)
+
+The `<=>` operator creates bidirectional reactive bindings inside render blocks.
+It connects a parent's reactive state to a child element or component — changes
+flow in both directions automatically. This is a Rip original.
+
+### With HTML Elements
+
+```coffee
+export Form = component
+  @name := ''
+  @age := 25
+  @agree := false
+
+  render
+    input value <=> @name                           # text input
+    input type: "number", value <=> @age            # number input
+    input type: "checkbox", checked <=> @agree      # checkbox
+    p "#{@name}, age #{@age}, agreed: #{@agree}"
+```
+
+`value <=> @name` compiles to two things:
+1. **State → DOM**: an effect that sets `el.value = name` whenever `name` changes
+2. **DOM → State**: an event listener that sets `name = e.target.value` on input
+
+The compiler auto-detects types:
+- Text inputs use the `input` event and `e.target.value`
+- Number/range inputs use `e.target.valueAsNumber`
+- Checkboxes use the `change` event and `e.target.checked`
+
+### With Components
+
+`<=>` works with custom components using the same syntax:
+
+```coffee
+export App = component
+  @selected := 'viewer'
+  @showDialog := false
+  @darkMode := false
+
+  render
+    Select value <=> @selected
+      Option value: "viewer", "Viewer"
+      Option value: "editor", "Editor"
+      Option value: "admin",  "Admin"
+    Switch checked <=> @darkMode, "Dark mode"
+    Dialog open <=> @showDialog
+      p "Are you sure?"
+    p "Role: #{@selected}"
+```
+
+The parent owns the state. The child reads it and writes back to it. No
+callback props, no `onChange` handlers, no `onOpenChange`, no `setValue`.
+
+### Why This Matters
+
+React requires explicit `value` + `onChange` pairs for every bindable property.
+This is the "controlled component" pattern — the single most tedious aspect of
+React development:
+
+```jsx
+// React: 8 lines of wiring for 4 controls
+const [name, setName] = useState('');
+const [role, setRole] = useState('viewer');
+const [notify, setNotify] = useState(true);
+const [show, setShow] = useState(false);
+
+<input value={name} onChange={e => setName(e.target.value)} />
+<Select value={role} onValueChange={setRole} />
+<Switch checked={notify} onCheckedChange={setNotify} />
+<Dialog open={show} onOpenChange={setShow} />
+```
+
+Rip eliminates all of it:
+
+```coffee
+# Rip: 4 state declarations, 4 bindings, zero callbacks
+@name := ''
+@role := 'viewer'
+@notify := true
+@show := false
+
+input value <=> @name
+Select value <=> @role
+Switch checked <=> @notify
+Dialog open <=> @show
+```
+
+Vue has `v-model`. Svelte has `bind:`. But Rip's `<=>` is cleaner — it works
+uniformly across HTML elements and custom components with the same syntax, the
+same operator, and the same mental model. No framework-specific directives, no
+special component protocol. Just a reactive binding that flows both ways.
+
+### Auto-Detection
+
+Even without `<=>`, the compiler auto-detects when `value:` or `checked:` is
+bound to a reactive expression and generates two-way binding automatically:
+
+```coffee
+# These are equivalent:
+input value <=> @name           # explicit
+input value: @name              # auto-detected (name is reactive)
 ```
 
 ---
@@ -1545,6 +1650,10 @@ a =~ /pat/     # regex match, captures in _
 a[/pat/, 1]    # regex extract
 a?             # existence check (a != null)
 a ?? b         # nullish coalescing
+
+# Two-way binding (render blocks)
+input value <=> @name      # bidirectional reactive binding
+Dialog open <=> @show      # works with components too
 ```
 
 ## File Templates

@@ -1,9 +1,8 @@
-# Styling Guide
+# Styling & Components Guide
 
-This document defines the styling architecture for Rip projects. It is a
-determination, not a survey of options. These choices reflect Rip's core
-principles: elegance, minimalism, zero unnecessary dependencies, and letting
-the platform do the work.
+This document defines the styling architecture and component strategy for Rip
+projects. These choices reflect Rip's core principles: elegance, minimalism,
+zero dependencies, and letting the platform do the work.
 
 ---
 
@@ -15,7 +14,11 @@ language. Modern CSS — with nesting, custom properties, cascade layers, and
 container queries — is expressive enough to build any interface without
 preprocessors, runtimes, or utility class vocabularies.
 
-Our styling architecture has four layers. Each does one thing well.
+For interactive behavior — keyboard navigation, focus management, ARIA,
+dismissal, positioning — we build our own headless components in Rip. The
+patterns come from the WAI-ARIA Authoring Practices spec and Base UI's
+reference implementations. The code is pure Rip, using the language's own
+reactive primitives. Zero framework dependencies.
 
 ---
 
@@ -23,27 +26,280 @@ Our styling architecture has four layers. Each does one thing well.
 
 | Layer | Tool | Role |
 |-------|------|------|
-| **Behavior** | Base UI | Accessible headless components — keyboard nav, ARIA, focus management |
+| **Behavior** | Rip Widgets | Accessible headless components — keyboard nav, ARIA, focus management |
 | **Design Tokens** | Open Props | Consistent scales for spacing, color, shadow, radius, easing, typography |
-| **Scoping** | CSS Modules | Automatic class name isolation per component |
+| **Scoping** | CSS (scoped) | Component-scoped styles via CSS Modules or Rip UI's built-in scoping |
 | **Platform** | Native CSS | Nesting, `@layer`, `data-*` selectors, `prefers-color-scheme` |
 
-### Base UI
+---
 
-Base UI provides unstyled, accessible interactive primitives: dialogs, menus,
-selects, tooltips, tabs, checkboxes, sliders, and more. It handles the hard
-problems — keyboard interaction, screen reader announcements, focus trapping,
-dismissal behavior — and exposes styling hooks through:
+## Rip Widgets — Native Headless Components
 
-- **`className`** — static class or a function receiving component state
-- **`data-*` attributes** — `[data-open]`, `[data-checked]`, `[data-disabled]`, `[data-entering]`, `[data-exiting]`, etc.
-- **CSS variables** — `--available-height`, `--anchor-width`, etc.
-- **`render` prop** — full control over the rendered element
+Rip provides its own headless, accessible interactive components. These are
+written in Rip using the language's reactive primitives (`:=`, `~=`, `~>`)
+and compiled to JavaScript like everything else. No React. No framework
+runtime. Just Rip.
 
-We style Base UI components entirely through CSS selectors targeting these
-attributes. No JavaScript styling logic.
+### Why We Build Our Own
 
-### Open Props
+Base UI is the industry's best headless component library. But it requires
+React — hooks, context, synthetic events, a virtual DOM reconciler. Shipping
+React as a dependency contradicts Rip's zero-dependency philosophy, and
+React's rendering model is fundamentally different from Rip UI's fine-grained
+DOM updates.
+
+Instead, we reimplement Base UI's proven behavioral patterns directly in Rip.
+This is the same approach Rip took with CoffeeScript's syntax (reimplemented
+better) and React's reactivity model (reimplemented as language-level
+operators). The patterns are documented. The code is ours.
+
+### How Rip's Primitives Map to Component Behavior
+
+| Need | React (Base UI) | Rip |
+|------|----------------|-----|
+| Mutable state | `useState` | `:=` (reactive state) |
+| Derived values | `useMemo` | `~=` (computed) |
+| Side effects + cleanup | `useEffect` | `~>` (effect with cleanup) |
+| DOM references | `useRef` | Direct DOM access — components own their elements |
+| Shared state (compound components) | React Context | Component props / shared stash |
+| Batched updates | `unstable_batchedUpdates` | `__batch` |
+| Events | Synthetic event system | Native DOM events |
+
+Rip's model is simpler. Fine-grained reactivity means no virtual DOM diffing,
+no hook ordering rules, no dependency arrays. An effect that returns a function
+automatically cleans up. State changes propagate to exactly the DOM nodes that
+depend on them.
+
+### The Components
+
+These 10 components cover ~90% of real application needs:
+
+| Component | What It Handles |
+|-----------|----------------|
+| **Dialog** | Focus trap, scroll lock, escape/click-outside dismiss, ARIA roles |
+| **Popover** | Anchor positioning, flip/shift, dismiss behavior, ARIA |
+| **Tooltip** | Show/hide with delay, anchor positioning, ARIA describedby |
+| **Select** | Keyboard navigation, typeahead, ARIA listbox, positioning |
+| **Menu** | Nested submenus, keyboard navigation, ARIA menu roles |
+| **Tabs** | Arrow key navigation, ARIA tablist/tab/tabpanel |
+| **Accordion** | Expand/collapse, single or multiple, ARIA |
+| **Checkbox/Switch** | Toggle state, indeterminate, ARIA checked |
+| **Combobox** | Input filtering, keyboard nav, ARIA combobox, positioning |
+| **Toast** | Auto-dismiss timer, stacking, ARIA live region |
+
+Each component:
+- Handles all keyboard interactions per WAI-ARIA Authoring Practices
+- Sets correct ARIA attributes automatically
+- Exposes `data-*` attributes for CSS styling (`[data-open]`, `[data-selected]`, etc.)
+- Ships zero CSS — styling is entirely in the user's stylesheets
+- Uses Rip's reactive primitives for all state management
+
+### Behavioral Primitives
+
+The components are built from a small set of shared behavioral primitives:
+
+**Focus Trap** — confines tab focus within a container (dialogs, modals):
+
+```coffee
+trapFocus = (el) ->
+  focusable = el.querySelectorAll 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+  first = focusable[0]
+  last = focusable[focusable.length - 1]
+  first?.focus()
+  handler = (e) ->
+    return unless e.key is 'Tab'
+    if e.shiftKey
+      if document.activeElement is first
+        e.preventDefault()
+        last?.focus()
+    else
+      if document.activeElement is last
+        e.preventDefault()
+        first?.focus()
+  el.addEventListener 'keydown', handler
+  -> el.removeEventListener 'keydown', handler
+```
+
+**Scroll Lock** — prevents body scroll while a modal is open:
+
+```coffee
+lockScroll = ->
+  scrollY = window.scrollY
+  document.body.style.position = 'fixed'
+  document.body.style.top = "-#{scrollY}px"
+  document.body.style.width = '100%'
+  ->
+    document.body.style.position = ''
+    document.body.style.top = ''
+    document.body.style.width = ''
+    window.scrollTo 0, scrollY
+```
+
+**Dismiss** — close on Escape key or click outside:
+
+```coffee
+onDismiss = (el, close) ->
+  onKey = (e) -> close() if e.key is 'Escape'
+  onClick = (e) -> close() unless el.contains(e.target)
+  document.addEventListener 'keydown', onKey
+  document.addEventListener 'pointerdown', onClick
+  ->
+    document.removeEventListener 'keydown', onKey
+    document.removeEventListener 'pointerdown', onClick
+```
+
+**Keyboard Navigation** — arrow key movement through a list of items:
+
+```coffee
+navigateList = (el, opts = {}) ->
+  vertical = opts.vertical ? true
+  wrap = opts.wrap ? true
+  items = -> el.querySelectorAll('[role="option"]:not([aria-disabled="true"]), [role="menuitem"]:not([aria-disabled="true"])')
+
+  handler = (e) ->
+    list = Array.from items()
+    idx = list.indexOf document.activeElement
+    return if idx is -1
+
+    next = switch e.key
+      when (if vertical then 'ArrowDown' else 'ArrowRight')
+        if wrap then (idx + 1) %% list.length else Math.min(idx + 1, list.length - 1)
+      when (if vertical then 'ArrowUp' else 'ArrowLeft')
+        if wrap then (idx - 1) %% list.length else Math.max(idx - 1, 0)
+      when 'Home' then 0
+      when 'End' then list.length - 1
+      else null
+
+    if next?
+      e.preventDefault()
+      list[next].focus()
+
+  el.addEventListener 'keydown', handler
+  -> el.removeEventListener 'keydown', handler
+```
+
+**Anchor Positioning** — position a floating element relative to a trigger:
+
+```coffee
+anchorPosition = (anchor, floating, opts = {}) ->
+  placement = opts.placement or 'bottom'
+  offset = opts.offset or 4
+
+  update = ->
+    ar = anchor.getBoundingClientRect()
+    fr = floating.getBoundingClientRect()
+
+    [side, align] = placement.split('-')
+    x = switch side
+      when 'bottom', 'top'
+        switch align
+          when 'start' then ar.left
+          when 'end' then ar.right - fr.width
+          else ar.left + (ar.width - fr.width) / 2
+      when 'right' then ar.right + offset
+      when 'left' then ar.left - fr.width - offset
+
+    y = switch side
+      when 'bottom' then ar.bottom + offset
+      when 'top' then ar.top - fr.height - offset
+      when 'left', 'right'
+        switch align
+          when 'start' then ar.top
+          when 'end' then ar.bottom - fr.height
+          else ar.top + (ar.height - fr.height) / 2
+
+    # Flip if off screen
+    if side is 'bottom' and y + fr.height > window.innerHeight
+      y = ar.top - fr.height - offset
+    if side is 'top' and y < 0
+      y = ar.bottom + offset
+
+    # Shift to stay in viewport
+    x = Math.max(4, Math.min(x, window.innerWidth - fr.width - 4))
+
+    floating.style.left = "#{x}px"
+    floating.style.top = "#{y}px"
+
+  update()
+  -> null
+```
+
+### Example: Dialog Component
+
+A complete headless dialog in Rip, showing how the primitives compose:
+
+```coffee
+component Dialog
+  @open := false
+
+  ~>
+    if @open
+      prevFocus = document.activeElement
+      trapFocus @el
+      lockScroll()
+      ->
+        releaseScroll()
+        prevFocus?.focus()
+
+  onKeydown: (e) ->
+    @open = false if e.key is 'Escape'
+
+  onBackdropClick: (e) ->
+    @open = false if e.target is e.currentTarget
+
+  render
+    div.backdrop @click: @onBackdropClick, data-open: @open
+      div.panel role: "dialog", aria-modal: "true"
+        slot
+```
+
+That's the entire behavioral core — focus trap, scroll lock, escape dismiss,
+click-outside dismiss, ARIA attributes — in ~20 lines of Rip. The effect
+cleanup handles teardown automatically when `@open` becomes false.
+
+### Example: Tabs Component
+
+```coffee
+component Tabs
+  @active := @items?[0]?.id or ''
+
+  select: (id) -> @active = id
+
+  onKeydown: (e) ->
+    ids = @items.map -> it.id
+    idx = ids.indexOf @active
+    switch e.key
+      when 'ArrowRight' then @active = ids[(idx + 1) %% ids.length]
+      when 'ArrowLeft'  then @active = ids[(idx - 1) %% ids.length]
+      when 'Home'       then @active = ids[0]
+      when 'End'        then @active = ids[-1]
+
+  render
+    div role: "tablist", @keydown: @onKeydown
+      for item in @items
+        button role: "tab",
+          aria-selected: item.id is @active,
+          tabindex: (if item.id is @active then 0 else -1),
+          data-active: item.id is @active,
+          @click: -> @select item.id
+          item.label
+    for item in @items
+      div role: "tabpanel",
+        data-active: item.id is @active,
+        hidden: item.id isnt @active
+        item.content
+```
+
+### Reference Material
+
+Component behavior patterns follow:
+- **WAI-ARIA Authoring Practices** — https://www.w3.org/WAI/ARIA/apg/patterns/
+- **Base UI source** (MIT) — https://github.com/mui/base-ui
+- **MDN ARIA documentation** — https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA
+
+---
+
+## Open Props — Design Tokens
 
 Open Props is a set of CSS custom properties — design tokens — covering spacing,
 color, shadow, radius, easing, typography, and animation. It ships as pure CSS
@@ -78,36 +334,47 @@ Override or extend any token by redefining the custom property:
 }
 ```
 
-### CSS Modules
+### Token Categories
 
-CSS Modules provide automatic class name scoping. Each `.module.css` file
-generates unique class names at build time, so styles never leak across
-components. No runtime. No naming conventions to enforce. Just write CSS
-and import it.
+**Spacing** — `--size-1` through `--size-15` (0.25rem to 7.5rem). Use for
+padding, margin, and gap.
+
+**Colors** — Full palettes (`--blue-0` through `--blue-12`, etc.) plus
+semantic surface tokens. Define project-level aliases:
 
 ```css
-/* Button.module.css */
-.button {
-  padding: var(--size-2) var(--size-4);
-  border-radius: var(--radius-2);
-  font-weight: var(--font-weight-6);
-  cursor: pointer;
+:root {
+  --color-primary: var(--indigo-7);
+  --color-danger: var(--red-7);
+  --color-success: var(--green-7);
+  --color-text: var(--gray-9);
+  --color-text-muted: var(--gray-6);
+  --surface-1: var(--gray-0);
+  --surface-2: var(--gray-1);
+  --surface-3: var(--gray-2);
 }
 ```
 
-```jsx
-import styles from './Button.module.css'
+**Shadows** — `--shadow-1` through `--shadow-6`, progressively stronger.
 
-<button className={styles.button}>Click</button>
-```
+**Radii** — `--radius-1` through `--radius-6` plus `--radius-round`.
 
-Vite, Bun, webpack, and every modern bundler support CSS Modules natively.
+**Easing** — `--ease-1` through `--ease-5` (standard) and `--ease-spring-1`
+through `--ease-spring-5` (spring).
+
+**Typography** — `--font-size-0` through `--font-size-8`,
+`--font-weight-1` through `--font-weight-9`,
+`--font-lineheight-0` through `--font-lineheight-5`.
+
+---
+
+## CSS Architecture
 
 ### Native CSS Features
 
 Modern CSS eliminates the need for preprocessors. Use these features directly:
 
-**Nesting** — group related rules under their parent:
+**Nesting** — group related rules:
 
 ```css
 .card {
@@ -124,7 +391,7 @@ Modern CSS eliminates the need for preprocessors. Use these features directly:
 }
 ```
 
-**Cascade Layers** — control specificity without fighting it:
+**Cascade Layers** — control specificity:
 
 ```css
 @layer base, components, overrides;
@@ -138,8 +405,7 @@ Modern CSS eliminates the need for preprocessors. Use these features directly:
 }
 ```
 
-**Container Queries** — style based on the component's container, not the
-viewport:
+**Container Queries** — style based on the container, not the viewport:
 
 ```css
 .sidebar {
@@ -151,7 +417,7 @@ viewport:
 }
 ```
 
-**`color-mix()`** — derive colors without Sass functions:
+**`color-mix()`** — derive colors without Sass:
 
 ```css
 .muted {
@@ -159,129 +425,31 @@ viewport:
 }
 ```
 
----
+### Styling Widget State
 
-## How They Work Together
-
-A Base UI component styled with Open Props tokens, scoped by CSS Modules,
-using `data-*` attributes for state:
+Rip widgets expose `data-*` attributes for all interactive states. Style them
+with pure CSS attribute selectors:
 
 ```css
-/* Dialog.module.css */
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: oklch(0% 0 0 / 40%);
-  display: grid;
-  place-items: center;
-
-  &[data-entering] { animation: var(--animation-fade-in); }
-  &[data-exiting]  { animation: var(--animation-fade-out); }
-}
-
-.panel {
-  background: var(--surface-1);
-  border-radius: var(--radius-3);
-  padding: var(--size-6);
-  box-shadow: var(--shadow-4);
-  max-width: min(90vw, 32rem);
-  width: 100%;
-
-  &[data-entering] {
-    animation: var(--animation-slide-in-up) 200ms var(--ease-spring-3);
-  }
-
-  &[data-exiting] {
-    animation: var(--animation-fade-out) 100ms var(--ease-2);
-  }
-}
-
-.title {
-  font-size: var(--font-size-4);
-  font-weight: var(--font-weight-7);
-  margin-block-end: var(--size-2);
-}
+.dialog-backdrop[data-open] { ... }
+.tab[data-active] { ... }
+.option[data-highlighted] { ... }
+.option[data-selected] { ... }
+.switch[data-checked] { ... }
+.input[data-invalid] { ... }
+.button[data-disabled] { ... }
+.tooltip[data-entering] { ... }
+.tooltip[data-exiting] { ... }
 ```
 
-```jsx
-import { Dialog } from '@base-ui-components/react/dialog'
-import styles from './Dialog.module.css'
-
-<Dialog.Root>
-  <Dialog.Trigger>Open</Dialog.Trigger>
-  <Dialog.Portal>
-    <Dialog.Backdrop className={styles.overlay} />
-    <Dialog.Popup className={styles.panel}>
-      <Dialog.Title className={styles.title}>Confirm</Dialog.Title>
-      <Dialog.Description>Are you sure?</Dialog.Description>
-      <Dialog.Close>Cancel</Dialog.Close>
-    </Dialog.Popup>
-  </Dialog.Portal>
-</Dialog.Root>
-```
-
-The pattern is always the same:
-
-1. Base UI owns behavior and accessibility
-2. `data-*` attributes expose component state to CSS
-3. Open Props tokens provide the values
-4. CSS Modules scope the class names
-5. Native CSS nesting keeps selectors clean
-
----
-
-## Design Tokens
-
-Use these Open Props categories as the project's design vocabulary.
-
-### Spacing
-
-`--size-1` through `--size-15` — a fluid scale from `0.25rem` to `7.5rem`.
-Use for padding, margin, and gap.
-
-### Colors
-
-Open Props provides full color palettes (`--blue-0` through `--blue-12`, etc.)
-plus semantic surface tokens. Define project-level semantic aliases:
-
-```css
-:root {
-  --color-primary: var(--indigo-7);
-  --color-danger: var(--red-7);
-  --color-success: var(--green-7);
-  --color-text: var(--gray-9);
-  --color-text-muted: var(--gray-6);
-  --surface-1: var(--gray-0);
-  --surface-2: var(--gray-1);
-  --surface-3: var(--gray-2);
-}
-```
-
-### Shadows
-
-`--shadow-1` through `--shadow-6` — progressively stronger elevations.
-
-### Radii
-
-`--radius-1` through `--radius-6` plus `--radius-round` and `--radius-blob`.
-
-### Easing
-
-`--ease-1` through `--ease-5` for standard curves.
-`--ease-spring-1` through `--ease-spring-5` for spring-like motion.
-
-### Typography
-
-`--font-size-0` through `--font-size-8` for a modular type scale.
-`--font-weight-1` through `--font-weight-9`.
-`--font-lineheight-0` through `--font-lineheight-5`.
+No JavaScript styling logic. No className toggling. The component sets the
+attribute; CSS handles the rest.
 
 ---
 
 ## Dark Mode
 
-Use `prefers-color-scheme` with CSS variable swapping. No JavaScript required
-for the default behavior:
+Use `prefers-color-scheme` with CSS variable swapping:
 
 ```css
 :root {
@@ -317,7 +485,7 @@ document.documentElement.dataset.theme = 'dark'
 
 ---
 
-## Common Patterns
+## Common CSS Patterns
 
 ### Button
 
@@ -368,7 +536,6 @@ document.documentElement.dataset.theme = 'dark'
 
   &[data-invalid] { border-color: var(--color-danger); }
   &[data-disabled] { opacity: 0.5; }
-
   &::placeholder { color: var(--color-text-muted); }
 }
 ```
@@ -398,7 +565,37 @@ document.documentElement.dataset.theme = 'dark'
 }
 ```
 
-### Select (Base UI)
+### Dialog
+
+```css
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: oklch(0% 0 0 / 40%);
+  display: grid;
+  place-items: center;
+
+  &[data-open] { animation: fade-in 150ms var(--ease-2); }
+}
+
+.panel {
+  background: var(--surface-1);
+  border-radius: var(--radius-3);
+  padding: var(--size-6);
+  box-shadow: var(--shadow-4);
+  max-width: min(90vw, 32rem);
+  width: 100%;
+  animation: slide-in-up 200ms var(--ease-spring-3);
+}
+
+.panel .title {
+  font-size: var(--font-size-4);
+  font-weight: var(--font-weight-7);
+  margin-block-end: var(--size-2);
+}
+```
+
+### Select
 
 ```css
 .trigger {
@@ -413,7 +610,7 @@ document.documentElement.dataset.theme = 'dark'
   cursor: pointer;
   min-width: 10rem;
 
-  &[data-popup-open] { border-color: var(--color-primary); }
+  &[data-open] { border-color: var(--color-primary); }
 }
 
 .popup {
@@ -422,8 +619,6 @@ document.documentElement.dataset.theme = 'dark'
   border-radius: var(--radius-2);
   box-shadow: var(--shadow-3);
   padding: var(--size-1);
-  max-height: var(--available-height);
-  overflow-y: auto;
 }
 
 .option {
@@ -436,7 +631,7 @@ document.documentElement.dataset.theme = 'dark'
 }
 ```
 
-### Tooltip (Base UI)
+### Tooltip
 
 ```css
 .tooltip {
@@ -447,12 +642,8 @@ document.documentElement.dataset.theme = 'dark'
   border-radius: var(--radius-2);
   max-width: 20rem;
 
-  &[data-entering] { animation: var(--animation-fade-in) 100ms; }
-  &[data-exiting]  { animation: var(--animation-fade-out) 75ms; }
-}
-
-.arrow {
-  fill: var(--gray-10);
+  &[data-entering] { animation: fade-in 100ms var(--ease-2); }
+  &[data-exiting]  { animation: fade-out 75ms var(--ease-2); }
 }
 ```
 
@@ -460,12 +651,14 @@ document.documentElement.dataset.theme = 'dark'
 
 ## What We Don't Use
 
+**React or any framework runtime** — Rip widgets are written in Rip, compiled
+to JavaScript, with zero runtime dependencies.
+
 **Tailwind CSS** — utility classes in markup are write-only and semantically
 empty. We write real CSS with real selectors.
 
 **CSS-in-JS runtimes** (styled-components, Emotion) — runtime style injection
-adds bundle size and creates hydration complexity. We use CSS Modules for
-scoping, which compiles away completely.
+adds bundle size and creates hydration complexity.
 
 **Sass / Less** — native CSS nesting, `color-mix()`, and custom properties
 eliminate the need for preprocessors.
@@ -474,29 +667,35 @@ eliminate the need for preprocessors.
 (e.g., positioning from a calculation). Layout, spacing, color, and typography
 go in CSS.
 
-**Component library themes** (Material UI themes, Chakra tokens) — we own our
-design tokens via Open Props and CSS custom properties. No framework-specific
-theming APIs.
+**Third-party headless libraries** (Base UI, Radix, Headless UI, Zag.js) —
+we implement the same WAI-ARIA patterns natively in Rip. The patterns are
+standard; the implementation is ours.
 
 ---
 
 ## Installation
 
+Open Props is the only external styling dependency:
+
 ```bash
-npm install @base-ui-components/react open-props
+bun add open-props
 ```
 
-No additional configuration. CSS Modules work out of the box with Vite and Bun.
+Rip widgets ship as part of `@rip-lang/ui`. No additional installation needed.
 
 ---
 
 ## Summary
 
-Write semantic CSS. Use Open Props for consistent values. Use CSS Modules for
-scoping. Use Base UI for accessible interactive components. Use `data-*`
-attributes for styling component states. Use native CSS features — nesting,
+Write semantic CSS. Use Open Props for consistent design tokens. Use `data-*`
+attributes for styling interactive states. Use native CSS features — nesting,
 layers, container queries, `color-mix()` — for everything else.
 
-The result: zero-runtime styling, accessible components, consistent design
-tokens, scoped styles, and clean readable code. No class soup. No vendor
-lock-in. Just CSS.
+Build accessible interactive components in Rip, following WAI-ARIA patterns
+and Base UI's behavioral specifications. Rip's reactive primitives (`:=`,
+`~=`, `~>`) handle all state, effects, and cleanup. Zero framework
+dependencies. Zero runtime overhead.
+
+The result: accessible components, consistent design tokens, scoped styles,
+and clean readable code in both Rip and CSS. No class soup. No framework
+lock-in. Just the platform.
