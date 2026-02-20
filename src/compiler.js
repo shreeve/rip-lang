@@ -871,9 +871,7 @@ export class CodeGenerator {
     } else if (typeof target === 'string' && this.reactiveVars?.has(target)) {
       targetCode = `${target}.value`;
     } else {
-      this.suppressReactiveUnwrap = true;
       targetCode = this.generate(target, 'value');
-      this.suppressReactiveUnwrap = false;
     }
 
     let valueCode = this.generate(value, 'value');
