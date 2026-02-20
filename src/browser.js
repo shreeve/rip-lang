@@ -138,6 +138,7 @@ if (typeof globalThis !== 'undefined') {
 
 // Auto-launch: if rip-ui is bundled and the page has component scripts or a data-url,
 // call launch() automatically with config from the script tag's data attributes.
+// Hash routing defaults to true (opt out with data-hash="false").
 async function autoLaunch() {
   if (globalThis.__ripLaunched) return;
   const ui = importRip.modules?.['ui.rip'];
@@ -146,8 +147,8 @@ async function autoLaunch() {
   const url = cfg?.getAttribute('data-url') || '';
   const hasComponents = document.querySelectorAll('script[type="text/rip"][data-name]').length > 0;
   if (!hasComponents && !url) return;
-  const opts = {};
-  if (cfg?.hasAttribute('data-hash')) opts.hash = cfg.getAttribute('data-hash') !== 'false';
+  const hash = cfg?.getAttribute('data-hash');
+  const opts = { hash: hash !== 'false' };
   await ui.launch(url, opts);
 }
 
