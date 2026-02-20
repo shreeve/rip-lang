@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lab Results</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,400;0,500;0,700;1,400&family=Nothing+You+Could+Do&display=swap" rel="stylesheet">
+  <script type="module" src="../dist/rip-ui.min.js"></script>
+  <style>
+/* ==========================================================================
+   Lab Results — Styles
+   Single stylesheet: design tokens, app shell, forms, brochure, print
+   ========================================================================== */
+
+:root {
+  --color-primary: #3f5e53;
+  --color-text: #333;
+  --color-base: #333;
+  --color-body: #f5f5f5;
+  --color-success: #2EAB27;
+  --color-danger: #FB2E47;
+  --color-border: #e5e5e5;
+  --font-base: 'Lato', sans-serif;
+  --font-heading: 'Nothing You Could Do', cursive;
+  --radius: 4px;
+  --page-width: 800px;
+  --page-height: 1056px;
+  --shadow-panel: 0 6px 20px 0 rgba(50,50,93,.06), 0 2px 4px 0 rgba(0,0,0,.03);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { font-size: 10px; }
+@media (max-width: 1200px) { html { font-size: 9px; } }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font-base);
+  font-size: 1.6rem;
+  line-height: 1.4;
+  color: var(--color-base);
+  background: var(--color-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- App Shell --- */
+
+.app { padding-bottom: 2rem; }
+
+@media (min-width: 1300px) {
+  .app {
+    padding: 3rem;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+  }
+}
+
+.sidebar {
+  display: none;
+  background: white;
+  padding: 3rem;
+  position: sticky;
+  top: 3rem;
+  box-shadow: var(--shadow-panel);
+  border-radius: var(--radius);
+  max-width: 40rem;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+@media (min-width: 1300px) { .sidebar { display: block; } }
+
+.sidebar__heading {
+  font-size: 1.8rem;
+  font-weight: 600;
+  margin-bottom: 2.5rem;
+}
+
+.header {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 0;
+  background: white;
+  box-shadow: 0 1px 8px rgba(0,0,0,.15);
+  z-index: 10;
+  height: 5rem;
+}
+
+@media (min-width: 1300px) { .header { display: none; } }
+
+.header__toggle {
+  padding: 0.5rem 1rem;
+  margin-left: 1rem;
+  cursor: pointer;
+  font-size: 1.9rem;
+}
+
+.header__title { font-size: 1.6rem; font-weight: 600; }
+
+.drawer-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.4);
+  z-index: 20;
+}
+
+.drawer-overlay.open { display: block; }
+
+.drawer {
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  width: 320px;
+  background: white;
+  z-index: 30;
+  padding: 2rem;
+  overflow-y: auto;
+  transform: translateX(-100%);
+  transition: transform 0.25s ease;
+}
+
+@media (min-width: 550px) { .drawer { width: 400px; } }
+
+.drawer.open { transform: translateX(0); }
+
+.preview { padding-top: 6rem; }
+
+@media (min-width: 1300px) {
+  .preview { padding: 0; margin-left: 4rem; }
+}
+
+/* --- Settings Form --- */
+
+.settings__section { margin-top: 3rem; }
+.settings__section:first-child { margin-top: 0; }
+
+.settings__heading {
+  font-weight: 600;
+  font-size: 1.4rem;
+  text-transform: uppercase;
+  color: rgba(51,51,51,.8);
+  margin-bottom: 1.8rem;
+  letter-spacing: 0.3px;
+}
+
+.settings__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.2rem;
+}
+
+.settings__field {
+  flex: 1 1 45%;
+  min-width: 140px;
+}
+
+.settings__field label {
+  display: block;
+  font-size: 1.3rem;
+  font-weight: 500;
+  color: rgba(51,51,51,.7);
+  margin-bottom: 0.4rem;
+}
+
+.settings__field input,
+.settings__field select {
+  width: 100%;
+  padding: 1rem 1.2rem;
+  font-family: var(--font-base);
+  font-size: 1.5rem;
+  font-weight: 500;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  outline: none;
+  transition: border-color 0.15s;
+  color: var(--color-text);
+  background: white;
+}
+
+.settings__field input:focus,
+.settings__field select:focus {
+  border-color: var(--color-primary);
+}
+
+.btn-primary {
+  display: block;
+  width: 100%;
+  margin-top: 3rem;
+  padding: 1.2rem;
+  font-family: var(--font-base);
+  font-size: 1.55rem;
+  font-weight: 800;
+  color: white;
+  background: var(--color-primary);
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-primary:hover { background: #355247; }
+
+/* --- Brochure Pages --- */
+
+.brochure {
+  width: var(--page-width);
+  margin: 0 auto;
+  box-shadow: var(--shadow-panel);
+}
+
+.brochure__page {
+  font-size: 15px;
+  width: var(--page-width);
+  min-height: var(--page-height);
+  background-size: cover;
+  background-repeat: no-repeat;
+  border-top: 2px solid rgba(0,0,0,.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.brochure__page:first-child { border-top: 0; }
+
+.page-cover {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: var(--page-height);
+}
+
+.cover__heading-fade {
+  width: 100%;
+  height: 280px;
+  background: linear-gradient(white, rgba(255,255,255,0));
+}
+
+.cover__title {
+  font-family: var(--font-heading);
+  font-size: 50px;
+  letter-spacing: 1.5px;
+  line-height: 60px;
+  padding: 60px 0 0 60px;
+  width: 380px;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.cover__body {
+  background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.7));
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.cover__copy {
+  font-size: 20px;
+  margin: 0 0 60px 60px;
+  color: white;
+  text-shadow: 1px 1px 5px rgba(0,0,0,.3);
+  width: 440px;
+}
+
+.cover__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 40px;
+  background: rgba(255,255,255,.9);
+  backdrop-filter: blur(10px);
+}
+
+.cover__footer img { width: 135px; }
+
+.cover__powered-by {
+  opacity: 0.8;
+  font-weight: 600;
+  color: rgba(51,51,51,.9);
+}
+
+.cover__powered-by div:first-child { font-size: 15px; }
+.cover__powered-by div:last-child { font-size: 17px; margin-top: -3px; }
+
+.page-summary { padding: 30px; }
+
+.page-summary .page-heading {
+  color: var(--color-primary);
+  font-size: 20px;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.summary__intro {
+  margin-top: 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.summary__patient {
+  background: white;
+  border: 1px solid rgba(63,94,83,.6);
+  padding: 20px;
+  border-radius: var(--radius);
+  flex-shrink: 0;
+}
+
+.summary__patient-name { font-weight: 700; font-size: 17px; }
+.summary__patient-meta { margin-top: 2px; color: rgba(51,51,51,.8); }
+
+.summary__patient-lab { margin-top: 15px; color: rgba(51,51,51,.8); }
+.summary__patient-lab strong { font-weight: 600; color: rgba(51,51,51,.9); }
+
+.summary__copy {
+  flex: 1;
+  margin-left: 40px;
+  line-height: 1.5;
+  color: rgba(51,51,51,.8);
+}
+
+.summary-table {
+  width: 100%;
+  margin-top: 15px;
+  border-spacing: 0;
+  border-collapse: collapse;
+}
+
+.summary-table:first-of-type { margin-top: 20px; }
+
+.summary-table thead th {
+  font-weight: 800;
+  font-size: 12pt;
+  padding: 10px 0;
+}
+
+.summary-table tbody {
+  background: white;
+  border: 1px solid #f0f0f0;
+  border-radius: var(--radius);
+}
+
+.summary-table tbody tr { border-bottom: 1px solid #f0f0f0; }
+.summary-table tbody tr:first-child,
+.summary-table tbody tr:last-child { border: none; }
+
+.summary-table tbody tr:first-child td {
+  padding-top: 20px;
+  padding-bottom: 0;
+}
+
+.summary-table tbody tr:first-child td:first-child {
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(51,51,51,.7);
+  text-transform: uppercase;
+  letter-spacing: 0.2px;
+}
+
+.summary-table td {
+  text-align: center;
+  padding: 15px 25px;
+}
+
+.summary-table td:first-child { text-align: left; width: 320px; }
+.summary-table td:nth-child(2) { font-weight: 600; }
+
+.summary-table td .name { font-size: 17px; font-weight: 600; }
+.summary-table td .desc { font-size: 14px; color: rgba(51,51,51,.7); }
+
+.summary-table td.value {
+  color: rgba(51,51,51,.8);
+  font-size: 20pt;
+}
+
+.row-acceptable td:first-child,
+.row-acceptable td:nth-child(2) { color: var(--color-success); }
+
+.row-unacceptable td:first-child,
+.row-unacceptable td:nth-child(2) { color: var(--color-danger); }
+
+.row-acceptable td:first-child,
+.row-unacceptable td:first-child {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.page-detail {
+  display: flex;
+  flex-direction: column;
+  min-height: var(--page-height);
+}
+
+.detail__header {
+  flex-shrink: 0;
+  color: white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 30px 40px;
+  min-height: 280px;
+}
+
+.detail__header-image {
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  flex-shrink: 0;
+}
+
+.detail__header-text { margin-left: 70px; max-width: 360px; }
+
+.detail__header-title {
+  font-size: 18px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.detail__header-copy {
+  color: rgba(255,255,255,.85);
+  margin-top: 20px;
+  line-height: 1.5;
+}
+
+.detail__content {
+  display: flex;
+  padding: 25px;
+  flex: 1;
+}
+
+.detail__item {
+  width: 50%;
+  background: white;
+  border: 1px solid #f0f0f0;
+  border-radius: var(--radius);
+  padding: 25px;
+}
+
+.detail__item + .detail__item { margin-left: 25px; }
+
+.detail__item-header {
+  margin-top: 15px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.detail__item-header .name { font-size: 18px; font-weight: 600; }
+.detail__item-header .desc { font-size: 15px; color: rgba(51,51,51,.7); }
+
+.detail__item-header.acceptable { color: var(--color-success); }
+.detail__item-header.unacceptable { color: var(--color-danger); }
+
+.detail__item-info {
+  margin-top: 20px;
+  color: rgba(51,51,51,.9);
+  line-height: 1.5;
+}
+
+.detail__item-info p { margin: 1rem 0; }
+.detail__item-info p:first-child { margin-top: 0; }
+.detail__item-info strong { font-weight: 700; }
+
+.detail__maintenance { margin-top: 25px; }
+
+.detail__maintenance-heading {
+  text-transform: uppercase;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.detail__maintenance-item {
+  margin-top: 15px;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  color: rgba(51,51,51,.9);
+  line-height: 1.4;
+}
+
+.detail__maintenance-icon {
+  width: 16px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  color: rgba(51,51,51,.5);
+}
+
+.gauge {
+  position: relative;
+  display: inline-block;
+}
+
+.gauge--flip svg { transform: scaleX(-1); }
+
+.gauge__needle {
+  position: absolute;
+  width: 131px;
+  height: 131px;
+  margin: 0 auto;
+  border-radius: 50%;
+  top: 21px;
+  left: 0;
+  right: 0;
+}
+
+.gauge__arrow,
+.gauge__arrow-border {
+  position: absolute;
+  margin: 0 auto;
+  left: 0; right: 0;
+  width: 0; height: 0;
+}
+
+.gauge__arrow {
+  top: -13px;
+  z-index: 2;
+  border-left: 15px solid transparent;
+  border-right: 15px solid transparent;
+  border-bottom: 15px solid var(--color-success);
+}
+
+.gauge__arrow-border {
+  top: -15px;
+  z-index: 1;
+  border-left: 15px solid transparent;
+  border-right: 15px solid transparent;
+  border-bottom: 15px solid white;
+}
+
+.gauge__value,
+.gauge__units {
+  font-weight: 600;
+  position: absolute;
+  left: 0; right: 0;
+  text-align: center;
+}
+
+.gauge__value { font-size: 18px; color: white; bottom: 26px; }
+.gauge__units { font-size: 13px; color: rgba(255,255,255,.9); bottom: 13px; }
+
+@media print {
+  body { background: white; }
+
+  .header, .sidebar, .drawer, .drawer-overlay, .btn-primary,
+  .settings__section { display: none !important; }
+
+  .app { padding: 0; display: block; }
+  .preview { padding: 0; margin: 0; }
+
+  .brochure { width: 100%; box-shadow: none; }
+
+  .brochure__page {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0; left: 0;
+    margin: auto;
+    border: none;
+    page-break-before: always;
+  }
+
+  .brochure__page:first-child { page-break-before: auto; }
+}
+  </style>
+</head>
+<body>
+
+<!-- ===== Components ===== -->
+
+<script type="text/rip" data-name="index">
+# Lab Results - Main Page
+
+export Home = component
+  appTitle := 'Lab Results'
+  title := 'My Guide to Health'
+  poweredBy := 'Crossover Health'
+  lab := 'Medical Diagnostics'
+
+  firstName := 'Scott'
+  lastName := 'Bowman'
+  age := 42
+  gender := 'Male'
+
+  history := [
+    date: '2022-10'
+    triglycerides: 181
+    hdlCholesterol: 44
+    totalCholesterol: 177
+    cholesterolHdlRatio: 4.3
+    glucose: 75
+    a1c: 5.2
+  ]
+
+  ranges :=
+    triglycerides:
+      name: 'Triglycerides'
+      range: ['<', 150]
+      units: 'mg/dL'
+      desc: 'Reference range: < 150 mg/dL'
+      info:
+        acceptable: 'Your result falls within the normal Reference Range.'
+        unacceptable: 'Your result falls outside the normal Reference Range.'
+    hdlCholesterol:
+      name: 'HDL Cholesterol'
+      range: ['>=', 40]
+      units: 'mg/dL'
+      desc: 'Reference range: ≥ 40 mg/dL'
+      info:
+        acceptable: 'Your result falls within the normal Reference Range.'
+        unacceptable: 'Your result falls outside the normal Reference Range.'
+    totalCholesterol:
+      name: 'Total Cholesterol'
+      range: ['<>', 125, 199]
+      units: 'mg/dL'
+      desc: 'Reference range: 125-199 mg/dL'
+      info:
+        acceptable: 'Your result falls within the normal Reference Range.'
+        unacceptable: 'Your result falls outside the normal Reference Range.'
+    cholesterolHdlRatio:
+      name: 'Cholesterol / HDL Ratio'
+      range: ['<=', 5]
+      units: '(calc)'
+      desc: 'Reference range: ≤ 5.0 (calc)'
+      info:
+        acceptable: 'Your result falls within the normal Reference Range.'
+        unacceptable: 'Your result falls outside the normal Reference Range.'
+    glucose:
+      name: 'Glucose'
+      range: ['<>', 65, 99]
+      units: 'mg/dL'
+      desc: 'Reference range: 65-99 mg/dL'
+      info:
+        acceptable: 'Your result falls within the normal Reference Range.'
+        unacceptable: 'Your result falls outside the normal Reference Range.'
+    a1c:
+      name: 'Hemoglobin A1c'
+      range: ['<', 5.7]
+      units: '%'
+      desc: 'Reference range: < 5.7%'
+      info:
+        acceptable: 'Your result falls within the normal Reference Range.'
+        unacceptable: 'Your result falls outside the normal Reference Range.'
+    waistCircumference:
+      name: 'Waist Circumference'
+      range: ['<=', 40]
+      units: 'in'
+      desc: 'Reference range: ≤ 40 in'
+      info:
+        acceptable: 'Your result falls within the normal Reference Range.'
+        unacceptable: 'Your result falls outside the normal Reference Range.'
+    bloodPressure:
+      name: 'Blood Pressure'
+      range: ['<', '120/80']
+      units: 'mm/Hg'
+      desc: 'Reference range: < 120/80 mmHg'
+      info:
+        acceptable: 'Your result falls within the normal Reference Range.'
+        unacceptable: 'Your result falls outside the normal Reference Range.'
+
+  acceptable: (key, value) ->
+    ref = ranges[key]
+    return 'acceptable' unless ref
+    r = ref.range
+    ok = false
+    if typeof r[1] is 'string' and r[1].includes('/')
+      bp = r[1].split('/')
+      bv = String(value).split('/')
+      ok = Number(bv[0]) <= Number(bp[0]) and Number(bv[1]) <= Number(bp[1])
+    else
+      switch r[0]
+        when '<'  then ok = value < r[1]
+        when '<=' then ok = value <= r[1]
+        when '>=' then ok = value >= r[1]
+        when '<>' then ok = value >= r[1] and value <= r[2]
+    if ok then 'acceptable' else 'unacceptable'
+
+  topics := [
+    { title: 'Heart Health', gradient: 'linear-gradient(45deg, #851717, #E83F3F)', image: 'images/heart.png', imageWidth: 166, imageHeight: 240, copy: "Your heart is one of the most important organs in your body. Every day, it beats around 100,000 times, pumping blood through an extensive network of blood vessels.\n\nIt's responsible for supplying oxygen to your body, removing waste materials, supplying energy and delivering immune system responses. Given all these essential functions, it's important to keep your heart healthy.", biomarkers: [{ key: 'triglycerides', text: '<strong>Triglycerides</strong> are fats composed of fatty acids and glycerol. The level of triglycerides in your blood tells how well your body processes the fat in your diet.', extra: 'Accurate results require fasting for nine to twelve hours (no food or drink except water and medication) prior to testing.', tips: [{ icon: 'utensils', text: 'Drink watery drinks instead of sugary drinks.' }, { icon: 'drop', text: 'Choose fish rich in omega-3 fatty acids to lower your triglycerides.' }] }, { key: 'hdlCholesterol', text: '<strong>High Density Lipoprotein (HDL) cholesterol</strong> is commonly called "good" cholesterol. Unlike other cholesterol levels, the HDL cholesterol test result is best if it is high. Elevated HDL cholesterol is associated with decreased risk of heart disease.', tips: [{ icon: 'utensils', text: 'Try adding almonds or walnuts to hot or cold cereal for extra crunch and some healthy fat.' }, { icon: 'drop', text: 'Choose a margarine spread without hydrogenated or partially-hydrogenated oils.' }] }] }
+    { title: 'Heart Health', isImagePage: true, image: 'images/yoga_lady.jpg', biomarkers: [{ key: 'totalCholesterol', text: '<strong>Total Cholesterol</strong> is a combination of three types of cholesterol: HDL, LDL, and part of triglycerides.', extra: 'High cholesterol may put you at risk for heart disease or stroke. A low cholesterol measurement can indicate other health conditions.', tips: [{ icon: 'walk', text: 'Keep it interesting. Try new exercise activities to improve your overall fitness and prevent boredom.' }, { icon: 'utensils', text: 'Choose oatmeal, whole-wheat toast, or a whole-grain English muffin instead of a doughnut or pastry at breakfast.' }] }, { key: 'cholesterolHdlRatio', text: '<strong>Total cholesterol/HDL cholesterol ratio</strong> is a calculation obtained by dividing the total cholesterol level by the HDL cholesterol level and is another indicator of heart disease risk. A ratio of 5.0 or less is associated with a lower risk of heart disease. A ratio of less than 3.5 is highly desirable.', tips: [{ icon: 'utensils', text: 'Go for the whole grains. Try brown rice or whole-wheat pasta. Switch from white bread to whole-wheat bread.' }, { icon: 'drop', text: 'Use liquid fats instead of solid fats (such as shortening) in your cooking and baking.' }] }] }
+    { title: 'Diabetes Risk', gradient: 'linear-gradient(45deg, #5C3619, #E8873F)', image: 'images/pancreas.png', imageWidth: 233, imageHeight: 149, copy: "The pancreas is a relatively small organ located right behind your stomach. It has two main functions that help your body convert the food you eat into fuel. The exocrine function aids in digestion while the endocrine function creates and releases hormones to regulate your blood sugar.\n\nBecause of these critical roles, your pancreas can be tied to several serious health issues.", biomarkers: [{ key: 'glucose', text: '<strong>Glucose</strong> ("blood sugar") is the chief source of energy for all cells in the body. Glucose levels are regulated by hormones produced by your pancreas, including insulin.', tips: [{ icon: 'walk', text: 'Boost your metabolism with strength training. Strength training can lower glucose levels by increasing lean muscle and reducing body fat.' }, { icon: 'utensils', text: 'Carbohydrates count. Choose from healthy carbohydrates, such as whole grains, fruits, vegetables, legumes (beans/peas) and low-fat or fat-free milk and yogurt.' }] }, { key: 'a1c', text: "<strong>Hemoglobin A1c</strong> measures the percentage of glucose that's bound to hemoglobin, a protein found in red blood cells whose job is to carry oxygen throughout your body.", tips: [{ icon: 'doctor', text: 'Check your glucose as directed. Work with your doctor to determine if, and how often, you should check your blood sugar.' }, { icon: 'utensils', text: 'Eat a balanced diet. Load up on non-starchy vegetables, but be mindful of serving sizes when eating fruits, protein and carbohydrates.' }] }] }
+    { title: 'Physical Measures', gradient: 'linear-gradient(45deg, #214B7A, #3F8EE8)', image: 'images/human_body.png', imageWidth: 140, imageHeight: 247, copy: "During your screening, physical measurements were taken to provide you with more information about your health. These measures are considered risk factors for chronic health conditions, like heart disease, diabetes and stroke.\n\nThese measures should be used with all of your blood tests to understand your risk for these conditions.", conditional: 'waistCircumference', biomarkers: [{ key: 'waistCircumference', text: '<strong>Waist circumference</strong> measures the stored fat around your waist area, also known as "abdominal obesity" or "having an apple shape". It can provide a different look at your weight related health risk than a body mass index (BMI).', tips: [{ icon: 'walk', text: 'Did you know that walking is a great way to reduce belly fat and strengthen the muscles in the lower back?' }, { icon: 'utensils', text: 'Eat at home more and dine out less. Strive to dine out no more than once or twice each week.' }] }, { key: 'bloodPressure', text: '<strong>Blood pressure</strong> is the force of blood pushing against the artery walls as the heart pumps blood. Having high blood pressure can damage your heart and lead to other health problems such as heart disease and stroke.', tips: [{ icon: 'walk', text: 'Aerobic exercise lowers the blood pressure by strengthening the heart and the blood vessels.' }, { icon: 'smile', text: 'Try a relaxation technique, such as deep breathing or meditation.' }] }] }
+  ]
+
+  drawerOpen := false
+  mobile := window.matchMedia('(max-width: 1299px)').matches
+
+  setupResize: ->
+    mq = window.matchMedia('(max-width: 1299px)')
+    handler = (e) ->
+      mobile = e.matches
+      drawerOpen = false
+    mq.addEventListener 'change', handler
+
+  ~> @setupResize()
+
+  render
+    .app
+      if mobile
+        .header
+          .header__toggle
+            @click: -> drawerOpen = true
+            span "☰"
+          .header__title appTitle
+          div style: 'width: 48px'
+        div
+          class: "drawer-overlay #{if drawerOpen then 'open' else ''}"
+          @click: -> drawerOpen = false
+        div
+          class: "drawer #{if drawerOpen then 'open' else ''}"
+          Settings
+            firstName: firstName, lastName: lastName, age: age, gender: gender
+            history: history, ranges: ranges
+
+      .sidebar
+        .sidebar__heading appTitle
+        Settings
+          firstName: firstName, lastName: lastName, age: age, gender: gender
+          history: history, ranges: ranges
+
+      .preview
+        Brochure
+          title: title, poweredBy: poweredBy, lab: lab
+          firstName: firstName, lastName: lastName, age: age, gender: gender
+          history: history, ranges: ranges, topics: topics
+          acceptable: (k, v) -> @acceptable(k, v)
+</script>
+
+<script type="text/rip" data-name="settings">
+# Settings - Form panel with two-way bound inputs
+
+export Settings = component
+  @firstName := ''
+  @lastName := ''
+  @age := 0
+  @gender := 'Male'
+  @history := []
+  @ranges := {}
+
+  render
+    div
+      .settings__section
+        .settings__heading "Patient Info"
+        .settings__fields
+          .settings__field
+            label "First name"
+            input type: 'text', value <=> firstName
+          .settings__field
+            label "Last name"
+            input type: 'text', value <=> lastName
+          .settings__field
+            label "Age"
+            input type: 'number', value <=> age
+          .settings__field
+            label "Gender"
+            select
+              @change: (e) -> gender = e.target.value
+              option value: 'Male', selected: gender is 'Male', "Male"
+              option value: 'Female', selected: gender is 'Female', "Female"
+
+      .settings__section
+        .settings__heading "Heart Health"
+        .settings__fields
+          .settings__field
+            label "Triglycerides (mg/dL)"
+            input type: 'number', value <=> history[0].triglycerides
+          .settings__field
+            label "HDL Cholesterol (mg/dL)"
+            input type: 'number', value <=> history[0].hdlCholesterol
+          .settings__field
+            label "Total Cholesterol (mg/dL)"
+            input type: 'number', value <=> history[0].totalCholesterol
+          .settings__field
+            label "Cholesterol/HDL Ratio"
+            input type: 'number', step: '0.1', value <=> history[0].cholesterolHdlRatio
+
+      .settings__section
+        .settings__heading "Pancreas Health"
+        .settings__fields
+          .settings__field
+            label "Glucose (mg/dL)"
+            input type: 'number', value <=> history[0].glucose
+          .settings__field
+            label "Hemoglobin A1c (%)"
+            input type: 'number', step: '0.1', value <=> history[0].a1c
+
+      button.btn-primary "Print PDF"
+        @click: -> window.print()
+</script>
+
+<script type="text/rip" data-name="brochure">
+# Brochure — Container composing all pages
+
+export Brochure = component
+  @title := ''
+  @poweredBy := ''
+  @lab := ''
+  @firstName := ''
+  @lastName := ''
+  @age := 0
+  @gender := 'Male'
+  @history := []
+  @ranges := {}
+  @topics := []
+  @acceptable := null
+
+  render
+    .brochure
+      Cover title: title, poweredBy: poweredBy, firstName: firstName
+
+      Summary
+        firstName: firstName, lastName: lastName, age: age, gender: gender
+        lab: lab, history: history, ranges: ranges, acceptable: acceptable
+
+      for topic in topics
+        DetailPage topic: topic, history: history, ranges: ranges, acceptable: acceptable
+</script>
+
+<script type="text/rip" data-name="cover">
+# Cover — Brochure cover page
+
+export Cover = component
+  @title := ''
+  @poweredBy := ''
+  @firstName := ''
+
+  today ~=
+    d = new Date()
+    months = ['January','February','March','April','May','June','July','August','September','October','November','December']
+    day = d.getDate()
+    suffix = 'th'
+    suffix = 'st' if day is 1 or day is 21 or day is 31
+    suffix = 'nd' if day is 2 or day is 22
+    suffix = 'rd' if day is 3 or day is 23
+    "#{months[d.getMonth()]} #{day}#{suffix}, #{d.getFullYear()}"
+
+  greeting ~=
+    name = firstName or '(First Name)'
+    "#{name}, here are the results and personalized action plan from your recent screening."
+
+  render
+    .('brochure__page page-cover') style: "background-image: url(images/cover_bg.jpg)"
+      .cover__heading-fade
+        .cover__title title
+
+      .cover__body
+        .cover__copy
+          span greeting
+          br
+          br
+          span today
+
+      .cover__footer
+        img src: 'images/crossover.svg', alt: 'Crossover Health'
+        .cover__powered-by
+          div "Powered by"
+          div poweredBy
+</script>
+
+<script type="text/rip" data-name="summary">
+# Summary - Medical Summary table (Page 1)
+
+export Summary = component
+  @firstName := ''
+  @lastName := ''
+  @age := 0
+  @gender := 'Male'
+  @lab := ''
+  @history := []
+  @ranges := {}
+  @acceptable := null
+
+  patientName ~=
+    f = firstName or '(First Name)'
+    l = lastName or '(Last Name)'
+    "#{f} #{l}"
+
+  formattedDate ~=
+    d = new Date()
+    mo = String(d.getMonth() + 1).padStart(2, '0')
+    dy = String(d.getDate()).padStart(2, '0')
+    yr = d.getFullYear()
+    "#{mo}/#{dy}/#{yr}"
+
+  historyDate ~=
+    return '' unless history and history[0] and history[0].date
+    parts = history[0].date.split('-')
+    "#{parts[1]}/#{parts[0]}"
+
+  checkIcon := '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>'
+  warnIcon  := '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>'
+
+  sections ~=
+    s = []
+    s.push { label: 'Heart Health', keys: ['triglycerides', 'hdlCholesterol', 'totalCholesterol', 'cholesterolHdlRatio'] }
+    s.push { label: 'Pancreas Health', keys: ['glucose', 'a1c'] }
+    if history and history[0] and history[0].waistCircumference?
+      s.push { label: 'Physical Measurements', keys: ['waistCircumference', 'bloodPressure'] }
+    s
+
+  rows ~=
+    result = []
+    for section in sections
+      for k in section.keys
+        ref = ranges[k]
+        continue unless ref
+        val = history[0]?[k]
+        continue unless val?
+        status = acceptable(k, val)
+        result.push
+          section: section.label
+          key: k
+          name: ref.name
+          desc: ref.desc
+          value: String(val)
+          rowClass: if status is 'acceptable' then 'row-acceptable' else 'row-unacceptable'
+          icon: if status is 'acceptable' then checkIcon else warnIcon
+    result
+
+  render
+    .('brochure__page page-summary')
+      .page-heading "Medical Summary"
+
+      .summary__intro
+        .summary__patient
+          .summary__patient-name patientName
+          .summary__patient-meta "#{age ? age : '(age)'} years old | #{gender}"
+          .summary__patient-lab
+            div
+              strong "Screening results from: "
+              span formattedDate
+            div
+              strong "Testing facility: "
+              span lab
+
+        .summary__copy "This report serves as an easy reference to review all of your testing results, including data from previous years. We encourage you to use this information in conjunction with an exam by your doctor, not as a replacement for one. We hope this summary will be a good starting point for conversations with your doctor about improving your overall health."
+
+      table.summary-table
+        thead
+          tr
+            th ""
+            th historyDate
+        tbody
+          for row in rows
+            tr
+              class: row.rowClass
+              td
+                .status-icon
+                  innerHTML: row.icon
+                div
+                  .name row.name
+                  .desc row.desc
+              td.value row.value
+</script>
+
+<script type="text/rip" data-name="detail-page">
+# DetailPage - Reusable health detail page with gradient header and gauges
+
+export DetailPage = component
+  @topic := {}
+  @history := []
+  @ranges := {}
+  @acceptable := null
+
+  shouldShow ~=
+    return true unless topic.conditional
+    history and history[0] and history[0][topic.conditional]?
+
+  tipIcons :=
+    utensils: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 2v7c0 1.1.9 2 2 2h4c1.1 0 2-.9 2-2V2"/><line x1="7" y1="2" x2="7" y2="22"/><path d="M21 15V2a5 5 0 00-5 5v6h4"/><line x1="21" y1="12" x2="21" y2="22"/></svg>'
+    drop: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z"/></svg>'
+    walk: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="13" cy="4" r="2"/><path d="M7 21l3-4V11l-2-2-3 3"/><path d="M16 21l-2-6-3-1"/></svg>'
+    doctor: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 11V3M4.93 7.5l7.07 3.5 7.07-3.5"/><circle cx="12" cy="18" r="3"/><line x1="12" y1="15" x2="12" y2="11"/></svg>'
+    smile: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>'
+
+  checkIcon := '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>'
+  warnIcon  := '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>'
+
+  statusOf: (key) ->
+    val = history[0]?[key]
+    return 'acceptable' unless val?
+    acceptable(key, val)
+
+  iconFor: (key) ->
+    if @statusOf(key) is 'acceptable' then checkIcon else warnIcon
+
+  render
+    if shouldShow
+      .('brochure__page page-detail')
+        if topic.gradient
+          .detail__header style: "background: #{topic.gradient}"
+            .detail__header-image style: "background-image: url(#{topic.image}); width: #{topic.imageWidth}px; height: #{topic.imageHeight}px"
+            .detail__header-text
+              .detail__header-title topic.title
+              .detail__header-copy topic.copy
+
+        if topic.isImagePage
+          .detail__header style: "background-image: url(#{topic.image}); background-size: cover"
+
+        .detail__content
+          for bio in topic.biomarkers
+            .detail__item
+              if ranges[bio.key]
+                Gauge value: (history[0]?[bio.key] or 0), units: ranges[bio.key].units, range: ranges[bio.key].range
+
+                .detail__item-header class: @statusOf(bio.key)
+                  .status-icon
+                    innerHTML: @iconFor(bio.key)
+                  div
+                    .name ranges[bio.key].name
+                    .desc ranges[bio.key].desc
+
+                .detail__item-info
+                  p innerHTML: bio.text
+                  if bio.extra
+                    p bio.extra
+
+                .detail__maintenance
+                  .detail__maintenance-heading "How To Maintain"
+                  for tip in bio.tips
+                    .detail__maintenance-item
+                      .detail__maintenance-icon
+                        innerHTML: (tipIcons[tip.icon] or '')
+                      div tip.text
+</script>
+
+<script type="text/rip" data-name="gauge">
+# Gauge — SVG semi-circular gauge with rotating needle
+
+export Gauge = component
+  @value := 0
+  @units := ''
+  @range := []
+
+  gaugeType ~=
+    switch range[0]
+      when '<', '<=' then 'lessThan'
+      when '>', '>=' then 'greaterThan'
+      when '<>'       then 'inBetween'
+      else null
+
+  needleRotation ~=
+    max = 75
+    fraction = 0
+
+    if typeof range[1] is 'string' and String(range[1]).includes('/')
+      bp = String(range[1]).split('/')
+      bv = String(value).split('/')
+      sf = Number(bv[0]) / (Number(bp[0]) * 2)
+      df = Number(bv[1]) / (Number(bp[1]) * 2)
+      fraction = (sf + df) / 2
+    else
+      switch gaugeType
+        when 'lessThan', 'greaterThan'
+          fraction = Number(value) / (Number(range[1]) * 2)
+        when 'inBetween'
+          fraction = Number(value) / (Number(range[1]) + Number(range[2]))
+
+    fraction = 1 if fraction >= 1
+    fraction = 0 if fraction <= 0
+    fraction * (max * 2) - max
+
+  render
+    .('gauge', gaugeType is 'lessThan' and 'gauge--flip')
+      if gaugeType is 'lessThan' or gaugeType is 'greaterThan'
+        svg width: '170', height: '85', viewBox: '0 0 170 85'
+          g stroke: 'none', fill: 'none'
+            g transform: 'translate(-31, -36)'
+              g transform: 'translate(30, 36)'
+                path d: 'M86.09,0 C132.98,0 171,38.06 171,85.01 L156.85,85.01 C156.85,45.89 125.17,14.17 86.09,14.17 L86.09,0 Z', fill: '#2EAB27'
+                path d: 'M1.18,0 C48.07,0 86.09,38.06 86.09,85.01 L71.94,85.01 C71.94,45.89 40.26,14.17 1.18,14.17 L1.18,0 Z', fill: '#FB2E47', transform: 'translate(43.63, 42.51) scale(-1, 1) translate(-43.63, -42.51)'
+                g transform: 'translate(20.23, 19.25)'
+                  path d: 'M0.77,65.75 C0.77,29.85 30.1,0.75 66.27,0.75 C102.45,0.75 131.77,29.85 131.77,65.75 L0.77,65.75 Z', fill: '#2EAB27'
+                  path d: 'M8.77,65.75 C8.77,34.27 34.52,8.75 66.27,8.75 C98.03,8.75 123.77,34.27 123.77,65.75 L8.77,65.75 Z', fill: '#20781C'
+      else
+        svg width: '170', height: '85', viewBox: '0 0 170 85'
+          g stroke: 'none', fill: 'none'
+            g transform: 'translate(-31, -36)'
+              g transform: 'translate(30, 0)'
+                path d: 'M43.6,18.43 C90.49,18.43 128.51,56.49 128.51,103.44 L114.36,103.44 C114.36,64.32 82.68,32.6 43.6,32.6 L43.6,18.43 Z', fill: '#2EAB27', transform: 'translate(86.05, 60.94) rotate(-45) translate(-86.05, -60.94)'
+                path d: 'M15.29,121 L1.13,121 C1.11,99.24 9.39,77.49 25.98,60.9 L36,70.92 C22.17,84.74 15.27,102.87 15.29,121 Z', fill: '#FB2E47'
+                path d: 'M170.96,121 L156.8,121 C156.79,102.9 149.89,84.82 136.09,71.02 L146.11,61 C162.68,77.56 170.96,99.28 170.96,121 Z', fill: '#FB2E47'
+                g transform: 'translate(20.23, 55.25)'
+                  path d: 'M0.77,65.75 C0.77,29.85 30.1,0.75 66.27,0.75 C102.45,0.75 131.77,29.85 131.77,65.75 L0.77,65.75 Z', fill: '#2EAB27'
+                  path d: 'M8.77,65.75 C8.77,34.27 34.52,8.75 66.27,8.75 C98.03,8.75 123.77,34.27 123.77,65.75 L8.77,65.75 Z', fill: '#20781C'
+
+      .gauge__needle style: "transform: rotate(#{needleRotation}deg)"
+        .gauge__arrow
+        .gauge__arrow-border
+
+      .gauge__value "#{value}"
+      .gauge__units units
+</script>
+
+<!-- ===== Boot ===== -->
+
+<script type="text/rip">
+  { launch } = importRip! '/rip/ui.rip'
+  launch hash: true
+</script>
+
+</body>
+</html>
