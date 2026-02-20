@@ -7,11 +7,11 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.10.11] - 2026-02-20
+## [3.10.12] - 2026-02-20
 
 ### Compiler — Fix Variable Scoping in Effect Blocks
 
-- **Effect block bodies now scope variables correctly** — Variables assigned inside `~>` block bodies (e.g., `prev = document.querySelector(...)`) were being hoisted to the enclosing function scope instead of staying local to the effect's arrow function. This caused `ReferenceError` in strict mode. Fixed by treating effect blocks as proper function boundaries in both `collectProgramVariables` and `collectFunctionVariables`, and using `generateFunctionBody` (matching how `generateComputed` already handles blocks) instead of raw `formatStatements`.
+- **Effect block bodies now scope variables correctly** — Variables assigned inside `~>` block bodies (e.g., `prev = document.querySelector(...)`) were being hoisted to the enclosing function scope instead of staying local to the effect's arrow function. This caused `ReferenceError` in strict mode. Fixed in both the standalone compiler (`compiler.js`) and the component compiler (`components.js`) by treating effect blocks as proper function boundaries in variable collection, and using `generateFunctionBody` (matching how computed blocks were already handled) instead of raw expression generation.
 
 ## [3.10.6] - 2026-02-20
 
