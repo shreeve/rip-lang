@@ -815,6 +815,17 @@ export Settings = component
             label "Hemoglobin A1c (%)"
             input type: 'number', step: '0.1', value <=> history[0].a1c
 
+      if history?[0]?.waistCircumference
+        .settings__section
+          .settings__heading "Physical Measurements"
+          .settings__fields
+            .settings__field
+              label "Waist Circumference (in)"
+              input type: 'number', value <=> history[0].waistCircumference
+            .settings__field
+              label "Blood Pressure (mm/Hg)"
+              input type: 'text', value <=> history[0].bloodPressure
+
       button.btn-primary "Print PDF"
         @click: -> window.print()
 </script>
