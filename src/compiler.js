@@ -897,9 +897,7 @@ export class CodeGenerator {
       let mapped = this._atParamMap.get(str(prop));
       if (mapped) return mapped;
     }
-    this.suppressReactiveUnwrap = true;
     let objCode = this.generate(obj, 'value');
-    this.suppressReactiveUnwrap = false;
     let needsParens = CodeGenerator.NUMBER_LITERAL_RE.test(objCode) ||
                       objCode.startsWith('await ') ||
                       ((this.is(obj, 'object') || this.is(obj, 'yield')));

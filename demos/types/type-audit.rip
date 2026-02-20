@@ -473,12 +473,12 @@ clicksDoubled:: number ~= clicks * 2
 greeting:: string ~= "Hello, #{username}!"
 hasTags:: boolean ~= tags.length > 0
 
-# # Typed readonly (=!) — compiles to plain `const`, no reactive runtime
-# MAX_RETRIES:: number =! 3
-# API_VERSION:: string =! "v2"
+# Typed readonly (=!) — compiles to plain `const`, no reactive runtime
+MAX_RETRIES:: number =! 3
+API_VERSION:: string =! "v2"
 
-# # Typed effect (~>)
-# clickLogger:: Function ~> console.log "clicks changed:", clicks
+# Typed effect (~>)
+clickLogger:: Function ~> console.log "clicks changed:", clicks
 
 # ==============================================================================
 # 12. TYPED COMPONENT PROPS — type annotations on @ props
