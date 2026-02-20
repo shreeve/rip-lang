@@ -434,6 +434,7 @@ body {
   color: rgba(255,255,255,.85);
   margin-top: 20px;
   line-height: 1.5;
+  white-space: pre-line;
 }
 
 .detail__content {
@@ -498,6 +499,18 @@ body {
   display: flex;
   justify-content: center;
   color: rgba(51,51,51,.5);
+}
+
+.detail__maintenance-icon + div {
+  max-width: 80%;
+}
+
+.detail__footer-image {
+  flex: 1;
+  min-height: 280px;
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center;
 }
 
 .gauge {
@@ -904,32 +917,15 @@ export Summary = component
   checkIcon := '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>'
   warnIcon  := '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>'
 
-  sections ~=
-    s = []
-    s.push { label: 'Heart Health', keys: ['triglycerides', 'hdlCholesterol', 'totalCholesterol', 'cholesterolHdlRatio'] }
-    s.push { label: 'Pancreas Health', keys: ['glucose', 'a1c'] }
-    if history and history[0] and history[0].waistCircumference?
-      s.push { label: 'Physical Measurements', keys: ['waistCircumference', 'bloodPressure'] }
-    s
+  rowClass: (k) ->
+    val = history[0]?[k]
+    return '' unless val?
+    if acceptable(k, val) is 'acceptable' then 'row-acceptable' else 'row-unacceptable'
 
-  rows ~=
-    result = []
-    for section in sections
-      for k in section.keys
-        ref = ranges[k]
-        continue unless ref
-        val = history[0]?[k]
-        continue unless val?
-        status = acceptable(k, val)
-        result.push
-          section: section.label
-          key: k
-          name: ref.name
-          desc: ref.desc
-          value: String(val)
-          rowClass: if status is 'acceptable' then 'row-acceptable' else 'row-unacceptable'
-          icon: if status is 'acceptable' then checkIcon else warnIcon
-    result
+  rowIcon: (k) ->
+    val = history[0]?[k]
+    return '' unless val?
+    if acceptable(k, val) is 'acceptable' then checkIcon else warnIcon
 
   render
     .('brochure__page page-summary')
@@ -955,16 +951,52 @@ export Summary = component
             th ""
             th historyDate
         tbody
-          for row in rows
+          tr
+            td "Heart Health"
+            td
+          for k in ['triglycerides', 'hdlCholesterol', 'totalCholesterol', 'cholesterolHdlRatio']
             tr
-              class: row.rowClass
+              class: @rowClass(k)
               td
                 .status-icon
-                  innerHTML: row.icon
+                  innerHTML: @rowIcon(k)
                 div
-                  .name row.name
-                  .desc row.desc
-              td.value row.value
+                  .name ranges[k].name
+                  .desc ranges[k].desc
+              td.value history[0]?[k]
+
+      table.summary-table
+        tbody
+          tr
+            td "Pancreas Health"
+            td
+          for k in ['glucose', 'a1c']
+            tr
+              class: @rowClass(k)
+              td
+                .status-icon
+                  innerHTML: @rowIcon(k)
+                div
+                  .name ranges[k].name
+                  .desc ranges[k].desc
+              td.value history[0]?[k]
+
+      if history and history[0] and history[0].waistCircumference?
+        table.summary-table
+          tbody
+            tr
+              td "Physical Measurements"
+              td
+            for k in ['waistCircumference', 'bloodPressure']
+              tr
+                class: @rowClass(k)
+                td
+                  .status-icon
+                    innerHTML: @rowIcon(k)
+                  div
+                    .name ranges[k].name
+                    .desc ranges[k].desc
+                td.value history[0]?[k]
 </script>
 
 <script type="text/rip" data-name="detail-page">
@@ -1008,9 +1040,6 @@ export DetailPage = component
               .detail__header-title topic.title
               .detail__header-copy topic.copy
 
-        if topic.isImagePage
-          .detail__header style: "background-image: url(#{topic.image}); background-size: cover"
-
         .detail__content
           for bio in topic.biomarkers
             .detail__item
@@ -1025,6 +1054,7 @@ export DetailPage = component
                     .desc ranges[bio.key].desc
 
                 .detail__item-info
+                  p ranges[bio.key].info[@statusOf(bio.key)]
                   p innerHTML: bio.text
                   if bio.extra
                     p bio.extra
@@ -1036,6 +1066,9 @@ export DetailPage = component
                       .detail__maintenance-icon
                         innerHTML: (tipIcons[tip.icon] or '')
                       div tip.text
+
+        if topic.isImagePage
+          .detail__footer-image style: "background-image: url(#{topic.image})"
 </script>
 
 <script type="text/rip" data-name="gauge">
