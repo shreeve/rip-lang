@@ -136,12 +136,27 @@ if (typeof globalThis !== 'undefined') {
   globalThis.__ripExports = { compile, compileToJS, formatSExpr, VERSION, BUILD_DATE, getReactiveRuntime, getComponentRuntime };
 }
 
-// Auto-process <script type="text/rip"> blocks.
+// Auto-launch: if rip-ui is bundled and the page has component scripts or a data-url,
+// call launch() automatically with config from the script tag's data attributes.
+async function autoLaunch() {
+  if (globalThis.__ripLaunched) return;
+  const ui = importRip.modules?.['ui.rip'];
+  if (!ui?.launch) return;
+  const cfg = document.querySelector('script[data-hash], script[data-url]');
+  const url = cfg?.getAttribute('data-url') || '';
+  const hasComponents = document.querySelectorAll('script[type="text/rip"][data-name]').length > 0;
+  if (!hasComponents && !url) return;
+  const opts = {};
+  if (cfg?.hasAttribute('data-hash')) opts.hash = cfg.getAttribute('data-hash') !== 'false';
+  await ui.launch(url, opts);
+}
+
+// Auto-process <script type="text/rip"> blocks, then auto-launch if applicable.
 // Deferred via queueMicrotask so bundled entry code (e.g. rip-ui.min.js registering
 // importRip.modules) runs before script processing begins.
 if (typeof document !== 'undefined') {
   globalThis.__ripScriptsReady = new Promise(resolve => {
-    const run = () => processRipScripts().then(resolve);
+    const run = () => processRipScripts().then(autoLaunch).then(resolve);
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', () => queueMicrotask(run));
     } else {

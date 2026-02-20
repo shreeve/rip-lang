@@ -37,8 +37,7 @@ const parserInstance = {
       case 79: return ["readonly", $[$0-4], $[$0-1]];
       case 80: case 82: return ["effect", $[$0-2], $[$0]];
       case 81: return ["effect", $[$0-3], $[$0]];
-      case 83: case 84: return ["effect", null, $[$0]];
-      case 85: return ["effect", null, $[$01]];
+      case 83: case 84: case 85: return ["effect", null, $[$0]];
       case 91: case 100: case 138: return [".", $[$0-2], $[$0]];
       case 92: case 101: case 139: return ["?.", $[$0-2], $[$0]];
       case 93: case 95: case 102: case 140: return ["[]", $[$0-3], $[$0-1]];

@@ -815,6 +815,7 @@ export createRenderer = (opts = {}) ->
 # ==============================================================================
 
 export launch = (appBase = '', opts = {}) ->
+  globalThis.__ripLaunched = true
   if typeof appBase is 'object'
     opts = appBase
     appBase = ''
