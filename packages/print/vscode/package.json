@@ -14,10 +14,6 @@
   "engines": {
     "vscode": "^1.80.0"
   },
-  "activationEvents": [
-    "onCommand:rip-print.printFile",
-    "onCommand:rip-print.printFolder"
-  ],
   "categories": [
     "Other"
   ],

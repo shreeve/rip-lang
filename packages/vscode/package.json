@@ -14,10 +14,6 @@
   "engines": {
     "vscode": "^1.80.0"
   },
-  "activationEvents": [
-    "onLanguage:rip",
-    "onLanguage:rip-schema"
-  ],
   "categories": ["Programming Languages"],
   "keywords": ["rip", "reactive", "types", "compiler"],
   "icon": "icon.png",
