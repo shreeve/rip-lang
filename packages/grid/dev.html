@@ -234,6 +234,9 @@ select.rip-grid-editor { cursor: pointer; padding-left: 4px; }
 <script type="text/rip" data-name="index">
 export Grid = component
 
+  @beforeEdit := null
+  @afterEdit  := null
+
   ROW_HEIGHT    = 32
   HEADER_HEIGHT = 36
   OVERSCAN      = 5
@@ -445,20 +448,28 @@ export Grid = component
   commitEditor: ->
     if editing
       col = columns[activeCol]
+      oldVal = data[activeRow][col.key]
       val = editValue
       fmt = cellFormat(activeRow, activeCol)
       if fmt and fmt.parse
         val = fmt.parse(val)
+      if @beforeEdit
+        val = @beforeEdit(activeRow, activeCol, oldVal, val)
+        if val is false then return @cancelEditor()
       data[activeRow][col.key] = val
       dataVersion++
       editing = false
       @_removeEditor()
       @_container.focus() if @_container
+      if @afterEdit
+        @afterEdit(activeRow, activeCol, oldVal, val)
 
   cancelEditor: ->
-    editing = false
     @_removeEditor()
+    anchorRow = activeRow
+    anchorCol = activeCol
     @_container.focus() if @_container
+    editing = false
 
   handleEditorKeydown: (e) ->
     numCols = columns.length
@@ -497,6 +508,7 @@ export Grid = component
         anchorCol = activeCol
       when 'Escape'
         e.preventDefault()
+        e.stopPropagation()
         @cancelEditor()
 
   handleDblclick: (e) ->
@@ -662,8 +674,14 @@ export Grid = component
         activeCol = 0 if activeCol < 0
         @scrollToRow(activeRow)
       when 'Escape'
-        anchorRow = activeRow
-        anchorCol = activeCol
+        if anchorRow isnt activeRow or anchorCol isnt activeCol
+          anchorRow = activeRow
+          anchorCol = activeCol
+        else
+          activeRow = -1
+          activeCol = -1
+          anchorRow = -1
+          anchorCol = -1
         return
       when ' '
         if activeRow >= 0 and activeCol >= 0
