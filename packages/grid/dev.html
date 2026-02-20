@@ -237,6 +237,8 @@ export Home = component
 
   scrollTop       := 0
   containerHeight := 600
+  activeRow       := -1
+  activeCol       := -1
 
   totalRows   ~= data.length
   totalHeight ~= totalRows * ROW_HEIGHT
@@ -258,6 +260,18 @@ export Home = component
       n++
     result
 
+  ~>
+    prev = document.querySelector('.rip-grid td.active')
+    if prev
+      prev.classList.remove('active')
+    if activeRow >= startRow and activeRow <= endRow and activeCol >= 0
+      trs = document.querySelectorAll('.rip-grid tbody tr:not(.spacer)')
+      tr = trs[activeRow - startRow]
+      if tr
+        td = tr.children[activeCol]
+        if td
+          td.classList.add('active')
+
   handleScroll: (e) ->
     @_nextST = e.currentTarget.scrollTop
     if not @_rafPending
@@ -265,6 +279,16 @@ export Home = component
       requestAnimationFrame =>
         scrollTop = @_nextST
         @_rafPending = false
+
+  handleClick: (e) ->
+    td = e.target.closest('td')
+    if td and not td.parentElement.classList.contains('spacer')
+      container = e.currentTarget
+      rect = container.getBoundingClientRect()
+      ri = Math.floor((e.clientY - rect.top + container.scrollTop - 36) / ROW_HEIGHT)
+      if ri >= 0 and ri < totalRows
+        activeRow = ri
+        activeCol = td.cellIndex
 
   mounted: ->
     el = document.querySelector('.grid-container')
@@ -284,9 +308,11 @@ export Home = component
       .grid-toolbar
         h1 "Rip Grid"
         span.grid-info
-          "#{totalRows.toLocaleString()} rows | Rows #{startRow}-#{endRow} | #{visibleRows.length} DOM rows"
+          if activeRow >= 0
+            "R#{activeRow + 1}:C#{activeCol + 1} | "
+          "#{totalRows.toLocaleString()} rows"
 
-      .grid-container @scroll: @handleScroll
+      .grid-container @scroll: @handleScroll, @click: @handleClick
         table.rip-grid
           colgroup
             for c in columns

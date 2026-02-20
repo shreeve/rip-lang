@@ -371,7 +371,7 @@ export class CodeGenerator {
       return;
     }
 
-    if (head === 'def' || head === '->' || head === '=>') return;
+    if (head === 'def' || head === '->' || head === '=>' || head === 'effect') return;
 
     if (head === 'if') {
       let [condition, thenBranch, elseBranch] = rest;
@@ -423,7 +423,7 @@ export class CodeGenerator {
         collect(value);
         return;
       }
-      if (head === 'def' || head === '->' || head === '=>') return;
+      if (head === 'def' || head === '->' || head === '=>' || head === 'effect') return;
       if (head === 'try') {
         collect(rest[0]);
         if (rest.length >= 2 && Array.isArray(rest[1]) && rest[1].length === 2 && rest[1][0] !== 'block') {
@@ -1110,8 +1110,7 @@ export class CodeGenerator {
     this.usesReactivity = true;
     let bodyCode;
     if (this.is(body, 'block')) {
-      let stmts = this.withIndent(() => this.formatStatements(body.slice(1)));
-      bodyCode = `{\n${stmts.join('\n')}\n${this.indent()}}`;
+      bodyCode = this.generateFunctionBody(body);
     } else if ((this.is(body, '->') || this.is(body, '=>'))) {
       let fnCode = this.generate(body, 'value');
       if (target) return `const ${str(target) ?? this.generate(target, 'value')} = __effect(${fnCode})`;
