@@ -277,56 +277,23 @@ export class CodeGenerator {
     this.collectProgramVariables(sexpr);
     let code = this.generate(sexpr);
 
-    // Build source map mappings from generated code + S-expression locations
-    if (this.sourceMap) this.buildMappings(code, sexpr);
+    // Build source map mappings from generation-time recorded entries
+    if (this.sourceMap) this.buildMappings();
 
     return code;
   }
 
-  // Build source map by walking generated output lines and S-expression nodes.
-  // Collects locations from STATEMENT-level nodes only (direct children of
-  // program/block containers), then matches them to output lines in order.
-  buildMappings(code, sexpr) {
-    if (!sexpr || sexpr[0] !== 'program') return;
-
-    // Collect statement locations: only direct children of program/block nodes.
-    // This gives exactly one loc per output statement line, in source order.
-    let locs = [];
-    let collect = (node) => {
-      if (!Array.isArray(node)) return;
-      let head = node[0];
-      if (head === 'program' || head === 'block') {
-        for (let i = 1; i < node.length; i++) {
-          let child = node[i];
-          if (Array.isArray(child) && child.loc) locs.push(child.loc);
-          collect(child);
-        }
-      } else {
-        for (let i = 1; i < node.length; i++) collect(node[i]);
+  // Build source map from generation-time recorded entries.
+  // Each entry pairs a statement's generated code with its source loc.
+  // Output line positions are computed by exact arithmetic — no heuristics.
+  buildMappings() {
+    if (!this._stmtEntries) return;
+    let lineOffset = this._preambleLines;
+    for (let entry of this._stmtEntries) {
+      if (entry.loc) {
+        this.sourceMap.addMapping(lineOffset, 0, entry.loc.r, entry.loc.c);
       }
-    };
-    collect(sexpr);
-
-    // Match output lines to collected statement locations in parallel.
-    // Skip lines with no source correspondence (preamble, braces, etc.).
-    let lines = code.split('\n');
-    let locIdx = 0;
-    for (let outLine = 0; outLine < lines.length; outLine++) {
-      let line = lines[outLine];
-      let trimmed = line.trim();
-
-      if (!trimmed || trimmed === '}' || trimmed === '});') continue;
-      if (trimmed.startsWith('let ') || trimmed.startsWith('var ')) continue;
-      if (trimmed.startsWith('const slice') || trimmed.startsWith('const modulo') || trimmed.startsWith('const toMatchable')) continue;
-      if (trimmed.startsWith('const {') && trimmed.includes('__')) continue;
-      if (trimmed.startsWith('} else')) continue;
-      if (trimmed.startsWith('//# source')) continue;
-
-      if (locIdx < locs.length) {
-        let indent = line.length - trimmed.length;
-        this.sourceMap.addMapping(outLine, indent, locs[locIdx].r, locs[locIdx].c);
-        locIdx++;
-      }
+      lineOffset += entry.code.split('\n').length;
     }
   }
 
@@ -629,7 +596,7 @@ export class CodeGenerator {
 
     // Generate body first to detect needed helpers
     let blockStmts = ['def', 'class', 'if', 'for-in', 'for-of', 'for-as', 'while', 'loop', 'switch', 'try'];
-    let statementsCode = other.map((stmt, index) => {
+    let stmtEntries = other.map((stmt, index) => {
       let isSingle = other.length === 1 && imports.length === 0 && exports.length === 0;
       let isObj = this.is(stmt, 'object');
       let isObjComp = isObj && stmt.length === 2 && Array.isArray(stmt[1]) && Array.isArray(stmt[1][1]) && stmt[1][1][0] === 'comprehension';
@@ -646,10 +613,12 @@ export class CodeGenerator {
 
       if (generated && !generated.endsWith(';')) {
         let h = Array.isArray(stmt) ? stmt[0] : null;
-        if (!blockStmts.includes(h) || !generated.endsWith('}')) return generated + ';';
+        if (!blockStmts.includes(h) || !generated.endsWith('}')) generated += ';';
       }
-      return generated;
-    }).join('\n');
+      let loc = Array.isArray(stmt) ? stmt.loc : null;
+      return { code: generated, loc };
+    });
+    let statementsCode = stmtEntries.map(e => e.code).join('\n');
 
     let needsBlank = false;
 
@@ -719,6 +688,8 @@ export class CodeGenerator {
     }
 
     if (needsBlank && code.length > 0) code += '\n';
+    this._stmtEntries = stmtEntries;
+    this._preambleLines = code.length === 0 ? 0 : code.split('\n').length - 1;
     code += statementsCode;
     code += exportsCode;
 
