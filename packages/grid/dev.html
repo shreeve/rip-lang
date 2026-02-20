@@ -95,7 +95,7 @@ body {
   border: 2px solid #3b82f6;
   border-radius: 0;
   font: 13px system-ui, -apple-system, sans-serif;
-  padding: 0 9px;
+  padding: 0 8px;
   outline: none;
   background: white;
   color: #1e293b;
@@ -329,45 +329,39 @@ export Home = component
         if td
           td.classList.add('active')
 
-  ~>
-    el = document.querySelector('.rip-grid-editor')
-    if editing and el and activeRow >= startRow and activeRow <= endRow
-      trs = document.querySelectorAll('.rip-grid tbody tr:not(.spacer)')
-      tr = trs[activeRow - startRow]
-      if tr
-        td = tr.children[activeCol]
-        if td
-          tdRect = td.getBoundingClientRect()
-          cRect = @_container.getBoundingClientRect()
-          el.style.top = "#{tdRect.top - cRect.top + @_container.scrollTop}px"
-          el.style.left = "#{tdRect.left - cRect.left}px"
-          el.style.width = "#{tdRect.width}px"
-          el.style.height = "#{tdRect.height}px"
-          if @_selectAll
-            el.select()
-            @_selectAll = false
-          else if @_cursorEnd
-            el.selectionStart = el.value.length
-            el.selectionEnd = el.value.length
-            @_cursorEnd = false
-          el.focus()
-
   openEditor: (initial, cursorEnd) ->
     if activeRow < 0 or activeCol < 0 or editing
       return
     col = columns[activeCol]
     val = data[activeRow][col.key]
     orig = String(if val? then val else '')
-    @_editOriginal = orig
+    selectAll = false
     if initial isnt undefined
       editValue = initial
-      @_selectAll = false
-      @_cursorEnd = false
     else
       editValue = orig
-      @_selectAll = not cursorEnd
-      @_cursorEnd = !!cursorEnd
+      selectAll = not cursorEnd
     editing = true
+    requestAnimationFrame =>
+      el = document.querySelector('.rip-grid-editor')
+      if el
+        trs = document.querySelectorAll('.rip-grid tbody tr:not(.spacer)')
+        tr = trs[activeRow - startRow]
+        if tr
+          td = tr.children[activeCol]
+          if td
+            tdRect = td.getBoundingClientRect()
+            cRect = @_container.getBoundingClientRect()
+            el.style.top = "#{tdRect.top - cRect.top + @_container.scrollTop}px"
+            el.style.left = "#{tdRect.left - cRect.left + @_container.scrollLeft}px"
+            el.style.width = "#{tdRect.width}px"
+            el.style.height = "#{tdRect.height}px"
+            if selectAll
+              el.select()
+            else
+              el.selectionStart = el.value.length
+              el.selectionEnd = el.value.length
+            el.focus()
 
   commitEditor: ->
     if editing
