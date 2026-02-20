@@ -101,10 +101,6 @@ body {
   color: #1e293b;
 }
 
-.rip-grid-editor[type="number"] { -moz-appearance: textfield; }
-.rip-grid-editor::-webkit-inner-spin-button,
-.rip-grid-editor::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-
 select.rip-grid-editor { cursor: pointer; padding-left: 4px; }
 
 .rip-grid tbody td .cell-checkbox {
@@ -244,20 +240,50 @@ export Home = component
   ROW_COUNT     = 100000
   ROLES         = ['Engineer', 'Designer', 'Manager', 'Analyst', 'Director', 'Intern', 'VP', 'Lead']
 
+  formatRegistry = []
+
+  registerFormat = (code, formatFn, parseFn) ->
+    id = formatRegistry.length
+    formatRegistry.push({ code, format: formatFn, parse: parseFn })
+    id
+
+  dollarFmt = registerFormat "$#,##0",
+    (n) -> "$#{Number(n).toLocaleString()}"
+    (s) -> Number(String(s).replace(/[^0-9.\-]/g, '')) or 0
+
   columns := [
-    { key: 'id',     title: '#',       width: 60,  align: 'right', type: 'number' }
+    { key: 'id',     title: '#',       width: 60,  align: 'right' }
     { key: 'name',   title: 'Name',    width: 200 }
     { key: 'active', title: 'Active',  width: 70,  align: 'center', type: 'checkbox' }
-    { key: 'age',    title: 'Age',     width: 80,  align: 'right', type: 'number' }
+    { key: 'age',    title: 'Age',     width: 80,  align: 'right' }
     { key: 'role',   title: 'Role',    width: 150, type: 'select', source: ROLES }
     { key: 'salary', title: 'Salary',  width: 120, align: 'right' }
     { key: 'email',  title: 'Email',   width: 250 }
   ]
 
+  formatMap = new Map([["0,6", dollarFmt]])
+
+  _resolveCol = (ci) ->
+    fid = formatMap.get("0,#{ci + 1}")
+    if fid isnt undefined then return formatRegistry[fid]
+    gid = formatMap.get("0,0")
+    if gid isnt undefined then formatRegistry[gid] else null
+
+  colFormatCache ~=
+    cache = []
+    ci = 0
+    while ci < columns.length
+      cache.push(_resolveCol(ci))
+      ci++
+    cache
+
+  cellFormat = (row, col) ->
+    fid = formatMap.get("#{row + 1},#{col + 1}")
+    if fid isnt undefined then formatRegistry[fid] else colFormatCache[col]
+
   data := do ->
     fns = ['Alice', 'Bob', 'Carol', 'Dave', 'Eve', 'Frank', 'Grace', 'Hank', 'Iris', 'Jack']
     lns = ['Smith', 'Jones', 'Brown', 'Davis', 'Wilson', 'Clark', 'Lewis', 'Hall', 'Young', 'King']
-    fmt = (n) -> n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
     result = new Array(ROW_COUNT)
     idx = 0
     while idx < ROW_COUNT
@@ -269,7 +295,7 @@ export Home = component
         active: idx % 3 isnt 0
         age: 22 + (idx % 45)
         role: ROLES[idx % ROLES.length]
-        salary: "$#{fmt(50000 + (idx * 137 % 100000))}"
+        salary: 50000 + (idx * 137 % 100000)
         email: "#{fn.toLowerCase()}.#{ln.toLowerCase()}@example.com"
       idx++
     result
@@ -300,8 +326,10 @@ export Home = component
       if n >= 0 and n < totalRows
         row = data[n]
         vals = []
-        for c in columns
-          vals.push(row[c.key])
+        for c, ci in columns
+          v = row[c.key]
+          fmt = cellFormat(n, ci)
+          vals.push(if fmt then fmt.format(v) else v)
         result.push({ idx: n, cells: vals })
       n++
     result
@@ -354,23 +382,23 @@ export Home = component
     if activeRow < 0 or activeCol < 0 or editing
       return
     col = columns[activeCol]
-    colType = col.type or 'text'
-    if colType is 'checkbox'
+    if col.type is 'checkbox'
       data[activeRow][col.key] = not data[activeRow][col.key]
       dataVersion++
       return
     val = data[activeRow][col.key]
     orig = String(if val? then val else '')
+    numeric = col.align is 'right'
     selectAll = false
-    if initial isnt undefined and colType isnt 'select'
+    if initial isnt undefined and col.type isnt 'select'
       editValue = initial
     else
       editValue = orig
-      selectAll = not cursorEnd
+      selectAll = not cursorEnd and not numeric
     editing = true
     @_removeEditor()
     el = undefined
-    if colType is 'select'
+    if col.type is 'select'
       el = document.createElement('select')
       el.className = 'rip-grid-editor'
       for opt in (col.source or [])
@@ -386,9 +414,13 @@ export Home = component
     else
       el = document.createElement('input')
       el.className = 'rip-grid-editor'
-      el.type = colType
+      el.type = 'text'
       el.value = editValue
-      el.addEventListener 'input', (e) => editValue = e.target.value
+      align = col.align or 'left'
+      el.style.textAlign = align
+      el.addEventListener 'input', (e) =>
+        editValue = e.target.value
+        e.target.style.textAlign = if /[a-z]/i.test(editValue) then 'left' else align
       el.addEventListener 'keydown', (e) => @handleEditorKeydown(e)
     @_container.appendChild(el)
     requestAnimationFrame =>
@@ -414,9 +446,9 @@ export Home = component
     if editing
       col = columns[activeCol]
       val = editValue
-      if col.type is 'number'
-        parsed = Number(val)
-        val = if isNaN(parsed) then 0 else parsed
+      fmt = cellFormat(activeRow, activeCol)
+      if fmt and fmt.parse
+        val = fmt.parse(val)
       data[activeRow][col.key] = val
       dataVersion++
       editing = false
@@ -645,13 +677,11 @@ export Home = component
         if activeRow >= 0 and activeCol >= 0 and not e.ctrlKey and not e.metaKey
           e.preventDefault()
           col = columns[activeCol]
-          colType = col.type or 'text'
-          if colType is 'checkbox'
+          if col.type is 'checkbox'
             data[activeRow][col.key] = false
-          else if colType is 'number'
-            data[activeRow][col.key] = 0
           else
-            data[activeRow][col.key] = ''
+            fmt = cellFormat(activeRow, activeCol)
+            data[activeRow][col.key] = if fmt and fmt.parse then fmt.parse('') else ''
           dataVersion++
         return
       when 'a'
@@ -665,8 +695,8 @@ export Home = component
       else
         if key.length is 1 and not e.ctrlKey and not e.metaKey and not e.altKey
           if activeRow >= 0 and activeCol >= 0
-            colType = columns[activeCol].type or 'text'
-            if colType is 'text' or colType is 'number'
+            ct = columns[activeCol].type
+            if ct isnt 'checkbox' and ct isnt 'select'
               e.preventDefault()
               @openEditor(key)
         return
