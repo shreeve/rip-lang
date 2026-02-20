@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rip Grid — Dev</title>
+  <script type="module" src="/rip/rip-ui.min.js"></script>
+  <style>
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  color: #1e293b;
+  background: #f1f5f9;
+}
+
+.grid-dev {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.grid-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+
+.grid-toolbar h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.grid-info {
+  font-size: 12px;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+.grid-container {
+  overflow: auto;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+}
+
+.rip-grid {
+  --row-height: 32px;
+  --header-height: 36px;
+  --cell-padding: 0 10px;
+  --border-color: #e2e8f0;
+  --header-bg: #f8fafc;
+  --header-color: #475569;
+  --cell-color: #1e293b;
+  --stripe-bg: #f8fafc;
+  --hover-bg: rgba(59, 130, 246, 0.04);
+  --font: system-ui, -apple-system, sans-serif;
+  --font-size: 13px;
+
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font);
+  font-size: var(--font-size);
+  color: var(--cell-color);
+  table-layout: fixed;
+}
+
+.rip-grid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: var(--header-height);
+  padding: var(--cell-padding);
+  background: var(--header-bg);
+  color: var(--header-color);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid var(--border-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+}
+
+.rip-grid tbody td {
+  height: var(--row-height);
+  padding: var(--cell-padding);
+  border-bottom: 1px solid var(--border-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rip-grid tbody tr:hover td {
+  background: var(--hover-bg);
+}
+
+.rip-grid tbody tr.even td {
+  background: var(--stripe-bg);
+}
+
+.rip-grid tbody tr.even:hover td {
+  background: var(--hover-bg);
+}
+
+.rip-grid tr.spacer td {
+  padding: 0;
+  border: none;
+  line-height: 0;
+  font-size: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  body { background: #0f172a; color: #e2e8f0; }
+  .grid-toolbar { background: #1e293b; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+  .grid-toolbar h1 { color: #f1f5f9; }
+  .grid-info { color: #94a3b8; }
+  .grid-container { background: #1e293b; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+  .rip-grid {
+    --border-color: #334155;
+    --header-bg: #1e293b;
+    --header-color: #cbd5e1;
+    --cell-color: #e2e8f0;
+    --stripe-bg: rgba(255,255,255,.02);
+    --hover-bg: rgba(59, 130, 246, 0.08);
+  }
+}
+  </style>
+</head>
+<body>
+
+<script type="text/rip" data-name="index">
+export Home = component
+
+  ROW_HEIGHT = 32
+  OVERSCAN   = 5
+  ROW_COUNT  = 100000
+
+  columns := [
+    { key: 'id',     title: '#',      width: 60,  align: 'right' }
+    { key: 'name',   title: 'Name',   width: 200 }
+    { key: 'age',    title: 'Age',    width: 80,  align: 'right' }
+    { key: 'role',   title: 'Role',   width: 150 }
+    { key: 'salary', title: 'Salary', width: 120, align: 'right' }
+    { key: 'email',  title: 'Email',  width: 250 }
+  ]
+
+  data := do ->
+    fns   = ['Alice', 'Bob', 'Carol', 'Dave', 'Eve', 'Frank', 'Grace', 'Hank', 'Iris', 'Jack']
+    lns   = ['Smith', 'Jones', 'Brown', 'Davis', 'Wilson', 'Clark', 'Lewis', 'Hall', 'Young', 'King']
+    roles = ['Engineer', 'Designer', 'Manager', 'Analyst', 'Director', 'Intern', 'VP', 'Lead']
+    fmt   = (n) -> n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+    result = new Array(ROW_COUNT)
+    idx = 0
+    while idx < ROW_COUNT
+      fn = fns[idx % fns.length]
+      ln = lns[Math.floor(idx / fns.length) % lns.length]
+      result[idx] =
+        id: idx + 1
+        name: "#{fn} #{ln}"
+        age: 22 + (idx % 45)
+        role: roles[idx % roles.length]
+        salary: "$#{fmt(50000 + (idx * 137 % 100000))}"
+        email: "#{fn.toLowerCase()}.#{ln.toLowerCase()}@example.com"
+      idx++
+    result
+
+  scrollTop       := 0
+  containerHeight := 600
+
+  totalRows   ~= data.length
+  totalHeight ~= totalRows * ROW_HEIGHT
+  startRow    ~= Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN)
+  endRow      ~= Math.min(totalRows - 1, Math.ceil((scrollTop + containerHeight) / ROW_HEIGHT) + OVERSCAN)
+  offsetY     ~= startRow * ROW_HEIGHT
+  bottomSpace ~= Math.max(0, (totalRows - endRow - 1) * ROW_HEIGHT)
+
+  visibleRows ~=
+    result = []
+    n = startRow
+    while n <= endRow
+      if n >= 0 and n < totalRows
+        row = data[n]
+        vals = []
+        for c in columns
+          vals.push(row[c.key])
+        result.push({ idx: n, cells: vals })
+      n++
+    result
+
+  handleScroll: (e) ->
+    scrollTop = e.currentTarget.scrollTop
+
+  mounted: ->
+    el = document.querySelector('.grid-container')
+    if el
+      handler = (entries) =>
+        for entry in entries
+          containerHeight = entry.contentRect.height
+      @_resizeObs = new ResizeObserver(handler)
+      @_resizeObs.observe(el)
+
+  unmounted: ->
+    if @_resizeObs
+      @_resizeObs.disconnect()
+
+  render
+    .grid-dev
+      .grid-toolbar
+        h1 "Rip Grid"
+        span.grid-info
+          "#{totalRows.toLocaleString()} rows | Rows #{startRow}-#{endRow} | #{visibleRows.length} DOM rows"
+
+      .grid-container @scroll: @handleScroll, style: "height: #{containerHeight}px"
+        table.rip-grid
+          colgroup
+            for c in columns
+              col style: "width: #{c.width}px"
+          thead
+            tr
+              for c in columns
+                th style: "text-align: #{c.align or 'left'}"
+                  "#{c.title}"
+          tbody
+            if offsetY > 0
+              tr.spacer
+                td colspan: columns.length, style: "height: #{offsetY}px"
+            for row in visibleRows
+              GridRow row: row, columns: columns
+            if bottomSpace > 0
+              tr.spacer
+                td colspan: columns.length, style: "height: #{bottomSpace}px"
+</script>
+
+<script type="text/rip" data-name="grid-row">
+export GridRow = component
+  @row := {}
+  @columns := []
+
+  render
+    tr.(row.idx % 2 is 0 and 'even')
+      for c, ci in columns
+        td style: "text-align: #{c.align or 'left'}"
+          row.cells[ci]
+</script>
+
+</body>
+</html>

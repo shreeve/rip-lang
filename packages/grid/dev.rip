@@ -1,0 +1,7 @@
+import { get, use, start } from '@rip-lang/api'
+import { ripUI } from '@rip-lang/ui/serve'
+
+dir = import.meta.dir
+use ripUI dir: dir
+get '/*' -> @send "#{dir}/dev.html", 'text/html; charset=UTF-8'
+start port: 3003
