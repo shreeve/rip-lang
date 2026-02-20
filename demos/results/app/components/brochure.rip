@@ -1,0 +1,25 @@
+# Brochure — Container composing all pages
+
+export Brochure = component
+  @title := ''
+  @poweredBy := ''
+  @lab := ''
+  @firstName := ''
+  @lastName := ''
+  @age := 0
+  @gender := 'Male'
+  @history := []
+  @ranges := {}
+  @topics := []
+  @acceptable := null
+
+  render
+    .brochure
+      Cover title: title, poweredBy: poweredBy, firstName: firstName
+
+      Summary
+        firstName: firstName, lastName: lastName, age: age, gender: gender
+        lab: lab, history: history, ranges: ranges, acceptable: acceptable
+
+      for topic in topics
+        DetailPage topic: topic, history: history, ranges: ranges, acceptable: acceptable

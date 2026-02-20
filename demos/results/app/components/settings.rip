@@ -1,0 +1,59 @@
+# Settings - Form panel with two-way bound inputs
+
+export Settings = component
+  @firstName := ''
+  @lastName := ''
+  @age := 0
+  @gender := 'Male'
+  @history := []
+  @ranges := {}
+
+  render
+    div
+      .settings__section
+        .settings__heading "Patient Info"
+        .settings__fields
+          .settings__field
+            label "First name"
+            input type: 'text', value <=> firstName
+          .settings__field
+            label "Last name"
+            input type: 'text', value <=> lastName
+          .settings__field
+            label "Age"
+            input type: 'number', value <=> age
+          .settings__field
+            label "Gender"
+            select
+              @change: (e) -> gender = e.target.value
+              option value: 'Male', selected: gender is 'Male', "Male"
+              option value: 'Female', selected: gender is 'Female', "Female"
+
+      .settings__section
+        .settings__heading "Heart Health"
+        .settings__fields
+          .settings__field
+            label "Triglycerides (mg/dL)"
+            input type: 'number', value <=> history[0].triglycerides
+          .settings__field
+            label "HDL Cholesterol (mg/dL)"
+            input type: 'number', value <=> history[0].hdlCholesterol
+          .settings__field
+            label "Total Cholesterol (mg/dL)"
+            input type: 'number', value <=> history[0].totalCholesterol
+          .settings__field
+            label "Cholesterol/HDL Ratio"
+            input type: 'number', step: '0.1', value <=> history[0].cholesterolHdlRatio
+
+      .settings__section
+        .settings__heading "Pancreas Health"
+        .settings__fields
+          .settings__field
+            label "Glucose (mg/dL)"
+            input type: 'number', value <=> history[0].glucose
+          .settings__field
+            label "Hemoglobin A1c (%)"
+            input type: 'number', step: '0.1', value <=> history[0].a1c
+
+      button.btn-primary "Print PDF"
+        @click: -> window.print()

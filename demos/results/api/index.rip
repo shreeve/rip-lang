@@ -1,0 +1,19 @@
+# Lab Results — Rip UI Demo Server
+
+import { get, use, start } from '@rip-lang/api'
+import { ripUI } from '@rip-lang/ui/serve'
+
+dir = new URL('../app', import.meta.url).pathname
+
+use ripUI
+  app: ''
+  dir: dir
+  components: 'routes'
+  includes: ['components']
+  title: 'Lab Results'
+
+get '/css/*'    -> @send "#{dir}/css/#{@req.path.slice(5)}"
+get '/images/*' -> @send "#{dir}/images/#{@req.path.slice(8)}"
+get '/*'        -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
+
+start port: 3001

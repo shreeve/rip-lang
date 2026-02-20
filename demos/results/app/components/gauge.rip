@@ -1,0 +1,65 @@
+# Gauge — SVG semi-circular gauge with rotating needle
+
+export Gauge = component
+  @value := 0
+  @units := ''
+  @range := []
+
+  gaugeType ~=
+    switch range[0]
+      when '<', '<=' then 'lessThan'
+      when '>', '>=' then 'greaterThan'
+      when '<>'       then 'inBetween'
+      else null
+
+  needleRotation ~=
+    max = 75
+    fraction = 0
+
+    if typeof range[1] is 'string' and String(range[1]).includes('/')
+      bp = String(range[1]).split('/')
+      bv = String(value).split('/')
+      sf = Number(bv[0]) / (Number(bp[0]) * 2)
+      df = Number(bv[1]) / (Number(bp[1]) * 2)
+      fraction = (sf + df) / 2
+    else
+      switch gaugeType
+        when 'lessThan', 'greaterThan'
+          fraction = Number(value) / (Number(range[1]) * 2)
+        when 'inBetween'
+          fraction = Number(value) / (Number(range[1]) + Number(range[2]))
+
+    fraction = 1 if fraction >= 1
+    fraction = 0 if fraction <= 0
+    fraction * (max * 2) - max
+
+  render
+    .('gauge', gaugeType is 'lessThan' and 'gauge--flip')
+      if gaugeType is 'lessThan' or gaugeType is 'greaterThan'
+        svg width: '170', height: '85', viewBox: '0 0 170 85'
+          g stroke: 'none', fill: 'none'
+            g transform: 'translate(-31, -36)'
+              g transform: 'translate(30, 36)'
+                path d: 'M86.09,0 C132.98,0 171,38.06 171,85.01 L156.85,85.01 C156.85,45.89 125.17,14.17 86.09,14.17 L86.09,0 Z', fill: '#2EAB27'
+                path d: 'M1.18,0 C48.07,0 86.09,38.06 86.09,85.01 L71.94,85.01 C71.94,45.89 40.26,14.17 1.18,14.17 L1.18,0 Z', fill: '#FB2E47', transform: 'translate(43.63, 42.51) scale(-1, 1) translate(-43.63, -42.51)'
+                g transform: 'translate(20.23, 19.25)'
+                  path d: 'M0.77,65.75 C0.77,29.85 30.1,0.75 66.27,0.75 C102.45,0.75 131.77,29.85 131.77,65.75 L0.77,65.75 Z', fill: '#2EAB27'
+                  path d: 'M8.77,65.75 C8.77,34.27 34.52,8.75 66.27,8.75 C98.03,8.75 123.77,34.27 123.77,65.75 L8.77,65.75 Z', fill: '#20781C'
+      else
+        svg width: '170', height: '85', viewBox: '0 0 170 85'
+          g stroke: 'none', fill: 'none'
+            g transform: 'translate(-31, -36)'
+              g transform: 'translate(30, 0)'
+                path d: 'M43.6,18.43 C90.49,18.43 128.51,56.49 128.51,103.44 L114.36,103.44 C114.36,64.32 82.68,32.6 43.6,32.6 L43.6,18.43 Z', fill: '#2EAB27', transform: 'translate(86.05, 60.94) rotate(-45) translate(-86.05, -60.94)'
+                path d: 'M15.29,121 L1.13,121 C1.11,99.24 9.39,77.49 25.98,60.9 L36,70.92 C22.17,84.74 15.27,102.87 15.29,121 Z', fill: '#FB2E47'
+                path d: 'M170.96,121 L156.8,121 C156.79,102.9 149.89,84.82 136.09,71.02 L146.11,61 C162.68,77.56 170.96,99.28 170.96,121 Z', fill: '#FB2E47'
+                g transform: 'translate(20.23, 55.25)'
+                  path d: 'M0.77,65.75 C0.77,29.85 30.1,0.75 66.27,0.75 C102.45,0.75 131.77,29.85 131.77,65.75 L0.77,65.75 Z', fill: '#2EAB27'
+                  path d: 'M8.77,65.75 C8.77,34.27 34.52,8.75 66.27,8.75 C98.03,8.75 123.77,34.27 123.77,65.75 L8.77,65.75 Z', fill: '#20781C'
+
+      .gauge__needle style: "transform: rotate(#{needleRotation}deg)"
+        .gauge__arrow
+        .gauge__arrow-border
+
+      .gauge__value "#{value}"
+      .gauge__units units

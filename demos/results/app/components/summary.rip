@@ -1,0 +1,93 @@
+# Summary - Medical Summary table (Page 1)
+
+export Summary = component
+  @firstName := ''
+  @lastName := ''
+  @age := 0
+  @gender := 'Male'
+  @lab := ''
+  @history := []
+  @ranges := {}
+  @acceptable := null
+
+  patientName ~=
+    f = firstName or '(First Name)'
+    l = lastName or '(Last Name)'
+    "#{f} #{l}"
+
+  formattedDate ~=
+    d = new Date()
+    mo = String(d.getMonth() + 1).padStart(2, '0')
+    dy = String(d.getDate()).padStart(2, '0')
+    yr = d.getFullYear()
+    "#{mo}/#{dy}/#{yr}"
+
+  historyDate ~=
+    return '' unless history and history[0] and history[0].date
+    parts = history[0].date.split('-')
+    "#{parts[1]}/#{parts[0]}"
+
+  checkIcon := '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>'
+  warnIcon  := '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>'
+
+  sections ~=
+    s = []
+    s.push { label: 'Heart Health', keys: ['triglycerides', 'hdlCholesterol', 'totalCholesterol', 'cholesterolHdlRatio'] }
+    s.push { label: 'Pancreas Health', keys: ['glucose', 'a1c'] }
+    if history and history[0] and history[0].waistCircumference?
+      s.push { label: 'Physical Measurements', keys: ['waistCircumference', 'bloodPressure'] }
+    s
+
+  rows ~=
+    result = []
+    for section in sections
+      for k in section.keys
+        ref = ranges[k]
+        continue unless ref
+        val = history[0]?[k]
+        continue unless val?
+        status = acceptable(k, val)
+        result.push
+          section: section.label
+          key: k
+          name: ref.name
+          desc: ref.desc
+          value: String(val)
+          rowClass: if status is 'acceptable' then 'row-acceptable' else 'row-unacceptable'
+          icon: if status is 'acceptable' then checkIcon else warnIcon
+    result
+
+  render
+    .('brochure__page page-summary')
+      .page-heading "Medical Summary"
+
+      .summary__intro
+        .summary__patient
+          .summary__patient-name patientName
+          .summary__patient-meta "#{age ? age : '(age)'} years old | #{gender}"
+          .summary__patient-lab
+            div
+              strong "Screening results from: "
+              span formattedDate
+            div
+              strong "Testing facility: "
+              span lab
+
+        .summary__copy "This report serves as an easy reference to review all of your testing results, including data from previous years. We encourage you to use this information in conjunction with an exam by your doctor, not as a replacement for one. We hope this summary will be a good starting point for conversations with your doctor about improving your overall health."
+
+      table.summary-table
+        thead
+          tr
+            th ""
+            th historyDate
+        tbody
+          for row in rows
+            tr
+              class: row.rowClass
+              td
+                .status-icon
+                  innerHTML: row.icon
+                div
+                  .name row.name
+                  .desc row.desc
+              td.value row.value

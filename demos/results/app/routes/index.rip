@@ -1,0 +1,155 @@
+# Lab Results - Main Page
+
+export Home = component
+  appTitle := 'Lab Results'
+  title := 'My Guide to Health'
+  poweredBy := 'Crossover Health'
+  lab := 'Medical Diagnostics'
+
+  firstName := 'Scott'
+  lastName := 'Bowman'
+  age := 42
+  gender := 'Male'
+
+  history := [
+    date: '2022-10'
+    triglycerides: 181
+    hdlCholesterol: 44
+    totalCholesterol: 177
+    cholesterolHdlRatio: 4.3
+    glucose: 75
+    a1c: 5.2
+  ]
+
+  ranges :=
+    triglycerides:
+      name: 'Triglycerides'
+      range: ['<', 150]
+      units: 'mg/dL'
+      desc: 'Reference range: < 150 mg/dL'
+      info:
+        acceptable: 'Your result falls within the normal Reference Range.'
+        unacceptable: 'Your result falls outside the normal Reference Range.'
+    hdlCholesterol:
+      name: 'HDL Cholesterol'
+      range: ['>=', 40]
+      units: 'mg/dL'
+      desc: 'Reference range: ≥ 40 mg/dL'
+      info:
+        acceptable: 'Your result falls within the normal Reference Range.'
+        unacceptable: 'Your result falls outside the normal Reference Range.'
+    totalCholesterol:
+      name: 'Total Cholesterol'
+      range: ['<>', 125, 199]
+      units: 'mg/dL'
+      desc: 'Reference range: 125-199 mg/dL'
+      info:
+        acceptable: 'Your result falls within the normal Reference Range.'
+        unacceptable: 'Your result falls outside the normal Reference Range.'
+    cholesterolHdlRatio:
+      name: 'Cholesterol / HDL Ratio'
+      range: ['<=', 5]
+      units: '(calc)'
+      desc: 'Reference range: ≤ 5.0 (calc)'
+      info:
+        acceptable: 'Your result falls within the normal Reference Range.'
+        unacceptable: 'Your result falls outside the normal Reference Range.'
+    glucose:
+      name: 'Glucose'
+      range: ['<>', 65, 99]
+      units: 'mg/dL'
+      desc: 'Reference range: 65-99 mg/dL'
+      info:
+        acceptable: 'Your result falls within the normal Reference Range.'
+        unacceptable: 'Your result falls outside the normal Reference Range.'
+    a1c:
+      name: 'Hemoglobin A1c'
+      range: ['<', 5.7]
+      units: '%'
+      desc: 'Reference range: < 5.7%'
+      info:
+        acceptable: 'Your result falls within the normal Reference Range.'
+        unacceptable: 'Your result falls outside the normal Reference Range.'
+    waistCircumference:
+      name: 'Waist Circumference'
+      range: ['<=', 40]
+      units: 'in'
+      desc: 'Reference range: ≤ 40 in'
+      info:
+        acceptable: 'Your result falls within the normal Reference Range.'
+        unacceptable: 'Your result falls outside the normal Reference Range.'
+    bloodPressure:
+      name: 'Blood Pressure'
+      range: ['<', '120/80']
+      units: 'mm/Hg'
+      desc: 'Reference range: < 120/80 mmHg'
+      info:
+        acceptable: 'Your result falls within the normal Reference Range.'
+        unacceptable: 'Your result falls outside the normal Reference Range.'
+
+  acceptable: (key, value) ->
+    ref = ranges[key]
+    return 'acceptable' unless ref
+    r = ref.range
+    ok = false
+    if typeof r[1] is 'string' and r[1].includes('/')
+      bp = r[1].split('/')
+      bv = String(value).split('/')
+      ok = Number(bv[0]) <= Number(bp[0]) and Number(bv[1]) <= Number(bp[1])
+    else
+      switch r[0]
+        when '<'  then ok = value < r[1]
+        when '<=' then ok = value <= r[1]
+        when '>=' then ok = value >= r[1]
+        when '<>' then ok = value >= r[1] and value <= r[2]
+    if ok then 'acceptable' else 'unacceptable'
+
+  topics := [
+    { title: 'Heart Health', gradient: 'linear-gradient(45deg, #851717, #E83F3F)', image: '/images/heart.png', imageWidth: 166, imageHeight: 240, copy: "Your heart is one of the most important organs in your body. Every day, it beats around 100,000 times, pumping blood through an extensive network of blood vessels.\n\nIt's responsible for supplying oxygen to your body, removing waste materials, supplying energy and delivering immune system responses. Given all these essential functions, it's important to keep your heart healthy.", biomarkers: [{ key: 'triglycerides', text: '<strong>Triglycerides</strong> are fats composed of fatty acids and glycerol. The level of triglycerides in your blood tells how well your body processes the fat in your diet.', extra: 'Accurate results require fasting for nine to twelve hours (no food or drink except water and medication) prior to testing.', tips: [{ icon: 'utensils', text: 'Drink watery drinks instead of sugary drinks.' }, { icon: 'drop', text: 'Choose fish rich in omega-3 fatty acids to lower your triglycerides.' }] }, { key: 'hdlCholesterol', text: '<strong>High Density Lipoprotein (HDL) cholesterol</strong> is commonly called "good" cholesterol. Unlike other cholesterol levels, the HDL cholesterol test result is best if it is high. Elevated HDL cholesterol is associated with decreased risk of heart disease.', tips: [{ icon: 'utensils', text: 'Try adding almonds or walnuts to hot or cold cereal for extra crunch and some healthy fat.' }, { icon: 'drop', text: 'Choose a margarine spread without hydrogenated or partially-hydrogenated oils.' }] }] }
+    { title: 'Heart Health', isImagePage: true, image: '/images/yoga_lady.jpg', biomarkers: [{ key: 'totalCholesterol', text: '<strong>Total Cholesterol</strong> is a combination of three types of cholesterol: HDL, LDL, and part of triglycerides.', extra: 'High cholesterol may put you at risk for heart disease or stroke. A low cholesterol measurement can indicate other health conditions.', tips: [{ icon: 'walk', text: 'Keep it interesting. Try new exercise activities to improve your overall fitness and prevent boredom.' }, { icon: 'utensils', text: 'Choose oatmeal, whole-wheat toast, or a whole-grain English muffin instead of a doughnut or pastry at breakfast.' }] }, { key: 'cholesterolHdlRatio', text: '<strong>Total cholesterol/HDL cholesterol ratio</strong> is a calculation obtained by dividing the total cholesterol level by the HDL cholesterol level and is another indicator of heart disease risk. A ratio of 5.0 or less is associated with a lower risk of heart disease. A ratio of less than 3.5 is highly desirable.', tips: [{ icon: 'utensils', text: 'Go for the whole grains. Try brown rice or whole-wheat pasta. Switch from white bread to whole-wheat bread.' }, { icon: 'drop', text: 'Use liquid fats instead of solid fats (such as shortening) in your cooking and baking.' }] }] }
+    { title: 'Diabetes Risk', gradient: 'linear-gradient(45deg, #5C3619, #E8873F)', image: '/images/pancreas.png', imageWidth: 233, imageHeight: 149, copy: "The pancreas is a relatively small organ located right behind your stomach. It has two main functions that help your body convert the food you eat into fuel. The exocrine function aids in digestion while the endocrine function creates and releases hormones to regulate your blood sugar.\n\nBecause of these critical roles, your pancreas can be tied to several serious health issues.", biomarkers: [{ key: 'glucose', text: '<strong>Glucose</strong> ("blood sugar") is the chief source of energy for all cells in the body. Glucose levels are regulated by hormones produced by your pancreas, including insulin.', tips: [{ icon: 'walk', text: 'Boost your metabolism with strength training. Strength training can lower glucose levels by increasing lean muscle and reducing body fat.' }, { icon: 'utensils', text: 'Carbohydrates count. Choose from healthy carbohydrates, such as whole grains, fruits, vegetables, legumes (beans/peas) and low-fat or fat-free milk and yogurt.' }] }, { key: 'a1c', text: "<strong>Hemoglobin A1c</strong> measures the percentage of glucose that's bound to hemoglobin, a protein found in red blood cells whose job is to carry oxygen throughout your body.", tips: [{ icon: 'doctor', text: 'Check your glucose as directed. Work with your doctor to determine if, and how often, you should check your blood sugar.' }, { icon: 'utensils', text: 'Eat a balanced diet. Load up on non-starchy vegetables, but be mindful of serving sizes when eating fruits, protein and carbohydrates.' }] }] }
+    { title: 'Physical Measures', gradient: 'linear-gradient(45deg, #214B7A, #3F8EE8)', image: '/images/human_body.png', imageWidth: 140, imageHeight: 247, copy: "During your screening, physical measurements were taken to provide you with more information about your health. These measures are considered risk factors for chronic health conditions, like heart disease, diabetes and stroke.\n\nThese measures should be used with all of your blood tests to understand your risk for these conditions.", conditional: 'waistCircumference', biomarkers: [{ key: 'waistCircumference', text: '<strong>Waist circumference</strong> measures the stored fat around your waist area, also known as "abdominal obesity" or "having an apple shape". It can provide a different look at your weight related health risk than a body mass index (BMI).', tips: [{ icon: 'walk', text: 'Did you know that walking is a great way to reduce belly fat and strengthen the muscles in the lower back?' }, { icon: 'utensils', text: 'Eat at home more and dine out less. Strive to dine out no more than once or twice each week.' }] }, { key: 'bloodPressure', text: '<strong>Blood pressure</strong> is the force of blood pushing against the artery walls as the heart pumps blood. Having high blood pressure can damage your heart and lead to other health problems such as heart disease and stroke.', tips: [{ icon: 'walk', text: 'Aerobic exercise lowers the blood pressure by strengthening the heart and the blood vessels.' }, { icon: 'smile', text: 'Try a relaxation technique, such as deep breathing or meditation.' }] }] }
+  ]
+
+  drawerOpen := false
+  mobile := window.matchMedia('(max-width: 1299px)').matches
+
+  setupResize: ->
+    mq = window.matchMedia('(max-width: 1299px)')
+    handler = (e) ->
+      mobile = e.matches
+      drawerOpen = false
+    mq.addEventListener 'change', handler
+
+  ~> @setupResize()
+
+  render
+    .app
+      if mobile
+        .header
+          .header__toggle
+            @click: -> drawerOpen = true
+            span "☰"
+          .header__title appTitle
+          div style: 'width: 48px'
+        div
+          class: "drawer-overlay #{if drawerOpen then 'open' else ''}"
+          @click: -> drawerOpen = false
+        div
+          class: "drawer #{if drawerOpen then 'open' else ''}"
+          Settings
+            firstName: firstName, lastName: lastName, age: age, gender: gender
+            history: history, ranges: ranges
+
+      .sidebar
+        .sidebar__heading appTitle
+        Settings
+          firstName: firstName, lastName: lastName, age: age, gender: gender
+          history: history, ranges: ranges
+
+      .preview
+        Brochure
+          title: title, poweredBy: poweredBy, lab: lab
+          firstName: firstName, lastName: lastName, age: age, gender: gender
+          history: history, ranges: ranges, topics: topics
+          acceptable: (k, v) -> @acceptable(k, v)

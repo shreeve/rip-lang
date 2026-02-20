@@ -1,0 +1,38 @@
+# Cover — Brochure cover page
+
+export Cover = component
+  @title := ''
+  @poweredBy := ''
+  @firstName := ''
+
+  today ~=
+    d = new Date()
+    months = ['January','February','March','April','May','June','July','August','September','October','November','December']
+    day = d.getDate()
+    suffix = 'th'
+    suffix = 'st' if day is 1 or day is 21 or day is 31
+    suffix = 'nd' if day is 2 or day is 22
+    suffix = 'rd' if day is 3 or day is 23
+    "#{months[d.getMonth()]} #{day}#{suffix}, #{d.getFullYear()}"
+
+  greeting ~=
+    name = firstName or '(First Name)'
+    "#{name}, here are the results and personalized action plan from your recent screening."
+
+  render
+    .('brochure__page page-cover') style: "background-image: url(/images/cover_bg.jpg)"
+      .cover__heading-fade
+        .cover__title title
+
+      .cover__body
+        .cover__copy
+          span greeting
+          br
+          br
+          span today
+
+      .cover__footer
+        img src: '/images/crossover.svg', alt: 'Crossover Health'
+        .cover__powered-by
+          div "Powered by"
+          div poweredBy
