@@ -346,7 +346,7 @@ export Home = component
           td.classList.add('active')
 
   _removeEditor: ->
-    els = document.querySelectorAll('.rip-grid-editor')
+    els = @_container.querySelectorAll('.rip-grid-editor')
     for el in els
       el.remove()
 
