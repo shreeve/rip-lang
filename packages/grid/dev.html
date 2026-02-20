@@ -283,6 +283,7 @@ export Home = component
   selecting       := false
   editing         := false
   editValue       := ''
+  dataVersion     := 0
 
   totalRows   ~= data.length
   totalHeight ~= totalRows * ROW_HEIGHT
@@ -292,6 +293,7 @@ export Home = component
   bottomSpace ~= Math.max(0, (totalRows - endRow - 1) * ROW_HEIGHT)
 
   visibleRows ~=
+    dataVersion
     result = []
     n = startRow
     while n <= endRow
@@ -343,6 +345,11 @@ export Home = component
         if td
           td.classList.add('active')
 
+  _removeEditor: ->
+    els = document.querySelectorAll('.rip-grid-editor')
+    for el in els
+      el.remove()
+
   openEditor: (initial, cursorEnd) ->
     if activeRow < 0 or activeCol < 0 or editing
       return
@@ -350,6 +357,7 @@ export Home = component
     colType = col.type or 'text'
     if colType is 'checkbox'
       data[activeRow][col.key] = not data[activeRow][col.key]
+      dataVersion++
       return
     val = data[activeRow][col.key]
     orig = String(if val? then val else '')
@@ -360,26 +368,47 @@ export Home = component
       editValue = orig
       selectAll = not cursorEnd
     editing = true
+    @_removeEditor()
+    el = undefined
+    if colType is 'select'
+      el = document.createElement('select')
+      el.className = 'rip-grid-editor'
+      for opt in (col.source or [])
+        o = document.createElement('option')
+        o.value = opt
+        o.textContent = opt
+        o.selected = (opt is editValue)
+        el.appendChild(o)
+      el.addEventListener 'change', (e) =>
+        editValue = e.target.value
+        @commitEditor()
+      el.addEventListener 'keydown', (e) => @handleEditorKeydown(e)
+    else
+      el = document.createElement('input')
+      el.className = 'rip-grid-editor'
+      el.type = colType
+      el.value = editValue
+      el.addEventListener 'input', (e) => editValue = e.target.value
+      el.addEventListener 'keydown', (e) => @handleEditorKeydown(e)
+    @_container.appendChild(el)
     requestAnimationFrame =>
-      el = document.querySelector('.rip-grid-editor')
-      if el
-        trs = document.querySelectorAll('.rip-grid tbody tr:not(.spacer)')
-        tr = trs[activeRow - startRow]
-        if tr
-          td = tr.children[activeCol]
-          if td
-            tdRect = td.getBoundingClientRect()
-            cRect = @_container.getBoundingClientRect()
-            el.style.top = "#{tdRect.top - cRect.top + @_container.scrollTop}px"
-            el.style.left = "#{tdRect.left - cRect.left + @_container.scrollLeft}px"
-            el.style.width = "#{tdRect.width}px"
-            el.style.height = "#{tdRect.height}px"
-            if selectAll and el.select and el.tagName is 'INPUT'
-              el.select()
-            else if el.selectionStart isnt undefined
-              el.selectionStart = el.value.length
-              el.selectionEnd = el.value.length
-            el.focus()
+      trs = document.querySelectorAll('.rip-grid tbody tr:not(.spacer)')
+      tr = trs[activeRow - startRow]
+      if tr
+        td = tr.children[activeCol]
+        if td
+          tdRect = td.getBoundingClientRect()
+          cRect = @_container.getBoundingClientRect()
+          el.style.top = "#{tdRect.top - cRect.top + @_container.scrollTop}px"
+          el.style.left = "#{tdRect.left - cRect.left + @_container.scrollLeft}px"
+          el.style.width = "#{tdRect.width}px"
+          el.style.height = "#{tdRect.height}px"
+          if selectAll and el.select and el.tagName is 'INPUT'
+            el.select()
+          else if el.selectionStart isnt undefined
+            el.selectionStart = el.value.length
+            el.selectionEnd = el.value.length
+          el.focus()
 
   commitEditor: ->
     if editing
@@ -389,19 +418,15 @@ export Home = component
         parsed = Number(val)
         val = if isNaN(parsed) then 0 else parsed
       data[activeRow][col.key] = val
+      dataVersion++
       editing = false
+      @_removeEditor()
       @_container.focus() if @_container
 
   cancelEditor: ->
     editing = false
+    @_removeEditor()
     @_container.focus() if @_container
-
-  handleEditorInput: (e) ->
-    editValue = e.target.value
-
-  handleSelectChange: (e) ->
-    editValue = e.target.value
-    @commitEditor()
 
   handleEditorKeydown: (e) ->
     numCols = columns.length
@@ -490,7 +515,7 @@ export Home = component
     selecting = false
 
   handleMousemove: (e) ->
-    if e.buttons isnt 1 or anchorRow < 0
+    if not selecting or e.buttons isnt 1
       return
     el = @_container
     rect = el.getBoundingClientRect()
@@ -614,6 +639,7 @@ export Home = component
           if col.type is 'checkbox'
             e.preventDefault()
             data[activeRow][col.key] = not data[activeRow][col.key]
+            dataVersion++
         return
       when 'Delete', 'Backspace'
         if activeRow >= 0 and activeCol >= 0 and not e.ctrlKey and not e.metaKey
@@ -626,6 +652,7 @@ export Home = component
             data[activeRow][col.key] = 0
           else
             data[activeRow][col.key] = ''
+          dataVersion++
         return
       when 'a'
         if e.ctrlKey or e.metaKey
@@ -671,21 +698,11 @@ export Home = component
           if activeRow >= 0
             "R#{activeRow + 1}:C#{activeCol + 1}"
             if anchorRow >= 0 and (anchorRow isnt activeRow or anchorCol isnt activeCol)
-              h = Math.abs(activeRow - anchorRow) + 1
-              w = Math.abs(activeCol - anchorCol) + 1
-              " [#{h}×#{w}]"
+              " [#{Math.abs(activeRow - anchorRow) + 1}×#{Math.abs(activeCol - anchorCol) + 1}]"
             " | "
           "#{totalRows.toLocaleString()} rows"
 
       .grid-container tabindex: 0, @scroll: @handleScroll, @mousedown: @handleMousedown, @mousemove: @handleMousemove, @mouseup: @handleMouseup, @keydown: @handleKeydown, @dblclick: @handleDblclick
-        if editing
-          if columns[activeCol].type is 'select'
-            select.rip-grid-editor @change: @handleSelectChange, @keydown: @handleEditorKeydown
-              for opt in (columns[activeCol].source or [])
-                option value: opt, selected: (opt is editValue)
-                  "#{opt}"
-          else
-            input.rip-grid-editor type: (columns[activeCol].type or 'text'), value: editValue, @input: @handleEditorInput, @keydown: @handleEditorKeydown
         table.rip-grid
           colgroup
             for c in columns
