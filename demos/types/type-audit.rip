@@ -463,22 +463,22 @@ console.log "\n✓ All type-safe code executed successfully"
 # and deduplicate .d.ts declarations for reactive variables.
 
 # Typed state (:=)
-# count:: number := 0
-# name:: string := "Rip"
-# active:: boolean := true
-# items:: string[] := []
+# clicks:: number := 0
+# username:: string := "Rip"
+# enabled:: boolean := true
+# tags:: string[] := []
 
 # Typed computed (~=)
-# doubled:: number ~= count * 2
-# greeting:: string ~= "Hello, #{name}!"
-# hasItems:: boolean ~= items.length > 0
+# clicksDoubled:: number ~= clicks * 2
+# greeting:: string ~= "Hello, #{username}!"
+# hasTags:: boolean ~= tags.length > 0
 
 # Typed readonly (=!) — compiles to plain `const`, no reactive runtime
 # MAX_RETRIES:: number =! 3
 # API_VERSION:: string =! "v2"
 
 # Typed effect (~>)
-# logger:: Function ~> console.log "count changed:", count
+# clickLogger:: Function ~> console.log "clicks changed:", clicks
 
 # ==============================================================================
 # 12. TYPED COMPONENT PROPS — type annotations on @ props
