@@ -780,15 +780,15 @@ grid.off(hook, callback)              # unregister hook listener
 
 The minimum viable grid: virtual scrolling with a sticky header.
 
-- [ ] Grid component with container, spacer, and table elements
-- [ ] Column model: parse column definitions, calculate widths
-- [ ] Viewport engine: compute visible row range from scroll position
-- [ ] Render pipeline: create/recycle `<tr>`/`<td>`, populate with data
-- [ ] Sticky `<thead>` for frozen header
-- [ ] Scroll handler with `requestAnimationFrame` throttle
-- [ ] ResizeObserver for container dimensions
-- [ ] Basic CSS: borders, padding, header styling, alternating rows
-- [ ] CSS custom properties for theming
+- [x] Grid component with container, spacer, and table elements
+- [x] Column model: parse column definitions, calculate widths
+- [x] Viewport engine: compute visible row range from scroll position
+- [x] Render pipeline: create/recycle `<tr>`/`<td>`, populate with data
+- [x] Sticky `<thead>` for frozen header
+- [x] Scroll handler with `requestAnimationFrame` throttle
+- [x] ResizeObserver for container dimensions
+- [x] Basic CSS: borders, padding, header styling, alternating rows
+- [x] CSS custom properties for theming
 
 **Deliverable**: A grid that renders 100K rows and scrolls at 60fps.
 
