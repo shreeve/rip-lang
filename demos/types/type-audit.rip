@@ -1,0 +1,582 @@
+# type-audit.rip — Comprehensive Rip type safety audit
+#
+# Run with:
+#   rip demos/types/type-audit.rip              # compile & run
+#   rip check demos/types                       # type-check
+#
+# Sections 1–10 work today. Sections 11–15 are commented out,
+# awaiting type checker support, ordered by priority:
+#
+# Tier 1 — Foundational (blocks nearly everything)
+#   11. Typed reactive state       count:: number := 0
+#   12. Typed component props      @variant:: string := "primary"
+#
+# Tier 2 — Essential for real apps
+#   13. Generic return types       def f():: Promise<User>
+#
+# Tier 3 — Important but deferrable
+#   14. export type / import type  export type { User }
+#   15. Generic function calls     response.json<{ users: User[] }>()
+
+# ==============================================================================
+# 1. BASIC TYPE ANNOTATIONS — variables with type safety
+# ==============================================================================
+
+count:: number = 0
+label:: string = "Rip"
+active:: boolean = true
+ratio:: number = 3.14
+items:: string[] = ["alpha", "bravo", "charlie"]
+ids:: number[] = [1, 2, 3]
+lookup:: Map<string, number> = new Map()
+pair:: [string, number] = ["hello", 42]
+headers:: Record<string, string> = { "Content-Type": "application/json" }
+promise:: Promise<string> = Promise.resolve("done")
+
+# ==============================================================================
+# 2. TYPE ALIASES — simple, union, and complex
+# ==============================================================================
+
+# Simple aliases
+ID ::= number
+Name ::= string
+Email ::= string
+Timestamp ::= number
+
+# Union aliases
+UserID ::= number | string
+Primitive ::= string | number | boolean
+Nullable ::= string | null
+
+# typeof in type position — extract a type from a runtime value
+# Note: the source variable must itself be typed for `rip check` to work,
+# since untyped variables don't get .d.ts declarations.
+defaults = { theme: "dark", lang: "en" }
+Defaults ::= typeof defaults
+
+# ==============================================================================
+# 3. STRUCTURAL TYPES — object shapes with type keyword
+# ==============================================================================
+
+# Basic structure
+Point ::= type
+  x: number
+  y: number
+
+# With optional properties
+User ::= type
+  id: number
+  firstName: string
+  lastName: string
+  email: string
+  phone?: string
+  bio?: string
+
+# Nested structures — flatten into separate types to avoid .d.ts emission bugs
+ResponseData ::= type
+  users: User[]
+  total: number
+
+ResponseMeta ::= type
+  page: number
+  limit: number
+  hasMore: boolean
+
+ApiResponse ::= type
+  data: ResponseData
+  meta: ResponseMeta
+
+# With readonly fields
+ImmutableConfig ::= type
+  readonly host: string
+  readonly port: number
+  readonly ssl: boolean
+
+# Index signatures — not yet supported in .d.ts emission (missing bracket)
+# Dictionary ::= type
+#   [key: string]: any
+# StringMap ::= type
+#   [key: string]: string
+
+# Recursive type
+TreeNode ::= type
+  value: string
+  children: TreeNode[]
+
+# ==============================================================================
+# 4. NULLABLE AND OPTIONAL — explicit union syntax
+# ==============================================================================
+
+# Nullable variables use explicit unions (string | undefined, etc.)
+optionalName:: string | undefined = undefined
+nullableCount:: number | null = null
+
+# Optional properties in structural types use ? on the property
+ContactInfo ::= type
+  email: string
+  phone?: string
+  fax?: string
+
+# ==============================================================================
+# 5. UNION TYPES — inline and block form
+# ==============================================================================
+
+# Inline unions
+Status ::= "pending" | "active" | "done"
+Result ::= "success" | "error" | "timeout"
+
+# Block unions (diff-friendly vertical form)
+HttpMethod ::=
+  | "GET"
+  | "POST"
+  | "PUT"
+  | "PATCH"
+  | "DELETE"
+
+LogLevel ::=
+  | "debug"
+  | "info"
+  | "warn"
+  | "error"
+  | "fatal"
+
+# Discriminated unions — block form with inline object members
+# .d.ts formatting is ugly (properties on one line, commas) but valid TypeScript
+Shape ::=
+  | { kind: "circle", radius: number }
+  | { kind: "rect", width: number, height: number }
+
+# ==============================================================================
+# 6. INTERFACES — declaration, extension, and composition
+# ==============================================================================
+
+interface Identifiable
+  id: number
+
+interface Timestamped
+  createdAt: string
+  updatedAt: string
+
+interface Named
+  name: string
+
+interface Animal
+  name: string
+  sound: string
+  legs: number
+
+interface Dog extends Animal
+  breed: string
+
+interface Serializable
+  toJSON: () => string
+
+# Interface with optional members
+# Note: Record<> inside interfaces causes .d.ts field merging.
+# Use simple types or omit Record<> fields.
+interface HttpOptions
+  method?: string
+  body?: string
+  timeout?: number
+
+# ==============================================================================
+# 7. FUNCTIONS — typed params, returns, and patterns
+# ==============================================================================
+
+# Basic typed function
+def add(a:: number, b:: number):: number
+  a + b
+
+# String return
+def greet(n:: string):: string
+  "Hello, #{n}!"
+
+# No params, typed return
+def timestamp():: number
+  Date.now()
+
+# Multiple params
+def clamp(val:: number, lo:: number, hi:: number):: number
+  Math.max(lo, Math.min(hi, val))
+
+# Array return
+def makeRange(start:: number, end:: number):: number[]
+  result = []
+  i = start
+  while i <= end
+    result.push(i)
+    i++
+  result
+
+# Object return with structural type
+def makePoint(x:: number, y:: number):: Point
+  { x, y }
+
+# Union return type
+def parse(input:: string):: number | null
+  result = parseInt(input)
+  if isNaN(result) then null else result
+
+# Type narrowing
+def describe(val:: string | number):: string
+  if typeof val == "string"
+    "String: #{val}"
+  else
+    "Number: #{val}"
+
+# Rest parameters
+def sum(...nums:: number[]):: number
+  nums.reduce ((a, b) => a + b), 0
+
+# Boolean return
+def isPositive(n:: number):: boolean
+  n > 0
+
+# Function taking typed object param
+def formatAddress(addr:: Address):: string
+  parts = [addr.street, addr.city, addr.state, addr.zip]
+  if addr.country
+    parts.push(addr.country)
+  parts.join(", ")
+
+# Function taking typed array param
+def calculateTotal(lineItems:: OrderItem[]):: number
+  lineItems.reduce ((total, item) ->
+    price = item.unitPrice * item.quantity
+    discount = item.discount or 0
+    total + price - discount
+  ), 0
+
+# Function returning string array
+def validateOrder(order:: Order):: string[]
+  errors = []
+  if order.items.length is 0
+    errors.push("Order must have at least one item")
+  if order.total < 0
+    errors.push("Total cannot be negative")
+  errors
+
+# Functions with non-generic any-typed params (workaround for no generics)
+def first(arr:: any[]):: any
+  arr[0]
+
+def last(arr:: any[]):: any
+  arr[arr.length - 1]
+
+def uniq(arr:: any[]):: any[]
+  [...new Set(arr)]
+
+# Debounce — inner closure rest params not yet supported by type checker
+# def debounce(fn:: Function, ms:: number):: Function
+#   timer:: any = null
+#   (...args:: any[]) ->
+#     clearTimeout(timer)
+#     timer = setTimeout (-> fn(...args)), ms
+
+# ==============================================================================
+# 8. ARROW FUNCTIONS — typed array transforms
+# ==============================================================================
+
+nums:: number[] = [1, 2, 3, 4, 5]
+doubled:: number[] = nums.map (x) => x * 2
+evens:: number[] = nums.filter (x) => x % 2 == 0
+total:: number = nums.reduce ((acc, x) => acc + x), 0
+
+# ==============================================================================
+# 9. COMPLEX DOMAIN TYPES — real-world modeling
+# ==============================================================================
+
+# --- Domain modeling ---
+
+Address ::= type
+  street: string
+  city: string
+  state: string
+  zip: string
+  country?: string
+
+# Note: Record<> inside structural types causes .d.ts field merging.
+# Use simple types for fields, or annotate Record<> vars directly.
+Customer ::= type
+  id: number
+  name: string
+  email: string
+  addresses: Address[]
+  primaryAddress?: Address
+  tags: string[]
+
+OrderStatus ::=
+  | "draft"
+  | "submitted"
+  | "processing"
+  | "shipped"
+  | "delivered"
+  | "cancelled"
+
+OrderItem ::= type
+  productId: number
+  quantity: number
+  unitPrice: number
+  discount?: number
+
+Order ::= type
+  id: number
+  customerId: number
+  status: OrderStatus
+  items: OrderItem[]
+  total: number
+  createdAt: string
+  shippedAt?: string
+
+# --- Generic structural types ---
+
+PaginatedResponse<T> ::= type
+  data: T[]
+  page: number
+  pageSize: number
+  total: number
+  hasNext: boolean
+
+ErrorResponse ::= type
+  code: number
+  message: string
+  details?: string[]
+
+# ==============================================================================
+# 10. RUNTIME VERIFICATION — exercising all features
+# ==============================================================================
+
+# Basic operations
+console.log "--- Basic types ---"
+console.log "count:", count
+console.log "label:", label
+console.log "active:", active
+console.log "ratio:", ratio
+console.log "items:", items
+console.log "pair:", pair
+console.log "headers:", headers
+
+# Functions
+console.log "\n--- Functions ---"
+console.log "add(3, 4):", add(3, 4)
+console.log "greet('World'):", greet("World")
+console.log "clamp(15, 0, 10):", clamp(15, 0, 10)
+console.log "makeRange(1, 5):", makeRange(1, 5)
+console.log "makePoint(3, 4):", makePoint(3, 4)
+console.log "timestamp():", timestamp()
+console.log "sum(1, 2, 3, 4):", sum(1, 2, 3, 4)
+console.log "isPositive(5):", isPositive(5)
+console.log "isPositive(-3):", isPositive(-3)
+
+# Type narrowing and unions
+console.log "\n--- Unions & narrowing ---"
+console.log "parse('42'):", parse("42")
+console.log "parse('abc'):", parse("abc")
+console.log "describe('hello'):", describe("hello")
+console.log "describe(42):", describe(42)
+
+# Array helpers
+console.log "\n--- Array helpers ---"
+console.log "first([10, 20, 30]):", first([10, 20, 30])
+console.log "last([10, 20, 30]):", last([10, 20, 30])
+console.log "uniq([1, 2, 2, 3, 3]):", uniq([1, 2, 2, 3, 3])
+
+# Arrow functions
+console.log "\n--- Arrow functions ---"
+console.log "doubled:", doubled
+console.log "evens:", evens
+console.log "total:", total
+
+# Typed data structures
+console.log "\n--- Typed objects ---"
+user:: User = {
+  id: 1
+  firstName: "Jane"
+  lastName: "Doe"
+  email: "jane@example.com"
+  phone: "555-0100"
+}
+console.log "user:", user
+
+point:: Point = { x: 10, y: 20 }
+console.log "point:", point
+
+# Order with typed items
+order:: Order = {
+  id: 1001
+  customerId: user.id
+  status: "submitted"
+  items: [
+    { productId: 1, quantity: 2, unitPrice: 29.99 }
+    { productId: 2, quantity: 1, unitPrice: 49.99, discount: 5.00 }
+  ]
+  total: 0
+  createdAt: new Date().toISOString()
+}
+order.total = calculateTotal(order.items)
+
+console.log "\n--- Order ---"
+console.log "order id:", order.id
+console.log "order total:", order.total
+console.log "validation:", validateOrder(order)
+
+# Address formatting
+addr:: Address = {
+  street: "123 Main St"
+  city: "Springfield"
+  state: "IL"
+  zip: "62704"
+  country: "US"
+}
+console.log "address:", formatAddress(addr)
+
+console.log "\n✓ All type-safe code executed successfully"
+
+# ╔════════════════════════════════════════════════════════════════════════════╗
+# ║ Tier 1 — Foundational (blocks nearly everything)                         ║
+# ╚════════════════════════════════════════════════════════════════════════════╝
+
+# ==============================================================================
+# 11. TYPED REACTIVE STATE — type annotations on :=, ~=, ~>, =!
+# ==============================================================================
+# Rip's reactive operators (:=, ~=, ~>, =!) replace React's useState, useMemo,
+# useEffect, and const. Type annotations are accepted on all four operators.
+#
+# What works today:
+#   - Compilation: `count:: number := 0` compiles and runs correctly
+#   - .d.ts emission: produces correct types (Signal<T>, Computed<T>, etc.)
+#   - =! (readonly) compiles to plain `const`, no reactive runtime needed.
+#     It has the simpler fix: just the "Cannot redeclare" issue below.
+#
+# What's broken:
+#   - `rip check` is unusable on any file containing := or ~= because the
+#     reactive runtime that rip inlines into the compiled JS is plain untyped
+#     JavaScript. TypeScript flags ~44 errors in the runtime code itself
+#     (implicit `any` types, `unknown` Set members, missing properties),
+#     which bury any real type errors from user code.
+#   - The `Cannot redeclare block-scoped variable` error also appears because
+#     the .d.ts emits `declare const count: Signal<number>` while the compiled
+#     JS has `let count`, creating a duplicate declaration. This affects =! too
+#     (`const X = 3` in JS + `declare const X: number` in .d.ts).
+#
+# Fix required: type-annotate the inlined reactive runtime in src/compiler.js
+# and deduplicate .d.ts declarations for reactive variables.
+
+# Typed state (:=)
+# count:: number := 0
+# name:: string := "Rip"
+# active:: boolean := true
+# items:: string[] := []
+
+# Typed computed (~=)
+# doubled:: number ~= count * 2
+# greeting:: string ~= "Hello, #{name}!"
+# hasItems:: boolean ~= items.length > 0
+
+# Typed readonly (=!) — compiles to plain `const`, no reactive runtime
+# MAX_RETRIES:: number =! 3
+# API_VERSION:: string =! "v2"
+
+# Typed effect (~>)
+# logger:: Function ~> console.log "count changed:", count
+
+# ==============================================================================
+# 12. TYPED COMPONENT PROPS — type annotations on @ props
+# ==============================================================================
+# In bhvr, every React component has a Props type (~50 in the codebase).
+# In rip, the @ prefix marks public props. Types on @ props define the
+# component's public API.
+#
+# What's broken:
+#   - .d.ts emission mangles @prop names (e.g. @variant emits as
+#     ".,this,variant: any") and loses type annotations entirely
+#   - @props with =! (readonly) are not emitted at all
+
+# export Button = component
+#   @variant:: "primary" | "secondary" := "primary"
+#   @compact:: boolean := false
+#   @loading:: boolean := false
+#   @label:: string =! "Click me"
+#   disabled:: boolean := false
+#
+#   render
+#     button.btn.("btn-#{@variant}").("compact" if @compact)
+#       if @loading
+#         span.spinner
+#       @label
+
+# export Select = component
+#   @options:: string[] =! []
+#   @value:: string := ""
+#   @error:: string | boolean := false
+#
+#   render
+#     select @change: (e -> @value = e.target.value)
+#       for opt in @options
+#         option value: opt, "#{opt}"
+
+# ╔════════════════════════════════════════════════════════════════════════════╗
+# ║ Tier 2 — Essential for real apps                                         ║
+# ╚════════════════════════════════════════════════════════════════════════════╝
+
+# ==============================================================================
+# 13. GENERIC RETURN TYPES — generic types in function return position
+# ==============================================================================
+# Any generic type (Promise<T>, Map<K,V>, Set<T>, etc.) in function return
+# position causes a parse error. The `<` is misinterpreted as a comparison.
+# Simple return types (string, number, string[]) work fine.
+# This blocks typed async functions, which bhvr uses ~32 times for API calls.
+
+# def fetchUser(id:: number):: Promise<User>
+#   response = await fetch("/api/users/#{id}")
+#   response.json()
+
+# def fetchUsers():: Promise<User[]>
+#   response = await fetch("/api/users")
+#   data = await response.json()
+#   data.users
+
+# def createOrder(cart:: OrderItem[]):: Promise<Order>
+#   response = await fetch "/api/orders",
+#     method: "POST"
+#     body: JSON.stringify(cart)
+#   response.json()
+
+# Also affects non-Promise generics:
+# def getEntries():: Map<string, number>
+#   new Map()
+
+# ╔════════════════════════════════════════════════════════════════════════════╗
+# ║ Tier 3 — Important but deferrable                                        ║
+# ╚════════════════════════════════════════════════════════════════════════════╝
+
+# ==============================================================================
+# 14. EXPORT TYPE / IMPORT TYPE — type-only module boundaries
+# ==============================================================================
+# Type-only exports and imports that are erased at runtime.
+# bhvr uses `export type` 29 times; `import type` only once.
+
+# Named type export
+# export type UserID = number
+
+# Type-only import
+# import type { User, Order } from "./types"
+
+# Mixed export (values + types)
+# export { formatDate, type DateFormat } from "./dates"
+
+# ==============================================================================
+# 15. GENERIC FUNCTION CALLS — explicit type arguments on calls
+# ==============================================================================
+# Calling a function or method with an explicit type argument.
+# bhvr uses this ~60 times, primarily .json<T>() for typed API responses.
+
+# Typed JSON response
+# response = await fetch("/api/users")
+# data = await response.json<{ users: User[], total: number }>()
+
+# Typed parsing
+# result = schema.parse<User>(rawData)
+
+# Typed Map construction
+# weekMap = new Map<number, string[]>()
