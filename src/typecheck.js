@@ -125,6 +125,25 @@ export function compileForCheck(filePath, source, compiler) {
     );
   }
 
+  // Remove component class implementations when the DTS already has
+  // typed class declarations — avoids "Duplicate identifier" conflicts.
+  for (const m of dts.matchAll(/^(?:export\s+)?declare\s+class\s+(\w+)\b/gm)) {
+    const name = m[1];
+    const re = new RegExp(`^export\\s+const\\s+${name}\\s*=\\s*class\\s+extends\\s+\\w+`);
+    const lines = code.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      if (!re.test(lines[i])) continue;
+      let depth = 0, start = i;
+      for (; i < lines.length; i++) {
+        for (const ch of lines[i]) { if (ch === '{') depth++; else if (ch === '}') depth--; }
+        if (depth <= 0) break;
+      }
+      lines.splice(start, i - start + 1);
+      break;
+    }
+    code = lines.join('\n');
+  }
+
   // Remove bare `let x;` declarations when the DTS already declares
   // `let x: Type;` — avoids "Cannot redeclare" conflicts. Handles
   // both single (`let x;`) and comma-separated (`let x, y;`) forms.

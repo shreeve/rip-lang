@@ -1002,55 +1002,47 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars) {
     let members = (Array.isArray(body) && (body[0]?.valueOf?.() ?? body[0]) === 'block')
       ? body.slice(1) : (body ? [body] : []);
 
-    let props = [];
-    let methods = [];
+    let publicProps = [];
+    let hasRequired = false;
 
     for (let member of members) {
       if (!Array.isArray(member)) continue;
       let mHead = member[0]?.valueOf?.() ?? member[0];
 
-      // Reactive state: ["state", "count", 0]
-      if (mHead === 'state') {
-        let propName = member[1]?.valueOf?.() ?? member[1];
-        let type = member[1]?.type;
-        props.push(`  ${propName}: ${type ? expandSuffixes(type) : 'any'};`);
+      let target, propName, isProp, type, hasDefault;
+
+      if (mHead === 'state' || mHead === 'readonly' || mHead === 'computed') {
+        target = member[1];
+        isProp = Array.isArray(target) && (target[0]?.valueOf?.() ?? target[0]) === '.' && (target[1]?.valueOf?.() ?? target[1]) === 'this';
+        propName = isProp ? (target[2]?.valueOf?.() ?? target[2]) : (target?.valueOf?.() ?? target);
+        type = isProp ? target[2]?.type : target?.type;
+        hasDefault = true;
         componentVars.add(propName);
-      }
-      // Computed: ["computed", "doubled", expr]
-      else if (mHead === 'computed') {
-        let propName = member[1]?.valueOf?.() ?? member[1];
-        let type = member[1]?.type;
-        props.push(`  readonly ${propName}: ${type ? expandSuffixes(type) : 'any'};`);
-        componentVars.add(propName);
-      }
-      // Method object: ["object", ["methodName", ["->", params, body], ":"]]
-      else if (mHead === 'object') {
-        for (let j = 1; j < member.length; j++) {
-          let entry = member[j];
-          if (!Array.isArray(entry)) continue;
-          let methodName = entry[0]?.valueOf?.() ?? entry[0];
-          if (methodName === 'render') continue; // skip render
-          let fn = entry[1];
-          if (Array.isArray(fn)) {
-            let fnHead = fn[0]?.valueOf?.() ?? fn[0];
-            if (fnHead === '->' || fnHead === '=>') {
-              methods.push(`  ${methodName}(): void;`);
-            }
-          }
-        }
-      }
-      // Skip render blocks
-      else if (mHead === 'render') {
+      } else if (mHead === '.') {
+        isProp = (member[1]?.valueOf?.() ?? member[1]) === 'this';
+        propName = isProp ? (member[2]?.valueOf?.() ?? member[2]) : null;
+        type = isProp ? member[2]?.type : null;
+        hasDefault = false;
+        if (propName) componentVars.add(propName);
+      } else {
         continue;
       }
+
+      if (!isProp || !propName) continue;
+
+      let typeStr = type ? expandSuffixes(type) : 'any';
+      let opt = hasDefault ? '?' : '';
+      if (!hasDefault) hasRequired = true;
+      publicProps.push(`    ${propName}${opt}: ${typeStr};`);
     }
 
     lines.push(`${exp}declare class ${name} {`);
-    lines.push(`  constructor(props?: Record<string, any>);`);
-    for (let p of props) lines.push(p);
-    for (let m of methods) lines.push(m);
-    lines.push(`  mount(target: Element | string): ${name};`);
-    lines.push(`  unmount(): void;`);
+    if (publicProps.length > 0) {
+      let propsOpt = hasRequired ? '' : '?';
+      lines.push(`  constructor(props${propsOpt}: {`);
+      for (let p of publicProps) lines.push(p);
+      lines.push(`  });`);
+    }
     lines.push(`}`);
   }
 
