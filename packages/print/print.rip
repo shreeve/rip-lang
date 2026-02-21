@@ -195,6 +195,12 @@ def stripTopComments(code)
 def escapeHtml(str)
   str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
+def rehighlightRipScripts(html)
+  html.replace /(&quot;text\/rip&quot;[\s\S]*?&gt;<\/span>)<span class="language-\w+">([\s\S]*?)<\/span>(<span class="hljs-tag">)/g, (match, before, inner, after) ->
+    plain = inner.replace(/<\/?span[^>]*>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"')
+    rip = hljs.highlight(plain, { language: 'rip' }).value
+    "#{before}<span class=\"language-rip\">#{rip}</span>#{after}"
+
 def highlightCode(code, lang)
   highlighted = null
   try
@@ -204,8 +210,8 @@ def highlightCode(code, lang)
   catch
     # fall through
   highlighted ?= escapeHtml code
+  highlighted = rehighlightRipScripts(highlighted) if lang is 'html' or lang is 'xml'
 
-  # Add line numbers (fixed 4-digit width for consistent gutter)
   lines = highlighted.split('\n')
   numbered = lines.map (line, i) ->
     num = String(i + 1).padStart(4)

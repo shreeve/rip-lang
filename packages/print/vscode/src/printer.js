@@ -131,6 +131,14 @@ function stripTopComments(code) {
   return lines.slice(i).join('\n');
 }
 
+function rehighlightRipScripts(html) {
+  return html.replace(/(&quot;text\/rip&quot;[\s\S]*?&gt;<\/span>)<span class="language-\w+">([\s\S]*?)<\/span>(<span class="hljs-tag">)/g, (match, before, inner, after) => {
+    const plain = inner.replace(/<\/?span[^>]*>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+    const rip = hljs.highlight(plain, { language: 'rip' }).value;
+    return `${before}<span class="language-rip">${rip}</span>${after}`;
+  });
+}
+
 function highlightCode(code, lang) {
   let highlighted = null;
   try {
@@ -139,6 +147,7 @@ function highlightCode(code, lang) {
     }
   } catch { /* fall through */ }
   if (!highlighted) highlighted = escapeHtml(code);
+  if (lang === 'html' || lang === 'xml') highlighted = rehighlightRipScripts(highlighted);
 
   const lines = highlighted.split('\n');
   return lines.map((line, i) => {
