@@ -533,20 +533,20 @@ export Dashboard = component
       } for name, data of products)
 
     @ic 'bar',
-      xAxis: { ...XAXIS, data: quarters }
-      yAxis: { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: $M } }
+      xAxis: xaxis quarters
+      yAxis: yaxis 'Revenue ($k)', $M
       series: [{ type: 'bar', barMaxWidth: 60, label: { fontSize: 11 }, data: quarterlyRev }]
 
     @ic 'stackedBar',
-      xAxis: { ...XAXIS, data: quarters }
-      yAxis: { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: $k } }
+      xAxis: xaxis quarters
+      yAxis: yaxis 'Revenue ($k)', $k
       series: ({ type: 'bar', name, data, stack: 'total', barMaxWidth: 60, emphasis: { focus: 'series' } } for name, data of productQuarterly)
 
     @ic 'combo',
-      xAxis: { ...XAXIS, data: months }
+      xAxis: xaxis months
       yAxis: [
-        { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: $k } }
-        { ...YAXIS, name: 'Margin %', position: 'right', splitLine: { show: false }, axisLabel: { ...YAXIS.axisLabel, formatter: pct }, min: 50, max: 80 }
+        yaxis 'Revenue ($k)', $k
+        yaxis 'Margin %', pct, position: 'right', splitLine: { show: false }, min: 50, max: 80
       ]
       series: [
         { type: 'bar', name: 'Revenue', data: revenue, barMaxWidth: 60, yAxisIndex: 0 }
@@ -554,10 +554,10 @@ export Dashboard = component
       ]
 
     @ic 'multiAxis',
-      xAxis: { ...XAXIS, data: months }
+      xAxis: xaxis months
       yAxis: [
-        { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: $k } }
-        { ...YAXIS, name: 'MoM Growth %', position: 'right', splitLine: { show: false }, axisLabel: { ...YAXIS.axisLabel, formatter: pct } }
+        yaxis 'Revenue ($k)', $k
+        yaxis 'MoM Growth %', pct, position: 'right', splitLine: { show: false }
       ]
       series: [
         { type: 'line', name: 'Revenue', data: revenue, symbol: 'circle', symbolSize: 0, lineStyle: { width: 2 }, emphasis: { focus: 'series', lineStyle: { opacity: 1, width: 3 } } }
@@ -574,7 +574,7 @@ export Dashboard = component
 
     @ic 'scatter',
       xAxis: { ...XAXIS, type: 'value', name: 'Avg Deal Size ($k)', axisLabel: { ...XAXIS.axisLabel, formatter: $k }, axisLine: { show: true } }
-      yAxis: { ...YAXIS, name: 'Close Rate %', axisLabel: { ...YAXIS.axisLabel, formatter: pct } }
+      yAxis: yaxis 'Close Rate %', pct
       tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> "Deal: $#{p.value[0]}k<br>Close Rate: #{p.value[1]}%<br>Deals: #{p.value[2]}" }
       series: [{
         type: 'scatter', data: deals, symbolSize: (d) -> d[2] * 1.8
@@ -715,8 +715,8 @@ export Dashboard = component
     wf = @buildWaterfall(waterfallLabels, waterfallValues)
     totals = [0, 6, 11, 16]
     @ic 'waterfall',
-      xAxis: { ...XAXIS, data: waterfallLabels, axisLabel: { ...XAXIS.axisLabel, rotate: 45, fontSize: 10 } }
-      yAxis: { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: $k } }
+      xAxis: xaxis waterfallLabels, axisLabel: { ...XAXIS.axisLabel, rotate: 45, fontSize: 10 }
+      yAxis: yaxis 'Revenue ($k)', $k
       legend: { show: false }
       series: [
         { type: 'bar', stack: 'wf', name: 'base', data: wf.base, barMaxWidth: 36, itemStyle: { color: 'transparent' }, emphasis: { itemStyle: { color: 'transparent' } } }
@@ -725,8 +725,8 @@ export Dashboard = component
       ]
 
     @ic 'boxplot',
-      xAxis: { ...XAXIS, data: quarters }
-      yAxis: { ...YAXIS, name: 'Deal Size ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: $k } }
+      xAxis: xaxis quarters
+      yAxis: yaxis 'Deal Size ($k)', $k
       tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> "#{p.name}<br>Max: $#{p.value[5]}k<br>Q3: $#{p.value[4]}k<br>Median: $#{p.value[3]}k<br>Q1: $#{p.value[2]}k<br>Min: $#{p.value[1]}k" }
       series: [{
         type: 'boxplot', data: boxplotData
@@ -782,8 +782,8 @@ export Dashboard = component
 
   initAdditionalCharts: ->
     @ic 'histogram',
-      xAxis: { ...XAXIS, data: histBins, name: 'Response Time (ms)', axisLabel: { ...XAXIS.axisLabel, fontSize: 10 } }
-      yAxis: { ...YAXIS, name: 'Request Count', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> v >= 1000 ? "#{v / 1000}k" : v } }
+      xAxis: xaxis histBins, name: 'Response Time (ms)', axisLabel: { ...XAXIS.axisLabel, fontSize: 10 }
+      yAxis: yaxis 'Request Count', (v) -> v >= 1000 ? "#{v / 1000}k" : v
       legend: { show: false }
       series: [{
         type: 'bar', barWidth: '90%'
@@ -825,7 +825,7 @@ export Dashboard = component
     r = regression
     @ic 'scatterReg',
       xAxis: { ...XAXIS, type: 'value', name: 'Engagement Score', axisLabel: { ...XAXIS.axisLabel }, axisLine: { show: true } }
-      yAxis: { ...YAXIS, name: 'Retention %', axisLabel: { ...YAXIS.axisLabel, formatter: pct } }
+      yAxis: yaxis 'Retention %', pct
       tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> p.seriesType is 'scatter' ? "Engagement: #{p.value[0]}<br>Retention: #{p.value[1]}%" : 'Trend line' }
       legend: { show: false }
       series: [
