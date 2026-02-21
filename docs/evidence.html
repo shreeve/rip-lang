@@ -1,0 +1,1228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Acme Corp Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', sans-serif;
+    font-feature-settings: "cv02", "tnum";
+    background: #f7f7f7;
+    color: #2c2c2c;
+    padding: 32px;
+  }
+  h1 {
+    font-size: 24px;
+    font-weight: 600;
+    color: #060606;
+    margin-bottom: 4px;
+  }
+  .subtitle {
+    font-size: 14px;
+    color: #717171;
+    margin-bottom: 28px;
+  }
+  .section {
+    font-size: 13px;
+    font-weight: 500;
+    color: #717171;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 36px 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e5e5e5;
+  }
+  .section:first-of-type { margin-top: 0; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(540px, 1fr));
+    gap: 20px;
+  }
+  .card {
+    background: #ffffff;
+    border-radius: 8px;
+    border: 1px solid #e5e5e5;
+    padding: 20px 20px 12px;
+  }
+  .card h2 {
+    font-size: 15px;
+    font-weight: 500;
+    color: #060606;
+    margin-bottom: 2px;
+  }
+  .card p {
+    font-size: 12px;
+    color: #717171;
+    margin-bottom: 12px;
+  }
+  .chart { width: 100%; height: 380px; }
+  .chart-tall { width: 100%; height: 440px; }
+  .wide { grid-column: 1 / -1; }
+  .gauge-row {
+    display: flex;
+    gap: 0;
+  }
+  .gauge-cell {
+    flex: 1;
+    height: 300px;
+  }
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 8px;
+  }
+  .kpi {
+    background: #fff;
+    border: 1px solid #e5e5e5;
+    border-radius: 8px;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .kpi-label {
+    font-size: 12px;
+    color: #717171;
+    font-weight: 500;
+  }
+  .kpi-row-inner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .kpi-value {
+    font-size: 26px;
+    font-weight: 600;
+    color: #060606;
+    line-height: 1.1;
+  }
+  .kpi-spark {
+    flex-shrink: 0;
+  }
+  .kpi-delta {
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .kpi-delta.up { color: #16a34a; }
+  .kpi-delta.down { color: #dc2626; }
+</style>
+</head>
+<body>
+
+<h1>Acme Corp Dashboard</h1>
+<p class="subtitle">FY 2025 SaaS Metrics &mdash; styled with the Evidence.dev ECharts theme</p>
+
+<div class="kpi-row" id="kpiRow"></div>
+
+<p class="section">Core Charts</p>
+<div class="grid">
+  <div class="card">
+    <h2>Monthly Revenue</h2>
+    <p>Total recurring revenue by month</p>
+    <div id="line" class="chart"></div>
+  </div>
+  <div class="card">
+    <h2>Revenue by Product</h2>
+    <p>Stacked area breakdown across product lines</p>
+    <div id="area" class="chart"></div>
+  </div>
+  <div class="card">
+    <h2>Quarterly Revenue</h2>
+    <p>Quarter-over-quarter comparison</p>
+    <div id="bar" class="chart"></div>
+  </div>
+  <div class="card">
+    <h2>Revenue by Product &times; Quarter</h2>
+    <p>Stacked bar with product breakdown</p>
+    <div id="stackedBar" class="chart"></div>
+  </div>
+  <div class="card">
+    <h2>Revenue &amp; Margin</h2>
+    <p>Revenue bars with gross margin % line overlay</p>
+    <div id="combo" class="chart"></div>
+  </div>
+  <div class="card">
+    <h2>Revenue &amp; Growth Rate</h2>
+    <p>Dual-axis: revenue (left) and YoY growth (right)</p>
+    <div id="multiAxis" class="chart"></div>
+  </div>
+  <div class="card">
+    <h2>Customers by Segment</h2>
+    <p>Distribution across customer tiers</p>
+    <div id="pie" class="chart"></div>
+  </div>
+  <div class="card">
+    <h2>Deal Size vs. Close Rate</h2>
+    <p>Each bubble represents a sales rep</p>
+    <div id="scatter" class="chart"></div>
+  </div>
+  <div class="card">
+    <h2>Feature Usage Heatmap</h2>
+    <p>Active sessions by day of week and hour</p>
+    <div id="heatmap" class="chart"></div>
+  </div>
+  <div class="card">
+    <h2>Sales Pipeline</h2>
+    <p>Conversion through funnel stages</p>
+    <div id="funnel" class="chart"></div>
+  </div>
+  <div class="card wide">
+    <h2>Customer Acquisition Flow</h2>
+    <p>Channel attribution from source to conversion</p>
+    <div id="sankey" class="chart"></div>
+  </div>
+</div>
+
+<p class="section">Geographic</p>
+<div class="grid">
+  <div class="card">
+    <h2>Revenue by State</h2>
+    <p>Annual revenue across US states</p>
+    <div id="choropleth" class="chart-tall"></div>
+  </div>
+  <div class="card">
+    <h2>Customer Locations</h2>
+    <p>Purchase origins clustered by region (k-means)</p>
+    <div id="scatterMap" class="chart-tall"></div>
+  </div>
+</div>
+
+<p class="section">KPI Gauges</p>
+<div class="grid">
+  <div class="card wide">
+    <h2>Key Performance Indicators</h2>
+    <p>Net Promoter Score, Customer Satisfaction, and Platform Uptime</p>
+    <div class="gauge-row">
+      <div id="gauge1" class="gauge-cell"></div>
+      <div id="gauge2" class="gauge-cell"></div>
+      <div id="gauge3" class="gauge-cell"></div>
+    </div>
+  </div>
+</div>
+
+<p class="section">Hierarchical</p>
+<div class="grid">
+  <div class="card">
+    <h2>Revenue Breakdown</h2>
+    <p>Treemap by division, product, and feature</p>
+    <div id="treemap" class="chart"></div>
+  </div>
+  <div class="card">
+    <h2>Revenue Composition</h2>
+    <p>Sunburst showing contribution at each level</p>
+    <div id="sunburst" class="chart"></div>
+  </div>
+</div>
+
+<p class="section">Analytical</p>
+<div class="grid">
+  <div class="card">
+    <h2>Product Comparison</h2>
+    <p>Multi-metric radar across product lines</p>
+    <div id="radar" class="chart"></div>
+  </div>
+  <div class="card">
+    <h2>Revenue Bridge</h2>
+    <p>Waterfall from Q1 baseline through Q4</p>
+    <div id="waterfall" class="chart"></div>
+  </div>
+  <div class="card">
+    <h2>Deal Size Distribution</h2>
+    <p>Boxplot of closed deal values by quarter ($k)</p>
+    <div id="boxplot" class="chart"></div>
+  </div>
+  <div class="card">
+    <h2>Product Metrics</h2>
+    <p>Parallel coordinates across key dimensions</p>
+    <div id="parallel" class="chart"></div>
+  </div>
+  <div class="card wide">
+    <h2>Daily Platform Activity</h2>
+    <p>Login volume over the past year</p>
+    <div id="calendar" class="chart"></div>
+  </div>
+</div>
+
+<p class="section">Additional Chart Types</p>
+<div class="grid">
+  <div class="card">
+    <h2>Response Time Distribution</h2>
+    <p>Histogram of API response times (ms)</p>
+    <div id="histogram" class="chart"></div>
+  </div>
+  <div class="card">
+    <h2>Feature Adoption</h2>
+    <p>Horizontal bar chart of feature usage rates</p>
+    <div id="horizBar" class="chart"></div>
+  </div>
+  <div class="card">
+    <h2>Support Volume by Channel</h2>
+    <p>Polar area chart of ticket counts</p>
+    <div id="polar" class="chart"></div>
+  </div>
+  <div class="card">
+    <h2>Engagement vs. Retention</h2>
+    <p>Scatter with regression trend by cohort</p>
+    <div id="scatterReg" class="chart"></div>
+  </div>
+</div>
+
+<script>
+// ===================================================================
+// Theme (from Evidence.dev — pass directly to echarts.registerTheme)
+// ===================================================================
+const THEME = {
+  darkMode: false,
+  backgroundColor: "#ffffff",
+  textStyle: { fontFamily: ["Inter", "sans-serif"] },
+  color: ["#236aa4","#45a1bf","#a5cdee","#8dacbf","#85c7c6","#d2c6ac","#f4b548","#8f3d56","#71b9f4","#46a485"],
+  grid: { left:"1%", right:"4%", bottom:"0%", top:"15%", containLabel:true },
+  title: {
+    padding:0, itemGap:7,
+    textStyle: { fontSize:14, color:"#060606" },
+    subtextStyle: { fontSize:13, color:"#717171", overflow:"break" },
+    top: "1px"
+  },
+  line:    { itemStyle:{borderWidth:0}, lineStyle:{width:2,join:"round"}, symbolSize:0, symbol:"circle", smooth:false },
+  radar:   { itemStyle:{borderWidth:0}, lineStyle:{width:2}, symbolSize:0, symbol:"circle", smooth:false },
+  pie:     { itemStyle:{borderWidth:0, borderColor:"#cccccc"} },
+  scatter: { itemStyle:{borderWidth:0, borderColor:"#cccccc"} },
+  boxplot: { itemStyle:{borderWidth:1.5} },
+  parallel:{ itemStyle:{borderWidth:0, borderColor:"#cccccc"} },
+  sankey:  { itemStyle:{borderWidth:0, borderColor:"#cccccc"} },
+  funnel:  { itemStyle:{borderWidth:0, borderColor:"#cccccc"} },
+  gauge:   { itemStyle:{borderWidth:0, borderColor:"#cccccc"} },
+  candlestick: { itemStyle:{ color:"#eb5454", color0:"#47b262", borderColor:"#eb5454", borderColor0:"#47b262", borderWidth:1 } },
+  graph: {
+    itemStyle:{borderWidth:0, borderColor:"#cccccc"}, lineStyle:{width:1,color:"#aaaaaa"},
+    symbolSize:0, symbol:"circle", smooth:false,
+    color:["#923d59","#488f96","#518eca","#b3a9a0","#ffc857","#495867","#bfdbf7","#bc4749","#eeebd0"],
+    label:{color:"#f2f2f2"}
+  },
+  categoryAxis: {
+    axisLine:{show:true, lineStyle:{color:"#717171"}},
+    axisTick:{show:false, lineStyle:{color:"#717171"}, length:3, alignWithLabel:true},
+    axisLabel:{show:true, color:"#717171"},
+    splitLine:{show:false, lineStyle:{color:["#d6d6d6"]}},
+    splitArea:{show:false}
+  },
+  valueAxis: {
+    axisLine:{show:false, lineStyle:{color:"#717171"}},
+    axisTick:{show:false, lineStyle:{color:"#717171"}, length:2},
+    axisLabel:{show:true, color:"#717171"},
+    splitLine:{show:true, lineStyle:{color:["#d6d6d6"], width:1}},
+    splitArea:{show:false},
+    nameTextStyle:{backgroundColor:"#ffffff"}
+  },
+  logAxis: {
+    axisLine:{show:false, lineStyle:{color:"#717171"}},
+    axisTick:{show:false, lineStyle:{color:"#717171"}, length:2},
+    axisLabel:{show:true, color:"#717171"},
+    splitLine:{show:true, lineStyle:{color:["#d6d6d6"]}},
+    splitArea:{show:false},
+    nameTextStyle:{backgroundColor:"#ffffff"}
+  },
+  timeAxis: {
+    axisLine:{show:true, lineStyle:{color:"#717171"}},
+    axisTick:{show:true, lineStyle:{color:"#717171"}, length:3},
+    axisLabel:{show:true, color:"#717171"},
+    splitLine:{show:false, lineStyle:{color:["#d6d6d6"]}},
+    splitArea:{show:false}
+  },
+  toolbox: { iconStyle:{borderColor:"#999"}, emphasis:{iconStyle:{borderColor:"#459cde"}} },
+  legend: {
+    textStyle:{padding:[0,0,0,-7], color:"#717171"}, icon:"circle",
+    pageIconColor:"#717171", pageIconSize:12, pageTextStyle:{color:"#717171"},
+    pageButtonItemGap:-2, animationDurationUpdate:300
+  },
+  tooltip: {
+    axisPointer:{ lineStyle:{color:"#ccc",width:1}, crossStyle:{color:"#ccc",width:1} },
+    borderRadius:4, borderWidth:1, borderColor:"#d6d6d6", backgroundColor:"#ffffff",
+    textStyle:{color:"#2c2c2c", fontSize:12, fontWeight:400}, padding:6
+  },
+  visualMap: { color:["#c41621","#e39588","#f5ed98"] },
+  dataZoom: {
+    type:"slider", bottom:10, height:30, showDetail:false, handleSize:"80%",
+    borderColor:"#d6d6d6",
+    handleStyle:{borderColor:"#d6d6d6",color:"#d6d6d6"},
+    moveHandleStyle:{borderColor:"#d6d6d6",color:"#d6d6d6"},
+    emphasis:{ handleStyle:{borderColor:"#d6d6d6",color:"#d6d6d6"}, moveHandleStyle:{borderColor:"#d6d6d6",color:"#d6d6d6"} }
+  },
+  markPoint: { label:{color:"#f2f2f2"}, emphasis:{label:{color:"#f2f2f2"}} }
+};
+
+echarts.registerTheme('evidence', THEME);
+
+// ===================================================================
+// Shared option defaults (from Evidence's _Chart.svelte)
+// ===================================================================
+const BASE = {
+  animationDuration: 500,
+  animationDurationUpdate: 500,
+  grid: { left:"0.8%", right:"3%", containLabel:true },
+  tooltip: {
+    trigger:"axis", show:true, confine:true,
+    axisPointer:{type:"shadow"},
+    extraCssText: 'box-shadow:0 3px 6px rgba(0,0,0,.15);box-shadow:0 2px 4px rgba(0,0,0,.12);z-index:1;font-feature-settings:"cv02","tnum";',
+    order:"valueDesc"
+  },
+  legend: { show:true, type:"scroll", padding:[0,0,0,0] }
+};
+
+const XAXIS = {
+  type:"category", splitLine:{show:false}, axisLine:{show:true}, axisTick:{show:false},
+  axisLabel:{show:true, hideOverlap:true, showMaxLabel:true, margin:6}, scale:true, z:2
+};
+
+const YAXIS = {
+  type:"value", splitLine:{show:true}, axisLine:{show:false,onZero:false}, axisTick:{show:false},
+  axisLabel:{show:true, hideOverlap:true, margin:4},
+  nameLocation:"end", nameTextStyle:{align:"left",verticalAlign:"top",padding:[0,5,0,0]},
+  nameGap:6, scale:true, boundaryGap:["0%","1%"], z:2
+};
+
+const COLORS = THEME.color;
+
+function init(id, opts) {
+  const el = document.getElementById(id);
+  if (!el) return null;
+  const c = echarts.init(el, 'evidence');
+  c.setOption({ ...BASE, ...opts });
+  window.addEventListener('resize', () => c.resize({ animation: { duration: 500 } }));
+  return c;
+}
+
+// ===================================================================
+// Sample Data — Acme Corp FY 2025
+// ===================================================================
+const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const quarters = ['Q1','Q2','Q3','Q4'];
+
+const revenue = [420, 460, 490, 530, 560, 610, 640, 680, 720, 760, 810, 870];
+
+const products = {
+  'Platform':   [180,195,210,225,240,260,275,290,310,330,350,380],
+  'Analytics':  [120,130,135,145,150,165,170,180,190,200,215,225],
+  'Integrations':[80, 90, 95,105,110,120,125,135,140,145,155,165],
+  'Support':    [40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90,100]
+};
+
+const quarterlyRev = [1370, 1700, 2040, 2440];
+const productQuarterly = {
+  'Platform':    [585, 725, 875, 1060],
+  'Analytics':   [385, 460, 540, 640],
+  'Integrations':[265, 335, 400, 465],
+  'Support':     [135, 180, 225, 275]
+};
+
+const margin = [62, 64, 63, 65, 66, 65, 67, 68, 67, 69, 70, 71];
+const growthRate = [null, 9.5, 6.5, 8.2, 5.7, 8.9, 4.9, 6.3, 5.9, 5.6, 6.6, 7.4];
+
+const segments = [
+  {value:1840, name:'Enterprise'},
+  {value:3200, name:'Mid-Market'},
+  {value:5100, name:'SMB'},
+  {value:1200, name:'Startup'},
+  {value:660,  name:'Free Tier'}
+];
+
+const deals = [
+  [15,82,12],[25,75,18],[35,68,22],[45,60,28],[55,55,15],
+  [20,78,20],[30,72,14],[40,63,24],[50,52,19],[60,45,16],
+  [18,80,10],[28,70,21],[38,65,26],[48,58,13],[58,48,17],
+  [22,76,16],[32,69,23],[42,61,20],[52,50,11],[62,42,14]
+];
+
+const days  = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const hours = ['6a','7a','8a','9a','10a','11a','12p','1p','2p','3p','4p','5p','6p','7p','8p','9p'];
+const heatData = [];
+for (let d = 0; d < 7; d++) {
+  for (let h = 0; h < 16; h++) {
+    let base = (d < 5) ? 40 : 15;
+    if (h >= 2 && h <= 10) base += (d < 5) ? 50 : 10;
+    if (h >= 4 && h <= 8)  base += (d < 5) ? 30 : 5;
+    heatData.push([h, d, Math.round(base + Math.random() * 20)]);
+  }
+}
+
+const funnelData = [
+  {value:12000, name:'Leads'},
+  {value:7200,  name:'Qualified'},
+  {value:4100,  name:'Proposals'},
+  {value:2400,  name:'Negotiation'},
+  {value:1400,  name:'Closed Won'}
+];
+
+const sankeyNodes = [
+  {name:'Organic Search'},{name:'Paid Search'},{name:'Social Media'},{name:'Referrals'},{name:'Direct'},
+  {name:'Blog'},{name:'Landing Page'},{name:'Product Page'},{name:'Pricing Page'},
+  {name:'Trial Signup'},{name:'Demo Request'},{name:'Converted'},{name:'Churned'}
+];
+const sankeyLinks = [
+  {source:'Organic Search',target:'Blog',value:3200},
+  {source:'Organic Search',target:'Product Page',value:2100},
+  {source:'Paid Search',target:'Landing Page',value:2800},
+  {source:'Paid Search',target:'Pricing Page',value:1200},
+  {source:'Social Media',target:'Blog',value:1800},
+  {source:'Social Media',target:'Landing Page',value:900},
+  {source:'Referrals',target:'Product Page',value:1600},
+  {source:'Referrals',target:'Pricing Page',value:800},
+  {source:'Direct',target:'Product Page',value:1400},
+  {source:'Direct',target:'Pricing Page',value:600},
+  {source:'Blog',target:'Trial Signup',value:3100},
+  {source:'Blog',target:'Demo Request',value:1900},
+  {source:'Landing Page',target:'Trial Signup',value:2400},
+  {source:'Landing Page',target:'Demo Request',value:1300},
+  {source:'Product Page',target:'Trial Signup',value:2800},
+  {source:'Product Page',target:'Demo Request',value:2300},
+  {source:'Pricing Page',target:'Trial Signup',value:1500},
+  {source:'Pricing Page',target:'Demo Request',value:1100},
+  {source:'Trial Signup',target:'Converted',value:6200},
+  {source:'Trial Signup',target:'Churned',value:3600},
+  {source:'Demo Request',target:'Converted',value:4800},
+  {source:'Demo Request',target:'Churned',value:1800}
+];
+
+// ===================================================================
+// Additional data for new charts
+// ===================================================================
+
+// State revenue data (top 20 states + rest)
+const stateRevenue = [
+  {name:'California',value:9200},{name:'New York',value:7100},{name:'Texas',value:5800},
+  {name:'Florida',value:4200},{name:'Illinois',value:3600},{name:'Massachusetts',value:3400},
+  {name:'Washington',value:3100},{name:'Pennsylvania',value:2800},{name:'Georgia',value:2500},
+  {name:'Virginia',value:2400},{name:'New Jersey',value:2200},{name:'North Carolina',value:2000},
+  {name:'Colorado',value:1900},{name:'Ohio',value:1800},{name:'Michigan',value:1600},
+  {name:'Arizona',value:1500},{name:'Maryland',value:1400},{name:'Oregon',value:1300},
+  {name:'Minnesota',value:1200},{name:'Connecticut',value:1100},{name:'Tennessee',value:950},
+  {name:'Indiana',value:850},{name:'Missouri',value:800},{name:'Wisconsin',value:750},
+  {name:'Utah',value:700},{name:'Nevada',value:650},{name:'South Carolina',value:600},
+  {name:'Alabama',value:500},{name:'Kentucky',value:480},{name:'Louisiana',value:460},
+  {name:'Oklahoma',value:420},{name:'Iowa',value:400},{name:'Kansas',value:380},
+  {name:'Arkansas',value:320},{name:'Nebraska',value:300},{name:'Mississippi',value:280},
+  {name:'New Mexico',value:260},{name:'Idaho',value:240},{name:'Hawaii',value:220},
+  {name:'New Hampshire',value:210},{name:'Maine',value:190},{name:'Rhode Island',value:180},
+  {name:'Delaware',value:170},{name:'Montana',value:140},{name:'Vermont',value:130},
+  {name:'South Dakota',value:110},{name:'North Dakota',value:100},{name:'Alaska',value:90},
+  {name:'Wyoming',value:75},{name:'West Virginia',value:250},{name:'District of Columbia',value:1800}
+];
+
+// Customer locations with k-means cluster assignments
+// Clusters: West Coast, Mountain/Central, South, Northeast
+const clusterColors = ['#236aa4','#f4b548','#8f3d56','#46a485'];
+const clusterNames = ['West Coast','Mountain & Central','South','Northeast'];
+const customerLocations = [
+  // West Coast (cluster 0)
+  [-122.42,37.77,0],[-118.24,34.05,0],[-122.33,47.61,0],[-121.89,37.34,0],[-117.16,32.72,0],
+  [-122.68,45.52,0],[-121.49,38.58,0],[-117.93,33.81,0],[-122.27,37.87,0],[-118.49,34.02,0],
+  [-119.70,36.75,0],[-122.03,36.97,0],[-117.39,33.95,0],[-121.94,37.35,0],[-118.16,33.77,0],
+  [-122.41,37.78,0],[-122.68,45.52,0],[-117.16,32.72,0],[-123.09,44.05,0],[-120.66,35.28,0],
+  [-118.40,33.94,0],[-122.33,47.61,0],[-121.74,36.68,0],[-116.54,33.83,0],[-122.02,37.55,0],
+  // Mountain & Central (cluster 1)
+  [-104.99,39.74,1],[-111.89,40.76,1],[-112.07,33.45,1],[-97.74,30.27,1],[-94.58,39.10,1],
+  [-96.80,32.78,1],[-95.37,29.76,1],[-87.63,41.88,1],[-93.27,44.98,1],[-90.20,38.63,1],
+  [-104.82,38.83,1],[-97.52,35.47,1],[-96.70,40.81,1],[-86.16,39.77,1],[-89.97,35.15,1],
+  [-105.94,35.69,1],[-106.65,35.08,1],[-111.83,33.42,1],[-104.99,39.74,1],[-95.99,36.15,1],
+  // South (cluster 2)
+  [-84.39,33.75,2],[-80.84,35.23,2],[-81.66,30.33,2],[-80.19,25.76,2],[-82.46,27.95,2],
+  [-78.64,35.78,2],[-86.78,36.16,2],[-90.07,29.95,2],[-84.51,38.05,2],[-77.44,37.54,2],
+  [-81.38,28.54,2],[-82.55,35.60,2],[-79.93,32.78,2],[-85.76,38.25,2],[-84.28,30.44,2],
+  [-80.24,25.79,2],[-81.69,41.50,2],[-76.61,39.29,2],[-77.03,38.90,2],[-83.05,42.33,2],
+  // Northeast (cluster 3)
+  [-74.01,40.71,3],[-71.06,42.36,3],[-75.17,39.95,3],[-73.94,40.67,3],[-72.68,41.76,3],
+  [-73.76,42.65,3],[-71.41,41.82,3],[-76.15,43.05,3],[-70.26,43.66,3],[-73.79,42.66,3],
+  [-74.17,40.74,3],[-71.06,42.36,3],[-75.17,39.95,3],[-73.21,44.48,3],[-71.46,42.10,3],
+  [-73.94,40.78,3],[-74.01,40.71,3],[-72.92,41.31,3],[-75.52,39.68,3],[-71.80,42.27,3]
+];
+
+// Treemap & Sunburst hierarchy
+const revenueTree = [
+  { name:'Platform', value:4510, children:[
+    {name:'Core Engine',value:1800},{name:'API Gateway',value:1200},
+    {name:'Auth & SSO',value:850},{name:'Admin Console',value:660}
+  ]},
+  { name:'Analytics', value:2500, children:[
+    {name:'Dashboards',value:900},{name:'Reports',value:700},
+    {name:'Data Explorer',value:550},{name:'Alerts',value:350}
+  ]},
+  { name:'Integrations', value:1650, children:[
+    {name:'CRM Sync',value:600},{name:'Slack & Teams',value:450},
+    {name:'Webhooks',value:350},{name:'Custom API',value:250}
+  ]},
+  { name:'Support', value:890, children:[
+    {name:'Live Chat',value:380},{name:'Knowledge Base',value:280},
+    {name:'Ticketing',value:230}
+  ]}
+];
+
+// Radar metrics (normalized 0-100)
+const radarProducts = {
+  'Platform':    [92, 78, 95, 82, 88],
+  'Analytics':   [76, 85, 80, 74, 70],
+  'Integrations':[65, 92, 72, 68, 60],
+  'Support':     [58, 60, 88, 90, 55]
+};
+const radarMetrics = ['Revenue','Growth','Retention','NPS','Usage'];
+
+// Waterfall data: Q1 baseline → expansions/contractions → Q4
+const waterfallLabels = ['Q1 Base','New Customers','Upsells','Price Increase','Churn','Downgrades','Q2','New Customers','Upsells','Churn','Downgrades','Q3','New Customers','Upsells','Churn','Downgrades','Q4'];
+const waterfallValues = [1370, 180, 220, 50, -80, -40, null, 200, 160, -60, -30, null, 240, 200, -70, -30, null];
+
+function buildWaterfallSeries(labels, values) {
+  const base = [], inc = [], dec = [];
+  let running = 0;
+  for (let i = 0; i < values.length; i++) {
+    const v = values[i];
+    if (v === null) {
+      base.push(0); inc.push(running); dec.push(0);
+    } else if (i === 0) {
+      running = v; base.push(0); inc.push(v); dec.push(0);
+    } else if (v >= 0) {
+      base.push(running); inc.push(v); dec.push(0); running += v;
+    } else {
+      running += v; base.push(running); inc.push(0); dec.push(-v);
+    }
+  }
+  return { base, inc, dec };
+}
+
+// Boxplot data: [min, Q1, median, Q3, max] per quarter
+const boxplotData = [
+  [8, 18, 28, 42, 65],
+  [10, 22, 35, 52, 78],
+  [12, 25, 38, 55, 85],
+  [15, 30, 45, 62, 95]
+];
+
+// Parallel coordinates: products across 5 metrics
+const parallelData = [
+  ['Platform',    4510, 18.2, 95, 82, 88],
+  ['Analytics',   2500, 22.5, 80, 74, 70],
+  ['Integrations',1650, 15.8, 72, 68, 60],
+  ['Support',      890, 12.0, 88, 90, 55]
+];
+
+// Calendar heatmap: daily logins for 2024
+const calendarData = [];
+const calStart = new Date('2024-01-01');
+for (let i = 0; i < 366; i++) {
+  const d = new Date(calStart);
+  d.setDate(d.getDate() + i);
+  if (d.getFullYear() > 2024) break;
+  const dow = d.getDay();
+  let base = (dow > 0 && dow < 6) ? 800 : 350;
+  const month = d.getMonth();
+  base += month * 25;
+  base += Math.round(Math.random() * 300 - 100);
+  const ds = d.toISOString().slice(0, 10);
+  calendarData.push([ds, Math.max(50, base)]);
+}
+
+// ===================================================================
+// 1. Line Chart — Monthly Revenue
+// ===================================================================
+init('line', {
+  xAxis: { ...XAXIS, data: months },
+  yAxis: { ...YAXIS, name:'Revenue ($k)', axisLabel:{...YAXIS.axisLabel, formatter: v => '$'+v+'k'} },
+  series: [{
+    type:'line', symbol:'circle', symbolSize:0, smooth:false,
+    lineStyle:{width:2, type:'solid'},
+    emphasis:{focus:'series', lineStyle:{opacity:1, width:3}},
+    data: revenue
+  }]
+});
+
+// ===================================================================
+// 2. Area Chart — Revenue by Product (stacked)
+// ===================================================================
+init('area', {
+  xAxis: { ...XAXIS, data: months },
+  yAxis: { ...YAXIS, name:'Revenue ($k)', axisLabel:{...YAXIS.axisLabel, formatter: v => '$'+v+'k'} },
+  series: Object.entries(products).map(([name, data]) => ({
+    type:'line', name, data,
+    symbol:'circle', symbolSize:0, smooth:false,
+    lineStyle:{width:1}, areaStyle:{opacity:0.45},
+    stack:'revenue', emphasis:{focus:'series'}
+  }))
+});
+
+// ===================================================================
+// 3. Bar Chart — Quarterly Revenue
+// ===================================================================
+init('bar', {
+  xAxis: { ...XAXIS, data: quarters },
+  yAxis: { ...YAXIS, name:'Revenue ($k)', axisLabel:{...YAXIS.axisLabel, formatter: v => '$'+(v/1000).toFixed(1)+'M'} },
+  series: [{ type:'bar', barMaxWidth:60, label:{fontSize:11}, data:quarterlyRev }]
+});
+
+// ===================================================================
+// 4. Stacked Bar — Revenue by Product × Quarter
+// ===================================================================
+init('stackedBar', {
+  xAxis: { ...XAXIS, data: quarters },
+  yAxis: { ...YAXIS, name:'Revenue ($k)', axisLabel:{...YAXIS.axisLabel, formatter: v => '$'+v+'k'} },
+  series: Object.entries(productQuarterly).map(([name, data]) => ({
+    type:'bar', name, data, stack:'total', barMaxWidth:60, emphasis:{focus:'series'}
+  }))
+});
+
+// ===================================================================
+// 5. Combo Chart — Revenue + Margin %
+// ===================================================================
+init('combo', {
+  xAxis: { ...XAXIS, data: months },
+  yAxis: [
+    { ...YAXIS, name:'Revenue ($k)', axisLabel:{...YAXIS.axisLabel, formatter: v => '$'+v+'k'} },
+    { ...YAXIS, name:'Margin %', position:'right', splitLine:{show:false},
+      axisLabel:{...YAXIS.axisLabel, formatter: v => v+'%'}, min:50, max:80 }
+  ],
+  series: [
+    { type:'bar', name:'Revenue', data:revenue, barMaxWidth:60, yAxisIndex:0 },
+    { type:'line', name:'Gross Margin', data:margin, yAxisIndex:1,
+      symbol:'circle', symbolSize:0, lineStyle:{width:2},
+      emphasis:{focus:'series', lineStyle:{opacity:1, width:3}} }
+  ]
+});
+
+// ===================================================================
+// 6. Multi-Axis — Revenue + Growth Rate
+// ===================================================================
+init('multiAxis', {
+  xAxis: { ...XAXIS, data: months },
+  yAxis: [
+    { ...YAXIS, name:'Revenue ($k)', axisLabel:{...YAXIS.axisLabel, formatter: v => '$'+v+'k'} },
+    { ...YAXIS, name:'MoM Growth %', position:'right', splitLine:{show:false},
+      axisLabel:{...YAXIS.axisLabel, formatter: v => v+'%'} }
+  ],
+  series: [
+    { type:'line', name:'Revenue', data:revenue, symbol:'circle', symbolSize:0, lineStyle:{width:2},
+      emphasis:{focus:'series', lineStyle:{opacity:1, width:3}} },
+    { type:'line', name:'Growth %', data:growthRate, yAxisIndex:1,
+      symbol:'circle', symbolSize:6, lineStyle:{width:2, type:'dashed'},
+      emphasis:{focus:'series', lineStyle:{opacity:1, width:3}} }
+  ]
+});
+
+// ===================================================================
+// 7. Pie / Donut
+// ===================================================================
+init('pie', {
+  tooltip: { trigger:'item', formatter:'{b}: {c} ({d}%)' },
+  series: [{
+    type:'pie', radius:['40%','70%'], center:['50%','55%'],
+    padAngle:2, itemStyle:{borderRadius:4}, label:{fontSize:12},
+    data: segments
+  }]
+});
+
+// ===================================================================
+// 8. Scatter — Deal Size vs. Close Rate
+// ===================================================================
+init('scatter', {
+  xAxis: { ...XAXIS, type:'value', name:'Avg Deal Size ($k)',
+    axisLabel:{...XAXIS.axisLabel, formatter: v => '$'+v+'k'}, axisLine:{show:true} },
+  yAxis: { ...YAXIS, name:'Close Rate %', axisLabel:{...YAXIS.axisLabel, formatter: v => v+'%'} },
+  tooltip: { ...BASE.tooltip, trigger:'item',
+    formatter: p => `Deal: $${p.value[0]}k<br>Close Rate: ${p.value[1]}%<br>Deals: ${p.value[2]}` },
+  series: [{
+    type:'scatter', data:deals, symbolSize: d => d[2]*1.8,
+    emphasis:{focus:'self', itemStyle:{shadowBlur:10, shadowColor:'rgba(0,0,0,0.3)'}}
+  }]
+});
+
+// ===================================================================
+// 9. Heatmap — Feature Usage
+// ===================================================================
+init('heatmap', {
+  grid: { ...BASE.grid, top:'8%', bottom:'12%' },
+  xAxis: { ...XAXIS, data:hours, splitArea:{show:false} },
+  yAxis: { ...YAXIS, type:'category', data:days, splitLine:{show:false}, splitArea:{show:false} },
+  tooltip: { ...BASE.tooltip, trigger:'item',
+    formatter: p => `${days[p.value[1]]} ${hours[p.value[0]]}<br>Sessions: <b>${p.value[2]}</b>` },
+  visualMap: {
+    min:10, max:140, calculable:true, orient:'horizontal', left:'center', bottom:'0%',
+    inRange:{color:['#a5cdee','#236aa4']}, textStyle:{color:'#717171',fontSize:11}
+  },
+  series: [{ type:'heatmap', data:heatData, label:{show:false},
+    emphasis:{itemStyle:{shadowBlur:10, shadowColor:'rgba(0,0,0,0.3)'}} }]
+});
+
+// ===================================================================
+// 10. Funnel
+// ===================================================================
+init('funnel', {
+  tooltip: { trigger:'item', formatter:'{b}: {c}' },
+  series: [{
+    type:'funnel', left:'10%', right:'10%', top:'12%', bottom:'8%', width:'80%',
+    sort:'descending', gap:4,
+    label:{show:true, position:'inside', fontSize:13, color:'#fff'},
+    emphasis:{label:{fontSize:15}},
+    data: funnelData
+  }]
+});
+
+// ===================================================================
+// 11. Sankey
+// ===================================================================
+init('sankey', {
+  tooltip: { trigger:'item', triggerOn:'mousemove' },
+  series: [{
+    type:'sankey', layout:'none',
+    left:'3%', right:'10%', top:'8%', bottom:'8%',
+    nodeWidth:20, nodeGap:14, layoutIterations:32,
+    emphasis:{focus:'adjacency'},
+    lineStyle:{color:'gradient', curveness:0.5},
+    label:{fontSize:12},
+    data:sankeyNodes, links:sankeyLinks
+  }]
+});
+
+// ===================================================================
+// 12–13. US Maps (loaded async)
+// ===================================================================
+fetch('https://raw.githubusercontent.com/apache/echarts-examples/gh-pages/public/data/asset/geo/USA.json')
+  .then(r => r.json())
+  .then(usaJson => {
+    echarts.registerMap('USA', usaJson, {
+      'Alaska': { left:-131, top:25, width:15 },
+      'Hawaii': { left:-110, top:28, width:5 },
+      'Puerto Rico': { left:-76, top:26, width:2 }
+    });
+
+    // 12. Choropleth
+    init('choropleth', {
+      tooltip: { trigger:'item', formatter: p => p.name + '<br>Revenue: $' + (p.value||0).toLocaleString() + 'k' },
+      visualMap: {
+        min:50, max:9500, text:['$9.5M+','$50k'],
+        inRange: { color:['#a5cdee','#45a1bf','#236aa4'] },
+        calculable:true, orient:'horizontal', left:'center', bottom:'2%',
+        textStyle:{color:'#717171', fontSize:11}
+      },
+      series: [{
+        type:'map', map:'USA', roam:true,
+        emphasis: { label:{show:true, fontSize:11, color:'#060606'},
+          itemStyle:{areaColor:'#f4b548'} },
+        label:{show:false},
+        itemStyle: { areaColor:'#e5e5e5', borderColor:'#fff', borderWidth:1 },
+        data: stateRevenue
+      }]
+    });
+
+    // 13. Scatter Map with clusters
+    init('scatterMap', {
+      tooltip: { trigger:'item',
+        formatter: p => {
+          if (p.seriesType === 'scatter') return clusterNames[p.value[2]] + ' cluster';
+          return p.name;
+        }
+      },
+      legend: {
+        show:true, top:'2%', data: clusterNames.map((n,i) => ({name:n, icon:'circle',
+          itemStyle:{color:clusterColors[i]}}))
+      },
+      geo: {
+        map:'USA', roam:true,
+        itemStyle: { areaColor:'#f0f0f0', borderColor:'#d6d6d6', borderWidth:0.5 },
+        emphasis: { itemStyle:{areaColor:'#e5e5e5'}, label:{show:false} },
+        label:{show:false}
+      },
+      series: clusterNames.map((name, ci) => ({
+        type:'scatter', name, coordinateSystem:'geo',
+        data: customerLocations.filter(d => d[2] === ci).map(d => ({value:[d[0],d[1],d[2]]})),
+        symbolSize: 8,
+        itemStyle: { color:clusterColors[ci], opacity:0.8 },
+        emphasis: { itemStyle:{opacity:1, shadowBlur:5, shadowColor:'rgba(0,0,0,0.3)'} }
+      }))
+    });
+  })
+  .catch(() => {
+    ['choropleth','scatterMap'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#717171;font-size:13px;">Map data could not be loaded (requires internet)</div>';
+    });
+  });
+
+// ===================================================================
+// 14. Gauges — Clean arc style (not NASCAR)
+// ===================================================================
+function makeGauge(id, value, label, fmt, color, max) {
+  init(id, {
+    tooltip: {show:false},
+    legend: {show:false},
+    series: [{
+      type: 'gauge',
+      startAngle: 200,
+      endAngle: -20,
+      min: 0,
+      max: max || 100,
+      pointer: { show:false },
+      progress: {
+        show: true,
+        width: 16,
+        roundCap: true,
+        itemStyle: { color: color }
+      },
+      axisLine: {
+        lineStyle: { width:16, color:[[1, '#e5e5e5']] }
+      },
+      axisTick: { show:false },
+      splitLine: { show:false },
+      axisLabel: { show:false },
+      anchor: { show:false },
+      detail: {
+        valueAnimation: true,
+        fontSize: 32,
+        fontWeight: 600,
+        fontFamily: 'Inter',
+        color: '#060606',
+        offsetCenter: [0, '10%'],
+        formatter: fmt
+      },
+      title: {
+        fontSize: 14,
+        fontWeight: 500,
+        color: '#717171',
+        offsetCenter: [0, '60%']
+      },
+      data: [{ value: value, name: label }]
+    }]
+  });
+}
+
+makeGauge('gauge1', 72, 'NPS Score', '{value}', '#236aa4', 100);
+makeGauge('gauge2', 94.2, 'CSAT', '{value}%', '#46a485', 100);
+makeGauge('gauge3', 99.97, 'Uptime', '{value}%', '#45a1bf', 100);
+
+// ===================================================================
+// 15. Treemap
+// ===================================================================
+init('treemap', {
+  tooltip: { trigger:'item', formatter: p => p.name + '<br>$' + (p.value||0).toLocaleString() + 'k' },
+  legend: {show:false},
+  series: [{
+    type:'treemap',
+    data: revenueTree,
+    top:'4%', bottom:'2%', left:'2%', right:'2%',
+    roam: false,
+    nodeClick: false,
+    breadcrumb: { show:false },
+    label: { show:true, fontSize:12, color:'#fff', fontWeight:500 },
+    upperLabel: { show:true, height:24, fontSize:12, fontWeight:600, color:'#fff' },
+    itemStyle: { borderColor:'#fff', borderWidth:2, gapWidth:2 },
+    levels: [
+      { itemStyle:{borderWidth:3, gapWidth:4, borderColor:'#fff'},
+        upperLabel:{show:true} },
+      { itemStyle:{borderWidth:2, gapWidth:2, borderColor:'#fff'},
+        colorSaturation:[0.3,0.7] }
+    ]
+  }]
+});
+
+// ===================================================================
+// 16. Sunburst
+// ===================================================================
+init('sunburst', {
+  tooltip: { trigger:'item', formatter: p => p.name + '<br>$' + (p.value||0).toLocaleString() + 'k' },
+  legend: {show:false},
+  series: [{
+    type:'sunburst',
+    data: revenueTree,
+    radius: ['15%','90%'],
+    sort: null,
+    emphasis: { focus:'ancestor' },
+    itemStyle: { borderRadius:4, borderWidth:2, borderColor:'#fff' },
+    label: { fontSize:11, minAngle:15 },
+    levels: [
+      {},
+      { r0:'15%', r:'45%', label:{fontSize:13, fontWeight:500} },
+      { r0:'45%', r:'90%', label:{fontSize:10} }
+    ]
+  }]
+});
+
+// ===================================================================
+// 17. Radar
+// ===================================================================
+init('radar', {
+  tooltip: { trigger:'item' },
+  radar: {
+    indicator: radarMetrics.map(m => ({name:m, max:100})),
+    shape:'polygon',
+    splitNumber:4,
+    axisName: { color:'#717171', fontSize:12 },
+    splitLine: { lineStyle:{color:'#e5e5e5'} },
+    splitArea: { areaStyle:{color:['#fff','#fafafa']} },
+    axisLine: { lineStyle:{color:'#e5e5e5'} }
+  },
+  series: [{
+    type:'radar',
+    data: Object.entries(radarProducts).map(([name, value]) => ({name, value})),
+    areaStyle: { opacity:0.15 },
+    lineStyle: { width:2 },
+    symbol: 'circle',
+    symbolSize: 5
+  }]
+});
+
+// ===================================================================
+// 18. Waterfall (stacked bar simulation)
+// ===================================================================
+(function() {
+  const wf = buildWaterfallSeries(waterfallLabels, waterfallValues);
+  const totals = [0, 6, 11, 16];
+  init('waterfall', {
+    xAxis: { ...XAXIS, data:waterfallLabels,
+      axisLabel:{...XAXIS.axisLabel, rotate:45, fontSize:10} },
+    yAxis: { ...YAXIS, name:'Revenue ($k)', axisLabel:{...YAXIS.axisLabel, formatter: v => '$'+v+'k'} },
+    legend: {show:false},
+    series: [
+      { type:'bar', stack:'wf', name:'base', data:wf.base, barMaxWidth:36,
+        itemStyle:{color:'transparent'}, emphasis:{itemStyle:{color:'transparent'}} },
+      { type:'bar', stack:'wf', name:'Increase', data:wf.inc.map((v,i) => ({
+          value:v, itemStyle:{color: totals.includes(i) ? '#236aa4' : '#46a485'} })),
+        barMaxWidth:36,
+        label:{show:true, position:'top', fontSize:10, color:'#717171',
+          formatter: p => { const v=waterfallValues[p.dataIndex]; return v===null?'$'+p.value+'k':v>0?'+$'+v+'k':''; }}
+      },
+      { type:'bar', stack:'wf', name:'Decrease', data:wf.dec, barMaxWidth:36,
+        itemStyle:{color:'#8f3d56'},
+        label:{show:true, position:'bottom', fontSize:10, color:'#717171',
+          formatter: p => p.value>0 ? '-$'+p.value+'k' : ''} }
+    ]
+  });
+})();
+
+// ===================================================================
+// 19. Boxplot
+// ===================================================================
+init('boxplot', {
+  xAxis: { ...XAXIS, data:quarters },
+  yAxis: { ...YAXIS, name:'Deal Size ($k)', axisLabel:{...YAXIS.axisLabel, formatter: v => '$'+v+'k'} },
+  tooltip: { ...BASE.tooltip, trigger:'item',
+    formatter: p => `${p.name}<br>Max: $${p.value[5]}k<br>Q3: $${p.value[4]}k<br>Median: $${p.value[3]}k<br>Q1: $${p.value[2]}k<br>Min: $${p.value[1]}k` },
+  series: [{
+    type:'boxplot',
+    data: boxplotData,
+    itemStyle: { color:'#a5cdee', borderColor:'#236aa4', borderWidth:1.5 },
+    emphasis: { itemStyle:{borderColor:'#060606', borderWidth:2} }
+  }]
+});
+
+// ===================================================================
+// 20. Parallel Coordinates
+// ===================================================================
+init('parallel', {
+  tooltip: {show:false},
+  legend: { show:true, data:parallelData.map(d => d[0]) },
+  parallelAxis: [
+    {dim:0, name:'Product',    type:'category', data:parallelData.map(d=>d[0]), nameLocation:'start'},
+    {dim:1, name:'Revenue ($k)', type:'value', nameLocation:'end'},
+    {dim:2, name:'Growth %',   type:'value', nameLocation:'end'},
+    {dim:3, name:'Retention %', type:'value', min:50, max:100, nameLocation:'end'},
+    {dim:4, name:'NPS',        type:'value', min:50, max:100, nameLocation:'end'},
+    {dim:5, name:'Usage Score', type:'value', min:40, max:100, nameLocation:'end'}
+  ],
+  parallel: {
+    left:'5%', right:'5%', top:'18%', bottom:'12%',
+    parallelAxisDefault: {
+      nameTextStyle: { color:'#717171', fontSize:11 },
+      axisLine: { lineStyle:{color:'#d6d6d6'} },
+      axisTick: { show:false },
+      axisLabel: { color:'#717171', fontSize:10 },
+      splitLine: { show:false }
+    }
+  },
+  series: parallelData.map((d,i) => ({
+    type:'parallel', name:d[0],
+    lineStyle: { width:3, opacity:0.7, color:COLORS[i] },
+    emphasis: { lineStyle:{width:5, opacity:1} },
+    data: [d]
+  }))
+});
+
+// ===================================================================
+// 21. Calendar Heatmap
+// ===================================================================
+init('calendar', {
+  tooltip: { trigger:'item', formatter: p => p.value[0] + '<br>Logins: ' + p.value[1].toLocaleString() },
+  legend: {show:false},
+  visualMap: {
+    min:200, max:1400, calculable:true, orient:'horizontal', left:'center', bottom:'2%',
+    inRange:{color:['#a5cdee','#45a1bf','#236aa4']},
+    textStyle:{color:'#717171', fontSize:11}
+  },
+  calendar: {
+    range:'2024',
+    top:'12%', left:'8%', right:'4%', bottom:'18%',
+    cellSize:['auto',16],
+    itemStyle: { borderWidth:2, borderColor:'#fff' },
+    splitLine: { lineStyle:{color:'#d6d6d6', width:1} },
+    yearLabel: { show:false },
+    monthLabel: { color:'#717171', fontSize:11, nameMap:'en' },
+    dayLabel: { color:'#717171', fontSize:10, firstDay:1, nameMap:['','M','','W','','F',''] }
+  },
+  series: [{
+    type:'heatmap', coordinateSystem:'calendar',
+    data: calendarData,
+    emphasis: { itemStyle:{shadowBlur:5, shadowColor:'rgba(0,0,0,0.3)'} }
+  }]
+});
+
+// ===================================================================
+// KPI Sparkline Cards (pure SVG, Evidence-style)
+// ===================================================================
+function sparklineSVG(data, color, w, h) {
+  const min = Math.min(...data), max = Math.max(...data);
+  const range = max - min || 1;
+  const pts = data.map((v, i) =>
+    `${(i / (data.length - 1)) * w},${h - ((v - min) / range) * (h - 4) - 2}`
+  ).join(' ');
+  return `<svg class="kpi-spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
+    `<polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>` +
+    `</svg>`;
+}
+
+const kpis = [
+  { label:'Monthly Revenue', value:'$870k', spark:revenue, delta:'+7.4% vs. prior month', up:true },
+  { label:'Total Customers', value:'12,000', spark:[8200,8600,9100,9400,9800,10200,10500,10900,11200,11500,11700,12000], delta:'+2.6% vs. prior month', up:true },
+  { label:'Avg Deal Size', value:'$38k', spark:[32,30,34,33,36,35,37,36,38,37,39,38], delta:'-2.6% vs. prior month', up:false },
+  { label:'Net Revenue Retention', value:'118%', spark:[108,110,112,111,114,113,115,114,116,117,117,118], delta:'+0.9% vs. prior month', up:true },
+  { label:'Churn Rate', value:'1.8%', spark:[3.2,3.0,2.8,2.6,2.5,2.4,2.3,2.2,2.1,2.0,1.9,1.8], delta:'-5.3% vs. prior month', up:true }
+];
+
+document.getElementById('kpiRow').innerHTML = kpis.map(k =>
+  `<div class="kpi">` +
+    `<div class="kpi-label">${k.label}</div>` +
+    `<div class="kpi-row-inner">` +
+      `<div class="kpi-value">${k.value}</div>` +
+      sparklineSVG(k.spark, '#236aa4', 64, 24) +
+    `</div>` +
+    `<div class="kpi-delta ${k.up ? 'up' : 'down'}">${k.up ? '▲' : '▼'} ${k.delta}</div>` +
+  `</div>`
+).join('');
+
+// ===================================================================
+// 22. Histogram — API Response Time Distribution
+// ===================================================================
+const histBins = ['0-50','50-100','100-150','150-200','200-300','300-500','500-1000','1000+'];
+const histCounts = [1200, 3400, 5800, 4200, 2600, 1400, 600, 180];
+
+init('histogram', {
+  xAxis: { ...XAXIS, data:histBins, name:'Response Time (ms)',
+    axisLabel:{...XAXIS.axisLabel, fontSize:10} },
+  yAxis: { ...YAXIS, name:'Request Count',
+    axisLabel:{...YAXIS.axisLabel, formatter: v => v>=1000 ? (v/1000)+'k' : v} },
+  legend: {show:false},
+  series: [{
+    type:'bar', data:histCounts.map((v,i) => ({
+      value:v,
+      itemStyle:{ color: i <= 2 ? '#46a485' : i <= 4 ? '#f4b548' : '#8f3d56' }
+    })),
+    barWidth:'90%',
+    emphasis: { itemStyle:{opacity:0.85} }
+  }]
+});
+
+// ===================================================================
+// 23. Horizontal Bar — Feature Adoption
+// ===================================================================
+const features = ['Single Sign-On','API Access','Custom Reports','Slack Integration',
+  'Webhooks','Data Export','Role Permissions','Audit Log','2FA','White Label'];
+const adoption = [94,87,76,72,65,61,58,52,48,34];
+
+init('horizBar', {
+  grid: { ...BASE.grid, left:'2%' },
+  xAxis: { ...YAXIS, name:'Adoption %', max:100,
+    axisLabel:{...YAXIS.axisLabel, formatter: v => v+'%'} },
+  yAxis: { ...XAXIS, type:'category', data:features.slice().reverse(),
+    axisLabel:{...XAXIS.axisLabel, fontSize:11},
+    inverse:false },
+  legend: {show:false},
+  tooltip: { ...BASE.tooltip, trigger:'item',
+    formatter: p => p.name + ': ' + p.value + '%' },
+  series: [{
+    type:'bar', data:adoption.slice().reverse(), barMaxWidth:20,
+    itemStyle: { borderRadius:[0,3,3,0] },
+    label: { show:true, position:'right', fontSize:11, color:'#717171',
+      formatter: p => p.value+'%' },
+    emphasis: { itemStyle:{opacity:0.85} }
+  }]
+});
+
+// ===================================================================
+// 24. Polar Area Chart — Support Volume by Channel
+// ===================================================================
+const channels = ['Email','Live Chat','Phone','Social Media','Community Forum','In-App'];
+const tickets = [3200, 2800, 1900, 1400, 1100, 2100];
+
+init('polar', {
+  tooltip: { trigger:'item', formatter: '{b}: {c} tickets' },
+  legend: { show:true, type:'scroll', bottom:'2%' },
+  angleAxis: { type:'category', data:channels, startAngle:90,
+    axisLine:{lineStyle:{color:'#d6d6d6'}},
+    axisLabel:{color:'#717171', fontSize:11} },
+  radiusAxis: { max:3500,
+    axisLine:{show:false}, axisTick:{show:false},
+    axisLabel:{show:false},
+    splitLine:{lineStyle:{color:'#e5e5e5'}} },
+  polar: { radius:['10%','75%'] },
+  series: [{
+    type:'bar', coordinateSystem:'polar',
+    data: tickets.map((v,i) => ({value:v, itemStyle:{color:COLORS[i]}})),
+    roundCap: true,
+    emphasis: { focus:'self' },
+    label: { show:false }
+  }]
+});
+
+// ===================================================================
+// 25. Scatter with Trend — Engagement vs. Retention
+// ===================================================================
+const cohortScatter = [];
+for (let i = 0; i < 40; i++) {
+  const eng = 20 + Math.random() * 75;
+  const ret = 35 + eng * 0.65 + (Math.random() - 0.5) * 25;
+  cohortScatter.push([Math.round(eng*10)/10, Math.min(99, Math.max(30, Math.round(ret*10)/10))]);
+}
+cohortScatter.sort((a,b) => a[0]-b[0]);
+
+const n = cohortScatter.length;
+const sx = cohortScatter.reduce((s,d) => s+d[0], 0);
+const sy = cohortScatter.reduce((s,d) => s+d[1], 0);
+const sxy = cohortScatter.reduce((s,d) => s+d[0]*d[1], 0);
+const sx2 = cohortScatter.reduce((s,d) => s+d[0]*d[0], 0);
+const slope = (n*sxy - sx*sy) / (n*sx2 - sx*sx);
+const intercept = (sy - slope*sx) / n;
+const xMin = Math.min(...cohortScatter.map(d=>d[0]));
+const xMax = Math.max(...cohortScatter.map(d=>d[0]));
+
+init('scatterReg', {
+  xAxis: { ...XAXIS, type:'value', name:'Engagement Score',
+    axisLabel:{...XAXIS.axisLabel}, axisLine:{show:true} },
+  yAxis: { ...YAXIS, name:'Retention %',
+    axisLabel:{...YAXIS.axisLabel, formatter: v => v+'%'} },
+  tooltip: { ...BASE.tooltip, trigger:'item',
+    formatter: p => p.seriesType==='scatter'
+      ? `Engagement: ${p.value[0]}<br>Retention: ${p.value[1]}%`
+      : 'Trend line' },
+  legend: {show:false},
+  series: [
+    { type:'scatter', data:cohortScatter, symbolSize:9,
+      itemStyle:{color:'#236aa4', opacity:0.7},
+      emphasis:{itemStyle:{opacity:1, shadowBlur:8, shadowColor:'rgba(0,0,0,0.25)'}} },
+    { type:'line', data:[[xMin, slope*xMin+intercept],[xMax, slope*xMax+intercept]],
+      symbol:'none', lineStyle:{width:2, type:'dashed', color:'#8f3d56'},
+      tooltip:{show:false} }
+  ]
+});
+</script>
+</body>
+</html>
