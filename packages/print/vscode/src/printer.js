@@ -133,7 +133,7 @@ function stripTopComments(code) {
 
 function rehighlightRipScripts(html) {
   return html.replace(/(&quot;text\/rip&quot;[\s\S]*?&gt;<\/span>)<span class="language-\w+">([\s\S]*?)<\/span>(<span class="hljs-tag">)/g, (match, before, inner, after) => {
-    const plain = inner.replace(/<\/?span[^>]*>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+    const plain = inner.replace(/<\/?span[^>]*>/g, '').replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
     const rip = hljs.highlight(plain, { language: 'rip' }).value;
     return `${before}<span class="language-rip">${rip}</span>${after}`;
   });
