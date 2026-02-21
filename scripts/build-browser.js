@@ -4,7 +4,9 @@ import { readFileSync, writeFileSync, unlinkSync, copyFileSync } from 'fs';
 import { brotliCompressSync } from 'zlib';
 import { compileToJS } from '../src/compiler.js';
 
-console.log('Building browser bundles...\n');
+const debug = process.argv.includes('--debug');
+
+console.log(`Building browser bundles${debug ? ' (with unminified)' : ''}...\n`);
 
 // Read version from package.json
 const packageJson = JSON.parse(readFileSync('./package.json', 'utf-8'));
@@ -16,13 +18,23 @@ const buildDate = new Date().toISOString().replace('T', '@').substring(0, 19) + 
 console.log(`Version: ${version}`);
 console.log(`Build: ${buildDate}\n`);
 
-// Helper: build, stamp version, write minified + brotli
-async function buildBundle(entrypoints, name) {
-  await Bun.build({ entrypoints, outdir: './docs/dist', format: 'esm', minify: true, naming: name });
+function stamp(js) {
+  return js.replace('"0.0.0"', `"${version}"`).replace('"0000-00-00@00:00:00GMT"', `"${buildDate}"`);
+}
 
-  let js = readFileSync(`./docs/dist/${name}`, 'utf-8');
-  js = js.replace('"0.0.0"', `"${version}"`);
-  js = js.replace('"0000-00-00@00:00:00GMT"', `"${buildDate}"`);
+async function buildBundle(entrypoints, name) {
+  // Unminified (only with --debug)
+  if (debug) {
+    const unminName = name.replace('.min.js', '.js');
+    await Bun.build({ entrypoints, outdir: './docs/dist', format: 'esm', minify: false, naming: unminName });
+    writeFileSync(`./docs/dist/${unminName}`, stamp(readFileSync(`./docs/dist/${unminName}`, 'utf-8')));
+    const unminSize = (Buffer.byteLength(readFileSync(`./docs/dist/${unminName}`)) / 1024).toFixed(2);
+    console.log(`  ${unminName.padEnd(24)} ${unminSize} KB`);
+  }
+
+  // Minified (always)
+  await Bun.build({ entrypoints, outdir: './docs/dist', format: 'esm', minify: true, naming: name });
+  const js = stamp(readFileSync(`./docs/dist/${name}`, 'utf-8'));
   writeFileSync(`./docs/dist/${name}`, js);
 
   const br = brotliCompressSync(Buffer.from(js));
@@ -56,7 +68,8 @@ const ripUi = await buildBundle(['./docs/dist/_rip-ui-entry.js'], 'rip-ui.min.js
 try { unlinkSync('./docs/dist/_ui.js'); } catch {}
 try { unlinkSync('./docs/dist/_rip-ui-entry.js'); } catch {}
 
-// Copy rip-ui bundle to @rip-lang/ui package (canonical location)
+// Copy rip-ui bundles to @rip-lang/ui package (canonical location)
+if (debug) copyFileSync('./docs/dist/rip-ui.js', './packages/ui/dist/rip-ui.js');
 copyFileSync('./docs/dist/rip-ui.min.js', './packages/ui/dist/rip-ui.min.js');
 copyFileSync('./docs/dist/rip-ui.min.js.br', './packages/ui/dist/rip-ui.min.js.br');
 
