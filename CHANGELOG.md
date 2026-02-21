@@ -1,4 +1,4 @@
-<p><img src="docs/rip.svg" alt="Rip Logo" width="100"></p>
+<img src="https://raw.githubusercontent.com/shreeve/rip-lang/main/docs/assets/rip.png" style="width:50px" /> <br>
 
 # Changelog
 

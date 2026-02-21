@@ -13,7 +13,7 @@ export const BUILD_DATE = "0000-00-00@00:00:00GMT";
 import { compile, compileToJS, formatSExpr, getReactiveRuntime, getComponentRuntime } from './compiler.js';
 
 // Eagerly register Rip's reactive primitives on globalThis so that
-// framework code (ui.rip) can use them directly without the compiler
+// framework code (app.rip) can use them directly without the compiler
 // needing to detect reactive operators in the source
 if (typeof globalThis !== 'undefined' && !globalThis.__rip) {
   new Function(getReactiveRuntime())();
@@ -71,10 +71,10 @@ export { processRipScripts };
 /**
  * Import a .rip file as an ES module
  * Fetches the URL, compiles Rip→JS, dynamically imports via Blob URL
- * Usage: const { launch } = await importRip('/ui.rip')
+ * Usage: const { launch } = await importRip('/app.rip')
  *
  * Pre-compiled modules can be registered on importRip.modules to skip fetching.
- * The rip-ui bundle uses this to embed ui.rip without a server round-trip.
+ * The browser bundle uses this to embed app.rip without a server round-trip.
  */
 export async function importRip(url) {
   for (const [key, mod] of Object.entries(importRip.modules)) {
@@ -85,13 +85,10 @@ export async function importRip(url) {
     return r.text();
   });
   const js = compileToJS(source);
-  const blob = new Blob([js], { type: 'application/javascript' });
+  const header = `// ${url}\n`;
+  const blob = new Blob([header + js], { type: 'application/javascript' });
   const blobUrl = URL.createObjectURL(blob);
-  try {
-    return await import(blobUrl);
-  } finally {
-    URL.revokeObjectURL(blobUrl);
-  }
+  return await import(blobUrl);
 }
 importRip.modules = {};
 
@@ -136,12 +133,12 @@ if (typeof globalThis !== 'undefined') {
   globalThis.__ripExports = { compile, compileToJS, formatSExpr, VERSION, BUILD_DATE, getReactiveRuntime, getComponentRuntime };
 }
 
-// Auto-launch: if rip-ui is bundled and the page has component scripts or a data-url,
+// Auto-launch: if app.rip is bundled and the page has component scripts or a data-url,
 // call launch() automatically with config from the script tag's data attributes.
 // Hash routing defaults to true (opt out with data-hash="false").
 async function autoLaunch() {
   if (globalThis.__ripLaunched) return;
-  const ui = importRip.modules?.['ui.rip'];
+  const ui = importRip.modules?.['app.rip'];
   if (!ui?.launch) return;
   const cfg = document.querySelector('script[data-hash], script[data-url]');
   const url = cfg?.getAttribute('data-url') || '';
@@ -153,7 +150,7 @@ async function autoLaunch() {
 }
 
 // Auto-process <script type="text/rip"> blocks, then auto-launch if applicable.
-// Deferred via queueMicrotask so bundled entry code (e.g. rip-ui.min.js registering
+// Deferred via queueMicrotask so bundled entry code (e.g. rip.min.js registering
 // importRip.modules) runs before script processing begins.
 if (typeof document !== 'undefined') {
   globalThis.__ripScriptsReady = new Promise(resolve => {

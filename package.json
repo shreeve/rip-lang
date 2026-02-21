@@ -1,18 +1,18 @@
 {
   "name": "rip-lang",
-  "version": "3.10.16",
+  "version": "3.11.0",
   "description": "A modern language that compiles to JavaScript",
   "type": "module",
   "main": "src/compiler.js",
   "workspaces": [
     "packages/*"
   ],
-  "browser": "docs/dist/rip.browser.js",
+  "browser": "docs/dist/rip.min.js",
   "exports": {
     ".": {
       "bun": "./src/compiler.js",
       "node": "./src/compiler.js",
-      "browser": "./docs/dist/rip.browser.js",
+      "browser": "./docs/dist/rip.min.js",
       "default": "./src/compiler.js"
     },
     "./loader": "./rip-loader.js"
@@ -31,8 +31,8 @@
     "CHANGELOG.md"
   ],
   "scripts": {
-    "browser": "bun scripts/build-browser.js",
-    "browser:debug": "bun scripts/build-browser.js --debug",
+    "build": "bun scripts/build-browser.js",
+    "build:debug": "bun scripts/build-browser.js --debug",
     "bump": "bun scripts/bump-version.js",
     "parser": "bun src/grammar/solar.rip -o src/parser.js src/grammar/grammar.rip",
     "serve": "bun scripts/serve.js",

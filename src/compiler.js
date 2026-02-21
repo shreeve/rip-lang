@@ -1010,11 +1010,15 @@ export class CodeGenerator {
       if (this.is(body, 'block') && body.length === 2) {
         let expr = body[1];
         if (!Array.isArray(expr) || expr[0] !== 'return') {
-          return `${prefix}${paramSyntax} => ${this.generate(expr, 'value')}`;
+          let code = this.generate(expr, 'value');
+          if (code[0] === '{') code = `(${code})`;
+          return `${prefix}${paramSyntax} => ${code}`;
         }
       }
       if (!Array.isArray(body) || body[0] !== 'block') {
-        return `${prefix}${paramSyntax} => ${this.generate(body, 'value')}`;
+        let code = this.generate(body, 'value');
+        if (code[0] === '{') code = `(${code})`;
+        return `${prefix}${paramSyntax} => ${code}`;
       }
     }
 

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/rip-1280w.png" alt="Rip Logo" width="400">
+  <img src="docs/assets/rip-1280w.png" alt="Rip Logo" width="400">
 </p>
 
 <h1 align="center">Rip</h1>
@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.10.16-blue.svg" alt="Version"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.11.0-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
   <a href="#"><img src="https://img.shields.io/badge/tests-1%2C243%2F1%2C243-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>

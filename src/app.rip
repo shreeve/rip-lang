@@ -1,18 +1,18 @@
 # ==============================================================================
-# Rip UI — Unified reactive framework
+# Rip App — application framework for Rip
 #
-# Two files. One is JavaScript, everything else is Rip.
+# Provides the runtime infrastructure for building reactive web applications:
 #
-#   /rip/browser.js  — the compiler (pre-compiled JS, cached forever)
-#   /rip/ui.rip      — the framework (this file, compiled in browser)
+#   Stash      — deep reactive proxy with path navigation
+#   Resource   — async data loading with reactive states
+#   Timing     — delay, debounce, throttle, hold
+#   Components — in-memory component store with file watchers
+#   Router     — file-based URL routing with layouts and params
+#   Renderer   — compile-import-mount pipeline with error boundaries
+#   Launch     — orchestrator that wires everything together
 #
-# The app stash:
-#   app.data    — reactive app state
-#   app.routes  — navigation state (path, params, query, hash)
-#
-# Boot (in <script type="text/rip">):
-#   { launch } = importRip! '/rip/ui.rip'
-#   launch '/myapp'
+# The reactive primitives (__state, __effect, __batch) are provided by the
+# Rip compiler runtime and registered on globalThis when the bundle loads.
 #
 # Author: Steve Shreeve <steve.shreeve@gmail.com>
 #   Date: February 2026
@@ -27,6 +27,10 @@ export { setContext, getContext, hasContext }
 
 # ==============================================================================
 # Stash — deep reactive proxy with path navigation
+#
+# Wraps a plain object in a Proxy that lazily creates fine-grained signals
+# for each property. Nested objects are wrapped recursively. Supports path-
+# based access via get/set methods (e.g., stash.get('users[0].name')).
 # ==============================================================================
 
 STASH   = Symbol('stash')
@@ -154,6 +158,10 @@ export isStash = (obj) -> obj?[STASH] is true
 
 # ==============================================================================
 # Resource — async data loading with reactive loading/error/data states
+#
+# Wraps an async function and exposes reactive .data, .loading, and .error
+# properties. Calls the function immediately unless opts.lazy is set.
+# Call .refetch() to reload.
 # ==============================================================================
 
 export createResource = (fn, opts = {}) ->
@@ -186,7 +194,11 @@ export createResource = (fn, opts = {}) ->
   resource
 
 # ==============================================================================
-# Timing — reactive timing primitives composed from __state + __effect + cleanup
+# Timing — reactive timing primitives
+#
+# Each takes a duration (ms) and a reactive source (signal or function).
+# Returns a new signal whose value is derived from the source with a
+# time-based transformation. Cleanup is automatic via effect disposal.
 # ==============================================================================
 
 _toFn = (source) ->
@@ -259,7 +271,11 @@ export hold = (ms, source) ->
   if typeof source isnt 'function' then _proxy(out, source) else out
 
 # ==============================================================================
-# Components — in-memory file storage with watchers
+# Components — in-memory file store with watchers
+#
+# A virtual filesystem for .rip component sources. Supports read, write,
+# delete, listing, and glob-style operations. Watchers are notified on
+# create/change/delete. Compiled modules are cached alongside sources.
 # ==============================================================================
 
 export createComponents = ->
@@ -315,7 +331,16 @@ export createComponents = ->
   setCompiled: (path, result) -> compiled.set(path, result)
 
 # ==============================================================================
-# Router — URL-to-component mapping with reactive state
+# Router — file-based URL routing with reactive state
+#
+# Maps URL paths to component files using a file-system convention:
+#   components/index.rip       → /
+#   components/about.rip       → /about
+#   components/users/[id].rip  → /users/:id
+#   components/[...rest].rip   → /* (catch-all)
+#
+# Supports nested layouts via _layout.rip files, hash-mode routing,
+# base path prefixes, and query/hash tracking.
 # ==============================================================================
 
 fileToPattern = (rel) ->
@@ -485,7 +510,7 @@ export createRouter = (components, opts = {}) ->
     back: -> history.back()
     forward: -> history.forward()
 
-    current:    undefined  # overridden by getter
+    current:    undefined
     path:       undefined
     params:     undefined
     route:      undefined
@@ -500,7 +525,7 @@ export createRouter = (components, opts = {}) ->
 
     rebuild: -> tree = buildRoutes(components, root)
 
-    routes: undefined  # overridden by getter
+    routes: undefined
 
     init: ->
       resolve readUrl()
@@ -528,7 +553,12 @@ export createRouter = (components, opts = {}) ->
   router
 
 # ==============================================================================
-# Renderer — compile, import, mount/unmount, layouts, slots
+# Renderer — compile, import, mount, unmount, and manage components
+#
+# Handles the full lifecycle: compile Rip source to JS, import as an ES
+# module, instantiate, mount into the DOM. Supports nested layouts with
+# slot-based composition, component caching for back/forward navigation,
+# generation tracking to prevent stale mounts, and error boundaries.
 # ==============================================================================
 
 arraysEqual = (a, b) ->
@@ -599,12 +629,10 @@ compileAndImport = (source, compile, components = null, path = null, resolver = 
       preamble = "const {#{names.join(', ')}} = globalThis['#{resolver.key}'];\n"
       js = preamble + js
 
-  blob = new Blob([js], { type: 'application/javascript' })
+  header = if path then "// #{path}\n" else ''
+  blob = new Blob([header + js], { type: 'application/javascript' })
   url = URL.createObjectURL(blob)
-  try
-    mod = await import(url)
-  finally
-    URL.revokeObjectURL url
+  mod = await import(url)
 
   # Register any components from this module
   if resolver
@@ -811,7 +839,43 @@ export createRenderer = (opts = {}) ->
   renderer
 
 # ==============================================================================
-# Launch — fetch an app bundle, populate the stash, start everything
+# SSE Watch — hot-reload connection with exponential backoff
+# ==============================================================================
+
+connectWatch = (url) ->
+  retryDelay = 1000
+  maxDelay = 30000
+
+  connect = ->
+    es = new EventSource(url)
+
+    es.addEventListener 'connected', ->
+      retryDelay = 1000
+      console.log '[Rip] Hot reload connected'
+
+    es.addEventListener 'reload', ->
+      console.log '[Rip] Reloading...'
+      location.reload()
+
+    es.onerror = ->
+      es.close()
+      setTimeout connect, retryDelay
+      retryDelay = Math.min(retryDelay * 2, maxDelay)
+
+  connect()
+
+# ==============================================================================
+# Launch — fetch bundle, create stash, wire router + renderer, start app
+#
+# Entry point for Rip applications. Handles four bundle sources:
+#   1. Explicit bundle object (opts.bundle)
+#   2. Array of component URLs (opts.components)
+#   3. Inline <script type="text/rip" data-name="..."> tags
+#   4. Server fetch from {appBase}/bundle
+#
+# Creates the app stash, sets up persistence if configured, builds the
+# component resolver, initializes the router and renderer, and optionally
+# connects SSE hot-reload.
 # ==============================================================================
 
 export launch = (appBase = '', opts = {}) ->
@@ -936,29 +1000,3 @@ export launch = (appBase = '', opts = {}) ->
       version: '0.3.0'
 
   { app, components: appComponents, router, renderer }
-
-# ==============================================================================
-# SSE Watch — hot-reload connection
-# ==============================================================================
-
-connectWatch = (url) ->
-  retryDelay = 1000
-  maxDelay = 30000
-
-  connect = ->
-    es = new EventSource(url)
-
-    es.addEventListener 'connected', ->
-      retryDelay = 1000
-      console.log '[Rip] Hot reload connected'
-
-    es.addEventListener 'reload', ->
-      console.log '[Rip] Reloading...'
-      location.reload()
-
-    es.onerror = ->
-      es.close()
-      setTimeout connect, retryDelay
-      retryDelay = Math.min(retryDelay * 2, maxDelay)
-
-  connect()
