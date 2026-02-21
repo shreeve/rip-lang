@@ -77,15 +77,15 @@ export KpiCard = component
     return '' unless spark and spark.length > 1
     w = 64
     h = 24
-    lo = Math.min.apply(null, spark)
-    hi = Math.max.apply(null, spark)
+    lo = Math.min(...spark)
+    hi = Math.max(...spark)
     range = hi - lo or 1
     pts = spark.map((v, i) ->
       x = (i / (spark.length - 1)) * w
       y = h - ((v - lo) / range) * (h - 4) - 2
       "#{x},#{y}"
     ).join(' ')
-    '<svg class="kpi-spark" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '"><polyline points="' + pts + '" fill="none" stroke="#236aa4" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></svg>'
+    "<svg class='kpi-spark' width='#{w}' height='#{h}' viewBox='0 0 #{w} #{h}'><polyline points='#{pts}' fill='none' stroke='#236aa4' stroke-width='1.5' stroke-linejoin='round' stroke-linecap='round'/></svg>"
 
   render
     .kpi
@@ -434,9 +434,9 @@ export Dashboard = component
     sx2 = cohortScatter.reduce(((s, d) -> s + d[0] * d[0]), 0)
     slope = (n * sxy - sx * sy) / (n * sx2 - sx * sx)
     intercept = (sy - slope * sx) / n
-    xMin = Math.min.apply(null, cohortScatter.map((d) -> d[0]))
-    xMax = Math.max.apply(null, cohortScatter.map((d) -> d[0]))
-    { slope: slope, intercept: intercept, xMin: xMin, xMax: xMax }
+    xMin = Math.min(...cohortScatter.map(-> it[0]))
+    xMax = Math.max(...cohortScatter.map(-> it[0]))
+    { slope, intercept, xMin, xMax }
 
   kpis := [
     { label: 'Monthly Revenue',       value: '$870k',  spark: [420,460,490,530,560,610,640,680,720,760,810,870], delta: '+7.4% vs. prior month', up: true }
@@ -447,6 +447,11 @@ export Dashboard = component
   ]
 
   # ── Helpers ──
+
+  $k  = (v) -> "$#{v}k"
+  pct = (v) -> "#{v}%"
+  $M  = (v) -> "$#{(v / 1000).toFixed(1)}M"
+  valK = (p) -> "#{p.name}<br>$#{(p.value or 0).toLocaleString()}k"
 
   ic: (id, opts) ->
     el = document.getElementById(id)
@@ -482,7 +487,7 @@ export Dashboard = component
         base.push running
         inc.push 0
         dec.push -v
-    { base: base, inc: inc, dec: dec }
+    { base, inc, dec }
 
   makeGauge: (id, value, label, fmt, color, max) ->
     @ic id,
@@ -491,14 +496,14 @@ export Dashboard = component
       series: [{
         type: 'gauge', startAngle: 200, endAngle: -20, min: 0, max: max or 100
         pointer: { show: false }
-        progress: { show: true, width: 16, roundCap: true, itemStyle: { color: color } }
+        progress: { show: true, width: 16, roundCap: true, itemStyle: { color } }
         axisLine: { lineStyle: { width: 16, color: [[1, '#e5e5e5']] } }
         axisTick: { show: false }, splitLine: { show: false }, axisLabel: { show: false }, anchor: { show: false }
         detail:
           valueAnimation: true, fontSize: 32, fontWeight: 600, fontFamily: 'Inter'
           color: '#060606', offsetCenter: [0, '10%'], formatter: fmt
         title: { fontSize: 14, fontWeight: 500, color: '#717171', offsetCenter: [0, '60%'] }
-        data: [{ value: value, name: label }]
+        data: [{ value, name: label }]
       }]
 
   # ── Chart initialization ──
@@ -506,7 +511,7 @@ export Dashboard = component
   initCoreCharts: ->
     @ic 'line',
       xAxis: { ...XAXIS, data: months }
-      yAxis: { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
+      yAxis: { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: $k } }
       series: [{
         type: 'line', symbol: 'circle', symbolSize: 0, smooth: false
         lineStyle: { width: 2, type: 'solid' }
@@ -516,9 +521,9 @@ export Dashboard = component
 
     @ic 'area',
       xAxis: { ...XAXIS, data: months }
-      yAxis: { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
+      yAxis: { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: $k } }
       series: Object.entries(products).map(([name, data]) -> {
-        type: 'line', name: name, data: data
+        type: 'line', name, data
         symbol: 'circle', symbolSize: 0, smooth: false
         lineStyle: { width: 1 }, areaStyle: { opacity: 0.45 }
         stack: 'revenue', emphasis: { focus: 'series' }
@@ -526,21 +531,21 @@ export Dashboard = component
 
     @ic 'bar',
       xAxis: { ...XAXIS, data: quarters }
-      yAxis: { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> '$' + (v / 1000).toFixed(1) + 'M' } }
+      yAxis: { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: $M } }
       series: [{ type: 'bar', barMaxWidth: 60, label: { fontSize: 11 }, data: quarterlyRev }]
 
     @ic 'stackedBar',
       xAxis: { ...XAXIS, data: quarters }
-      yAxis: { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
+      yAxis: { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: $k } }
       series: Object.entries(productQuarterly).map(([name, data]) -> {
-        type: 'bar', name: name, data: data, stack: 'total', barMaxWidth: 60, emphasis: { focus: 'series' }
+        type: 'bar', name, data, stack: 'total', barMaxWidth: 60, emphasis: { focus: 'series' }
       })
 
     @ic 'combo',
       xAxis: { ...XAXIS, data: months }
       yAxis: [
-        { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
-        { ...YAXIS, name: 'Margin %', position: 'right', splitLine: { show: false }, axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> v + '%' }, min: 50, max: 80 }
+        { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: $k } }
+        { ...YAXIS, name: 'Margin %', position: 'right', splitLine: { show: false }, axisLabel: { ...YAXIS.axisLabel, formatter: pct }, min: 50, max: 80 }
       ]
       series: [
         { type: 'bar', name: 'Revenue', data: revenue, barMaxWidth: 60, yAxisIndex: 0 }
@@ -550,8 +555,8 @@ export Dashboard = component
     @ic 'multiAxis',
       xAxis: { ...XAXIS, data: months }
       yAxis: [
-        { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
-        { ...YAXIS, name: 'MoM Growth %', position: 'right', splitLine: { show: false }, axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> v + '%' } }
+        { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: $k } }
+        { ...YAXIS, name: 'MoM Growth %', position: 'right', splitLine: { show: false }, axisLabel: { ...YAXIS.axisLabel, formatter: pct } }
       ]
       series: [
         { type: 'line', name: 'Revenue', data: revenue, symbol: 'circle', symbolSize: 0, lineStyle: { width: 2 }, emphasis: { focus: 'series', lineStyle: { opacity: 1, width: 3 } } }
@@ -567,9 +572,9 @@ export Dashboard = component
       }]
 
     @ic 'scatter',
-      xAxis: { ...XAXIS, type: 'value', name: 'Avg Deal Size ($k)', axisLabel: { ...XAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' }, axisLine: { show: true } }
-      yAxis: { ...YAXIS, name: 'Close Rate %', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> v + '%' } }
-      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> 'Deal: $' + p.value[0] + 'k<br>Close Rate: ' + p.value[1] + '%<br>Deals: ' + p.value[2] }
+      xAxis: { ...XAXIS, type: 'value', name: 'Avg Deal Size ($k)', axisLabel: { ...XAXIS.axisLabel, formatter: $k }, axisLine: { show: true } }
+      yAxis: { ...YAXIS, name: 'Close Rate %', axisLabel: { ...YAXIS.axisLabel, formatter: pct } }
+      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> "Deal: $#{p.value[0]}k<br>Close Rate: #{p.value[1]}%<br>Deals: #{p.value[2]}" }
       series: [{
         type: 'scatter', data: deals, symbolSize: (d) -> d[2] * 1.8
         emphasis: { focus: 'self', itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.3)' } }
@@ -579,7 +584,7 @@ export Dashboard = component
       grid: { ...BASE.grid, top: '8%', bottom: '12%' }
       xAxis: { ...XAXIS, data: hours, splitArea: { show: false } }
       yAxis: { ...YAXIS, type: 'category', data: days, splitLine: { show: false }, splitArea: { show: false } }
-      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> days[p.value[1]] + ' ' + hours[p.value[0]] + '<br>Sessions: <b>' + p.value[2] + '</b>' }
+      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> "#{days[p.value[1]]} #{hours[p.value[0]]}<br>Sessions: <b>#{p.value[2]}</b>" }
       visualMap:
         min: 10, max: 140, calculable: true, orient: 'horizontal', left: 'center', bottom: '0%'
         inRange: { color: ['#a5cdee','#236aa4'] }
@@ -617,7 +622,7 @@ export Dashboard = component
         'Puerto Rico': { left: -76, top: 26, width: 2 }
 
       @ic 'choropleth',
-        tooltip: { trigger: 'item', formatter: (p) -> p.name + '<br>Revenue: $' + (p.value or 0).toLocaleString() + 'k' }
+        tooltip: { trigger: 'item', formatter: (p) -> "#{p.name}<br>Revenue: $#{(p.value or 0).toLocaleString()}k" }
         visualMap:
           min: 50, max: 9500, text: ['$9.5M+','$50k']
           inRange: { color: ['#a5cdee','#45a1bf','#236aa4'] }
@@ -635,7 +640,7 @@ export Dashboard = component
         tooltip:
           trigger: 'item'
           formatter: (p) ->
-            return clusterNames[p.value[2]] + ' cluster' if p.seriesType is 'scatter'
+            return "#{clusterNames[p.value[2]]} cluster" if p.seriesType is 'scatter'
             p.name
         legend:
           show: true, top: '2%'
@@ -646,7 +651,7 @@ export Dashboard = component
           emphasis: { itemStyle: { areaColor: '#e5e5e5' }, label: { show: false } }
           label: { show: false }
         series: clusterNames.map((name, ci) -> {
-          type: 'scatter', name: name, coordinateSystem: 'geo'
+          type: 'scatter', name, coordinateSystem: 'geo'
           data: customerLocations.filter((d) -> d[2] is ci).map((d) -> { value: [d[0], d[1], d[2]] })
           symbolSize: 8
           itemStyle: { color: clusterColors[ci], opacity: 0.8 }
@@ -659,7 +664,7 @@ export Dashboard = component
 
   initHierarchicalCharts: ->
     @ic 'treemap',
-      tooltip: { trigger: 'item', formatter: (p) -> p.name + '<br>$' + (p.value or 0).toLocaleString() + 'k' }
+      tooltip: { trigger: 'item', formatter: valK }
       legend: { show: false }
       series: [{
         type: 'treemap', data: revenueTree
@@ -675,7 +680,7 @@ export Dashboard = component
       }]
 
     @ic 'sunburst',
-      tooltip: { trigger: 'item', formatter: (p) -> p.name + '<br>$' + (p.value or 0).toLocaleString() + 'k' }
+      tooltip: { trigger: 'item', formatter: valK }
       legend: { show: false }
       series: [{
         type: 'sunburst', data: revenueTree, radius: ['15%','90%'], sort: null
@@ -701,7 +706,7 @@ export Dashboard = component
         axisLine: { lineStyle: { color: '#e5e5e5' } }
       series: [{
         type: 'radar'
-        data: Object.entries(radarProducts).map(([name, value]) -> { name: name, value: value })
+        data: Object.entries(radarProducts).map(([name, value]) -> { name, value })
         areaStyle: { opacity: 0.15 }, lineStyle: { width: 2 }
         symbol: 'circle', symbolSize: 5
       }]
@@ -710,18 +715,18 @@ export Dashboard = component
     totals = [0, 6, 11, 16]
     @ic 'waterfall',
       xAxis: { ...XAXIS, data: waterfallLabels, axisLabel: { ...XAXIS.axisLabel, rotate: 45, fontSize: 10 } }
-      yAxis: { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
+      yAxis: { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: $k } }
       legend: { show: false }
       series: [
         { type: 'bar', stack: 'wf', name: 'base', data: wf.base, barMaxWidth: 36, itemStyle: { color: 'transparent' }, emphasis: { itemStyle: { color: 'transparent' } } }
-        { type: 'bar', stack: 'wf', name: 'Increase', barMaxWidth: 36, data: wf.inc.map((v, i) -> { value: v, itemStyle: { color: if totals.includes(i) then '#236aa4' else '#46a485' } }), label: { show: true, position: 'top', fontSize: 10, color: '#717171', formatter: (p) -> v = waterfallValues[p.dataIndex]; return '$' + p.value + 'k' if v is null; return '+$' + v + 'k' if v > 0; '' } }
-        { type: 'bar', stack: 'wf', name: 'Decrease', data: wf.dec, barMaxWidth: 36, itemStyle: { color: '#8f3d56' }, label: { show: true, position: 'bottom', fontSize: 10, color: '#717171', formatter: (p) -> if p.value > 0 then '-$' + p.value + 'k' else '' } }
+        { type: 'bar', stack: 'wf', name: 'Increase', barMaxWidth: 36, data: wf.inc.map((v, i) -> { value: v, itemStyle: { color: if totals.includes(i) then '#236aa4' else '#46a485' } }), label: { show: true, position: 'top', fontSize: 10, color: '#717171', formatter: (p) -> v = waterfallValues[p.dataIndex]; return "$#{p.value}k" if v is null; return "+$#{v}k" if v > 0; '' } }
+        { type: 'bar', stack: 'wf', name: 'Decrease', data: wf.dec, barMaxWidth: 36, itemStyle: { color: '#8f3d56' }, label: { show: true, position: 'bottom', fontSize: 10, color: '#717171', formatter: (p) -> if p.value > 0 then "-$#{p.value}k" else '' } }
       ]
 
     @ic 'boxplot',
       xAxis: { ...XAXIS, data: quarters }
-      yAxis: { ...YAXIS, name: 'Deal Size ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
-      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> p.name + '<br>Max: $' + p.value[5] + 'k<br>Q3: $' + p.value[4] + 'k<br>Median: $' + p.value[3] + 'k<br>Q1: $' + p.value[2] + 'k<br>Min: $' + p.value[1] + 'k' }
+      yAxis: { ...YAXIS, name: 'Deal Size ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: $k } }
+      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> "#{p.name}<br>Max: $#{p.value[5]}k<br>Q3: $#{p.value[4]}k<br>Median: $#{p.value[3]}k<br>Q1: $#{p.value[2]}k<br>Min: $#{p.value[1]}k" }
       series: [{
         type: 'boxplot', data: boxplotData
         itemStyle: { color: '#a5cdee', borderColor: '#236aa4', borderWidth: 1.5 }
@@ -730,9 +735,9 @@ export Dashboard = component
 
     @ic 'parallel',
       tooltip: { show: false }
-      legend: { show: true, data: parallelData.map((d) -> d[0]) }
+      legend: { show: true, data: parallelData.map(-> it[0]) }
       parallelAxis: [
-        { dim: 0, name: 'Product', type: 'category', data: parallelData.map((d) -> d[0]), nameLocation: 'start' }
+        { dim: 0, name: 'Product', type: 'category', data: parallelData.map(-> it[0]), nameLocation: 'start' }
         { dim: 1, name: 'Revenue ($k)', type: 'value', nameLocation: 'end' }
         { dim: 2, name: 'Growth %', type: 'value', nameLocation: 'end' }
         { dim: 3, name: 'Retention %', type: 'value', min: 50, max: 100, nameLocation: 'end' }
@@ -755,7 +760,7 @@ export Dashboard = component
       })
 
     @ic 'calendar',
-      tooltip: { trigger: 'item', formatter: (p) -> p.value[0] + '<br>Logins: ' + p.value[1].toLocaleString() }
+      tooltip: { trigger: 'item', formatter: (p) -> "#{p.value[0]}<br>Logins: #{p.value[1].toLocaleString()}" }
       legend: { show: false }
       visualMap:
         min: 200, max: 1400, calculable: true, orient: 'horizontal', left: 'center', bottom: '2%'
@@ -777,7 +782,7 @@ export Dashboard = component
   initAdditionalCharts: ->
     @ic 'histogram',
       xAxis: { ...XAXIS, data: histBins, name: 'Response Time (ms)', axisLabel: { ...XAXIS.axisLabel, fontSize: 10 } }
-      yAxis: { ...YAXIS, name: 'Request Count', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> if v >= 1000 then (v / 1000) + 'k' else v } }
+      yAxis: { ...YAXIS, name: 'Request Count', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> if v >= 1000 then "#{v / 1000}k" else v } }
       legend: { show: false }
       series: [{
         type: 'bar', barWidth: '90%'
@@ -787,14 +792,14 @@ export Dashboard = component
 
     @ic 'horizBar',
       grid: { ...BASE.grid, left: '2%' }
-      xAxis: { ...YAXIS, name: 'Adoption %', max: 100, axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> v + '%' } }
+      xAxis: { ...YAXIS, name: 'Adoption %', max: 100, axisLabel: { ...YAXIS.axisLabel, formatter: pct } }
       yAxis: { ...XAXIS, type: 'category', data: features.slice().reverse(), axisLabel: { ...XAXIS.axisLabel, fontSize: 11 }, inverse: false }
       legend: { show: false }
-      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> p.name + ': ' + p.value + '%' }
+      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> "#{p.name}: #{p.value}%" }
       series: [{
         type: 'bar', data: adoption.slice().reverse(), barMaxWidth: 20
         itemStyle: { borderRadius: [0,3,3,0] }
-        label: { show: true, position: 'right', fontSize: 11, color: '#717171', formatter: (p) -> p.value + '%' }
+        label: { show: true, position: 'right', fontSize: 11, color: '#717171', formatter: (p) -> "#{p.value}%" }
         emphasis: { itemStyle: { opacity: 0.85 } }
       }]
 
@@ -819,8 +824,8 @@ export Dashboard = component
     r = regression
     @ic 'scatterReg',
       xAxis: { ...XAXIS, type: 'value', name: 'Engagement Score', axisLabel: { ...XAXIS.axisLabel }, axisLine: { show: true } }
-      yAxis: { ...YAXIS, name: 'Retention %', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> v + '%' } }
-      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> if p.seriesType is 'scatter' then 'Engagement: ' + p.value[0] + '<br>Retention: ' + p.value[1] + '%' else 'Trend line' }
+      yAxis: { ...YAXIS, name: 'Retention %', axisLabel: { ...YAXIS.axisLabel, formatter: pct } }
+      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> if p.seriesType is 'scatter' then "Engagement: #{p.value[0]}<br>Retention: #{p.value[1]}%" else 'Trend line' }
       legend: { show: false }
       series: [
         { type: 'scatter', data: cohortScatter, symbolSize: 9, itemStyle: { color: '#236aa4', opacity: 0.7 }, emphasis: { itemStyle: { opacity: 1, shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.25)' } } }
@@ -836,7 +841,7 @@ export Dashboard = component
       @initMaps()
       @makeGauge('gauge1', 72, 'NPS Score', '{value}', '#236aa4', 100)
       @makeGauge('gauge2', 94.2, 'CSAT', '{value}%', '#46a485', 100)
-      @makeGauge('gauge3', 99.97, 'Uptime', '{value}%', '#45a1bf', 100)
+      @makeGauge('gauge3', 99.8, 'Uptime', '{value}%', '#45a1bf', 100)
       @initHierarchicalCharts()
       @initAnalyticalCharts()
       @initAdditionalCharts()
