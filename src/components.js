@@ -135,6 +135,18 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       return isHtmlTag(name) || isComponent(name);
     };
 
+    let skipBalancedPair = (tokens, from, closer, opener) => {
+      let depth = 1;
+      let k = from;
+      while (k >= 0 && depth > 0) {
+        let kt = tokens[k][0];
+        if (kt === closer) depth++;
+        else if (kt === opener) depth--;
+        if (depth > 0) k--;
+      }
+      return k;
+    };
+
     let startsWithTag = (tokens, i) => {
       let j = i;
       while (j > 0) {
@@ -145,31 +157,21 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         if (pt === 'INDENT' || pt === 'OUTDENT') {
           let jt = tokens[j][0];
           if (jt === 'CALL_END' || jt === ')') {
-            let open = jt === 'CALL_END' ? 'CALL_START' : '(';
-            let depth = 1;
-            let k = j - 1;
-            while (k >= 0 && depth > 0) {
-              let kt = tokens[k][0];
-              if (kt === jt) depth++;
-              else if (kt === open) depth--;
-              if (depth > 0) k--;
-            }
-            j = k;
+            j = skipBalancedPair(tokens, j - 1, jt, jt === 'CALL_END' ? 'CALL_START' : '(');
             continue;
           }
           break;
         }
         if (pt === 'CALL_END' || pt === ')') {
-          let open = pt === 'CALL_END' ? 'CALL_START' : '(';
-          let depth = 1;
-          let k = j - 2;
-          while (k >= 0 && depth > 0) {
-            let kt = tokens[k][0];
-            if (kt === 'CALL_END' || kt === ')') depth++;
-            else if (kt === 'CALL_START' || kt === '(') depth--;
-            if (depth > 0) k--;
-          }
-          j = k;
+          j = skipBalancedPair(tokens, j - 2, pt, pt === 'CALL_END' ? 'CALL_START' : '(');
+          continue;
+        }
+        if (pt === 'INTERPOLATION_END') {
+          j = skipBalancedPair(tokens, j - 2, 'INTERPOLATION_END', 'INTERPOLATION_START');
+          continue;
+        }
+        if (pt === 'STRING_END') {
+          j = skipBalancedPair(tokens, j - 2, 'STRING_END', 'STRING_START');
           continue;
         }
         j--;
