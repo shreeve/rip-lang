@@ -522,12 +522,12 @@ export Dashboard = component
     @ic 'area',
       xAxis: { ...XAXIS, data: months }
       yAxis: { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: $k } }
-      series: Object.entries(products).map(([name, data]) -> {
+      series: ({
         type: 'line', name, data
         symbol: 'circle', symbolSize: 0, smooth: false
         lineStyle: { width: 1 }, areaStyle: { opacity: 0.45 }
         stack: 'revenue', emphasis: { focus: 'series' }
-      })
+      } for name, data of products)
 
     @ic 'bar',
       xAxis: { ...XAXIS, data: quarters }
@@ -537,9 +537,7 @@ export Dashboard = component
     @ic 'stackedBar',
       xAxis: { ...XAXIS, data: quarters }
       yAxis: { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: $k } }
-      series: Object.entries(productQuarterly).map(([name, data]) -> {
-        type: 'bar', name, data, stack: 'total', barMaxWidth: 60, emphasis: { focus: 'series' }
-      })
+      series: ({ type: 'bar', name, data, stack: 'total', barMaxWidth: 60, emphasis: { focus: 'series' } } for name, data of productQuarterly)
 
     @ic 'combo',
       xAxis: { ...XAXIS, data: months }
@@ -706,7 +704,7 @@ export Dashboard = component
         axisLine: { lineStyle: { color: '#e5e5e5' } }
       series: [{
         type: 'radar'
-        data: Object.entries(radarProducts).map(([name, value]) -> { name, value })
+        data: ({ name, value } for name, value of radarProducts)
         areaStyle: { opacity: 0.15 }, lineStyle: { width: 2 }
         symbol: 'circle', symbolSize: 5
       }]

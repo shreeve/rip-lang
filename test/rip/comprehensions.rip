@@ -148,3 +148,11 @@ test "no iife with guard", '''
   result = test()
   result
   ''', [3, 4, 5]
+
+# Forward for-of comprehension (for k, v of obj in value context returns array)
+test "forward for-of comprehension", '''
+  obj = { a: 1, b: 2, c: 3 }
+  result = for k, v of obj
+    { k, v }
+  result
+  ''', [{ k: 'a', v: 1 }, { k: 'b', v: 2 }, { k: 'c', v: 3 }]

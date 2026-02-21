@@ -1281,6 +1281,12 @@ export class CodeGenerator {
 
   generateForOf(head, rest, context, sexpr) {
     let [vars, obj, own, guard, body] = rest;
+
+    if (context === 'value' && this.comprehensionDepth === 0) {
+      let iterator = ['for-of', vars, obj, own];
+      return this.generate(['comprehension', body, [iterator], guard ? [guard] : []], context);
+    }
+
     let [keyVar, valueVar] = Array.isArray(vars) ? vars : [vars];
     let objCode = this.generate(obj, 'value');
     let code = `for (const ${keyVar} in ${objCode}) `;
