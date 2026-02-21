@@ -453,8 +453,15 @@ export Dashboard = component
   $M  = (v) -> "$#{(v / 1000).toFixed(1)}M"
   valK = (p) -> "#{p.name}<br>$#{(p.value or 0).toLocaleString()}k"
 
-  xaxis = (data, opts = {}) -> { ...XAXIS, data, ...opts }
-  yaxis = (name, fmt, opts = {}) -> { ...YAXIS, name, axisLabel: { ...YAXIS.axisLabel, formatter: fmt }, ...opts }
+  xaxis = (data = null, opts = {}) ->
+    if typeof data is 'object' and not Array.isArray(data) and data isnt null
+      opts = data
+      data = opts.data or null
+    label = if opts.axisLabel then { ...XAXIS.axisLabel, ...opts.axisLabel } else XAXIS.axisLabel
+    { ...XAXIS, data, ...opts, axisLabel: label }
+  yaxis = (name, fmt, opts = {}) ->
+    label = if opts.axisLabel then { ...YAXIS.axisLabel, formatter: fmt, ...opts.axisLabel } else { ...YAXIS.axisLabel, formatter: fmt }
+    { ...YAXIS, name, ...opts, axisLabel: label }
 
   ic: (id, opts) ->
     el = document.getElementById(id)
@@ -573,7 +580,7 @@ export Dashboard = component
       }]
 
     @ic 'scatter',
-      xAxis: { ...XAXIS, type: 'value', name: 'Avg Deal Size ($k)', axisLabel: { ...XAXIS.axisLabel, formatter: $k }, axisLine: { show: true } }
+      xAxis: xaxis type: 'value', name: 'Avg Deal Size ($k)', axisLabel: { formatter: $k }, axisLine: { show: true }
       yAxis: yaxis 'Close Rate %', pct
       tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> "Deal: $#{p.value[0]}k<br>Close Rate: #{p.value[1]}%<br>Deals: #{p.value[2]}" }
       series: [{
@@ -583,7 +590,7 @@ export Dashboard = component
 
     @ic 'heatmap',
       grid: { ...BASE.grid, top: '8%', bottom: '12%' }
-      xAxis: { ...XAXIS, data: hours, splitArea: { show: false } }
+      xAxis: xaxis hours, splitArea: { show: false }
       yAxis: { ...YAXIS, type: 'category', data: days, splitLine: { show: false }, splitArea: { show: false } }
       tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> "#{days[p.value[1]]} #{hours[p.value[0]]}<br>Sessions: <b>#{p.value[2]}</b>" }
       visualMap:
@@ -715,7 +722,7 @@ export Dashboard = component
     wf = @buildWaterfall(waterfallLabels, waterfallValues)
     totals = [0, 6, 11, 16]
     @ic 'waterfall',
-      xAxis: xaxis waterfallLabels, axisLabel: { ...XAXIS.axisLabel, rotate: 45, fontSize: 10 }
+      xAxis: xaxis waterfallLabels, axisLabel: { rotate: 45, fontSize: 10 }
       yAxis: yaxis 'Revenue ($k)', $k
       legend: { show: false }
       series: [
@@ -782,7 +789,7 @@ export Dashboard = component
 
   initAdditionalCharts: ->
     @ic 'histogram',
-      xAxis: xaxis histBins, name: 'Response Time (ms)', axisLabel: { ...XAXIS.axisLabel, fontSize: 10 }
+      xAxis: xaxis histBins, name: 'Response Time (ms)', axisLabel: { fontSize: 10 }
       yAxis: yaxis 'Request Count', (v) -> v >= 1000 ? "#{v / 1000}k" : v
       legend: { show: false }
       series: [{
@@ -793,8 +800,8 @@ export Dashboard = component
 
     @ic 'horizBar',
       grid: { ...BASE.grid, left: '2%' }
-      xAxis: { ...YAXIS, name: 'Adoption %', max: 100, axisLabel: { ...YAXIS.axisLabel, formatter: pct } }
-      yAxis: { ...XAXIS, type: 'category', data: features.slice().reverse(), axisLabel: { ...XAXIS.axisLabel, fontSize: 11 }, inverse: false }
+      xAxis: yaxis 'Adoption %', pct, max: 100
+      yAxis: xaxis features.slice().reverse(), type: 'category', axisLabel: { fontSize: 11 }, inverse: false
       legend: { show: false }
       tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> "#{p.name}: #{p.value}%" }
       series: [{
@@ -824,7 +831,7 @@ export Dashboard = component
 
     r = regression
     @ic 'scatterReg',
-      xAxis: { ...XAXIS, type: 'value', name: 'Engagement Score', axisLabel: { ...XAXIS.axisLabel }, axisLine: { show: true } }
+      xAxis: xaxis type: 'value', name: 'Engagement Score', axisLine: { show: true }
       yAxis: yaxis 'Retention %', pct
       tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> p.seriesType is 'scatter' ? "Engagement: #{p.value[0]}<br>Retention: #{p.value[1]}%" : 'Trend line' }
       legend: { show: false }
