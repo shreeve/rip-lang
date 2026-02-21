@@ -1,8 +1,8 @@
 <img src="https://raw.githubusercontent.com/shreeve/rip-lang/main/docs/assets/rip.png" style="width:50px" /> <br>
 
-# Rip Print - VS Code Extension
+# Rip Print
 
-Syntax-highlighted source code printing for VS Code.
+Syntax-highlighted source code printing for VS Code and Cursor.
 
 ## Features
 
@@ -13,7 +13,8 @@ Syntax-highlighted source code printing for VS Code.
 - Line numbers
 - Table of contents for multi-file prints
 - Print-optimized CSS (toolbar and navigation hidden when printing)
-- Auto-detects light/dark mode from your VS Code theme
+- Auto-detects light/dark mode from your editor theme
+- Rip syntax highlighting inside `<script type="text/rip">` HTML blocks
 
 ## Usage
 
@@ -32,17 +33,38 @@ Syntax-highlighted source code printing for VS Code.
 40+ languages including JavaScript, TypeScript, Python, Rust, Go, Ruby, C, C++,
 Zig, Rip, CoffeeScript, Bash, YAML, JSON, HTML, CSS, SQL, Markdown, and more.
 
-## Packaging and Publishing
+HTML files with embedded `<script type="text/rip">` blocks get proper Rip
+syntax highlighting instead of JavaScript.
+
+## Installation
+
+### From the Marketplace
+
+Search for "Rip Print" in the Extensions panel, or visit:
+https://marketplace.visualstudio.com/items?itemName=rip-lang.print
+
+### From a Local Build
 
 ```sh
 cd packages/print/vscode
 npm install
-npm run package                  # produces print-1.0.2.vsix
-npx @vscode/vsce publish         # publishes to marketplace as rip-lang.print
+npm run package                  # produces print-x.y.z.vsix
 ```
 
-To install locally:
+Install into **VS Code**:
 
 ```sh
-code --install-extension print-1.0.2.vsix --force
+code --install-extension print-x.y.z.vsix --force
+```
+
+Install into **Cursor**:
+
+```sh
+cursor --install-extension print-x.y.z.vsix --force
+```
+
+### Publishing
+
+```sh
+npx @vscode/vsce publish         # publishes to marketplace as rip-lang.print
 ```
