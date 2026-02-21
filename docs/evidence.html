@@ -117,7 +117,7 @@
 <body>
 
 <h1>ACME Corp Dashboard</h1>
-<p class="subtitle">FY 2025 SaaS Metrics &mdash; styled with the Evidence.dev ECharts theme</p>
+<p class="subtitle">FY 2025 SaaS Metrics &mdash; styled with the evidence.dev ECharts theme</p>
 
 <div class="kpi-row" id="kpiRow"></div>
 
@@ -276,7 +276,7 @@
 
 <script>
 // ===================================================================
-// Theme (from Evidence.dev — pass directly to echarts.registerTheme)
+// Theme (from evidence.dev — pass directly to echarts.registerTheme)
 // ===================================================================
 const THEME = {
   darkMode: false,
@@ -361,7 +361,7 @@ const THEME = {
 echarts.registerTheme('evidence', THEME);
 
 // ===================================================================
-// Shared option defaults (from Evidence's _Chart.svelte)
+// Shared option defaults (from evidence's _Chart.svelte)
 // ===================================================================
 const BASE = {
   animationDuration: 500,
@@ -1077,7 +1077,7 @@ init('calendar', {
 });
 
 // ===================================================================
-// KPI Sparkline Cards (pure SVG, Evidence-style)
+// KPI Sparkline Cards (pure SVG, evidence-style)
 // ===================================================================
 function sparklineSVG(data, color, w, h) {
   const min = Math.min(...data), max = Math.max(...data);
