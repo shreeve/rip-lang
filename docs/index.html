@@ -522,6 +522,7 @@
     <button class="tab" data-tab="repl"><span class="tab-full">REPL Console</span><span class="tab-short">REPL</span></button>
     <button class="tab" data-tab="example">Example</button>
     <button class="tab" data-tab="sierpinski">Sierpinski</button>
+    <button class="tab" data-tab="charts" title="Opens in new tab">Charts ⧉</button>
     <button class="tab" data-tab="demo" title="Opens in new tab">Demo ⧉</button>
   </div>
 
@@ -1129,6 +1130,9 @@
     exampleLoaded = false
 
     def switchToTab(tabName)
+      if tabName is 'charts'
+        window.open 'charts.html', '_blank'
+        return
       if tabName is 'demo'
         window.open 'https://shreeve.github.io/rip-lang/results/', '_blank'
         return
