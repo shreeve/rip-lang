@@ -96,7 +96,7 @@ code "fat arrow implicit object", """
   f = => status: 200, data: "ok"
   """, """
   let f;
-  f = () => {status: 200, data: "ok"};
+  f = () => ({status: 200, data: "ok"});
 """
 
 # Comma that SHOULD end arrow body (not an implicit object)
