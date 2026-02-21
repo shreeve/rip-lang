@@ -35,11 +35,6 @@
     "README.md"
   ],
   "peerDependencies": {
-    "@rip-lang/ui": ">=0.3.19"
-  },
-  "peerDependenciesMeta": {
-    "@rip-lang/ui": {
-      "optional": false
-    }
+    "rip-lang": ">=3.11.1"
   }
 }
