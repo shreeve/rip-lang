@@ -29,6 +29,7 @@ import { importRip } from '../../src/browser.js';
 export * from '../../src/browser.js';
 import * as __appExports from './_app.js';
 importRip.modules['app.rip'] = __appExports;
+for (const [k, v] of Object.entries(__appExports)) if (typeof v === 'function') globalThis[k] = v;
 `);
 
 // Step 3: Build the bundle

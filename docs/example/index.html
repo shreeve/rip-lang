@@ -8,8 +8,6 @@
 <body>
   <div id="app"></div>
   <script type="text/rip">
-    { launch } = importRip!('../dist/ui.rip')
-
     params = new URLSearchParams(window.location.search)
     url = params.get('app') or 'index.json'
     res = await fetch(url)
