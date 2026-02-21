@@ -16,18 +16,17 @@
 From the repo root:
 
 ```bash
-bun packages/grid/dev.rip
+bun packages/grid/grid.rip
 ```
 
 Then open http://localhost:3003.
 
 ## Status
 
-- **Phase 1** — Viewport (read-only grid) ✓
-- **Phase 2** — Selection and Navigation (in progress)
-- **Phase 3** — Editing
-- **Phase 4** — Sorting, Filtering, Clipboard
-- **Phase 5** — Column Resize, Reorder, Freeze
-- **Phase 6** — Polish and Performance
+- **Phase 1** — Viewport ✓
+- **Phase 2** — Selection and Navigation ✓
+- **Phase 3** — Editing ✓
+- **Phase 4** — Features (in progress: sorting ✓, resize ✓, freeze, reorder, clipboard, undo/redo)
+- **Phase 5** — Polish and Performance
 
 See [GRID.md](GRID.md) for the full specification.

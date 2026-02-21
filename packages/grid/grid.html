@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Rip Grid — Dev</title>
+  <title>Rip Grid</title>
   <script>
   (function() {
     // ?disable=index,grid-row — disable specific scripts to isolate errors
@@ -48,7 +48,7 @@ body {
   background: #f1f5f9;
 }
 
-.grid-dev {
+.grid-app {
   max-width: 1200px;
   margin: 0 auto;
   padding: 24px;
@@ -855,7 +855,7 @@ export Grid = component
       @_resizeObs.disconnect()
 
   render
-    .grid-dev
+    .grid-app
       .grid-toolbar
         h1 "Rip Grid"
         span.grid-info

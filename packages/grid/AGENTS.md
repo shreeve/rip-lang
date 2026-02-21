@@ -45,15 +45,15 @@ These are hard-won rules learned while building this grid. Follow them.
 
 ### Dev Server
 
-- Run `bun dev.rip` from the **repo root** (not `packages/grid/`) so that
+- Run `bun grid.rip` from the **repo root** (not `packages/grid/`) so that
   `bunfig.toml` is picked up and `rip-loader.js` preloads the compiler.
 
-- The dev server runs on port 3003 and serves `dev.html` plus `rip-ui.min.js`.
+- The dev server runs on port 3003 and serves `grid.html` plus `rip-ui.min.js`.
 
 ## Architecture
 
 See `GRID.md` for the full specification. The grid is built as:
 
-- `dev.html` — single-file development with inline `<script type="text/rip">` blocks
-- `dev.rip` — minimal Bun server using `@rip-lang/api` and `@rip-lang/ui/serve`
-- Components: `Home` (main grid) and `GridRow` (row renderer)
+- `grid.html` — single-file development with inline `<script type="text/rip">` blocks
+- `grid.rip` — minimal Bun server using `@rip-lang/api` and `@rip-lang/ui/serve`
+- Components: `Grid` (main grid) and `GridRow` (row renderer)
