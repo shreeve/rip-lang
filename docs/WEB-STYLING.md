@@ -681,7 +681,7 @@ Open Props is the only external styling dependency:
 bun add open-props
 ```
 
-Rip widgets ship as part of `@rip-lang/ui`. No additional installation needed.
+Rip widgets ship as part of `rip-lang`. No additional installation needed.
 
 ---
 

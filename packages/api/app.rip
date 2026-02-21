@@ -1,13 +1,12 @@
 # ==============================================================================
-# @rip-lang/ui/serve — Rip UI Server Middleware
-# ==============================================================================
+# @rip-lang/api app middleware — serve Rip applications
 #
-# Serves the Rip UI runtime, auto-generated app bundles, and component files.
+# Serves the Rip browser bundle, app component files, and the component bundle.
 # Hot-reload SSE is handled by rip-server; this middleware registers watch dirs.
 #
 # Usage:
-#   import { ripUI } from '@rip-lang/ui/serve'
-#   use ripUI dir: dir, components: 'routes', includes: ['ui'], watch: true, title: 'My App'
+#   import { ripApp } from '@rip-lang/api/app'
+#   use ripApp dir: dir, components: 'routes', includes: ['ui'], watch: true, title: 'My App'
 #
 # Options:
 #   app:        string  — URL mount point (default: '')
@@ -22,7 +21,7 @@
 
 import { get } from '@rip-lang/api'
 
-export ripUI = (opts = {}) ->
+export ripApp = (opts = {}) ->
   prefix        = opts.app or ''
   appDir        = opts.dir or '.'
   componentsDir = "#{appDir}/#{opts.components or 'components'}"
@@ -30,28 +29,22 @@ export ripUI = (opts = {}) ->
   enableWatch   = opts.watch or false
   appState      = opts.state or null
   appTitle      = opts.title or null
-  uiDir         = import.meta.dir
 
-  # Resolve rip-ui.min.js (compiler + UI framework bundled)
-  bundlePath = "#{uiDir}/dist/rip-ui.min.js"
+  # Resolve rip.min.js from the rip-lang package
+  ripDir = import.meta.resolve('rip-lang').replace('/src/compiler.js', '')
+  bundlePath = "#{ripDir}/docs/dist/rip.min.js"
 
-  # ----------------------------------------------------------------------------
-  # Route: /rip/* — framework files, registered once
-  # ----------------------------------------------------------------------------
+  # Route: /rip/rip.min.js — serve the bundle (registered once)
+  unless ripApp._registered
+    get "/rip/rip.min.js", (c) -> c.send bundlePath, 'application/javascript'
+    ripApp._registered = true
 
-  unless ripUI._registered
-    get "/rip/rip-ui.min.js", (c) -> c.send bundlePath, 'application/javascript'
-    ripUI._registered = true
-
-  # ----------------------------------------------------------------------------
   # Route: {prefix}/components/* — individual .rip component files
-  # Route: {prefix}/bundle  — app bundle (components + data as JSON)
-  # ----------------------------------------------------------------------------
-
   get "#{prefix}/components/*", (c) ->
     name = c.req.path.slice("#{prefix}/components/".length)
     c.send "#{componentsDir}/#{name}", 'text/plain; charset=UTF-8'
 
+  # Route: {prefix}/bundle — all components + app data as JSON
   get "#{prefix}/bundle", (c) ->
     glob = new Bun.Glob("**/*.rip")
     components = {}
@@ -77,16 +70,12 @@ export ripUI = (opts = {}) ->
       return new Response(null, { status: 304, headers: { 'ETag': etag } })
     new Response json, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'ETag': etag }
 
-  # ----------------------------------------------------------------------------
   # Register watch directories with rip-server via control socket
-  # ----------------------------------------------------------------------------
-
   if enableWatch and process.env.SOCKET_PREFIX
     ctl = "/tmp/#{process.env.SOCKET_PREFIX}.ctl.sock"
     dirs = [componentsDir, ...includeDirs]
     body = JSON.stringify({ op: 'watch', prefix, dirs })
     fetch('http://localhost/watch', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl }).catch (e) ->
-      console.warn "rip-ui: watch registration failed: #{e.message}"
+      console.warn "[Rip] Watch registration failed: #{e.message}"
 
-  # Return pass-through middleware
   (c, next) -> next!()
