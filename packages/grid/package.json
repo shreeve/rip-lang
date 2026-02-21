@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/grid",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "High-performance reactive data grid for Rip UI",
   "type": "module",
   "main": "grid.rip",
@@ -35,6 +35,6 @@
     "README.md"
   ],
   "peerDependencies": {
-    "rip-lang": ">=3.11.1"
+    "rip-lang": ">=3.12.0"
   }
 }
