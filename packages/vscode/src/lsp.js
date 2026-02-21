@@ -271,6 +271,31 @@ function offsetToLineCol(t, o) { let line = 0, ls = 0; for (let i = 0; i < o && 
 function uriToPath(u) { try { return decodeURIComponent(new URL(u).pathname); } catch { return u; } }
 function pathToUri(p) { return 'file://' + p; }
 
+// ── Reactive type unwrapping ────────────────────────────────────────
+// Rip's reactive operators (:=, ~=) compile to Signal<T> / Computed<T>
+// wrappers. On hover, show the inner type T instead — users write and
+// think in terms of the value type, not the wrapper.
+
+function unwrapReactiveType(display) {
+  for (const wrapper of ['Signal', 'Computed']) {
+    const tag = wrapper + '<';
+    const idx = display.indexOf(tag);
+    if (idx < 0) continue;
+    const start = idx + tag.length;
+    let depth = 1, end = start;
+    while (end < display.length && depth > 0) {
+      if (display[end] === '<') depth++;
+      else if (display[end] === '>') depth--;
+      end++;
+    }
+    if (depth === 0) {
+      const inner = display.slice(start, end - 1);
+      display = display.slice(0, idx) + inner + display.slice(end);
+    }
+  }
+  return display;
+}
+
 // ── LSP handlers ───────────────────────────────────────────────────
 
 connection.onCompletion((params) => {
@@ -296,7 +321,7 @@ connection.onCompletion((params) => {
         try {
           const d = service.getCompletionEntryDetails(vf, offset, e.name, undefined, undefined, undefined, undefined);
           if (d) {
-            const display = ts.displayPartsToString(d.displayParts);
+            const display = unwrapReactiveType(ts.displayPartsToString(d.displayParts));
             item.detail = display.replace(/\((\w+)\)\s*\S+\./, '($1) ');
             if (display.includes('?:')) item.label = e.name + '?';
             if (d.documentation?.length) {
@@ -321,8 +346,9 @@ connection.onHover((params) => {
     patchTypes();
     const info = service.getQuickInfoAtPosition(toVirtual(fp), offset);
     if (!info) return null;
-    const display = ts.displayPartsToString(info.displayParts);
+    let display = ts.displayPartsToString(info.displayParts);
     const docs = ts.displayPartsToString(info.documentation || []);
+    display = unwrapReactiveType(display);
     return { contents: { kind: 'markdown', value: '```typescript\n' + (docs ? display + '\n\n' + docs : display) + '\n```' } };
   } catch { return null; }
 });

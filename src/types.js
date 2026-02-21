@@ -1017,13 +1017,13 @@ function emitComponentTypes(sexpr, lines, indent, indentLevel, componentVars) {
         propName = isProp ? (target[2]?.valueOf?.() ?? target[2]) : (target?.valueOf?.() ?? target);
         type = isProp ? target[2]?.type : target?.type;
         hasDefault = true;
-        componentVars.add(propName);
+        if (!isProp) componentVars.add(propName);
       } else if (mHead === '.') {
         isProp = (member[1]?.valueOf?.() ?? member[1]) === 'this';
         propName = isProp ? (member[2]?.valueOf?.() ?? member[2]) : null;
         type = isProp ? member[2]?.type : null;
         hasDefault = false;
-        if (propName) componentVars.add(propName);
+        if (!isProp && propName) componentVars.add(propName);
       } else {
         continue;
       }
