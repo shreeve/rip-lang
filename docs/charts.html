@@ -452,7 +452,7 @@ export Dashboard = component
     el = document.getElementById(id)
     return unless el
     c = echarts.init(el, 'evidence')
-    c.setOption({ *BASE, *opts })
+    c.setOption({ ...BASE, ...opts })
     window.addEventListener 'resize', -> c.resize({ animation: { duration: 500 } })
     c
 
@@ -505,8 +505,8 @@ export Dashboard = component
 
   initCoreCharts: ->
     @ic 'line',
-      xAxis: { *XAXIS, data: months }
-      yAxis: { *YAXIS, name: 'Revenue ($k)', axisLabel: { *YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
+      xAxis: { ...XAXIS, data: months }
+      yAxis: { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
       series: [{
         type: 'line', symbol: 'circle', symbolSize: 0, smooth: false
         lineStyle: { width: 2, type: 'solid' }
@@ -515,8 +515,8 @@ export Dashboard = component
       }]
 
     @ic 'area',
-      xAxis: { *XAXIS, data: months }
-      yAxis: { *YAXIS, name: 'Revenue ($k)', axisLabel: { *YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
+      xAxis: { ...XAXIS, data: months }
+      yAxis: { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
       series: Object.entries(products).map(([name, data]) -> {
         type: 'line', name: name, data: data
         symbol: 'circle', symbolSize: 0, smooth: false
@@ -525,22 +525,22 @@ export Dashboard = component
       })
 
     @ic 'bar',
-      xAxis: { *XAXIS, data: quarters }
-      yAxis: { *YAXIS, name: 'Revenue ($k)', axisLabel: { *YAXIS.axisLabel, formatter: (v) -> '$' + (v / 1000).toFixed(1) + 'M' } }
+      xAxis: { ...XAXIS, data: quarters }
+      yAxis: { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> '$' + (v / 1000).toFixed(1) + 'M' } }
       series: [{ type: 'bar', barMaxWidth: 60, label: { fontSize: 11 }, data: quarterlyRev }]
 
     @ic 'stackedBar',
-      xAxis: { *XAXIS, data: quarters }
-      yAxis: { *YAXIS, name: 'Revenue ($k)', axisLabel: { *YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
+      xAxis: { ...XAXIS, data: quarters }
+      yAxis: { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
       series: Object.entries(productQuarterly).map(([name, data]) -> {
         type: 'bar', name: name, data: data, stack: 'total', barMaxWidth: 60, emphasis: { focus: 'series' }
       })
 
     @ic 'combo',
-      xAxis: { *XAXIS, data: months }
+      xAxis: { ...XAXIS, data: months }
       yAxis: [
-        { *YAXIS, name: 'Revenue ($k)', axisLabel: { *YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
-        { *YAXIS, name: 'Margin %', position: 'right', splitLine: { show: false }, axisLabel: { *YAXIS.axisLabel, formatter: (v) -> v + '%' }, min: 50, max: 80 }
+        { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
+        { ...YAXIS, name: 'Margin %', position: 'right', splitLine: { show: false }, axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> v + '%' }, min: 50, max: 80 }
       ]
       series: [
         { type: 'bar', name: 'Revenue', data: revenue, barMaxWidth: 60, yAxisIndex: 0 }
@@ -548,10 +548,10 @@ export Dashboard = component
       ]
 
     @ic 'multiAxis',
-      xAxis: { *XAXIS, data: months }
+      xAxis: { ...XAXIS, data: months }
       yAxis: [
-        { *YAXIS, name: 'Revenue ($k)', axisLabel: { *YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
-        { *YAXIS, name: 'MoM Growth %', position: 'right', splitLine: { show: false }, axisLabel: { *YAXIS.axisLabel, formatter: (v) -> v + '%' } }
+        { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
+        { ...YAXIS, name: 'MoM Growth %', position: 'right', splitLine: { show: false }, axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> v + '%' } }
       ]
       series: [
         { type: 'line', name: 'Revenue', data: revenue, symbol: 'circle', symbolSize: 0, lineStyle: { width: 2 }, emphasis: { focus: 'series', lineStyle: { opacity: 1, width: 3 } } }
@@ -567,19 +567,19 @@ export Dashboard = component
       }]
 
     @ic 'scatter',
-      xAxis: { *XAXIS, type: 'value', name: 'Avg Deal Size ($k)', axisLabel: { *XAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' }, axisLine: { show: true } }
-      yAxis: { *YAXIS, name: 'Close Rate %', axisLabel: { *YAXIS.axisLabel, formatter: (v) -> v + '%' } }
-      tooltip: { *BASE.tooltip, trigger: 'item', formatter: (p) -> 'Deal: $' + p.value[0] + 'k<br>Close Rate: ' + p.value[1] + '%<br>Deals: ' + p.value[2] }
+      xAxis: { ...XAXIS, type: 'value', name: 'Avg Deal Size ($k)', axisLabel: { ...XAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' }, axisLine: { show: true } }
+      yAxis: { ...YAXIS, name: 'Close Rate %', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> v + '%' } }
+      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> 'Deal: $' + p.value[0] + 'k<br>Close Rate: ' + p.value[1] + '%<br>Deals: ' + p.value[2] }
       series: [{
         type: 'scatter', data: deals, symbolSize: (d) -> d[2] * 1.8
         emphasis: { focus: 'self', itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.3)' } }
       }]
 
     @ic 'heatmap',
-      grid: { *BASE.grid, top: '8%', bottom: '12%' }
-      xAxis: { *XAXIS, data: hours, splitArea: { show: false } }
-      yAxis: { *YAXIS, type: 'category', data: days, splitLine: { show: false }, splitArea: { show: false } }
-      tooltip: { *BASE.tooltip, trigger: 'item', formatter: (p) -> days[p.value[1]] + ' ' + hours[p.value[0]] + '<br>Sessions: <b>' + p.value[2] + '</b>' }
+      grid: { ...BASE.grid, top: '8%', bottom: '12%' }
+      xAxis: { ...XAXIS, data: hours, splitArea: { show: false } }
+      yAxis: { ...YAXIS, type: 'category', data: days, splitLine: { show: false }, splitArea: { show: false } }
+      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> days[p.value[1]] + ' ' + hours[p.value[0]] + '<br>Sessions: <b>' + p.value[2] + '</b>' }
       visualMap:
         min: 10, max: 140, calculable: true, orient: 'horizontal', left: 'center', bottom: '0%'
         inRange: { color: ['#a5cdee','#236aa4'] }
@@ -711,8 +711,8 @@ export Dashboard = component
     wf = @buildWaterfall(waterfallLabels, waterfallValues)
     totals = [0, 6, 11, 16]
     @ic 'waterfall',
-      xAxis: { *XAXIS, data: waterfallLabels, axisLabel: { *XAXIS.axisLabel, rotate: 45, fontSize: 10 } }
-      yAxis: { *YAXIS, name: 'Revenue ($k)', axisLabel: { *YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
+      xAxis: { ...XAXIS, data: waterfallLabels, axisLabel: { ...XAXIS.axisLabel, rotate: 45, fontSize: 10 } }
+      yAxis: { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
       legend: { show: false }
       series: [
         { type: 'bar', stack: 'wf', name: 'base', data: wf.base, barMaxWidth: 36, itemStyle: { color: 'transparent' }, emphasis: { itemStyle: { color: 'transparent' } } }
@@ -721,9 +721,9 @@ export Dashboard = component
       ]
 
     @ic 'boxplot',
-      xAxis: { *XAXIS, data: quarters }
-      yAxis: { *YAXIS, name: 'Deal Size ($k)', axisLabel: { *YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
-      tooltip: { *BASE.tooltip, trigger: 'item', formatter: (p) -> p.name + '<br>Max: $' + p.value[5] + 'k<br>Q3: $' + p.value[4] + 'k<br>Median: $' + p.value[3] + 'k<br>Q1: $' + p.value[2] + 'k<br>Min: $' + p.value[1] + 'k' }
+      xAxis: { ...XAXIS, data: quarters }
+      yAxis: { ...YAXIS, name: 'Deal Size ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
+      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> p.name + '<br>Max: $' + p.value[5] + 'k<br>Q3: $' + p.value[4] + 'k<br>Median: $' + p.value[3] + 'k<br>Q1: $' + p.value[2] + 'k<br>Min: $' + p.value[1] + 'k' }
       series: [{
         type: 'boxplot', data: boxplotData
         itemStyle: { color: '#a5cdee', borderColor: '#236aa4', borderWidth: 1.5 }
@@ -778,8 +778,8 @@ export Dashboard = component
 
   initAdditionalCharts: ->
     @ic 'histogram',
-      xAxis: { *XAXIS, data: histBins, name: 'Response Time (ms)', axisLabel: { *XAXIS.axisLabel, fontSize: 10 } }
-      yAxis: { *YAXIS, name: 'Request Count', axisLabel: { *YAXIS.axisLabel, formatter: (v) -> if v >= 1000 then (v / 1000) + 'k' else v } }
+      xAxis: { ...XAXIS, data: histBins, name: 'Response Time (ms)', axisLabel: { ...XAXIS.axisLabel, fontSize: 10 } }
+      yAxis: { ...YAXIS, name: 'Request Count', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> if v >= 1000 then (v / 1000) + 'k' else v } }
       legend: { show: false }
       series: [{
         type: 'bar', barWidth: '90%'
@@ -788,11 +788,11 @@ export Dashboard = component
       }]
 
     @ic 'horizBar',
-      grid: { *BASE.grid, left: '2%' }
-      xAxis: { *YAXIS, name: 'Adoption %', max: 100, axisLabel: { *YAXIS.axisLabel, formatter: (v) -> v + '%' } }
-      yAxis: { *XAXIS, type: 'category', data: features.slice().reverse(), axisLabel: { *XAXIS.axisLabel, fontSize: 11 }, inverse: false }
+      grid: { ...BASE.grid, left: '2%' }
+      xAxis: { ...YAXIS, name: 'Adoption %', max: 100, axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> v + '%' } }
+      yAxis: { ...XAXIS, type: 'category', data: features.slice().reverse(), axisLabel: { ...XAXIS.axisLabel, fontSize: 11 }, inverse: false }
       legend: { show: false }
-      tooltip: { *BASE.tooltip, trigger: 'item', formatter: (p) -> p.name + ': ' + p.value + '%' }
+      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> p.name + ': ' + p.value + '%' }
       series: [{
         type: 'bar', data: adoption.slice().reverse(), barMaxWidth: 20
         itemStyle: { borderRadius: [0,3,3,0] }
@@ -820,9 +820,1069 @@ export Dashboard = component
 
     r = regression
     @ic 'scatterReg',
-      xAxis: { *XAXIS, type: 'value', name: 'Engagement Score', axisLabel: { *XAXIS.axisLabel }, axisLine: { show: true } }
-      yAxis: { *YAXIS, name: 'Retention %', axisLabel: { *YAXIS.axisLabel, formatter: (v) -> v + '%' } }
-      tooltip: { *BASE.tooltip, trigger: 'item', formatter: (p) -> if p.seriesType is 'scatter' then 'Engagement: ' + p.value[0] + '<br>Retention: ' + p.value[1] + '%' else 'Trend line' }
+      xAxis: { ...XAXIS, type: 'value', name: 'Engagement Score', axisLabel: { ...XAXIS.axisLabel }, axisLine: { show: true } }
+      yAxis: { ...YAXIS, name: 'Retention %', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> v + '%' } }
+      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> if p.seriesType is 'scatter' then 'Engagement: ' + p.value[0] + '<br>Retention: ' + p.value[1] + '%' else 'Trend line' }
+      legend: { show: false }
+      series: [
+        { type: 'scatter', data: cohortScatter, symbolSize: 9, itemStyle: { color: '#236aa4', opacity: 0.7 }, emphasis: { itemStyle: { opacity: 1, shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.25)' } } }
+        { type: 'line', data: [[r.xMin, r.slope * r.xMin + r.intercept], [r.xMax, r.slope * r.xMax + r.intercept]], symbol: 'none', lineStyle: { width: 2, type: 'dashed', color: '#8f3d56' }, tooltip: { show: false } }
+      ]
+
+  # ── Mount ──
+
+  ~>
+    requestAnimationFrame ->
+      echarts.registerTheme('evidence', THEME)
+      @initCoreCharts()
+      @initMaps()
+      @makeGauge('gauge1', 72, 'NPS Score', '{value}', '#236aa4', 100)
+      @makeGauge('gauge2', 94.2, 'CSAT', '{value}%', '#46a485', 100)
+      @makeGauge('gauge3', 99.97, 'Uptime', '{value}%', '#45a1bf', 100)
+      @initHierarchicalCharts()
+      @initAnalyticalCharts()
+      @initAdditionalCharts()
+
+  # ── Render ──
+
+  render
+    h1 "Acme Corp Dashboard"
+    p class: 'subtitle', "FY 2025 SaaS Metrics \u2014 styled with the Evidence.dev ECharts theme"
+
+    .kpi-row
+      for kpi in kpis
+        KpiCard
+          label: kpi.label, value: kpi.value
+          spark: kpi.spark, delta: kpi.delta, up: kpi.up
+
+    p class: 'section', "Core Charts"
+    .grid
+      ChartCard title: 'Monthly Revenue',               subtitle: 'Total recurring revenue by month',              chartId: 'line'
+      ChartCard title: 'Revenue by Product',             subtitle: 'Stacked area breakdown across product lines',   chartId: 'area'
+      ChartCard title: 'Quarterly Revenue',              subtitle: 'Quarter-over-quarter comparison',               chartId: 'bar'
+      ChartCard title: 'Revenue by Product \u00d7 Quarter', subtitle: 'Stacked bar with product breakdown',         chartId: 'stackedBar'
+      ChartCard title: 'Revenue & Margin',               subtitle: 'Revenue bars with gross margin % line overlay', chartId: 'combo'
+      ChartCard title: 'Revenue & Growth Rate',          subtitle: 'Dual-axis: revenue (left) and YoY growth (right)', chartId: 'multiAxis'
+      ChartCard title: 'Customers by Segment',           subtitle: 'Distribution across customer tiers',            chartId: 'pie'
+      ChartCard title: 'Deal Size vs. Close Rate',       subtitle: 'Each bubble represents a sales rep',            chartId: 'scatter'
+      ChartCard title: 'Feature Usage Heatmap',          subtitle: 'Active sessions by day of week and hour',       chartId: 'heatmap'
+      ChartCard title: 'Sales Pipeline',                 subtitle: 'Conversion through funnel stages',              chartId: 'funnel'
+      ChartCard title: 'Customer Acquisition Flow',      subtitle: 'Channel attribution from source to conversion', chartId: 'sankey', wide: true
+
+    p class: 'section', "Geographic"
+    .grid
+      ChartCard title: 'Revenue by State',    subtitle: 'Annual revenue across US states',               chartId: 'choropleth', tall: true
+      ChartCard title: 'Customer Locations',  subtitle: 'Purchase origins clustered by region (k-means)', chartId: 'scatterMap', tall: true
+
+    p class: 'section', "KPI Gauges"
+    .grid
+      div class: 'card wide'
+        h2 "Key Performance Indicators"
+        p "Net Promoter Score, Customer Satisfaction, and Platform Uptime"
+        .gauge-row
+          div id: 'gauge1', class: 'gauge-cell'
+          div id: 'gauge2', class: 'gauge-cell'
+          div id: 'gauge3', class: 'gauge-cell'
+
+    p class: 'section', "Hierarchical"
+    .grid
+      ChartCard title: 'Revenue Breakdown',    subtitle: 'Treemap by division, product, and feature',       chartId: 'treemap'
+      ChartCard title: 'Revenue Composition',  subtitle: 'Sunburst showing contribution at each level',     chartId: 'sunburst'
+
+    p class: 'section', "Analytical"
+    .grid
+      ChartCard title: 'Product Comparison',       subtitle: 'Multi-metric radar across product lines',          chartId: 'radar'
+      ChartCard title: 'Revenue Bridge',           subtitle: 'Waterfall from Q1 baseline through Q4',           chartId: 'waterfall'
+      ChartCard title: 'Deal Size Distribution',   subtitle: 'Boxplot of closed deal values by quarter ($k)',   chartId: 'boxplot'
+      ChartCard title: 'Product Metrics',          subtitle: 'Parallel coordinates across key dimensions',      chartId: 'parallel'
+      ChartCard title: 'Daily Platform Activity',  subtitle: 'Login volume over the past year',                 chartId: 'calendar', wide: true
+
+    p class: 'section', "Additional Chart Types"
+    .grid
+      ChartCard title: 'Response Time Distribution', subtitle: 'Histogram of API response times (ms)',           chartId: 'histogram'
+      ChartCard title: 'Feature Adoption',           subtitle: 'Horizontal bar chart of feature usage rates',    chartId: 'horizBar'
+      ChartCard title: 'Support Volume by Channel',  subtitle: 'Polar area chart of ticket counts',              chartId: 'polar'
+      ChartCard title: 'Engagement vs. Retention',   subtitle: 'Scatter with regression trend by cohort',        chartId: 'scatterReg'
+  initAnalyticalCharts: ->
+    @ic 'radar',
+      tooltip: { trigger: 'item' }
+      radar:
+        indicator: radarMetrics.map((m) -> { name: m, max: 100 })
+        shape: 'polygon', splitNumber: 4
+        axisName: { color: '#717171', fontSize: 12 }
+        splitLine: { lineStyle: { color: '#e5e5e5' } }
+        splitArea: { areaStyle: { color: ['#fff','#fafafa'] } }
+        axisLine: { lineStyle: { color: '#e5e5e5' } }
+      series: [{
+        type: 'radar'
+        data: Object.entries(radarProducts).map(([name, value]) -> { name: name, value: value })
+        areaStyle: { opacity: 0.15 }, lineStyle: { width: 2 }
+        symbol: 'circle', symbolSize: 5
+      }]
+
+    wf = @buildWaterfall(waterfallLabels, waterfallValues)
+    totals = [0, 6, 11, 16]
+    @ic 'waterfall',
+      xAxis: { ...XAXIS, data: waterfallLabels, axisLabel: { ...XAXIS.axisLabel, rotate: 45, fontSize: 10 } }
+      yAxis: { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
+      legend: { show: false }
+      series: [
+        { type: 'bar', stack: 'wf', name: 'base', data: wf.base, barMaxWidth: 36, itemStyle: { color: 'transparent' }, emphasis: { itemStyle: { color: 'transparent' } } }
+        { type: 'bar', stack: 'wf', name: 'Increase', barMaxWidth: 36, data: wf.inc.map((v, i) -> { value: v, itemStyle: { color: if totals.includes(i) then '#236aa4' else '#46a485' } }), label: { show: true, position: 'top', fontSize: 10, color: '#717171', formatter: (p) -> v = waterfallValues[p.dataIndex]; return '$' + p.value + 'k' if v is null; return '+$' + v + 'k' if v > 0; '' } }
+        { type: 'bar', stack: 'wf', name: 'Decrease', data: wf.dec, barMaxWidth: 36, itemStyle: { color: '#8f3d56' }, label: { show: true, position: 'bottom', fontSize: 10, color: '#717171', formatter: (p) -> if p.value > 0 then '-$' + p.value + 'k' else '' } }
+      ]
+
+    @ic 'boxplot',
+      xAxis: { ...XAXIS, data: quarters }
+      yAxis: { ...YAXIS, name: 'Deal Size ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
+      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> p.name + '<br>Max: $' + p.value[5] + 'k<br>Q3: $' + p.value[4] + 'k<br>Median: $' + p.value[3] + 'k<br>Q1: $' + p.value[2] + 'k<br>Min: $' + p.value[1] + 'k' }
+      series: [{
+        type: 'boxplot', data: boxplotData
+        itemStyle: { color: '#a5cdee', borderColor: '#236aa4', borderWidth: 1.5 }
+        emphasis: { itemStyle: { borderColor: '#060606', borderWidth: 2 } }
+      }]
+
+    @ic 'parallel',
+      tooltip: { show: false }
+      legend: { show: true, data: parallelData.map((d) -> d[0]) }
+      parallelAxis: [
+        { dim: 0, name: 'Product', type: 'category', data: parallelData.map((d) -> d[0]), nameLocation: 'start' }
+        { dim: 1, name: 'Revenue ($k)', type: 'value', nameLocation: 'end' }
+        { dim: 2, name: 'Growth %', type: 'value', nameLocation: 'end' }
+        { dim: 3, name: 'Retention %', type: 'value', min: 50, max: 100, nameLocation: 'end' }
+        { dim: 4, name: 'NPS', type: 'value', min: 50, max: 100, nameLocation: 'end' }
+        { dim: 5, name: 'Usage Score', type: 'value', min: 40, max: 100, nameLocation: 'end' }
+      ]
+      parallel:
+        left: '5%', right: '5%', top: '18%', bottom: '12%'
+        parallelAxisDefault:
+          nameTextStyle: { color: '#717171', fontSize: 11 }
+          axisLine: { lineStyle: { color: '#d6d6d6' } }
+          axisTick: { show: false }
+          axisLabel: { color: '#717171', fontSize: 10 }
+          splitLine: { show: false }
+      series: parallelData.map((d, i) -> {
+        type: 'parallel', name: d[0]
+        lineStyle: { width: 3, opacity: 0.7, color: COLORS[i] }
+        emphasis: { lineStyle: { width: 5, opacity: 1 } }
+        data: [d]
+      })
+
+    @ic 'calendar',
+      tooltip: { trigger: 'item', formatter: (p) -> p.value[0] + '<br>Logins: ' + p.value[1].toLocaleString() }
+      legend: { show: false }
+      visualMap:
+        min: 200, max: 1400, calculable: true, orient: 'horizontal', left: 'center', bottom: '2%'
+        inRange: { color: ['#a5cdee','#45a1bf','#236aa4'] }
+        textStyle: { color: '#717171', fontSize: 11 }
+      calendar:
+        range: '2024', top: '12%', left: '8%', right: '4%', bottom: '18%'
+        cellSize: ['auto', 16]
+        itemStyle: { borderWidth: 2, borderColor: '#fff' }
+        splitLine: { lineStyle: { color: '#d6d6d6', width: 1 } }
+        yearLabel: { show: false }
+        monthLabel: { color: '#717171', fontSize: 11, nameMap: 'en' }
+        dayLabel: { color: '#717171', fontSize: 10, firstDay: 1, nameMap: ['','M','','W','','F',''] }
+      series: [{
+        type: 'heatmap', coordinateSystem: 'calendar', data: calendarData
+        emphasis: { itemStyle: { shadowBlur: 5, shadowColor: 'rgba(0,0,0,0.3)' } }
+      }]
+
+  initAdditionalCharts: ->
+    @ic 'histogram',
+      xAxis: { ...XAXIS, data: histBins, name: 'Response Time (ms)', axisLabel: { ...XAXIS.axisLabel, fontSize: 10 } }
+      yAxis: { ...YAXIS, name: 'Request Count', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> if v >= 1000 then (v / 1000) + 'k' else v } }
+      legend: { show: false }
+      series: [{
+        type: 'bar', barWidth: '90%'
+        data: histCounts.map((v, i) -> { value: v, itemStyle: { color: if i <= 2 then '#46a485' else if i <= 4 then '#f4b548' else '#8f3d56' } })
+        emphasis: { itemStyle: { opacity: 0.85 } }
+      }]
+
+    @ic 'horizBar',
+      grid: { ...BASE.grid, left: '2%' }
+      xAxis: { ...YAXIS, name: 'Adoption %', max: 100, axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> v + '%' } }
+      yAxis: { ...XAXIS, type: 'category', data: features.slice().reverse(), axisLabel: { ...XAXIS.axisLabel, fontSize: 11 }, inverse: false }
+      legend: { show: false }
+      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> p.name + ': ' + p.value + '%' }
+      series: [{
+        type: 'bar', data: adoption.slice().reverse(), barMaxWidth: 20
+        itemStyle: { borderRadius: [0,3,3,0] }
+        label: { show: true, position: 'right', fontSize: 11, color: '#717171', formatter: (p) -> p.value + '%' }
+        emphasis: { itemStyle: { opacity: 0.85 } }
+      }]
+
+    @ic 'polar',
+      tooltip: { trigger: 'item', formatter: '{b}: {c} tickets' }
+      legend: { show: true, type: 'scroll', bottom: '2%' }
+      angleAxis:
+        type: 'category', data: channels, startAngle: 90
+        axisLine: { lineStyle: { color: '#d6d6d6' } }
+        axisLabel: { color: '#717171', fontSize: 11 }
+      radiusAxis:
+        max: 3500, axisLine: { show: false }, axisTick: { show: false }
+        axisLabel: { show: false }
+        splitLine: { lineStyle: { color: '#e5e5e5' } }
+      polar: { radius: ['10%','75%'] }
+      series: [{
+        type: 'bar', coordinateSystem: 'polar', roundCap: true
+        data: tickets.map((v, i) -> { value: v, itemStyle: { color: COLORS[i] } })
+        emphasis: { focus: 'self' }, label: { show: false }
+      }]
+
+    r = regression
+    @ic 'scatterReg',
+      xAxis: { ...XAXIS, type: 'value', name: 'Engagement Score', axisLabel: { ...XAXIS.axisLabel }, axisLine: { show: true } }
+      yAxis: { ...YAXIS, name: 'Retention %', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> v + '%' } }
+      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> if p.seriesType is 'scatter' then 'Engagement: ' + p.value[0] + '<br>Retention: ' + p.value[1] + '%' else 'Trend line' }
+      legend: { show: false }
+      series: [
+        { type: 'scatter', data: cohortScatter, symbolSize: 9, itemStyle: { color: '#236aa4', opacity: 0.7 }, emphasis: { itemStyle: { opacity: 1, shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.25)' } } }
+        { type: 'line', data: [[r.xMin, r.slope * r.xMin + r.intercept], [r.xMax, r.slope * r.xMax + r.intercept]], symbol: 'none', lineStyle: { width: 2, type: 'dashed', color: '#8f3d56' }, tooltip: { show: false } }
+      ]
+
+  # ── Mount ──
+
+  ~>
+    requestAnimationFrame ->
+      echarts.registerTheme('evidence', THEME)
+      @initCoreCharts()
+      @initMaps()
+      @makeGauge('gauge1', 72, 'NPS Score', '{value}', '#236aa4', 100)
+      @makeGauge('gauge2', 94.2, 'CSAT', '{value}%', '#46a485', 100)
+      @makeGauge('gauge3', 99.97, 'Uptime', '{value}%', '#45a1bf', 100)
+      @initHierarchicalCharts()
+      @initAnalyticalCharts()
+      @initAdditionalCharts()
+
+  # ── Render ──
+
+  render
+    h1 "Acme Corp Dashboard"
+    p class: 'subtitle', "FY 2025 SaaS Metrics \u2014 styled with the Evidence.dev ECharts theme"
+
+    .kpi-row
+      for kpi in kpis
+        KpiCard
+          label: kpi.label, value: kpi.value
+          spark: kpi.spark, delta: kpi.delta, up: kpi.up
+
+    p class: 'section', "Core Charts"
+    .grid
+      ChartCard title: 'Monthly Revenue',               subtitle: 'Total recurring revenue by month',              chartId: 'line'
+      ChartCard title: 'Revenue by Product',             subtitle: 'Stacked area breakdown across product lines',   chartId: 'area'
+      ChartCard title: 'Quarterly Revenue',              subtitle: 'Quarter-over-quarter comparison',               chartId: 'bar'
+      ChartCard title: 'Revenue by Product \u00d7 Quarter', subtitle: 'Stacked bar with product breakdown',         chartId: 'stackedBar'
+      ChartCard title: 'Revenue & Margin',               subtitle: 'Revenue bars with gross margin % line overlay', chartId: 'combo'
+      ChartCard title: 'Revenue & Growth Rate',          subtitle: 'Dual-axis: revenue (left) and YoY growth (right)', chartId: 'multiAxis'
+      ChartCard title: 'Customers by Segment',           subtitle: 'Distribution across customer tiers',            chartId: 'pie'
+      ChartCard title: 'Deal Size vs. Close Rate',       subtitle: 'Each bubble represents a sales rep',            chartId: 'scatter'
+      ChartCard title: 'Feature Usage Heatmap',          subtitle: 'Active sessions by day of week and hour',       chartId: 'heatmap'
+      ChartCard title: 'Sales Pipeline',                 subtitle: 'Conversion through funnel stages',              chartId: 'funnel'
+      ChartCard title: 'Customer Acquisition Flow',      subtitle: 'Channel attribution from source to conversion', chartId: 'sankey', wide: true
+
+    p class: 'section', "Geographic"
+    .grid
+      ChartCard title: 'Revenue by State',    subtitle: 'Annual revenue across US states',               chartId: 'choropleth', tall: true
+      ChartCard title: 'Customer Locations',  subtitle: 'Purchase origins clustered by region (k-means)', chartId: 'scatterMap', tall: true
+
+    p class: 'section', "KPI Gauges"
+    .grid
+      div class: 'card wide'
+        h2 "Key Performance Indicators"
+        p "Net Promoter Score, Customer Satisfaction, and Platform Uptime"
+        .gauge-row
+          div id: 'gauge1', class: 'gauge-cell'
+          div id: 'gauge2', class: 'gauge-cell'
+          div id: 'gauge3', class: 'gauge-cell'
+
+    p class: 'section', "Hierarchical"
+    .grid
+      ChartCard title: 'Revenue Breakdown',    subtitle: 'Treemap by division, product, and feature',       chartId: 'treemap'
+      ChartCard title: 'Revenue Composition',  subtitle: 'Sunburst showing contribution at each level',     chartId: 'sunburst'
+
+    p class: 'section', "Analytical"
+    .grid
+      ChartCard title: 'Product Comparison',       subtitle: 'Multi-metric radar across product lines',          chartId: 'radar'
+      ChartCard title: 'Revenue Bridge',           subtitle: 'Waterfall from Q1 baseline through Q4',           chartId: 'waterfall'
+      ChartCard title: 'Deal Size Distribution',   subtitle: 'Boxplot of closed deal values by quarter ($k)',   chartId: 'boxplot'
+      ChartCard title: 'Product Metrics',          subtitle: 'Parallel coordinates across key dimensions',      chartId: 'parallel'
+      ChartCard title: 'Daily Platform Activity',  subtitle: 'Login volume over the past year',                 chartId: 'calendar', wide: true
+
+    p class: 'section', "Additional Chart Types"
+    .grid
+      ChartCard title: 'Response Time Distribution', subtitle: 'Histogram of API response times (ms)',           chartId: 'histogram'
+      ChartCard title: 'Feature Adoption',           subtitle: 'Horizontal bar chart of feature usage rates',    chartId: 'horizBar'
+      ChartCard title: 'Support Volume by Channel',  subtitle: 'Polar area chart of ticket counts',              chartId: 'polar'
+      ChartCard title: 'Engagement vs. Retention',   subtitle: 'Scatter with regression trend by cohort',        chartId: 'scatterReg'
+  initAnalyticalCharts: ->
+    @ic 'radar',
+      tooltip: { trigger: 'item' }
+      radar:
+        indicator: radarMetrics.map((m) -> { name: m, max: 100 })
+        shape: 'polygon', splitNumber: 4
+        axisName: { color: '#717171', fontSize: 12 }
+        splitLine: { lineStyle: { color: '#e5e5e5' } }
+        splitArea: { areaStyle: { color: ['#fff','#fafafa'] } }
+        axisLine: { lineStyle: { color: '#e5e5e5' } }
+      series: [{
+        type: 'radar'
+        data: Object.entries(radarProducts).map(([name, value]) -> { name: name, value: value })
+        areaStyle: { opacity: 0.15 }, lineStyle: { width: 2 }
+        symbol: 'circle', symbolSize: 5
+      }]
+
+    wf = @buildWaterfall(waterfallLabels, waterfallValues)
+    totals = [0, 6, 11, 16]
+    @ic 'waterfall',
+      xAxis: { ...XAXIS, data: waterfallLabels, axisLabel: { ...XAXIS.axisLabel, rotate: 45, fontSize: 10 } }
+      yAxis: { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
+      legend: { show: false }
+      series: [
+        { type: 'bar', stack: 'wf', name: 'base', data: wf.base, barMaxWidth: 36, itemStyle: { color: 'transparent' }, emphasis: { itemStyle: { color: 'transparent' } } }
+        { type: 'bar', stack: 'wf', name: 'Increase', barMaxWidth: 36, data: wf.inc.map((v, i) -> { value: v, itemStyle: { color: if totals.includes(i) then '#236aa4' else '#46a485' } }), label: { show: true, position: 'top', fontSize: 10, color: '#717171', formatter: (p) -> v = waterfallValues[p.dataIndex]; return '$' + p.value + 'k' if v is null; return '+$' + v + 'k' if v > 0; '' } }
+        { type: 'bar', stack: 'wf', name: 'Decrease', data: wf.dec, barMaxWidth: 36, itemStyle: { color: '#8f3d56' }, label: { show: true, position: 'bottom', fontSize: 10, color: '#717171', formatter: (p) -> if p.value > 0 then '-$' + p.value + 'k' else '' } }
+      ]
+
+    @ic 'boxplot',
+      xAxis: { ...XAXIS, data: quarters }
+      yAxis: { ...YAXIS, name: 'Deal Size ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
+      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> p.name + '<br>Max: $' + p.value[5] + 'k<br>Q3: $' + p.value[4] + 'k<br>Median: $' + p.value[3] + 'k<br>Q1: $' + p.value[2] + 'k<br>Min: $' + p.value[1] + 'k' }
+      series: [{
+        type: 'boxplot', data: boxplotData
+        itemStyle: { color: '#a5cdee', borderColor: '#236aa4', borderWidth: 1.5 }
+        emphasis: { itemStyle: { borderColor: '#060606', borderWidth: 2 } }
+      }]
+
+    @ic 'parallel',
+      tooltip: { show: false }
+      legend: { show: true, data: parallelData.map((d) -> d[0]) }
+      parallelAxis: [
+        { dim: 0, name: 'Product', type: 'category', data: parallelData.map((d) -> d[0]), nameLocation: 'start' }
+        { dim: 1, name: 'Revenue ($k)', type: 'value', nameLocation: 'end' }
+        { dim: 2, name: 'Growth %', type: 'value', nameLocation: 'end' }
+        { dim: 3, name: 'Retention %', type: 'value', min: 50, max: 100, nameLocation: 'end' }
+        { dim: 4, name: 'NPS', type: 'value', min: 50, max: 100, nameLocation: 'end' }
+        { dim: 5, name: 'Usage Score', type: 'value', min: 40, max: 100, nameLocation: 'end' }
+      ]
+      parallel:
+        left: '5%', right: '5%', top: '18%', bottom: '12%'
+        parallelAxisDefault:
+          nameTextStyle: { color: '#717171', fontSize: 11 }
+          axisLine: { lineStyle: { color: '#d6d6d6' } }
+          axisTick: { show: false }
+          axisLabel: { color: '#717171', fontSize: 10 }
+          splitLine: { show: false }
+      series: parallelData.map((d, i) -> {
+        type: 'parallel', name: d[0]
+        lineStyle: { width: 3, opacity: 0.7, color: COLORS[i] }
+        emphasis: { lineStyle: { width: 5, opacity: 1 } }
+        data: [d]
+      })
+
+    @ic 'calendar',
+      tooltip: { trigger: 'item', formatter: (p) -> p.value[0] + '<br>Logins: ' + p.value[1].toLocaleString() }
+      legend: { show: false }
+      visualMap:
+        min: 200, max: 1400, calculable: true, orient: 'horizontal', left: 'center', bottom: '2%'
+        inRange: { color: ['#a5cdee','#45a1bf','#236aa4'] }
+        textStyle: { color: '#717171', fontSize: 11 }
+      calendar:
+        range: '2024', top: '12%', left: '8%', right: '4%', bottom: '18%'
+        cellSize: ['auto', 16]
+        itemStyle: { borderWidth: 2, borderColor: '#fff' }
+        splitLine: { lineStyle: { color: '#d6d6d6', width: 1 } }
+        yearLabel: { show: false }
+        monthLabel: { color: '#717171', fontSize: 11, nameMap: 'en' }
+        dayLabel: { color: '#717171', fontSize: 10, firstDay: 1, nameMap: ['','M','','W','','F',''] }
+      series: [{
+        type: 'heatmap', coordinateSystem: 'calendar', data: calendarData
+        emphasis: { itemStyle: { shadowBlur: 5, shadowColor: 'rgba(0,0,0,0.3)' } }
+      }]
+
+  initAdditionalCharts: ->
+    @ic 'histogram',
+      xAxis: { ...XAXIS, data: histBins, name: 'Response Time (ms)', axisLabel: { ...XAXIS.axisLabel, fontSize: 10 } }
+      yAxis: { ...YAXIS, name: 'Request Count', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> if v >= 1000 then (v / 1000) + 'k' else v } }
+      legend: { show: false }
+      series: [{
+        type: 'bar', barWidth: '90%'
+        data: histCounts.map((v, i) -> { value: v, itemStyle: { color: if i <= 2 then '#46a485' else if i <= 4 then '#f4b548' else '#8f3d56' } })
+        emphasis: { itemStyle: { opacity: 0.85 } }
+      }]
+
+    @ic 'horizBar',
+      grid: { ...BASE.grid, left: '2%' }
+      xAxis: { ...YAXIS, name: 'Adoption %', max: 100, axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> v + '%' } }
+      yAxis: { ...XAXIS, type: 'category', data: features.slice().reverse(), axisLabel: { ...XAXIS.axisLabel, fontSize: 11 }, inverse: false }
+      legend: { show: false }
+      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> p.name + ': ' + p.value + '%' }
+      series: [{
+        type: 'bar', data: adoption.slice().reverse(), barMaxWidth: 20
+        itemStyle: { borderRadius: [0,3,3,0] }
+        label: { show: true, position: 'right', fontSize: 11, color: '#717171', formatter: (p) -> p.value + '%' }
+        emphasis: { itemStyle: { opacity: 0.85 } }
+      }]
+
+    @ic 'polar',
+      tooltip: { trigger: 'item', formatter: '{b}: {c} tickets' }
+      legend: { show: true, type: 'scroll', bottom: '2%' }
+      angleAxis:
+        type: 'category', data: channels, startAngle: 90
+        axisLine: { lineStyle: { color: '#d6d6d6' } }
+        axisLabel: { color: '#717171', fontSize: 11 }
+      radiusAxis:
+        max: 3500, axisLine: { show: false }, axisTick: { show: false }
+        axisLabel: { show: false }
+        splitLine: { lineStyle: { color: '#e5e5e5' } }
+      polar: { radius: ['10%','75%'] }
+      series: [{
+        type: 'bar', coordinateSystem: 'polar', roundCap: true
+        data: tickets.map((v, i) -> { value: v, itemStyle: { color: COLORS[i] } })
+        emphasis: { focus: 'self' }, label: { show: false }
+      }]
+
+    r = regression
+    @ic 'scatterReg',
+      xAxis: { ...XAXIS, type: 'value', name: 'Engagement Score', axisLabel: { ...XAXIS.axisLabel }, axisLine: { show: true } }
+      yAxis: { ...YAXIS, name: 'Retention %', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> v + '%' } }
+      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> if p.seriesType is 'scatter' then 'Engagement: ' + p.value[0] + '<br>Retention: ' + p.value[1] + '%' else 'Trend line' }
+      legend: { show: false }
+      series: [
+        { type: 'scatter', data: cohortScatter, symbolSize: 9, itemStyle: { color: '#236aa4', opacity: 0.7 }, emphasis: { itemStyle: { opacity: 1, shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.25)' } } }
+        { type: 'line', data: [[r.xMin, r.slope * r.xMin + r.intercept], [r.xMax, r.slope * r.xMax + r.intercept]], symbol: 'none', lineStyle: { width: 2, type: 'dashed', color: '#8f3d56' }, tooltip: { show: false } }
+      ]
+
+  # ── Mount ──
+
+  ~>
+    requestAnimationFrame ->
+      echarts.registerTheme('evidence', THEME)
+      @initCoreCharts()
+      @initMaps()
+      @makeGauge('gauge1', 72, 'NPS Score', '{value}', '#236aa4', 100)
+      @makeGauge('gauge2', 94.2, 'CSAT', '{value}%', '#46a485', 100)
+      @makeGauge('gauge3', 99.97, 'Uptime', '{value}%', '#45a1bf', 100)
+      @initHierarchicalCharts()
+      @initAnalyticalCharts()
+      @initAdditionalCharts()
+
+  # ── Render ──
+
+  render
+    h1 "Acme Corp Dashboard"
+    p class: 'subtitle', "FY 2025 SaaS Metrics \u2014 styled with the Evidence.dev ECharts theme"
+
+    .kpi-row
+      for kpi in kpis
+        KpiCard
+          label: kpi.label, value: kpi.value
+          spark: kpi.spark, delta: kpi.delta, up: kpi.up
+
+    p class: 'section', "Core Charts"
+    .grid
+      ChartCard title: 'Monthly Revenue',               subtitle: 'Total recurring revenue by month',              chartId: 'line'
+      ChartCard title: 'Revenue by Product',             subtitle: 'Stacked area breakdown across product lines',   chartId: 'area'
+      ChartCard title: 'Quarterly Revenue',              subtitle: 'Quarter-over-quarter comparison',               chartId: 'bar'
+      ChartCard title: 'Revenue by Product \u00d7 Quarter', subtitle: 'Stacked bar with product breakdown',         chartId: 'stackedBar'
+      ChartCard title: 'Revenue & Margin',               subtitle: 'Revenue bars with gross margin % line overlay', chartId: 'combo'
+      ChartCard title: 'Revenue & Growth Rate',          subtitle: 'Dual-axis: revenue (left) and YoY growth (right)', chartId: 'multiAxis'
+      ChartCard title: 'Customers by Segment',           subtitle: 'Distribution across customer tiers',            chartId: 'pie'
+      ChartCard title: 'Deal Size vs. Close Rate',       subtitle: 'Each bubble represents a sales rep',            chartId: 'scatter'
+      ChartCard title: 'Feature Usage Heatmap',          subtitle: 'Active sessions by day of week and hour',       chartId: 'heatmap'
+      ChartCard title: 'Sales Pipeline',                 subtitle: 'Conversion through funnel stages',              chartId: 'funnel'
+      ChartCard title: 'Customer Acquisition Flow',      subtitle: 'Channel attribution from source to conversion', chartId: 'sankey', wide: true
+
+    p class: 'section', "Geographic"
+    .grid
+      ChartCard title: 'Revenue by State',    subtitle: 'Annual revenue across US states',               chartId: 'choropleth', tall: true
+      ChartCard title: 'Customer Locations',  subtitle: 'Purchase origins clustered by region (k-means)', chartId: 'scatterMap', tall: true
+
+    p class: 'section', "KPI Gauges"
+    .grid
+      div class: 'card wide'
+        h2 "Key Performance Indicators"
+        p "Net Promoter Score, Customer Satisfaction, and Platform Uptime"
+        .gauge-row
+          div id: 'gauge1', class: 'gauge-cell'
+          div id: 'gauge2', class: 'gauge-cell'
+          div id: 'gauge3', class: 'gauge-cell'
+
+    p class: 'section', "Hierarchical"
+    .grid
+      ChartCard title: 'Revenue Breakdown',    subtitle: 'Treemap by division, product, and feature',       chartId: 'treemap'
+      ChartCard title: 'Revenue Composition',  subtitle: 'Sunburst showing contribution at each level',     chartId: 'sunburst'
+
+    p class: 'section', "Analytical"
+    .grid
+      ChartCard title: 'Product Comparison',       subtitle: 'Multi-metric radar across product lines',          chartId: 'radar'
+      ChartCard title: 'Revenue Bridge',           subtitle: 'Waterfall from Q1 baseline through Q4',           chartId: 'waterfall'
+      ChartCard title: 'Deal Size Distribution',   subtitle: 'Boxplot of closed deal values by quarter ($k)',   chartId: 'boxplot'
+      ChartCard title: 'Product Metrics',          subtitle: 'Parallel coordinates across key dimensions',      chartId: 'parallel'
+      ChartCard title: 'Daily Platform Activity',  subtitle: 'Login volume over the past year',                 chartId: 'calendar', wide: true
+
+    p class: 'section', "Additional Chart Types"
+    .grid
+      ChartCard title: 'Response Time Distribution', subtitle: 'Histogram of API response times (ms)',           chartId: 'histogram'
+      ChartCard title: 'Feature Adoption',           subtitle: 'Horizontal bar chart of feature usage rates',    chartId: 'horizBar'
+      ChartCard title: 'Support Volume by Channel',  subtitle: 'Polar area chart of ticket counts',              chartId: 'polar'
+      ChartCard title: 'Engagement vs. Retention',   subtitle: 'Scatter with regression trend by cohort',        chartId: 'scatterReg'
+  initAnalyticalCharts: ->
+    @ic 'radar',
+      tooltip: { trigger: 'item' }
+      radar:
+        indicator: radarMetrics.map((m) -> { name: m, max: 100 })
+        shape: 'polygon', splitNumber: 4
+        axisName: { color: '#717171', fontSize: 12 }
+        splitLine: { lineStyle: { color: '#e5e5e5' } }
+        splitArea: { areaStyle: { color: ['#fff','#fafafa'] } }
+        axisLine: { lineStyle: { color: '#e5e5e5' } }
+      series: [{
+        type: 'radar'
+        data: Object.entries(radarProducts).map(([name, value]) -> { name: name, value: value })
+        areaStyle: { opacity: 0.15 }, lineStyle: { width: 2 }
+        symbol: 'circle', symbolSize: 5
+      }]
+
+    wf = @buildWaterfall(waterfallLabels, waterfallValues)
+    totals = [0, 6, 11, 16]
+    @ic 'waterfall',
+      xAxis: { ...XAXIS, data: waterfallLabels, axisLabel: { ...XAXIS.axisLabel, rotate: 45, fontSize: 10 } }
+      yAxis: { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
+      legend: { show: false }
+      series: [
+        { type: 'bar', stack: 'wf', name: 'base', data: wf.base, barMaxWidth: 36, itemStyle: { color: 'transparent' }, emphasis: { itemStyle: { color: 'transparent' } } }
+        { type: 'bar', stack: 'wf', name: 'Increase', barMaxWidth: 36, data: wf.inc.map((v, i) -> { value: v, itemStyle: { color: if totals.includes(i) then '#236aa4' else '#46a485' } }), label: { show: true, position: 'top', fontSize: 10, color: '#717171', formatter: (p) -> v = waterfallValues[p.dataIndex]; return '$' + p.value + 'k' if v is null; return '+$' + v + 'k' if v > 0; '' } }
+        { type: 'bar', stack: 'wf', name: 'Decrease', data: wf.dec, barMaxWidth: 36, itemStyle: { color: '#8f3d56' }, label: { show: true, position: 'bottom', fontSize: 10, color: '#717171', formatter: (p) -> if p.value > 0 then '-$' + p.value + 'k' else '' } }
+      ]
+
+    @ic 'boxplot',
+      xAxis: { ...XAXIS, data: quarters }
+      yAxis: { ...YAXIS, name: 'Deal Size ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
+      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> p.name + '<br>Max: $' + p.value[5] + 'k<br>Q3: $' + p.value[4] + 'k<br>Median: $' + p.value[3] + 'k<br>Q1: $' + p.value[2] + 'k<br>Min: $' + p.value[1] + 'k' }
+      series: [{
+        type: 'boxplot', data: boxplotData
+        itemStyle: { color: '#a5cdee', borderColor: '#236aa4', borderWidth: 1.5 }
+        emphasis: { itemStyle: { borderColor: '#060606', borderWidth: 2 } }
+      }]
+
+    @ic 'parallel',
+      tooltip: { show: false }
+      legend: { show: true, data: parallelData.map((d) -> d[0]) }
+      parallelAxis: [
+        { dim: 0, name: 'Product', type: 'category', data: parallelData.map((d) -> d[0]), nameLocation: 'start' }
+        { dim: 1, name: 'Revenue ($k)', type: 'value', nameLocation: 'end' }
+        { dim: 2, name: 'Growth %', type: 'value', nameLocation: 'end' }
+        { dim: 3, name: 'Retention %', type: 'value', min: 50, max: 100, nameLocation: 'end' }
+        { dim: 4, name: 'NPS', type: 'value', min: 50, max: 100, nameLocation: 'end' }
+        { dim: 5, name: 'Usage Score', type: 'value', min: 40, max: 100, nameLocation: 'end' }
+      ]
+      parallel:
+        left: '5%', right: '5%', top: '18%', bottom: '12%'
+        parallelAxisDefault:
+          nameTextStyle: { color: '#717171', fontSize: 11 }
+          axisLine: { lineStyle: { color: '#d6d6d6' } }
+          axisTick: { show: false }
+          axisLabel: { color: '#717171', fontSize: 10 }
+          splitLine: { show: false }
+      series: parallelData.map((d, i) -> {
+        type: 'parallel', name: d[0]
+        lineStyle: { width: 3, opacity: 0.7, color: COLORS[i] }
+        emphasis: { lineStyle: { width: 5, opacity: 1 } }
+        data: [d]
+      })
+
+    @ic 'calendar',
+      tooltip: { trigger: 'item', formatter: (p) -> p.value[0] + '<br>Logins: ' + p.value[1].toLocaleString() }
+      legend: { show: false }
+      visualMap:
+        min: 200, max: 1400, calculable: true, orient: 'horizontal', left: 'center', bottom: '2%'
+        inRange: { color: ['#a5cdee','#45a1bf','#236aa4'] }
+        textStyle: { color: '#717171', fontSize: 11 }
+      calendar:
+        range: '2024', top: '12%', left: '8%', right: '4%', bottom: '18%'
+        cellSize: ['auto', 16]
+        itemStyle: { borderWidth: 2, borderColor: '#fff' }
+        splitLine: { lineStyle: { color: '#d6d6d6', width: 1 } }
+        yearLabel: { show: false }
+        monthLabel: { color: '#717171', fontSize: 11, nameMap: 'en' }
+        dayLabel: { color: '#717171', fontSize: 10, firstDay: 1, nameMap: ['','M','','W','','F',''] }
+      series: [{
+        type: 'heatmap', coordinateSystem: 'calendar', data: calendarData
+        emphasis: { itemStyle: { shadowBlur: 5, shadowColor: 'rgba(0,0,0,0.3)' } }
+      }]
+
+  initAdditionalCharts: ->
+    @ic 'histogram',
+      xAxis: { ...XAXIS, data: histBins, name: 'Response Time (ms)', axisLabel: { ...XAXIS.axisLabel, fontSize: 10 } }
+      yAxis: { ...YAXIS, name: 'Request Count', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> if v >= 1000 then (v / 1000) + 'k' else v } }
+      legend: { show: false }
+      series: [{
+        type: 'bar', barWidth: '90%'
+        data: histCounts.map((v, i) -> { value: v, itemStyle: { color: if i <= 2 then '#46a485' else if i <= 4 then '#f4b548' else '#8f3d56' } })
+        emphasis: { itemStyle: { opacity: 0.85 } }
+      }]
+
+    @ic 'horizBar',
+      grid: { ...BASE.grid, left: '2%' }
+      xAxis: { ...YAXIS, name: 'Adoption %', max: 100, axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> v + '%' } }
+      yAxis: { ...XAXIS, type: 'category', data: features.slice().reverse(), axisLabel: { ...XAXIS.axisLabel, fontSize: 11 }, inverse: false }
+      legend: { show: false }
+      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> p.name + ': ' + p.value + '%' }
+      series: [{
+        type: 'bar', data: adoption.slice().reverse(), barMaxWidth: 20
+        itemStyle: { borderRadius: [0,3,3,0] }
+        label: { show: true, position: 'right', fontSize: 11, color: '#717171', formatter: (p) -> p.value + '%' }
+        emphasis: { itemStyle: { opacity: 0.85 } }
+      }]
+
+    @ic 'polar',
+      tooltip: { trigger: 'item', formatter: '{b}: {c} tickets' }
+      legend: { show: true, type: 'scroll', bottom: '2%' }
+      angleAxis:
+        type: 'category', data: channels, startAngle: 90
+        axisLine: { lineStyle: { color: '#d6d6d6' } }
+        axisLabel: { color: '#717171', fontSize: 11 }
+      radiusAxis:
+        max: 3500, axisLine: { show: false }, axisTick: { show: false }
+        axisLabel: { show: false }
+        splitLine: { lineStyle: { color: '#e5e5e5' } }
+      polar: { radius: ['10%','75%'] }
+      series: [{
+        type: 'bar', coordinateSystem: 'polar', roundCap: true
+        data: tickets.map((v, i) -> { value: v, itemStyle: { color: COLORS[i] } })
+        emphasis: { focus: 'self' }, label: { show: false }
+      }]
+
+    r = regression
+    @ic 'scatterReg',
+      xAxis: { ...XAXIS, type: 'value', name: 'Engagement Score', axisLabel: { ...XAXIS.axisLabel }, axisLine: { show: true } }
+      yAxis: { ...YAXIS, name: 'Retention %', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> v + '%' } }
+      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> if p.seriesType is 'scatter' then 'Engagement: ' + p.value[0] + '<br>Retention: ' + p.value[1] + '%' else 'Trend line' }
+      legend: { show: false }
+      series: [
+        { type: 'scatter', data: cohortScatter, symbolSize: 9, itemStyle: { color: '#236aa4', opacity: 0.7 }, emphasis: { itemStyle: { opacity: 1, shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.25)' } } }
+        { type: 'line', data: [[r.xMin, r.slope * r.xMin + r.intercept], [r.xMax, r.slope * r.xMax + r.intercept]], symbol: 'none', lineStyle: { width: 2, type: 'dashed', color: '#8f3d56' }, tooltip: { show: false } }
+      ]
+
+  # ── Mount ──
+
+  ~>
+    requestAnimationFrame ->
+      echarts.registerTheme('evidence', THEME)
+      @initCoreCharts()
+      @initMaps()
+      @makeGauge('gauge1', 72, 'NPS Score', '{value}', '#236aa4', 100)
+      @makeGauge('gauge2', 94.2, 'CSAT', '{value}%', '#46a485', 100)
+      @makeGauge('gauge3', 99.97, 'Uptime', '{value}%', '#45a1bf', 100)
+      @initHierarchicalCharts()
+      @initAnalyticalCharts()
+      @initAdditionalCharts()
+
+  # ── Render ──
+
+  render
+    h1 "Acme Corp Dashboard"
+    p class: 'subtitle', "FY 2025 SaaS Metrics \u2014 styled with the Evidence.dev ECharts theme"
+
+    .kpi-row
+      for kpi in kpis
+        KpiCard
+          label: kpi.label, value: kpi.value
+          spark: kpi.spark, delta: kpi.delta, up: kpi.up
+
+    p class: 'section', "Core Charts"
+    .grid
+      ChartCard title: 'Monthly Revenue',               subtitle: 'Total recurring revenue by month',              chartId: 'line'
+      ChartCard title: 'Revenue by Product',             subtitle: 'Stacked area breakdown across product lines',   chartId: 'area'
+      ChartCard title: 'Quarterly Revenue',              subtitle: 'Quarter-over-quarter comparison',               chartId: 'bar'
+      ChartCard title: 'Revenue by Product \u00d7 Quarter', subtitle: 'Stacked bar with product breakdown',         chartId: 'stackedBar'
+      ChartCard title: 'Revenue & Margin',               subtitle: 'Revenue bars with gross margin % line overlay', chartId: 'combo'
+      ChartCard title: 'Revenue & Growth Rate',          subtitle: 'Dual-axis: revenue (left) and YoY growth (right)', chartId: 'multiAxis'
+      ChartCard title: 'Customers by Segment',           subtitle: 'Distribution across customer tiers',            chartId: 'pie'
+      ChartCard title: 'Deal Size vs. Close Rate',       subtitle: 'Each bubble represents a sales rep',            chartId: 'scatter'
+      ChartCard title: 'Feature Usage Heatmap',          subtitle: 'Active sessions by day of week and hour',       chartId: 'heatmap'
+      ChartCard title: 'Sales Pipeline',                 subtitle: 'Conversion through funnel stages',              chartId: 'funnel'
+      ChartCard title: 'Customer Acquisition Flow',      subtitle: 'Channel attribution from source to conversion', chartId: 'sankey', wide: true
+
+    p class: 'section', "Geographic"
+    .grid
+      ChartCard title: 'Revenue by State',    subtitle: 'Annual revenue across US states',               chartId: 'choropleth', tall: true
+      ChartCard title: 'Customer Locations',  subtitle: 'Purchase origins clustered by region (k-means)', chartId: 'scatterMap', tall: true
+
+    p class: 'section', "KPI Gauges"
+    .grid
+      div class: 'card wide'
+        h2 "Key Performance Indicators"
+        p "Net Promoter Score, Customer Satisfaction, and Platform Uptime"
+        .gauge-row
+          div id: 'gauge1', class: 'gauge-cell'
+          div id: 'gauge2', class: 'gauge-cell'
+          div id: 'gauge3', class: 'gauge-cell'
+
+    p class: 'section', "Hierarchical"
+    .grid
+      ChartCard title: 'Revenue Breakdown',    subtitle: 'Treemap by division, product, and feature',       chartId: 'treemap'
+      ChartCard title: 'Revenue Composition',  subtitle: 'Sunburst showing contribution at each level',     chartId: 'sunburst'
+
+    p class: 'section', "Analytical"
+    .grid
+      ChartCard title: 'Product Comparison',       subtitle: 'Multi-metric radar across product lines',          chartId: 'radar'
+      ChartCard title: 'Revenue Bridge',           subtitle: 'Waterfall from Q1 baseline through Q4',           chartId: 'waterfall'
+      ChartCard title: 'Deal Size Distribution',   subtitle: 'Boxplot of closed deal values by quarter ($k)',   chartId: 'boxplot'
+      ChartCard title: 'Product Metrics',          subtitle: 'Parallel coordinates across key dimensions',      chartId: 'parallel'
+      ChartCard title: 'Daily Platform Activity',  subtitle: 'Login volume over the past year',                 chartId: 'calendar', wide: true
+
+    p class: 'section', "Additional Chart Types"
+    .grid
+      ChartCard title: 'Response Time Distribution', subtitle: 'Histogram of API response times (ms)',           chartId: 'histogram'
+      ChartCard title: 'Feature Adoption',           subtitle: 'Horizontal bar chart of feature usage rates',    chartId: 'horizBar'
+      ChartCard title: 'Support Volume by Channel',  subtitle: 'Polar area chart of ticket counts',              chartId: 'polar'
+      ChartCard title: 'Engagement vs. Retention',   subtitle: 'Scatter with regression trend by cohort',        chartId: 'scatterReg'
+  initAnalyticalCharts: ->
+    @ic 'radar',
+      tooltip: { trigger: 'item' }
+      radar:
+        indicator: radarMetrics.map((m) -> { name: m, max: 100 })
+        shape: 'polygon', splitNumber: 4
+        axisName: { color: '#717171', fontSize: 12 }
+        splitLine: { lineStyle: { color: '#e5e5e5' } }
+        splitArea: { areaStyle: { color: ['#fff','#fafafa'] } }
+        axisLine: { lineStyle: { color: '#e5e5e5' } }
+      series: [{
+        type: 'radar'
+        data: Object.entries(radarProducts).map(([name, value]) -> { name: name, value: value })
+        areaStyle: { opacity: 0.15 }, lineStyle: { width: 2 }
+        symbol: 'circle', symbolSize: 5
+      }]
+
+    wf = @buildWaterfall(waterfallLabels, waterfallValues)
+    totals = [0, 6, 11, 16]
+    @ic 'waterfall',
+      xAxis: { ...XAXIS, data: waterfallLabels, axisLabel: { ...XAXIS.axisLabel, rotate: 45, fontSize: 10 } }
+      yAxis: { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
+      legend: { show: false }
+      series: [
+        { type: 'bar', stack: 'wf', name: 'base', data: wf.base, barMaxWidth: 36, itemStyle: { color: 'transparent' }, emphasis: { itemStyle: { color: 'transparent' } } }
+        { type: 'bar', stack: 'wf', name: 'Increase', barMaxWidth: 36, data: wf.inc.map((v, i) -> { value: v, itemStyle: { color: if totals.includes(i) then '#236aa4' else '#46a485' } }), label: { show: true, position: 'top', fontSize: 10, color: '#717171', formatter: (p) -> v = waterfallValues[p.dataIndex]; return '$' + p.value + 'k' if v is null; return '+$' + v + 'k' if v > 0; '' } }
+        { type: 'bar', stack: 'wf', name: 'Decrease', data: wf.dec, barMaxWidth: 36, itemStyle: { color: '#8f3d56' }, label: { show: true, position: 'bottom', fontSize: 10, color: '#717171', formatter: (p) -> if p.value > 0 then '-$' + p.value + 'k' else '' } }
+      ]
+
+    @ic 'boxplot',
+      xAxis: { ...XAXIS, data: quarters }
+      yAxis: { ...YAXIS, name: 'Deal Size ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
+      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> p.name + '<br>Max: $' + p.value[5] + 'k<br>Q3: $' + p.value[4] + 'k<br>Median: $' + p.value[3] + 'k<br>Q1: $' + p.value[2] + 'k<br>Min: $' + p.value[1] + 'k' }
+      series: [{
+        type: 'boxplot', data: boxplotData
+        itemStyle: { color: '#a5cdee', borderColor: '#236aa4', borderWidth: 1.5 }
+        emphasis: { itemStyle: { borderColor: '#060606', borderWidth: 2 } }
+      }]
+
+    @ic 'parallel',
+      tooltip: { show: false }
+      legend: { show: true, data: parallelData.map((d) -> d[0]) }
+      parallelAxis: [
+        { dim: 0, name: 'Product', type: 'category', data: parallelData.map((d) -> d[0]), nameLocation: 'start' }
+        { dim: 1, name: 'Revenue ($k)', type: 'value', nameLocation: 'end' }
+        { dim: 2, name: 'Growth %', type: 'value', nameLocation: 'end' }
+        { dim: 3, name: 'Retention %', type: 'value', min: 50, max: 100, nameLocation: 'end' }
+        { dim: 4, name: 'NPS', type: 'value', min: 50, max: 100, nameLocation: 'end' }
+        { dim: 5, name: 'Usage Score', type: 'value', min: 40, max: 100, nameLocation: 'end' }
+      ]
+      parallel:
+        left: '5%', right: '5%', top: '18%', bottom: '12%'
+        parallelAxisDefault:
+          nameTextStyle: { color: '#717171', fontSize: 11 }
+          axisLine: { lineStyle: { color: '#d6d6d6' } }
+          axisTick: { show: false }
+          axisLabel: { color: '#717171', fontSize: 10 }
+          splitLine: { show: false }
+      series: parallelData.map((d, i) -> {
+        type: 'parallel', name: d[0]
+        lineStyle: { width: 3, opacity: 0.7, color: COLORS[i] }
+        emphasis: { lineStyle: { width: 5, opacity: 1 } }
+        data: [d]
+      })
+
+    @ic 'calendar',
+      tooltip: { trigger: 'item', formatter: (p) -> p.value[0] + '<br>Logins: ' + p.value[1].toLocaleString() }
+      legend: { show: false }
+      visualMap:
+        min: 200, max: 1400, calculable: true, orient: 'horizontal', left: 'center', bottom: '2%'
+        inRange: { color: ['#a5cdee','#45a1bf','#236aa4'] }
+        textStyle: { color: '#717171', fontSize: 11 }
+      calendar:
+        range: '2024', top: '12%', left: '8%', right: '4%', bottom: '18%'
+        cellSize: ['auto', 16]
+        itemStyle: { borderWidth: 2, borderColor: '#fff' }
+        splitLine: { lineStyle: { color: '#d6d6d6', width: 1 } }
+        yearLabel: { show: false }
+        monthLabel: { color: '#717171', fontSize: 11, nameMap: 'en' }
+        dayLabel: { color: '#717171', fontSize: 10, firstDay: 1, nameMap: ['','M','','W','','F',''] }
+      series: [{
+        type: 'heatmap', coordinateSystem: 'calendar', data: calendarData
+        emphasis: { itemStyle: { shadowBlur: 5, shadowColor: 'rgba(0,0,0,0.3)' } }
+      }]
+
+  initAdditionalCharts: ->
+    @ic 'histogram',
+      xAxis: { ...XAXIS, data: histBins, name: 'Response Time (ms)', axisLabel: { ...XAXIS.axisLabel, fontSize: 10 } }
+      yAxis: { ...YAXIS, name: 'Request Count', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> if v >= 1000 then (v / 1000) + 'k' else v } }
+      legend: { show: false }
+      series: [{
+        type: 'bar', barWidth: '90%'
+        data: histCounts.map((v, i) -> { value: v, itemStyle: { color: if i <= 2 then '#46a485' else if i <= 4 then '#f4b548' else '#8f3d56' } })
+        emphasis: { itemStyle: { opacity: 0.85 } }
+      }]
+
+    @ic 'horizBar',
+      grid: { ...BASE.grid, left: '2%' }
+      xAxis: { ...YAXIS, name: 'Adoption %', max: 100, axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> v + '%' } }
+      yAxis: { ...XAXIS, type: 'category', data: features.slice().reverse(), axisLabel: { ...XAXIS.axisLabel, fontSize: 11 }, inverse: false }
+      legend: { show: false }
+      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> p.name + ': ' + p.value + '%' }
+      series: [{
+        type: 'bar', data: adoption.slice().reverse(), barMaxWidth: 20
+        itemStyle: { borderRadius: [0,3,3,0] }
+        label: { show: true, position: 'right', fontSize: 11, color: '#717171', formatter: (p) -> p.value + '%' }
+        emphasis: { itemStyle: { opacity: 0.85 } }
+      }]
+
+    @ic 'polar',
+      tooltip: { trigger: 'item', formatter: '{b}: {c} tickets' }
+      legend: { show: true, type: 'scroll', bottom: '2%' }
+      angleAxis:
+        type: 'category', data: channels, startAngle: 90
+        axisLine: { lineStyle: { color: '#d6d6d6' } }
+        axisLabel: { color: '#717171', fontSize: 11 }
+      radiusAxis:
+        max: 3500, axisLine: { show: false }, axisTick: { show: false }
+        axisLabel: { show: false }
+        splitLine: { lineStyle: { color: '#e5e5e5' } }
+      polar: { radius: ['10%','75%'] }
+      series: [{
+        type: 'bar', coordinateSystem: 'polar', roundCap: true
+        data: tickets.map((v, i) -> { value: v, itemStyle: { color: COLORS[i] } })
+        emphasis: { focus: 'self' }, label: { show: false }
+      }]
+
+    r = regression
+    @ic 'scatterReg',
+      xAxis: { ...XAXIS, type: 'value', name: 'Engagement Score', axisLabel: { ...XAXIS.axisLabel }, axisLine: { show: true } }
+      yAxis: { ...YAXIS, name: 'Retention %', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> v + '%' } }
+      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> if p.seriesType is 'scatter' then 'Engagement: ' + p.value[0] + '<br>Retention: ' + p.value[1] + '%' else 'Trend line' }
+      legend: { show: false }
+      series: [
+        { type: 'scatter', data: cohortScatter, symbolSize: 9, itemStyle: { color: '#236aa4', opacity: 0.7 }, emphasis: { itemStyle: { opacity: 1, shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.25)' } } }
+        { type: 'line', data: [[r.xMin, r.slope * r.xMin + r.intercept], [r.xMax, r.slope * r.xMax + r.intercept]], symbol: 'none', lineStyle: { width: 2, type: 'dashed', color: '#8f3d56' }, tooltip: { show: false } }
+      ]
+
+  # ── Mount ──
+
+  ~>
+    requestAnimationFrame ->
+      echarts.registerTheme('evidence', THEME)
+      @initCoreCharts()
+      @initMaps()
+      @makeGauge('gauge1', 72, 'NPS Score', '{value}', '#236aa4', 100)
+      @makeGauge('gauge2', 94.2, 'CSAT', '{value}%', '#46a485', 100)
+      @makeGauge('gauge3', 99.97, 'Uptime', '{value}%', '#45a1bf', 100)
+      @initHierarchicalCharts()
+      @initAnalyticalCharts()
+      @initAdditionalCharts()
+
+  # ── Render ──
+
+  render
+    h1 "Acme Corp Dashboard"
+    p class: 'subtitle', "FY 2025 SaaS Metrics \u2014 styled with the Evidence.dev ECharts theme"
+
+    .kpi-row
+      for kpi in kpis
+        KpiCard
+          label: kpi.label, value: kpi.value
+          spark: kpi.spark, delta: kpi.delta, up: kpi.up
+
+    p class: 'section', "Core Charts"
+    .grid
+      ChartCard title: 'Monthly Revenue',               subtitle: 'Total recurring revenue by month',              chartId: 'line'
+      ChartCard title: 'Revenue by Product',             subtitle: 'Stacked area breakdown across product lines',   chartId: 'area'
+      ChartCard title: 'Quarterly Revenue',              subtitle: 'Quarter-over-quarter comparison',               chartId: 'bar'
+      ChartCard title: 'Revenue by Product \u00d7 Quarter', subtitle: 'Stacked bar with product breakdown',         chartId: 'stackedBar'
+      ChartCard title: 'Revenue & Margin',               subtitle: 'Revenue bars with gross margin % line overlay', chartId: 'combo'
+      ChartCard title: 'Revenue & Growth Rate',          subtitle: 'Dual-axis: revenue (left) and YoY growth (right)', chartId: 'multiAxis'
+      ChartCard title: 'Customers by Segment',           subtitle: 'Distribution across customer tiers',            chartId: 'pie'
+      ChartCard title: 'Deal Size vs. Close Rate',       subtitle: 'Each bubble represents a sales rep',            chartId: 'scatter'
+      ChartCard title: 'Feature Usage Heatmap',          subtitle: 'Active sessions by day of week and hour',       chartId: 'heatmap'
+      ChartCard title: 'Sales Pipeline',                 subtitle: 'Conversion through funnel stages',              chartId: 'funnel'
+      ChartCard title: 'Customer Acquisition Flow',      subtitle: 'Channel attribution from source to conversion', chartId: 'sankey', wide: true
+
+    p class: 'section', "Geographic"
+    .grid
+      ChartCard title: 'Revenue by State',    subtitle: 'Annual revenue across US states',               chartId: 'choropleth', tall: true
+      ChartCard title: 'Customer Locations',  subtitle: 'Purchase origins clustered by region (k-means)', chartId: 'scatterMap', tall: true
+
+    p class: 'section', "KPI Gauges"
+    .grid
+      div class: 'card wide'
+        h2 "Key Performance Indicators"
+        p "Net Promoter Score, Customer Satisfaction, and Platform Uptime"
+        .gauge-row
+          div id: 'gauge1', class: 'gauge-cell'
+          div id: 'gauge2', class: 'gauge-cell'
+          div id: 'gauge3', class: 'gauge-cell'
+
+    p class: 'section', "Hierarchical"
+    .grid
+      ChartCard title: 'Revenue Breakdown',    subtitle: 'Treemap by division, product, and feature',       chartId: 'treemap'
+      ChartCard title: 'Revenue Composition',  subtitle: 'Sunburst showing contribution at each level',     chartId: 'sunburst'
+
+    p class: 'section', "Analytical"
+    .grid
+      ChartCard title: 'Product Comparison',       subtitle: 'Multi-metric radar across product lines',          chartId: 'radar'
+      ChartCard title: 'Revenue Bridge',           subtitle: 'Waterfall from Q1 baseline through Q4',           chartId: 'waterfall'
+      ChartCard title: 'Deal Size Distribution',   subtitle: 'Boxplot of closed deal values by quarter ($k)',   chartId: 'boxplot'
+      ChartCard title: 'Product Metrics',          subtitle: 'Parallel coordinates across key dimensions',      chartId: 'parallel'
+      ChartCard title: 'Daily Platform Activity',  subtitle: 'Login volume over the past year',                 chartId: 'calendar', wide: true
+
+    p class: 'section', "Additional Chart Types"
+    .grid
+      ChartCard title: 'Response Time Distribution', subtitle: 'Histogram of API response times (ms)',           chartId: 'histogram'
+      ChartCard title: 'Feature Adoption',           subtitle: 'Horizontal bar chart of feature usage rates',    chartId: 'horizBar'
+      ChartCard title: 'Support Volume by Channel',  subtitle: 'Polar area chart of ticket counts',              chartId: 'polar'
+      ChartCard title: 'Engagement vs. Retention',   subtitle: 'Scatter with regression trend by cohort',        chartId: 'scatterReg'
+  initAnalyticalCharts: ->
+    @ic 'radar',
+      tooltip: { trigger: 'item' }
+      radar:
+        indicator: radarMetrics.map((m) -> { name: m, max: 100 })
+        shape: 'polygon', splitNumber: 4
+        axisName: { color: '#717171', fontSize: 12 }
+        splitLine: { lineStyle: { color: '#e5e5e5' } }
+        splitArea: { areaStyle: { color: ['#fff','#fafafa'] } }
+        axisLine: { lineStyle: { color: '#e5e5e5' } }
+      series: [{
+        type: 'radar'
+        data: Object.entries(radarProducts).map(([name, value]) -> { name: name, value: value })
+        areaStyle: { opacity: 0.15 }, lineStyle: { width: 2 }
+        symbol: 'circle', symbolSize: 5
+      }]
+
+    wf = @buildWaterfall(waterfallLabels, waterfallValues)
+    totals = [0, 6, 11, 16]
+    @ic 'waterfall',
+      xAxis: { ...XAXIS, data: waterfallLabels, axisLabel: { ...XAXIS.axisLabel, rotate: 45, fontSize: 10 } }
+      yAxis: { ...YAXIS, name: 'Revenue ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
+      legend: { show: false }
+      series: [
+        { type: 'bar', stack: 'wf', name: 'base', data: wf.base, barMaxWidth: 36, itemStyle: { color: 'transparent' }, emphasis: { itemStyle: { color: 'transparent' } } }
+        { type: 'bar', stack: 'wf', name: 'Increase', barMaxWidth: 36, data: wf.inc.map((v, i) -> { value: v, itemStyle: { color: if totals.includes(i) then '#236aa4' else '#46a485' } }), label: { show: true, position: 'top', fontSize: 10, color: '#717171', formatter: (p) -> v = waterfallValues[p.dataIndex]; return '$' + p.value + 'k' if v is null; return '+$' + v + 'k' if v > 0; '' } }
+        { type: 'bar', stack: 'wf', name: 'Decrease', data: wf.dec, barMaxWidth: 36, itemStyle: { color: '#8f3d56' }, label: { show: true, position: 'bottom', fontSize: 10, color: '#717171', formatter: (p) -> if p.value > 0 then '-$' + p.value + 'k' else '' } }
+      ]
+
+    @ic 'boxplot',
+      xAxis: { ...XAXIS, data: quarters }
+      yAxis: { ...YAXIS, name: 'Deal Size ($k)', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> '$' + v + 'k' } }
+      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> p.name + '<br>Max: $' + p.value[5] + 'k<br>Q3: $' + p.value[4] + 'k<br>Median: $' + p.value[3] + 'k<br>Q1: $' + p.value[2] + 'k<br>Min: $' + p.value[1] + 'k' }
+      series: [{
+        type: 'boxplot', data: boxplotData
+        itemStyle: { color: '#a5cdee', borderColor: '#236aa4', borderWidth: 1.5 }
+        emphasis: { itemStyle: { borderColor: '#060606', borderWidth: 2 } }
+      }]
+
+    @ic 'parallel',
+      tooltip: { show: false }
+      legend: { show: true, data: parallelData.map((d) -> d[0]) }
+      parallelAxis: [
+        { dim: 0, name: 'Product', type: 'category', data: parallelData.map((d) -> d[0]), nameLocation: 'start' }
+        { dim: 1, name: 'Revenue ($k)', type: 'value', nameLocation: 'end' }
+        { dim: 2, name: 'Growth %', type: 'value', nameLocation: 'end' }
+        { dim: 3, name: 'Retention %', type: 'value', min: 50, max: 100, nameLocation: 'end' }
+        { dim: 4, name: 'NPS', type: 'value', min: 50, max: 100, nameLocation: 'end' }
+        { dim: 5, name: 'Usage Score', type: 'value', min: 40, max: 100, nameLocation: 'end' }
+      ]
+      parallel:
+        left: '5%', right: '5%', top: '18%', bottom: '12%'
+        parallelAxisDefault:
+          nameTextStyle: { color: '#717171', fontSize: 11 }
+          axisLine: { lineStyle: { color: '#d6d6d6' } }
+          axisTick: { show: false }
+          axisLabel: { color: '#717171', fontSize: 10 }
+          splitLine: { show: false }
+      series: parallelData.map((d, i) -> {
+        type: 'parallel', name: d[0]
+        lineStyle: { width: 3, opacity: 0.7, color: COLORS[i] }
+        emphasis: { lineStyle: { width: 5, opacity: 1 } }
+        data: [d]
+      })
+
+    @ic 'calendar',
+      tooltip: { trigger: 'item', formatter: (p) -> p.value[0] + '<br>Logins: ' + p.value[1].toLocaleString() }
+      legend: { show: false }
+      visualMap:
+        min: 200, max: 1400, calculable: true, orient: 'horizontal', left: 'center', bottom: '2%'
+        inRange: { color: ['#a5cdee','#45a1bf','#236aa4'] }
+        textStyle: { color: '#717171', fontSize: 11 }
+      calendar:
+        range: '2024', top: '12%', left: '8%', right: '4%', bottom: '18%'
+        cellSize: ['auto', 16]
+        itemStyle: { borderWidth: 2, borderColor: '#fff' }
+        splitLine: { lineStyle: { color: '#d6d6d6', width: 1 } }
+        yearLabel: { show: false }
+        monthLabel: { color: '#717171', fontSize: 11, nameMap: 'en' }
+        dayLabel: { color: '#717171', fontSize: 10, firstDay: 1, nameMap: ['','M','','W','','F',''] }
+      series: [{
+        type: 'heatmap', coordinateSystem: 'calendar', data: calendarData
+        emphasis: { itemStyle: { shadowBlur: 5, shadowColor: 'rgba(0,0,0,0.3)' } }
+      }]
+
+  initAdditionalCharts: ->
+    @ic 'histogram',
+      xAxis: { ...XAXIS, data: histBins, name: 'Response Time (ms)', axisLabel: { ...XAXIS.axisLabel, fontSize: 10 } }
+      yAxis: { ...YAXIS, name: 'Request Count', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> if v >= 1000 then (v / 1000) + 'k' else v } }
+      legend: { show: false }
+      series: [{
+        type: 'bar', barWidth: '90%'
+        data: histCounts.map((v, i) -> { value: v, itemStyle: { color: if i <= 2 then '#46a485' else if i <= 4 then '#f4b548' else '#8f3d56' } })
+        emphasis: { itemStyle: { opacity: 0.85 } }
+      }]
+
+    @ic 'horizBar',
+      grid: { ...BASE.grid, left: '2%' }
+      xAxis: { ...YAXIS, name: 'Adoption %', max: 100, axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> v + '%' } }
+      yAxis: { ...XAXIS, type: 'category', data: features.slice().reverse(), axisLabel: { ...XAXIS.axisLabel, fontSize: 11 }, inverse: false }
+      legend: { show: false }
+      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> p.name + ': ' + p.value + '%' }
+      series: [{
+        type: 'bar', data: adoption.slice().reverse(), barMaxWidth: 20
+        itemStyle: { borderRadius: [0,3,3,0] }
+        label: { show: true, position: 'right', fontSize: 11, color: '#717171', formatter: (p) -> p.value + '%' }
+        emphasis: { itemStyle: { opacity: 0.85 } }
+      }]
+
+    @ic 'polar',
+      tooltip: { trigger: 'item', formatter: '{b}: {c} tickets' }
+      legend: { show: true, type: 'scroll', bottom: '2%' }
+      angleAxis:
+        type: 'category', data: channels, startAngle: 90
+        axisLine: { lineStyle: { color: '#d6d6d6' } }
+        axisLabel: { color: '#717171', fontSize: 11 }
+      radiusAxis:
+        max: 3500, axisLine: { show: false }, axisTick: { show: false }
+        axisLabel: { show: false }
+        splitLine: { lineStyle: { color: '#e5e5e5' } }
+      polar: { radius: ['10%','75%'] }
+      series: [{
+        type: 'bar', coordinateSystem: 'polar', roundCap: true
+        data: tickets.map((v, i) -> { value: v, itemStyle: { color: COLORS[i] } })
+        emphasis: { focus: 'self' }, label: { show: false }
+      }]
+
+    r = regression
+    @ic 'scatterReg',
+      xAxis: { ...XAXIS, type: 'value', name: 'Engagement Score', axisLabel: { ...XAXIS.axisLabel }, axisLine: { show: true } }
+      yAxis: { ...YAXIS, name: 'Retention %', axisLabel: { ...YAXIS.axisLabel, formatter: (v) -> v + '%' } }
+      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> if p.seriesType is 'scatter' then 'Engagement: ' + p.value[0] + '<br>Retention: ' + p.value[1] + '%' else 'Trend line' }
       legend: { show: false }
       series: [
         { type: 'scatter', data: cohortScatter, symbolSize: 9, itemStyle: { color: '#236aa4', opacity: 0.7 }, emphasis: { itemStyle: { opacity: 1, shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.25)' } } }
