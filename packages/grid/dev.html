@@ -158,12 +158,18 @@ select.rip-grid-editor { cursor: pointer; padding-left: 4px; }
   right: 0;
   top: 0;
   bottom: 0;
-  width: 4px;
+  width: 2px;
   cursor: col-resize;
   z-index: 3;
+  background: transparent;
+  transition: background 0.5s;
+}
+.rip-grid thead tr:hover .resize-handle {
+  background: rgba(0, 0, 0, 0.08);
 }
 .resize-handle:hover, .resize-handle.active {
   background: rgba(59, 130, 246, 0.3);
+  transition: background 0.15s;
 }
 
 .sort-arrow { color: #94a3b8; font-size: 11px; margin-left: 3px; vertical-align: middle; }
@@ -248,6 +254,7 @@ select.rip-grid-editor { cursor: pointer; padding-left: 4px; }
   }
   .sort-arrow { color: #64748b; }
   .sort-badge { background: #334155; color: #94a3b8; }
+  .rip-grid thead tr:hover .resize-handle { background: rgba(255, 255, 255, 0.08); }
   .resize-handle:hover, .resize-handle.active { background: rgba(96, 165, 250, 0.3); }
 }
   </style>
