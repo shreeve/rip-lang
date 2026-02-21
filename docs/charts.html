@@ -609,55 +609,53 @@ export Dashboard = component
       }]
 
   initMaps: ->
-    self = this
-    fetch('https://raw.githubusercontent.com/apache/echarts-examples/gh-pages/public/data/asset/geo/USA.json')
-      .then((r) -> r.json())
-      .then (usaJson) ->
-        echarts.registerMap 'USA', usaJson,
-          'Alaska': { left: -131, top: 25, width: 15 }
-          'Hawaii': { left: -110, top: 28, width: 5 }
-          'Puerto Rico': { left: -76, top: 26, width: 2 }
+    try
+      usaJson = fetch!('https://raw.githubusercontent.com/apache/echarts-examples/gh-pages/public/data/asset/geo/USA.json').json!
+      echarts.registerMap 'USA', usaJson,
+        'Alaska': { left: -131, top: 25, width: 15 }
+        'Hawaii': { left: -110, top: 28, width: 5 }
+        'Puerto Rico': { left: -76, top: 26, width: 2 }
 
-        self.ic 'choropleth',
-          tooltip: { trigger: 'item', formatter: (p) -> p.name + '<br>Revenue: $' + (p.value or 0).toLocaleString() + 'k' }
-          visualMap:
-            min: 50, max: 9500, text: ['$9.5M+','$50k']
-            inRange: { color: ['#a5cdee','#45a1bf','#236aa4'] }
-            calculable: true, orient: 'horizontal', left: 'center', bottom: '2%'
-            textStyle: { color: '#717171', fontSize: 11 }
-          series: [{
-            type: 'map', map: 'USA', roam: true
-            emphasis: { label: { show: true, fontSize: 11, color: '#060606' }, itemStyle: { areaColor: '#f4b548' } }
-            label: { show: false }
-            itemStyle: { areaColor: '#e5e5e5', borderColor: '#fff', borderWidth: 1 }
-            data: self.stateRevenue
-          }]
+      @ic 'choropleth',
+        tooltip: { trigger: 'item', formatter: (p) -> p.name + '<br>Revenue: $' + (p.value or 0).toLocaleString() + 'k' }
+        visualMap:
+          min: 50, max: 9500, text: ['$9.5M+','$50k']
+          inRange: { color: ['#a5cdee','#45a1bf','#236aa4'] }
+          calculable: true, orient: 'horizontal', left: 'center', bottom: '2%'
+          textStyle: { color: '#717171', fontSize: 11 }
+        series: [{
+          type: 'map', map: 'USA', roam: true
+          emphasis: { label: { show: true, fontSize: 11, color: '#060606' }, itemStyle: { areaColor: '#f4b548' } }
+          label: { show: false }
+          itemStyle: { areaColor: '#e5e5e5', borderColor: '#fff', borderWidth: 1 }
+          data: stateRevenue
+        }]
 
-        self.ic 'scatterMap',
-          tooltip:
-            trigger: 'item'
-            formatter: (p) ->
-              return self.clusterNames[p.value[2]] + ' cluster' if p.seriesType is 'scatter'
-              p.name
-          legend:
-            show: true, top: '2%'
-            data: self.clusterNames.map((n, i) -> { name: n, icon: 'circle', itemStyle: { color: self.clusterColors[i] } })
-          geo:
-            map: 'USA', roam: true
-            itemStyle: { areaColor: '#f0f0f0', borderColor: '#d6d6d6', borderWidth: 0.5 }
-            emphasis: { itemStyle: { areaColor: '#e5e5e5' }, label: { show: false } }
-            label: { show: false }
-          series: self.clusterNames.map((name, ci) -> {
-            type: 'scatter', name: name, coordinateSystem: 'geo'
-            data: self.customerLocations.filter((d) -> d[2] is ci).map((d) -> { value: [d[0], d[1], d[2]] })
-            symbolSize: 8
-            itemStyle: { color: self.clusterColors[ci], opacity: 0.8 }
-            emphasis: { itemStyle: { opacity: 1, shadowBlur: 5, shadowColor: 'rgba(0,0,0,0.3)' } }
-          })
-      .catch ->
-        for id in ['choropleth', 'scatterMap']
-          el = document.getElementById(id)
-          el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#717171;font-size:13px;">Map data could not be loaded (requires internet)</div>' if el
+      @ic 'scatterMap',
+        tooltip:
+          trigger: 'item'
+          formatter: (p) ->
+            return clusterNames[p.value[2]] + ' cluster' if p.seriesType is 'scatter'
+            p.name
+        legend:
+          show: true, top: '2%'
+          data: clusterNames.map((n, i) -> { name: n, icon: 'circle', itemStyle: { color: clusterColors[i] } })
+        geo:
+          map: 'USA', roam: true
+          itemStyle: { areaColor: '#f0f0f0', borderColor: '#d6d6d6', borderWidth: 0.5 }
+          emphasis: { itemStyle: { areaColor: '#e5e5e5' }, label: { show: false } }
+          label: { show: false }
+        series: clusterNames.map((name, ci) -> {
+          type: 'scatter', name: name, coordinateSystem: 'geo'
+          data: customerLocations.filter((d) -> d[2] is ci).map((d) -> { value: [d[0], d[1], d[2]] })
+          symbolSize: 8
+          itemStyle: { color: clusterColors[ci], opacity: 0.8 }
+          emphasis: { itemStyle: { opacity: 1, shadowBlur: 5, shadowColor: 'rgba(0,0,0,0.3)' } }
+        })
+    catch
+      for id in ['choropleth', 'scatterMap']
+        el = document.getElementById(id)
+        el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#717171;font-size:13px;">Map data could not be loaded (requires internet)</div>' if el
 
   initHierarchicalCharts: ->
     @ic 'treemap',
