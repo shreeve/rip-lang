@@ -448,10 +448,11 @@ export Dashboard = component
 
   # ── Helpers ──
 
-  $k  = (v) -> "$#{v}k"
-  pct = (v) -> "#{v}%"
-  $M  = (v) -> "$#{(v / 1000).toFixed(1)}M"
+  $k   = (v) -> "$#{v}k"
+  pct  = (v) -> "#{v}%"
+  $M   = (v) -> "$#{(v / 1000).toFixed(1)}M"
   valK = (p) -> "#{p.name}<br>$#{(p.value or 0).toLocaleString()}k"
+  tip  = (fmt) -> { ...BASE.tooltip, trigger: 'item', formatter: fmt }
 
   xaxis = (data = null, opts = {}) ->
     if typeof data is 'object' and not Array.isArray(data) and data isnt null
@@ -582,7 +583,7 @@ export Dashboard = component
     @ic 'scatter',
       xAxis: xaxis type: 'value', name: 'Avg Deal Size ($k)', axisLabel: { formatter: $k }, axisLine: { show: true }
       yAxis: yaxis 'Close Rate %', pct
-      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> "Deal: $#{p.value[0]}k<br>Close Rate: #{p.value[1]}%<br>Deals: #{p.value[2]}" }
+      tooltip: tip (p) -> "Deal: $#{p.value[0]}k<br>Close Rate: #{p.value[1]}%<br>Deals: #{p.value[2]}"
       series: [{
         type: 'scatter', data: deals, symbolSize: (d) -> d[2] * 1.8
         emphasis: { focus: 'self', itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.3)' } }
@@ -592,7 +593,7 @@ export Dashboard = component
       grid: { ...BASE.grid, top: '8%', bottom: '12%' }
       xAxis: xaxis hours, splitArea: { show: false }
       yAxis: { ...YAXIS, type: 'category', data: days, splitLine: { show: false }, splitArea: { show: false } }
-      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> "#{days[p.value[1]]} #{hours[p.value[0]]}<br>Sessions: <b>#{p.value[2]}</b>" }
+      tooltip: tip (p) -> "#{days[p.value[1]]} #{hours[p.value[0]]}<br>Sessions: <b>#{p.value[2]}</b>"
       visualMap:
         min: 10, max: 140, calculable: true, orient: 'horizontal', left: 'center', bottom: '0%'
         inRange: { color: ['#a5cdee','#236aa4'] }
@@ -734,7 +735,7 @@ export Dashboard = component
     @ic 'boxplot',
       xAxis: xaxis quarters
       yAxis: yaxis 'Deal Size ($k)', $k
-      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> "#{p.name}<br>Max: $#{p.value[5]}k<br>Q3: $#{p.value[4]}k<br>Median: $#{p.value[3]}k<br>Q1: $#{p.value[2]}k<br>Min: $#{p.value[1]}k" }
+      tooltip: tip (p) -> "#{p.name}<br>Max: $#{p.value[5]}k<br>Q3: $#{p.value[4]}k<br>Median: $#{p.value[3]}k<br>Q1: $#{p.value[2]}k<br>Min: $#{p.value[1]}k"
       series: [{
         type: 'boxplot', data: boxplotData
         itemStyle: { color: '#a5cdee', borderColor: '#236aa4', borderWidth: 1.5 }
@@ -803,7 +804,7 @@ export Dashboard = component
       xAxis: yaxis 'Adoption %', pct, max: 100
       yAxis: xaxis features.slice().reverse(), type: 'category', axisLabel: { fontSize: 11 }, inverse: false
       legend: { show: false }
-      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> "#{p.name}: #{p.value}%" }
+      tooltip: tip (p) -> "#{p.name}: #{p.value}%"
       series: [{
         type: 'bar', data: adoption.slice().reverse(), barMaxWidth: 20
         itemStyle: { borderRadius: [0,3,3,0] }
@@ -833,7 +834,7 @@ export Dashboard = component
     @ic 'scatterReg',
       xAxis: xaxis type: 'value', name: 'Engagement Score', axisLine: { show: true }
       yAxis: yaxis 'Retention %', pct
-      tooltip: { ...BASE.tooltip, trigger: 'item', formatter: (p) -> p.seriesType is 'scatter' ? "Engagement: #{p.value[0]}<br>Retention: #{p.value[1]}%" : 'Trend line' }
+      tooltip: tip (p) -> p.seriesType is 'scatter' ? "Engagement: #{p.value[0]}<br>Retention: #{p.value[1]}%" : 'Trend line'
       legend: { show: false }
       series: [
         { type: 'scatter', data: cohortScatter, symbolSize: 9, itemStyle: { color: '#236aa4', opacity: 0.7 }, emphasis: { itemStyle: { opacity: 1, shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.25)' } } }
@@ -847,7 +848,7 @@ export Dashboard = component
       echarts.registerTheme('evidence', THEME)
       @initCoreCharts()
       @initMaps()
-      @makeGauge('gauge1', 72, 'NPS Score', '{value}', '#236aa4', 100)
+      @makeGauge('gauge1', 72.4, 'NPS Score', '{value}', '#236aa4', 100)
       @makeGauge('gauge2', 94.2, 'CSAT', '{value}%', '#46a485', 100)
       @makeGauge('gauge3', 99.8, 'Uptime', '{value}%', '#45a1bf', 100)
       @initHierarchicalCharts()
