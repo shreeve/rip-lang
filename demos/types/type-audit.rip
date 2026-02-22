@@ -441,15 +441,6 @@ console.log "\n✓ All type-safe code executed successfully"
 # ==============================================================================
 # Rip's reactive operators (:=, ~=, ~>, =!) replace React's useState, useMemo,
 # useEffect, and const. Type annotations are accepted on all four operators.
-#
-# What works today:
-#   - Compilation: `count:: number := 0` compiles and runs correctly
-#   - .d.ts emission: produces correct types (Signal<T>, Computed<T>, etc.)
-#   - =! (readonly) compiles to plain `const`, no reactive runtime needed.
-#     It has the simpler fix: just the "Cannot redeclare" issue below.
-#
-# Fix required: type-annotate the inlined reactive runtime in src/compiler.js
-# and deduplicate .d.ts declarations for reactive variables.
 
 # Typed state (:=)
 clicks:: number := 0
