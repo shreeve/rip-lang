@@ -1,7 +1,0 @@
-# Home Page
-
-export Home = component
-  render
-    div
-      h1 "Rip UI Labs"
-      p "Experimental playground for Rip UI features."
