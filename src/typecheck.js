@@ -196,7 +196,8 @@ export function compileForCheck(filePath, source, compiler) {
         const src = srcLines[s];
         if (new RegExp('\\b' + name + '\\s*(?:::=|::)').test(src) ||
             new RegExp('^(?:export\\s+)?interface\\s+' + name + '\\b').test(src) ||
-            new RegExp('^(?:export\\s+)?enum\\s+' + name + '\\b').test(src)) {
+            new RegExp('^(?:export\\s+)?enum\\s+' + name + '\\b').test(src) ||
+            new RegExp('^(?:export\\s+)?' + name + '\\s*=\\s*component\\b').test(src)) {
           genToSrc.set(i, s);
           srcToGen.set(s, i);
           break;
