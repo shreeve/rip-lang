@@ -917,7 +917,7 @@ export Dashboard = component
 
     @ic 'cholesterolBand',
       xAxis: xaxis type: 'value', name: 'Age (years)', axisLine: { show: true }
-      yAxis: yaxis 'Total Cholesterol (mg/dL)', (v) -> "#{v}"
+      yAxis: yaxis 'Total Cholesterol (mg/dL)', (v) -> "#{v}", min: 80
       tooltip: tip (p) ->
         return 'Trend line' if p.seriesName is 'Trend'
         return '' if p.seriesName is 'Error'
