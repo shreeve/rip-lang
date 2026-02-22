@@ -702,7 +702,10 @@ export createRenderer = (opts = {}) ->
   mountRoute = (info) ->
     { route, params, layouts: layoutFiles, query } = info
     return unless route
-    return if route.file is currentRoute  # already showing this route
+    if route.file is currentRoute
+      currentComponent?.load!(params, query) if currentComponent?.load
+      router.navigating = false
+      return
 
     gen = ++generation
     router.navigating = true
