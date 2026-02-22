@@ -15,7 +15,7 @@
 #   13. Generic return types       def f():: Promise<User>
 #
 # Tier 3 — Important but deferrable
-#   14. export type / import type  export type { User }
+#   14. export / import type       export type { User }
 #   15. Generic function calls     response.json<{ users: User[] }>()
 
 # ==============================================================================
