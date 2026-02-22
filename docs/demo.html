@@ -536,23 +536,19 @@ export Dashboard = component
     { base, inc, dec }
 
   makeGauge: (id, value, label, fmt, color, max) ->
-    el = document.getElementById(id)
-    return unless el
-    w = el.offsetWidth
-    s = (lo, hi, pct) -> Math.max(lo, Math.min(hi, w * pct))
     @ic id,
       tooltip: { show: false }
       legend: { show: false }
       series: [{
         type: 'gauge', startAngle: 200, endAngle: -20, min: 0, max: max or 100
         pointer: { show: false }
-        progress: { show: true, width: s(8, 16, 0.09), roundCap: true, itemStyle: { color } }
-        axisLine: { lineStyle: { width: s(8, 16, 0.09), color: [[1, '#e5e5e5']] } }
+        progress: { show: true, width: 16, roundCap: true, itemStyle: { color } }
+        axisLine: { lineStyle: { width: 16, color: [[1, '#e5e5e5']] } }
         axisTick: { show: false }, splitLine: { show: false }, axisLabel: { show: false }, anchor: { show: false }
         detail:
-          valueAnimation: true, fontSize: s(16, 32, 0.18), fontWeight: 600, fontFamily: 'Inter'
+          valueAnimation: true, fontSize: 26, fontWeight: 600, fontFamily: 'Inter'
           color: '#060606', offsetCenter: [0, '10%'], formatter: fmt
-        title: { fontSize: s(10, 14, 0.08), fontWeight: 500, color: '#717171', offsetCenter: [0, '60%'] }
+        title: { fontSize: 13, fontWeight: 500, color: '#717171', offsetCenter: [0, '55%'] }
         data: [{ value, name: label }]
       }]
 
