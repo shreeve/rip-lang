@@ -448,17 +448,6 @@ console.log "\n✓ All type-safe code executed successfully"
 #   - =! (readonly) compiles to plain `const`, no reactive runtime needed.
 #     It has the simpler fix: just the "Cannot redeclare" issue below.
 #
-# What's broken:
-#   - `rip check` is unusable on any file containing := or ~= because the
-#     reactive runtime that rip inlines into the compiled JS is plain untyped
-#     JavaScript. TypeScript flags ~44 errors in the runtime code itself
-#     (implicit `any` types, `unknown` Set members, missing properties),
-#     which bury any real type errors from user code.
-#   - The `Cannot redeclare block-scoped variable` error also appears because
-#     the .d.ts emits `declare const count: Signal<number>` while the compiled
-#     JS has `let count`, creating a duplicate declaration. This affects =! too
-#     (`const X = 3` in JS + `declare const X: number` in .d.ts).
-#
 # Fix required: type-annotate the inlined reactive runtime in src/compiler.js
 # and deduplicate .d.ts declarations for reactive variables.
 
@@ -486,7 +475,6 @@ clickLogger:: Function ~> console.log "clicks changed:", clicks
 # In bhvr, every React component has a Props type (~50 in the codebase).
 # In rip, the @ prefix marks public props. Types on @ props define the
 # component's public API.
-#
 
 export Button = component
   @variant:: "primary" | "secondary" := "primary"

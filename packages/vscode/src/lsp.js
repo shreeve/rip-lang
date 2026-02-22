@@ -240,10 +240,15 @@ function srcToOffset(filePath, line, col) {
   }
   const srcLines = c.source.split('\n');
   const genLines = c.tsContent.split('\n');
+  const KEYWORDS = new Set(['interface', 'type', 'enum', 'class', 'export', 'declare', 'extends', 'implements', 'import', 'from', 'def', 'const', 'let', 'var']);
   if (srcLines[line] && genLines[genLine]) {
     const srcText = srcLines[line];
     const genText = genLines[genLine];
-    const wordMatch = srcText.substring(col).match(/^\w+/) || srcText.substring(0, col).match(/\w+$/);
+    let wordMatch = srcText.substring(col).match(/^\w+/) || srcText.substring(0, col).match(/\w+$/);
+    if (wordMatch && KEYWORDS.has(wordMatch[0])) {
+      const after = srcText.substring(col + wordMatch[0].length).match(/\s+(\w+)/);
+      if (after) wordMatch = [after[1]];
+    }
     if (wordMatch) {
       const word = wordMatch[0];
       const genCol = genText.indexOf(word);

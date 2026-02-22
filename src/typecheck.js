@@ -181,20 +181,24 @@ export function compileForCheck(filePath, source, compiler) {
   // Build bidirectional line maps
   const { srcToGen, genToSrc } = buildLineMap(result.reverseMap, result.map, headerLines);
 
-  // Map DTS variable declaration lines back to their source lines.
-  // TypeScript may report errors on the `let x: Type;` line in the
-  // DTS header, which has no entry in genToSrc. Fix by matching
-  // variable names to source lines with `x::`.
+  // Map DTS declaration lines back to source lines (bidirectional).
+  // Covers: let/var declarations, type aliases, interfaces, enums, classes.
+  // This enables hover, go-to-definition, and diagnostics for type-only code.
   if (hasTypes && dts) {
     const dtsLines = dts.split('\n');
     const srcLines = source.split('\n');
     for (let i = 0; i < dtsLines.length; i++) {
-      const m = dtsLines[i].match(/^(?:let|var)\s+(\w+)\s*:/);
+      const line = dtsLines[i];
+      const m = line.match(/^(?:export\s+)?(?:declare\s+)?(?:let|var|type|interface|enum|class)\s+(\w+)/);
       if (!m) continue;
-      const varName = m[1];
+      const name = m[1];
       for (let s = 0; s < srcLines.length; s++) {
-        if (new RegExp('\\b' + varName + '\\s*::').test(srcLines[s])) {
+        const src = srcLines[s];
+        if (new RegExp('\\b' + name + '\\s*(?:::=|::)').test(src) ||
+            new RegExp('^(?:export\\s+)?interface\\s+' + name + '\\b').test(src) ||
+            new RegExp('^(?:export\\s+)?enum\\s+' + name + '\\b').test(src)) {
           genToSrc.set(i, s);
+          srcToGen.set(s, i);
           break;
         }
       }
