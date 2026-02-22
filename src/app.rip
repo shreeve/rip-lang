@@ -661,6 +661,7 @@ export createRenderer = (opts = {}) ->
 
   currentComponent = null
   currentRoute = null
+  currentParams = null
   currentLayouts = []
   layoutInstances = []
   mountPoint = container
@@ -702,10 +703,9 @@ export createRenderer = (opts = {}) ->
   mountRoute = (info) ->
     { route, params, layouts: layoutFiles, query } = info
     return unless route
-    if route.file is currentRoute
-      currentComponent?.load!(params, query) if currentComponent?.load
-      router.navigating = false
+    if route.file is currentRoute and JSON.stringify(params) is JSON.stringify(currentParams)
       return
+    currentParams = params
 
     gen = ++generation
     router.navigating = true
