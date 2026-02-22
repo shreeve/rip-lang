@@ -510,7 +510,7 @@ rip-server -w
 
 This gives you:
 
-- **Framework bundle** served at `/rip/rip-ui.min.js`
+- **Framework bundle** served at `/rip/rip.min.js`
 - **App bundle** auto-generated at `/{app}/bundle`
 - **Hot reload** via SSE at `/{app}/watch` — save a `.rip` file and the browser
   updates instantly
@@ -565,5 +565,5 @@ MIT
 
 - [Rip Language](https://github.com/shreeve/rip-lang)
 - [@rip-lang/api](../api/README.md) — API framework (routing, middleware, `@send`)
-- [Rip UI](https://github.com/shreeve/rip-lang#rip-ui) — Zero-build reactive web framework (built into rip-lang)
+- [Rip](https://github.com/shreeve/rip-lang) — Compiler + reactive UI framework
 - [Report Issues](https://github.com/shreeve/rip-lang/issues)
