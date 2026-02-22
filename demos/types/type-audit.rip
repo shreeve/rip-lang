@@ -510,20 +510,19 @@ def fetchUser(id:: number):: Promise<User>
   response = await fetch("/api/users/#{id}")
   response.json()
 
-# def fetchUsers():: Promise<User[]>
-#   response = await fetch("/api/users")
-#   data = await response.json()
-#   data.users
+def fetchUsers():: Promise<User[]>
+  response = await fetch("/api/users")
+  data = await response.json()
+  data.users
 
-# def createOrder(cart:: OrderItem[]):: Promise<Order>
-#   response = await fetch "/api/orders",
-#     method: "POST"
-#     body: JSON.stringify(cart)
-#   response.json()
+def createOrder(cart:: OrderItem[]):: Promise<Order>
+  response = await fetch "/api/orders",
+    method: "POST"
+    body: JSON.stringify(cart)
+  response.json()
 
-# Also affects non-Promise generics:
-# def getEntries():: Map<string, number>
-#   new Map()
+def getEntries():: Map<string, number>
+  new Map()
 
 # ╔════════════════════════════════════════════════════════════════════════════╗
 # ║ Tier 3 — Important but deferrable                                          ║
