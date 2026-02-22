@@ -33,7 +33,7 @@ bun run browser
 
 | Metric | Value |
 |--------|-------|
-| Version | 3.12.0 |
+| Version | 3.12.1 |
 | Tests | 1,243 |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
@@ -60,7 +60,7 @@ rip-lang/
 │       └── solar.rip    # SLR(1) parser generator (929 LOC) — Don't edit!
 ├── packages/            # Optional packages (see Packages section below)
 │   ├── api/             # @rip-lang/api — Web framework
-│   ├── ui/              # @rip-lang/ui — Reactive web UI framework
+│   ├── grid/            # @rip-lang/grid — Reactive data grid
 │   ├── server/          # @rip-lang/server — Production server
 │   ├── db/              # @rip-lang/db — DuckDB server
 │   ├── schema/          # @rip-lang/schema — ORM + validation
@@ -475,9 +475,9 @@ notFound -> @send 'index.html', 'text/html; charset=UTF-8'
 start port: 3000
 ```
 
-### @rip-lang/ui (v0.3.19) — Reactive Web Framework
+### Rip UI (built into rip-lang) — Reactive Web Framework
 
-Zero-build reactive web framework. The browser loads `rip-ui.min.js`
+Zero-build reactive web framework. The browser loads `rip.min.js`
 (compiler + pre-compiled UI framework), auto-detects inline components,
 and renders with fine-grained DOM updates. Uses Rip's built-in reactive
 primitives directly — one signal graph shared between framework and components.
@@ -489,7 +489,7 @@ primitives directly — one signal graph shared between framework and components
 
 Key concepts:
 - **Auto-launch** — `rip-ui.min.js` auto-detects `<script type="text/rip" data-name="...">` components and calls `launch()` automatically. Hash routing is on by default. Configure via `data-url` and `data-hash` attributes on the script tag. No bootstrap script needed.
-- **`ripUI` middleware** — `use ripUI dir: dir, components: 'routes', includes: ['ui']` registers routes for the framework bundle (`/rip/rip-ui.min.js`), app bundle (`/{app}/bundle`), and SSE hot-reload (`/{app}/watch`)
+- **`ripApp` middleware** — `use ripApp dir: dir, components: 'routes', includes: ['ui']` registers routes for the framework bundle (`/rip/rip.min.js`), app bundle (`/{app}/bundle`), and SSE hot-reload (`/{app}/watch`)
 - **`launch(appBase)`** — Client-side: fetches the app bundle, hydrates the stash, starts the router and renderer
 - **`component` / `render`** — Two keywords added to Rip for defining components with reactive state (`:=`), computed (`~=`), effects (`~>`)
 - **File-based routing** — `pages/users/[id].rip` → `/users/:id` (Next.js-style). Shared components go in `ui/` via `includes`.
@@ -499,10 +499,10 @@ Key concepts:
 ```coffee
 # Server (index.rip)
 import { get, use, start, notFound } from '@rip-lang/api'
-import { ripUI } from '@rip-lang/ui/serve'
+import { ripApp } from '@rip-lang/api/app'
 
 dir = import.meta.dir
-use ripUI dir: dir, components: 'routes', includes: ['ui'], watch: true, title: 'My App'
+use ripApp dir: dir, components: 'routes', includes: ['ui'], watch: true, title: 'My App'
 get '/css/*', -> @send "#{dir}/css/#{@req.path.slice(5)}"
 notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 start port: 3000

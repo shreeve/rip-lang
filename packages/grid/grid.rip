@@ -1,7 +1,7 @@
 import { get, use, start } from '@rip-lang/api'
-import { ripUI } from '@rip-lang/ui/serve'
+import { ripApp } from '@rip-lang/api/app'
 
 dir = import.meta.dir
-use ripUI dir: dir
+use ripApp dir: dir
 get '/*' -> @send "#{dir}/grid.html", 'text/html; charset=UTF-8'
 start port: 3003

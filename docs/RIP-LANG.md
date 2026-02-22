@@ -1212,7 +1212,7 @@ Rip includes optional packages for full-stack development. All are written in Ri
 ```bash
 bun add @rip-lang/api            # Web framework
 bun add @rip-lang/server         # Production server
-bun add @rip-lang/ui             # Reactive web UI
+bun add @rip-lang/grid           # Reactive data grid
 bun add @rip-lang/db             # DuckDB server + client
 bun add @rip-lang/schema         # ORM + validation
 bun add @rip-lang/swarm          # Parallel job runner
@@ -1287,17 +1287,17 @@ rip-server myapp          # Named (accessible at myapp.local)
 rip-server http:3000      # HTTP on specific port
 ```
 
-## @rip-lang/ui — Reactive Web Framework
+## Rip UI — Reactive Web Framework (built into rip-lang)
 
 Zero-build reactive framework. Ships the compiler to the browser and compiles `.rip` components on demand. File-based routing, unified reactive stash, and SSE hot reload.
 
 ```coffee
 # Server setup (index.rip)
 import { get, use, start, notFound } from '@rip-lang/api'
-import { ripUI } from '@rip-lang/ui/serve'
+import { ripApp } from '@rip-lang/api/app'
 
 dir = import.meta.dir
-use ripUI dir: dir, components: 'routes', includes: ['ui'], watch: true
+use ripApp dir: dir, components: 'routes', includes: ['ui'], watch: true
 get '/css/*' -> @send "#{dir}/css/#{@req.path.slice(5)}"
 notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 start port: 3000

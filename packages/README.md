@@ -16,7 +16,7 @@ bun add @rip-lang/db             # DuckDB server
 bun add @rip-lang/print          # Syntax-highlighted code printer
 bun add @rip-lang/server         # Production server
 bun add @rip-lang/swarm          # Parallel job runner
-bun add @rip-lang/ui             # Reactive web UI framework
+bun add @rip-lang/grid           # Reactive data grid
 bun add @rip-lang/x12            # X12 EDI parser + query engine
 
 # VS Code / Cursor extension
@@ -104,16 +104,16 @@ perform = (task, ctx) ->
 swarm { setup, perform }
 ```
 
-### [@rip-lang/ui](ui/) — Reactive Web Framework
+### Rip UI (built into rip-lang) — Reactive Web Framework
 
-Zero-build reactive web framework. The browser loads `rip-ui.min.js` (compiler + pre-compiled UI framework), fetches an app bundle, and renders with fine-grained DOM updates. Includes file-based router (path + hash modes), reactive stash, component store, server middleware (`ripUI`), SSE hot-reload, and `launch bundle:` for self-contained static deployment. ~1,088 lines.
+Zero-build reactive web framework. The browser loads `rip.min.js` (compiler + UI framework), fetches an app bundle, and renders with fine-grained DOM updates. Includes file-based router (path + hash modes), reactive stash, component store, server middleware (`ripApp`), SSE hot-reload, and `launch bundle:` for self-contained static deployment.
 
 ```coffee
 import { get, use, start, notFound } from '@rip-lang/api'
-import { ripUI } from '@rip-lang/ui/serve'
+import { ripApp } from '@rip-lang/api/app'
 
 dir = import.meta.dir
-use ripUI dir: dir, components: 'routes', includes: ['ui'], watch: true, title: 'My App'
+use ripApp dir: dir, components: 'routes', includes: ['ui'], watch: true, title: 'My App'
 get '/css/*', -> @send "#{dir}/css/#{@req.path.slice(5)}"
 notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 start port: 3000

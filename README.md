@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.12.0-blue.svg" alt="Version"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.12.1-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
   <a href="#"><img src="https://img.shields.io/badge/tests-1%2C243%2F1%2C243-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
@@ -280,7 +280,7 @@ export Home = component
 
 That's it. The runtime auto-detects inline `data-name` components, compiles them, and launches the app with hash routing — no bootstrap script needed. Two keywords (`component` and `render`) are all the language adds. Everything else (`:=` state, `~=` computed, methods, lifecycle) is standard Rip.
 
-See [@rip-lang/ui](packages/ui/) for the full framework: file-based router, reactive stash, component store, and renderer. **[Try the demo](https://shreeve.github.io/rip-lang/demo.html)** — a complete app in one HTML file.
+The UI framework is built into rip-lang: file-based router, reactive stash, component store, and renderer. **[Try the demo](https://shreeve.github.io/rip-lang/demo.html)** — a complete app in one HTML file.
 
 ---
 
@@ -361,7 +361,7 @@ Rip includes optional packages for full-stack development:
 | [@rip-lang/api](packages/api/) | 1.1.10 | HTTP framework (Sinatra-style routing, 37 validators) |
 | [@rip-lang/server](packages/server/) | 1.1.19 | Multi-worker app server (hot reload, HTTPS, mDNS) |
 | [@rip-lang/db](packages/db/) | 1.2.0 | DuckDB server with official UI + ActiveRecord-style client |
-| [@rip-lang/ui](packages/ui/) | 0.3.19 | Zero-build reactive web framework (auto-launch, stash, router) |
+| [@rip-lang/grid](packages/grid/) | 0.2.0 | Reactive data grid |
 | [@rip-lang/swarm](packages/swarm/) | 1.1.4 | Parallel job runner with worker pool |
 | [@rip-lang/csv](packages/csv/) | 1.1.4 | CSV parser + writer |
 | [@rip-lang/schema](packages/schema/) | 0.2.1 | Unified schema → TypeScript types, SQL DDL, validation, ORM |

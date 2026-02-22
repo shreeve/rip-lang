@@ -1,11 +1,11 @@
 # Lab Results — Rip UI Demo Server
 
 import { get, use, start } from '@rip-lang/api'
-import { ripUI } from '@rip-lang/ui/serve'
+import { ripApp } from '@rip-lang/api/app'
 
 dir = new URL('../app', import.meta.url).pathname
 
-use ripUI
+use ripApp
   app: ''
   dir: dir
   components: 'routes'

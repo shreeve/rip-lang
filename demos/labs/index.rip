@@ -8,12 +8,12 @@
 # ==============================================================================
 
 import { get, use, start, notFound } from '@rip-lang/api'
-import { ripUI } from '@rip-lang/ui/serve'
+import { ripApp } from '@rip-lang/api/app'
 
 dir = import.meta.dir
 
 export mount = (app = '') ->
-  use ripUI app: app, dir: dir, title: 'Rip UI Labs', state: { appName: 'Rip UI Labs', theme: 'dark' }
+  use ripApp app: app, dir: dir, title: 'Rip UI Labs', state: { appName: 'Rip UI Labs', theme: 'dark' }
   get "#{app}/css/*", -> @send "#{dir}/css/#{@req.path.slice(app.length + 5)}"
   get "#{app}/*", -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 
