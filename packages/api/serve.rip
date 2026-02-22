@@ -45,14 +45,16 @@ export serve = (opts = {}) ->
   # Route: /rip/rip.min.js — serve the bundle, prefer pre-compressed Brotli
   unless serve._registered
     get "/rip/rip.min.js", (c) ->
-      if hasBrotli and (c.req.header('Accept-Encoding') or '').includes('br')
-        file = Bun.file(bundlePathBr)
-        etag = "W/\"#{file.lastModified}-#{file.size}\""
-        if c.req.header('if-none-match') is etag
-          return new Response(null, { status: 304, headers: { 'ETag': etag } })
-        new Response file, headers: { 'Content-Type': 'application/javascript', 'Content-Encoding': 'br', 'ETag': etag }
+      file = if hasBrotli and (c.req.header('Accept-Encoding') or '').includes('br')
+        Bun.file(bundlePathBr)
       else
-        c.send bundlePath, 'application/javascript'
+        Bun.file(bundlePath)
+      etag = "W/\"#{file.lastModified}-#{file.size}\""
+      if c.req.header('if-none-match') is etag
+        return new Response(null, { status: 304, headers: { 'ETag': etag } })
+      headers = { 'Content-Type': 'application/javascript', 'Cache-Control': 'no-cache', 'ETag': etag }
+      headers['Content-Encoding'] = 'br' if hasBrotli and (c.req.header('Accept-Encoding') or '').includes('br')
+      new Response file, { headers }
     serve._registered = true
 
   # Route: {prefix}/components/* — individual .rip component files
@@ -84,7 +86,7 @@ export serve = (opts = {}) ->
     etag = "W/\"#{Bun.hash(json).toString(36)}\""
     if c.req.header('if-none-match') is etag
       return new Response(null, { status: 304, headers: { 'ETag': etag } })
-    new Response json, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'ETag': etag }
+    new Response json, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', 'ETag': etag }
 
   # Register watch directories with rip-server via control socket
   if enableWatch and process.env.SOCKET_PREFIX
