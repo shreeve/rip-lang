@@ -6,10 +6,10 @@ export Home = component
   poweredBy := 'Crossover Health'
   lab := 'Medical Diagnostics'
 
-  firstName := 'Scott'
-  lastName := 'Bowman'
+  firstName := 'Jane'
+  lastName := 'Doe'
   age := 42
-  gender := 'Male'
+  gender := 'Female'
 
   history := [
     date: "#{new Date().getFullYear()}-#{String(new Date().getMonth() + 1).padStart(2, '0')}"
