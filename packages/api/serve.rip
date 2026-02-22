@@ -43,8 +43,7 @@ export serve = (opts = {}) ->
     ripDir = dirname(dirname(fileURLToPath(import.meta.resolve('rip-lang'))))
     "#{ripDir}/docs/dist/rip.min.js"
   bundlePathBr = "#{bundlePath}.br"
-  isWorker = process.env.WORKER_ID?
-  hasBrotli = not isWorker and existsSync(bundlePathBr)
+  hasBrotli = existsSync(bundlePathBr)
 
   # Route: /rip/rip.min.js — serve the bundle, prefer pre-compressed Brotli
   unless serve._registered
