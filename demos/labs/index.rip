@@ -1,11 +1,8 @@
 # ==============================================================================
 # Rip UI Labs App
 # ==============================================================================
-#
-# Standalone: bun packages/ui/apps/labs/index.rip
-# Multi-app:  imported by apps/index.rip
-#
-# ==============================================================================
+
+# Run: bun demos/labs/index.rip
 
 import { get, use, start, notFound } from '@rip-lang/api'
 import { ripApp } from '@rip-lang/api/app'
