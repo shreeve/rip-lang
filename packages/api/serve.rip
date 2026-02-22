@@ -33,10 +33,13 @@ export serve = (opts = {}) ->
   appState      = opts.state or null
   appTitle      = opts.title or null
 
-  # Resolve rip.min.js — try workspace root first (dev), then module resolution (prod)
+  # Resolve rip.min.js — walk up from cwd to find it (dev), then module resolution (prod)
   bundlePath = do ->
-    cwd = "#{process.cwd()}/docs/dist/rip.min.js"
-    return cwd if existsSync(cwd)
+    dir = process.cwd()
+    while dir isnt dirname(dir)
+      candidate = "#{dir}/docs/dist/rip.min.js"
+      return candidate if existsSync(candidate)
+      dir = dirname(dir)
     ripDir = dirname(dirname(fileURLToPath(import.meta.resolve('rip-lang'))))
     "#{ripDir}/docs/dist/rip.min.js"
   bundlePathBr = "#{bundlePath}.br"
