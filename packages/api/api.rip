@@ -17,6 +17,7 @@
 # ==============================================================================
 
 import { AsyncLocalStorage } from 'node:async_hooks'
+import { posix } from 'node:path'
 
 # ==============================================================================
 # Module State
@@ -172,7 +173,7 @@ createContext = (req, params = {}) ->
       raw: req
       method: req.method
       url: req.url
-      path: url.pathname
+      path: posix.normalize(url.pathname)
       param: (key) -> if key? then params[key] else { ...params }
       query: (key) -> if key? then url.searchParams.get(key) else Object.fromEntries(url.searchParams)
       header: (key) -> if key? then req.headers.get(key) else Object.fromEntries(req.headers)
@@ -302,7 +303,7 @@ export after = (fn) -> _afterFilters.push fn
 
 export fetch = (req) ->
   url = new URL(req.url)
-  pathname = url.pathname
+  pathname = posix.normalize(url.pathname)
   method = req.method
 
   if method is 'HEAD'

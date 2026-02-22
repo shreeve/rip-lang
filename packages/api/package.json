@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/api",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "description": "Pure Rip API framework — elegant, fast, zero dependencies",
   "type": "module",
   "main": "api.rip",
