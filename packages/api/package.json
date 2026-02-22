@@ -1,12 +1,12 @@
 {
   "name": "@rip-lang/api",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Pure Rip API framework — elegant, fast, zero dependencies",
   "type": "module",
   "main": "api.rip",
   "exports": {
     ".": "./api.rip",
-    "./app": "./app.rip",
+    "./serve": "./serve.rip",
     "./middleware": "./middleware.rip"
   },
   "scripts": {
@@ -38,7 +38,7 @@
   },
   "files": [
     "api.rip",
-    "app.rip",
+    "serve.rip",
     "middleware.rip",
     "README.md"
   ]

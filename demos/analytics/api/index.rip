@@ -5,13 +5,13 @@
 # Then: rip api/index.rip
 
 import { get, post, use, start, read } from '@rip-lang/api'
-import { ripApp } from '@rip-lang/api/app'
+import { serve } from '@rip-lang/api/serve'
 
 dir = new URL('../app', import.meta.url).pathname
 dbUrl = process.env.RIPDB_URL or 'http://localhost:4213'
 
 # Serve the Rip app
-use ripApp
+use serve
   app: ''
   dir: dir
   components: 'routes'

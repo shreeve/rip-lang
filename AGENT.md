@@ -489,7 +489,7 @@ primitives directly — one signal graph shared between framework and components
 
 Key concepts:
 - **Auto-launch** — `rip-ui.min.js` auto-detects `<script type="text/rip" data-name="...">` components and calls `launch()` automatically. Hash routing is on by default. Configure via `data-url` and `data-hash` attributes on the script tag. No bootstrap script needed.
-- **`ripApp` middleware** — `use ripApp dir: dir, components: 'routes', includes: ['ui']` registers routes for the framework bundle (`/rip/rip.min.js`), app bundle (`/{app}/bundle`), and SSE hot-reload (`/{app}/watch`)
+- **`serve` middleware** — `use serve dir: dir, components: 'routes', includes: ['ui']` registers routes for the framework bundle (`/rip/rip.min.js`), app bundle (`/{app}/bundle`), and SSE hot-reload (`/{app}/watch`)
 - **`launch(appBase)`** — Client-side: fetches the app bundle, hydrates the stash, starts the router and renderer
 - **`component` / `render`** — Two keywords added to Rip for defining components with reactive state (`:=`), computed (`~=`), effects (`~>`)
 - **File-based routing** — `pages/users/[id].rip` → `/users/:id` (Next.js-style). Shared components go in `ui/` via `includes`.
@@ -499,10 +499,10 @@ Key concepts:
 ```coffee
 # Server (index.rip)
 import { get, use, start, notFound } from '@rip-lang/api'
-import { ripApp } from '@rip-lang/api/app'
+import { serve } from '@rip-lang/api/serve'
 
 dir = import.meta.dir
-use ripApp dir: dir, components: 'routes', includes: ['ui'], watch: true, title: 'My App'
+use serve dir: dir, components: 'routes', includes: ['ui'], watch: true, title: 'My App'
 get '/css/*', -> @send "#{dir}/css/#{@req.path.slice(5)}"
 notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 start port: 3000

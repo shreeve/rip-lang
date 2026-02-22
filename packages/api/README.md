@@ -22,7 +22,7 @@ and powerful session management — all in three files with no external dependen
 | File | Lines | Role |
 |------|-------|------|
 | `api.rip` | ~660 | Core framework: routing, validation, `read()`, `session`, file serving, server |
-| `app.rip` | ~80 | App middleware: serves `rip.min.js`, component bundles, and hot-reload registration |
+| `serve.rip` | ~80 | Serve middleware: serves `rip.min.js`, component bundles, and hot-reload registration |
 | `middleware.rip` | ~460 | Built-in middleware: cors, logger, sessions, compression, security |
 
 See [docs/RIP-LANG.md](https://github.com/shreeve/rip-lang/blob/main/docs/RIP-LANG.md) for Rip language documentation.
@@ -669,15 +669,15 @@ export default App ->
 
 ## Serving Rip UI Apps
 
-The `ripApp` middleware from `@rip-lang/api/app` serves reactive Rip applications. It handles the framework bundle, component file serving, and hot-reload registration — everything needed to run a Rip UI app behind `@rip-lang/server`.
+The `serve` middleware from `@rip-lang/api/serve` serves reactive Rip applications. It handles the framework bundle, component file serving, and hot-reload registration — everything needed to run a Rip UI app behind `@rip-lang/server`.
 
 ```coffee
 import { get, use, start, notFound } from '@rip-lang/api'
-import { ripApp } from '@rip-lang/api/app'
+import { serve } from '@rip-lang/api/serve'
 
 dir = import.meta.dir
 
-use ripApp dir: dir, components: 'routes', includes: ['ui'], watch: true, title: 'My App'
+use serve dir: dir, components: 'routes', includes: ['ui'], watch: true, title: 'My App'
 get '/css/*' -> @send "#{dir}/css/#{@req.path.slice(5)}"
 notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 
@@ -884,7 +884,7 @@ start port: 3000
 
 ## Performance
 
-- **Minimal footprint** — Core is ~660 lines, app middleware ~80 lines, built-in middleware ~460 lines
+- **Minimal footprint** — Core is ~660 lines, serve middleware ~80 lines, built-in middleware ~460 lines
 - **Zero dependencies** — No external packages to load
 - **Compiled patterns** — Route regexes compiled once at startup
 - **Smart response wrapping** — Minimal overhead for return-value handlers

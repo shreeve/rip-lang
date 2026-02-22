@@ -5,12 +5,12 @@
 # Run: bun demos/labs/index.rip
 
 import { get, use, start, notFound } from '@rip-lang/api'
-import { ripApp } from '@rip-lang/api/app'
+import { serve } from '@rip-lang/api/serve'
 
 dir = import.meta.dir
 
 export mount = (app = '') ->
-  use ripApp app: app, dir: dir, title: 'Rip UI Labs', state: { appName: 'Rip UI Labs', theme: 'dark' }
+  use serve app: app, dir: dir, title: 'Rip UI Labs', state: { appName: 'Rip UI Labs', theme: 'dark' }
   get "#{app}/css/*", -> @send "#{dir}/css/#{@req.path.slice(app.length + 5)}"
   get "#{app}/*", -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 

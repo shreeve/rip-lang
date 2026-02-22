@@ -106,14 +106,14 @@ swarm { setup, perform }
 
 ### Rip UI (built into rip-lang) — Reactive Web Framework
 
-Zero-build reactive web framework. The browser loads `rip.min.js` (compiler + UI framework), fetches an app bundle, and renders with fine-grained DOM updates. Includes file-based router (path + hash modes), reactive stash, component store, server middleware (`ripApp`), SSE hot-reload, and `launch bundle:` for self-contained static deployment.
+Zero-build reactive web framework. The browser loads `rip.min.js` (compiler + UI framework), fetches an app bundle, and renders with fine-grained DOM updates. Includes file-based router (path + hash modes), reactive stash, component store, server middleware (`serve`), SSE hot-reload, and `launch bundle:` for self-contained static deployment.
 
 ```coffee
 import { get, use, start, notFound } from '@rip-lang/api'
-import { ripApp } from '@rip-lang/api/app'
+import { serve } from '@rip-lang/api/serve'
 
 dir = import.meta.dir
-use ripApp dir: dir, components: 'routes', includes: ['ui'], watch: true, title: 'My App'
+use serve dir: dir, components: 'routes', includes: ['ui'], watch: true, title: 'My App'
 get '/css/*', -> @send "#{dir}/css/#{@req.path.slice(5)}"
 notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 start port: 3000

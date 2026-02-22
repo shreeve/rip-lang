@@ -2,7 +2,7 @@
 
 import { get, use, start } from '@rip-lang/api'
 import { prettyJson, sessions } from '@rip-lang/api/middleware'
-import { ripApp } from '@rip-lang/api/app'
+import { serve } from '@rip-lang/api/serve'
 import { Stash } from './lib/stash.rip'
 import { setup } from './setup.rip'
 import configData from './config.rip'
@@ -19,7 +19,7 @@ use prettyJson
 use sessions name: config.session.name, maxAge: config.session.maxAge
 
 # Serve the Rip app
-use ripApp
+use serve
   app: ''
   dir: dir
   components: 'routes'

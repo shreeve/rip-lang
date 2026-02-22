@@ -331,7 +331,7 @@ When `RIP_SETUP_MODE=1` is set, the same file runs the one-time setup phase. Whe
 Two layers of hot reload work together in development:
 
 - **API changes** (`-w` flag) — The Manager watches for `.rip` file changes in the API directory and triggers rolling worker restarts (zero downtime, server-side).
-- **UI changes** (`watch: true` in `ripApp`) — Workers register their app's component directories with the Manager via the control socket. The Manager watches those directories and broadcasts SSE reload events to connected browsers (client-side). SSE connections are held by the long-lived Server process, not by workers.
+- **UI changes** (`watch: true` in `serve`) — Workers register their app's component directories with the Manager via the control socket. The Manager watches those directories and broadcasts SSE reload events to connected browsers (client-side). SSE connections are held by the long-lived Server process, not by workers.
 
 Use `--static` in production to disable hot reload entirely.
 
@@ -478,8 +478,8 @@ The dashboard uses the same mDNS infrastructure as your app, so it's always avai
 
 ## Serving Rip UI Apps
 
-Rip Server works seamlessly with the `ripApp` middleware for serving
-reactive web applications with hot reload. The `ripApp` middleware handles
+Rip Server works seamlessly with the `serve` middleware for serving
+reactive web applications with hot reload. The `serve` middleware handles
 framework files, page manifests, and SSE hot-reload — rip-server adds HTTPS,
 mDNS, multi-worker load balancing, and rolling restarts on top.
 
@@ -489,11 +489,11 @@ Create `index.rip`:
 
 ```coffee
 import { get, use, start, notFound } from '@rip-lang/api'
-import { ripApp } from '@rip-lang/api/app'
+import { serve } from '@rip-lang/api/serve'
 
 dir = import.meta.dir
 
-use ripApp dir: dir, components: 'routes', includes: ['ui'], watch: true, title: 'My App'
+use serve dir: dir, components: 'routes', includes: ['ui'], watch: true, title: 'My App'
 
 get '/css/*', -> @send "#{dir}/css/#{@req.path.slice(5)}"
 

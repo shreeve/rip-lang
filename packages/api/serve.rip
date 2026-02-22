@@ -1,12 +1,12 @@
 # ==============================================================================
-# @rip-lang/api app middleware — serve Rip applications
+# @rip-lang/api/serve — serve Rip applications
 #
 # Serves the Rip browser bundle, app component files, and the component bundle.
 # Hot-reload SSE is handled by rip-server; this middleware registers watch dirs.
 #
 # Usage:
-#   import { ripApp } from '@rip-lang/api/app'
-#   use ripApp dir: dir, components: 'routes', includes: ['ui'], watch: true, title: 'My App'
+#   import { serve } from '@rip-lang/api/serve'
+#   use serve dir: dir, components: 'routes', includes: ['ui'], watch: true, title: 'My App'
 #
 # Options:
 #   app:        string  — URL mount point (default: '')
@@ -21,7 +21,7 @@
 
 import { get } from '@rip-lang/api'
 
-export ripApp = (opts = {}) ->
+export serve = (opts = {}) ->
   prefix        = opts.app or ''
   appDir        = opts.dir or '.'
   componentsDir = "#{appDir}/#{opts.components or 'components'}"
@@ -35,9 +35,9 @@ export ripApp = (opts = {}) ->
   bundlePath = "#{ripDir}/docs/dist/rip.min.js"
 
   # Route: /rip/rip.min.js — serve the bundle (registered once)
-  unless ripApp._registered
+  unless serve._registered
     get "/rip/rip.min.js", (c) -> c.send bundlePath, 'application/javascript'
-    ripApp._registered = true
+    serve._registered = true
 
   # Route: {prefix}/components/* — individual .rip component files
   get "#{prefix}/components/*", (c) ->

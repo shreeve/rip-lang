@@ -1294,10 +1294,10 @@ Zero-build reactive framework. Ships the compiler to the browser and compiles `.
 ```coffee
 # Server setup (index.rip)
 import { get, use, start, notFound } from '@rip-lang/api'
-import { ripApp } from '@rip-lang/api/app'
+import { serve } from '@rip-lang/api/serve'
 
 dir = import.meta.dir
-use ripApp dir: dir, components: 'routes', includes: ['ui'], watch: true
+use serve dir: dir, components: 'routes', includes: ['ui'], watch: true
 get '/css/*' -> @send "#{dir}/css/#{@req.path.slice(5)}"
 notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 start port: 3000
