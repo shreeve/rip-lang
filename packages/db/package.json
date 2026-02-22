@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/db",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "description": "DuckDB server with official DuckDB UI — pure Bun FFI",
   "type": "module",
   "main": "db.rip",

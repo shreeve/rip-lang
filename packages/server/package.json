@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/server",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Pure Rip application server — multi-worker, hot reload, HTTPS, mDNS",
   "type": "module",
   "main": "server.rip",
