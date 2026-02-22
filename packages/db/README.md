@@ -114,7 +114,7 @@ Rip DB includes an ActiveRecord-style database client for use in Rip
 applications. Import it from `@rip-lang/db/client` — it talks to a running
 `rip-db` server over HTTP with parameterized queries.
 
-```rip
+```coffee
 import { connect, query, findOne, findAll, Model } from '@rip-lang/db/client'
 
 connect 'http://localhost:4213'   # optional — defaults to DB_URL env or localhost:4213
@@ -125,7 +125,7 @@ connect 'http://localhost:4213'   # optional — defaults to DB_URL env or local
 Every query uses parameterized placeholders (`$1`, `$2`, ...) to prevent SQL
 injection. Results are automatically materialized into plain objects.
 
-```rip
+```coffee
 # Raw result (meta + data arrays)
 result = query! "SELECT * FROM users WHERE active = $1", [true]
 
@@ -141,13 +141,13 @@ users = findAll! "SELECT * FROM users WHERE role = $1", ['admin']
 Create a Model for any table to get a full set of CRUD operations and a
 chainable query builder.
 
-```rip
+```coffee
 User = Model 'users'
 ```
 
 #### Find & Count
 
-```rip
+```coffee
 user  = User.find! 42           # SELECT * FROM "users" WHERE id = $1
 count = User.count!              # SELECT COUNT(*) ...
 users = User.all!                # SELECT * FROM "users"
@@ -158,7 +158,7 @@ users = User.all! 10             # SELECT * FROM "users" LIMIT 10
 
 All query methods return a new builder — chains are immutable and reusable.
 
-```rip
+```coffee
 User.where(active: true).order('name').limit(10).all!
 User.where(active: true).offset(20).limit(10).all!
 User.where('age > $1', [21]).all!
@@ -167,7 +167,7 @@ User.select('id, name').where(role: 'admin').first!
 
 #### Where, Or, Not
 
-```rip
+```coffee
 # Object-style (null-aware — generates IS NULL / IS NOT NULL)
 User.where(role: 'admin').all!
 User.where(deleted_at: null).all!          # WHERE "deleted_at" IS NULL
@@ -186,7 +186,7 @@ User.not(deleted_at: null).all!            # WHERE "deleted_at" IS NOT NULL
 
 #### Group & Having
 
-```rip
+```coffee
 User.group('role').select('role, count(*) as n').all!
 User.group('role').having('count(*) > $1', [5]).select('role, count(*) as n').all!
 ```
@@ -195,7 +195,7 @@ User.group('role').having('count(*) > $1', [5]).select('role, count(*) as n').al
 
 All mutations return the affected row(s) via `RETURNING *`.
 
-```rip
+```coffee
 # Insert — returns the new record
 user = User.insert! { first_name: 'Alice', email: 'alice@example.com' }
 
@@ -213,7 +213,7 @@ user = User.destroy! 42
 
 Chain `.where()` with `.update!` or `.destroy!` for bulk operations.
 
-```rip
+```coffee
 # Update all matching rows
 User.where(role: 'guest').update! { role: 'member' }
 
@@ -225,7 +225,7 @@ User.where(active: false).destroy!
 
 For anything the builder doesn't cover, drop down to raw SQL.
 
-```rip
+```coffee
 users = User.query! "SELECT * FROM users WHERE dob > $1", ['2000-01-01']
 ```
 
@@ -233,7 +233,7 @@ users = User.query! "SELECT * FROM users WHERE dob > $1", ['2000-01-01']
 
 Pass a database name to query attached DuckDB databases.
 
-```rip
+```coffee
 Archive = Model 'orders', 'archive_db'
 order = Archive.find! 99    # SELECT * FROM "archive_db"."orders" WHERE id = $1
 ```

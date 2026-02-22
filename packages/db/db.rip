@@ -183,7 +183,7 @@ get '/tables' ->
 
 # GET /schema/:table — Get table schema
 get '/schema/:table' ->
-  table = @req.params.table.replace(/[^a-zA-Z0-9_]/g, '')  # sanitize
+  table = read('table').replace(/[^a-zA-Z0-9_]/g, '')
   try
     rows = await conn.query "DESCRIBE \"#{table}\""
     { schema: rows }
