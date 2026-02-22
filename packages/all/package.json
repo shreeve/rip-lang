@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/all",
-  "version": "3.12.7",
+  "version": "3.12.8",
   "description": "Meta-package that installs rip-lang and all @rip-lang/* packages",
   "type": "module",
   "keywords": [
@@ -22,7 +22,7 @@
   "license": "MIT",
   "dependencies": {
     "rip-lang": "^3.12.1",
-    "@rip-lang/api": "^1.2.7",
+    "@rip-lang/api": "^1.2.8",
     "@rip-lang/csv": "^1.2.0",
     "@rip-lang/db": "^1.3.3",
     "@rip-lang/grid": "^0.2.1",
