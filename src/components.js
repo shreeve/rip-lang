@@ -729,13 +729,14 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     // Effects
     for (const effect of effects) {
       const effectBody = effect[2];
+      const isAsync = this.containsAwait(effectBody) ? 'async ' : '';
       if (this.is(effectBody, 'block') && effectBody.length > 2) {
         const transformed = this.transformComponentMembers(effectBody);
         const body = this.generateFunctionBody(transformed, [], true);
-        lines.push(`    __effect(() => ${body});`);
+        lines.push(`    __effect(${isAsync}() => ${body});`);
       } else {
         const effectCode = this.generateInComponent(effectBody, 'value');
-        lines.push(`    __effect(() => { ${effectCode}; });`);
+        lines.push(`    __effect(${isAsync}() => { ${effectCode}; });`);
       }
     }
 

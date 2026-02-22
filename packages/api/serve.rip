@@ -92,7 +92,7 @@ export serve = (opts = {}) ->
   # Register watch directories with rip-server via control socket
   if enableWatch and process.env.SOCKET_PREFIX
     ctl = "/tmp/#{process.env.SOCKET_PREFIX}.ctl.sock"
-    dirs = [routesDir, ...componentDirs]
+    dirs = [routesDir, ...componentDirs, "#{appDir}/css"]
     body = JSON.stringify({ op: 'watch', prefix, dirs })
     fetch('http://localhost/watch', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl }).catch (e) ->
       console.warn "[Rip] Watch registration failed: #{e.message}"

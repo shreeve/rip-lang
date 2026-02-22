@@ -688,7 +688,7 @@ export createRenderer = (opts = {}) ->
     for inst in layoutInstances by -1
       inst.beforeUnmount() if inst.beforeUnmount
       inst.unmounted() if inst.unmounted
-      inst._root?.remove()
+      inst._target?.remove()
     layoutInstances = []
     mountPoint = container
 
@@ -724,7 +724,7 @@ export createRenderer = (opts = {}) ->
         return
 
       layoutsChanged = not arraysEqual(layoutFiles, currentLayouts)
-      oldRoot = currentComponent?._root
+      oldTarget = currentComponent?._target
 
       if layoutsChanged
         unmount()
@@ -768,7 +768,7 @@ export createRenderer = (opts = {}) ->
       cached = componentCache.get(route.file)
       if cached
         componentCache.delete route.file
-        mp.appendChild cached._root
+        mp.appendChild cached._target
         currentComponent = cached
         currentRoute = route.file
       else
@@ -783,7 +783,7 @@ export createRenderer = (opts = {}) ->
         currentRoute = route.file
 
         instance.load!(params, query) if instance.load
-      oldRoot?.remove()
+      oldTarget?.remove()
       router.navigating = false
       if container.style.opacity is '0'
         document.fonts.ready.then ->
@@ -856,6 +856,12 @@ connectWatch = (url) ->
     es.addEventListener 'reload', ->
       console.log '[Rip] Reloading...'
       location.reload()
+
+    es.addEventListener 'css', ->
+      for link as document.querySelectorAll('link[rel="stylesheet"]')
+        url = new URL(link.href)
+        url.searchParams.set('_t', Date.now())
+        link.href = url.toString()
 
     es.onerror = ->
       es.close()

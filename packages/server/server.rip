@@ -576,17 +576,23 @@ class Manager
   watchDirs: (prefix, dirs) ->
     return if @appWatchers.has(prefix)
     timer = null
+    pending = null
     watchers = []
-    broadcast = =>
+    broadcast = (type = 'reload') =>
+      pending = if type is 'reload' or pending is 'reload' then 'reload' else type
       clearTimeout(timer) if timer
       timer = setTimeout =>
         timer = null
-        @server?.broadcastChange(prefix)
+        @server?.broadcastChange(prefix, pending)
+        pending = null
       , 100
     for dir in dirs
       try
         w = watch dir, { recursive: true }, (event, filename) ->
-          broadcast() if filename?.endsWith('.rip')
+          if filename?.endsWith('.rip')
+            broadcast('reload')
+          else if filename?.endsWith('.css')
+            broadcast('css')
         watchers.push(w)
       catch e
         console.warn "rip-server: watch failed for #{dir}: #{e.message}"
@@ -894,12 +900,12 @@ class Server
         'Cache-Control': 'no-cache'
         'Connection': 'keep-alive'
 
-  broadcastChange: (prefix) ->
+  broadcastChange: (prefix, type = 'reload') ->
     group = @watchGroups.get(prefix)
     return unless group
     dead = []
     for client as group.sseClients
-      try client.send('reload')
+      try client.send(type)
       catch then dead.push(client)
     group.sseClients.delete(c) for c in dead
 
