@@ -484,6 +484,9 @@ export Button = component
   @notes:: string
   disabled:: boolean := false
 
+  # NOTE: I'm not sure what this should show. That "button" looks like a
+  #       variable name to me, so I'm not sure how to define that or hint
+  #       to the editor that it's a Button component.
   # render
   #   button.btn.("btn-#{@variant}").("compact" if @compact)
   #     if @loading
