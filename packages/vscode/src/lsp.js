@@ -236,7 +236,7 @@ function srcToOffset(filePath, line, col) {
     let best = -1;
     for (const [s] of c.srcToGen) if (s <= line && s > best) best = s;
     if (best < 0) return undefined;
-    genLine = c.srcToGen.get(best) + (line - best);
+    genLine = c.srcToGen.get(best);
   }
   const srcLines = c.source.split('\n');
   const genLines = c.tsContent.split('\n');
@@ -255,7 +255,9 @@ function srcToOffset(filePath, line, col) {
       if (genCol >= 0) return lineColToOffset(c.tsContent, genLine, genCol);
     }
   }
-  return lineColToOffset(c.tsContent, genLine, col);
+  const genText = c.tsContent.split('\n')[genLine] || '';
+  if (col < genText.length) return lineColToOffset(c.tsContent, genLine, col);
+  return lineColToOffset(c.tsContent, genLine, 0);
 }
 
 function genToSrcPos(filePath, offset) {
