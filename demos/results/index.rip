@@ -7,8 +7,8 @@ dir = import.meta.dir
 
 use serve dir: dir, components: 'routes', includes: ['components'], title: 'Lab Results'
 
-get '/css/*'    -> @send "#{dir}/css/#{@req.path.slice(5)}"
-get '/images/*' -> @send "#{dir}/images/#{@req.path.slice(8)}"
+get '/css/*'    -> @send "#{dir}#{@req.path}"
+get '/images/*' -> @send "#{dir}#{@req.path}"
 get '/*'        -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 
 start!
