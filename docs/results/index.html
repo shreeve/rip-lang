@@ -926,10 +926,9 @@ export Summary = component
     "#{mo}/#{dy}/#{yr}"
 
   historyDate ~=
-    return '' unless history?[0]?.date
-    months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-    [yr, mo] = history[0].date.split('-')
-    "#{months[parseInt(mo, 10) - 1]} #{yr}"
+    return '' unless history and history[0] and history[0].date
+    parts = history[0].date.split('-')
+    "#{parts[1]}/#{parts[0]}"
 
   checkIcon := '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>'
   warnIcon  := '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>'
@@ -938,18 +937,28 @@ export Summary = component
     s = []
     s.push { label: 'Heart Health', keys: ['triglycerides', 'hdlCholesterol', 'totalCholesterol', 'cholesterolHdlRatio'] }
     s.push { label: 'Pancreas Health', keys: ['glucose', 'a1c'] }
-    s.push { label: 'Physical Measurements', keys: ['waistCircumference', 'bloodPressure'] } if history?[0]?.waistCircumference
+    if history and history[0] and history[0].waistCircumference?
+      s.push { label: 'Physical Measurements', keys: ['waistCircumference', 'bloodPressure'] }
     s
 
-  rowClass: (k) ->
-    val = history[0]?[k]
-    return '' unless val?
-    if acceptable(k, val) is 'acceptable' then 'row-acceptable' else 'row-unacceptable'
-
-  rowIcon: (k) ->
-    val = history[0]?[k]
-    return '' unless val?
-    if acceptable(k, val) is 'acceptable' then checkIcon else warnIcon
+  rows ~=
+    result = []
+    for section in sections
+      for k in section.keys
+        ref = ranges[k]
+        continue unless ref
+        val = history[0]?[k]
+        continue unless val?
+        status = acceptable(k, val)
+        result.push
+          section: section.label
+          key: k
+          name: ref.name
+          desc: ref.desc
+          value: String(val)
+          rowClass: if status is 'acceptable' then 'row-acceptable' else 'row-unacceptable'
+          icon: if status is 'acceptable' then checkIcon else warnIcon
+    result
 
   render
     .('brochure__page page-summary')
@@ -969,27 +978,22 @@ export Summary = component
 
         .summary__copy "This report serves as an easy reference to review all of your testing results, including data from previous years. We encourage you to use this information in conjunction with an exam by your doctor, not as a replacement for one. We hope this summary will be a good starting point for conversations with your doctor about improving your overall health."
 
-      for section, i in sections
-        table.summary-table
-          unless i
-            thead
-              tr
-                th
-                th historyDate
-          tbody
+      table.summary-table
+        thead
+          tr
+            th ""
+            th historyDate
+        tbody
+          for row in rows
             tr
-              td section.label
+              class: row.rowClass
               td
-            for k in section.keys
-              tr
-                class: @rowClass(k)
-                td
-                  .status-icon
-                    innerHTML: @rowIcon(k)
-                  div
-                    .name ranges[k].name
-                    .desc ranges[k].desc
-                td.value history[0]?[k]
+                .status-icon
+                  innerHTML: row.icon
+                div
+                  .name row.name
+                  .desc row.desc
+              td.value row.value
 </script>
 
 <script type="text/rip" data-name="detail-page">

@@ -20,7 +20,7 @@ export Cover = component
     "#{name}, here are the results and personalized action plan from your recent screening."
 
   render
-    .('brochure__page page-cover') style: "background-image: url(/images/cover_bg.jpg)"
+    .('brochure__page page-cover') style: "background-image: url(images/cover_bg.jpg)"
       .cover__heading-fade
         .cover__title title
 
@@ -32,7 +32,7 @@ export Cover = component
           span today
 
       .cover__footer
-        img src: '/images/crossover.svg', alt: 'Crossover Health'
+        img src: 'images/crossover.svg', alt: 'Crossover Health'
         .cover__powered-by
           div "Powered by"
           div poweredBy
