@@ -22,6 +22,7 @@
 import { get } from '@rip-lang/api'
 import { fileURLToPath } from 'node:url'
 import { dirname } from 'node:path'
+import { existsSync } from 'node:fs'
 
 export serve = (opts = {}) ->
   prefix        = opts.app or ''
@@ -32,13 +33,26 @@ export serve = (opts = {}) ->
   appState      = opts.state or null
   appTitle      = opts.title or null
 
-  # Resolve rip.min.js from the rip-lang package
-  ripDir = dirname(dirname(fileURLToPath(import.meta.resolve('rip-lang'))))
-  bundlePath = "#{ripDir}/docs/dist/rip.min.js"
+  # Resolve rip.min.js — try workspace root first (dev), then module resolution (prod)
+  bundlePath = do ->
+    cwd = "#{process.cwd()}/docs/dist/rip.min.js"
+    return cwd if existsSync(cwd)
+    ripDir = dirname(dirname(fileURLToPath(import.meta.resolve('rip-lang'))))
+    "#{ripDir}/docs/dist/rip.min.js"
+  bundlePathBr = "#{bundlePath}.br"
+  hasBrotli = existsSync(bundlePathBr)
 
-  # Route: /rip/rip.min.js — serve the bundle (registered once)
+  # Route: /rip/rip.min.js — serve the bundle, prefer pre-compressed Brotli
   unless serve._registered
-    get "/rip/rip.min.js", (c) -> c.send bundlePath, 'application/javascript'
+    get "/rip/rip.min.js", (c) ->
+      if hasBrotli and (c.req.header('Accept-Encoding') or '').includes('br')
+        file = Bun.file(bundlePathBr)
+        etag = "W/\"#{file.lastModified}-#{file.size}\""
+        if c.req.header('if-none-match') is etag
+          return new Response(null, { status: 304, headers: { 'ETag': etag } })
+        new Response file, headers: { 'Content-Type': 'application/javascript', 'Content-Encoding': 'br', 'ETag': etag }
+      else
+        c.send bundlePath, 'application/javascript'
     serve._registered = true
 
   # Route: {prefix}/components/* — individual .rip component files
