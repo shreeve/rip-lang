@@ -6,9 +6,7 @@
 
 Rip API is a complete HTTP framework for building APIs with Bun. It provides
 Sinatra-style routing, Koa-style middleware composition, 37 built-in validators,
-and powerful session management — all in two files with no external dependencies.
-It powers [@rip-lang/db](https://github.com/shreeve/rip-lang/tree/main/packages/db)
-and is designed for APIs that are clear, concise, and correct.
+and powerful session management — all in three files with no external dependencies.
 
 ## Features
 
@@ -23,10 +21,11 @@ and is designed for APIs that are clear, concise, and correct.
 
 | File | Lines | Role |
 |------|-------|------|
-| `api.rip` | ~640 | Core framework: routing, validation, `read()`, `session`, file serving, server |
-| `middleware.rip` | ~465 | Built-in middleware: cors, logger, sessions, compression, security |
+| `api.rip` | ~660 | Core framework: routing, validation, `read()`, `session`, file serving, server |
+| `app.rip` | ~80 | App middleware: serves `rip.min.js`, component bundles, and hot-reload registration |
+| `middleware.rip` | ~460 | Built-in middleware: cors, logger, sessions, compression, security |
 
-> **See Also**: For Rip language documentation, see the [main rip-lang repository](https://github.com/shreeve/rip-lang) and [docs/RIP-LANG.md](https://github.com/shreeve/rip-lang/blob/main/docs/RIP-LANG.md).
+See [docs/RIP-LANG.md](https://github.com/shreeve/rip-lang/blob/main/docs/RIP-LANG.md) for Rip language documentation.
 
 ## Try it Now
 
@@ -173,8 +172,8 @@ username = read 'username', 'string', [3, 20]  # 3-20 characters
 bio = read 'bio', 'string', [0, 500]           # Up to 500 chars
 
 # Numbers: value range
-views = read 'views', 'int', min: 0            # Non-negative integer
-discount = read 'discount', 'number', max: 100  # Up to 100
+views = read 'views', 'int', min: 0             # Non-negative integer
+discount = read 'discount', 'float', max: 100   # Up to 100
 ```
 
 ### Enumeration Validation
@@ -200,8 +199,8 @@ code = read 'code', /^[A-Z]{3,6}$/
 ```coffee
 id = read 'user_id', 'id!'       # Positive integer (1+)
 count = read 'count', 'whole'    # Non-negative integer (0+)
-price = read 'price', 'decimal'  # Decimal number
-cost = read 'cost', 'money'      # Cents (multiplies by 100)
+price = read 'price', 'float'   # Decimal number
+cost = read 'cost', 'money'     # Banker's rounding to cents
 ```
 
 ### Text Processing
@@ -244,9 +243,8 @@ semver = read 'version', 'semver' # Semantic version
 
 ### Time & Date
 ```coffee
-time = read 'time', 'time'        # HH:MM or HH:MM:SS
 date = read 'date', 'date'        # YYYY-MM-DD
-time24 = read 'time', 'time24'    # 24-hour format
+time = read 'time', 'time'        # HH:MM or HH:MM:SS (24-hour)
 time12 = read 'time', 'time12'    # 12-hour with am/pm
 ```
 
@@ -669,6 +667,41 @@ export default App ->
   post '/echo', -> read()
 ```
 
+## Serving Rip UI Apps
+
+The `ripApp` middleware from `@rip-lang/api/app` serves reactive Rip applications. It handles the framework bundle, component file serving, and hot-reload registration — everything needed to run a Rip UI app behind `@rip-lang/server`.
+
+```coffee
+import { get, use, start, notFound } from '@rip-lang/api'
+import { ripApp } from '@rip-lang/api/app'
+
+dir = import.meta.dir
+
+use ripApp dir: dir, components: 'routes', includes: ['ui'], watch: true, title: 'My App'
+get '/css/*' -> @send "#{dir}/css/#{@req.path.slice(5)}"
+notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
+
+start port: 3000
+```
+
+### Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `app` | string | `''` | URL mount point |
+| `dir` | string | `'.'` | App directory on disk |
+| `components` | string | `'components'` | Page components directory (relative to `dir`) |
+| `includes` | string[] | `[]` | Shared component directories (relative to `dir`) |
+| `watch` | boolean | `false` | Enable hot-reload (registers watch dirs with rip-server) |
+| `state` | object | `null` | Initial app state passed via bundle |
+| `title` | string | `null` | Document title |
+
+### What it registers
+
+- **`GET /rip/rip.min.js`** — serves the Rip browser bundle from the `rip-lang` package
+- **`GET {prefix}/components/*`** — serves individual `.rip` component source files
+- **`GET {prefix}/bundle`** — serves all components + app data as a single JSON payload (with ETag caching)
+
 ## Context Utilities
 
 ### ctx()
@@ -734,19 +767,6 @@ toName 'JANE SMITH'         # 'Jane Smith'
 toName "o'brien"            # "O'Brien"
 toName 'mcdonald'           # 'McDonald'
 toName 'los angeles', 'address'  # 'Los Angeles'
-```
-
-### mimeType
-
-Auto-detect content type from file extension:
-
-```coffee
-import { mimeType } from '@rip-lang/api'
-
-mimeType 'style.css'    # 'text/css; charset=UTF-8'
-mimeType 'app.js'       # 'application/javascript'
-mimeType 'data.json'    # 'application/json'
-mimeType 'unknown.xyz'  # 'application/octet-stream'
 ```
 
 ### toPhone
@@ -864,7 +884,7 @@ start port: 3000
 
 ## Performance
 
-- **Minimal footprint** — Core is ~590 lines, middleware ~465 lines
+- **Minimal footprint** — Core is ~660 lines, app middleware ~80 lines, built-in middleware ~460 lines
 - **Zero dependencies** — No external packages to load
 - **Compiled patterns** — Route regexes compiled once at startup
 - **Smart response wrapping** — Minimal overhead for return-value handlers

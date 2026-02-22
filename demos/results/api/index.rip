@@ -12,6 +12,7 @@ use ripApp
   includes: ['components']
   title: 'Lab Results'
 
+get 'ping' -> pong: true
 get '/css/*'    -> @send "#{dir}/css/#{@req.path.slice(5)}"
 get '/images/*' -> @send "#{dir}/images/#{@req.path.slice(8)}"
 get '/*'        -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
