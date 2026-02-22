@@ -40,3 +40,4 @@ notes.txt
 .manifest.json
 /demos/streamline/ARCHIVE
 *.local.*
+/demos/candor
