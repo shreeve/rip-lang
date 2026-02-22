@@ -539,10 +539,13 @@ export UserIDNumber ::= number
 
 # Typed JSON response
 # response = await fetch("/api/users")
-# data = await response.json<{ users: User[], total: number }>()
+# data = await response.json<{ users: User[], total: number }>() #!# NOTE: The Rip way is below
+# data:: UserResponse = response.json!
 
 # Typed parsing
-# result = schema.parse<User>(rawData)
+# result = schema.parse<User>(rawData) #!# NOTE: The Rip way is below
+result:: User = schema.parse(rawData)
 
 # Typed Map construction
-# weekMap = new Map<number, string[]>()
+# weekMap = new Map<number, string[]>() #!# NOTE: The Rip way is below
+weekMap:: Map<number, string[]> = new Map()
