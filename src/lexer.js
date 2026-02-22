@@ -768,6 +768,18 @@ export class Lexer {
         }
       }
     }
+    // A > that closes a generic type annotation is NOT a continuation
+    let prev = this.tokens[this.tokens.length - 1];
+    if (prev?.[0] === 'COMPARE' && prev[1] === '>') {
+      let depth = 0;
+      for (let k = this.tokens.length - 1; k >= 0; k--) {
+        let tk = this.tokens[k];
+        if (tk[0] === 'COMPARE' && tk[1] === '>') depth++;
+        else if (tk[0] === 'COMPARE' && tk[1] === '<') depth--;
+        if (depth === 0 && tk[0] === 'TYPE_ANNOTATION') return false;
+        if (tk[0] === 'TERMINATOR' || tk[0] === 'INDENT' || tk[0] === 'OUTDENT') break;
+      }
+    }
     return LINE_CONTINUER_RE.test(this.chunk) || UNFINISHED.has(this.prevTag());
   }
 

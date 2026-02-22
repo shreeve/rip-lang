@@ -506,9 +506,9 @@ export Select = component
 # Simple return types (string, number, string[]) work fine.
 # This blocks typed async functions, which bhvr uses ~32 times for API calls.
 
-# def fetchUser(id:: number):: Promise<User>
-#   response = await fetch("/api/users/#{id}")
-#   response.json()
+def fetchUser(id:: number):: Promise<User>
+  response = await fetch("/api/users/#{id}")
+  response.json()
 
 # def fetchUsers():: Promise<User[]>
 #   response = await fetch("/api/users")
