@@ -1,20 +1,14 @@
-# Lab Results — Rip UI Demo Server
+# Lab Results — Rip UI Demo
 
 import { get, use, start } from '@rip-lang/api'
 import { serve } from '@rip-lang/api/serve'
 
-dir = new URL('../app', import.meta.url).pathname
+dir = import.meta.dir
 
-use serve
-  app: ''
-  dir: dir
-  components: 'routes'
-  includes: ['components']
-  title: 'Lab Results'
+use serve dir: dir, components: 'routes', includes: ['components'], title: 'Lab Results'
 
-get '/ping' -> pong: true
 get '/css/*'    -> @send "#{dir}/css/#{@req.path.slice(5)}"
 get '/images/*' -> @send "#{dir}/images/#{@req.path.slice(8)}"
 get '/*'        -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 
-start port: 3001
+start!
