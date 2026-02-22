@@ -501,10 +501,6 @@ export Select = component
 # ==============================================================================
 # 13. GENERIC RETURN TYPES — generic types in function return position
 # ==============================================================================
-# Any generic type (Promise<T>, Map<K,V>, Set<T>, etc.) in function return
-# position causes a parse error. The `<` is misinterpreted as a comparison.
-# Simple return types (string, number, string[]) work fine.
-# This blocks typed async functions, which bhvr uses ~32 times for API calls.
 
 def fetchUser(id:: number):: Promise<User>
   response = await fetch("/api/users/#{id}")

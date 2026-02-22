@@ -206,6 +206,25 @@ export function compileForCheck(filePath, source, compiler) {
     }
   }
 
+  // Interpolate gaps — if src line A maps to gen line X and src line B maps to
+  // gen line Y, fill src lines A+1..B-1 → gen lines X+1..Y-1. This gives hover
+  // and diagnostics coverage for function body lines that the compiler didn't map.
+  const mapped = [...srcToGen.entries()].sort((a, b) => a[0] - b[0]);
+  for (let i = 0; i < mapped.length - 1; i++) {
+    const [srcA, genA] = mapped[i];
+    const [srcB, genB] = mapped[i + 1];
+    const srcGap = srcB - srcA;
+    const genGap = genB - genA;
+    if (srcGap > 1 && genGap > 1 && srcGap <= genGap + 2) {
+      for (let d = 1; d < srcGap; d++) {
+        if (!srcToGen.has(srcA + d) && genA + d < genB) {
+          srcToGen.set(srcA + d, genA + d);
+          genToSrc.set(genA + d, srcA + d);
+        }
+      }
+    }
+  }
+
   return { tsContent, headerLines, hasTypes, srcToGen, genToSrc, source };
 }
 
