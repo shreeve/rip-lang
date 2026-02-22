@@ -975,7 +975,7 @@ class Server
     readTimeoutMs = @flags.readTimeoutMs
 
     try
-      fetchPromise = fetch(forwardUrl, { method: req.method, headers: req.headers, body: req.body, unix: socketPath })
+      fetchPromise = fetch(forwardUrl, { method: req.method, headers: req.headers, body: req.body, unix: socketPath, decompress: false })
       readGuard = new Promise (_, rej) ->
         setTimeout (-> rej(new Error('Upstream timeout'))), readTimeoutMs
       res = Promise.race!([fetchPromise, readGuard])

@@ -919,7 +919,7 @@ export launch = (appBase = '', opts = {}) ->
     bundle = { components, data: {} }
   else
     bundleUrl = "#{appBase}/bundle"
-    res = await fetch(bundleUrl)
+    res = await fetch(bundleUrl, cache: 'no-cache')
     throw new Error "launch: #{bundleUrl} (#{res.status})" unless res.ok
     bundle = res.json!
 

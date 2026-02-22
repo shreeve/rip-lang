@@ -48,17 +48,15 @@ export serve = (opts = {}) ->
 
   # Route: /rip/rip.min.js — serve the bundle, prefer pre-compressed Brotli
   unless serve._registered
+    baseFile = Bun.file(bundlePath)
+    baseEtag = "W/\"#{baseFile.lastModified}-#{baseFile.size}\""
     get "/rip/rip.min.js", (c) ->
-      file = if hasBrotli and (c.req.header('Accept-Encoding') or '').includes('br')
-        Bun.file(bundlePathBr)
-      else
-        Bun.file(bundlePath)
-      etag = "W/\"#{file.lastModified}-#{file.size}\""
-      if c.req.header('if-none-match') is etag
-        return new Response(null, { status: 304, headers: { 'ETag': etag } })
-      headers = { 'Content-Type': 'application/javascript', 'Cache-Control': 'no-cache', 'ETag': etag }
-      headers['Content-Encoding'] = 'br' if hasBrotli and (c.req.header('Accept-Encoding') or '').includes('br')
-      new Response file, { headers }
+      if c.req.header('if-none-match') is baseEtag
+        return new Response(null, { status: 304, headers: { 'ETag': baseEtag, 'Cache-Control': 'no-cache' } })
+      useBr = hasBrotli and (c.req.header('Accept-Encoding') or '').includes('br')
+      headers = { 'Content-Type': 'application/javascript', 'Cache-Control': 'no-cache', 'ETag': baseEtag }
+      headers['Content-Encoding'] = 'br' if useBr
+      new Response (if useBr then Bun.file(bundlePathBr) else Bun.file(bundlePath)), { headers }
     serve._registered = true
 
   # Route: {prefix}/components/* — individual .rip component files
