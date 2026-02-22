@@ -20,6 +20,8 @@
 # ==============================================================================
 
 import { get } from '@rip-lang/api'
+import { fileURLToPath } from 'node:url'
+import { dirname } from 'node:path'
 
 export serve = (opts = {}) ->
   prefix        = opts.app or ''
@@ -31,7 +33,7 @@ export serve = (opts = {}) ->
   appTitle      = opts.title or null
 
   # Resolve rip.min.js from the rip-lang package
-  ripDir = import.meta.resolve('rip-lang').replace('/src/compiler.js', '')
+  ripDir = dirname(dirname(fileURLToPath(import.meta.resolve('rip-lang'))))
   bundlePath = "#{ripDir}/docs/dist/rip.min.js"
 
   # Route: /rip/rip.min.js — serve the bundle (registered once)
