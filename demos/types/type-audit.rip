@@ -523,7 +523,7 @@ def getEntries():: Map<string, number>
 # bhvr uses `export type` 29 times; `import type` only once.
 
 # Named type export
-# export type UserID = number
+export UserIDNumber ::= number
 
 # Type-only import
 # import type { User, Order } from "./types"
