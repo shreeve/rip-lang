@@ -484,17 +484,6 @@ export Button = component
   @notes:: string
   disabled:: boolean := false
 
-  # NOTE: The above generates this via "rip -d type-audit.rip"
-  # export declare class Button {
-  #   constructor(Props: {
-  #     variant?: "primary" | "secondary";
-  #     compact?: boolean;
-  #     loading?: boolean;
-  #     label?: string;
-  #     notes: string;
-  #   });
-  # }
-
   # render
   #   button.btn.("btn-#{@variant}").("compact" if @compact)
   #     if @loading
