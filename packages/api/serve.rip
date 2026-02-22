@@ -6,16 +6,16 @@
 #
 # Usage:
 #   import { serve } from '@rip-lang/api/serve'
-#   use serve dir: dir, components: 'routes', includes: ['ui'], watch: true, title: 'My App'
+#   use serve dir: dir, title: 'My App'
 #
 # Options:
-#   app:        string  — URL mount point (default: '')
-#   dir:        string  — app directory on disk (default: '.')
-#   components: string  — directory for page components, relative to dir (default: 'components')
-#   includes:   array   — directories for shared components, relative to dir (default: [])
-#   watch:      boolean — enable hot-reload (registers watch dirs with rip-server)
-#   state:      object  — initial app state passed via bundle
-#   title:      string  — document title
+#   dir:        string    — app directory on disk (default: '.')
+#   routes:     string    — page components directory, relative to dir (default: 'routes')
+#   components: string[]  — shared component directories, relative to dir (default: ['components'])
+#   app:        string    — URL mount point (default: '')
+#   title:      string    — document title
+#   state:      object    — initial app state passed via bundle
+#   watch:      boolean   — enable hot-reload (registers watch dirs with rip-server)
 #
 # ==============================================================================
 
@@ -27,8 +27,8 @@ import { existsSync } from 'node:fs'
 export serve = (opts = {}) ->
   prefix        = opts.app or ''
   appDir        = opts.dir or '.'
-  componentsDir = "#{appDir}/#{opts.components or 'components'}"
-  includeDirs   = (opts.includes or []).map (d) -> "#{appDir}/#{d}"
+  routesDir     = "#{appDir}/#{opts.routes or 'routes'}"
+  componentDirs = (opts.components or ['components']).map (d) -> "#{appDir}/#{d}"
   enableWatch   = opts.watch or false
   appState      = opts.state or null
   appTitle      = opts.title or null
@@ -63,17 +63,17 @@ export serve = (opts = {}) ->
   # Route: {prefix}/components/* — individual .rip component files
   get "#{prefix}/components/*", (c) ->
     name = c.req.path.slice("#{prefix}/components/".length)
-    c.send "#{componentsDir}/#{name}", 'text/plain; charset=UTF-8'
+    c.send "#{routesDir}/#{name}", 'text/plain; charset=UTF-8'
 
   # Route: {prefix}/bundle — all components + app data as JSON
   get "#{prefix}/bundle", (c) ->
     glob = new Bun.Glob("**/*.rip")
     components = {}
-    paths = Array.from(glob.scanSync(componentsDir))
+    paths = Array.from(glob.scanSync(routesDir))
     for path in paths
-      components["components/#{path}"] = Bun.file("#{componentsDir}/#{path}").text!
+      components["components/#{path}"] = Bun.file("#{routesDir}/#{path}").text!
 
-    for dir in includeDirs
+    for dir in componentDirs
       incPaths = Array.from(glob.scanSync(dir))
       for path in incPaths
         key = "components/_lib/#{path}"
@@ -94,7 +94,7 @@ export serve = (opts = {}) ->
   # Register watch directories with rip-server via control socket
   if enableWatch and process.env.SOCKET_PREFIX
     ctl = "/tmp/#{process.env.SOCKET_PREFIX}.ctl.sock"
-    dirs = [componentsDir, ...includeDirs]
+    dirs = [routesDir, ...componentDirs]
     body = JSON.stringify({ op: 'watch', prefix, dirs })
     fetch('http://localhost/watch', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl }).catch (e) ->
       console.warn "[Rip] Watch registration failed: #{e.message}"

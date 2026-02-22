@@ -12,12 +12,8 @@ dbUrl = process.env.RIPDB_URL or 'http://localhost:4213'
 
 # Serve the Rip app
 use serve
-  app: ''
   dir: dir
-  components: 'routes'
-  includes: ['components']
   title: 'Rip Analytics Demo'
-  watch: false
 
 # Proxy SQL queries to rip-db
 post '/sql', ->

@@ -2,19 +2,14 @@
 # Rip UI Labs App
 # ==============================================================================
 
-# Run: bun demos/labs/index.rip
-
-import { get, use, start, notFound } from '@rip-lang/api'
+import { get, use, start } from '@rip-lang/api'
 import { serve } from '@rip-lang/api/serve'
 
 dir = import.meta.dir
 
-export mount = (app = '') ->
-  use serve app: app, dir: dir, title: 'Rip UI Labs', state: { appName: 'Rip UI Labs', theme: 'dark' }
-  get "#{app}/css/*", -> @send "#{dir}/css/#{@req.path.slice(app.length + 5)}"
-  get "#{app}/*", -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
+use serve dir: dir, title: 'Rip UI Labs'
 
-# Standalone mode
-if import.meta.main
-  mount()
-  start port: 3003
+get '/css/*' -> @send "#{dir}#{@req.path}"
+get '/*'     -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
+
+start!

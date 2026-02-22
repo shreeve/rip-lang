@@ -5,7 +5,7 @@ import { serve } from '@rip-lang/api/serve'
 
 dir = import.meta.dir
 
-use serve dir: dir, components: 'routes', includes: ['components'], title: 'Lab Results'
+use serve dir: dir, title: 'Lab Results'
 
 get '/css/*'    -> @send "#{dir}#{@req.path}"
 get '/images/*' -> @send "#{dir}#{@req.path}"

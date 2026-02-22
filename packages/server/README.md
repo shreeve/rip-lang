@@ -493,7 +493,7 @@ import { serve } from '@rip-lang/api/serve'
 
 dir = import.meta.dir
 
-use serve dir: dir, components: 'routes', includes: ['ui'], watch: true, title: 'My App'
+use serve dir: dir, title: 'My App', watch: true
 
 get '/css/*', -> @send "#{dir}/css/#{@req.path.slice(5)}"
 

@@ -677,8 +677,8 @@ import { serve } from '@rip-lang/api/serve'
 
 dir = import.meta.dir
 
-use serve dir: dir, components: 'routes', includes: ['ui'], watch: true, title: 'My App'
-get '/css/*' -> @send "#{dir}/css/#{@req.path.slice(5)}"
+use serve dir: dir, title: 'My App', watch: true
+get '/css/*' -> @send "#{dir}#{@req.path}"
 notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 
 start port: 3000
@@ -688,13 +688,13 @@ start port: 3000
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `app` | string | `''` | URL mount point |
 | `dir` | string | `'.'` | App directory on disk |
-| `components` | string | `'components'` | Page components directory (relative to `dir`) |
-| `includes` | string[] | `[]` | Shared component directories (relative to `dir`) |
-| `watch` | boolean | `false` | Enable hot-reload (registers watch dirs with rip-server) |
-| `state` | object | `null` | Initial app state passed via bundle |
+| `routes` | string | `'routes'` | Page components directory (relative to `dir`) |
+| `components` | string[] | `['components']` | Shared component directories (relative to `dir`) |
 | `title` | string | `null` | Document title |
+| `app` | string | `''` | URL mount point |
+| `state` | object | `null` | Initial app state passed via bundle |
+| `watch` | boolean | `false` | Enable hot-reload (registers watch dirs with rip-server) |
 
 ### What it registers
 

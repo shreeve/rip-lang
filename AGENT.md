@@ -489,10 +489,10 @@ primitives directly — one signal graph shared between framework and components
 
 Key concepts:
 - **Auto-launch** — `rip-ui.min.js` auto-detects `<script type="text/rip" data-name="...">` components and calls `launch()` automatically. Hash routing is on by default. Configure via `data-url` and `data-hash` attributes on the script tag. No bootstrap script needed.
-- **`serve` middleware** — `use serve dir: dir, components: 'routes', includes: ['ui']` registers routes for the framework bundle (`/rip/rip.min.js`), app bundle (`/{app}/bundle`), and SSE hot-reload (`/{app}/watch`)
+- **`serve` middleware** — `use serve dir: dir` registers routes for the framework bundle (`/rip/rip.min.js`), app bundle (`/{app}/bundle`), and SSE hot-reload (`/{app}/watch`). Defaults: routes in `routes/`, shared components in `components/`.
 - **`launch(appBase)`** — Client-side: fetches the app bundle, hydrates the stash, starts the router and renderer
 - **`component` / `render`** — Two keywords added to Rip for defining components with reactive state (`:=`), computed (`~=`), effects (`~>`)
-- **File-based routing** — `pages/users/[id].rip` → `/users/:id` (Next.js-style). Shared components go in `ui/` via `includes`.
+- **File-based routing** — `pages/users/[id].rip` → `/users/:id` (Next.js-style). Shared components go in `components/`.
 - **Unified stash** — Deep reactive proxy with path navigation, uses `__state` from Rip's built-in reactive runtime
 - **Hot reload** — Server sends notify-only SSE events, browser invalidates + refetches + remounts
 
@@ -502,7 +502,7 @@ import { get, use, start, notFound } from '@rip-lang/api'
 import { serve } from '@rip-lang/api/serve'
 
 dir = import.meta.dir
-use serve dir: dir, components: 'routes', includes: ['ui'], watch: true, title: 'My App'
+use serve dir: dir, title: 'My App', watch: true
 get '/css/*', -> @send "#{dir}/css/#{@req.path.slice(5)}"
 notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 start port: 3000

@@ -20,10 +20,7 @@ use sessions name: config.session.name, maxAge: config.session.maxAge
 
 # Serve the Rip app
 use serve
-  app: ''
   dir: dir
-  components: 'routes'
-  includes: ['components']
   title: config.app.name
   watch: true
 
