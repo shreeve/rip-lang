@@ -97,6 +97,21 @@ async function main() {
 
   if (ripOptions.includes('-v') || ripOptions.includes('--version')) {
     console.log(`Rip ${VERSION} - ${SUMMARY}`);
+    try {
+      const { readdirSync } = await import('fs');
+      const home = process.env.HOME || process.env.USERPROFILE;
+      const scopeDir = join(home, '.bun', 'install', 'global', 'node_modules', '@rip-lang');
+      if (existsSync(scopeDir) && statSync(scopeDir).isDirectory()) {
+        const pkgs = readdirSync(scopeDir).sort();
+        console.log();
+        for (const name of pkgs) {
+          try {
+            const pkg = JSON.parse(readFileSync(join(scopeDir, name, 'package.json'), 'utf-8'));
+            console.log(`  ${pkg.name.padEnd(24)} ${pkg.version}`);
+          } catch {}
+        }
+      }
+    } catch {}
     process.exit(0);
   }
 
