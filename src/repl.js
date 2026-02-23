@@ -399,25 +399,21 @@ export class RipREPL {
       }
     }
 
-    // Build module code
-    const moduleCode = `${staticImports}
-${restoreCode}
-let __result;
-${lines.join('\n')}
-${saveCode}
-export { __result };
-`;
+    // Use vm.runInContext for most code (simpler, supports await)
+    // Fall back to vm.SourceTextModule only when imports are needed
+    if (staticImports) {
+      const moduleCode = `${staticImports}\n${restoreCode}\nlet __result;\n${lines.join('\n')}\n${saveCode}\nexport { __result };\n`;
+      const mod = new vm.SourceTextModule(moduleCode, {
+        context: this.vmContext,
+        identifier: this.cwd + '/repl-' + Date.now()
+      });
+      await mod.link(this.linker.bind(this));
+      await mod.evaluate();
+      return mod.namespace.__result;
+    }
 
-    // Create and evaluate module
-    const mod = new vm.SourceTextModule(moduleCode, {
-      context: this.vmContext,
-      identifier: this.cwd + '/repl-' + Date.now()
-    });
-
-    await mod.link(this.linker.bind(this));
-    await mod.evaluate();
-
-    return mod.namespace.__result;
+    const wrapped = `(async () => {\n${restoreCode}\nlet __result;\n${lines.join('\n')}\n${saveCode}\nreturn __result;\n})()`;
+    return await vm.runInContext(wrapped, this.vmContext);
   }
 
   printResult(value) {
