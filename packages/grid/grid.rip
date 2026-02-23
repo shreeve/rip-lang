@@ -2,6 +2,9 @@ import { get, use, start } from '@rip-lang/api'
 import { serve } from '@rip-lang/api/serve'
 
 dir = import.meta.dir
+
 use serve dir: dir
+
 get '/*' -> @send "#{dir}/grid.html", 'text/html; charset=UTF-8'
+
 start port: 3003

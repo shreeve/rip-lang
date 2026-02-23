@@ -48,7 +48,7 @@ These are hard-won rules learned while building this grid. Follow them.
 - Run `bun grid.rip` from the **repo root** (not `packages/grid/`) so that
   `bunfig.toml` is picked up and `rip-loader.js` preloads the compiler.
 
-- The dev server runs on port 3003 and serves `grid.html` plus `rip-ui.min.js`.
+- The dev server runs on port 3003 and serves `grid.html` plus `rip.min.js`.
 
 ## Architecture
 
