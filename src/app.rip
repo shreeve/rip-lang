@@ -908,9 +908,13 @@ export launch = (appBase = '', opts = {}) ->
     el.id = target.replace(/^#/, '')
     document.body.prepend el
 
-  # Get the app bundle — explicit, static files, inline DOM, or server fetch
+  # Get the app bundle — explicit object, literal URL, static files, inline DOM, or server fetch
   if opts.bundle
     bundle = opts.bundle
+  else if opts.bundleUrl
+    res = await fetch(opts.bundleUrl, cache: 'no-cache')
+    throw new Error "launch: #{opts.bundleUrl} (#{res.status})" unless res.ok
+    bundle = res.json!
   else if opts.components and Array.isArray(opts.components)
     components = {}
     for url in opts.components

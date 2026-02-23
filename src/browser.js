@@ -134,22 +134,20 @@ if (typeof globalThis !== 'undefined') {
   globalThis.__ripExports = { compile, compileToJS, formatSExpr, getStdlibCode, VERSION, BUILD_DATE, getReactiveRuntime, getComponentRuntime };
 }
 
-// Auto-launch: discover how to start the Rip App, in order of priority:
-//   1. Nothing on the page          → do nothing
-//   2. Inline data-name scripts     → compile and mount those
-//   3. data-url="bundle" (or path)  → fetch components from server
-//   4. data-url="" (empty)          → do nothing (explicit opt-out)
+// Auto-launch: requires data-url or inline data-name scripts.
+// data-url is the literal fetch URL for the component bundle.
 async function autoLaunch() {
   if (globalThis.__ripLaunched) return;
   const ui = importRip.modules?.['app.rip'];
   if (!ui?.launch) return;
-  const cfg = document.querySelector('script[data-hash], script[data-url]');
+  const cfg = document.querySelector('script[data-url], script[data-hash]');
   const tag = document.querySelectorAll('script[type="text/rip"][data-name]').length > 0;
+  if (!cfg && !tag) return;
   const url = cfg?.getAttribute('data-url') || '';
-  if (!tag && !url) return;
   const hash = cfg?.getAttribute('data-hash');
   const opts = { hash: hash !== 'false' };
-  await ui.launch(url, opts);
+  if (url) opts.bundleUrl = url;
+  await ui.launch('', opts);
 }
 
 // Auto-process <script type="text/rip"> blocks, then auto-launch if applicable.
