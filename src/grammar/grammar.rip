@@ -849,6 +849,9 @@ grammar =
     # Postfix existence check: expr? → (expr != null)
     o 'Value ?'               , '["?", 1]'
 
+    # Postfix defined check: expr!? → (expr !== undefined)
+    o 'Value DEFINED'         , '["defined", 1]'
+
     # Await
     o 'AWAIT Expression'            , '["await", 2]'
     o 'AWAIT INDENT Object OUTDENT' , '["await", 3]'
@@ -912,7 +915,7 @@ operators = """
   right       DO_IIFE
   left        . ?.
   left        CALL_START CALL_END
-  nonassoc    ++ -- ?
+  nonassoc    ++ -- ? DEFINED
   right       UNARY DO
   right       AWAIT
   right       **

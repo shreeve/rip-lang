@@ -211,7 +211,8 @@ let UNARY_MATH = new Set(['!', '~']);
 // Identifier: word chars + optional trailing ! (await) or ? (predicate)
 // The ? suffix is only captured when NOT followed by . ? [ ( to avoid
 // conflict with ?. (optional chaining), ?? (nullish), ?.( and ?.[
-let IDENTIFIER_RE = /^(?!\d)((?:(?!\s)[$\w\x7f-\uffff])+(?:!|[?](?![.?[(]))?)([^\n\S]*:(?![=:]))?/;
+// The ! suffix is NOT captured when followed by ? to preserve !? as operator
+let IDENTIFIER_RE = /^(?!\d)((?:(?!\s)[$\w\x7f-\uffff])+(?:!(?!\?)|[?](?![.?[(]))?)([^\n\S]*:(?![=:]))?/;
 let NUMBER_RE     = /^0b[01](?:_?[01])*n?|^0o[0-7](?:_?[0-7])*n?|^0x[\da-f](?:_?[\da-f])*n?|^\d+(?:_\d+)*n|^(?:\d+(?:_\d+)*)?\.?\d+(?:_\d+)*(?:e[+-]?\d+(?:_\d+)*)?/i;
 let OPERATOR_RE   = /^(?:<=>|::=|::|[-=]>|~>|~=|:=|=!|===|!==|!\?|\?\?|=~|\|>|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?\.?|\.{2,3})/;
 let WHITESPACE_RE = /^[^\n\S]+/;
@@ -1226,6 +1227,8 @@ export class Lexer {
     else if (SHIFT.has(val))           tag = 'SHIFT';
     // Spaced ? → SPACE? (ternary)
     else if (val === '?' && prev?.spaced) tag = 'SPACE?';
+    // Unspaced !? → DEFINED (postfix defined check: v!? → v !== undefined)
+    else if (val === '!?' && prev && !prev.spaced) tag = 'DEFINED';
     // ?[ and ?( without dot → treat as optional chaining (?.)
     else if (val === '?' && (this.chunk[1] === '[' || this.chunk[1] === '(')) tag = '?.';
     // Call/index context (ES6 optional chaining only)

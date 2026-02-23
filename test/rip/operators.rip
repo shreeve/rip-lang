@@ -126,6 +126,15 @@ test "otherwise first value", "5 !? 10 !? 15", 5
 test "otherwise second value", "undefined !? 10 !? 15", 10
 code "otherwise operator parens", "a !? b", "(a !== undefined ? a : b)"
 
+# Postfix defined check: "!?" (is not undefined)
+test "defined with value", "5!?", true
+test "defined with zero", "0!?", true
+test "defined with false", "false!?", true
+test "defined with null", "null!?", true
+test "defined with empty string", "''!?", true
+test "defined with undefined", "undefined!?", false
+code "defined operator parens", "a!?", "(a !== undefined)"
+
 # ==============================================================================
 # Bitwise Operators
 # ==============================================================================

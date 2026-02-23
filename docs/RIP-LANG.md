@@ -293,6 +293,7 @@ Multiple lines
 | `in` | `x in arr` | Array membership |
 | `of` | `k of obj` | Object key existence |
 | `?` (postfix) | `a?` | Existence check (`a != null`) |
+| `!?` (postfix) | `a!?` | Defined check (`a !== undefined`) |
 | `?` (ternary) | `a ? b : c` | Ternary conditional |
 | `if...else` (postfix) | `b if a else c` | Python-style ternary |
 | `?.` `?.[]` `?.()` | `a?.b` `a?.[0]` `a?.()` | Optional chaining (ES6) |
@@ -311,7 +312,8 @@ Multiple lines
 | `%%` | True modulo | `-1 %% 3` | Always positive result (not remainder) |
 | `!` | Dammit | `fetchData!` | `await fetchData()` — calls AND awaits |
 | `!` | Void | `def process!` | Suppresses implicit return |
-| `!?` | Otherwise | `val !? 5` | Default if undefined or throws |
+| `!?` | Otherwise | `val !? 5` | Default if undefined (infix) |
+| `!?` | Defined | `val!?` | True if not undefined (postfix) |
 | `=~` | Match | `str =~ /pat/` | Ruby-style regex match, captures in `_` |
 | `::` | Prototype | `String::trim` | `String.prototype.trim` |
 | `[-n]` | Negative index | `arr[-1]` | `arr.at(-1)` |
@@ -374,14 +376,33 @@ level = score > 90 ? 'A' : score > 80 ? 'B' : score > 70 ? 'C' : 'F'
 item = found ? (arr[0]) : default
 ```
 
-## Otherwise Operator (`!?`)
+## Otherwise Operator (`!?`) and Defined Check (`!?`)
 
-Handles both null/undefined AND thrown errors:
+The `!?` token serves two roles, distinguished by spacing:
+
+**Infix (spaced) — otherwise:** Provides a fallback when a value is `undefined`:
 
 ```coffee
-result = riskyOperation() !? "default"
-# If riskyOperation() throws or returns null/undefined, result = "default"
+result = getValue() !? "default"
+# If getValue() returns undefined, result = "default"
+# null, 0, false, "" all pass through unchanged
 ```
+
+**Postfix (unspaced) — defined check:** Returns `true` if a value is not `undefined`:
+
+```coffee
+value!?              # (value !== undefined)
+
+# Useful in comprehensions for filtering defined keys
+keys = (k for k, v of obj when v!?)
+```
+
+The postfix form mirrors `?` (existence check) but with tighter semantics:
+
+| Operator | Checks | `null` | `undefined` | `0` | `false` | `""` |
+|----------|--------|--------|-------------|-----|---------|------|
+| `v?` | not nullish | false | false | true | true | true |
+| `v!?` | not undefined | true | false | true | true | true |
 
 ## Method Assignment (`.=`)
 
@@ -1536,6 +1557,9 @@ finally
 # Otherwise operator for defaults
 value = riskyOperation() !? "default"
 
+# Defined check for filtering
+keys = (k for k, v of data when v!?)
+
 # Optional chaining for safety
 name = user?.profile?.name ?? "Anonymous"
 ```
@@ -1643,7 +1667,8 @@ X.new(a: 1)
 
 # Operators
 a!             # await a()
-a !? b         # a if defined, else b
+a !? b         # a if defined, else b (infix otherwise)
+a!?            # true if a is defined (postfix defined check)
 a // b         # floor divide
 a %% b         # true modulo
 a =~ /pat/     # regex match, captures in _
@@ -1796,4 +1821,4 @@ Each would need design discussion before building.
 
 ---
 
-*Rip 3.10 — 1,243 tests — Zero dependencies — Self-hosting — ~13,500 LOC*
+*Rip 3.10 — 1,251 tests — Zero dependencies — Self-hosting — ~13,500 LOC*

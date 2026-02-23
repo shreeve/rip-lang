@@ -11,7 +11,7 @@
 <p align="center">
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.13.3-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
-  <a href="#"><img src="https://img.shields.io/badge/tests-1%2C243%2F1%2C243-brightgreen.svg" alt="Tests"></a>
+  <a href="#"><img src="https://img.shields.io/badge/tests-1%2C251%2F1%2C251-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
 </p>
 
@@ -180,7 +180,8 @@ Compiles to `.js` (types erased) + `.d.ts` (types preserved) — full IDE suppor
 |----------|---------|--------------|
 | `!` (dammit) | `fetchData!` | Calls AND awaits |
 | `!` (void) | `def process!` | Suppresses implicit return |
-| `!?` (otherwise) | `val !? 5` | Default only if `undefined` |
+| `!?` (otherwise) | `val !? 5` | Default only if `undefined` (infix) |
+| `!?` (defined) | `val!?` | True if not `undefined` (postfix) |
 | `?` (existence) | `x?` | True if `x != null` |
 | `?:` (ternary) | `x > 0 ? 'yes' : 'no'` | JS-style ternary expression |
 | `if...else` (postfix) | `"yes" if cond else "no"` | Python-style ternary expression |
@@ -403,7 +404,7 @@ rip file.rip           # Run
 rip -c file.rip        # Compile
 rip -t file.rip        # Tokens
 rip -s file.rip        # S-expressions
-bun run test           # 1243 tests
+bun run test           # 1251 tests
 bun run parser         # Rebuild parser
 bun run browser        # Build browser bundle
 ```

@@ -19,7 +19,7 @@ echo 'your code' | ./bin/rip -s  # S-expressions (parser)
 echo 'your code' | ./bin/rip -c  # JavaScript (codegen)
 
 # Run tests
-bun run test                             # All tests (1242)
+bun run test                             # All tests (1251)
 bun test/runner.js test/rip/FILE.rip     # Specific file
 
 # Rebuild parser (after grammar changes)
@@ -34,7 +34,7 @@ bun run browser
 | Metric | Value |
 |--------|-------|
 | Version | 3.13.3 |
-| Tests | 1,243 |
+| Tests | 1,251 |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
 
@@ -71,7 +71,7 @@ rip-lang/
 │   ├── RIP-LANG.md      # Language reference (includes reactivity, future ideas)
 │   ├── RIP-TYPES.md     # Type system specification
 │   └── RIP-INTERNALS.md # Compiler architecture & design decisions
-├── test/rip/            # 25 test files (1,243 tests)
+├── test/rip/            # 25 test files (1,251 tests)
 └── scripts/             # Build utilities
 ```
 
@@ -412,7 +412,7 @@ code "name", "x + y", "(x + y)"
 fail "name", "invalid syntax"
 ```
 
-### Test Files (25 files, 1,243 tests)
+### Test Files (25 files, 1,251 tests)
 
 ```
 test/rip/
@@ -623,6 +623,7 @@ Run with `bun run serve` → `http://localhost:3000/playground-rip.html`
 | Postfix ternary | `a if x else b` | Python-style ternary expressions |
 | `for...as` iteration | `for x as iter` | ES6 `for...of` on iterables |
 | `as!` async shorthand | `for x as! iter` | Shorthand for `for await x as iter` |
+| Defined check | `x!?` | Postfix `!?` — true if not undefined |
 
 ### Kept
 
@@ -674,7 +675,8 @@ rip> .js      # Toggle JS display
 | `!` | Dammit | `fetchData!` — calls AND awaits |
 | `!` | Void | `def process!` — suppresses return |
 | `=!` | Readonly | `MAX =! 100` — const ("equals, dammit!") |
-| `!?` | Otherwise | `val !? 5` — default if undefined |
+| `!?` | Otherwise | `val !? 5` — default if undefined (infix) |
+| `!?` | Defined | `val!?` — true if not undefined (postfix) |
 | `?` | Existence | `x?` — true if not null/undefined |
 | `//` | Floor div | `7 // 2` — 3 |
 | `%%` | True mod | `-1 %% 3` — 2 |

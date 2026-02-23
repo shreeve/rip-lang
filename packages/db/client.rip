@@ -208,7 +208,7 @@ class QueryBuilder
     result.data[0][0]
 
   update: (data) ->
-    keys = Object.keys(data).filter (k) -> data[k] isnt undefined
+    keys = (k for k, v of data when v!?)
     sets = keys.map((k, i) -> "\"#{k}\" = $#{@_params.length + i + 1}").join(', ')
     vals = keys.map (k) -> data[k]
     allParams = [...@_params, ...vals]
@@ -269,18 +269,18 @@ export Model = (table, database = null) ->
   insert: (data) ->
     if Array.isArray(data)
       return { rows: 0 } if data.length is 0
-      columns = Object.keys(data[0]).filter (k) -> data[0][k] isnt undefined
+      columns = (k for k, v of data[0] when v!?)
       rows = data.map (row) -> columns.map (k) -> row[k]
       bulk! table, columns, rows
     else
-      keys = Object.keys(data).filter (k) -> data[k] isnt undefined
+      keys = (k for k, v of data when v!?)
       cols = keys.map((k) -> "\"#{k}\"").join(', ')
       refs = keys.map((_, i) -> "$#{i + 1}").join(', ')
       vals = keys.map (k) -> data[k]
       findOne! "INSERT INTO #{tableName} (#{cols}) VALUES (#{refs}) RETURNING *", vals
 
   update: (id, data) ->
-    keys = Object.keys(data).filter (k) -> data[k] isnt undefined
+    keys = (k for k, v of data when v!?)
     sets = keys.map((k, i) -> "\"#{k}\" = $#{i + 2}").join(', ')
     vals = keys.map (k) -> data[k]
     findOne! "UPDATE #{tableName} SET #{sets} WHERE id = $1 RETURNING *", [id, ...vals]
@@ -288,7 +288,7 @@ export Model = (table, database = null) ->
   upsert: (data, opts = {}) ->
     if Array.isArray(data)
       return [] if data.length is 0
-      keys = Object.keys(data[0]).filter (k) -> data[0][k] isnt undefined
+      keys = (k for k, v of data[0] when v!?)
       cols = keys.map((k) -> "\"#{k}\"").join(', ')
       allVals = []
       valueTuples = data.map (row, rowIdx) ->
@@ -305,7 +305,7 @@ export Model = (table, database = null) ->
       sql += " RETURNING *"
       findAll! sql, allVals
     else
-      keys = Object.keys(data).filter (k) -> data[k] isnt undefined
+      keys = (k for k, v of data when v!?)
       cols = keys.map((k) -> "\"#{k}\"").join(', ')
       refs = keys.map((_, i) -> "$#{i + 1}").join(', ')
       vals = keys.map (k) -> data[k]
