@@ -1828,7 +1828,7 @@ Each would need design discussion before building.
 | **[RIP-LANG.md](RIP-LANG.md)** | Full language reference (this file) |
 | **[RIP-TYPES.md](RIP-TYPES.md)** | Type system specification |
 | **[RIP-INTERNALS.md](RIP-INTERNALS.md)** | Compiler architecture & design decisions |
-| **[AGENT.md](../AGENT.md)** | AI agent guide for working on the compiler |
+| **[AGENTS.md](../AGENTS.md)** | AI agent guide for working on the compiler |
 
 ---
 

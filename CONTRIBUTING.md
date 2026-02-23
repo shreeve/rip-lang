@@ -446,7 +446,7 @@ All tests passing: X/Y (100%)
 
 ## Getting Help
 
-- Read [AGENT.md](AGENT.md) for AI assistant guide
+- Read [AGENTS.md](AGENTS.md) for AI assistant guide
 - Check [docs/](docs/) for detailed documentation
 - Open a [Question issue](https://github.com/shreeve/rip-lang/issues/new/choose)
 - Look at existing tests in `test/rip/` for examples

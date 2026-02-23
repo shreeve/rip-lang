@@ -65,7 +65,7 @@
 
 - [ ] Updated `docs/CODEGEN.md` (if adding/changing node types)
 - [ ] Updated `README.md` (if user-facing change)
-- [ ] Updated `AGENT.md` (if relevant for AI/developers)
+- [ ] Updated `AGENTS.md` (if relevant for AI/developers)
 - [ ] Added inline code comments
 - [ ] No documentation changes needed
 
