@@ -144,7 +144,6 @@ async function autoLaunch() {
   const cfg = document.querySelector('script[data-hash], script[data-url]');
   const url = cfg?.getAttribute('data-url') || '';
   const hash = cfg?.getAttribute('data-hash');
-  if (cfg?.hasAttribute('data-url') && !url) return;
   const opts = { hash: hash !== 'false' };
   await ui.launch(url, opts);
 }
