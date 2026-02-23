@@ -202,7 +202,7 @@ export swarm = (opts = {}) ->
   workerPath = join(dirname(new URL(import.meta.url).pathname), 'lib', 'worker.mjs')
   scriptPath = resolve(process.argv[1] or '')
 
-  # find rip-loader for workers (NODE_PATH ensures require.resolve works)
+  # find rip-loader for workers
   loaderPath = null
   try
     loaderPath = join(dirname(require.resolve('rip-lang')), '..', 'rip-loader.js')
