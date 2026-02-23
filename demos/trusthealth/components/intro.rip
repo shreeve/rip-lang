@@ -13,10 +13,8 @@ export Intro = component
     current = i
     clearInterval @_timer if @_timer
 
-  mounted: ->
-    @_timer = setInterval (-> current = (current + 1) % slides.length), 4000
-  unmounted: ->
-    clearInterval @_timer if @_timer
+  mounted:   -> @_timer = setInterval (-> current = (current + 1) % slides.length), 4000
+  unmounted: -> clearInterval @_timer if @_timer
 
   selectionStyle ~=
     items = document.querySelectorAll('.slider-item')

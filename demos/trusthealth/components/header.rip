@@ -29,10 +29,8 @@ export Header = component
     else
       activeSection = 'intro'
 
-  mounted: ->
-    window.addEventListener 'scroll', @onScroll, passive: true
-  unmounted: ->
-    window.removeEventListener 'scroll', @onScroll
+  mounted:   -> window.addEventListener 'scroll', @onScroll, passive: true
+  unmounted: -> window.removeEventListener 'scroll', @onScroll
 
   render
     header.('site-header', opaque and 'opaque')
@@ -41,12 +39,10 @@ export Header = component
           img src: '/images/logos/logo-standard.svg', alt: 'Trust Health', class: (if opaque then 'visible' else '')
           img src: '/images/logos/logo-inverted.svg', alt: 'Trust Health', class: (if opaque then '' else 'visible')
 
-        button.mobile-nav-toggle @click: (-> mobileNavOpen = not mobileNavOpen)
-          "☰"
+        button.mobile-nav-toggle @click: (-> mobileNavOpen = not mobileNavOpen), "☰"
 
         nav.('nav mobile-nav', mobileNavOpen and 'active')
-          button.close-btn @click: (-> mobileNavOpen = false)
-            "✕"
+          button.close-btn @click: (-> mobileNavOpen = false), "✕"
           a @click: (-> @scrollTo('team')), "Team"
           a @click: (-> @scrollTo('about')), "About"
           a @click: (-> contactOpen = true; mobileNavOpen = false), "Contact"

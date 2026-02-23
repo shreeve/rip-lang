@@ -17,8 +17,7 @@ export Contact = component
       success = false
     , 300
 
-  send: ->
-    success = true
+  send: -> success = true
 
   render
     .('dialog-overlay', contactOpen and 'open')
