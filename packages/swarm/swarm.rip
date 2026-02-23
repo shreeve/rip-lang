@@ -313,15 +313,6 @@ export swarm = (opts = {}) ->
 
       w.on 'exit', (code) ->
         writeFileSync('.swarm/errors.log', "worker #{slot} exited with code #{code}, inflight: #{inflight[slot]}\n", { flag: 'a' }) if existsSync(_dir)
-        # startup failure — worker never became ready
-        if code isnt 0 and not info[slot]? and not fatal
-          fatal = true
-          cursor(true) unless quiet
-          write go(workers + 5, 1) unless quiet
-          console.error "\nswarm: worker #{slot} failed to start (exit code #{code})"
-          console.error "hint:  run 'bun add @rip-lang/all' in your project directory"
-          console.error "       check .swarm/errors.log for details"
-          exit 1
         # if worker crashed mid-task, count the in-flight task as died
         if inflight[slot]
           move(inflight[slot], _died)

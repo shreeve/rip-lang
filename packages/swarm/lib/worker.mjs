@@ -22,7 +22,6 @@ try {
   }
 } catch (err) {
   parentPort.postMessage({ type: 'error', error: err.message });
-  process.exit(1);
 }
 
 // Signal ready
