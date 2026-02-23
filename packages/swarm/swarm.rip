@@ -276,6 +276,7 @@ export swarm = (opts = {}) ->
       w.on 'message', (msg) ->
         switch msg.type
           when 'error'
+            console.error "\nswarm: worker #{slot} failed to start: #{msg.error}"
             writeFileSync('.swarm/errors.log', "worker #{slot} startup: #{msg.error}\n", { flag: 'a' }) if existsSync(_dir)
           when 'ready'
             dispatchNext(w, slot)
