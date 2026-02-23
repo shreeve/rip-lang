@@ -1,0 +1,58 @@
+# Header — Fixed nav with scroll-aware transparency
+
+export Header = component
+  @contactOpen := false
+  @mobileNavOpen := false
+
+  opaque := false
+  activeSection := 'intro'
+
+  scrollTo: (section) ->
+    mobileNavOpen = false
+    el = document.getElementById(section)
+    if el
+      headerH = document.querySelector('.site-header')?.offsetHeight or 70
+      top = el.getBoundingClientRect().top + window.scrollY - headerH + 1
+      window.scrollTo({ top, behavior: 'smooth' })
+
+  onScroll: ->
+    headerH = document.querySelector('.site-header')?.offsetHeight or 70
+    opaque = window.scrollY > headerH
+
+    teamEl  = document.getElementById('team')
+    aboutEl = document.getElementById('about')
+
+    if aboutEl and window.scrollY >= aboutEl.offsetTop - headerH
+      activeSection = 'about'
+    else if teamEl and window.scrollY >= teamEl.offsetTop - headerH
+      activeSection = 'team'
+    else
+      activeSection = 'intro'
+
+  mounted: ->
+    window.addEventListener 'scroll', @onScroll, passive: true
+
+  unmounted: ->
+    window.removeEventListener 'scroll', @onScroll
+
+  render
+    header.('site-header', opaque and 'opaque')
+      .container
+        a.logo @click: (-> @scrollTo('intro'))
+          img src: '/images/logos/logo-standard.svg', alt: 'Trust Health', class: (if opaque then 'visible' else '')
+          img src: '/images/logos/logo-inverted.svg', alt: 'Trust Health', class: (if opaque then '' else 'visible')
+
+        button.mobile-nav-toggle @click: (-> mobileNavOpen = not mobileNavOpen)
+          "☰"
+
+        nav.('nav mobile-nav', mobileNavOpen and 'active')
+          button.close-btn @click: (-> mobileNavOpen = false)
+            "✕"
+          a @click: (-> @scrollTo('team')), "Team"
+          a @click: (-> @scrollTo('about')), "About"
+          a @click: (-> contactOpen = true; mobileNavOpen = false), "Contact"
+
+        nav.('nav desktop-nav')
+          a.('', activeSection is 'team' and 'active') @click: (-> @scrollTo('team')), "Team"
+          a.('', activeSection is 'about' and 'active') @click: (-> @scrollTo('about')), "About"
+          a @click: (-> contactOpen = true), "Contact"

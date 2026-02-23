@@ -1,0 +1,16 @@
+# Trust Health — Marketing site rebuilt in Rip
+#
+# Run: rip-server -w
+
+import { get, use, start, notFound } from '@rip-lang/api'
+import { serve } from '@rip-lang/api/serve'
+
+dir = import.meta.dir
+
+use serve dir: dir, title: 'Trust Health'
+
+get '/css/*'    -> @send "#{dir}#{@req.path}"
+get '/images/*' -> @send "#{dir}#{@req.path}"
+notFound        -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
+
+start!
