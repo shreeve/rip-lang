@@ -2,7 +2,7 @@
 
 export About = component
   render
-    div id: 'about', style: "background-image:url(/images/about/about-bg.jpg)"
+    div#about style: "background-image:url(/images/about/about-bg.jpg)"
       .container
         .panel
           h2.heading "About Trust Health"

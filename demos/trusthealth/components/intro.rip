@@ -13,11 +13,9 @@ export Intro = component
     current = i
     clearInterval @_timer if @_timer
 
-  mounted: ->
-    @_timer = setInterval (-> current = (current + 1) % slides.length), 4000
-
-  unmounted: ->
-    clearInterval @_timer if @_timer
+  ~>
+    timer = setInterval (-> current = (current + 1) % slides.length), 4000
+    -> clearInterval timer
 
   selectionStyle ~=
     items = document.querySelectorAll('.slider-item')
@@ -31,7 +29,7 @@ export Intro = component
     "width:#{w}px;transform:translateX(#{offset}px)"
 
   render
-    div id: 'intro'
+    div#intro
       .background
       .slider
         for slide, i in slides

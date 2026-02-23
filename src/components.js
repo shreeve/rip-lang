@@ -317,7 +317,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
           token[1] = token[1] + '#' + nextNext[1];
           if (nextNext.spaced) token.spaced = true;
           tokens.splice(i + 1, 2);
-          return 1;
+          return 0;
         }
       }
 

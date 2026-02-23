@@ -185,12 +185,12 @@ img { max-width: 100%; height: auto; }
    Intro / Hero Slider
    ========================================================================== */
 
-[id="intro"] {
+#intro {
   margin-top: calc(var(--header-height) * -1);
   position: relative;
 }
 
-[id="intro"] > .background {
+#intro > .background {
   position: absolute;
   width: 100%; height: 100%;
   background: var(--color-body);
@@ -351,14 +351,14 @@ img { max-width: 100%; height: auto; }
    Team
    ========================================================================== */
 
-[id="team"] {
+#team {
   background-color: var(--color-body);
   padding: 80px 0;
 }
-@media (min-width: 992px)  { [id="team"] { padding: 100px 0; } }
-@media (min-width: 1200px) { [id="team"] { padding: 120px 0; } }
+@media (min-width: 992px)  { #team { padding: 100px 0; } }
+@media (min-width: 1200px) { #team { padding: 120px 0; } }
 
-[id="team"] > .container > .heading { text-align: center; }
+#team > .container > .heading { text-align: center; }
 
 .team-items {
   padding: 35px 20px 0;
@@ -422,16 +422,16 @@ img { max-width: 100%; height: auto; }
    About
    ========================================================================== */
 
-[id="about"] {
+#about {
   background-size: cover;
   background-position: center;
   padding: 80px 0;
 }
-@media (min-width: 768px)  { [id="about"] { height: 600px; } }
-@media (min-width: 992px)  { [id="about"] { padding-top: 100px; height: 700px; } }
-@media (min-width: 1200px) { [id="about"] { padding-top: 120px; height: 800px; } }
+@media (min-width: 768px)  { #about { height: 600px; } }
+@media (min-width: 992px)  { #about { padding-top: 100px; height: 700px; } }
+@media (min-width: 1200px) { #about { padding-top: 120px; height: 800px; } }
 
-[id="about"] .panel {
+#about .panel {
   padding: 22px;
   max-width: 520px;
   background: rgba(255, 255, 255, 0.92);
@@ -439,19 +439,19 @@ img { max-width: 100%; height: auto; }
   backdrop-filter: blur(12px);
   box-shadow: var(--panel-shadow);
 }
-@media (min-width: 768px)  { [id="about"] .panel { padding: 30px; margin-left: 30px; } }
-@media (min-width: 992px)  { [id="about"] .panel { background: rgba(255, 255, 255, 0.88); padding: 35px; max-width: 550px; margin-left: 40px; } }
-@media (min-width: 1200px) { [id="about"] .panel { padding: 40px; max-width: 580px; margin-left: 0; } }
+@media (min-width: 768px)  { #about .panel { padding: 30px; margin-left: 30px; } }
+@media (min-width: 992px)  { #about .panel { background: rgba(255, 255, 255, 0.88); padding: 35px; max-width: 550px; margin-left: 40px; } }
+@media (min-width: 1200px) { #about .panel { padding: 40px; max-width: 580px; margin-left: 0; } }
 
-[id="about"] .panel p {
+#about .panel p {
   margin-top: 14px;
   line-height: 1.55;
   color: rgba(18, 39, 64, 0.85);
   font-size: 16px;
 }
-@media (min-width: 768px)  { [id="about"] .panel p { margin-top: 20px; } }
-@media (min-width: 992px)  { [id="about"] .panel p { font-size: 16.5px; margin-top: 25px; } }
-@media (min-width: 1200px) { [id="about"] .panel p { font-size: 17px; margin-top: 30px; } }
+@media (min-width: 768px)  { #about .panel p { margin-top: 20px; } }
+@media (min-width: 992px)  { #about .panel p { font-size: 16.5px; margin-top: 25px; } }
+@media (min-width: 1200px) { #about .panel p { font-size: 17px; margin-top: 30px; } }
 
 /* ==========================================================================
    Contact Dialog

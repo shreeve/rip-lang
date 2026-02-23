@@ -6,7 +6,7 @@ export Team = component
   ]
 
   render
-    div id: 'team'
+    div#team
       .container
         h2.heading "Our Team"
 
