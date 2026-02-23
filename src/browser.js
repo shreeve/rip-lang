@@ -134,15 +134,19 @@ if (typeof globalThis !== 'undefined') {
   globalThis.__ripExports = { compile, compileToJS, formatSExpr, getStdlibCode, VERSION, BUILD_DATE, getReactiveRuntime, getComponentRuntime };
 }
 
-// Auto-launch: if app.rip is bundled and the page has component scripts or a data-url,
-// call launch() automatically with config from the script tag's data attributes.
-// Hash routing defaults to true (opt out with data-hash="false").
+// Auto-launch: discover how to start the Rip App, in order of priority:
+//   1. Nothing on the page          → do nothing
+//   2. Inline data-name scripts     → compile and mount those
+//   3. data-url="bundle" (or path)  → fetch components from server
+//   4. data-url="" (empty)          → do nothing (explicit opt-out)
 async function autoLaunch() {
   if (globalThis.__ripLaunched) return;
   const ui = importRip.modules?.['app.rip'];
   if (!ui?.launch) return;
   const cfg = document.querySelector('script[data-hash], script[data-url]');
+  const tag = document.querySelectorAll('script[type="text/rip"][data-name]').length > 0;
   const url = cfg?.getAttribute('data-url') || '';
+  if (!tag && !url) return;
   const hash = cfg?.getAttribute('data-hash');
   const opts = { hash: hash !== 'false' };
   await ui.launch(url, opts);

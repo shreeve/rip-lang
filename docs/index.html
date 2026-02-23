@@ -495,7 +495,7 @@
     body.light .repl-prompt-text { color: #007acc; }
   </style>
   <link rel="preload" href="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs/loader.js" as="script">
-  <script type="module" src="dist/rip.min.js" data-url=""></script>
+  <script type="module" src="dist/rip.min.js"></script>
 </head>
 <body>
 
@@ -1307,7 +1307,7 @@
 
         { success: true, value: evalResult, result }
       catch error
-        { success: false, error: error.message }
+        { success: false, error: error?.message or String(error or 'Unknown error') }
 
     # --- REPL Commands ---
 
@@ -1403,7 +1403,7 @@
       replBuffer = if replBuffer then replBuffer + "\n" + line else line
 
       # Try to evaluate
-      evalResult = evaluateRip replBuffer
+      evalResult = evaluateRip! replBuffer
 
       if evalResult.success
         # Show debug info if enabled
@@ -1426,7 +1426,7 @@
         replBuffer = ''
         promptSpan.textContent = 'rip>'
 
-      else if evalResult.error.includes 'Unexpected end'
+      else if evalResult.error?.includes 'Unexpected end'
         # Incomplete input — wait for more
         promptSpan.textContent = '....>'
 
