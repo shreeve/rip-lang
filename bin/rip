@@ -136,7 +136,8 @@ async function main() {
     const servePath = join(__dirname, '../scripts/serve.js');
     const serverProcess = spawn('bun', [servePath], {
       stdio: ['inherit', 'pipe', 'inherit'],
-      detached: false
+      detached: false,
+      env: process.env
     });
 
     let actualPort = null;
@@ -174,7 +175,8 @@ async function main() {
     // Spawn REPL with --experimental-vm-modules flag for proper ES module support
     const replModule = join(__dirname, '../src/repl.js');
     const replProcess = spawn('bun', ['--experimental-vm-modules', '-e', `import('${replModule}').then(m => m.startREPL())`], {
-      stdio: 'inherit'
+      stdio: 'inherit',
+      env: process.env
     });
     replProcess.on('exit', (code) => process.exit(code || 0));
     return;
@@ -216,7 +218,8 @@ async function main() {
 
     if (inputFile.endsWith('.rip')) {
       const result = spawnSync('bun', ['--preload', loaderPath, inputFile, ...scriptArgs], {
-        stdio: 'inherit'
+        stdio: 'inherit',
+        env: process.env
       });
       process.exit(result.status ?? 1);
     } else {
@@ -228,7 +231,7 @@ async function main() {
       let exitCode = 0;
       try {
         writeFileSync(tmp, result.code);
-        const r = spawnSync('bun', ['--preload', loaderPath, tmp, ...scriptArgs], { stdio: 'inherit' });
+        const r = spawnSync('bun', ['--preload', loaderPath, tmp, ...scriptArgs], { stdio: 'inherit', env: process.env });
         exitCode = r.status ?? 1;
       } catch (error) {
         exitCode = error.status || 1;
@@ -253,7 +256,7 @@ async function main() {
       const binScript = join(repoRoot, 'bin', inputFile);
 
       if (existsSync(binScript)) {
-        const r = spawnSync(binScript, scriptArgs, { stdio: 'inherit' });
+        const r = spawnSync(binScript, scriptArgs, { stdio: 'inherit', env: process.env });
         process.exit(r.status ?? 1);
       }
     } catch {
