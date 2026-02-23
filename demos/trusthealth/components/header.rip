@@ -29,10 +29,10 @@ export Header = component
     else
       activeSection = 'intro'
 
-  ~>
-    handler = @onScroll
-    window.addEventListener 'scroll', handler, passive: true
-    -> window.removeEventListener 'scroll', handler
+  mounted: ->
+    window.addEventListener 'scroll', @onScroll, passive: true
+  unmounted: ->
+    window.removeEventListener 'scroll', @onScroll
 
   render
     header.('site-header', opaque and 'opaque')
