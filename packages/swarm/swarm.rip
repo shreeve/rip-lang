@@ -199,12 +199,12 @@ export swarm = (opts = {}) ->
   jobs = tasks.length
 
   # resolve paths
-  workerPath = join(dirname(new URL(import.meta.url).pathname), 'lib', 'worker.mjs')
+  swarmDir   = dirname(new URL(import.meta.url).pathname)
+  workerPath = join(swarmDir, 'lib', 'worker.mjs')
   scriptPath = resolve(process.argv[1] or '')
 
   # find rip-loader for workers — derive from swarm's own location
   # (swarm is at node_modules/@rip-lang/swarm/, loader is at node_modules/rip-lang/)
-  swarmDir   = dirname(new URL(import.meta.url).pathname)
   loaderPath = join(swarmDir, '..', '..', 'rip-lang', 'rip-loader.js')
   loaderPath = null unless existsSync(loaderPath)
 

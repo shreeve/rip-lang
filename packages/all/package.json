@@ -30,7 +30,7 @@
     "@rip-lang/print": "^1.1.3",
     "@rip-lang/schema": "^0.3.3",
     "@rip-lang/server": "^1.2.8",
-    "@rip-lang/swarm": "^1.2.11",
+    "@rip-lang/swarm": "^1.2.12",
     "@rip-lang/x12": "^0.2.3"
   }
 }
