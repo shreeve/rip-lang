@@ -214,21 +214,6 @@ export swarm = (opts = {}) ->
     catch
       null
 
-  # pre-flight: check workers can resolve modules from script directory
-  dir = dirname(scriptPath)
-  found = false
-  loop
-    if existsSync(join(dir, 'node_modules', '@rip-lang', 'swarm'))
-      found = true
-      break
-    parent = dirname(dir)
-    break if parent is dir
-    dir = parent
-  unless found
-    console.error "swarm: no node_modules found — workers won't be able to load modules"
-    console.error "hint:  run 'bun add @rip-lang/all' in your project directory"
-    exit 1
-
   # state
   live     = 0
   done     = 0
@@ -293,12 +278,14 @@ export swarm = (opts = {}) ->
       w.on 'message', (msg) ->
         switch msg.type
           when 'error'
+            writeFileSync('.swarm/errors.log', "worker #{slot} startup: #{msg.error}\n", { flag: 'a' }) if existsSync(_dir)
             unless fatal
               fatal = true
               cursor(true) unless quiet
+              write go(workers + 5, 1) unless quiet
               console.error "\nswarm: #{msg.error}"
               console.error "hint:  run 'bun add @rip-lang/all' in your project directory" if msg.error.includes('Cannot find module')
-            writeFileSync('.swarm/errors.log', "worker #{slot} startup: #{msg.error}\n", { flag: 'a' }) if existsSync(_dir)
+              exit 1
           when 'ready'
             dispatchNext(w, slot)
           when 'done'
@@ -326,6 +313,15 @@ export swarm = (opts = {}) ->
 
       w.on 'exit', (code) ->
         writeFileSync('.swarm/errors.log', "worker #{slot} exited with code #{code}, inflight: #{inflight[slot]}\n", { flag: 'a' }) if existsSync(_dir)
+        # startup failure — worker never became ready
+        if code isnt 0 and not info[slot]? and not fatal
+          fatal = true
+          cursor(true) unless quiet
+          write go(workers + 5, 1) unless quiet
+          console.error "\nswarm: worker #{slot} failed to start (exit code #{code})"
+          console.error "hint:  run 'bun add @rip-lang/all' in your project directory"
+          console.error "       check .swarm/errors.log for details"
+          exit 1
         # if worker crashed mid-task, count the in-flight task as died
         if inflight[slot]
           move(inflight[slot], _died)
