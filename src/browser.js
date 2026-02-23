@@ -144,6 +144,7 @@ async function autoLaunch() {
   const url = cfg?.getAttribute('data-url') || '';
   const hash = cfg?.getAttribute('data-hash');
   const opts = { hash: hash !== 'false' };
+  if (cfg?.hasAttribute('data-url') && !url) opts.bundle = false;
   await ui.launch(url, opts);
 }
 
