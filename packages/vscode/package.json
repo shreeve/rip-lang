@@ -74,7 +74,7 @@
   },
   "scripts": {
     "build": "esbuild src/extension.js --bundle --outfile=dist/extension.js --format=cjs --platform=node --external:vscode --minify && esbuild src/lsp.js --bundle --outfile=dist/lsp.js --format=cjs --platform=node --external:typescript --minify",
-    "package": "bun run build && npx @vscode/vsce package --no-dependencies",
+    "package": "rm -f rip-*.vsix && bun run build && npx @vscode/vsce package --no-dependencies --skip-license",
     "install-ext": "bun run package && cursor --install-extension rip-*.vsix --force"
   },
   "dependencies": {
