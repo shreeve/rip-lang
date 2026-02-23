@@ -199,8 +199,8 @@ CSV.write rows, mode: 'compact'
 # Full: quote every field
 CSV.write rows, mode: 'full'
 
-# Excel: emit ="0123" for leading-zero numbers
-CSV.write rows, excel: true
+# Protect leading zeros for spreadsheets
+CSV.write rows, zeros: true
 
 # Drop trailing empty columns
 CSV.write rows, drop: true
@@ -232,7 +232,7 @@ CSV.write rows, drop: true
 | `quote` | string | `'"'` | Quote character |
 | `escape` | string | same as `quote` | Escape character |
 | `mode` | string | `'compact'` | `'compact'` or `'full'` |
-| `excel` | boolean | `false` | Emit `="0123"` for leading zeros |
+| `zeros` | boolean | `false` | Protect leading zeros with `="0123"` |
 | `drop` | boolean | `false` | Drop trailing empty columns |
 | `rowsep` | string | `'\n'` | Row separator |
 

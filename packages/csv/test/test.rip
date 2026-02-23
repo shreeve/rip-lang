@@ -228,8 +228,8 @@ test "write with tab separator", ->
   result = CSV.write([['a','b']], sep: '\t')
   eq result, "a\tb\n"
 
-test "write excel mode", ->
-  result = CSV.write([['0123','hello']], excel: true)
+test "write zeros mode", ->
+  result = CSV.write([['0123','hello']], zeros: true)
   eq result, '="0123",hello\n'
 
 test "write drop trailing empties", ->

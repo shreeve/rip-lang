@@ -362,7 +362,7 @@ class Writer
     @quote  = opts.quote  ?? '"'
     @escape = opts.escape ?? @quote
     @mode   = opts.mode   ?? 'compact'
-    @excel  = opts.excel  ?? false
+    @zeros  = opts.zeros  ?? false
     @drop   = opts.drop   ?? false
     @rowsep = opts.rowsep ?? '\n'
 
@@ -390,11 +390,11 @@ class Writer
 
     formatted = switch @mode
       when 'compact'
-        if not @excel and not @needsQuote(cells.join(''))
+        if not @zeros and not @needsQuote(cells.join(''))
           cells
         else
           for cell in cells
-            if @excel and @leadZero.test(cell)
+            if @zeros and @leadZero.test(cell)
               "=#{q}#{cell}#{q}"
             else if @needsQuote(cell)
               "#{q}#{cell.replaceAll(q, esc)}#{q}"
@@ -402,7 +402,7 @@ class Writer
               cell
       when 'full'
         for cell in cells
-          if @excel and @leadZero.test(cell)
+          if @zeros and @leadZero.test(cell)
             "=#{q}#{cell}#{q}"
           else
             "#{q}#{cell.replaceAll(q, esc)}#{q}"
@@ -460,7 +460,7 @@ if import.meta.main
 
   args      = process.argv.slice(2)
   readOpts  = {relax: false, excel: false, strip: false}
-  writeOpts = {excel: false}
+  writeOpts = {zeros: false}
   files     = []
 
   for arg in args
@@ -490,7 +490,7 @@ if import.meta.main
       when '-r', '--relax' then readOpts.relax  = true
       when '-e', '--excel' then readOpts.excel  = true
       when '-s', '--strip' then readOpts.strip  = true
-      when '-z', '--zeros' then writeOpts.excel = true
+      when '-z', '--zeros' then writeOpts.zeros = true
       else files.push arg
 
   unless files.length
