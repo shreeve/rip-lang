@@ -117,7 +117,7 @@ draw = (state) ->
   for slot, count of info
     tpct = count / most
     cols = Math.floor(ppct * tpct * wide)
-    write go(parseInt(slot) + 1, len + 5) + bg("5383ec") + char.repeat(cols) + bg()
+    write go(parseInt(slot) + 1, len + 5) + fg("fff") + bg("5383ec") + char.repeat(cols) + fg() + bg()
 
   # summary bar
   dpct = done / jobs
@@ -162,6 +162,7 @@ export swarm = (opts = {}) ->
   char    = (findArg(args, '-c', '--char')             or opts.char   or '•')[0]
   doreset = args.includes('-r') or args.includes('--reset')
   dosafe  = args.includes('-s') or args.includes('--safe')
+  quiet   = args.includes('-q') or args.includes('--quiet')
 
   if workers < 1
     console.error 'error: workers must be at least 1'
@@ -223,17 +224,19 @@ export swarm = (opts = {}) ->
 
   # signal handlers
   process.on 'SIGINT', ->
-    cursor(true)
-    write go(workers + 5, 1) + "\n"
+    cursor(true) unless quiet
+    write go(workers + 5, 1) + "\n" unless quiet
     process.exit(1)
-  process.on 'SIGWINCH', ->
-    drawFrame(workers)
-    draw({ live, done, died, jobs, workers, info })
+  unless quiet
+    process.on 'SIGWINCH', ->
+      drawFrame(workers)
+      draw({ live, done, died, jobs, workers, info })
 
   # draw initial frame
   startTime = Date.now()
-  cursor(false)
-  drawFrame(workers)
+  unless quiet
+    cursor(false)
+    drawFrame(workers)
 
   # create workers and dispatch tasks
   allWorkers = []
@@ -254,8 +257,9 @@ export swarm = (opts = {}) ->
         taskPath = tasks[taskIdx++]
         inflight[slot] = taskPath
         live++
-        write go(slot + 1, len + 5 + wide + 3) + " " + taskPath.split('/').pop() + clear(true)
-        draw({ live, done, died, jobs, workers, info })
+        unless quiet
+          write go(slot + 1, len + 5 + wide + 3) + " " + taskPath.split('/').pop() + clear(true)
+          draw({ live, done, died, jobs, workers, info })
         worker.postMessage { type: 'task', taskPath }
       else
         inflight[slot] = null
@@ -282,7 +286,7 @@ export swarm = (opts = {}) ->
             live--
             done++
             info[slot]++
-            draw({ live, done, died, jobs, workers, info })
+            draw({ live, done, died, jobs, workers, info }) unless quiet
             dispatchNext(w, slot)
           when 'failed'
             move(msg.taskPath, _died)
@@ -292,7 +296,7 @@ export swarm = (opts = {}) ->
             live--
             died++
             info[slot]++
-            draw({ live, done, died, jobs, workers, info })
+            draw({ live, done, died, jobs, workers, info }) unless quiet
             dispatchNext(w, slot)
 
       w.on 'error', (err) ->
@@ -307,7 +311,7 @@ export swarm = (opts = {}) ->
           live--
           died++
           info[slot]++
-          draw({ live, done, died, jobs, workers, info })
+          draw({ live, done, died, jobs, workers, info }) unless quiet
         # respawn if there's still work to do
         if done + died < jobs
           spawnWorker(slot)
@@ -319,23 +323,24 @@ export swarm = (opts = {}) ->
     for slot in [1..count]
       spawnWorker(slot)
 
-  # final redraw — fill all worker bars and show per-worker stats
-  secs = (Date.now() - startTime) / 1000
-  for slot of info
-    s = parseInt(slot)
-    n = info[slot]
-    rate = if secs > 0 then (n / secs).toFixed(1) else '—'
-    write go(s + 1, len + 5) + bg("5383ec") + char.repeat(wide) + bg() + " │ #{n} jobs @ #{rate}/sec" + clear(true)
-  draw({ live: 0, done, died, jobs, workers, info })
-
   # summary
-  cursor(true)
-  write go(workers + 5, 1)
-  write "#{secs.toFixed(2)} secs"
-  write " for #{jobs} jobs"
-  write " by #{workers} workers"
-  write " @ #{(jobs / secs).toFixed(2)} jobs/sec" if secs > 0
-  write "\n\n"
+  secs = (Date.now() - startTime) / 1000
+  if quiet
+    p "#{secs.toFixed(2)} secs for #{jobs} jobs by #{workers} workers" + (if secs > 0 then " @ #{(jobs / secs).toFixed(2)} jobs/sec" else "")
+  else
+    for slot of info
+      s = parseInt(slot)
+      n = info[slot]
+      rate = if secs > 0 then (n / secs).toFixed(1) else '—'
+      write go(s + 1, len + 5) + fg("fff") + bg("5383ec") + char.repeat(wide) + fg() + bg() + " │ #{n} jobs @ #{rate}/sec" + clear(true)
+    draw({ live: 0, done, died, jobs, workers, info })
+    cursor(true)
+    write go(workers + 5, 1)
+    write "#{secs.toFixed(2)} secs"
+    write " for #{jobs} jobs"
+    write " by #{workers} workers"
+    write " @ #{(jobs / secs).toFixed(2)} jobs/sec" if secs > 0
+    write "\n\n"
 
 # ==============================================================================
 # CLI helpers
@@ -344,7 +349,7 @@ export swarm = (opts = {}) ->
 # flags that swarm consumes (with value)
 _flagsWithValue = ['-w', '--workers', '-b', '--bar', '-c', '--char']
 # flags that swarm consumes (standalone)
-_flagsAlone     = ['-r', '--reset', '-s', '--safe', '-h', '--help', '-v', '--version']
+_flagsAlone     = ['-r', '--reset', '-s', '--safe', '-q', '--quiet', '-h', '--help', '-v', '--version']
 
 findArg = (args, short, long) ->
   for arg, i in args
