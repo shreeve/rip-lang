@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/api",
-  "version": "1.3.5",
+  "version": "1.3.6",
   "description": "Pure Rip API framework — elegant, fast, zero dependencies",
   "type": "module",
   "main": "api.rip",
@@ -34,7 +34,7 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": "^3.13.1"
+    "rip-lang": "^3.13.2"
   },
   "files": [
     "api.rip",
