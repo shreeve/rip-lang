@@ -52,6 +52,15 @@ export query = (sql, params = []) ->
   throw new Error data.error if data.error
   data
 
+export bulk = (table, columns, rows) ->
+  res = fetch! "#{dbUrl()}/sql",
+    method: 'POST'
+    headers: { 'Content-Type': 'application/json' }
+    body: JSON.stringify { table, columns, rows }
+  data = res.json!
+  throw new Error data.error if data.error
+  data
+
 materialize = (meta, row) ->
   obj = {}
   for col, i in meta
@@ -258,11 +267,17 @@ export Model = (table, database = null) ->
     findAll! sql, params
 
   insert: (data) ->
-    keys = Object.keys(data).filter (k) -> data[k] isnt undefined
-    cols = keys.map((k) -> "\"#{k}\"").join(', ')
-    refs = keys.map((_, i) -> "$#{i + 1}").join(', ')
-    vals = keys.map (k) -> data[k]
-    findOne! "INSERT INTO #{tableName} (#{cols}) VALUES (#{refs}) RETURNING *", vals
+    if Array.isArray(data)
+      return { rows: 0 } if data.length is 0
+      columns = Object.keys(data[0]).filter (k) -> data[0][k] isnt undefined
+      rows = data.map (row) -> columns.map (k) -> row[k]
+      bulk! table, columns, rows
+    else
+      keys = Object.keys(data).filter (k) -> data[k] isnt undefined
+      cols = keys.map((k) -> "\"#{k}\"").join(', ')
+      refs = keys.map((_, i) -> "$#{i + 1}").join(', ')
+      vals = keys.map (k) -> data[k]
+      findOne! "INSERT INTO #{tableName} (#{cols}) VALUES (#{refs}) RETURNING *", vals
 
   update: (id, data) ->
     keys = Object.keys(data).filter (k) -> data[k] isnt undefined
@@ -271,19 +286,37 @@ export Model = (table, database = null) ->
     findOne! "UPDATE #{tableName} SET #{sets} WHERE id = $1 RETURNING *", [id, ...vals]
 
   upsert: (data, opts = {}) ->
-    keys = Object.keys(data).filter (k) -> data[k] isnt undefined
-    cols = keys.map((k) -> "\"#{k}\"").join(', ')
-    refs = keys.map((_, i) -> "$#{i + 1}").join(', ')
-    vals = keys.map (k) -> data[k]
-
-    conflict = opts.on or opts.conflict
-    sql = "INSERT INTO #{tableName} (#{cols}) VALUES (#{refs})"
-    if conflict
-      updateCols = keys.filter((k) -> k isnt conflict)
-      sets = updateCols.map((k) -> "\"#{k}\" = EXCLUDED.\"#{k}\"").join(', ')
-      sql += " ON CONFLICT (\"#{conflict}\") DO UPDATE SET #{sets}"
-    sql += " RETURNING *"
-    findOne! sql, vals
+    if Array.isArray(data)
+      return [] if data.length is 0
+      keys = Object.keys(data[0]).filter (k) -> data[0][k] isnt undefined
+      cols = keys.map((k) -> "\"#{k}\"").join(', ')
+      allVals = []
+      valueTuples = data.map (row, rowIdx) ->
+        refs = keys.map (k, colIdx) ->
+          allVals.push(row[k])
+          "$#{rowIdx * keys.length + colIdx + 1}"
+        "(#{refs.join(', ')})"
+      sql = "INSERT INTO #{tableName} (#{cols}) VALUES #{valueTuples.join(', ')}"
+      conflict = opts.on or opts.conflict
+      if conflict
+        updateCols = keys.filter((k) -> k isnt conflict)
+        sets = updateCols.map((k) -> "\"#{k}\" = EXCLUDED.\"#{k}\"").join(', ')
+        sql += " ON CONFLICT (\"#{conflict}\") DO UPDATE SET #{sets}"
+      sql += " RETURNING *"
+      findAll! sql, allVals
+    else
+      keys = Object.keys(data).filter (k) -> data[k] isnt undefined
+      cols = keys.map((k) -> "\"#{k}\"").join(', ')
+      refs = keys.map((_, i) -> "$#{i + 1}").join(', ')
+      vals = keys.map (k) -> data[k]
+      conflict = opts.on or opts.conflict
+      sql = "INSERT INTO #{tableName} (#{cols}) VALUES (#{refs})"
+      if conflict
+        updateCols = keys.filter((k) -> k isnt conflict)
+        sets = updateCols.map((k) -> "\"#{k}\" = EXCLUDED.\"#{k}\"").join(', ')
+        sql += " ON CONFLICT (\"#{conflict}\") DO UPDATE SET #{sets}"
+      sql += " RETURNING *"
+      findOne! sql, vals
 
   destroy: (id) ->
     findOne! "DELETE FROM #{tableName} WHERE id = $1 RETURNING *", [id]

@@ -89,7 +89,10 @@ if '--version' in args or '-v' in args
   process.exit(0)
 
 # Database and port configuration
-path = process.env.DB_PATH or args.find((a) -> not a.startsWith('-')) or ':memory:'
+path = process.env.DB_PATH or args.find((a) -> not a.startsWith('-')) or do ->
+  glob = new Bun.Glob("*.duckdb")
+  files = Array.from(glob.scanSync('.'))
+  if files.length is 1 then files[0] else ':memory:'
 
 # Support both --port=N and --port N
 portArg = do ->
@@ -102,8 +105,9 @@ port = parseInt(process.env.DB_PORT or portArg) or 4213
 # Open database and create persistent connection
 db = open(path)
 conn = db.connect()
-console.log "rip-db: database=#{path} (bun-ffi)"
-console.log "rip-db: DuckDB version=#{duckdbVersion()}"
+console.log "rip-db: DuckDB #{duckdbVersion()}"
+console.log "rip-db: rip-db v#{VERSION}"
+console.log "rip-db: source #{path}"
 
 # ==============================================================================
 # Helpers
@@ -149,20 +153,54 @@ executeSQL = (sql, params = []) ->
   catch err
     { error: err.message }
 
+# Bulk insert via Appender API (fastest path for pure inserts)
+executeAppend = (table, columns, rows) ->
+  console.log "APPEND #{table} (#{rows.length} rows)"
+  startTime = Date.now()
+  try
+    await conn.append(table, columns, rows)
+    { rows: rows.length, time: (Date.now() - startTime) / 1000 }
+  catch err
+    { error: err.message }
+
+# Batch execute a prepared statement with multiple param sets
+executeBatch = (sql, paramSets) ->
+  logSQL sql
+  startTime = Date.now()
+  try
+    await conn.queryBatch(sql, paramSets)
+    { rows: paramSets.length, time: (Date.now() - startTime) / 1000 }
+  catch err
+    { error: err.message }
+
 # ==============================================================================
 # JSON Endpoints (for custom apps)
 # ==============================================================================
 
-# POST /sql — Execute SQL with optional parameters
+# POST /sql — Execute SQL, bulk append, or batch prepared statements
+#
+# Shapes:
+#   { sql }                          → raw execution
+#   { sql, params: [...] }           → prepared statement
+#   { sql, params: [[...], [...]] }  → batch prepared (reuse stmt)
+#   { table, columns, rows }         → appender API (fastest insert)
 post '/sql' ->
   contentType = @req.header('content-type') or ''
   if contentType.includes('application/json')
     body = read()
+
+    if body?.table and body?.rows
+      return executeAppend body.table, body.columns, body.rows
+
     sql = body?.sql or body
     params = body?.params or []
+
+    if params.length > 0 and Array.isArray(params[0])
+      return executeBatch sql, params
   else
     sql = read 'body', 'string'
     params = []
+
   return { error: 'Empty query' } unless sql
   executeSQL sql, params
 
@@ -381,7 +419,6 @@ get '/*' ->
 # Start Server
 # ==============================================================================
 
-start port: port
+console.log "rip-db: server http://localhost:#{port}"
 
-console.log "rip-db: listening on http://localhost:#{port}"
-console.log "rip-db: DuckDB UI available at http://localhost:#{port}/"
+start port: port, silent: true

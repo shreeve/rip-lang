@@ -384,10 +384,10 @@ export start = (opts = {}) ->
     return handler
 
   # Otherwise start standalone server
-  host = opts.host or '0.0.0.0'
+  host = opts.host or 'localhost'
   port = opts.port or 3000
   server = Bun.serve { hostname: host, port: port, fetch: handler }
-  console.log "rip-api listening on http://#{host}:#{port}"
+  console.log "rip-api listening on http://#{host}:#{port}" unless opts.silent
   server
 
 export App = (fn) ->

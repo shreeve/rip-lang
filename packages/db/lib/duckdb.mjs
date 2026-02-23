@@ -89,11 +89,28 @@ const lib = dlopen(libPath, {
   duckdb_bind_double:      { args: ['ptr', 'u64', 'f64'], returns: 'i32' },
   duckdb_bind_varchar:     { args: ['ptr', 'u64', 'ptr'], returns: 'i32' },
   duckdb_execute_prepared: { args: ['ptr', 'ptr'], returns: 'i32' },
+  duckdb_clear_bindings:   { args: ['ptr'], returns: 'i32' },
+
+  // Appender API
+  duckdb_appender_create:        { args: ['ptr', 'ptr', 'ptr', 'ptr'], returns: 'i32' },
+  duckdb_appender_error:         { args: ['ptr'], returns: 'ptr' },
+  duckdb_appender_flush:         { args: ['ptr'], returns: 'i32' },
+  duckdb_appender_close:         { args: ['ptr'], returns: 'i32' },
+  duckdb_appender_destroy:       { args: ['ptr'], returns: 'i32' },
+  duckdb_appender_end_row:       { args: ['ptr'], returns: 'i32' },
+  duckdb_append_bool:            { args: ['ptr', 'bool'], returns: 'i32' },
+  duckdb_append_int32:           { args: ['ptr', 'i32'], returns: 'i32' },
+  duckdb_append_int64:           { args: ['ptr', 'i64'], returns: 'i32' },
+  duckdb_append_double:          { args: ['ptr', 'f64'], returns: 'i32' },
+  duckdb_append_varchar:         { args: ['ptr', 'ptr'], returns: 'i32' },
+  duckdb_append_null:            { args: ['ptr'], returns: 'i32' },
+  duckdb_appender_add_column:    { args: ['ptr', 'ptr'], returns: 'i32' },
+  duckdb_appender_clear_columns: { args: ['ptr'], returns: 'i32' },
 
   // Result inspection
-  duckdb_column_count: { args: ['ptr'], returns: 'u64' },
-  duckdb_column_name:  { args: ['ptr', 'u64'], returns: 'ptr' },
-  duckdb_column_type:  { args: ['ptr', 'u64'], returns: 'i32' },
+  duckdb_column_count:  { args: ['ptr'], returns: 'u64' },
+  duckdb_column_name:   { args: ['ptr', 'u64'], returns: 'ptr' },
+  duckdb_column_type:   { args: ['ptr', 'u64'], returns: 'i32' },
   duckdb_result_error:  { args: ['ptr'], returns: 'ptr' },
 
   // Modern chunk-based API (non-deprecated)
@@ -358,30 +375,7 @@ class Connection {
     const stmtHandle = readPtr(stmtPtr);
 
     try {
-      for (let i = 0; i < params.length; i++) {
-        const paramIdx = BigInt(i + 1);
-        const value = params[i];
-
-        if (value === null || value === undefined) {
-          lib.duckdb_bind_null(stmtHandle, paramIdx);
-        } else if (typeof value === 'boolean') {
-          lib.duckdb_bind_boolean(stmtHandle, paramIdx, value);
-        } else if (typeof value === 'number') {
-          if (Number.isInteger(value)) {
-            lib.duckdb_bind_int64(stmtHandle, paramIdx, BigInt(value));
-          } else {
-            lib.duckdb_bind_double(stmtHandle, paramIdx, value);
-          }
-        } else if (typeof value === 'bigint') {
-          lib.duckdb_bind_int64(stmtHandle, paramIdx, value);
-        } else if (value instanceof Date) {
-          const strBytes = toCString(value.toISOString());
-          lib.duckdb_bind_varchar(stmtHandle, paramIdx, ptr(strBytes));
-        } else {
-          const strBytes = toCString(String(value));
-          lib.duckdb_bind_varchar(stmtHandle, paramIdx, ptr(strBytes));
-        }
-      }
+      this.#bindParams(stmtHandle, params);
 
       const resultPtr = new Uint8Array(64);  // duckdb_result struct is ~48 bytes
       lib.duckdb_execute_prepared(stmtHandle, ptr(resultPtr));
@@ -776,6 +770,168 @@ class Connection {
       if (value === type) return name;
     }
     return 'UNKNOWN';
+  }
+
+  #bindParams(stmtHandle, params) {
+    for (let i = 0; i < params.length; i++) {
+      const paramIdx = BigInt(i + 1);
+      const value = params[i];
+
+      if (value === null || value === undefined) {
+        lib.duckdb_bind_null(stmtHandle, paramIdx);
+      } else if (typeof value === 'boolean') {
+        lib.duckdb_bind_boolean(stmtHandle, paramIdx, value);
+      } else if (typeof value === 'number') {
+        if (Number.isInteger(value)) {
+          lib.duckdb_bind_int64(stmtHandle, paramIdx, BigInt(value));
+        } else {
+          lib.duckdb_bind_double(stmtHandle, paramIdx, value);
+        }
+      } else if (typeof value === 'bigint') {
+        lib.duckdb_bind_int64(stmtHandle, paramIdx, value);
+      } else if (value instanceof Date) {
+        const strBytes = toCString(value.toISOString());
+        lib.duckdb_bind_varchar(stmtHandle, paramIdx, ptr(strBytes));
+      } else {
+        const strBytes = toCString(String(value));
+        lib.duckdb_bind_varchar(stmtHandle, paramIdx, ptr(strBytes));
+      }
+    }
+  }
+
+  #appendValue(appenderHandle, value) {
+    if (value === null || value === undefined) {
+      lib.duckdb_append_null(appenderHandle);
+    } else if (typeof value === 'boolean') {
+      lib.duckdb_append_bool(appenderHandle, value);
+    } else if (typeof value === 'number') {
+      if (Number.isInteger(value)) {
+        lib.duckdb_append_int64(appenderHandle, BigInt(value));
+      } else {
+        lib.duckdb_append_double(appenderHandle, value);
+      }
+    } else if (typeof value === 'bigint') {
+      lib.duckdb_append_int64(appenderHandle, value);
+    } else if (value instanceof Date) {
+      const strBytes = toCString(value.toISOString());
+      lib.duckdb_append_varchar(appenderHandle, ptr(strBytes));
+    } else {
+      const strBytes = toCString(String(value));
+      lib.duckdb_append_varchar(appenderHandle, ptr(strBytes));
+    }
+  }
+
+  /**
+   * Bulk insert rows using the DuckDB Appender API (fastest path)
+   * @param {string} table - Table name
+   * @param {string[]} columns - Column names
+   * @param {any[][]} rows - Array of value arrays (positional, matching columns)
+   * @returns {Promise<{rows: number}>}
+   */
+  append(table, columns, rows) {
+    return withLock(() => {
+      const appenderPtr = allocPtr();
+      const tableBytes = toCString(table);
+
+      const status = lib.duckdb_appender_create(this.#handle, null, ptr(tableBytes), ptr(appenderPtr));
+      if (status !== 0) {
+        const handle = readPtr(appenderPtr);
+        if (handle) {
+          const errPtr = lib.duckdb_appender_error(handle);
+          const errMsg = errPtr ? fromCString(errPtr) : 'Failed to create appender';
+          lib.duckdb_appender_destroy(ptr(appenderPtr));
+          throw new Error(errMsg);
+        }
+        throw new Error('Failed to create appender');
+      }
+
+      const appenderHandle = readPtr(appenderPtr);
+
+      try {
+        if (columns && columns.length > 0) {
+          lib.duckdb_appender_clear_columns(appenderHandle);
+          for (const col of columns) {
+            const colBytes = toCString(col);
+            const addStatus = lib.duckdb_appender_add_column(appenderHandle, ptr(colBytes));
+            if (addStatus !== 0) {
+              const errPtr = lib.duckdb_appender_error(appenderHandle);
+              throw new Error(errPtr ? fromCString(errPtr) : `Failed to add column: ${col}`);
+            }
+          }
+        }
+
+        for (const row of rows) {
+          for (const value of row) {
+            this.#appendValue(appenderHandle, value);
+          }
+          lib.duckdb_appender_end_row(appenderHandle);
+        }
+
+        const flushStatus = lib.duckdb_appender_flush(appenderHandle);
+        if (flushStatus !== 0) {
+          const errPtr = lib.duckdb_appender_error(appenderHandle);
+          const errMsg = errPtr ? fromCString(errPtr) : 'Appender flush failed';
+          throw new Error(errMsg);
+        }
+
+        return { rows: rows.length };
+      } finally {
+        lib.duckdb_appender_destroy(ptr(appenderPtr));
+      }
+    });
+  }
+
+  /**
+   * Execute a prepared statement multiple times with different param sets
+   * @param {string} sql - SQL with $1, $2, ... placeholders
+   * @param {any[][]} paramSets - Array of param arrays
+   * @returns {Promise<{rows: number}>}
+   */
+  queryBatch(sql, paramSets) {
+    return withLock(() => {
+      const stmtPtr = allocPtr();
+      const sqlBytes = toCString(sql);
+
+      const prepStatus = lib.duckdb_prepare(this.#handle, ptr(sqlBytes), ptr(stmtPtr));
+      if (prepStatus !== 0) {
+        const stmtHandle = readPtr(stmtPtr);
+        if (stmtHandle) {
+          const errPtr = lib.duckdb_prepare_error(stmtHandle);
+          const errMsg = errPtr ? fromCString(errPtr) : 'Failed to prepare statement';
+          lib.duckdb_destroy_prepare(ptr(stmtPtr));
+          throw new Error(errMsg);
+        }
+        throw new Error('Failed to prepare statement');
+      }
+
+      const stmtHandle = readPtr(stmtPtr);
+      let totalRows = 0;
+
+      try {
+        for (const params of paramSets) {
+          this.#bindParams(stmtHandle, params);
+
+          const resultPtr = new Uint8Array(64);
+          lib.duckdb_execute_prepared(stmtHandle, ptr(resultPtr));
+
+          const rp = ptr(resultPtr);
+          const errorPtr = lib.duckdb_result_error(rp);
+          if (errorPtr) {
+            const error = fromCString(errorPtr);
+            lib.duckdb_destroy_result(rp);
+            throw new Error(error);
+          }
+
+          lib.duckdb_destroy_result(rp);
+          lib.duckdb_clear_bindings(stmtHandle);
+          totalRows++;
+        }
+
+        return { rows: totalRows };
+      } finally {
+        lib.duckdb_destroy_prepare(ptr(stmtPtr));
+      }
+    });
   }
 
   close() {

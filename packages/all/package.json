@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/all",
-  "version": "3.13.0",
+  "version": "3.13.1",
   "description": "Meta-package that installs rip-lang and all @rip-lang/* packages",
   "type": "module",
   "keywords": [
