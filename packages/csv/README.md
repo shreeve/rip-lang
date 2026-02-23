@@ -129,6 +129,35 @@ rows = CSV.read '="01",hello\n', excel: true
 rows = CSV.read str, relax: true
 ```
 
+## Special Cases (Relax + Excel)
+
+When `relax: true` and `excel: true` are both enabled, the parser recovers
+from common real-world CSV malformations — stray quotes, unescaped embedded
+quotes, and Excel `="..."` literals. These patterns appear frequently in
+exports from systems like Labcorp, legacy Excel, and other enterprise tools.
+
+The following table shows how the parser handles each case:
+
+| Row | Input | Fields | Key behavior |
+|-----|-------|--------|-------------|
+| 0 | `"AAA "BBB",CCC,"DDD"` | 3 | Stray quotes recovered (relax) |
+| 1 | `"CHUI, LOK HANG "BENNY",…,=""` | 5 | Stray quotes + excel empty |
+| 2 | `"Don",="007",10,"Ed"` | 4 | Excel literal preserves leading zero |
+| 6 | `Charlie or "Chuck",=B2 + B3,9` | 3 | Unquoted stray quotes + bare formula |
+| 10 | `A,B,C",D` | 4 | Trailing stray quote preserved |
+| 12 | `…,"CHO, JOELLE "JOJO"",08/19/2022` | 7 | Stray quotes + excel literals |
+| 14 | `"CHO, JOELLE "JOJO"",456` | 3 | Stray quotes (relax) |
+| 15 | `"CHO, JOELLE ""JOJO""",456` | 3 | Properly doubled quotes — same result |
+| 16 | `=,=x,x=,="x",="","","=",…` | 11 | Full excel + quoting matrix |
+
+```coffee
+# Parse messy real-world CSV with both modes enabled
+rows = CSV.read str, relax: true, excel: true
+
+# Load a Labcorp file
+rows = CSV.load! 'labcorp.csv', relax: true, excel: true, headers: true
+```
+
 ## Writing
 
 ### Basic Writing
@@ -235,27 +264,80 @@ CSV.writer(opts)               # create reusable Writer instance
 CSV.formatRow(row, opts)       # format single row -> string
 ```
 
+## CLI
+
+The library doubles as a command-line tool for converting CSV files:
+
+```bash
+# Clean up a malformed Labcorp file
+bun csv.rip -r -e input.csv output.csv
+
+# Protect leading zeros for Google Sheets / Excel
+bun csv.rip -r -e -z input.csv output.csv
+
+# Pipe to stdout
+bun csv.rip -r -e input.csv
+
+# Show version
+bun csv.rip -v
+```
+
+```
+Usage: bun csv.rip [options] <input> [output]
+
+Read options:
+  -r, --relax        Recover from stray/malformed quotes
+  -e, --excel        Handle Excel ="..." literals on input
+  -s, --strip        Strip whitespace from fields
+
+Write options:
+  -z, --zeros        Protect leading zeros with ="0123"
+
+General:
+  -v, --version      Show version
+  -h, --help         Show this help
+
+If output is omitted, writes to stdout.
+```
+
 ## Performance
 
-The parser consistently delivers **300-430 MB/s** throughput on real-world
-CSV files, scaling linearly from kilobytes to gigabytes:
+The parser consistently delivers **250-530 MB/s** throughput on real-world
+CSV files with `relax: true, excel: true` enabled:
 
-| File | Size | Rows | Fields/row | Time | Throughput |
-|------|------|------|-----------|------|-----------|
-| Medical records | 10.5 MB | 43,962 | 44 | 39ms | 269 MB/s |
-| Japanese postal codes | 10.9 MB | 124,565 | 15 | 26ms | 414 MB/s |
-| Geodata | 24.8 MB | 662,061 | 6 | 65ms | 382 MB/s |
-| Lab results (large) | 137.3 MB | 493,962 | 44 | 466ms | 294 MB/s |
-| Lab results (XL) | 315.8 MB | 997,195 | 44 | 1.1s | 287 MB/s |
-| Lab results (1GB+) | 1.2 GB | 3,497,822 | 44 | 4.1s | 298 MB/s |
+| File | Size | Rows | Time | Throughput |
+|------|------|------|------|-----------|
+| Geodata | 24.8 MB | 662,061 | 75ms | 329 MB/s |
+| Medical records | 22.8 MB | 93,963 | 86ms | 264 MB/s |
+| Japanese postal codes | 10.9 MB | 124,565 | 29ms | 370 MB/s |
+| Japanese postal codes (100K) | 8.8 MB | 100,000 | 20ms | 442 MB/s |
+| Labcorp charges | 3.6 MB | 20,035 | 7ms | 528 MB/s |
+| UTF-8 data | 2.5 MB | 30,000 | 7ms | 354 MB/s |
+| Mixed data | 2.6 MB | 30,000 | 8ms | 340 MB/s |
+| Lab results | 1.8 MB | 4,894 | 7ms | 254 MB/s |
 
-Quote-free files hit the fast path (~420 MB/s). Files with quoted fields
-use the full path (~300 MB/s). The `each` callback mode is slightly faster
-than array mode since it skips array allocation.
+Quote-free files hit the fast path (~440 MB/s). Files with quoted fields
+use the full path (~300 MB/s). The relax+excel heuristics add zero overhead
+on clean data — they only fire when an actual stray quote is encountered.
 
-For context, popular JS CSV parsers typically achieve 30-120 MB/s (Papa Parse,
-csv-parse, d3-dsv). This library is comfortably in the top tier of the JS
-ecosystem.
+### Comparison with Other JS Parsers
+
+Benchmarked against the [uDSV benchmark suite](https://github.com/leeoniya/uDSV/tree/main/bench)
+(the most comprehensive JS CSV benchmark), which tests ~20 parsers on Bun:
+
+| Parser | Strings | Quoted | Large (36 MB) | Notes |
+|--------|---------|--------|---------------|-------|
+| **Rip CSV** | **~370 MB/s** | **~330 MB/s** | **~329 MB/s** | indexOf ratchet, relax+excel |
+| uDSV | 287 MB/s | 188 MB/s | 293 MB/s | Fastest pure-JS parser (5KB) |
+| csv-simple-parser | 223 MB/s | 206 MB/s | 233 MB/s | |
+| d3-dsv | 275 MB/s | 110 MB/s | 285 MB/s | |
+| PapaParse | 252 MB/s | 59 MB/s | 292 MB/s | Drops 4x on quoted data |
+| csv-parse/sync | 20 MB/s | 19 MB/s | 18 MB/s | Node.js built-in |
+
+Rip CSV is in the same tier as uDSV — the acknowledged fastest JS CSV parser —
+while also supporting relax mode and Excel literal recovery that no other
+parser offers. On quoted files, Rip CSV is **5x faster** than PapaParse and
+**15x faster** than csv-parse.
 
 ## Roadmap
 

@@ -236,6 +236,11 @@ def readFull(str, cfg)
     if c is quoteCode or (excel and c is EQ and str.charCodeAt(pos + 1) is quoteCode)
       if excel and c is EQ
         pos += 2  # skip ="
+        # relax: skip extra " in ="" when followed by content (not a real empty literal)
+        if relax and pos < len and str.charCodeAt(pos) is quoteCode
+          p2 = pos + quote.length
+          if p2 < len and str.charCodeAt(p2) isnt sepCode and str.charCodeAt(p2) isnt nlCode
+            pos += quote.length
       else
         pos += 1  # skip opening quote
 
@@ -260,6 +265,11 @@ def readFull(str, cfg)
           if pos < len and str.charCodeAt(pos) is quoteCode
             field += quote
             pos += quote.length
+            # relax+excel heuristic: "",=" means close, not just escape
+            if relax and excel and pos < len and str.charCodeAt(pos) is sepCode
+              p2 = pos + sepLen
+              if p2 < len and str.charCodeAt(p2) is EQ and p2 + 1 < len and str.charCodeAt(p2 + 1) is quoteCode
+                break
             continue
         else
           # backslash escape: \" -> "
@@ -277,8 +287,17 @@ def readFull(str, cfg)
         unless relax
           throw new Error "CSV: unexpected character after quote at position #{pos}"
 
-        # relax mode: treat the quote as literal, keep scanning
-        field += quote
+        # relax mode: stray quote — scan through to next quote (censive approach)
+        q2 = str.indexOf(quote, pos)
+        unless q2 >= 0
+          field += str.slice(pos)
+          pos = len
+          break
+        field += quote + str.slice(pos, q2 + quote.length)
+        pos = q2 + quote.length
+        break if pos >= len
+        c2 = str.charCodeAt(pos)
+        break if c2 is sepCode or c2 is nlCode
         continue
 
       # push field and consume trailing delimiter
@@ -305,6 +324,7 @@ def readFull(str, cfg)
     else if c is sepCode
       row.push ''
       pos += sepLen
+      row.push '' if pos >= len or str.charCodeAt(pos) is nlCode
 
     # === unquoted field ===
     else
@@ -316,6 +336,7 @@ def readFull(str, cfg)
       if s >= 0 and (nl is -1 or s < nl)
         row.push str.slice(pos, s)
         pos = s + sepLen
+        row.push '' if pos >= len or str.charCodeAt(pos) is nlCode
       else if nl >= 0
         row.push str.slice(pos, nl)
         pos = nl + crlfLen(str, nl)
@@ -429,3 +450,63 @@ export CSV =
   # format a single row (convenience — creates a one-shot Writer)
   formatRow: (row, opts = {}) ->
     new Writer(opts).row(row)
+
+# ==============================================================================
+# CLI — run directly with: bun csv.rip [options] <input> [output]
+# ==============================================================================
+
+if import.meta.main
+  VERSION = Bun.file(import.meta.dir + "/package.json").json!.version
+
+  args      = process.argv.slice(2)
+  readOpts  = {relax: false, excel: false, strip: false}
+  writeOpts = {excel: false}
+  files     = []
+
+  for arg in args
+    switch arg
+      when '-v', '--version' then (p "csv #{VERSION}"; exit)
+      when '-h', '--help'
+        p """
+          csv #{VERSION} — Fast, flexible CSV parser and writer
+
+          Usage: bun csv.rip [options] <input> [output]
+
+          Read options:
+            -r, --relax     Recover from stray/malformed quotes
+            -e, --excel     Handle Excel ="..." literals on input
+            -s, --strip     Strip whitespace from fields
+
+          Write options:
+            -z, --zeros     Protect leading zeros with ="0123"
+
+          General:
+            -v, --version   Show version
+            -h, --help      Show this help
+
+          If output is omitted, writes to stdout.
+          """
+        exit
+      when '-r', '--relax' then readOpts.relax  = true
+      when '-e', '--excel' then readOpts.excel  = true
+      when '-s', '--strip' then readOpts.strip  = true
+      when '-z', '--zeros' then writeOpts.excel = true
+      else files.push arg
+
+  unless files.length
+    p "csv: no input file specified (use --help for usage)"
+    exit 1
+
+  input  = files[0]
+  output = files[1]
+
+  str = Bun.file(input).text!
+  cfg = probe(str, readOpts)
+  rows = if cfg.hasQuotes then readFull(cfg.str, cfg) else readFast(cfg.str, cfg)
+  writer = new Writer(writeOpts)
+
+  if output
+    Bun.write! output, writer.rows(rows)
+    p "#{rows.length} rows: #{input} -> #{output}"
+  else
+    process.stdout.write writer.rows(rows)

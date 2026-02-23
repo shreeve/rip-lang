@@ -122,7 +122,31 @@ console.log "\nReading — relax mode"
 
 test "stray quote in relax mode", ->
   rows = CSV.read 'a,"bad"quote",b\n', relax: true
-  eq rows, [['a', 'bad"quote', 'b']]
+  eq rows, [['a', 'bad"quote"', 'b']]
+
+test "stray quotes — AAA BBB", ->
+  rows = CSV.read '"AAA "BBB",CCC,"DDD"\n', relax: true
+  eq rows, [['AAA "BBB"', 'CCC', 'DDD']]
+
+test "stray quotes — JOJO", ->
+  rows = CSV.read '123,"CHO, JOELLE "JOJO"",456\n', relax: true
+  eq rows, [['123', 'CHO, JOELLE "JOJO"', '456']]
+
+test "properly doubled quotes — JOJO", ->
+  rows = CSV.read '123,"CHO, JOELLE ""JOJO""",456\n'
+  eq rows, [['123', 'CHO, JOELLE "JOJO"', '456']]
+
+test "stray quotes — BENNY with excel", ->
+  rows = CSV.read '"CHUI, LOK HANG "BENNY",224325325610,="001453","Hemoglobin A1c",=""\n', relax: true, excel: true
+  eq rows, [['CHUI, LOK HANG "BENNY"', '224325325610', '001453', 'Hemoglobin A1c', '']]
+
+test "stray quotes — unquoted Chuck", ->
+  rows = CSV.read 'Charlie or "Chuck",=B2 + B3,9\n', relax: true, excel: true
+  eq rows, [['Charlie or "Chuck"', '=B2 + B3', '9']]
+
+test "stray quote — trailing C\"", ->
+  rows = CSV.read 'A,B,C",D\n', relax: true
+  eq rows, [['A', 'B', 'C"', 'D']]
 
 # ==[ Reading: Excel mode ]==
 
@@ -131,6 +155,38 @@ console.log "\nReading — excel mode"
 test "excel literal =\"01\"", ->
   rows = CSV.read '="01",b\n', excel: true
   eq rows, [['01','b']]
+
+test "excel empty =\"\"", ->
+  rows = CSV.read '="",next\n', excel: true
+  eq rows, [['', 'next']]
+
+test "excel full matrix", ->
+  rows = CSV.read '=,=x,x=,="x",="","","=",123,0123,="123",="0123"\n', excel: true
+  eq rows, [['=', '=x', 'x=', 'x', '', '', '=', '123', '0123', '123', '0123']]
+
+# ==[ Reading: Relax + Excel (Labcorp patterns) ]==
+
+console.log "\nReading — relax + excel (Labcorp)"
+
+test "JAMIE pattern — doubled quotes at excel boundary", ->
+  rows = CSV.read '04003497,72359435,"DAVIS, DAKOTA ""JAMIE"",=""03/13/2022",207394404660,001453,Hemoglobin A1c,4.00\n', relax: true, excel: true
+  eq rows, [['04003497', '72359435', 'DAVIS, DAKOTA "JAMIE"', '03/13/2022', '207394404660', '001453', 'Hemoglobin A1c', '4.00']]
+
+test "JOJO pattern — doubled quotes at excel boundary", ->
+  rows = CSV.read '04003497,72359439,"CHO, JOELLE ""JOJO"",=""03/25/2022",208449441660,602989,Food Allergy Profile,66.00\n', relax: true, excel: true
+  eq rows, [['04003497', '72359439', 'CHO, JOELLE "JOJO"', '03/25/2022', '208449441660', '602989', 'Food Allergy Profile', '66.00']]
+
+test "=\"\" with content — extra quote skip", ->
+  rows = CSV.read 'simple,=""03/15/2022",after\n', relax: true, excel: true
+  eq rows, [['simple', '03/15/2022', 'after']]
+
+test "trailing separator — empty final field", ->
+  rows = CSV.read 'Name,Age,,,Shoe,,,\n', relax: true, excel: true
+  eq rows, [['Name', 'Age', '', '', 'Shoe', '', '', '']]
+
+test "trailing separator — 123,", ->
+  rows = CSV.read '123,\n', relax: true, excel: true
+  eq rows, [['123', '']]
 
 # ==[ Reading: BOM ]==
 

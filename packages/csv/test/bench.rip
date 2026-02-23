@@ -1,0 +1,22 @@
+import { CSV } from "../csv.rip"
+import { basename } from "path"
+
+files = process.argv.slice(2)
+
+unless files.length
+  p "Usage: bun bench.rip <file1.csv> [file2.csv] ..."
+  process.exit 1
+
+for path in files
+  name = basename(path)
+  str = Bun.file(path).text!
+  size = str.length
+
+  t0 = performance.now()
+  rows = CSV.read(str, relax: true, excel: true)
+  t1 = performance.now()
+  ms = t1 - t0
+  mb = size / 1048576
+  speed = mb / (ms / 1000)
+
+  p "#{name.padEnd(20)} #{(mb.toFixed(1) + ' MB').padStart(8)}  #{rows.length.toLocaleString().padStart(10)} rows  #{ms.toFixed(0).padStart(5)}ms  #{speed.toFixed(0).padStart(4)} MB/s"
