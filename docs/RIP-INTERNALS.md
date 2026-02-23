@@ -562,6 +562,19 @@ rip> .sexp    # Toggle s-expression display
 rip> .js      # Toggle JS display
 ```
 
+## REPL Architecture
+
+The CLI REPL (`src/repl.js`) uses a `vm`-based sandbox with two eval paths:
+
+- **Primary:** `vm.runInContext` with async IIFE wrapper — handles all code including `await`
+- **Fallback:** `vm.SourceTextModule` — used only when `import` statements are present (required for module linking)
+
+This split works around Bun bug [#22287](https://github.com/oven-sh/bun/issues/22287) where `vm.SourceTextModule` crashes on top-level `await`.
+
+The stdlib is injected once at REPL startup via `getStdlibCode()` — the same function the compiler uses, ensuring a single source of truth. Variables persist across evaluations via a `__vars` object.
+
+The browser REPL (`docs/index.html`) uses a hidden iframe as its sandbox. Code is compiled with `skipPreamble: true` and wrapped in an async IIFE for `await` support. The stdlib and reactive runtime are injected into the iframe context at initialization.
+
 ---
 
 # 9. Future Work

@@ -699,6 +699,28 @@ rip> .js      # Toggle JS display
 | `or return` | Guard | `x = get() or return err` — early return |
 | `?? throw` | Nullish guard | `x = get() ?? throw err` — throw if null |
 
+### Standard Library
+
+Rip injects 13 global helpers via `globalThis` into every compiled program. Defined in `getStdlibCode()` in `src/compiler.js`, also injected into the CLI REPL (`src/repl.js`) and browser REPL (`docs/index.html`).
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `abort(msg?)` | Log to stderr, exit with code 1 | `abort "fatal error"` |
+| `assert(v, msg?)` | Throw if falsy | `assert x > 0, "must be positive"` |
+| `exit(code?)` | Exit process | `exit 1` |
+| `kind(v)` | Lowercase type name (fixes `typeof`) | `kind [] # "array"` |
+| `noop()` | No-op function | `onClick ?= noop` |
+| `p(...args)` | `console.log` shorthand | `p "hello"` |
+| `pp(v)` | Pretty-print JSON, returns value | `pp user # logs and returns` |
+| `raise(a, b?)` | Throw error | `raise TypeError, "bad"` |
+| `rand(a?, b?)` | Random number | `rand 10 # 0-9` |
+| `sleep(ms)` | Promise-based delay | `sleep! 1000` |
+| `todo(msg?)` | Throw "Not implemented" | `todo "finish later"` |
+| `warn(...args)` | `console.warn` shorthand | `warn "deprecated"` |
+| `zip(...arrays)` | Zip arrays pairwise | `zip names, ages` |
+
+All use `??=` (overridable by redeclaring). The REPL uses `skipPreamble: true` and injects separately via `getStdlibCode()`.
+
 ### Build Commands
 
 ```bash

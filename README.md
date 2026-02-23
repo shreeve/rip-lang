@@ -172,6 +172,29 @@ enum HttpCode                            # Runtime enum
 
 Compiles to `.js` (types erased) + `.d.ts` (types preserved) — full IDE support via TypeScript Language Server. See [docs/RIP-TYPES.md](docs/RIP-TYPES.md).
 
+### Standard Library
+
+13 global helpers available in every Rip program — no imports needed:
+
+```coffee
+p "hello"                       # console.log shorthand
+pp {name: "Alice", age: 30}     # pretty-print JSON (also returns value)
+warn "deprecated"               # console.warn
+assert x > 0, "must be positive"
+raise TypeError, "expected string"
+todo "finish this later"
+kind [1, 2, 3]                  # "array" (fixes typeof)
+rand 10                         # 0-9
+rand 5, 10                      # 5-10 inclusive
+sleep! 1000                     # await sleep(1000)
+exit 1                          # process.exit(1)
+abort "fatal"                   # log to stderr + exit(1)
+zip names, ages                 # [[n1,a1], [n2,a2], ...]
+noop                            # () => {}
+```
+
+All use `globalThis` with `??=` — override any by redeclaring locally.
+
 ---
 
 ## Operators

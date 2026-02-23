@@ -21,9 +21,10 @@ Rip is a modern reactive language that compiles to ES2022 JavaScript. It combine
 11. [CLI Tools & Scripts](#11-cli-tools--scripts)
 12. [Types](#12-types)
 13. [JavaScript Interop](#13-javascript-interop)
-14. [Common Patterns](#14-common-patterns)
-15. [Quick Reference](#15-quick-reference)
-16. [Future Ideas](#16-future-ideas)
+14. [Standard Library](#14-standard-library)
+15. [Common Patterns](#15-common-patterns)
+16. [Quick Reference](#16-quick-reference)
+17. [Future Ideas](#17-future-ideas)
 
 ---
 
@@ -1541,7 +1542,73 @@ const { code } = compile('x = 42');
 
 ---
 
-# 14. Common Patterns
+# 14. Standard Library
+
+Rip includes 13 global helper functions, always available in every compiled
+program. They're injected via `globalThis` using `??=`, so they won't override
+existing definitions and can be shadowed by redeclaring locally.
+
+## Functions
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `abort(msg?)` | Log to stderr, exit with code 1 | `abort "fatal error"` |
+| `assert(v, msg?)` | Throw if falsy | `assert x > 0, "positive"` |
+| `exit(code?)` | Exit process | `exit 1` |
+| `kind(v)` | Lowercase type name (fixes `typeof`) | `kind [] # "array"` |
+| `noop()` | No-op function | `onClick ?= noop` |
+| `p(...args)` | `console.log` shorthand | `p "hello"` |
+| `pp(v)` | Pretty-print JSON, returns value | `pp user` |
+| `raise(a, b?)` | Throw error | `raise TypeError, "bad"` |
+| `rand(a?, b?)` | Random number | `rand 5, 10 # 5-10` |
+| `sleep(ms)` | Promise-based delay | `sleep! 1000` |
+| `todo(msg?)` | Throw "Not implemented" | `todo "finish later"` |
+| `warn(...args)` | `console.warn` shorthand | `warn "deprecated"` |
+| `zip(...arrays)` | Zip arrays pairwise | `zip names, ages` |
+
+## Usage
+
+```coffee
+# Output
+p "hello"                         # prints to stdout
+pp {name: "Alice", age: 30}       # pretty-print, returns value
+warn "this API is deprecated"     # prints to stderr
+
+# Errors
+assert users.length > 0, "no users found"
+raise TypeError, "expected a string"
+todo "implement caching"
+
+# Utilities
+kind [1, 2, 3]                    # "array" (not "object" like typeof)
+kind null                         # "null" (not "object" like typeof)
+rand 10                           # integer 0-9
+rand 5, 10                        # integer 5-10 inclusive
+rand                              # float 0.0-1.0
+
+# Async (using the ! dammit operator)
+sleep! 1000                       # pause for 1 second
+data = fetch! url                 # await fetch
+
+# Control
+exit                              # exit with code 0
+abort "something went wrong"      # log error + exit(1)
+onClick ?= noop                   # default no-op handler
+
+# Combine arrays
+zip ["alice", "bob"], [30, 25]    # [["alice", 30], ["bob", 25]]
+```
+
+## Design
+
+- **Always available** — injected into every compiled file, the CLI REPL, and the browser REPL
+- **Overridable** — `globalThis.p ??=` means your own `p = myLogger` shadows it cleanly
+- **Idempotent** — safe in multi-file apps; `??=` only sets if not already defined
+- **Inspired by** Ruby (`p`, `pp`, `raise`, `rand`), Rust (`assert`, `todo`), Python (`zip`), Kotlin (`todo`)
+
+---
+
+# 15. Common Patterns
 
 ## Error Handling
 
@@ -1626,7 +1693,7 @@ class EventEmitter
 
 ---
 
-# 15. Quick Reference
+# 16. Quick Reference
 
 ## Syntax Cheat Sheet
 
@@ -1723,67 +1790,11 @@ count = 10  # Logs: "Count: 10, Doubled: 20"
 
 ---
 
-# 16. Future Ideas
+# 17. Future Ideas
 
 Ideas and candidates that have been discussed but not yet implemented.
 
-## Standard Library (`stdlib`)
-
-Rip is a zero-dependency language, but a small standard library of useful
-utilities would save users from writing the same one-liners in every project.
-These are **not** language features — they're plain functions that could ship
-as a prelude or optional import.
-
-### Candidates
-
-```coffee
-# Printing (Ruby's p)
-p = console.log
-
-# Exit with optional code (uses implicit `it`)
-exit = -> process.exit(it)
-
-# Tap — call a function for side effects, return the original value
-# Useful in pipe chains: data |> tap(console.log) |> process
-tap = (v, fn) -> fn(v); v
-
-# Identity — returns its argument unchanged
-# Useful as a default callback: items.filter(id)
-id = -> it
-
-# No-op — does nothing
-# Useful as a default handler: onClick ?= noop
-noop = ->
-
-# String method aliases (shorter names for common checks)
-String::starts = String::startsWith
-String::ends   = String::endsWith
-String::has    = String::includes
-
-# Clamp a value to a range
-clamp = (v, lo, hi) -> Math.min(Math.max(v, lo), hi)
-
-# Sleep for N milliseconds (returns a Promise)
-sleep = (ms) -> new Promise (resolve) -> setTimeout resolve, ms
-
-# Times helper — call a function N times, collect results
-times = (n, fn) -> (fn(i) for i in [0...n])
-```
-
-### Design Questions
-
-- **Prelude vs import?** Should these be injected automatically (like Go's
-  `fmt` or Rip's reactive runtime), or explicitly imported (`import { p, tap }
-  from '@rip-lang/std'`)? Leaning toward explicit — Rip's philosophy is zero
-  magic in the output.
-
-- **Scope?** Keep it tiny. A stdlib that grows to 500 functions defeats the
-  purpose. Each entry should save real keystrokes on something people do
-  constantly.
-
-- **Node vs Browser?** Some helpers (like `exit`) are Node-only. Others (like
-  `p`, `tap`, `sleep`) work everywhere. May want to split into `std` (universal)
-  and `std/node` (server-only).
+> **Note:** The standard library was implemented in v3.13.0. See [Section 14](#14-standard-library).
 
 ## Future Syntax Ideas
 
@@ -1821,4 +1832,4 @@ Each would need design discussion before building.
 
 ---
 
-*Rip 3.10 — 1,251 tests — Zero dependencies — Self-hosting — ~13,500 LOC*
+*Rip 3.13 — 1,244 tests — Zero dependencies — Self-hosting — ~13,500 LOC*
