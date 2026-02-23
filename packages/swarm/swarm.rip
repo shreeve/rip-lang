@@ -94,19 +94,18 @@ bg = (rgb) -> if rgb then "\x1b[48;2;#{hex(rgb)}m" else "\x1b[49m"
 # Progress display
 # ==============================================================================
 
-_char = _wide = _len = null
+char = wide = len = null
 
 drawFrame = (workers) ->
-  _len = String(workers).length
+  len = String(workers).length
   write clear()
-  write go(2 + workers, _len + 3) + "╰" + "─".repeat(_wide + 2) + "╯"
-  write go(1,           _len + 3) + "╭" + "─".repeat(_wide + 2) + "╮"
+  write go(2 + workers, len + 3) + "╰" + "─".repeat(wide + 2) + "╯"
+  write go(1,           len + 3) + "╭" + "─".repeat(wide + 2) + "╮"
   for i in [0...workers]
     write go(i + 2, 1)
-    label = String(i + 1).padStart(_len)
-    write " #{label} │ " + " ".repeat(_wide) + " │"
-  # summary bar row
-  write go(workers + 3, _len + 3) + "│ " + " ".repeat(_wide) + " │"
+    label = String(i + 1).padStart(len)
+    write " #{label} │ " + " ".repeat(wide) + " │"
+  write go(workers + 3, len + 3) + "│ " + " ".repeat(wide) + " │"
 
 draw = (state) ->
   { live, done, died, jobs, workers, info } = state
@@ -117,27 +116,29 @@ draw = (state) ->
   # worker bars
   for slot, count of info
     tpct = count / most
-    cols = Math.floor(ppct * tpct * _wide)
-    write go(parseInt(slot) + 1, _len + 5) + bg("5383ec") + _char.repeat(cols) + bg()
+    cols = Math.floor(ppct * tpct * wide)
+    write go(parseInt(slot) + 1, len + 5) + bg("5383ec") + char.repeat(cols) + bg()
 
   # summary bar
   dpct = done / jobs
   lpct = live / jobs
-  gcol = Math.floor(dpct * _wide)
-  ycol = Math.floor(lpct * _wide)
-  rcol = Math.max(0, _wide - gcol - ycol)
+  gcol = Math.floor(dpct * wide)
+  ycol = Math.floor(lpct * wide)
+  rcol = Math.max(0, wide - gcol - ycol)
   row  = workers + 3
 
-  write go(row, _len + 5)
-  write fg("fff")
-  write bg("58a65c") + _char.repeat(gcol)          # green  (done)
-  write bg("f1bf42") + _char.repeat(ycol)           # yellow (live)
-  write bg("d85140") + " ".repeat(rcol)             # red    (rest)
-  write go(row, _len + 5 + _wide + 3)
-  write bg("5383ec") + " #{(ppct * 100).toFixed(1)}% "
-  write bg() + " " + bg("58a65c") + " #{done}/#{jobs} done " if done > 0
-  write bg() + " " + bg("d85140") + " #{died} died "         if died > 0
-  write fg() + bg()
+  out = [
+    go(row, len + 5)
+    fg("fff")
+    bg("58a65c") + char.repeat(gcol)              # green  (done)
+    bg("f1bf42") + char.repeat(ycol)              # yellow (live)
+    bg("d85140") + " ".repeat(rcol)                # red    (rest)
+    go(row, len + 5 + wide + 3)
+    bg("5383ec") + " #{(ppct * 100).toFixed(1)}% " # blue   (pct)
+    if done > 0 then bg() + " " + bg("58a65c") + " #{done}/#{jobs} done "
+    if died > 0 then bg() + " " + bg("d85140") + " #{died} died "
+  ].filter(Boolean).join('') + fg() + bg()
+  write out
 
 # ==============================================================================
 # Worker orchestration
@@ -157,17 +158,14 @@ export swarm = (opts = {}) ->
   # parse CLI options
   args    = process.argv.slice(2)
   workers = parseInt(findArg(args, '-w', '--workers')) or opts.workers or cpus().length
-  barw    = parseInt(findArg(args, '-b', '--bar'))     or opts.bar    or 20
-  char    = findArg(args, '-c', '--char')              or opts.char   or '•'
+  wide    = parseInt(findArg(args, '-b', '--bar'))     or opts.bar    or 20
+  char    = (findArg(args, '-c', '--char')             or opts.char   or '•')[0]
   doreset = args.includes('-r') or args.includes('--reset')
   dosafe  = args.includes('-s') or args.includes('--safe')
 
   if workers < 1
     console.error 'error: workers must be at least 1'
     process.exit(1)
-
-  _wide = barw
-  _char = char[0]
 
   if doreset
     rmSync(_dir, { recursive: true, force: true })
@@ -256,7 +254,7 @@ export swarm = (opts = {}) ->
         taskPath = tasks[taskIdx++]
         inflight[slot] = taskPath
         live++
-        write go(slot + 1, _len + 5 + _wide + 3) + " " + taskPath.split('/').pop() + clear(true)
+        write go(slot + 1, len + 5 + wide + 3) + " " + taskPath.split('/').pop() + clear(true)
         draw({ live, done, died, jobs, workers, info })
         worker.postMessage { type: 'task', taskPath }
       else
@@ -327,7 +325,7 @@ export swarm = (opts = {}) ->
     s = parseInt(slot)
     n = info[slot]
     rate = if secs > 0 then (n / secs).toFixed(1) else '—'
-    write go(s + 1, _len + 5) + bg("5383ec") + _char.repeat(_wide) + bg() + " │ #{n} jobs @ #{rate}/sec" + clear(true)
+    write go(s + 1, len + 5) + bg("5383ec") + char.repeat(wide) + bg() + " │ #{n} jobs @ #{rate}/sec" + clear(true)
   draw({ live: 0, done, died, jobs, workers, info })
 
   # summary
