@@ -640,21 +640,10 @@ export class CodeGenerator {
 
       // Standard library — always available, override by redeclaring
       if (needsBlank) code += '\n';
-      code += 'globalThis.abort  ??= (msg) => { if (msg) console.error(msg); process.exit(1); };\n';
-      code += 'globalThis.assert ??= (v, msg) => { if (!v) throw new Error(msg || "Assertion failed"); };\n';
-      code += 'globalThis.exit   ??= (code) => process.exit(code || 0);\n';
-      code += 'globalThis.kind   ??= (v) => v != null ? (v.constructor?.name || Object.prototype.toString.call(v).slice(8, -1)).toLowerCase() : String(v);\n';
-      code += 'globalThis.noop   ??= () => {};\n';
-      code += 'globalThis.p      ??= console.log;\n';
-      code += 'globalThis.pp     ??= (v) => { console.log(JSON.stringify(v, null, 2)); return v; };\n';
-      code += 'globalThis.raise  ??= (a, b) => { throw (b !== undefined ? new a(b) : new Error(a)); };\n';
-      code += 'globalThis.rand   ??= (a, b) => b !== undefined ? (a > b && ([a, b] = [b, a]), Math.floor(Math.random() * (b - a + 1) + a)) : a ? Math.floor(Math.random() * a) : Math.random();\n';
-      code += 'globalThis.sleep  ??= (ms) => new Promise(r => setTimeout(r, ms));\n';
-      code += 'globalThis.todo   ??= (msg) => { throw new Error(msg || "Not implemented"); };\n';
-      code += 'globalThis.warn   ??= console.warn;\n';
-      code += 'globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));\n';
+      code += getStdlibCode();
       needsBlank = true;
 
+      // On-demand helpers — only emitted when referenced
       if (this.helpers.has('slice'      )) { code += 'const slice = [].slice;\n'; needsBlank = true; }
       if (this.helpers.has('modulo'     )) { code += 'const modulo = (n, d) => { n = +n; d = +d; return (n % d + d) % d; };\n'; needsBlank = true; }
       if (this.helpers.has('toMatchable')) {
@@ -3284,6 +3273,24 @@ export function compileToJS(source, options = {}) {
 
 export function generate(sexpr, options = {}) {
   return new CodeGenerator(options).compile(sexpr);
+}
+
+export function getStdlibCode() {
+  return `\
+globalThis.abort  ??= (msg) => { if (msg) console.error(msg); process.exit(1); };
+globalThis.assert ??= (v, msg) => { if (!v) throw new Error(msg || "Assertion failed"); };
+globalThis.exit   ??= (code) => process.exit(code || 0);
+globalThis.kind   ??= (v) => v != null ? (v.constructor?.name || Object.prototype.toString.call(v).slice(8, -1)).toLowerCase() : String(v);
+globalThis.noop   ??= () => {};
+globalThis.p      ??= console.log;
+globalThis.pp     ??= (v) => { console.log(JSON.stringify(v, null, 2)); return v; };
+globalThis.raise  ??= (a, b) => { throw (b !== undefined ? new a(b) : new Error(a)); };
+globalThis.rand   ??= (a, b) => b !== undefined ? (a > b && ([a, b] = [b, a]), Math.floor(Math.random() * (b - a + 1) + a)) : a ? Math.floor(Math.random() * a) : Math.random();
+globalThis.sleep  ??= (ms) => new Promise(r => setTimeout(r, ms));
+globalThis.todo   ??= (msg) => { throw new Error(msg || "Not implemented"); };
+globalThis.warn   ??= console.warn;
+globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
+`;
 }
 
 export function getReactiveRuntime() {

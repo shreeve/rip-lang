@@ -17,7 +17,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as vm from 'vm';
-import { Compiler, compileToJS, getReactiveRuntime, getComponentRuntime } from './compiler.js';
+import { Compiler, compileToJS, getStdlibCode, getReactiveRuntime, getComponentRuntime } from './compiler.js';
 import packageJson from '../package.json' with { type: 'json' };
 
 const VERSION = packageJson.version;
@@ -64,6 +64,9 @@ export class RipREPL {
       TextDecoder,
       __vars: this.vars  // Reference to persisted variables
     });
+
+    // Inject standard library into REPL context
+    vm.runInContext(getStdlibCode(), this.vmContext);
 
     // Inject reactive and component runtimes
     this.injectReactiveRuntime();
