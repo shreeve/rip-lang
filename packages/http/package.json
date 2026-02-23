@@ -28,7 +28,7 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": ">=3.13.10"
+    "rip-lang": ">=3.13.11"
   },
   "files": [
     "http.rip",

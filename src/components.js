@@ -1651,6 +1651,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     this._createLines.push(`(this._children || (this._children = [])).push(${instVar});`);
 
     this._setupLines.push(`if (${instVar}._setup) ${instVar}._setup();`);
+    this._setupLines.push(`if (${instVar}.mounted) ${instVar}.mounted();`);
 
     for (const { key, valueCode } of reactiveProps) {
       this._setupLines.push(`__effect(() => { if (${instVar}.${key}) ${instVar}.${key}.value = ${valueCode}; });`);
