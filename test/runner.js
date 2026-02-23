@@ -40,6 +40,7 @@ function normalizeCode(code) {
   return code
     .trim()
     .replace(/^\/\/.*\n/gm, '')           // Remove comment lines
+    .replace(/^globalThis\.\w+.*\n?/gm, '') // Remove stdlib preamble lines
     .replace(/;\s*$/gm, '')               // Remove trailing semicolons from lines
     .replace(/\s+/g, ' ')                 // Collapse whitespace
     .replace(/\s*([{}();,=])\s*/g, '$1')  // Remove spaces around punctuation
