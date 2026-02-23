@@ -1290,8 +1290,18 @@
         # Remove remaining const
         js .= replace /^const\s+(\w+)\s*=/gm, '$1 ='
 
-        # Evaluate in iframe context
-        evalResult = replContext.eval js
+        # Evaluate in iframe context (wrap in async IIFE to support await)
+        # Capture the last expression as the return value
+        lines = js.trimEnd().split('\n')
+        last = lines.length - 1
+        unless /^\s*(import |export |let |const |var |for |while |if |else |switch |try |class |function )/.test(lines[last])
+          lines[last] = "return #{lines[last].replace(/;$/, '')}"
+        wrapped = "(async()=>{\n#{lines.join('\n')}\n})()"
+        evalResult = replContext.eval wrapped
+
+        # Handle async results
+        if evalResult and typeof evalResult.then is 'function'
+          evalResult = await evalResult
 
         replContext._ = evalResult if evalResult isnt undefined
 
