@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/all",
-  "version": "3.13.5",
+  "version": "3.13.6",
   "description": "Meta-package that installs rip-lang and all @rip-lang/* packages",
   "type": "module",
   "keywords": [
@@ -23,7 +23,7 @@
   "dependencies": {
     "rip-lang": "^3.13.2",
     "@rip-lang/api": "^1.3.6",
-    "@rip-lang/csv": "^1.2.3",
+    "@rip-lang/csv": "^1.3.0",
     "@rip-lang/db": "^1.3.10",
     "@rip-lang/grid": "^0.2.4",
     "@rip-lang/http": "^1.1.3",
