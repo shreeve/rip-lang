@@ -214,3 +214,19 @@ swarm { setup, perform }
 rip download-tests.rip tests.txt -w 40
 # 15,000 tests across 40 workers — finishes in minutes
 ```
+
+## Troubleshooting
+
+### Progress bar text appears black in VS Code / Cursor
+
+VS Code's terminal has a "minimum contrast ratio" feature that overrides
+foreground colors. This can turn white progress text black. To fix it,
+add this to your VS Code or Cursor settings:
+
+```json
+"terminal.integrated.minimumContrastRatio": 1
+```
+
+This disables the contrast adjustment and lets ANSI colors render as
+intended. The progress display works correctly in standard terminals
+(iTerm2, Terminal.app, etc.) without any changes.

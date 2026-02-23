@@ -89,7 +89,7 @@ hex = (str) ->
 
 fg  = (rgb) -> if rgb then "\x1b[38;2;#{hex(rgb)}m" else "\x1b[39m"
 bg  = (rgb) -> if rgb then "\x1b[48;2;#{hex(rgb)}m" else "\x1b[49m"
-fgw =! "\x1b[97m"  # bright white — more reliable than 24-bit fg("fff")
+fgw =! fg("fff")
 
 # ==============================================================================
 # Progress display
@@ -167,17 +167,17 @@ export swarm = (opts = {}) ->
 
   if workers < 1
     console.error 'error: workers must be at least 1'
-    process.exit(1)
+    exit(1)
 
   if doreset
     rmSync(_dir, { recursive: true, force: true })
     console.log 'removed .swarm directory'
-    process.exit(0)
+    exit(0)
 
   # run setup
   unless typeof opts.perform is 'function'
     console.error 'error: perform() function is required'
-    process.exit(1)
+    exit(1)
 
   context = {}
   if typeof opts.setup is 'function'
@@ -188,13 +188,13 @@ export swarm = (opts = {}) ->
   # read task list
   unless existsSync(_todo)
     console.error 'error: no .swarm/todo directory found (did setup run?)'
-    process.exit(1)
+    exit(1)
 
   tasks = readdirSync(_todo).sort().map (f) -> join(_todo, f)
 
   if tasks.length is 0
     console.log 'no tasks to process'
-    process.exit(0)
+    exit(0)
 
   jobs = tasks.length
 
@@ -214,12 +214,28 @@ export swarm = (opts = {}) ->
     catch
       null
 
+  # pre-flight: check workers can resolve modules from script directory
+  dir = dirname(scriptPath)
+  found = false
+  loop
+    if existsSync(join(dir, 'node_modules', '@rip-lang', 'swarm'))
+      found = true
+      break
+    parent = dirname(dir)
+    break if parent is dir
+    dir = parent
+  unless found
+    console.error "swarm: no node_modules found — workers won't be able to load modules"
+    console.error "hint:  run 'bun add @rip-lang/all' in your project directory"
+    exit 1
+
   # state
-  live    = 0
-  done    = 0
-  died    = 0
-  info    = {}
-  taskIdx = 0
+  live     = 0
+  done     = 0
+  died     = 0
+  info     = {}
+  taskIdx  = 0
+  fatal    = false
   inflight = {}  # slot → taskPath (track in-flight tasks for crash recovery)
   lastTask = {}  # slot → last completed task name (for display)
 
@@ -227,7 +243,7 @@ export swarm = (opts = {}) ->
   process.on 'SIGINT', ->
     cursor(true) unless quiet
     write go(workers + 5, 1) + "\n" unless quiet
-    process.exit(1)
+    exit(1)
   unless quiet
     process.on 'SIGWINCH', ->
       drawFrame(workers)
@@ -277,7 +293,11 @@ export swarm = (opts = {}) ->
       w.on 'message', (msg) ->
         switch msg.type
           when 'error'
-            console.error "\nswarm: worker #{slot} failed to start: #{msg.error}"
+            unless fatal
+              fatal = true
+              cursor(true) unless quiet
+              console.error "\nswarm: #{msg.error}"
+              console.error "hint:  run 'bun add @rip-lang/all' in your project directory" if msg.error.includes('Cannot find module')
             writeFileSync('.swarm/errors.log', "worker #{slot} startup: #{msg.error}\n", { flag: 'a' }) if existsSync(_dir)
           when 'ready'
             dispatchNext(w, slot)
