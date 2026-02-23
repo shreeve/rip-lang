@@ -12,6 +12,12 @@ import packageJson from '../package.json' with { type: 'json' };
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Set NODE_PATH so spawned processes and workers can resolve @rip-lang/* packages
+const _nodeModules = join(__dirname, '..', '..');
+if (!process.env.NODE_PATH?.split(':').includes(_nodeModules)) {
+  process.env.NODE_PATH = [_nodeModules, process.env.NODE_PATH].filter(Boolean).join(':');
+}
+
 const VERSION = packageJson.version;
 const SUMMARY = packageJson.description;
 

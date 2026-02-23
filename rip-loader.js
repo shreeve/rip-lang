@@ -1,7 +1,17 @@
 // Bun loader for .rip files
 
 import { plugin } from "bun";
+import { dirname } from "path";
+import { fileURLToPath } from "url";
 import { compileToJS } from "./src/compiler.js";
+
+// Ensure NODE_PATH includes the node_modules where rip-lang is installed, so workers
+// (and any code running through this loader) can resolve @rip-lang/* packages even
+// when the script lives in a directory without its own node_modules.
+const _nodeModules = dirname(dirname(fileURLToPath(import.meta.url)));
+if (!process.env.NODE_PATH?.split(':').includes(_nodeModules)) {
+  process.env.NODE_PATH = [_nodeModules, process.env.NODE_PATH].filter(Boolean).join(':');
+}
 
 await plugin({
   name: "rip-loader",

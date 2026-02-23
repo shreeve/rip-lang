@@ -202,17 +202,8 @@ export swarm = (opts = {}) ->
   workerPath = join(dirname(new URL(import.meta.url).pathname), 'lib', 'worker.mjs')
   scriptPath = resolve(process.argv[1] or '')
 
-  # find rip-loader for workers (check local, then global)
-  loaderPath = null
-  try
-    loaderPath = join(dirname(require.resolve('rip-lang')), '..', 'rip-loader.js')
-  catch
-    # fall back to global install
-    try
-      globalDir = join(process.env.HOME or '', '.bun', 'install', 'global', 'node_modules', 'rip-lang')
-      loaderPath = join(globalDir, 'rip-loader.js') if existsSync(join(globalDir, 'rip-loader.js'))
-    catch
-      null
+  # find rip-loader for workers (NODE_PATH ensures require.resolve works)
+  loaderPath = try join(dirname(require.resolve('rip-lang')), '..', 'rip-loader.js')
 
   # state
   live     = 0
@@ -284,8 +275,7 @@ export swarm = (opts = {}) ->
               cursor(true) unless quiet
               write go(workers + 5, 1) unless quiet
               console.error "\nswarm: #{msg.error}"
-              console.error "hint:  run 'bun add @rip-lang/all' in your project directory" if msg.error.includes('Cannot find module')
-              exit 1
+              exit(1)
           when 'ready'
             dispatchNext(w, slot)
           when 'done'

@@ -83,7 +83,11 @@ rip jobs.rip -w 40          # 40 workers for I/O-heavy jobs
 ```
 
 1. **`setup()`** runs once in the main thread — creates task files and
-   returns an optional context object (auth tokens, config, paths)
+   returns an optional context object (auth tokens, config, paths).
+   **Important:** the context must be plain data (strings, numbers,
+   booleans, arrays, plain objects). Class instances, functions, HTTP
+   clients, sockets, and other complex objects cannot be cloned for
+   worker threads — use `fetch` inside `perform()` instead
 2. **N worker threads** are spawned — each loads your script and gets
    the `perform` function. Workers are long-lived and process many tasks
 3. Tasks are dispatched from `.swarm/todo/` to workers via message passing
