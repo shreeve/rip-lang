@@ -87,8 +87,9 @@ hex = (str) ->
     [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)].join(';')
   _hex[str] = result
 
-fg = (rgb) -> if rgb then "\x1b[38;2;#{hex(rgb)}m" else "\x1b[39m"
-bg = (rgb) -> if rgb then "\x1b[48;2;#{hex(rgb)}m" else "\x1b[49m"
+fg  = (rgb) -> if rgb then "\x1b[38;2;#{hex(rgb)}m" else "\x1b[39m"
+bg  = (rgb) -> if rgb then "\x1b[48;2;#{hex(rgb)}m" else "\x1b[49m"
+fgw =! "\x1b[97m"  # bright white — more reliable than 24-bit fg("fff")
 
 # ==============================================================================
 # Progress display
@@ -113,13 +114,14 @@ draw = (state) ->
   ppct = (done + died) / jobs
   most = Math.max(...Object.values(info), 1)
 
-  # worker bars
+  # worker bars — set colors once, just move cursor per row
+  write fgw + bg("5383ec")
   for slot, count of info
     tpct = count / most
     cols = Math.floor(ppct * tpct * wide)
-    write go(parseInt(slot) + 1, len + 5) + fg("fff") + bg("5383ec") + char.repeat(cols) + fg() + bg()
+    write go(parseInt(slot) + 1, len + 5) + char.repeat(cols)
 
-  # summary bar
+  # summary bar — one atomic write
   dpct = done / jobs
   lpct = live / jobs
   gcol = Math.floor(dpct * wide)
@@ -129,12 +131,11 @@ draw = (state) ->
 
   out = [
     go(row, len + 5)
-    fg("fff")
-    bg("58a65c") + char.repeat(gcol)              # green  (done)
-    bg("f1bf42") + char.repeat(ycol)              # yellow (live)
-    bg("d85140") + " ".repeat(rcol)                # red    (rest)
+    bg("58a65c") + char.repeat(gcol)                          #  green (done)
+    bg("f1bf42") + char.repeat(ycol)                          # yellow (live)
+    bg("d85140") + " ".repeat(rcol)                           #    red (rest)
     go(row, len + 5 + wide + 3)
-    bg("5383ec") + " #{(ppct * 100).toFixed(1)}% " # blue   (pct)
+    bg("5383ec") + " #{(ppct * 100).toFixed(1)}% "           #   blue (pct)
     if done > 0 then bg() + " " + bg("58a65c") + " #{done}/#{jobs} done "
     if died > 0 then bg() + " " + bg("d85140") + " #{died} died "
   ].filter(Boolean).join('') + fg() + bg()
@@ -333,7 +334,7 @@ export swarm = (opts = {}) ->
       s = parseInt(slot)
       n = info[slot]
       rate = if secs > 0 then (n / secs).toFixed(1) else '—'
-      write go(s + 1, len + 5) + fg("fff") + bg("5383ec") + char.repeat(wide) + fg() + bg() + " │ #{n} jobs @ #{rate}/sec" + clear(true)
+      write go(s + 1, len + 5) + fgw + bg("5383ec") + char.repeat(wide) + fg() + bg() + " │ #{n} jobs @ #{rate}/sec" + clear(true)
     draw({ live: 0, done, died, jobs, workers, info })
     cursor(true)
     write go(workers + 5, 1)
