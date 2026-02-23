@@ -813,7 +813,7 @@
     # Load Compiler Exports + Monaco (in parallel)
     # ====================================================================
 
-    { compile, formatSExpr, VERSION, BUILD_DATE, getReactiveRuntime } = window.__ripExports
+    { compile, formatSExpr, getStdlibCode, VERSION, BUILD_DATE, getReactiveRuntime } = window.__ripExports
 
     MONACO_CDN =! 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0'
 
@@ -1217,6 +1217,7 @@
     replContext.showSexp = false
     replContext.showTokens = false
     replContext.__reactiveVars = {}
+    replContext.eval getStdlibCode()
     replContext.eval getReactiveRuntime()
 
     # Built-in properties to preserve when clearing

@@ -926,8 +926,6 @@ export launch = (appBase = '', opts = {}) ->
       name += '.rip' unless name.endsWith('.rip')
       components["components/#{name}"] = script.textContent
     bundle = { components, data: {} }
-  else if opts.bundle is false
-    bundle = { components: {}, data: {} }
   else
     bundleUrl = "#{appBase}/bundle"
     res = await fetch(bundleUrl, cache: 'no-cache')

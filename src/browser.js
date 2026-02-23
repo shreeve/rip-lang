@@ -3,7 +3,7 @@
 
 export { Lexer } from './lexer.js';
 export { parser } from './parser.js';
-export { CodeGenerator, Compiler, compile, compileToJS, formatSExpr, getReactiveRuntime, getComponentRuntime } from './compiler.js';
+export { CodeGenerator, Compiler, compile, compileToJS, formatSExpr, getStdlibCode, getReactiveRuntime, getComponentRuntime } from './compiler.js';
 
 // Version info (replaced during build)
 export const VERSION = "0.0.0";
@@ -130,7 +130,7 @@ if (typeof globalThis !== 'undefined') {
   globalThis.rip = rip;
   globalThis.importRip = importRip;
   globalThis.compileToJS = compileToJS;
-  globalThis.__ripExports = { compile, compileToJS, formatSExpr, VERSION, BUILD_DATE, getReactiveRuntime, getComponentRuntime };
+  globalThis.__ripExports = { compile, compileToJS, formatSExpr, getStdlibCode, VERSION, BUILD_DATE, getReactiveRuntime, getComponentRuntime };
 }
 
 // Auto-launch: if app.rip is bundled and the page has component scripts or a data-url,
@@ -143,8 +143,8 @@ async function autoLaunch() {
   const cfg = document.querySelector('script[data-hash], script[data-url]');
   const url = cfg?.getAttribute('data-url') || '';
   const hash = cfg?.getAttribute('data-hash');
+  if (cfg?.hasAttribute('data-url') && !url) return;
   const opts = { hash: hash !== 'false' };
-  if (cfg?.hasAttribute('data-url') && !url) opts.bundle = false;
   await ui.launch(url, opts);
 }
 
