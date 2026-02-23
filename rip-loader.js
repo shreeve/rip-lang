@@ -1,16 +1,21 @@
 // Bun loader for .rip files
 
 import { plugin } from "bun";
-import { dirname } from "path";
+import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { compileToJS } from "./src/compiler.js";
 
-// Ensure NODE_PATH includes the node_modules where rip-lang is installed, so workers
-// (and any code running through this loader) can resolve @rip-lang/* packages even
-// when the script lives in a directory without its own node_modules.
-const _nodeModules = dirname(dirname(fileURLToPath(import.meta.url)));
-if (!process.env.NODE_PATH?.split(':').includes(_nodeModules)) {
-  process.env.NODE_PATH = [_nodeModules, process.env.NODE_PATH].filter(Boolean).join(':');
+// Resolution paths for @rip-lang/* packages: the loader's own node_modules tree,
+// plus the global bun install as a fallback (covers dev repo running outside workspace).
+const _loaderModules = dirname(dirname(fileURLToPath(import.meta.url)));
+const _globalModules = join(process.env.HOME || '', '.bun', 'install', 'global', 'node_modules');
+const _resolvePaths = [...new Set([_loaderModules, _globalModules])];
+
+// Set NODE_PATH so child processes can also resolve @rip-lang/* packages.
+for (const p of _resolvePaths) {
+  if (!process.env.NODE_PATH?.split(':').includes(p)) {
+    process.env.NODE_PATH = [p, process.env.NODE_PATH].filter(Boolean).join(':');
+  }
 }
 
 await plugin({
@@ -22,7 +27,18 @@ await plugin({
     build.onLoad({ filter: /\.rip$/ }, async (args) => {
       try {
         const source = readFileSync(args.path, "utf-8");
-        const js = compileToJS(source);
+        let js = compileToJS(source);
+
+        // Rewrite @rip-lang/* imports to absolute paths. Bun's worker threads
+        // don't respect NODE_PATH, and onResolve doesn't fire for imports in
+        // compiled source, so we resolve them here during compilation.
+        js = js.replace(/(from\s+|import\s*\()(['"])(@rip-lang\/[^'"]+)\2/g, (match, prefix, quote, specifier) => {
+          try {
+            return `${prefix}${quote}${require.resolve(specifier, { paths: _resolvePaths })}${quote}`;
+          } catch {
+            return match;
+          }
+        });
 
         return {
           contents: js,

@@ -35,7 +35,7 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": "^3.13.5"
+    "rip-lang": "^3.13.6"
   },
   "files": [
     "swarm.rip",
