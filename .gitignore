@@ -1,7 +1,5 @@
 # Dependencies
 node_modules/
-bun.lockb
-*.lock
 
 # Build artifacts
 zig-out/
