@@ -6,6 +6,7 @@ export Time = component
   selectedWeek := null
   cart := @app.data.cart or []
   error := null
+  cartDrawerOpen := false
 
   ~> @app.data.cart = cart
 
@@ -23,7 +24,6 @@ export Time = component
   currentSlots ~=
     found = sessions.find (s) -> s.week is selectedWeek
     found?.slots or []
-  cartTotal ~= cart.length
   priceDisplay ~= "$#{cart.length * 100}"
   isoWeek = (date) ->
     d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
@@ -66,6 +66,16 @@ export Time = component
   addChild: (idx) ->
     item = cart[idx]
     item.children = [...item.children, { name: '', age: '' }]
+    cart = [...cart]
+
+  removeChild: (cartIdx, childIdx) ->
+    item = cart[cartIdx]
+    return if item.children.length <= 1
+    item.children = item.children.filter (c, i) -> i isnt childIdx
+    cart = [...cart]
+
+  updateChild: (cartIdx, childIdx, field, e) ->
+    cart[cartIdx].children[childIdx][field] = e.target.value
     cart = [...cart]
 
   goToConfirm: ->
@@ -121,16 +131,20 @@ export Time = component
                 if cart.length > 0
                   .('flex flex-col')
                     for item, idx in cart
-                      .('flex flex-col gap-y-5 pb-6',
+                      .('flex flex-col gap-y-4 pb-6',
                         if idx > 0 then 'border-t border-primary pt-6' else '')
                         .('flex items-start justify-between')
                           .('flex flex-col gap-y-1')
                             span.('text-sm font-semibold') "Week #{item.week}"
                             span.('text-sm text-tertiary') item.slot
                           button.('rounded-lg px-2 py-1 text-tertiary transition-colors hover:text-brand active:pointer-coarse:text-brand active:pointer-fine:opacity-70') @click: (=> @removeFromCart(item.week, item.slot)), "✕"
-                        .('flex items-center gap-x-2')
-                          span.('text-sm text-tertiary') "#{item.children.length} child(ren)"
-                          button.('flex items-center gap-x-1.5 rounded-lg border border-dashed border-secondary bg-tertiary px-3 py-1.5 text-sm font-medium text-secondary transition-colors hover:border-tertiary active:bg-quaternary/65') @click: (=> @addChild(idx)), "+ Add"
+                        for child, cidx in item.children
+                          .('flex items-center gap-x-2')
+                            input.('w-0 flex-auto rounded-lg border border-primary bg-primary px-3 py-2 text-sm text-primary shadow-xs transition-colors focus:border-brand focus:ring-1 focus:ring-brand outline-none') type: "text", value: child.name, placeholder: "Child name", @input: (=> @updateChild(idx, cidx, 'name', event))
+                            input.('w-16 rounded-lg border border-primary bg-primary px-3 py-2 text-sm text-primary shadow-xs transition-colors focus:border-brand focus:ring-1 focus:ring-brand outline-none') type: "text", value: child.age, placeholder: "Age", @input: (=> @updateChild(idx, cidx, 'age', event))
+                            if item.children.length > 1
+                              button.('text-sm text-tertiary transition-colors hover:text-brand active:pointer-coarse:text-brand active:pointer-fine:opacity-70') @click: (=> @removeChild(idx, cidx)), "✕"
+                        button.('flex items-center gap-x-1.5 self-start rounded-lg border border-dashed border-secondary bg-tertiary px-3 py-1.5 text-sm font-medium text-secondary transition-colors hover:border-tertiary active:bg-quaternary/65') @click: (=> @addChild(idx)), "+ Add child"
 
                   .('border-t border-primary pt-6')
                     .('flex items-center justify-between')
@@ -140,10 +154,44 @@ export Time = component
               button.('flex w-full items-center justify-center rounded-lg bg-brand px-4 py-2.5 text-sm-plus font-semibold text-white transition-colors hover:bg-brand-hover active:bg-brand-active disabled:opacity-50') @click: @goToConfirm, disabled: (cart.length is 0),
                 "Continue"
 
+      # Mobile cart drawer
+      if cart.length > 0
+        Drawer open: cartDrawerOpen, @close: (=> cartDrawerOpen = false)
+          .('px-5 pb-8 pt-2')
+            .('flex items-center justify-between')
+              .('text-lg font-semibold') "One-on-One Swim Lesson"
+              button.('rounded-lg px-2 py-1 text-tertiary transition-colors hover:text-brand') @click: (=> cartDrawerOpen = false), "✕"
+            .('mt-1 text-sm-plus text-tertiary') "Streamline Swim School"
+
+            .('mt-6 flex flex-col')
+              for item, idx in cart
+                .('flex flex-col gap-y-4 pb-6',
+                  if idx > 0 then 'border-t border-primary pt-6' else '')
+                  .('flex items-start justify-between')
+                    .('flex flex-col gap-y-1')
+                      span.('text-sm font-semibold') "Week #{item.week}"
+                      span.('text-sm text-tertiary') item.slot
+                    button.('rounded-lg px-2 py-1 text-tertiary transition-colors hover:text-brand active:pointer-coarse:text-brand active:pointer-fine:opacity-70') @click: (=> @removeFromCart(item.week, item.slot)), "✕"
+                  for child, cidx in item.children
+                    .('flex items-center gap-x-2')
+                      input.('w-0 flex-auto rounded-lg border border-primary bg-primary px-3 py-2 text-sm text-primary shadow-xs transition-colors focus:border-brand focus:ring-1 focus:ring-brand outline-none') type: "text", value: child.name, placeholder: "Child name", @input: (=> @updateChild(idx, cidx, 'name', event))
+                      input.('w-16 rounded-lg border border-primary bg-primary px-3 py-2 text-sm text-primary shadow-xs transition-colors focus:border-brand focus:ring-1 focus:ring-brand outline-none') type: "text", value: child.age, placeholder: "Age", @input: (=> @updateChild(idx, cidx, 'age', event))
+                      if item.children.length > 1
+                        button.('text-sm text-tertiary transition-colors hover:text-brand active:pointer-coarse:text-brand active:pointer-fine:opacity-70') @click: (=> @removeChild(idx, cidx)), "✕"
+                  button.('flex items-center gap-x-1.5 self-start rounded-lg border border-dashed border-secondary bg-tertiary px-3 py-1.5 text-sm font-medium text-secondary transition-colors hover:border-tertiary active:bg-quaternary/65') @click: (=> @addChild(idx)), "+ Add child"
+
+            .('mt-6 border-t border-primary pt-6')
+              .('flex items-center justify-between')
+                .('text-base-plus font-semibold leading-none') "Total"
+                .('text-base-plus font-semibold leading-none') priceDisplay
+
+            button.('mt-6 flex w-full items-center justify-center rounded-lg bg-brand px-4 py-2.5 text-sm-plus font-semibold text-white transition-colors hover:bg-brand-hover active:bg-brand-active disabled:opacity-50') @click: @goToConfirm, disabled: (cart.length is 0),
+              "Continue"
+
       # Mobile sticky cart footer
       unless loading or error
         .('fixed right-0 bottom-0 left-0 z-40 flex h-20 items-center justify-between border-t border-primary bg-primary px-5 lg:hidden')
-          .
+          button.('flex flex-col text-left') @click: (=> cartDrawerOpen = true),
             .('text-sm text-tertiary') "Added"
             .('-mt-0.5 text-sm-plus font-medium') "#{cart.length} session#{if cart.length is 1 then '' else 's'}"
           button.('flex w-46 items-center justify-center rounded-lg bg-brand px-4 py-2.5 text-sm-plus font-semibold text-white transition-colors hover:bg-brand-hover active:bg-brand-active disabled:opacity-50 md:w-56') @click: @goToConfirm, disabled: (cart.length is 0),

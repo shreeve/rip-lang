@@ -1,7 +1,6 @@
 # Apple Sign-in Authentication
 #
-# Minimal implementation for verifying Apple ID tokens.
-# Based on apple-signin-auth but simplified for Rip (~150 lines vs ~450 lines).
+# Verifies Apple ID tokens using shared JWT utilities.
 #
 # ==============================================================================
 # EXPORTS
@@ -73,131 +72,20 @@
 #   - Only happens once per worker lifetime (until key rotation)
 #
 
-import { createPublicKey, verify } from 'node:crypto'
+import { JWKCache, verifyToken } from './jwt.rip'
 
-# Apple's public keys endpoint
-APPLE_KEYS_URL = 'https://appleid.apple.com/auth/keys'
-APPLE_ISSUER   = 'https://appleid.apple.com'
-
-# Cache for Apple's public keys { kid: publicKey }
-keysCache = {}
-
-# ==============================================================================
-# Helpers
-# ==============================================================================
-
-# Base64URL decode (JWT uses base64url, not standard base64)
-base64UrlDecode = (str) ->
-  # Replace URL-safe chars and add padding
-  base64 = str.replace(/-/g, '+').replace(/_/g, '/')
-  pad = base64.length % 4
-  base64 += '=' for i in [0...pad] if pad
-  Buffer.from base64, 'base64'
-
-# Decode JWT without verification (to get header)
-decodeJwt = (token) ->
-  parts = token.split '.'
-  if parts.length isnt 3
-    throw new Error 'Invalid JWT format'
-
-  header:  JSON.parse base64UrlDecode(parts[0]).toString()
-  payload: JSON.parse base64UrlDecode(parts[1]).toString()
-  signature: parts[2]
-
-# ==============================================================================
-# Apple Public Keys
-# ==============================================================================
-
-# Fetch Apple's public keys and cache them
-fetchAppleKeys = ->
-  res = fetch! APPLE_KEYS_URL
-  if not res.ok
-    throw new Error "Failed to fetch Apple keys: #{res.status}"
-
-  data = res.json!
-  keysCache = {}  # Clear cache
-
-  for key in data.keys
-    # Convert JWK to PEM format
-    jwk =
-      kty: key.kty
-      n: key.n
-      e: key.e
-      alg: key.alg
-      use: key.use
-
-    publicKey = createPublicKey { key: jwk, format: 'jwk' }
-    keysCache[key.kid] = publicKey
-
-  keysCache
-
-# Get public key for a specific kid, fetching if not cached
-getPublicKey = (kid) ->
-  return keysCache[kid] if keysCache[kid]
-
-  # Fetch fresh keys
-  fetchAppleKeys!
-
-  if not keysCache[kid]
-    throw new Error "Apple public key not found for kid: #{kid}"
-  keysCache[kid]
-
-# ==============================================================================
-# Token Verification
-# ==============================================================================
+APPLE_KEYS = JWKCache 'https://appleid.apple.com/auth/keys'
 
 # Verify an Apple ID token and return the payload
 # Returns: { sub, email, email_verified, iss, aud, iat, exp, ... }
 export verifyIdToken = (idToken, options = {}) ->
-  if not idToken
-    throw new Error 'idToken is required'
-
-  # Decode without verification first (to get kid from header)
-  decoded = decodeJwt idToken
-  { header, payload } = decoded
-
-  # Validate algorithm
-  if header.alg isnt 'RS256'
-    throw new Error "Invalid algorithm: #{header.alg}"
-
-  # Get the public key for this token
-  publicKey = getPublicKey! header.kid
-
-  # Verify signature
-  parts = idToken.split '.'
-  signedData = "#{parts[0]}.#{parts[1]}"
-  signature = base64UrlDecode parts[2]
-
-  isValid = verify 'RSA-SHA256', Buffer.from(signedData), publicKey, signature
-  if not isValid
-    throw new Error 'Invalid token signature'
-
-  # Validate issuer
-  if payload.iss isnt APPLE_ISSUER
-    throw new Error "Invalid issuer: #{payload.iss}"
-
-  # Validate audience if provided
-  if options.audience
-    audiences = if Array.isArray(options.audience) then options.audience else [options.audience]
-    if payload.aud not in audiences
-      throw new Error "Invalid audience: #{payload.aud}"
-
-  # Validate expiration (unless ignoreExpiration is set)
-  if not options.ignoreExpiration
-    now = Math.floor(Date.now() / 1000)
-    if payload.exp and payload.exp < now
-      throw new Error 'Token has expired'
-
-  # Return the verified payload
-  payload
-
-# ==============================================================================
-# Utility Exports
-# ==============================================================================
+  verifyToken! idToken, APPLE_KEYS,
+    issuer:           'https://appleid.apple.com'
+    audience:         options.audience
+    ignoreExpiration: options.ignoreExpiration
 
 # Pre-fetch and cache Apple's keys (call on startup for faster first request)
-export prefetchKeys = ->
-  fetchAppleKeys!
+export prefetchKeys = -> APPLE_KEYS.prefetch!
 
 # Get user email from token (convenience function)
 export getEmail = (idToken) ->

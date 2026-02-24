@@ -33,7 +33,9 @@ get '/ping' ->
 get '/config' ->
   now: new Date().toISOString()
   app: config.app
-  dbUrl: config['database.url']
+  oauth:
+    googleClientId: config.google?.oauth?.clientId or null
+    appleClientId:  config.apple?.clientId or null
 
 # SPA fallback for client-side routing
 get '/*' -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
