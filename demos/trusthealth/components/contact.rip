@@ -19,6 +19,12 @@ export Contact = component
 
   send: -> success = true
 
+  mounted: ->
+    @_onKeydown = (e) -> @close() if e.key is 'Escape' and contactOpen
+    document.addEventListener 'keydown', @_onKeydown
+  unmounted: ->
+    document.removeEventListener 'keydown', @_onKeydown
+
   render
     .('dialog-overlay', contactOpen and 'open')
       @click: (-> @close())

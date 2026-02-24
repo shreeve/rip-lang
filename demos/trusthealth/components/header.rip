@@ -9,6 +9,10 @@ export Header = component
 
   scrollTo: (section) ->
     mobileNavOpen = false
+    activeSection = section
+    @_scrolling = true
+    clearTimeout @_scrollTimer
+    @_scrollTimer = setTimeout (-> @_scrolling = false), 1000
     el = document.getElementById(section)
     if el
       headerH = document.querySelector('.site-header')?.offsetHeight or 70
@@ -18,6 +22,7 @@ export Header = component
   onScroll: ->
     headerH = document.querySelector('.site-header')?.offsetHeight or 70
     opaque = window.scrollY > headerH
+    return if @_scrolling
 
     teamEl  = document.getElementById('team')
     aboutEl = document.getElementById('about')
@@ -29,8 +34,20 @@ export Header = component
     else
       activeSection = 'intro'
 
-  mounted:   -> window.addEventListener 'scroll', @onScroll, passive: true
-  unmounted: -> window.removeEventListener 'scroll', @onScroll
+  mounted: ->
+    @_onScroll = -> @onScroll()
+    @_onClick = (e) ->
+      if mobileNavOpen and not e.target.closest('.mobile-nav-toggle')
+        mobileNavOpen = false
+    @_onKeydown = (e) ->
+      mobileNavOpen = false if e.key is 'Escape'
+    window.addEventListener 'scroll', @_onScroll, passive: true
+    document.addEventListener 'click', @_onClick
+    document.addEventListener 'keydown', @_onKeydown
+  unmounted: ->
+    window.removeEventListener 'scroll', @_onScroll
+    document.removeEventListener 'click', @_onClick
+    document.removeEventListener 'keydown', @_onKeydown
 
   render
     header.('site-header', opaque and 'opaque')
@@ -48,6 +65,6 @@ export Header = component
           a @click: (-> contactOpen = true; mobileNavOpen = false), "Contact"
 
         nav.('nav desktop-nav')
-          a.('', activeSection is 'team' and 'active') @click: (-> @scrollTo('team')), "Team"
-          a.('', activeSection is 'about' and 'active') @click: (-> @scrollTo('about')), "About"
-          a @click: (-> contactOpen = true), "Contact"
+          a.('', not contactOpen and activeSection is 'team' and 'active') @click: (-> @scrollTo('team')), "Team"
+          a.('', not contactOpen and activeSection is 'about' and 'active') @click: (-> @scrollTo('about')), "About"
+          a.('', contactOpen and 'active') @click: (-> contactOpen = true), "Contact"

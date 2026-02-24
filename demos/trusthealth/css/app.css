@@ -102,6 +102,7 @@ img { max-width: 100%; height: auto; }
   color: white;
   background: none;
   border: none;
+  outline: none;
   font-family: inherit;
   line-height: 1;
 }
@@ -131,7 +132,7 @@ img { max-width: 100%; height: auto; }
 
 .mobile-nav .close-btn {
   position: absolute;
-  top: 5px; right: 6px;
+  top: 15px; right: 6px;
   padding: 0 10px;
   font-size: 23px;
   cursor: pointer;
@@ -172,10 +173,9 @@ img { max-width: 100%; height: auto; }
 @media (min-width: 992px)  { .desktop-nav > a { font-size: 17px; height: 40px; padding: 0 17px; } }
 @media (min-width: 1500px) { .desktop-nav > a { font-size: 17.5px; } }
 
-.desktop-nav > a:last-child { padding-right: 0; }
 .desktop-nav > a:hover { color: rgba(255, 255, 255, 0.75); }
-.desktop-nav > a.active { background: rgba(69, 131, 213, 0.12); color: var(--color-text); }
-.desktop-nav > a.active:hover { color: var(--color-text); }
+.desktop-nav > a.active { background: rgba(255, 255, 255, 0.15); }
+.desktop-nav > a.active:hover { color: white; }
 
 .site-header.opaque .desktop-nav > a { color: rgba(18, 39, 64, 0.85); }
 .site-header.opaque .desktop-nav > a:hover { color: rgba(18, 39, 64, 0.6); }
@@ -222,13 +222,14 @@ img { max-width: 100%; height: auto; }
 
 .slide .panel {
   position: absolute;
-  top: 120px;
+  top: 140px;
   max-width: 420px;
   margin-right: 20px;
   padding: 22px;
   background: rgba(255, 255, 255, 0.92);
   border-radius: var(--border-radius-card);
   backdrop-filter: blur(8px);
+  transition: top 0.3s ease, padding 0.3s ease, max-width 0.3s ease, background 0.3s ease;
 }
 @media (min-width: 768px)  { .slide .panel { top: 150px; padding: 30px; max-width: 480px; } }
 @media (min-width: 992px)  { .slide .panel { top: 180px; padding: 33px; max-width: 530px; background: rgba(255, 255, 255, 0.88); } }
@@ -305,6 +306,8 @@ img { max-width: 100%; height: auto; }
   border-radius: var(--border-radius);
   height: var(--selection-height);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+.selection-indicator.ready {
   transition: 0.35s cubic-bezier(0.35, 0.91, 0.33, 0.97);
 }
 

@@ -2,6 +2,7 @@
 
 export Intro = component
   current := 0
+  ready := false
 
   slides := [
     { name: 'Logistics',  heading: 'Logistics and Supply Chain',  subheading: 'Facilitating complex, multi-party transactions in the healthcare and manufacturing industries.',           image: '/images/intro/logistics.jpg',  icon: '🚚', color: '#77aaf8' }
@@ -13,7 +14,9 @@ export Intro = component
     current = i
     clearInterval @_timer if @_timer
 
-  mounted:   -> @_timer = setInterval (-> current = (current + 1) % slides.length), 4000
+  mounted: ->
+    @_timer = setInterval (-> current = (current + 1) % slides.length), 4000
+    setTimeout (-> ready = true), 100
   unmounted: -> clearInterval @_timer if @_timer
 
   selectionStyle ~=
@@ -45,7 +48,7 @@ export Intro = component
       .slider-controls-desktop
         div
           .selection-wrapper
-            .selection-indicator style: selectionStyle
+            .('selection-indicator', ready and 'ready') style: selectionStyle
           .slider-items
             for slide, i in slides
               .slider-item @click: (-> @goTo(i))
