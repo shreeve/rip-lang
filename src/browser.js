@@ -79,7 +79,15 @@ async function processRipScripts() {
     }
 
     if (compiled.length > 0) {
-      const js = compiled.join('\n');
+      let js = compiled.join('\n');
+
+      // 3b. data-mount: append component mount call inside the shared IIFE
+      const mount = runtimeTag?.getAttribute('data-mount');
+      if (mount) {
+        const target = runtimeTag.getAttribute('data-target') || 'body';
+        js += `\n${mount}.new().mount(${JSON.stringify(target)});`;
+      }
+
       try {
         await (0, eval)(`(async()=>{\n${js}\n})()`);
       } catch (e) {

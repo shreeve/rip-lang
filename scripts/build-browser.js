@@ -4,9 +4,7 @@ import { readFileSync, writeFileSync, unlinkSync } from 'fs';
 import { brotliCompressSync } from 'zlib';
 import { compileToJS } from '../src/compiler.js';
 
-const debug = process.argv.includes('--debug');
-
-console.log(`Building browser bundle${debug ? ' (with unminified)' : ''}...\n`);
+console.log('Building browser bundle...\n');
 
 const packageJson = JSON.parse(readFileSync('./package.json', 'utf-8'));
 const version = packageJson.version;
@@ -50,7 +48,7 @@ async function build(entrypoints, name, minify) {
   }
 }
 
-if (debug) await build(['./docs/dist/_entry.js'], 'rip.js', false);
+await build(['./docs/dist/_entry.js'], 'rip.js', false);
 await build(['./docs/dist/_entry.js'], 'rip.min.js', true);
 
 // Clean up intermediates

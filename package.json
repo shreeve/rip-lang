@@ -32,7 +32,6 @@
   ],
   "scripts": {
     "build": "bun scripts/build-browser.js",
-    "build:debug": "bun scripts/build-browser.js --debug",
     "bump": "bun scripts/bump-version.js",
     "parser": "bun src/grammar/solar.rip -o src/parser.js src/grammar/grammar.rip",
     "serve": "bun scripts/serve.js",

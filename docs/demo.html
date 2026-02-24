@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-  <script defer src="dist/rip.min.js"></script>
+  <script defer src="dist/rip.min.js" data-mount="Dashboard"></script>
   <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -1011,10 +1011,6 @@ export Dashboard = component
       ChartCard title: 'Hemoglobin A1c Distribution'       , subtitle: 'Population distribution of A1c results (green: normal, yellow: pre-diabetic, red: diabetic)', chartId: 'a1c', wide: true
       ChartCard title: 'Cholesterol by Age (±1σ)', subtitle: 'Average total cholesterol with standard deviation band and trend line',                       chartId: 'cholesterolBand', wide: true
       ChartCard title: 'Total Cholesterol by Age'          , subtitle: 'Average total cholesterol vs patient age with trend line',                                    chartId: 'cholesterol'
-</script>
-
-<script type="text/rip">
-Dashboard.new().mount('body')
 </script>
 
 </body>
