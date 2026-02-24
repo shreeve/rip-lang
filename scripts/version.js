@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-// bump-version.js — Automated release script for rip-lang
+// version.js — Automated release script for rip-lang
 //
 // Usage:
 //   bun run bump           # bump patch (default)

@@ -31,8 +31,8 @@
     "CHANGELOG.md"
   ],
   "scripts": {
-    "build": "bun scripts/build-browser.js",
-    "bump": "bun scripts/bump-version.js",
+    "build": "bun scripts/build.js",
+    "bump": "bun scripts/version.js",
     "parser": "bun src/grammar/solar.rip -o src/parser.js src/grammar/grammar.rip",
     "serve": "bun scripts/serve.js",
     "test": "bun test/runner.js",
