@@ -5,7 +5,6 @@ bun.lockb
 # Build output
 zig-out/
 .zig-cache/
-docs/dist/rip.js
 packages/vscode/dist/
 
 # OS files
