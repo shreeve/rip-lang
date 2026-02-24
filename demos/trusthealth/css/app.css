@@ -222,7 +222,7 @@ img { max-width: 100%; height: auto; }
 
 .slide .panel {
   position: absolute;
-  top: 140px;
+  top: 180px;
   max-width: 420px;
   margin-right: 20px;
   padding: 22px;
@@ -231,8 +231,8 @@ img { max-width: 100%; height: auto; }
   backdrop-filter: blur(8px);
   transition: top 0.3s ease, padding 0.3s ease, max-width 0.3s ease, background 0.3s ease;
 }
-@media (min-width: 768px)  { .slide .panel { top: 150px; padding: 30px; max-width: 480px; } }
-@media (min-width: 992px)  { .slide .panel { top: 180px; padding: 33px; max-width: 530px; background: rgba(255, 255, 255, 0.88); } }
+@media (min-width: 768px)  { .slide .panel { top: 225px; padding: 30px; max-width: 480px; } }
+@media (min-width: 992px)  { .slide .panel { top: 255px; padding: 33px; max-width: 530px; background: rgba(255, 255, 255, 0.88); } }
 @media (min-width: 1500px) { .slide .panel { padding: 37px; } }
 
 .slide .heading { font-size: 22px; color: var(--color-text); font-weight: 800; }
