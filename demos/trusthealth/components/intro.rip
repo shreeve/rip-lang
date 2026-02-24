@@ -21,7 +21,7 @@ export Intro = component
 
   selectionStyle ~=
     items = document.querySelectorAll('.slider-item')
-    return 'width:0' unless items and items.length > 0
+    return 'width:0' unless ready and items and items.length > 0
     w = items[current]?.offsetWidth or 0
     offset = 0
     i = 0
