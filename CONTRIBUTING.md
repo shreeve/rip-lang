@@ -350,7 +350,7 @@ bun test/runner.js test/rip/RELEVANT_FILE.rip  # Verify they fail
 bun run test  # All tests must pass
 
 # 7. Build browser bundle (if code changes)
-bun run build  # Updates web REPL
+bun run build  # Rebuilds rip.min.js (compiler + UI framework)
 
 # 8. Update documentation
 # - README.md (if user-facing change)
