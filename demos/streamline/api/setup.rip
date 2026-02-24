@@ -19,31 +19,19 @@ dbFetch = (sql, params) ->
     headers: { 'Content-Type': 'application/json' }
     body: JSON.stringify body
   data = res.json!
-  if data.error
-    console.warn "[setup] SQL warning: #{data.error}"
+  warn "[setup] SQL warning: #{data.error}" if data.error
   data
 
 export setup = ->
   check = dbFetch! "SELECT count(*) FROM information_schema.tables WHERE table_name = 'spots'"
-  if check.data and check.data[0] and check.data[0][0] > 0
-    return
+  return if check.data?[0]?[0] > 0
 
-  # Create tables from schema DDL (IF NOT EXISTS handles concurrent workers)
-  ddl = schema.toSQL()
-  for statement in ddl.split(';').filter((s) -> s.trim())
-    safe = statement.trim()
-    safe = safe.replace 'CREATE TABLE ', 'CREATE TABLE IF NOT EXISTS '
-    safe = safe.replace 'CREATE TYPE ', 'CREATE TYPE IF NOT EXISTS '
-    safe = safe.replace 'CREATE INDEX ', 'CREATE INDEX IF NOT EXISTS '
-    safe = safe.replace 'CREATE UNIQUE INDEX ', 'CREATE UNIQUE INDEX IF NOT EXISTS '
-    dbFetch! safe + ';'
-  console.log '[setup] Database tables created'
+  for stmt in schema.toSQL().split(';')
+    dbFetch! stmt.trim() + ';' if stmt.trim()
+  p '[setup] Tables created'
 
-  # Seed spots only if table is empty (another worker may have already seeded)
-  check = dbFetch! 'SELECT count(*) FROM spots'
-  if check.data and check.data[0] and check.data[0][0] is 0
-    for week in [1, 2, 3, 4]
-      for slot in ['09:00', '10:00', '11:00', '14:00']
-        for i in [1..4]
-          dbFetch! 'INSERT INTO spots (week, slot) VALUES (?, ?)', [week, slot]
-    console.log '[setup] Seeded spots for weeks 1-4'
+  for week in [1, 2, 3, 4]
+    for slot in ['09:00', '10:00', '11:00', '14:00']
+      for i in [1..4]
+        dbFetch! 'INSERT INTO spots (week, slot) VALUES (?, ?)', [week, slot]
+  p '[setup] Seeded spots for weeks 1-4'
