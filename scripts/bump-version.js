@@ -90,7 +90,6 @@ write('README.md', readme);
 
 const dirs = packageDirs();
 const changed = [];
-const unchanged = [];
 
 // Fetch all published versions in parallel
 const pkgEntries = dirs.filter(d => d !== 'all').map(dir => {
@@ -113,8 +112,6 @@ for (let i = 0; i < pkgEntries.length; i++) {
     const diff = run(`git diff HEAD -- packages/${dir}/`, { throws: false });
     if (diff && diff.length > 0) {
       changed.push({ dir, pkg, pkgPath, reason: 'uncommitted changes' });
-    } else {
-      unchanged.push({ dir, pkg, pkgPath });
     }
   }
 }
@@ -207,8 +204,10 @@ console.log('\nCommitting...');
 const pkgList = bumped.map(b => `  ${b.name}@${b.new}`).join('\n');
 const commitMsg = `Release rip-lang ${newVersion}\n\n${pkgList}`;
 
+const msgFile = join(ROOT, '.git', 'COMMIT_MSG');
+writeFileSync(msgFile, commitMsg);
 run('git add -A');
-run(`git commit -m "${commitMsg.replace(/"/g, '\\"')}"`);
+run(`git commit -F ${msgFile}`);
 run('git push');
 console.log('  ✓ committed and pushed');
 

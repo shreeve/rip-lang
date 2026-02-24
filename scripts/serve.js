@@ -38,8 +38,8 @@ function handleRequest(req) {
   }
 
   // Redirect /dir to /dir/ if it's a directory
-  if (!pathname.endsWith('/') && !extname(pathname) && existsSync(join(ROOT, pathname)) && statSync(join(ROOT, pathname)).isDirectory()) {
-    return Response.redirect(pathname + '/', 301);
+  if (!pathname.endsWith('/') && !extname(pathname)) {
+    try { if (statSync(join(ROOT, pathname)).isDirectory()) return Response.redirect(pathname + '/', 301); } catch {}
   }
 
   // Default to index.html for directory requests
