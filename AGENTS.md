@@ -50,7 +50,7 @@ rip-lang/
 │   ├── types.js         # Type System — sidecar for lexer (1,099 LOC)
 │   ├── components.js    # Component System — sidecar for compiler (1,877 LOC)
 │   ├── sourcemaps.js    # Source Map V3 generator (189 LOC)
-│   ├── tags.js          # HTML tag classification (62 LOC)
+│   ├── typecheck.js     # Shared type-checking infrastructure (443 LOC)
 │   ├── parser.js        # Generated parser (357 LOC) — Don't edit!
 │   ├── repl.js          # Terminal REPL (601 LOC)
 │   ├── browser.js       # Browser integration (~150 LOC)
@@ -88,7 +88,6 @@ rip-lang/
 | `src/grammar/grammar.rip` | Carefully | Run `bun run parser` after changes |
 | `src/parser.js` | Never | Generated file |
 | `src/sourcemaps.js` | Yes | Source map generator |
-| `src/tags.js` | Yes | HTML tag classification |
 | `src/browser.js` | Yes | Browser entry point (shared-scope loader) |
 | `rip-loader.js` | Yes | Bun plugin — compiles .rip files + rewrites @rip-lang/* imports |
 | `src/grammar/solar.rip` | Never | Parser generator (given) |
