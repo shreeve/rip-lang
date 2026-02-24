@@ -33,7 +33,7 @@ bun run browser
 
 | Metric | Value |
 |--------|-------|
-| Version | 3.13.3 |
+| Version | 3.13.7 |
 | Tests | 1,251 |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
@@ -53,7 +53,7 @@ rip-lang/
 │   ├── tags.js          # HTML tag classification (62 LOC)
 │   ├── parser.js        # Generated parser (357 LOC) — Don't edit!
 │   ├── repl.js          # Terminal REPL (601 LOC)
-│   ├── browser.js       # Browser integration (167 LOC)
+│   ├── browser.js       # Browser integration (~150 LOC)
 │   └── grammar/
 │       ├── grammar.rip  # Grammar specification (944 LOC)
 │       ├── lunar.rip    # Recursive descent parser generator (2,412 LOC)
@@ -66,6 +66,8 @@ rip-lang/
 │   ├── schema/          # @rip-lang/schema — ORM + validation
 │   ├── swarm/           # @rip-lang/swarm — Parallel job runner
 │   ├── csv/             # @rip-lang/csv — CSV parser + writer
+│   ├── http/            # @rip-lang/http — HTTP client (ky-inspired)
+│   ├── print/           # @rip-lang/print — Syntax-highlighted code printer
 │   └── vscode/          # VS Code/Cursor extension
 ├── docs/
 │   ├── RIP-LANG.md      # Language reference (includes reactivity, future ideas)
@@ -87,6 +89,8 @@ rip-lang/
 | `src/parser.js` | Never | Generated file |
 | `src/sourcemaps.js` | Yes | Source map generator |
 | `src/tags.js` | Yes | HTML tag classification |
+| `src/browser.js` | Yes | Browser entry point (shared-scope loader) |
+| `rip-loader.js` | Yes | Bun plugin — compiles .rip files + rewrites @rip-lang/* imports |
 | `src/grammar/solar.rip` | Never | Parser generator (given) |
 | `test/rip/*.rip` | Yes | Test files |
 
@@ -488,8 +492,8 @@ primitives directly — one signal graph shared between framework and components
 | `serve.rip` | ~93 | Server middleware: framework bundle, app bundle, SSE hot-reload |
 
 Key concepts:
-- **Auto-launch** — `rip-ui.min.js` auto-detects `<script type="text/rip" data-name="...">` components and calls `launch()` automatically. Hash routing is on by default. Configure via `data-url` and `data-hash` attributes on the script tag. No bootstrap script needed.
-- **`serve` middleware** — `use serve dir: dir` registers routes for the framework bundle (`/rip/rip.min.js`), app bundle (`/{app}/bundle`), and SSE hot-reload (`/{app}/watch`). Defaults: routes in `routes/`, shared components in `components/`.
+- **Shared scope** — Inline `<script type="text/rip">` tags are compiled and executed in one shared IIFE. Components use `export` to make themselves visible to other tags; exports are stripped to `const` declarations in the shared scope.
+- **Server mode** — When `data-url` is present on a script tag, the `serve` middleware provides the bundle. `use serve dir: dir` registers routes for the framework bundle (`/rip/rip.min.js`), app bundle (`/{app}/bundle`), and SSE hot-reload (`/{app}/watch`).
 - **`launch(appBase)`** — Client-side: fetches the app bundle, hydrates the stash, starts the router and renderer
 - **`component` / `render`** — Two keywords added to Rip for defining components with reactive state (`:=`), computed (`~=`), effects (`~>`)
 - **File-based routing** — `pages/users/[id].rip` → `/users/:id` (Next.js-style). Shared components go in `components/`.
@@ -527,8 +531,10 @@ rip-server -w    # Start with file watching + hot-reload
 
 - **@rip-lang/db** — DuckDB server with official UI + ActiveRecord-style client (`db.rip` ~388 lines, `client.rip` ~290 lines)
 - **@rip-lang/schema** — ORM + validation with declarative syntax (~505 lines)
-- **@rip-lang/swarm** — Parallel job runner with worker threads (~379 lines)
+- **@rip-lang/swarm** — Parallel job runner with worker threads (~384 lines). Workers get the rip-loader via path walking from swarm's own `import.meta.url` (not `require.resolve`, which fails from directories without `node_modules`).
 - **@rip-lang/csv** — CSV parser + writer with indexOf ratchet engine (~432 lines)
+- **@rip-lang/http** — Zero-dependency HTTP client (ky-inspired convenience over native fetch)
+- **@rip-lang/print** — Syntax-highlighted code printer using highlight.js (190+ languages). Serves once, caches via service worker for offline refresh.
 
 ### Package Development
 
@@ -547,25 +553,34 @@ are correct. Key patterns:
 
 ## Browser Runtime
 
-`src/browser.js` (~167 LOC) provides the browser entry point. When loaded,
-it registers key functions on `globalThis` and processes inline Rip scripts.
+`src/browser.js` (~150 LOC) provides the browser entry point. The browser
+bundle (`docs/dist/rip.min.js`) is built as an IIFE and loaded with
+`<script defer>` (not `type="module"` — this allows `file://` loading
+without CORS issues).
+
+### Shared-Scope Model
+
+All `<script type="text/rip">` tags (inline or `src`) are compiled and
+executed together in ONE shared async IIFE. Components defined with `export`
+in one script tag are visible to all subsequent tags (exports are stripped
+via the `stripExports` compiler option, becoming plain `const` declarations
+in the shared scope).
 
 ### Key Features
 
-- **Auto-launch** — When bundled as `rip-ui.min.js`, auto-detects
-  `<script type="text/rip" data-name="...">` component scripts and calls
-  `launch()` automatically with hash routing enabled by default. Configure
-  via `data-url` and `data-hash` attributes on the script tag. A
-  `__ripLaunched` flag prevents double-launch if `launch()` is called manually.
-- **`<script type="text/rip">`** — Inline Rip code compiled and executed on
-  `DOMContentLoaded`. Uses an async IIFE wrapper so `!` (await) works.
-  Scripts with `data-name` are reserved as component sources (not executed).
+- **`processRipScripts()`** — Collects all sources (inline script tags +
+  `data-src` URLs on the runtime tag), fetches external files in parallel,
+  compiles all with `{ skipRuntimes: true, stripExports: true }`, and
+  executes as one shared async IIFE.
+- **Server mode** — When `data-url` is present on a script tag, `launch()`
+  is called with `bundleUrl` for backward compat with `serve` middleware.
 - **`rip()` console REPL** — Wraps code in a Rip `do ->` block before
   compiling, so the compiler handles implicit return and auto-async natively.
   Sync code returns values directly; async code returns a Promise.
 - **`importRip(url)`** — Fetches a `.rip` file, compiles it, imports as an
   ES module via blob URL.
-- **`globalThis.__rip`** — Reactive runtime registered eagerly on load.
+- **Eager runtime registration** — Both reactive (`__rip`) and component
+  (`__ripComponent`) runtimes are registered on `globalThis` at load time.
 
 ### globalThis Registrations
 
@@ -575,12 +590,57 @@ it registers key functions on `globalThis` and processes inline Rip scripts.
 | `importRip(url)` | Fetch, compile, and import a `.rip` file |
 | `compileToJS(code)` | Compile Rip source to JavaScript |
 | `__rip` | Reactive primitives (`__state`, `__computed`, `__effect`, `__batch`) |
+| `__ripComponent` | Component runtime (`__component`, `__render`, etc.) |
+
+### Compiler Options for Browser
+
+| Option | Purpose |
+|--------|---------|
+| `stripExports` | Suppresses `export` keywords in codegen — `export const X` becomes `const X` |
+| `skipRuntimes` | Skips reactive/component runtime blocks (already on `globalThis`), uses `var` for helpers to allow safe re-emission across concatenated files |
 
 ### Variable Persistence in `rip()`
 
 `let` declarations are stripped (bare assignments create globals in sloppy
 mode eval). `const` is hoisted to `globalThis.` explicitly. This allows
 variables to persist across `rip()` calls in the browser console.
+
+---
+
+## Rip Loader (`rip-loader.js`)
+
+The rip-loader is a Bun plugin that compiles `.rip` files on the fly. It's
+preloaded via `--preload rip-loader.js` (by `bin/rip`) or via `bunfig.toml`
+(in the dev workspace). It does two things:
+
+1. **Compiles `.rip` files** — Registers a Bun plugin with `onLoad` for
+   `/\.rip$/` that reads the source, compiles to JS via `compileToJS()`,
+   and returns the compiled code.
+
+2. **Rewrites `@rip-lang/*` imports to absolute paths** — After compilation,
+   a regex replaces `@rip-lang/*` import specifiers with absolute filesystem
+   paths resolved via `import.meta.resolve()`. This is necessary because
+   Bun's worker threads don't respect `NODE_PATH`, and `onResolve` doesn't
+   fire for imports in compiled source. Since the rip-loader lives inside
+   the global `node_modules` tree, `import.meta.resolve` finds sibling
+   `@rip-lang/*` packages naturally.
+
+### `bin/rip` Environment Setup
+
+The `rip` binary sets `NODE_PATH` to include its parent `node_modules`
+directory and passes `env: process.env` explicitly to all `spawn`/`spawnSync`
+calls. This is needed because Bun has a bug where `process.env` modifications
+are not inherited by child processes unless `env` is passed explicitly.
+
+### Known Bun Bugs/Limitations (as of Bun v1.3.9)
+
+| Bug | Workaround |
+|-----|-----------|
+| `process.env` changes not inherited by `spawn`/`spawnSync` | Pass `env: process.env` explicitly |
+| `NODE_PATH` ignored by worker threads | Rewrite imports to absolute paths in `onLoad` |
+| Plugin `onResolve` doesn't fire for imports in `onLoad`-compiled source | Do import rewriting inside `onLoad` instead |
+| `require.resolve({ paths })` ignores `paths` inside plugin handlers | Use `import.meta.resolve` instead |
+| Bare `try` without `catch` compiles to invalid JS in Rip | Always include explicit `catch` block |
 
 ---
 
@@ -597,9 +657,10 @@ Three playground versions and a demo app in `docs/`, all single HTML files with 
 
 All three playgrounds share: same CSS, same Monarch tokenizer, same default code sample, same 16 features (live compiler, REPL, example snippets, theme select, dark/light mode, 5 output toggles, resizable panes, source persistence, URL hash routing, keyboard shortcuts).
 
-`demo.html` is a self-contained Rip UI Demo app — all 6 components and CSS inlined, hash-based routing for static hosting. No server required.
+`demo.html` is a self-contained Rip UI Demo app — all components and CSS inlined, using the shared-scope model. Can be opened directly from the filesystem (`file://`) or via a server. No server required.
 
 Run with `bun run serve` → `http://localhost:3000/playground-rip.html`
+Or open directly: `open docs/demo.html`
 
 ---
 
@@ -645,7 +706,7 @@ Run with `bun run serve` → `http://localhost:3000/playground-rip.html`
 - **Never add dependencies** — Zero dependencies is a core principle
 - Run `bun run test` before committing
 - Run `bun run parser` after grammar changes
-- Run `bun run browser` after codegen changes
+- Run `bun run browser` (or `bun run build`) after codegen or browser.js changes
 
 ---
 
