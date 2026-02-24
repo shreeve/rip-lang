@@ -172,16 +172,22 @@ console.log(`  ${'@rip-lang/all'.padEnd(22)} ${allOldVer} → ${allNewVer}`);
 
 console.log('\nRebuilding...');
 
-const grammarChanged = run('git diff HEAD -- src/grammar/grammar.rip', { throws: false });
-if (grammarChanged && grammarChanged.length > 0) {
-  run('bun run parser', { stdio: 'inherit' });
-  console.log('  ✓ parser (grammar changed)');
-} else {
-  console.log('  - parser (no grammar changes)');
-}
+const srcChanged = run('git diff HEAD -- src/', { throws: false });
 
-run('bun run build', { stdio: 'inherit' });
-console.log('  ✓ build');
+if (srcChanged && srcChanged.length > 0) {
+  const grammarChanged = run('git diff HEAD -- src/grammar/grammar.rip', { throws: false });
+  if (grammarChanged && grammarChanged.length > 0) {
+    run('bun run parser', { stdio: 'inherit' });
+    console.log('  ✓ parser (grammar changed)');
+  } else {
+    console.log('  - parser (no grammar changes)');
+  }
+
+  run('bun run build', { stdio: 'inherit' });
+  console.log('  ✓ build');
+} else {
+  console.log('  - build (no src/ changes)');
+}
 
 try {
   const testOutput = run('bun run test');
