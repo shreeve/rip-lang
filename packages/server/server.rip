@@ -280,7 +280,7 @@ parseFlags = (argv) ->
   httpIntent = hasHttpKeyword or httpPortToken?
   httpsIntent = true unless httpsIntent or httpIntent
 
-  httpPort = if httpIntent then (httpPortToken ?? 0) else 0
+  httpPort = if httpIntent then (httpPortToken ?? bareIntPort ?? 0) else 0
   httpsPortDerived = if not httpIntent then (bareIntPort or httpsPortToken or 0) else null
 
   socketPrefixOverride = getKV('--socket-prefix=')
@@ -747,38 +747,29 @@ class Server
     httpOnly = @flags.httpsPort is null
     fetchFn = @fetch.bind(@)
 
-    # Helper to start server, incrementing port if needed
+    # Helper to start server, trying the given port first, then incrementing.
+    # Falls back to unprivileged range (3000 for HTTP, 3443 for HTTPS) if
+    # the initial port fails due to permission denied (EACCES).
     startOnPort = (p, opts = {}) =>
       port = p
       while port < p + 100
         try
           return Bun.serve(Object.assign({ port, idleTimeout: 0, fetch: fetchFn }, opts))
         catch e
+          if e?.code is 'EACCES' and port < 1024
+            port = if opts.tls then 3443 else 3000
+            p = port
+            continue
           throw e unless e?.code is 'EADDRINUSE'
           port++
       throw new Error "No available port found (tried #{p}–#{p + 99})"
 
     if httpOnly
-      if @flags.httpPort is 0
-        try
-          @server = Bun.serve({ port: 80, idleTimeout: 0, fetch: fetchFn })
-        catch e
-          throw e unless e?.code in ['EADDRINUSE', 'EACCES']
-          @server = startOnPort(5700)
-      else
-        @server = startOnPort(@flags.httpPort)
+      @server = startOnPort(@flags.httpPort or 80)
       @flags.httpPort = @server.port
     else
       tls = @loadTlsMaterial!
-
-      if not @flags.httpsPort or @flags.httpsPort is 0
-        try
-          @httpsServer = Bun.serve({ port: 443, idleTimeout: 0, tls, fetch: fetchFn })
-        catch e
-          throw e unless e?.code in ['EADDRINUSE', 'EACCES']
-          @httpsServer = startOnPort(5700, { tls })
-      else
-        @httpsServer = startOnPort(@flags.httpsPort, { tls })
+      @httpsServer = startOnPort(@flags.httpsPort or 443, { tls })
 
       httpsPort = @httpsServer.port
       @flags.httpsPort = httpsPort

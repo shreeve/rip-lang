@@ -28,7 +28,7 @@ const dedent = s => {
 
 // Browser runtime: collect all <script type="text/rip"> sources (inline + src)
 // plus any data-src URLs on the runtime tag, compile them all with shared-scope
-// options, and execute as one async IIFE. Then handle data-url for server mode.
+// options, and execute as one async IIFE. Then handle data-launch for server mode.
 async function processRipScripts() {
   const sources = [];
 
@@ -88,12 +88,12 @@ async function processRipScripts() {
     }
   }
 
-  // 4. Backward compat: data-url triggers launch() for server mode
-  const cfg = document.querySelector('script[data-url]');
+  // 4. data-launch triggers launch() for server mode
+  const cfg = document.querySelector('script[data-launch]');
   if (cfg && !globalThis.__ripLaunched) {
     const ui = importRip.modules?.['app.rip'];
     if (ui?.launch) {
-      const url = cfg.getAttribute('data-url') || '';
+      const url = cfg.getAttribute('data-launch') || '';
       const hash = cfg.getAttribute('data-hash');
       const opts = { hash: hash !== 'false' };
       if (url) opts.bundleUrl = url;
@@ -169,7 +169,7 @@ if (typeof globalThis !== 'undefined') {
   globalThis.__ripExports = { compile, compileToJS, formatSExpr, getStdlibCode, VERSION, BUILD_DATE, getReactiveRuntime, getComponentRuntime };
 }
 
-// Auto-process <script type="text/rip"> blocks and handle data-url launch.
+// Auto-process <script type="text/rip"> blocks and handle data-launch.
 // Deferred via queueMicrotask so bundled entry code (e.g. rip.min.js registering
 // importRip.modules) runs before script processing begins.
 if (typeof document !== 'undefined') {

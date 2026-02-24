@@ -878,7 +878,7 @@ connectWatch = (url) ->
 #
 # Entry point for Rip applications. Handles two bundle sources:
 #   1. Explicit bundle object (opts.bundle)
-#   2. Fetch from URL (opts.bundleUrl) — used by serve middleware's data-url
+#   2. Fetch from URL (opts.bundleUrl) — used by serve middleware's data-launch
 #
 # Creates the app stash, sets up persistence if configured, builds the
 # component resolver, initializes the router and renderer, and optionally

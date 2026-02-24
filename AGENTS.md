@@ -493,7 +493,7 @@ primitives directly — one signal graph shared between framework and components
 
 Key concepts:
 - **Shared scope** — Inline `<script type="text/rip">` tags are compiled and executed in one shared IIFE. Components use `export` to make themselves visible to other tags; exports are stripped to `const` declarations in the shared scope.
-- **Server mode** — When `data-url` is present on a script tag, the `serve` middleware provides the bundle. `use serve dir: dir` registers routes for the framework bundle (`/rip/rip.min.js`), app bundle (`/{app}/bundle`), and SSE hot-reload (`/{app}/watch`).
+- **Server mode** — When `data-launch` is present on a script tag, the `serve` middleware provides the bundle. `use serve dir: dir` registers routes for the framework bundle (`/rip/rip.min.js`), app bundle (`/{app}/bundle`), and SSE hot-reload (`/{app}/watch`).
 - **`launch(appBase)`** — Client-side: fetches the app bundle, hydrates the stash, starts the router and renderer
 - **`component` / `render`** — Two keywords added to Rip for defining components with reactive state (`:=`), computed (`~=`), effects (`~>`)
 - **File-based routing** — `pages/users/[id].rip` → `/users/:id` (Next.js-style). Shared components go in `components/`.
@@ -572,8 +572,8 @@ in the shared scope).
   `data-src` URLs on the runtime tag), fetches external files in parallel,
   compiles all with `{ skipRuntimes: true, skipExports: true }`, and
   executes as one shared async IIFE.
-- **Server mode** — When `data-url` is present on a script tag, `launch()`
-  is called with `bundleUrl` for backward compat with `serve` middleware.
+- **Server mode** — When `data-launch` is present on a script tag, `launch()`
+  is called with `bundleUrl` to load the app bundle from the `serve` middleware.
 - **`rip()` console REPL** — Wraps code in a Rip `do ->` block before
   compiling, so the compiler handles implicit return and auto-async natively.
   Sync code returns values directly; async code returns a Promise.
