@@ -923,7 +923,7 @@ export Dashboard = component
         return '' if p.seriesName is 'Error'
         d = cholesterolWithStd.find(-> it[0] is p.value[0])
         return "Age #{p.value[0]}<br>Avg: #{p.value[1]} mg/dL" unless d and d[2] > 0
-        "Age #{d[0]}<br>Avg: #{d[1]} mg/dL<br>\u00b1#{d[2]} std dev"
+        "Age #{d[0]}<br>Avg: #{d[1]} mg/dL<br>±#{d[2]} std dev"
       legend: { show: false }
       series: [
         { type: 'custom', name: 'Error', data: cholesterolWithStd, renderItem: errorBarRenderer, z: 1 }
@@ -949,7 +949,7 @@ export Dashboard = component
 
   render
     h1 "ACME Corp Dashboard"
-    p class: 'subtitle', "FY 2026 SaaS Metrics \u2014 styled with the evidence.dev ECharts theme"
+    p class: 'subtitle', "FY 2026 SaaS Metrics - styled with the evidence.dev ECharts theme"
 
     .kpi-row
       for kpi in kpis
@@ -962,7 +962,7 @@ export Dashboard = component
       ChartCard title: 'Monthly Revenue',               subtitle: 'Total recurring revenue by month',              chartId: 'line'
       ChartCard title: 'Revenue by Product',             subtitle: 'Stacked area breakdown across product lines',   chartId: 'area'
       ChartCard title: 'Quarterly Revenue',              subtitle: 'Quarter-over-quarter comparison',               chartId: 'bar'
-      ChartCard title: 'Revenue by Product \u00d7 Quarter', subtitle: 'Stacked bar with product breakdown',         chartId: 'stackedBar'
+      ChartCard title: 'Revenue by Product × Quarter', subtitle: 'Stacked bar with product breakdown',         chartId: 'stackedBar'
       ChartCard title: 'Revenue & Margin',               subtitle: 'Revenue bars with gross margin % line overlay', chartId: 'combo'
       ChartCard title: 'Revenue & Growth Rate',          subtitle: 'Dual-axis: revenue (left) and YoY growth (right)', chartId: 'multiAxis'
       ChartCard title: 'Customers by Segment',           subtitle: 'Distribution across customer tiers',            chartId: 'pie'
@@ -1009,7 +1009,7 @@ export Dashboard = component
     p class: 'section', "Clinical"
     .grid
       ChartCard title: 'Hemoglobin A1c Distribution'       , subtitle: 'Population distribution of A1c results (green: normal, yellow: pre-diabetic, red: diabetic)', chartId: 'a1c', wide: true
-      ChartCard title: 'Cholesterol by Age (\u00b11\u03c3)', subtitle: 'Average total cholesterol with standard deviation band and trend line',                       chartId: 'cholesterolBand', wide: true
+      ChartCard title: 'Cholesterol by Age (±1σ)', subtitle: 'Average total cholesterol with standard deviation band and trend line',                       chartId: 'cholesterolBand', wide: true
       ChartCard title: 'Total Cholesterol by Age'          , subtitle: 'Average total cholesterol vs patient age with trend line',                                    chartId: 'cholesterol'
 </script>
 
