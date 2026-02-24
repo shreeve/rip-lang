@@ -2,7 +2,7 @@
 
 import { Schema } from '../../../packages/schema/orm.js'
 import { Stash } from './lib/stash.rip'
-import configData from './config.rip'
+import configData from '../config.rip'
 
 config = Stash configData
 DB_URL = config.database.url

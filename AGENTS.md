@@ -586,6 +586,7 @@ in the shared scope).
 | `data-target` | runtime script | Mount target selector (default: `'body'`), pairs with `data-mount` |
 | `data-launch` | runtime script | Bundle URL for server mode — triggers `launch()` with full app lifecycle |
 | `data-hash` | runtime script | Enable hash-based routing (for `data-launch` apps) |
+| `data-persist` | runtime script | Enable stash persistence — `data-persist` for sessionStorage, `data-persist="local"` for localStorage |
 
 ### Component Mounting
 

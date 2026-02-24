@@ -3,16 +3,16 @@
 import { get, use, start } from '@rip-lang/api'
 import { prettyJson, sessions } from '@rip-lang/api/middleware'
 import { serve } from '@rip-lang/api/serve'
-import { Stash } from './lib/stash.rip'
-import { setup } from './setup.rip'
+import { Stash } from './api/lib/stash.rip'
+import { setup } from './api/setup.rip'
 import configData from './config.rip'
-import './routes/auth.rip'
-import './routes/sessions.rip'
-import './routes/bookings.rip'
-import './routes/user.rip'
+import './api/routes/auth.rip'
+import './api/routes/sessions.rip'
+import './api/routes/bookings.rip'
+import './api/routes/user.rip'
 
 config = Stash configData
-dir = new URL('../app', import.meta.url).pathname
+dir = new URL('./app', import.meta.url).pathname
 
 # Middleware
 use prettyJson

@@ -330,6 +330,12 @@ That's it. All `<script type="text/rip">` tags share scope — `export` makes na
 
 <!-- Server mode with full app lifecycle (router, stash, hot reload) -->
 <script defer src="/rip/rip.min.js" data-launch="bundle"></script>
+
+<!-- Server mode with stash persistence (sessionStorage) -->
+<script defer src="/rip/rip.min.js" data-launch="bundle" data-persist></script>
+
+<!-- Server mode with localStorage persistence -->
+<script defer src="/rip/rip.min.js" data-launch="bundle" data-persist="local"></script>
 ```
 
 Every component has a static `mount(target)` method — `App.mount '#app'` is shorthand for `App.new().mount('#app')`. Target defaults to `'body'`.

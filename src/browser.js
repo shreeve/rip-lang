@@ -103,8 +103,10 @@ async function processRipScripts() {
     if (ui?.launch) {
       const url = cfg.getAttribute('data-launch') || '';
       const hash = cfg.getAttribute('data-hash');
+      const persist = cfg.getAttribute('data-persist');
       const opts = { hash: hash !== 'false' };
       if (url) opts.bundleUrl = url;
+      if (persist != null) opts.persist = persist === 'local' ? 'local' : true;
       await ui.launch('', opts);
     }
   }
