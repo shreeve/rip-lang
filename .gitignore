@@ -28,7 +28,6 @@ packages/vscode/dist/
 # Project-specific
 notes.txt
 .tool-versions
-/linguist
 /demos/candor
 /demos/streamline/ARCHIVE
 /demos/websites/
