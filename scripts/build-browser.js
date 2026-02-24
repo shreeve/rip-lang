@@ -34,7 +34,7 @@ for (const [k, v] of Object.entries(__appExports)) if (typeof v === 'function') 
 
 // Step 3: Build the bundle
 async function build(entrypoints, name, minify) {
-  await Bun.build({ entrypoints, outdir: './docs/dist', format: 'esm', minify, naming: name });
+  await Bun.build({ entrypoints, outdir: './docs/dist', format: 'iife', minify, naming: name });
   const js = stamp(readFileSync(`./docs/dist/${name}`, 'utf-8'));
   writeFileSync(`./docs/dist/${name}`, js);
 

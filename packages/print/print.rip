@@ -325,7 +325,7 @@ html = """
   <html lang="en">
   <head>
     <meta charset="utf-8">
-    <title>Rip Print - #{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })} at #{new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}</title>
+    <title>Printed on #{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })} at #{new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase()}</title>
     <link rel="icon" href="data:,">
     <style id="hljs-theme">#{defaultCss}</style>
     <style>
@@ -432,26 +432,48 @@ html = """
         var sizeBtn = document.querySelector('.size-btn[data-size="' + savedSize + '"]');
         if (sizeBtn) sizeBtn.click();
       }
+
+      // Service worker: cache page so refresh works after server exits
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(function() {});
+      }
     </script>
   </body>
   </html>
   """
 
 # ==============================================================================
-# Serve once and open browser
+# Serve and open browser (service worker caches page for offline refresh)
 # ==============================================================================
 
-served = false
+swScript = """\
+  self.addEventListener('install', function(e) { self.skipWaiting(); });
+  self.addEventListener('activate', function(e) { e.waitUntil(self.clients.claim()); });
+  self.addEventListener('fetch', function(e) {
+    e.respondWith(caches.match(e.request).then(function(r) {
+      return r || fetch(e.request).then(function(res) {
+        var c = res.clone();
+        caches.open('rip-print').then(function(cache) { cache.put(e.request, c); });
+        return res;
+      });
+    }));
+  });
+  """
+
+hits = 0
 
 server = Bun.serve
   port: 9111
   fetch: (req) ->
-    served = true
+    url = new URL(req.url)
+    if url.pathname is '/sw.js'
+      hits++
+      return new Response swScript, headers: { 'Content-Type': 'application/javascript' }
+    hits++
     new Response html, headers: { 'Content-Type': 'text/html; charset=utf-8' }
 
 console.log "\nOpening browser..."
 
-# Open browser
 try
   if process.platform is 'darwin'
     execSync "open 'http://localhost:#{server.port}/'"
@@ -462,14 +484,12 @@ try
 catch
   console.log "Visit: http://localhost:#{server.port}/"
 
-# Exit after serving
-setTimeout ->
-  if served
-    server.stop()
-    process.exit(0)
-  else
+# Exit once page and service worker are served (refresh works in Chrome)
+poll = setInterval ->
+  if hits >= 2
+    clearInterval(poll)
     setTimeout ->
       server.stop()
       process.exit(0)
-    , 5000
-, 3000
+    , 500
+, 200

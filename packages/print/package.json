@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/print",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "description": "Syntax-highlighted source code printer \u2014 highlight.js-powered, serves once, auto-opens browser",
   "type": "module",
   "main": "print.rip",

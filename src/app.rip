@@ -876,11 +876,9 @@ connectWatch = (url) ->
 # ==============================================================================
 # Launch — fetch bundle, create stash, wire router + renderer, start app
 #
-# Entry point for Rip applications. Handles four bundle sources:
+# Entry point for Rip applications. Handles two bundle sources:
 #   1. Explicit bundle object (opts.bundle)
-#   2. Array of component URLs (opts.components)
-#   3. Inline <script type="text/rip" data-name="..."> tags
-#   4. Server fetch from {appBase}/bundle
+#   2. Fetch from URL (opts.bundleUrl) — used by serve middleware's data-url
 #
 # Creates the app stash, sets up persistence if configured, builds the
 # component resolver, initializes the router and renderer, and optionally
@@ -908,33 +906,15 @@ export launch = (appBase = '', opts = {}) ->
     el.id = target.replace(/^#/, '')
     document.body.prepend el
 
-  # Get the app bundle — explicit object, literal URL, static files, inline DOM, or server fetch
+  # Get the app bundle — explicit object or fetch from URL
   if opts.bundle
     bundle = opts.bundle
   else if opts.bundleUrl
     res = await fetch(opts.bundleUrl, cache: 'no-cache')
     throw new Error "launch: #{opts.bundleUrl} (#{res.status})" unless res.ok
     bundle = res.json!
-  else if opts.components and Array.isArray(opts.components)
-    components = {}
-    for url in opts.components
-      res = await fetch(url)
-      if res.ok
-        name = url.split('/').pop()
-        components["components/#{name}"] = await res.text()
-    bundle = { components, data: {} }
-  else if typeof document isnt 'undefined' and document.querySelectorAll('script[type="text/rip"][data-name]').length > 0
-    components = {}
-    for script in document.querySelectorAll('script[type="text/rip"][data-name]')
-      name = script.getAttribute('data-name')
-      name += '.rip' unless name.endsWith('.rip')
-      components["components/#{name}"] = script.textContent
-    bundle = { components, data: {} }
   else
-    bundleUrl = "#{appBase}/bundle"
-    res = await fetch(bundleUrl, cache: 'no-cache')
-    throw new Error "launch: #{bundleUrl} (#{res.status})" unless res.ok
-    bundle = res.json!
+    throw new Error "launch: no bundle or bundleUrl provided"
 
   # Create the unified stash
   app = stash { components: {}, routes: {}, data: {} }

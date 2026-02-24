@@ -13,11 +13,11 @@ export const BUILD_DATE = "0000-00-00@00:00:00GMT";
 // Import compiler functions for use in rip() function and globalThis registration
 import { compile, compileToJS, formatSExpr, getReactiveRuntime, getComponentRuntime } from './compiler.js';
 
-// Eagerly register Rip's reactive primitives on globalThis so that
-// framework code (app.rip) can use them directly without the compiler
-// needing to detect reactive operators in the source
-if (typeof globalThis !== 'undefined' && !globalThis.__rip) {
-  new Function(getReactiveRuntime())();
+// Eagerly register Rip's reactive and component runtimes on globalThis so that
+// framework code (app.rip) and browser-compiled scripts can use them directly
+if (typeof globalThis !== 'undefined') {
+  if (!globalThis.__rip) new Function(getReactiveRuntime())();
+  if (!globalThis.__ripComponent) new Function(getComponentRuntime())();
 }
 
 const dedent = s => {
@@ -26,43 +26,78 @@ const dedent = s => {
   return s.replace(RegExp(`^[ \t]{${i}}`, 'gm'), '').trim();
 }
 
-// Browser runtime for executing <script type="text/rip"> tags
-// Supports both inline scripts and external files via src attribute
+// Browser runtime: collect all <script type="text/rip"> sources (inline + src)
+// plus any data-src URLs on the runtime tag, compile them all with shared-scope
+// options, and execute as one async IIFE. Then handle data-url for server mode.
 async function processRipScripts() {
-  const scripts = document.querySelectorAll('script[type="text/rip"]');
+  const sources = [];
 
-  for (const script of scripts) {
-    if (script.hasAttribute('data-rip-processed')) continue;
-    if (script.hasAttribute('data-name')) continue;
+  // 1. Collect data-src URLs from the runtime script tag
+  const runtimeTag = document.querySelector('script[src$="rip.min.js"], script[src$="rip.js"]');
+  const dataSrc = runtimeTag?.getAttribute('data-src');
+  if (dataSrc) {
+    for (const url of dataSrc.trim().split(/\s+/)) {
+      if (url) sources.push({ url });
+    }
+  }
 
-    try {
-      let ripCode;
-      if (script.src) {
-        const response = await fetch(script.src);
-        if (!response.ok) {
-          console.error(`Rip: failed to fetch ${script.src} (${response.status})`);
-          continue;
-        }
-        ripCode = await response.text();
-      } else {
-        ripCode = dedent(script.textContent);
-      }
+  // 2. Collect all <script type="text/rip"> tags (inline and external)
+  for (const script of document.querySelectorAll('script[type="text/rip"]')) {
+    if (script.src) {
+      sources.push({ url: script.src });
+    } else {
+      const code = dedent(script.textContent);
+      if (code) sources.push({ code });
+    }
+  }
 
-      let jsCode;
+  // 3. If any sources, fetch externals, compile all, execute in shared scope
+  if (sources.length > 0) {
+    await Promise.all(sources.map(async (s) => {
+      if (!s.url) return;
       try {
-        jsCode = compileToJS(ripCode);
-      } catch (compileError) {
-        console.error('Rip compile error:', compileError.message);
-        console.error('Source:', ripCode);
-        continue;
+        const res = await fetch(s.url);
+        if (!res.ok) {
+          console.error(`Rip: failed to fetch ${s.url} (${res.status})`);
+          return;
+        }
+        s.code = await res.text();
+      } catch (e) {
+        console.error(`Rip: failed to fetch ${s.url}:`, e.message);
       }
+    }));
 
-      // Execute as async to support await (importRip!, etc.)
-      await (0, eval)(`(async()=>{\n${jsCode}\n})()`);
+    const opts = { skipRuntimes: true, skipExports: true };
+    const compiled = [];
+    for (const s of sources) {
+      if (!s.code) continue;
+      try {
+        compiled.push(compileToJS(s.code, opts));
+      } catch (e) {
+        console.error('Rip compile error:', e.message);
+      }
+    }
 
-      script.setAttribute('data-rip-processed', 'true');
-    } catch (error) {
-      console.error('Rip runtime error:', error);
+    if (compiled.length > 0) {
+      const js = compiled.join('\n');
+      try {
+        await (0, eval)(`(async()=>{\n${js}\n})()`);
+      } catch (e) {
+        console.error('Rip runtime error:', e);
+      }
+    }
+  }
+
+  // 4. Backward compat: data-url triggers launch() for server mode
+  const cfg = document.querySelector('script[data-url]');
+  if (cfg && !globalThis.__ripLaunched) {
+    const ui = importRip.modules?.['app.rip'];
+    if (ui?.launch) {
+      const url = cfg.getAttribute('data-url') || '';
+      const hash = cfg.getAttribute('data-hash');
+      const opts = { hash: hash !== 'false' };
+      if (url) opts.bundleUrl = url;
+      await ui.launch('', opts);
     }
   }
 }
@@ -134,28 +169,12 @@ if (typeof globalThis !== 'undefined') {
   globalThis.__ripExports = { compile, compileToJS, formatSExpr, getStdlibCode, VERSION, BUILD_DATE, getReactiveRuntime, getComponentRuntime };
 }
 
-// Auto-launch: requires data-url or inline data-name scripts.
-// data-url is the literal fetch URL for the component bundle.
-async function autoLaunch() {
-  if (globalThis.__ripLaunched) return;
-  const ui = importRip.modules?.['app.rip'];
-  if (!ui?.launch) return;
-  const cfg = document.querySelector('script[data-url], script[data-hash]');
-  const tag = document.querySelectorAll('script[type="text/rip"][data-name]').length > 0;
-  if (!cfg && !tag) return;
-  const url = cfg?.getAttribute('data-url') || '';
-  const hash = cfg?.getAttribute('data-hash');
-  const opts = { hash: hash !== 'false' };
-  if (url) opts.bundleUrl = url;
-  await ui.launch('', opts);
-}
-
-// Auto-process <script type="text/rip"> blocks, then auto-launch if applicable.
+// Auto-process <script type="text/rip"> blocks and handle data-url launch.
 // Deferred via queueMicrotask so bundled entry code (e.g. rip.min.js registering
 // importRip.modules) runs before script processing begins.
 if (typeof document !== 'undefined') {
   globalThis.__ripScriptsReady = new Promise(resolve => {
-    const run = () => processRipScripts().then(autoLaunch).then(resolve);
+    const run = () => processRipScripts().then(resolve);
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', () => queueMicrotask(run));
     } else {

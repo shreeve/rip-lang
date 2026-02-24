@@ -636,6 +636,7 @@ export class CodeGenerator {
     }
 
     let skip = this.options.skipPreamble;
+    let skipRT = this.options.skipRuntimes;
 
     if (!skip) {
 
@@ -645,10 +646,12 @@ export class CodeGenerator {
       needsBlank = true;
 
       // On-demand helpers — only emitted when referenced
-      if (this.helpers.has('slice'      )) { code += 'const slice = [].slice;\n'; needsBlank = true; }
-      if (this.helpers.has('modulo'     )) { code += 'const modulo = (n, d) => { n = +n; d = +d; return (n % d + d) % d; };\n'; needsBlank = true; }
+      // Use var when skipRuntimes is set so helpers can be safely re-emitted across concatenated files
+      let helperDecl = skipRT ? 'var' : 'const';
+      if (this.helpers.has('slice'      )) { code += `${helperDecl} slice = [].slice;\n`; needsBlank = true; }
+      if (this.helpers.has('modulo'     )) { code += `${helperDecl} modulo = (n, d) => { n = +n; d = +d; return (n % d + d) % d; };\n`; needsBlank = true; }
       if (this.helpers.has('toMatchable')) {
-        code += 'const toMatchable = (v, allowNewlines) => {\n';
+        code += `${helperDecl} toMatchable = (v, allowNewlines) => {\n`;
         code += '  if (typeof v === "string") return !allowNewlines && /[\\n\\r]/.test(v) ? null : v;\n';
         code += '  if (v == null) return "";\n';
         code += '  if (typeof v === "number" || typeof v === "bigint" || typeof v === "boolean") return String(v);\n';
@@ -673,7 +676,9 @@ export class CodeGenerator {
     }
 
     if (this.usesReactivity && !skip) {
-      if (typeof globalThis !== 'undefined' && globalThis.__rip) {
+      if (skipRT) {
+        code += 'var { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;\n';
+      } else if (typeof globalThis !== 'undefined' && globalThis.__rip) {
         code += 'const { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;\n';
       } else {
         code += this.getReactiveRuntime();
@@ -682,7 +687,9 @@ export class CodeGenerator {
     }
 
     if (this.usesTemplates && !skip) {
-      if (typeof globalThis !== 'undefined' && globalThis.__ripComponent) {
+      if (skipRT) {
+        code += 'var { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __Component } = globalThis.__ripComponent;\n';
+      } else if (typeof globalThis !== 'undefined' && globalThis.__ripComponent) {
         code += 'const { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __Component } = globalThis.__ripComponent;\n';
       } else {
         code += this.getComponentRuntime();
@@ -2024,6 +2031,11 @@ export class CodeGenerator {
 
   generateExport(head, rest) {
     let [decl] = rest;
+    if (this.options.skipExports) {
+      if (Array.isArray(decl) && decl.every(i => typeof i === 'string')) return '';
+      if (this.is(decl, '=')) return `const ${decl[1]} = ${this.generate(decl[2], 'value')}`;
+      return this.generate(decl, 'statement');
+    }
     if (Array.isArray(decl) && decl.every(i => typeof i === 'string')) return `export { ${decl.join(', ')} }`;
     if (this.is(decl, '=')) return `export const ${decl[1]} = ${this.generate(decl[2], 'value')}`;
     return `export ${this.generate(decl, 'statement')}`;
@@ -2031,6 +2043,10 @@ export class CodeGenerator {
 
   generateExportDefault(head, rest) {
     let [expr] = rest;
+    if (this.options.skipExports) {
+      if (this.is(expr, '=')) return `const ${expr[1]} = ${this.generate(expr[2], 'value')}`;
+      return this.generate(expr, 'statement');
+    }
     if (this.is(expr, '=')) {
       return `const ${expr[1]} = ${this.generate(expr[2], 'value')};\nexport default ${expr[1]}`;
     }
@@ -2038,10 +2054,12 @@ export class CodeGenerator {
   }
 
   generateExportAll(head, rest) {
+    if (this.options.skipExports) return '';
     return `export * from ${this.addJsExtensionAndAssertions(rest[0])}`;
   }
 
   generateExportFrom(head, rest) {
+    if (this.options.skipExports) return '';
     let [specifiers, source] = rest;
     let fixedSource = this.addJsExtensionAndAssertions(source);
     if (Array.isArray(specifiers)) {
@@ -3226,6 +3244,8 @@ export class Compiler {
     let generator = new CodeGenerator({
       dataSection,
       skipPreamble: this.options.skipPreamble,
+      skipRuntimes: this.options.skipRuntimes,
+      skipExports: this.options.skipExports,
       reactiveVars: this.options.reactiveVars,
       sourceMap,
     });
