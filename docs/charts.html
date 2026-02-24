@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-  <script defer src="dist/rip.min.js"></script>
+  <script defer src="dist/rip.min.js" data-mount="Dashboard"></script>
   <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -65,7 +65,7 @@ h1 { font-size: 24px; font-weight: 600; color: #060606; margin-bottom: 4px; }
 
 <!-- ===== KpiCard ===== -->
 
-<script type="text/rip" data-name="kpi-card">
+<script type="text/rip">
 export KpiCard = component
   @label := ''
   @value := ''
@@ -99,7 +99,7 @@ export KpiCard = component
 
 <!-- ===== ChartCard ===== -->
 
-<script type="text/rip" data-name="chart-card">
+<script type="text/rip">
 export ChartCard = component
   @title := ''
   @subtitle := ''
@@ -116,7 +116,7 @@ export ChartCard = component
 
 <!-- ===== Dashboard ===== -->
 
-<script type="text/rip" data-name="index">
+<script type="text/rip">
 export Dashboard = component
 
   # ── ECharts theme (evidence.dev) ──

@@ -36,7 +36,7 @@
     });
   })();
   </script>
-  <script defer src="/rip/rip.min.js"></script>
+  <script defer src="/rip/rip.min.js" data-mount="Grid"></script>
   <style>
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -261,7 +261,7 @@ select.rip-grid-editor { cursor: pointer; padding-left: 4px; }
 </head>
 <body>
 
-<script type="text/rip" data-name="index">
+<script type="text/rip">
 export Grid = component
 
   @beforeEdit := null
@@ -893,7 +893,7 @@ export Grid = component
                 td colspan: columns.length, style: "height: #{bottomSpace}px"
 </script>
 
-<script type="text/rip" data-name="grid-row">
+<script type="text/rip">
 export GridRow = component
   @row := {}
   @columns := []
