@@ -228,8 +228,8 @@ rip-server --version   # Show version
 | `--static` | Disable hot reload (production) | Hot reload enabled |
 | `http` | HTTP-only mode (no HTTPS) | HTTPS enabled |
 | `https` | HTTPS mode (explicit) | Auto |
-| `http:<port>` | Set HTTP port | 80 or 5700 |
-| `https:<port>` | Set HTTPS port | 443 or 5700 |
+| `http:<port>` | Set HTTP port | 80, fallback 3000 |
+| `https:<port>` | Set HTTPS port | 443, fallback 3443 |
 | `w:<n>` | Worker count (`auto`, `half`, `2x`, `3x`, or number) | `half` of cores |
 | `r:<reqs>,<secs>s` | Restart policy: requests, seconds (e.g., `5000,3600s`) | `10000,3600s` |
 | `--cert=<path>` | TLS certificate path | Auto-generated |

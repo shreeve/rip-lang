@@ -671,23 +671,20 @@ are not inherited by child processes unless `env` is passed explicitly.
 
 ---
 
-## Playground
+## Playground & Demos
 
-Three playground versions and a demo app in `docs/`, all single HTML files with zero dependencies:
+HTML files in `docs/`, all using the shared-scope model with `<script defer>`:
 
-| File | Approach | Lines |
-|------|----------|-------|
-| `playground-js.html` | Pure JavaScript (reference) | ~1,800 |
-| `playground-rip.html` | Rip via `<script type="text/rip">` | ~1,623 |
-| `playground-rip-ui.html` | Rip UI component via `launch bundle:` (uses `rip.min.js`) | ~1,595 |
-| `demo.html` | Full Rip UI app via `launch bundle:` with hash routing | ~337 |
+| File | Purpose |
+|------|---------|
+| `index.html` | Interactive playground — compiler, REPL, examples, theme select, resizable panes |
+| `demo.html` | ACME Corp Dashboard — full ECharts app using `data-mount="Dashboard"` |
+| `charts.html` | Same dashboard, standalone copy |
+| `sierpinski.html` | Sierpinski triangle demo (loads `rip.min.js` from CDN) |
+| `example/index.html` | Generic app launcher — fetches JSON bundle (requires server) |
+| `results/index.html` | Lab Results app — 7 components in shared scope with `data-mount="Home"` |
 
-All three playgrounds share: same CSS, same Monarch tokenizer, same default code sample, same 16 features (live compiler, REPL, example snippets, theme select, dark/light mode, 5 output toggles, resizable panes, source persistence, URL hash routing, keyboard shortcuts).
-
-`demo.html` is a self-contained Rip UI Demo app — all components and CSS inlined, using the shared-scope model. Can be opened directly from the filesystem (`file://`) or via a server. No server required.
-
-Run with `bun run serve` → `http://localhost:3000/playground-rip.html`
-Or open directly: `open docs/demo.html`
+Static files (`demo.html`, `charts.html`, `sierpinski.html`) work from `file://` — just double-click to open. The playground and example app require `bun run serve` → `http://localhost:3000/`.
 
 ---
 
