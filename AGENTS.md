@@ -563,14 +563,14 @@ without CORS issues).
 All `<script type="text/rip">` tags (inline or `src`) are compiled and
 executed together in ONE shared async IIFE. Components defined with `export`
 in one script tag are visible to all subsequent tags (exports are stripped
-via the `stripExports` compiler option, becoming plain `const` declarations
+via the `skipExports` compiler option, becoming plain `const` declarations
 in the shared scope).
 
 ### Key Features
 
 - **`processRipScripts()`** — Collects all sources (inline script tags +
   `data-src` URLs on the runtime tag), fetches external files in parallel,
-  compiles all with `{ skipRuntimes: true, stripExports: true }`, and
+  compiles all with `{ skipRuntimes: true, skipExports: true }`, and
   executes as one shared async IIFE.
 - **Server mode** — When `data-url` is present on a script tag, `launch()`
   is called with `bundleUrl` for backward compat with `serve` middleware.
@@ -596,7 +596,7 @@ in the shared scope).
 
 | Option | Purpose |
 |--------|---------|
-| `stripExports` | Suppresses `export` keywords in codegen — `export const X` becomes `const X` |
+| `skipExports` | Suppresses `export` keywords in codegen — `export const X` becomes `const X` |
 | `skipRuntimes` | Skips reactive/component runtime blocks (already on `globalThis`), uses `var` for helpers to allow safe re-emission across concatenated files |
 
 ### Variable Persistence in `rip()`
