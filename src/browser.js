@@ -32,7 +32,7 @@ const dedent = s => {
 async function processRipScripts() {
   const sources = [];
 
-  // 1. Collect data-src URLs from the runtime script tag
+  // Step 1: Collect data-src URLs from the runtime script tag
   const runtimeTag = document.querySelector('script[src$="rip.min.js"], script[src$="rip.js"]');
   const dataSrc = runtimeTag?.getAttribute('data-src');
   if (dataSrc) {
@@ -41,7 +41,7 @@ async function processRipScripts() {
     }
   }
 
-  // 2. Collect all <script type="text/rip"> tags (inline and external)
+  // Step 2: Collect all <script type="text/rip"> tags (inline and external)
   for (const script of document.querySelectorAll('script[type="text/rip"]')) {
     if (script.src) {
       sources.push({ url: script.src });
@@ -51,7 +51,7 @@ async function processRipScripts() {
     }
   }
 
-  // 3. If any sources, fetch externals, compile all, execute in shared scope
+  // Step 3: Fetch externals, compile all, execute in shared scope
   if (sources.length > 0) {
     await Promise.all(sources.map(async (s) => {
       if (!s.url) return;
@@ -81,7 +81,7 @@ async function processRipScripts() {
     if (compiled.length > 0) {
       let js = compiled.join('\n');
 
-      // 3b. data-mount: append component mount call inside the shared IIFE
+      // Step 4: Append data-mount call inside the shared IIFE
       const mount = runtimeTag?.getAttribute('data-mount');
       if (mount) {
         const target = runtimeTag.getAttribute('data-target') || 'body';
@@ -96,7 +96,7 @@ async function processRipScripts() {
     }
   }
 
-  // 4. data-launch triggers launch() for server mode
+  // Step 5: data-launch triggers launch() for server mode
   const cfg = document.querySelector('script[data-launch]');
   if (cfg && !globalThis.__ripLaunched) {
     const ui = importRip.modules?.['app.rip'];
