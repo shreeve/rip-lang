@@ -8353,7 +8353,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.11";
-  var BUILD_DATE = "2026-02-24@21:02:22GMT";
+  var BUILD_DATE = "2026-02-24@21:15:11GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -8417,7 +8417,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
         if (mount) {
           const target = runtimeTag.getAttribute("data-target") || "body";
           js += `
-${mount}.new().mount(${JSON.stringify(target)});`;
+${mount}.mount(${JSON.stringify(target)});`;
         }
         try {
           await (0, eval)(`(async()=>{

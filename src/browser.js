@@ -85,7 +85,7 @@ async function processRipScripts() {
       const mount = runtimeTag?.getAttribute('data-mount');
       if (mount) {
         const target = runtimeTag.getAttribute('data-target') || 'body';
-        js += `\n${mount}.new().mount(${JSON.stringify(target)});`;
+        js += `\n${mount}.mount(${JSON.stringify(target)});`;
       }
 
       try {
