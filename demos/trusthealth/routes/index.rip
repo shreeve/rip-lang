@@ -11,11 +11,8 @@ export Home = component
         mobileNavOpen: mobileNavOpen
 
       Intro
-
       Team
-
       About
-
       Footer contactOpen: contactOpen
 
       Contact contactOpen: contactOpen
