@@ -289,9 +289,9 @@ Rip's reactivity is framework-agnostic — use it with React, Vue, Svelte, or va
 Load `rip-ui.min.js` (~53KB Brotli) — the Rip compiler and pre-compiled UI framework in one file. Components are `.rip` source files, compiled on demand, rendered with fine-grained reactivity. No build step. No bundler.
 
 ```html
-<script type="module" src="rip-ui.min.js"></script>
+<script defer src="rip-ui.min.js"></script>
 
-<script type="text/rip" data-name="index">
+<script type="text/rip">
 export Home = component
   @count := 0
   render
@@ -300,9 +300,13 @@ export Home = component
       button @click: (-> @count++), "+"
       button @click: (-> @count--), "-"
 </script>
+
+<script type="text/rip">
+Home.new().mount('body')
+</script>
 ```
 
-That's it. The runtime auto-detects inline `data-name` components, compiles them, and launches the app with hash routing — no bootstrap script needed. Two keywords (`component` and `render`) are all the language adds. Everything else (`:=` state, `~=` computed, methods, lifecycle) is standard Rip.
+That's it. All `<script type="text/rip">` tags share scope — `export` makes names visible across tags. Two keywords (`component` and `render`) are all the language adds. Everything else (`:=` state, `~=` computed, methods, lifecycle) is standard Rip.
 
 The UI framework is built into rip-lang: file-based router, reactive stash, component store, and renderer. **[Try the demo](https://shreeve.github.io/rip-lang/demo.html)** — a complete app in one HTML file.
 
@@ -329,7 +333,7 @@ Smaller codebase, modern output, built-in reactivity.
 Run Rip directly in the browser — inline scripts and the console REPL both support `await` via the `!` operator:
 
 ```html
-<script type="module" src="rip-ui.min.js"></script>
+<script defer src="rip-ui.min.js"></script>
 <script type="text/rip">
   res = fetch! 'https://api.example.com/data'
   data = res.json!

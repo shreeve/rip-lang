@@ -488,7 +488,7 @@ primitives directly — one signal graph shared between framework and components
 
 | File | Lines | Role |
 |------|-------|------|
-| `ui.rip` | ~965 | Unified framework: stash, router (path + hash), renderer, launch |
+| `app.rip` | ~965 | Unified framework: stash, router (path + hash), renderer, launch |
 | `serve.rip` | ~93 | Server middleware: framework bundle, app bundle, SSE hot-reload |
 
 Key concepts:
