@@ -1,7 +1,7 @@
 {
   "name": "@rip-lang/swarm",
   "version": "1.2.16",
-  "description": "Parallel job runner with worker threads \u2014 setup once, swarm many",
+  "description": "Parallel job runner with worker threads - setup once, swarm many",
   "type": "module",
   "main": "swarm.rip",
   "bin": {

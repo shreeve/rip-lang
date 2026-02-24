@@ -1,7 +1,7 @@
 {
   "name": "rip",
   "displayName": "Rip",
-  "description": "Rip language support \u2014 syntax highlighting, types, and editor integration",
+  "description": "Rip language support - syntax highlighting, types, and editor integration",
   "version": "0.5.6",
   "publisher": "rip-lang",
   "license": "MIT",
