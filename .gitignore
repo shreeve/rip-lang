@@ -23,6 +23,9 @@ packages/vscode/dist/
 # Logs
 *.log
 
+# Databases
+*.duckdb*
+
 # Project-specific
 notes.txt
 .tool-versions
