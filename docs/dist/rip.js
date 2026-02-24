@@ -4856,6 +4856,9 @@ class __Component {
       this._root.parentNode.removeChild(this._root);
     }
   }
+  static mount(target = 'body') {
+    return new this().mount(target);
+  }
 }
 
 // Register on globalThis for runtime deduplication
@@ -8350,7 +8353,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.11";
-  var BUILD_DATE = "2026-02-24@20:42:27GMT";
+  var BUILD_DATE = "2026-02-24@21:02:22GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

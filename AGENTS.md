@@ -566,14 +566,43 @@ in one script tag are visible to all subsequent tags (exports are stripped
 via the `skipExports` compiler option, becoming plain `const` declarations
 in the shared scope).
 
+### Loading Flow
+
+`processRipScripts()` runs on `DOMContentLoaded` and handles all loading:
+
+1. Collect `data-src` URLs from the runtime `<script>` tag (whitespace-separated)
+2. Collect all `<script type="text/rip">` tags (inline `textContent` or external `src`)
+3. Fetch all external URLs in parallel via `Promise.all`
+4. Compile each source with `{ skipRuntimes: true, skipExports: true }`
+5. If `data-mount` is present, append `Component.new().mount(target)` to the compiled code
+6. Execute everything as one shared async IIFE
+7. If `data-launch` is present, call `launch()` with the bundle URL (server mode)
+
+### HTML Attributes
+
+| Attribute | On | Purpose |
+|-----------|-----|---------|
+| `data-src` | runtime script | Whitespace-separated URLs of `.rip` files to fetch and compile |
+| `data-mount` | runtime script | Component name to instantiate and mount after compilation |
+| `data-target` | runtime script | Mount target selector (default: `'body'`), pairs with `data-mount` |
+| `data-launch` | runtime script | Bundle URL for server mode — triggers `launch()` with full app lifecycle |
+| `data-hash` | runtime script | Enable hash-based routing (for `data-launch` apps) |
+
+### Component Mounting
+
+Every component class has a static `mount(target)` method:
+
+```coffee
+App.mount '#app'     # shorthand for App.new().mount('#app')
+App.mount()          # defaults to 'body'
+```
+
+This can be used from a `<script type="text/rip">` tag as an alternative to
+`data-mount`. `data-mount` is declarative (no extra script tag); `App.mount`
+is code-based (more flexible — conditional mounting, multiple mounts, etc.).
+
 ### Key Features
 
-- **`processRipScripts()`** — Collects all sources (inline script tags +
-  `data-src` URLs on the runtime tag), fetches external files in parallel,
-  compiles all with `{ skipRuntimes: true, skipExports: true }`, and
-  executes as one shared async IIFE.
-- **Server mode** — When `data-launch` is present on a script tag, `launch()`
-  is called with `bundleUrl` to load the app bundle from the `serve` middleware.
 - **`rip()` console REPL** — Wraps code in a Rip `do ->` block before
   compiling, so the compiler handles implicit return and auto-async natively.
   Sync code returns values directly; async code returns a Promise.

@@ -311,6 +311,11 @@ That's it. All `<script type="text/rip">` tags share scope — `export` makes na
 <script defer src="rip.min.js" data-mount="App"></script>
 <script type="text/rip">export App = component ...</script>
 
+<!-- Mount from code instead of data-mount -->
+<script defer src="rip.min.js"></script>
+<script type="text/rip">export App = component ...</script>
+<script type="text/rip">App.mount '#app'</script>
+
 <!-- External .rip files via data-src -->
 <script defer src="rip.min.js" data-mount="App" data-src="
   components/header.rip
@@ -326,6 +331,8 @@ That's it. All `<script type="text/rip">` tags share scope — `export` makes na
 <!-- Server mode with full app lifecycle (router, stash, hot reload) -->
 <script defer src="/rip/rip.min.js" data-launch="bundle"></script>
 ```
+
+Every component has a static `mount(target)` method — `App.mount '#app'` is shorthand for `App.new().mount('#app')`. Target defaults to `'body'`.
 
 The UI framework is built into rip-lang: file-based router, reactive stash, component store, and renderer. **[Try the demo](https://shreeve.github.io/rip-lang/demo.html)** — a complete app in one HTML file.
 

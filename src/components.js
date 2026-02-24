@@ -1914,6 +1914,9 @@ class __Component {
       this._root.parentNode.removeChild(this._root);
     }
   }
+  static mount(target = 'body') {
+    return new this().mount(target);
+  }
 }
 
 // Register on globalThis for runtime deduplication
