@@ -184,7 +184,7 @@ gh issue view 1
 # Build & test
 bun run parser         # Rebuild parser from grammar
 bun run test           # Run all tests
-bun run browser        # Build browser bundle
+bun run build          # Build browser bundle
 bun run serve          # Dev server (localhost:3000)
 ```
 
@@ -350,7 +350,7 @@ bun test/runner.js test/rip/RELEVANT_FILE.rip  # Verify they fail
 bun run test  # All tests must pass
 
 # 7. Build browser bundle (if code changes)
-bun run browser  # Updates web REPL
+bun run build  # Updates web REPL
 
 # 8. Update documentation
 # - README.md (if user-facing change)

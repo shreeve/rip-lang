@@ -459,7 +459,7 @@ rip -t file.rip        # Tokens
 rip -s file.rip        # S-expressions
 bun run test           # 1251 tests
 bun run parser         # Rebuild parser
-bun run browser        # Build browser bundle
+bun run build          # Build browser bundle
 ```
 
 ---

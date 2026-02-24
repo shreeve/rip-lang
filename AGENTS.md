@@ -574,7 +574,7 @@ in the shared scope).
 2. Collect all `<script type="text/rip">` tags (inline `textContent` or external `src`)
 3. Fetch all external URLs in parallel via `Promise.all`
 4. Compile each source with `{ skipRuntimes: true, skipExports: true }`
-5. If `data-mount` is present, append `Component.new().mount(target)` to the compiled code
+5. If `data-mount` is present, append `Component.mount(target)` to the compiled code
 6. Execute everything as one shared async IIFE
 7. If `data-launch` is present, call `launch()` with the bundle URL (server mode)
 
