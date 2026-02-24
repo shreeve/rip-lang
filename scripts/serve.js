@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 // Simple static file server with brotli support
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, statSync } from 'fs';
 import { join, extname, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -35,6 +35,11 @@ function handleRequest(req) {
   // Strip /rip-lang/ prefix if present (for GitHub Pages compatibility)
   if (pathname.startsWith('/rip-lang/')) {
     pathname = pathname.slice('/rip-lang'.length);
+  }
+
+  // Redirect /dir to /dir/ if it's a directory
+  if (!pathname.endsWith('/') && !extname(pathname) && existsSync(join(ROOT, pathname)) && statSync(join(ROOT, pathname)).isDirectory()) {
+    return Response.redirect(pathname + '/', 301);
   }
 
   // Default to index.html for directory requests
