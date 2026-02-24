@@ -651,7 +651,7 @@ Three playground versions and a demo app in `docs/`, all single HTML files with 
 |------|----------|-------|
 | `playground-js.html` | Pure JavaScript (reference) | ~1,800 |
 | `playground-rip.html` | Rip via `<script type="text/rip">` | ~1,623 |
-| `playground-rip-ui.html` | Rip UI component via `launch bundle:` | ~1,595 |
+| `playground-rip-ui.html` | Rip UI component via `launch bundle:` (uses `rip.min.js`) | ~1,595 |
 | `demo.html` | Full Rip UI app via `launch bundle:` with hash routing | ~337 |
 
 All three playgrounds share: same CSS, same Monarch tokenizer, same default code sample, same 16 features (live compiler, REPL, example snippets, theme select, dark/light mode, 5 output toggles, resizable panes, source persistence, URL hash routing, keyboard shortcuts).

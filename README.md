@@ -286,10 +286,10 @@ Rip's reactivity is framework-agnostic — use it with React, Vue, Svelte, or va
 
 ## Rip UI
 
-Load `rip-ui.min.js` (~53KB Brotli) — the Rip compiler and pre-compiled UI framework in one file. Components are `.rip` source files, compiled on demand, rendered with fine-grained reactivity. No build step. No bundler.
+Load `rip.min.js` (~54KB Brotli) — the Rip compiler and UI framework in one file. Components are `.rip` source files, compiled on demand, rendered with fine-grained reactivity. No build step. No bundler.
 
 ```html
-<script defer src="rip-ui.min.js"></script>
+<script defer src="rip.min.js"></script>
 
 <script type="text/rip">
 export Home = component
@@ -333,7 +333,7 @@ Smaller codebase, modern output, built-in reactivity.
 Run Rip directly in the browser — inline scripts and the console REPL both support `await` via the `!` operator:
 
 ```html
-<script defer src="rip-ui.min.js"></script>
+<script defer src="rip.min.js"></script>
 <script type="text/rip">
   res = fetch! 'https://api.example.com/data'
   data = res.json!

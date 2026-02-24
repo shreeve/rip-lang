@@ -52,7 +52,7 @@
   and file watchers for hot reload via SSE.
 - **`launch bundle:`** — inline all components as heredoc strings in a single
   HTML file. Zero-server deployment. `docs/demo.html` is a 337-line example.
-- **Combined bundle** — `rip-ui.min.js` (~52KB Brotli) packages the compiler
+- **Combined bundle** — `rip.min.js` (~54KB Brotli) packages the compiler
   and pre-compiled UI framework in one file. Eliminates the `ui.rip` fetch
   and its runtime compilation. `importRip('ui.rip')` is intercepted and returns
   the pre-compiled module instantly.
