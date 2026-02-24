@@ -8,7 +8,7 @@ config = Stash configData
 DB_URL = config.database.url
 
 export schema = do ->
-  s = Schema.load './app.schema', import.meta.url
+  s = Schema.load '../app.schema', import.meta.url
   s.connect DB_URL
   s
 
