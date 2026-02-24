@@ -1,43 +1,34 @@
 # Dependencies
 node_modules/
 bun.lockb
+*.lock
 
-# Build output
+# Build artifacts
 zig-out/
 .zig-cache/
 packages/vscode/dist/
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# IDE
-.vscode/
-.idea/
 *.vsix
+
+# Runtime state
+.swarm
+.auth
+.env
+.env.local
+*.local.*
+.manifest.json
+
+# OS and editor
+.DS_Store
 *.swp
-*.swo
 *~
 
 # Logs
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 
-# Testing
-.swarm
-
-# Misc
-.auth
-.env
-.env.local
-.tool-versions
+# Project-specific
 notes.txt
-*.lock
+.tool-versions
 /linguist
-.manifest.json
-/demos/streamline/ARCHIVE
-*.local.*
 /demos/candor
-demos/websites/
+/demos/streamline/ARCHIVE
+/demos/websites/
