@@ -26,15 +26,15 @@ bun test/runner.js test/rip/FILE.rip     # Specific file
 bun run parser
 
 # Build browser bundle
-bun run browser
+bun run build
 ```
 
 ### Current Status
 
 | Metric | Value |
 |--------|-------|
-| Version | 3.13.7 |
-| Tests | 1,251 |
+| Version | 3.13.11 |
+| Tests | 1,255 |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
 
@@ -73,7 +73,7 @@ rip-lang/
 │   ├── RIP-LANG.md      # Language reference (includes reactivity, future ideas)
 │   ├── RIP-TYPES.md     # Type system specification
 │   └── RIP-INTERNALS.md # Compiler architecture & design decisions
-├── test/rip/            # 25 test files (1,251 tests)
+├── test/rip/            # 25 test files (1,255 tests)
 └── scripts/             # Build utilities
 ```
 
@@ -416,7 +416,7 @@ code "name", "x + y", "(x + y)"
 fail "name", "invalid syntax"
 ```
 
-### Test Files (25 files, 1,251 tests)
+### Test Files (25 files, 1,255 tests)
 
 ```
 test/rip/
@@ -705,7 +705,7 @@ Or open directly: `open docs/demo.html`
 - **Never add dependencies** — Zero dependencies is a core principle
 - Run `bun run test` before committing
 - Run `bun run parser` after grammar changes
-- Run `bun run browser` (or `bun run build`) after codegen or browser.js changes
+- Run `bun run build` after codegen or browser.js changes
 
 ---
 
@@ -786,7 +786,7 @@ All use `??=` (overridable by redeclaring). The REPL uses `skipPreamble: true` a
 ```bash
 bun run test      # Run all tests
 bun run parser    # Rebuild parser from grammar
-bun run browser   # Build browser bundle
+bun run build     # Build browser bundle
 bun run serve     # Start dev server (localhost:3000)
 ```
 

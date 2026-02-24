@@ -289,7 +289,7 @@ Rip's reactivity is framework-agnostic — use it with React, Vue, Svelte, or va
 Load `rip.min.js` (~54KB Brotli) — the Rip compiler and UI framework in one file. Components are `.rip` source files, compiled on demand, rendered with fine-grained reactivity. No build step. No bundler.
 
 ```html
-<script defer src="rip.min.js"></script>
+<script defer src="rip.min.js" data-mount="Home"></script>
 
 <script type="text/rip">
 export Home = component
@@ -300,13 +300,32 @@ export Home = component
       button @click: (-> @count++), "+"
       button @click: (-> @count--), "-"
 </script>
-
-<script type="text/rip">
-Home.new().mount('body')
-</script>
 ```
 
-That's it. All `<script type="text/rip">` tags share scope — `export` makes names visible across tags. Two keywords (`component` and `render`) are all the language adds. Everything else (`:=` state, `~=` computed, methods, lifecycle) is standard Rip.
+That's it. All `<script type="text/rip">` tags share scope — `export` makes names visible across tags. `data-mount` mounts the named component after all scripts execute. Two keywords (`component` and `render`) are all the language adds. Everything else (`:=` state, `~=` computed, methods, lifecycle) is standard Rip.
+
+**Loading patterns:**
+
+```html
+<!-- Inline components + declarative mount -->
+<script defer src="rip.min.js" data-mount="App"></script>
+<script type="text/rip">export App = component ...</script>
+
+<!-- External .rip files via data-src -->
+<script defer src="rip.min.js" data-mount="App" data-src="
+  components/header.rip
+  components/footer.rip
+  app.rip
+"></script>
+
+<!-- External .rip files via separate tags -->
+<script defer src="rip.min.js" data-mount="App"></script>
+<script type="text/rip" src="components/header.rip"></script>
+<script type="text/rip" src="app.rip"></script>
+
+<!-- Server mode with full app lifecycle (router, stash, hot reload) -->
+<script defer src="/rip/rip.min.js" data-launch="bundle"></script>
+```
 
 The UI framework is built into rip-lang: file-based router, reactive stash, component store, and renderer. **[Try the demo](https://shreeve.github.io/rip-lang/demo.html)** — a complete app in one HTML file.
 
