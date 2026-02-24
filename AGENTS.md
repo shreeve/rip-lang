@@ -640,7 +640,6 @@ are not inherited by child processes unless `env` is passed explicitly.
 | `NODE_PATH` ignored by worker threads | Rewrite imports to absolute paths in `onLoad` |
 | Plugin `onResolve` doesn't fire for imports in `onLoad`-compiled source | Do import rewriting inside `onLoad` instead |
 | `require.resolve({ paths })` ignores `paths` inside plugin handlers | Use `import.meta.resolve` instead |
-| Bare `try` without `catch` compiles to invalid JS in Rip | Always include explicit `catch` block |
 
 ---
 

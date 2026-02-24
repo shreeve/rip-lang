@@ -1608,6 +1608,8 @@ export class CodeGenerator {
 
     if (rest.length === 3) tryCode += ' finally ' + this.generate(rest[2], 'statement');
 
+    if (rest.length === 1) tryCode += ' catch {}';
+
     if (needsReturns) {
       let isAsync = this.containsAwait(rest[0]) || (rest[1] && this.containsAwait(rest[1]));
       return `(${isAsync ? 'async ' : ''}() => { ${tryCode} })()`;
