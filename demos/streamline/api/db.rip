@@ -69,8 +69,10 @@ export setup = ->
     sql! stmt.trim() + ';' if stmt.trim()
   p '[setup] Tables created'
 
+  values = []
   for week in [1, 2, 3, 4]
     for slot in ['09:00', '10:00', '11:00', '14:00']
       for i in [1..4]
-        sql! 'INSERT INTO spots (week, slot) VALUES (?, ?)', [week, slot]
-  p '[setup] Seeded spots for weeks 1-4'
+        values.push "(#{week}, '#{slot}')"
+  sql! "INSERT INTO spots (week, slot) VALUES #{values.join(', ')}"
+  p '[setup] Seeded 64 spots for weeks 1-4'
