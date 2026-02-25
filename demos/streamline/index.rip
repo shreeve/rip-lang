@@ -24,7 +24,7 @@ use serve
   title: config.app.name
   watch: true
 
-get '/index.css' -> @send "#{dir}/index.css"
+get '/app.css' -> @send "#{dir}/app.css"
 
 # Diagnostic routes
 get '/ping' ->
