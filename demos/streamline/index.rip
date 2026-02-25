@@ -24,7 +24,8 @@ use serve
   title: config.app.name
   watch: true
 
-get '/app.css' -> @send "#{dir}/app.css"
+get '/app.css'     -> @send "#{dir}/app.css"
+get '/favicon.ico' -> @send "#{dir}/favicon.png", 'image/png'
 
 # Diagnostic routes
 get '/ping' ->
