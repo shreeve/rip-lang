@@ -3,6 +3,7 @@
 import { get, use, start } from '@rip-lang/api'
 import { prettyJson, sessions } from '@rip-lang/api/middleware'
 import { serve } from '@rip-lang/api/serve'
+import { setup } from './api/db.rip'
 import { Stash } from './api/lib/stash.rip'
 import configData from './config.rip'
 
@@ -40,7 +41,5 @@ get '/config' ->
 # SPA fallback for client-side routing
 get '/*' -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 
-unless process.env.RIP_WORKER_MODE
-  { setup } = import!('./api/db.rip')
-  setup!()
+setup!() unless process.env.RIP_WORKER_MODE
 start port: config.app.port
