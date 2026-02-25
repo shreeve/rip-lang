@@ -45,11 +45,11 @@ dbReachable = ->
 startDb = ->
   logFile = "#{DB_FILE}.log"
   fd = openSync logFile, 'a'
-  proc = Bun.spawn ['rip-db', DB_FILE],
+  Bun.spawn(['rip-db', DB_FILE],
     stdout: fd
     stderr: fd
     stdio: ['ignore', fd, fd]
-  proc.unref()
+  ).unref()
 
   for attempt in [1..10]
     sleep! 200
