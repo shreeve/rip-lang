@@ -1,9 +1,9 @@
 # Trust Health — Marketing site rebuilt in Rip
 #
-# Run: rip-server -w
+# Run: rip serve
 
-import { get, use, start, notFound } from '@rip-lang/api'
-import { serve } from '@rip-lang/api/middleware'
+import { get, use, start, notFound } from '@rip-lang/server'
+import { serve } from '@rip-lang/server/middleware'
 
 dir = import.meta.dir
 

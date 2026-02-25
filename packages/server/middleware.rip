@@ -1,10 +1,10 @@
 # ==============================================================================
-# @rip-lang/api/middleware — Built-in Middleware
+# @rip-lang/server/middleware — Built-in Middleware
 # ==============================================================================
 #
 # Usage:
-#   import { cors, logger, compress, sessions, htmlJson, serve } from '@rip-lang/api/middleware'
-#   import { session } from '@rip-lang/api'
+#   import { cors, logger, compress, sessions, htmlJson, serve } from '@rip-lang/server/middleware'
+#   import { session } from '@rip-lang/server'
 #
 #   use logger()
 #   use cors origin: 'https://myapp.com'
@@ -33,7 +33,7 @@
 #   preflight: boolean — handle OPTIONS before route matching (default: false)
 #
 
-import { get, enableCorsPreflight } from '@rip-lang/api'
+import { get, enableCorsPreflight } from '@rip-lang/server'
 import { fileURLToPath } from 'node:url'
 import { dirname } from 'node:path'
 import { existsSync } from 'node:fs'
@@ -209,8 +209,8 @@ export compress = (opts = {}) ->
 #   sameSite: 'Strict' | 'Lax' | 'None' (default 'Lax')
 #
 # Usage:
-#   import { session } from '@rip-lang/api'
-#   import { sessions } from '@rip-lang/api/middleware'
+#   import { session } from '@rip-lang/server'
+#   import { sessions } from '@rip-lang/server/middleware'
 #
 #   use sessions secret: process.env.SESSION_SECRET
 #

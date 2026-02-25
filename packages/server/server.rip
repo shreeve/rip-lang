@@ -309,12 +309,8 @@ parseFlags = (argv) ->
   # Debug mode
   _debugMode = has('--debug')
 
-  # Watch mode: -w, --watch, -w=glob, --watch=glob
-  watchGlob = do ->
-    return getKV('-w=') if getKV('-w=')?
-    return getKV('--watch=') if getKV('--watch=')?
-    return '*.rip' if has('-w') or has('--watch')
-    null
+  # Watch mode: on by default, --static disables everything
+  watch = getKV('--watch=') or '*.rip'
 
   httpsPort = do ->
     kv = getKV('--https-port=')
@@ -345,7 +341,7 @@ parseFlags = (argv) ->
     readTimeoutMs: coerceInt(getKV('--read-timeout-ms='), coerceInt(process.env.RIP_READ_TIMEOUT_MS, 30000))
     jsonLogging: has('--json-logging')
     accessLog: not has('--no-access-log')
-    watchGlob: watchGlob
+    watch: watch
   }
 
 # ==============================================================================
@@ -401,7 +397,7 @@ runWorker = ->
 
       unless h
         try
-          api = import!('@rip-lang/api')
+          api = import!('@rip-lang/server')
           h = api?.startHandler?.()
         catch
           null
@@ -544,11 +540,11 @@ class Manager
           @rollingRestart().finally => @isRolling = false
       , 50
 
-      # Watch files in app directory (opt-in via -w/--watch)
-      if @flags.watchGlob
+      # Watch files in app directory (on by default, --static disables)
+      if @flags.watch
         entryFile = @flags.appEntry
         entryBase = basename(entryFile)
-        watchExt = if @flags.watchGlob.startsWith('*.') then @flags.watchGlob.slice(1) else null
+        watchExt = if @flags.watch.startsWith('*.') then @flags.watch.slice(1) else null
         debounceMs = @flags.debounce or 250
         try
           watch @flags.appBaseDir, { recursive: true }, (event, filename) =>
@@ -556,7 +552,7 @@ class Manager
             if watchExt
               return unless filename.endsWith(watchExt)
             else
-              return unless filename is @flags.watchGlob or filename.endsWith("/#{@flags.watchGlob}")
+              return unless filename is @flags.watch or filename.endsWith("/#{@flags.watch}")
             return if filename is entryBase or filename.endsWith("/#{entryBase}")
             # Touch entry file to trigger rolling restart
             try
@@ -1180,15 +1176,14 @@ main = ->
       rip-server - Pure Rip application server
 
       Usage:
-        rip-server [options] [app-path] [app-name]
-        rip-server [options] [app-path]@<alias1>,<alias2>,...
+        rip serve [options] [app-path] [app-name]
+        rip serve [options] [app-path]@<alias1>,<alias2>,...
 
       Options:
         -h, --help              Show this help
         -v, --version           Show version
-        -w, --watch             Watch *.rip files for changes (hot reload)
-        -w=<glob>               Watch custom glob pattern (e.g., -w=*.ts)
-        --static                Disable hot reload
+        --watch=<glob>          Watch glob pattern (default: *.rip)
+        --static                Disable hot reload and file watching
         --env=<mode>            Set environment (dev, production)
         --debug                 Enable debug logging
 
@@ -1208,10 +1203,10 @@ main = ->
         r:<n>,<s>s              Restart policy: max requests, max seconds
 
       Examples:
-        rip-server              Start with ./index.rip
-        rip-server -w           Start with file watching
-        rip-server myapp        Start with app name "myapp"
-        rip-server api -w 8080  Watch mode on port 8080
+        rip serve               Start with ./index.rip (watches *.rip)
+        rip serve myapp         Start with app name "myapp"
+        rip serve http          HTTP only (no TLS)
+        rip serve --static w:8  Production: no reload, 8 workers
     """
     return
 

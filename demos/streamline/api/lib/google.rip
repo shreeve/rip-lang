@@ -60,7 +60,7 @@
 #   Keys rotate infrequently (~every few months). Cache is refreshed
 #   automatically when a token's key ID (kid) is not found in cache.
 #
-#   For multi-worker servers (like rip-server), each worker maintains
+#   For multi-worker servers (like rip serve), each worker maintains
 #   its own cache. This is efficient because:
 #   - Keys are small (~3 keys, ~1KB total)
 #   - Fetch is fast (~100-150ms)

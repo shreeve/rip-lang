@@ -1,21 +1,28 @@
 {
   "name": "@rip-lang/server",
   "version": "1.2.11",
-  "description": "Pure Rip application server - multi-worker, hot reload, HTTPS, mDNS",
+  "description": "Pure Rip web framework and application server",
   "type": "module",
-  "main": "server.rip",
+  "main": "api.rip",
   "exports": {
-    ".": "./server.rip"
+    ".": "./api.rip",
+    "./middleware": "./middleware.rip",
+    "./server": "./server.rip"
   },
   "bin": {
     "rip-server": "./bin/rip-server"
   },
   "scripts": {
     "build": "rip -c server.rip",
-    "test": "echo \"Tests coming soon\" && exit 0"
+    "test": "rip tests/read.test.rip"
   },
   "keywords": [
     "server",
+    "api",
+    "web-framework",
+    "routing",
+    "middleware",
+    "validation",
     "app-server",
     "hot-reload",
     "multi-worker",
@@ -38,13 +45,15 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": ">=3.13.11",
-    "@rip-lang/api": "^1.2.7"
+    "rip-lang": ">=3.13.11"
   },
   "files": [
-    "bin/",
+    "api.rip",
+    "middleware.rip",
     "server.rip",
     "server.html",
+    "bin/",
+    "tests/",
     "docs/",
     "README.md"
   ]

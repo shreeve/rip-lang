@@ -39,7 +39,7 @@
   "license": "MIT",
   "dependencies": {
     "rip-lang": ">=3.13.11",
-    "@rip-lang/api": "^1.2.7"
+    "@rip-lang/server": ">=1.2.11"
   },
   "files": [
     "db.rip",

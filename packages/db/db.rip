@@ -19,8 +19,8 @@
 #
 # ==============================================================================
 
-import { get, post, read, start, use } from '@rip-lang/api'
-import { cors } from '@rip-lang/api/middleware'
+import { get, post, read, start, use } from '@rip-lang/server'
+import { cors } from '@rip-lang/server/middleware'
 import { version as VERSION } from './package.json'
 
 # Database access via pure Bun FFI

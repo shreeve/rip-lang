@@ -1,5 +1,5 @@
 # ==============================================================================
-# @rip-lang/api — Pure Rip API Framework
+# @rip-lang/server — Pure Rip API Framework
 # ==============================================================================
 #
 # A zero-dependency, Hono-compatible API framework written entirely in Rip.

@@ -1,5 +1,5 @@
-import { get, use, start } from '@rip-lang/api'
-import { serve } from '@rip-lang/api/middleware'
+import { get, use, start } from '@rip-lang/server'
+import { serve } from '@rip-lang/server/middleware'
 
 dir = import.meta.dir
 

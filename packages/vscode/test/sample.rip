@@ -229,7 +229,7 @@ t = arr?[0]          # Optional indexing
 # Modules
 # ------------------------------------------------------------------------------
 
-import { get, post, start } from '@rip-lang/api'
+import { get, post, start } from '@rip-lang/server'
 import fs from 'fs'
 import * as path from 'path'
 

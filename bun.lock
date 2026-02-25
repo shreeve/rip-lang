@@ -7,9 +7,8 @@
     },
     "packages/all": {
       "name": "@rip-lang/all",
-      "version": "3.13.21",
+      "version": "3.13.22",
       "dependencies": {
-        "@rip-lang/api": ">=1.3.9",
         "@rip-lang/csv": ">=1.3.4",
         "@rip-lang/db": ">=1.3.13",
         "@rip-lang/grid": ">=0.2.8",
@@ -19,14 +18,7 @@
         "@rip-lang/server": ">=1.2.11",
         "@rip-lang/swarm": ">=1.2.16",
         "@rip-lang/x12": ">=0.2.6",
-        "rip-lang": ">=3.13.12",
-      },
-    },
-    "packages/api": {
-      "name": "@rip-lang/api",
-      "version": "1.3.9",
-      "dependencies": {
-        "rip-lang": ">=3.13.11",
+        "rip-lang": ">=3.13.13",
       },
     },
     "packages/csv": {
@@ -43,7 +35,7 @@
         "rip-db": "./bin/rip-db",
       },
       "dependencies": {
-        "@rip-lang/api": "^1.2.7",
+        "@rip-lang/server": ">=1.2.11",
         "rip-lang": ">=3.13.11",
       },
     },
@@ -89,7 +81,6 @@
         "rip-server": "./bin/rip-server",
       },
       "dependencies": {
-        "@rip-lang/api": "^1.2.7",
         "rip-lang": ">=3.13.11",
       },
     },
@@ -105,7 +96,7 @@
     },
     "packages/vscode": {
       "name": "rip",
-      "version": "0.5.6",
+      "version": "0.5.7",
       "dependencies": {
         "vscode-languageclient": "^9.0.1",
         "vscode-languageserver": "^9.0.1",
@@ -181,8 +172,6 @@
 
     "@rip-lang/all": ["@rip-lang/all@workspace:packages/all"],
 
-    "@rip-lang/api": ["@rip-lang/api@workspace:packages/api"],
-
     "@rip-lang/csv": ["@rip-lang/csv@workspace:packages/csv"],
 
     "@rip-lang/db": ["@rip-lang/db@workspace:packages/db"],
@@ -213,7 +202,7 @@
 
     "rip": ["rip@workspace:packages/vscode"],
 
-    "rip-lang": ["rip-lang@3.13.12", "", { "bin": { "rip": "bin/rip" } }, "sha512-5hAcv92yQwJXxzVX8cSFdJe6J6aswLpG4SMnmlF+JYIyaR/xsjcqY+h1vmJHp2k5XeXaCwWY85DTs73Mupwalg=="],
+    "rip-lang": ["rip-lang@3.13.13", "", { "bin": { "rip": "bin/rip" } }, "sha512-yzj6cjpV4NxXXeFlCrZk3Xdqx7DK/BbQrE8FpMppE3696sCnWnErteXt33nLrcUvkK4t5tsws3yAI2PLidNX5w=="],
 
     "semver": ["semver@7.7.4", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-vFKC2IEtQnVhpT78h1Yp8wzwrf8CM+MzKMHGJZfBtzhZNycRFnXsHk6E5TxIkkMsgNS7mdX3AGB7x2QM2di4lA=="],
 
