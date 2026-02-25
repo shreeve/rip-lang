@@ -10,6 +10,7 @@
 #   Server:     start, startHandler, fetch, App
 #   Filters:    raw, before, after
 #   Handlers:   onError, notFound
+#   Errors:     error!, notice!, bail!
 #   Validation: read, validators, registerValidator, getValidator
 #   Context:    ctx, session, env, subrequest
 #   Utilities:  isBlank, toName, toPhone, mimeType
@@ -271,8 +272,12 @@ smart = (fn) ->
     catch err
       status = err?.status or 500
       console.error 'Handler error:', err if status >= 500
-      message = err?.message or 'Internal Server Error'
-      new Response message, { status, headers: { 'Content-Type': 'text/plain' } }
+      if err?.notice
+        body = JSON.stringify { error: { notice: err.notice } }
+        new Response body, { status, headers: { 'Content-Type': 'application/json' } }
+      else
+        message = err?.message or 'Internal Server Error'
+        new Response message, { status, headers: { 'Content-Type': 'text/plain' } }
 
 # ==============================================================================
 # DSL: Route Registration
@@ -450,6 +455,23 @@ export session = new Proxy {},
 export env = new Proxy {}, get: (_, key) -> process.env[key]
 
 # ==============================================================================
+# Error Helpers — Halt request with an HTTP error
+# ==============================================================================
+
+export error = (message = 'Bad request', status = 400) ->
+  throw Object.assign(new Error(message), { status })
+
+export notice = (message = 'Something went wrong', status = 400) ->
+  throw Object.assign(new Error(message), { status, notice: message })
+
+export bail = ->
+  store = requestContext.getStore()
+  if store?.env?.session?
+    for key of store.env.session
+      delete store.env.session[key]
+  throw Object.assign(new Error('Forbidden'), { status: 403 })
+
+# ==============================================================================
 # Utility Functions
 # ==============================================================================
 
@@ -607,7 +629,7 @@ export read = (name = null, type = null, miss = null) ->
   # missing value helper
   done = (must = false) ->
     return miss() if typeof miss is 'function'
-    throw new Error "Missing required field: #{name}" if must
+    throw Object.assign(new Error("Missing required field: #{name}"), { status: 400 }) if must
     return miss ?? null
 
   # get value from store
