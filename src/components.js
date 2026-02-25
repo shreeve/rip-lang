@@ -397,7 +397,17 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       // ─────────────────────────────────────────────────────────────────────
       // Implicit nesting (inject -> before INDENT)
       // ─────────────────────────────────────────────────────────────────────
-      if (nextToken && nextToken[0] === 'INDENT' && !nextToken.fromThen) {
+      if (nextToken && nextToken[0] === 'INDENT') {
+        // Skip fromThen INDENTs inside string interpolation (e.g. "#{if x then y else z}")
+        if (nextToken.fromThen) {
+          let depth = 0;
+          for (let j = i; j >= 0; j--) {
+            let jt = tokens[j][0];
+            if (jt === 'INTERPOLATION_END' || jt === 'STRING_END') depth++;
+            if (jt === 'INTERPOLATION_START' || jt === 'STRING_START') depth--;
+            if (depth < 0) { return 1; }
+          }
+        }
         if (tag === '->' || tag === '=>' || tag === 'CALL_START' || tag === '(') {
           return 1;
         }

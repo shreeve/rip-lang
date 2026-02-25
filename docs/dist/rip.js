@@ -3713,7 +3713,20 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             return 2;
           }
         }
-        if (nextToken && nextToken[0] === "INDENT" && !nextToken.fromThen) {
+        if (nextToken && nextToken[0] === "INDENT") {
+          if (nextToken.fromThen) {
+            let depth = 0;
+            for (let j = i;j >= 0; j--) {
+              let jt = tokens[j][0];
+              if (jt === "INTERPOLATION_END" || jt === "STRING_END")
+                depth++;
+              if (jt === "INTERPOLATION_START" || jt === "STRING_START")
+                depth--;
+              if (depth < 0) {
+                return 1;
+              }
+            }
+          }
           if (tag === "->" || tag === "=>" || tag === "CALL_START" || tag === "(") {
             return 1;
           }
@@ -8359,8 +8372,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.21";
-  var BUILD_DATE = "2026-02-25@12:40:03GMT";
+  var VERSION = "3.13.22";
+  var BUILD_DATE = "2026-02-25@12:47:56GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
