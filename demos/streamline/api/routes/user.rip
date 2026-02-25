@@ -1,6 +1,6 @@
 # User routes — get and update profile
 
-import { get, patch, prefix, read, session } from '@rip-lang/api'
+import { get, patch, prefix, read, session } from '@rip-lang/server'
 import { schema } from '../db.rip'
 
 User = schema.model 'User'

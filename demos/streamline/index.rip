@@ -1,7 +1,7 @@
 # Streamline Swim School — Server Entry Point
 
-import { get, use, start } from '@rip-lang/api'
-import { htmlJson, sessions, serve } from '@rip-lang/api/middleware'
+import { get, use, start } from '@rip-lang/server'
+import { htmlJson, sessions, serve } from '@rip-lang/server/middleware'
 import { setup } from './api/db.rip'
 import { Stash } from './api/lib/stash.rip'
 import configData from './config.rip'
@@ -24,7 +24,7 @@ use serve
   title: config.app.name
   watch: true
 
-get '/css/*' -> @send "#{dir}/css/#{@req.path.slice(5)}"
+get '/index.css' -> @send "#{dir}/index.css"
 
 # Diagnostic routes
 get '/ping' ->
