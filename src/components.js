@@ -106,23 +106,6 @@ function isPublicProp(target) {
   return Array.isArray(target) && target[0] === '.' && target[1] === 'this';
 }
 
-/**
- * Detect fragment root and collect direct child variables for proper removal.
- * After insertBefore, a DocumentFragment is empty — .remove() is a no-op.
- * Callers must remove each child element individually.
- */
-function getFragChildren(rootVar, createLines, localizeVar) {
-  const root = localizeVar(rootVar);
-  if (!/_frag\d+$/.test(root)) return null;
-  const children = [];
-  const re = new RegExp(`^${root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.appendChild\\(([^)]+)\\);`);
-  for (const line of createLines) {
-    const m = localizeVar(line).match(re);
-    if (m) children.push(m[1]);
-  }
-  return children.length > 0 ? children : null;
-}
-
 // ============================================================================
 // Prototype Installation
 // ============================================================================
@@ -482,16 +465,6 @@ export function installComponentSupport(CodeGenerator, Lexer) {
   // ==========================================================================
 
   /**
-   * Localize variable references for block factories.
-   * Converts this._elN to _elN and this.x to ctx.x.
-   */
-  proto.localizeVar = function(line) {
-    let result = line.replace(/this\.(_el\d+|_t\d+|_anchor\d+|_frag\d+|_slot\d+|_c\d+|_inst\d+|_empty\d+)/g, '$1');
-    result = result.replace(/\bthis\b/g, 'ctx');
-    return result;
-  };
-
-  /**
    * Check if name is an HTML/SVG tag
    */
   proto.isHtmlTag = function(name) {
@@ -538,12 +511,13 @@ export function installComponentSupport(CodeGenerator, Lexer) {
    * For component context where state variables are signals.
    */
   proto.transformComponentMembers = function(sexpr) {
+    const self = this._self;
     if (!Array.isArray(sexpr)) {
       if (typeof sexpr === 'string' && this.reactiveMembers && this.reactiveMembers.has(sexpr)) {
-        return ['.', ['.', 'this', sexpr], 'value'];
+        return ['.', ['.', self, sexpr], 'value'];
       }
       if (typeof sexpr === 'string' && this.componentMembers && this.componentMembers.has(sexpr)) {
-        return ['.', 'this', sexpr];
+        return ['.', self, sexpr];
       }
       return sexpr;
     }
@@ -552,9 +526,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     if (sexpr[0] === '.' && sexpr[1] === 'this' && typeof sexpr[2] === 'string') {
       const memberName = sexpr[2];
       if (this.reactiveMembers && this.reactiveMembers.has(memberName)) {
-        return ['.', sexpr, 'value'];  // this.X → this.X.value
+        return ['.', ['.', self, memberName], 'value'];
       }
-      return sexpr;
+      return this._factoryMode ? ['.', self, sexpr[2]] : sexpr;
     }
 
     // Dot access: transform the object but not the property name
@@ -797,10 +771,10 @@ export function installComponentSupport(CodeGenerator, Lexer) {
    */
   proto.generateInComponent = function(sexpr, context) {
     if (typeof sexpr === 'string' && this.reactiveMembers && this.reactiveMembers.has(sexpr)) {
-      return `this.${sexpr}.value`;
+      return `${this._self}.${sexpr}.value`;
     }
     if (typeof sexpr === 'string' && this.componentMembers && this.componentMembers.has(sexpr)) {
-      return `this.${sexpr}`;
+      return `${this._self}.${sexpr}`;
     }
     if (Array.isArray(sexpr) && this.reactiveMembers) {
       const transformed = this.transformComponentMembers(sexpr);
@@ -832,6 +806,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     this._setupLines = [];
     this._blockFactories = [];
     this._loopVarStack = [];
+    this._factoryMode = false;
+    this._factoryVars = null;
+    this._fragChildren = new Map();
 
     const statements = this.is(body, 'block') ? body.slice(1) : [body];
 
@@ -843,10 +820,13 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     } else {
       rootVar = this.newElementVar('frag');
       this._createLines.push(`${rootVar} = document.createDocumentFragment();`);
+      const children = [];
       for (const stmt of statements) {
         const childVar = this.generateNode(stmt);
         this._createLines.push(`${rootVar}.appendChild(${childVar});`);
+        children.push(childVar);
       }
+      this._fragChildren.set(rootVar, children);
     }
 
     return {
@@ -864,12 +844,30 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
   /** Generate a unique element variable name */
   proto.newElementVar = function(hint = 'el') {
-    return `this._${hint}${this._elementCount++}`;
+    const name = `_${hint}${this._elementCount++}`;
+    if (this._factoryVars) this._factoryVars.add(name);
+    return this._factoryMode ? name : `this.${name}`;
   };
 
   /** Generate a unique text node variable name */
   proto.newTextVar = function() {
-    return `this._t${this._textCount++}`;
+    const name = `_t${this._textCount++}`;
+    if (this._factoryVars) this._factoryVars.add(name);
+    return this._factoryMode ? name : `this.${name}`;
+  };
+
+  /** Context reference — 'this' in component body, 'ctx' in block factories */
+  Object.defineProperty(proto, '_self', {
+    get() { return this._factoryMode ? 'ctx' : 'this'; }
+  });
+
+  /** Push an effect line, wrapping with disposer tracking in factory mode */
+  proto._pushEffect = function(body) {
+    if (this._factoryMode) {
+      this._setupLines.push(`disposers.push(__effect(() => { ${body} }));`);
+    } else {
+      this._setupLines.push(`__effect(() => { ${body} });`);
+    }
   };
 
   // --------------------------------------------------------------------------
@@ -889,7 +887,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       if (this.reactiveMembers && this.reactiveMembers.has(str)) {
         const textVar = this.newTextVar();
         this._createLines.push(`${textVar} = document.createTextNode('');`);
-        this._setupLines.push(`__effect(() => { ${textVar}.data = this.${str}.value; });`);
+        this._pushEffect(`${textVar}.data = ${this._self}.${str}.value;`);
         return textVar;
       }
       // Static tag without content (possibly with #id)
@@ -931,15 +929,15 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
       // Property access on this (e.g., @prop, @children)
       if (obj === 'this' && typeof prop === 'string') {
+        const s = this._self;
         if (this.reactiveMembers && this.reactiveMembers.has(prop)) {
           const textVar = this.newTextVar();
           this._createLines.push(`${textVar} = document.createTextNode('');`);
-          this._setupLines.push(`__effect(() => { ${textVar}.data = this.${prop}.value; });`);
+          this._pushEffect(`${textVar}.data = ${s}.${prop}.value;`);
           return textVar;
         }
-        // Slot/prop — handle DOM nodes (children) and plain values
         const slotVar = this.newElementVar('slot');
-        this._createLines.push(`${slotVar} = this.${prop} instanceof Node ? this.${prop} : (this.${prop} != null ? document.createTextNode(String(this.${prop})) : document.createComment(''));`);
+        this._createLines.push(`${slotVar} = ${s}.${prop} instanceof Node ? ${s}.${prop} : (${s}.${prop} != null ? document.createTextNode(String(${s}.${prop})) : document.createComment(''));`);
         return slotVar;
       }
 
@@ -996,7 +994,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     const exprCode = this.generateInComponent(sexpr, 'value');
     if (this.hasReactiveDeps(sexpr)) {
       this._createLines.push(`${textVar} = document.createTextNode('');`);
-      this._setupLines.push(`__effect(() => { ${textVar}.data = ${exprCode}; });`);
+      this._pushEffect(`${textVar}.data = ${exprCode};`);
     } else {
       this._createLines.push(`${textVar} = document.createTextNode(String(${exprCode}));`);
     }
@@ -1035,9 +1033,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
           this._createLines.push(`${textVar} = document.createTextNode(${val});`);
         } else if (this.reactiveMembers && this.reactiveMembers.has(val)) {
           this._createLines.push(`${textVar} = document.createTextNode('');`);
-          this._setupLines.push(`__effect(() => { ${textVar}.data = this.${val}.value; });`);
+          this._pushEffect(`${textVar}.data = ${this._self}.${val}.value;`);
         } else if (this.componentMembers && this.componentMembers.has(val)) {
-          this._createLines.push(`${textVar} = document.createTextNode(String(this.${val}));`);
+          this._createLines.push(`${textVar} = document.createTextNode(String(${this._self}.${val}));`);
         } else {
           this._createLines.push(`${textVar} = document.createTextNode(${this.generateInComponent(arg, 'value')});`);
         }
@@ -1090,9 +1088,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       } else {
         const combined = this._pendingClassArgs.join(', ');
         if (isSvg) {
-          this._setupLines.push(`__effect(() => { ${elVar}.setAttribute('class', __clsx(${combined})); });`);
+          this._pushEffect(`${elVar}.setAttribute('class', __clsx(${combined}));`);
         } else {
-          this._setupLines.push(`__effect(() => { ${elVar}.className = __clsx(${combined}); });`);
+          this._pushEffect(`${elVar}.className = __clsx(${combined});`);
         }
       }
       this._pendingClassArgs = prevClassArgs;
@@ -1129,9 +1127,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       const combined = this._pendingClassArgs.join(', ');
       const isSvg = SVG_TAGS.has(tag) || this._svgDepth > 0;
       if (isSvg) {
-        this._setupLines.push(`__effect(() => { ${elVar}.setAttribute('class', __clsx(${combined})); });`);
+        this._pushEffect(`${elVar}.setAttribute('class', __clsx(${combined}));`);
       } else {
-        this._setupLines.push(`__effect(() => { ${elVar}.className = __clsx(${combined}); });`);
+        this._pushEffect(`${elVar}.className = __clsx(${combined});`);
       }
     }
     this._pendingClassArgs = prevClassArgs;
@@ -1153,9 +1151,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       // Event handler: @click or (. this eventName)
       if (this.is(key, '.') && key[1] === 'this') {
         const eventName = key[2];
-        // Bind method references to this
         if (typeof value === 'string' && this.componentMembers?.has(value)) {
-          this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => __batch(() => this.${value}(e)));`);
+          this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => __batch(() => ${this._self}.${value}(e)));`);
         } else {
           const handlerCode = this.generateInComponent(value, 'value');
           this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => __batch(() => (${handlerCode})(e)));`);
@@ -1177,9 +1174,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
             this._pendingClassArgs.push(valueCode);
           } else if (this.hasReactiveDeps(value)) {
             if (this._svgDepth > 0) {
-              this._setupLines.push(`__effect(() => { ${elVar}.setAttribute('class', __clsx(${valueCode})); });`);
+              this._pushEffect(`${elVar}.setAttribute('class', __clsx(${valueCode}));`);
             } else {
-              this._setupLines.push(`__effect(() => { ${elVar}.className = __clsx(${valueCode}); });`);
+              this._pushEffect(`${elVar}.className = __clsx(${valueCode});`);
             }
           } else {
             if (this._svgDepth > 0) {
@@ -1194,7 +1191,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         // Element ref: ref: "name" → this.name = element
         if (key === 'ref') {
           const refName = String(value).replace(/^["']|["']$/g, '');
-          this._createLines.push(`this.${refName} = ${elVar};`);
+          this._createLines.push(`${this._self}.${refName} = ${elVar};`);
           continue;
         }
 
@@ -1213,11 +1210,11 @@ export function installComponentSupport(CodeGenerator, Lexer) {
               ? 'e.target.valueAsNumber' : 'e.target.value';
           }
 
-          this._setupLines.push(`__effect(() => { ${elVar}.${prop} = ${valueCode}; });`);
+          this._pushEffect(`${elVar}.${prop} = ${valueCode};`);
           let assignCode = `${valueCode} = ${valueAccessor}`;
           const rootMember = !this.isSimpleAssignable(value) && this.findRootReactiveMember(value);
           if (rootMember) {
-            assignCode += `; this.${rootMember}.touch?.()`;
+            assignCode += `; ${this._self}.${rootMember}.touch?.()`;
           }
           this._createLines.push(`${elVar}.addEventListener('${event}', (e) => { ${assignCode}; });`);
           continue;
@@ -1227,9 +1224,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
         // Smart two-way binding for value/checked when bound to reactive state
         if ((key === 'value' || key === 'checked') && this.hasReactiveDeps(value)) {
-          this._setupLines.push(`__effect(() => { ${elVar}.${key} = ${valueCode}; });`);
-          // Generate reverse binding for simple assignable targets or nested
-          // reactive paths (with touch() for Svelte-style invalidation)
+          this._pushEffect(`${elVar}.${key} = ${valueCode};`);
           const rootMemberImplicit = !this.isSimpleAssignable(value) && this.findRootReactiveMember(value);
           if (this.isSimpleAssignable(value) || rootMemberImplicit) {
             const event = key === 'checked' ? 'change' : 'input';
@@ -1238,7 +1233,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
               : 'e.target.value';
             let assignCode = `${valueCode} = ${accessor}`;
             if (rootMemberImplicit) {
-              assignCode += `; this.${rootMemberImplicit}.touch?.()`;
+              assignCode += `; ${this._self}.${rootMemberImplicit}.touch?.()`;
             }
             this._createLines.push(`${elVar}.addEventListener('${event}', (e) => { ${assignCode}; });`);
           }
@@ -1247,18 +1242,18 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
         if (key === 'innerHTML' || key === 'textContent' || key === 'innerText') {
           if (this.hasReactiveDeps(value)) {
-            this._setupLines.push(`__effect(() => { ${elVar}.${key} = ${valueCode}; });`);
+            this._pushEffect(`${elVar}.${key} = ${valueCode};`);
           } else {
             this._createLines.push(`${elVar}.${key} = ${valueCode};`);
           }
         } else if (BOOLEAN_ATTRS.has(key)) {
           if (this.hasReactiveDeps(value)) {
-            this._setupLines.push(`__effect(() => { ${elVar}.toggleAttribute('${key}', !!${valueCode}); });`);
+            this._pushEffect(`${elVar}.toggleAttribute('${key}', !!${valueCode});`);
           } else {
             this._createLines.push(`if (${valueCode}) ${elVar}.setAttribute('${key}', '');`);
           }
         } else if (this.hasReactiveDeps(value)) {
-          this._setupLines.push(`__effect(() => { ${elVar}.setAttribute('${key}', ${valueCode}); });`);
+          this._pushEffect(`${elVar}.setAttribute('${key}', ${valueCode});`);
         } else {
           this._createLines.push(`${elVar}.setAttribute('${key}', ${valueCode});`);
         }
@@ -1287,10 +1282,13 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
     const fragVar = this.newElementVar('frag');
     this._createLines.push(`${fragVar} = document.createDocumentFragment();`);
+    const children = [];
     for (const stmt of statements) {
       const childVar = this.generateNode(stmt);
       this._createLines.push(`${fragVar}.appendChild(${childVar});`);
+      children.push(childVar);
     }
+    this._fragChildren.set(fragVar, children);
     return fragVar;
   };
 
@@ -1324,7 +1322,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     setupLines.push(`  const anchor = ${anchorVar};`);
     setupLines.push(`  let currentBlock = null;`);
     setupLines.push(`  let showing = null;`);
-    setupLines.push(`  __effect(() => {`);
+    const effOpen = this._factoryMode ? 'disposers.push(__effect(() => {' : '__effect(() => {';
+    const effClose = this._factoryMode ? '}));' : '});';
+    setupLines.push(`  ${effOpen}`);
     setupLines.push(`    const show = !!(${condCode});`);
     setupLines.push(`    const want = show ? 'then' : ${elseBlock ? "'else'" : 'null'};`);
     setupLines.push(`    if (want === showing) return;`);
@@ -1336,20 +1336,20 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     setupLines.push(`    showing = want;`);
     setupLines.push(``);
     setupLines.push(`    if (want === 'then') {`);
-    setupLines.push(`      currentBlock = ${thenBlockName}(this${outerExtra});`);
+    setupLines.push(`      currentBlock = ${thenBlockName}(${this._self}${outerExtra});`);
     setupLines.push(`      currentBlock.c();`);
     setupLines.push(`      if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);`);
-    setupLines.push(`      currentBlock.p(this${outerExtra});`);
+    setupLines.push(`      currentBlock.p(${this._self}${outerExtra});`);
     setupLines.push(`    }`);
     if (elseBlock) {
       setupLines.push(`    if (want === 'else') {`);
-      setupLines.push(`      currentBlock = ${elseBlockName}(this${outerExtra});`);
+      setupLines.push(`      currentBlock = ${elseBlockName}(${this._self}${outerExtra});`);
       setupLines.push(`      currentBlock.c();`);
       setupLines.push(`      if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);`);
-      setupLines.push(`      currentBlock.p(this${outerExtra});`);
+      setupLines.push(`      currentBlock.p(${this._self}${outerExtra});`);
       setupLines.push(`    }`);
     }
-    setupLines.push(`  });`);
+    setupLines.push(`  ${effClose}`);
     setupLines.push(`}`);
 
     this._setupLines.push(setupLines.join('\n    '));
@@ -1362,42 +1362,36 @@ export function installComponentSupport(CodeGenerator, Lexer) {
   // --------------------------------------------------------------------------
 
   proto.generateConditionBranch = function(blockName, block) {
-    const savedCreateLines = this._createLines;
-    const savedSetupLines = this._setupLines;
+    const saved = [this._createLines, this._setupLines, this._factoryMode, this._factoryVars];
 
     this._createLines = [];
     this._setupLines = [];
+    this._factoryMode = true;
+    this._factoryVars = new Set();
 
     const rootVar = this.generateTemplateBlock(block);
     const createLines = this._createLines;
     const setupLines = this._setupLines;
+    const factoryVars = this._factoryVars;
 
-    this._createLines = savedCreateLines;
-    this._setupLines = savedSetupLines;
+    [this._createLines, this._setupLines, this._factoryMode, this._factoryVars] = saved;
 
     const outerParams = this._loopVarStack.map(v => `${v.itemVar}, ${v.indexVar}`).join(', ');
     const extraParams = outerParams ? `, ${outerParams}` : '';
 
-    this.emitBlockFactory(blockName, `ctx${extraParams}`, rootVar, createLines, setupLines);
+    this.emitBlockFactory(blockName, `ctx${extraParams}`, rootVar, createLines, setupLines, factoryVars);
   };
 
   // --------------------------------------------------------------------------
   // emitBlockFactory — shared factory generation for conditionals and loops
   // --------------------------------------------------------------------------
 
-  proto.emitBlockFactory = function(blockName, params, rootVar, createLines, setupLines) {
-    const localizeVar = (line) => this.localizeVar(line);
-
+  proto.emitBlockFactory = function(blockName, params, rootVar, createLines, setupLines, factoryVars) {
     const factoryLines = [];
     factoryLines.push(`function ${blockName}(${params}) {`);
 
-    const localVars = new Set();
-    for (const line of createLines) {
-      const match = line.match(/^this\.(_(?:el|t|anchor|frag|slot|c|inst|empty)\d+)\s*=/);
-      if (match) localVars.add(match[1]);
-    }
-    if (localVars.size > 0) {
-      factoryLines.push(`  let ${[...localVars].join(', ')};`);
+    if (factoryVars.size > 0) {
+      factoryLines.push(`  let ${[...factoryVars].join(', ')};`);
     }
 
     const hasEffects = setupLines.length > 0;
@@ -1409,18 +1403,18 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
     factoryLines.push(`    c() {`);
     for (const line of createLines) {
-      factoryLines.push(`      ${localizeVar(line)}`);
+      factoryLines.push(`      ${line}`);
     }
     factoryLines.push(`    },`);
 
-    const fragChildren = getFragChildren(rootVar, createLines, localizeVar);
+    const fragChildren = this._fragChildren.get(rootVar);
     factoryLines.push(`    m(target, anchor) {`);
     if (fragChildren) {
       for (const child of fragChildren) {
         factoryLines.push(`      if (target) target.insertBefore(${child}, anchor);`);
       }
     } else {
-      factoryLines.push(`      if (target) target.insertBefore(${localizeVar(rootVar)}, anchor);`);
+      factoryLines.push(`      if (target) target.insertBefore(${rootVar}, anchor);`);
     }
     factoryLines.push(`    },`);
 
@@ -1429,15 +1423,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       factoryLines.push(`      disposers.forEach(d => d());`);
       factoryLines.push(`      disposers = [];`);
       for (const line of setupLines) {
-        const localizedLine = localizeVar(line);
-        const wrappedLine = localizedLine.replace(
-          /__effect\(\(\) => \{/g,
-          'disposers.push(__effect(() => {'
-        ).replace(
-          /\}\);$/gm,
-          '}));'
-        );
-        factoryLines.push(`      ${wrappedLine}`);
+        factoryLines.push(`      ${line}`);
       }
     }
     factoryLines.push(`    },`);
@@ -1451,7 +1437,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         factoryLines.push(`      if (detaching && ${child}) ${child}.remove();`);
       }
     } else {
-      factoryLines.push(`      if (detaching && ${localizeVar(rootVar)}) ${localizeVar(rootVar)}.remove();`);
+      factoryLines.push(`      if (detaching && ${rootVar}) ${rootVar}.remove();`);
     }
     factoryLines.push(`    }`);
 
@@ -1499,12 +1485,12 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       }
     }
 
-    // Save state and generate item template in isolation
-    const savedCreateLines = this._createLines;
-    const savedSetupLines = this._setupLines;
+    const saved = [this._createLines, this._setupLines, this._factoryMode, this._factoryVars];
 
     this._createLines = [];
     this._setupLines = [];
+    this._factoryMode = true;
+    this._factoryVars = new Set();
 
     const outerParams = this._loopVarStack.map(v => `${v.itemVar}, ${v.indexVar}`).join(', ');
     const outerExtra = outerParams ? `, ${outerParams}` : '';
@@ -1514,12 +1500,12 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     this._loopVarStack.pop();
     const itemCreateLines = this._createLines;
     const itemSetupLines = this._setupLines;
+    const itemFactoryVars = this._factoryVars;
 
-    this._createLines = savedCreateLines;
-    this._setupLines = savedSetupLines;
+    [this._createLines, this._setupLines, this._factoryMode, this._factoryVars] = saved;
 
     const loopParams = `ctx, ${itemVar}, ${indexVar}${outerExtra}`;
-    this.emitBlockFactory(blockName, loopParams, itemNode, itemCreateLines, itemSetupLines);
+    this.emitBlockFactory(blockName, loopParams, itemNode, itemCreateLines, itemSetupLines, itemFactoryVars);
 
     // Generate reconciliation code in _setup()
     const setupLines = [];
@@ -1527,7 +1513,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     setupLines.push(`{`);
     setupLines.push(`  const __anchor = ${anchorVar};`);
     setupLines.push(`  const __map = new Map();`);
-    setupLines.push(`  __effect(() => {`);
+    const effOpen = this._factoryMode ? 'disposers.push(__effect(() => {' : '__effect(() => {';
+    const effClose = this._factoryMode ? '}));' : '});';
+    setupLines.push(`  ${effOpen}`);
     setupLines.push(`    const __items = ${collectionCode};`);
     setupLines.push(`    const __parent = __anchor.parentNode;`);
     setupLines.push(`    const __newMap = new Map();`);
@@ -1537,11 +1525,11 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     setupLines.push(`      const __key = ${keyExpr};`);
     setupLines.push(`      let __block = __map.get(__key);`);
     setupLines.push(`      if (!__block) {`);
-    setupLines.push(`        __block = ${blockName}(this, ${itemVar}, ${indexVar}${outerExtra});`);
+    setupLines.push(`        __block = ${blockName}(${this._self}, ${itemVar}, ${indexVar}${outerExtra});`);
     setupLines.push(`        __block.c();`);
     setupLines.push(`      }`);
     setupLines.push(`      __block.m(__parent, __anchor);`);
-    setupLines.push(`      __block.p(this, ${itemVar}, ${indexVar}${outerExtra});`);
+    setupLines.push(`      __block.p(${this._self}, ${itemVar}, ${indexVar}${outerExtra});`);
     setupLines.push(`      __newMap.set(__key, __block);`);
     setupLines.push(`    }`);
     setupLines.push(``);
@@ -1551,7 +1539,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     setupLines.push(``);
     setupLines.push(`    __map.clear();`);
     setupLines.push(`    for (const [__k, __v] of __newMap) __map.set(__k, __v);`);
-    setupLines.push(`  });`);
+    setupLines.push(`  ${effClose}`);
     setupLines.push(`}`);
 
     this._setupLines.push(setupLines.join('\n    '));
@@ -1568,15 +1556,16 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     const elVar = this.newElementVar('el');
     const { propsCode, reactiveProps, childrenSetupLines } = this.buildComponentProps(args);
 
+    const s = this._self;
     this._createLines.push(`${instVar} = new ${componentName}(${propsCode});`);
     this._createLines.push(`${elVar} = ${instVar}._create();`);
-    this._createLines.push(`(this._children || (this._children = [])).push(${instVar});`);
+    this._createLines.push(`(${s}._children || (${s}._children = [])).push(${instVar});`);
 
     this._setupLines.push(`if (${instVar}._setup) ${instVar}._setup();`);
     this._setupLines.push(`if (${instVar}.mounted) ${instVar}.mounted();`);
 
     for (const { key, valueCode } of reactiveProps) {
-      this._setupLines.push(`__effect(() => { if (${instVar}.${key}) ${instVar}.${key}.value = ${valueCode}; });`);
+      this._pushEffect(`if (${instVar}.${key}) ${instVar}.${key}.value = ${valueCode};`);
     }
 
     for (const line of childrenSetupLines) {
@@ -1605,7 +1594,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       );
       if (isDirectSignal) {
         const member = typeof value === 'string' ? value : value[2];
-        props.push(`${key}: this.${member}`);
+        props.push(`${key}: ${this._self}.${member}`);
       } else {
         const valueCode = this.generateInComponent(value, 'value');
         props.push(`${key}: ${valueCode}`);
