@@ -525,12 +525,12 @@ export serve = (opts = {}) ->
   get "#{prefix}/bundle", (c) ->
     glob = new Bun.Glob("**/*.rip")
     components = {}
-    paths = Array.from(glob.scanSync(routesDir))
+    paths = Array.from(glob.scanSync(routesDir)).sort()
     for path in paths
       components["components/#{path}"] = Bun.file("#{routesDir}/#{path}").text!
 
     for dir in componentDirs
-      incPaths = Array.from(glob.scanSync(dir))
+      incPaths = Array.from(glob.scanSync(dir)).sort()
       for path in incPaths
         key = "components/_lib/#{path}"
         components[key] = Bun.file("#{dir}/#{path}").text! unless components[key]
