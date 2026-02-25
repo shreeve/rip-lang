@@ -1,7 +1,7 @@
 # Booking routes — list and create bookings (Stripe stubbed)
 
 import { get, post, prefix, read, session } from '@rip-lang/api'
-import { schema, dbFetch } from '../db.rip'
+import { schema, sql } from '../db.rip'
 
 Booking = schema.model 'Booking'
 
@@ -29,10 +29,10 @@ prefix '/api/bookings', ->
       bookingIds.push booking.id
 
       needed = item.children?.length or 1
-      data = dbFetch! 'SELECT id FROM spots WHERE week = ? AND slot = ? AND status = ? LIMIT ?', [item.week, item.slot, 'available', needed]
+      data = sql! 'SELECT id FROM spots WHERE week = ? AND slot = ? AND status = ? LIMIT ?', [item.week, item.slot, 'available', needed]
 
       for row in (data.data or [])
         spotId = row[0]
-        dbFetch! 'UPDATE spots SET status = ?, user_id = ?, booking_id = ? WHERE id = ?', ['booked', session.userId, booking.id, spotId]
+        sql! 'UPDATE spots SET status = ?, user_id = ?, booking_id = ? WHERE id = ?', ['booked', session.userId, booking.id, spotId]
 
     { bookingIds }

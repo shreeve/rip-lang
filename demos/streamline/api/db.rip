@@ -9,17 +9,17 @@ config = Stash configData
 DB_URL = config.database.url
 DB_FILE = config.database.file
 
-# =============================================================================
+# ==============================================================================
 # Connection (runs on import — every worker gets a schema + query helper)
-# =============================================================================
+# ==============================================================================
 
 export schema = do ->
   s = Schema.load '../app.schema', import.meta.url
   s.connect DB_URL
   s
 
-export dbFetch = (sql, params) ->
-  body = if params then { sql, params } else { sql }
+export sql = (query, params) ->
+  body = if params then { sql: query, params } else { sql: query }
   res = fetch! "#{DB_URL}/sql",
     method: 'POST'
     headers: { 'Content-Type': 'application/json' }
@@ -28,9 +28,9 @@ export dbFetch = (sql, params) ->
   warn "[db] SQL warning: #{data.error}" if data.error
   data
 
-# =============================================================================
+# ==============================================================================
 # Setup (called once by manager or single-process — never by workers)
-# =============================================================================
+# ==============================================================================
 
 dbReachable = ->
   try
@@ -62,15 +62,15 @@ export setup = ->
     startDb!
     p "[setup] DuckDB UI: #{DB_URL}"
 
-  check = dbFetch! "SELECT count(*) FROM information_schema.tables WHERE table_name = 'spots'"
+  check = sql! "SELECT count(*) FROM information_schema.tables WHERE table_name = 'spots'"
   return if check.data?[0]?[0] > 0
 
   for stmt in schema.toSQL().split(';')
-    dbFetch! stmt.trim() + ';' if stmt.trim()
+    sql! stmt.trim() + ';' if stmt.trim()
   p '[setup] Tables created'
 
   for week in [1, 2, 3, 4]
     for slot in ['09:00', '10:00', '11:00', '14:00']
       for i in [1..4]
-        dbFetch! 'INSERT INTO spots (week, slot) VALUES (?, ?)', [week, slot]
+        sql! 'INSERT INTO spots (week, slot) VALUES (?, ?)', [week, slot]
   p '[setup] Seeded spots for weeks 1-4'

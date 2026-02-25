@@ -5,6 +5,7 @@ import { prettyJson, sessions } from '@rip-lang/api/middleware'
 import { serve } from '@rip-lang/api/serve'
 import { Stash } from './api/lib/stash.rip'
 import configData from './config.rip'
+
 import './api/routes/auth.rip'
 import './api/routes/sessions.rip'
 import './api/routes/bookings.rip'

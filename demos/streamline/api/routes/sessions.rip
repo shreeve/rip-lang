@@ -1,7 +1,7 @@
 # Session routes — list available swim sessions and check availability
 
 import { get, post, prefix, read } from '@rip-lang/api'
-import { schema, dbFetch } from '../db.rip'
+import { schema, sql } from '../db.rip'
 import { Stash } from '../lib/stash.rip'
 import configData from '../../config.rip'
 
@@ -12,7 +12,7 @@ prefix '/api/sessions', ->
 
   # List available sessions grouped by week
   get '' ->
-    data = dbFetch! '''
+    data = sql! '''
       SELECT week, slot, COUNT(*) as spots
       FROM spots
       WHERE status = 'available'
@@ -32,7 +32,7 @@ prefix '/api/sessions', ->
   post '/confirm-availability' ->
     items = read 'sessions', 'json!'
     for item in items
-      data = dbFetch! 'SELECT COUNT(*) FROM spots WHERE week = ? AND slot = ? AND status = ?', [item.week, item.slot, 'available']
+      data = sql! 'SELECT COUNT(*) FROM spots WHERE week = ? AND slot = ? AND status = ?', [item.week, item.slot, 'available']
       available = data.data?[0]?[0] or 0
       needed = item.children?.length or 1
       if available < needed
