@@ -591,7 +591,8 @@ class Manager
             broadcast('css')
         watchers.push(w)
       catch e
-        console.warn "rip-server: watch failed for #{dir}:\n  #{e.message}"
+        rel = dir.replace(process.cwd() + '/', '')
+        console.warn "rip-server: watch skipped (#{e.code or 'error'}): #{rel}"
     @appWatchers.set prefix, { watchers, timer }
 
   spawnWorker: (version) ->

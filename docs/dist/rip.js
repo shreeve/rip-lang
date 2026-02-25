@@ -8352,8 +8352,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.13";
-  var BUILD_DATE = "2026-02-25@05:34:54GMT";
+  var VERSION = "3.13.15";
+  var BUILD_DATE = "2026-02-25@06:33:14GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -9519,7 +9519,7 @@ ${indented}`);
     return renderer;
   };
   var launch = async function(appBase = "", opts = {}) {
-    let _save, _storage, _storageKey, app, appComponents, bundle, classesKey, compile2, el, hash, persist, renderer, res, resolver, router, saved, savedData, target;
+    let _save, _storage, _storageKey, app, appComponents, bundle, cached, classesKey, compile2, el, etag, etagKey, hash, headers, persist, renderer, res, resolver, router, saved, savedData, target;
     globalThis.__ripLaunched = true;
     if (typeof appBase === "object") {
       opts = appBase;
@@ -9541,11 +9541,24 @@ ${indented}`);
     if (opts.bundle) {
       bundle = opts.bundle;
     } else if (opts.bundleUrl) {
-      res = await fetch(opts.bundleUrl, { cache: "no-cache" });
-      if (!res.ok) {
+      headers = {};
+      etagKey = `__rip_etag_${opts.bundleUrl}`;
+      cached = sessionStorage.getItem(etagKey);
+      if (cached)
+        headers["If-None-Match"] = cached;
+      res = await fetch(opts.bundleUrl, { headers });
+      if (res.status === 304) {
+        bundle = JSON.parse(sessionStorage.getItem(`${etagKey}_data`));
+      } else if (res.ok) {
+        bundle = await res.json();
+        etag = res.headers.get("etag");
+        if (etag) {
+          sessionStorage.setItem(etagKey, etag);
+          sessionStorage.setItem(`${etagKey}_data`, JSON.stringify(bundle));
+        }
+      } else {
         throw new Error(`launch: ${opts.bundleUrl} (${res.status})`);
       }
-      bundle = await res.json();
     } else {
       throw new Error("launch: no bundle or bundleUrl provided");
     }

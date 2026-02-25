@@ -910,9 +910,21 @@ export launch = (appBase = '', opts = {}) ->
   if opts.bundle
     bundle = opts.bundle
   else if opts.bundleUrl
-    res = await fetch(opts.bundleUrl, cache: 'no-cache')
-    throw new Error "launch: #{opts.bundleUrl} (#{res.status})" unless res.ok
-    bundle = res.json!
+    headers = {}
+    etagKey = "__rip_etag_#{opts.bundleUrl}"
+    cached = sessionStorage.getItem(etagKey)
+    headers['If-None-Match'] = cached if cached
+    res = await fetch(opts.bundleUrl, { headers })
+    if res.status is 304
+      bundle = JSON.parse(sessionStorage.getItem("#{etagKey}_data"))
+    else if res.ok
+      bundle = res.json!
+      etag = res.headers.get('etag')
+      if etag
+        sessionStorage.setItem(etagKey, etag)
+        sessionStorage.setItem("#{etagKey}_data", JSON.stringify(bundle))
+    else
+      throw new Error "launch: #{opts.bundleUrl} (#{res.status})"
   else
     throw new Error "launch: no bundle or bundleUrl provided"
 
