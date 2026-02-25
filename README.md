@@ -354,7 +354,7 @@ The UI framework is built into rip-lang: file-based router, reactive stash, comp
 | **Self-hosting** | No | Yes |
 | **Lexer** | 3,558 LOC | 2,024 LOC |
 | **Compiler** | 10,346 LOC | 3,293 LOC |
-| **Total** | 17,760 LOC | ~11,300 LOC |
+| **Total** | 17,760 LOC | ~11,890 LOC |
 
 Smaller codebase, modern output, built-in reactivity.
 
@@ -389,25 +389,25 @@ await rip("res = fetch! 'https://api.example.com/todos/1'; res.json!")  // → {
 
 ```
 Source  ->  Lexer  ->  emitTypes  ->  Parser  ->  S-Expressions  ->  Codegen  ->  JavaScript
-           (1,761)    (types.js)     (359)       ["=", "x", 42]     (3,293)      + source map
+           (1,778)    (types.js)     (359)       ["=", "x", 42]     (3,334)      + source map
 ```
 
 Simple arrays (with `.loc`) instead of AST node classes. The compiler is self-hosting — `bun run parser` rebuilds from source.
 
 | Component | File | Lines |
 |-----------|------|-------|
-| Lexer + Rewriter | `src/lexer.js` | 1,761 |
-| Compiler + Codegen | `src/compiler.js` | 3,303 |
-| Type System | `src/types.js` | 1,099 |
-| Component System | `src/components.js` | 1,877 |
+| Lexer + Rewriter | `src/lexer.js` | 1,778 |
+| Compiler + Codegen | `src/compiler.js` | 3,334 |
+| Type System | `src/types.js` | 1,091 |
+| Component System | `src/components.js` | 2,026 |
 | Source Maps | `src/sourcemaps.js` | 189 |
-| Parser (generated) | `src/parser.js` | 357 |
-| Grammar | `src/grammar/grammar.rip` | 944 |
+| Type Checking | `src/typecheck.js` | 442 |
+| Parser (generated) | `src/parser.js` | 359 |
+| Grammar | `src/grammar/grammar.rip` | 948 |
 | Parser Generator | `src/grammar/solar.rip` | 929 |
-| REPL | `src/repl.js` | 601 |
-| Browser Entry | `src/browser.js` | 167 |
-| Tags | `src/tags.js` | 62 |
-| **Total** | | **~11,289** |
+| REPL | `src/repl.js` | 600 |
+| Browser Entry | `src/browser.js` | 194 |
+| **Total** | | **~11,890** |
 
 ---
 
@@ -417,7 +417,7 @@ Rip includes optional packages for full-stack development:
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| [rip-lang](https://www.npmjs.com/package/rip-lang) | 3.13.13 | Core language compiler |
+| [rip-lang](https://www.npmjs.com/package/rip-lang) | 3.13.26 | Core language compiler |
 | [@rip-lang/server](packages/server/) | 1.2.11 | Multi-worker app server (web framework, hot reload, HTTPS, mDNS) |
 | [@rip-lang/db](packages/db/) | 1.3.13 | DuckDB server with official UI + ActiveRecord-style client |
 | [@rip-lang/grid](packages/grid/) | 0.2.8 | Reactive data grid |
@@ -462,7 +462,7 @@ rip file.rip           # Run
 rip -c file.rip        # Compile
 rip -t file.rip        # Tokens
 rip -s file.rip        # S-expressions
-bun run test           # 1265 tests
+bun run test           # 1369 tests
 bun run parser         # Rebuild parser
 bun run build          # Build browser bundle
 ```

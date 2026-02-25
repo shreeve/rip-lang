@@ -590,4 +590,4 @@ The browser REPL (`docs/index.html`) uses a hidden iframe as its sandbox. Code i
 
 ---
 
-*Rip 3.13 — 1,265 tests — Zero dependencies — Self-hosting — ~13,500 LOC*
+*Rip 3.13 — 1,369 tests — Zero dependencies — Self-hosting — ~11,890 LOC*

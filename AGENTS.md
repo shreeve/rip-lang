@@ -19,7 +19,7 @@ echo 'your code' | ./bin/rip -s  # S-expressions (parser)
 echo 'your code' | ./bin/rip -c  # JavaScript (codegen)
 
 # Run tests
-bun run test                             # All tests (1265)
+bun run test                             # All tests (1369)
 bun test/runner.js test/rip/FILE.rip     # Specific file
 
 # Rebuild parser (after grammar changes)
@@ -37,7 +37,7 @@ rip serve
 | Metric | Value |
 |--------|-------|
 | Version | 3.13.26 |
-| Tests | 1,300 |
+| Tests | 1,369 |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
 
@@ -51,14 +51,14 @@ rip-lang/
 │   ├── lexer.js         # Lexer + Rewriter (1,778 LOC)
 │   ├── compiler.js      # Compiler + Code Generator (3,334 LOC)
 │   ├── types.js         # Type System — sidecar for lexer (1,091 LOC)
-│   ├── components.js    # Component System — sidecar for compiler (1,827 LOC)
+│   ├── components.js    # Component System — sidecar for compiler (2,026 LOC)
 │   ├── sourcemaps.js    # Source Map V3 generator (189 LOC)
-│   ├── typecheck.js     # Shared type-checking infrastructure (443 LOC)
-│   ├── parser.js        # Generated parser (357 LOC) — Don't edit!
-│   ├── repl.js          # Terminal REPL (601 LOC)
-│   ├── browser.js       # Browser integration (~150 LOC)
+│   ├── typecheck.js     # Shared type-checking infrastructure (442 LOC)
+│   ├── parser.js        # Generated parser (359 LOC) — Don't edit!
+│   ├── repl.js          # Terminal REPL (600 LOC)
+│   ├── browser.js       # Browser integration (194 LOC)
 │   └── grammar/
-│       ├── grammar.rip  # Grammar specification (944 LOC)
+│       ├── grammar.rip  # Grammar specification (948 LOC)
 │       ├── lunar.rip    # Recursive descent parser generator (2,412 LOC)
 │       └── solar.rip    # SLR(1) parser generator (929 LOC) — Don't edit!
 ├── packages/            # Optional packages (see Packages section below)
@@ -75,7 +75,7 @@ rip-lang/
 │   ├── RIP-LANG.md      # Language reference (includes reactivity, future ideas)
 │   ├── RIP-TYPES.md     # Type system specification
 │   └── RIP-INTERNALS.md # Compiler architecture & design decisions
-├── test/rip/            # 26 test files (1,300 tests)
+├── test/rip/            # 26 test files (1,369 tests)
 └── scripts/             # Build utilities (all .js — run via `bun run <name>`)
 ```
 
@@ -289,8 +289,9 @@ Key mechanisms:
 Generates fine-grained DOM operations at compile time (no virtual DOM):
 - **`buildRender`** — entry point, initializes counters, create/setup line arrays, and tracking state
 - **`generateNode`** — main dispatch for all render-tree nodes (elements, text, conditionals, loops, components)
-- **`generateConditional`** / **`generateTemplateLoop`** — produce **block factories** for dynamic regions
-- **`emitBlockFactory`** — shared factory emitter (c/m/p/d methods) used by both conditionals and loops
+- **`generateConditional`** — produces block factories for if/else with transition-aware enter/leave
+- **`generateTemplateLoop`** — emits a `__reconcile` call with LIS-based keyed diffing
+- **`emitBlockFactory`** — shared factory emitter (c/m/p/d + `_first` + `_s` + `_t`) used by both conditionals and loops
 
 ### Factory Mode (`_factoryMode`)
 
@@ -305,9 +306,43 @@ Block factories need local variables and `ctx` references instead of `this._elN`
 
 Factory mode is entered in `generateConditionBranch` and `generateTemplateLoop` via save/restore of `[_createLines, _setupLines, _factoryMode, _factoryVars]`.
 
+### List Reconciliation (`__reconcile`)
+
+Loop rendering uses a runtime `__reconcile` function instead of inlined reconciliation code. The algorithm:
+
+1. **Phase 0 — Creation batch**: First render accumulates all blocks into a DocumentFragment, single DOM insert (1 op vs N)
+2. **Phase 1 — Prefix scan**: Matching items at the start skip `p()` entirely (effects already live)
+3. **Phase 2 — Suffix scan**: Matching items at the end call `p()` (index may differ)
+4. **Phase 3 — Fast paths**: Pure insertion (DocumentFragment batch) or pure deletion
+5. **Phase 4 — LIS**: Longest Increasing Subsequence for minimal DOM moves on genuine reorders
+
+Compile-time optimizations:
+- **Static blocks** (`_s: true`) — when `p()` has no effects, skip patch calls entirely
+- **Array-based storage** — `state.blocks[]` for O(1) index lookup (no persistent Map)
+- **Direct items-as-keys** — `state.keys = items.slice()` for default case (no keyFn allocation)
+
+### Error Boundaries
+
+`onError` lifecycle hook catches errors and walks the `_parent` chain:
+- **Constructor**: wraps `_init` in try-catch, calls `__handleComponentError(e, this)`
+- **Mount**: wraps `_create`/`_setup`/`mounted` in try-catch
+- **Child components**: codegen wraps child `_setup`/`mounted` calls in try-catch at compile time
+- **`__handleComponentError(error, component)`**: walks `_parent` to find nearest `onError` handler; rethrows if none found
+
+### Transitions (`~tilde` syntax)
+
+CSS enter/leave transitions on conditional blocks:
+- **Syntax**: `div ~fade` — tilde modifier on elements in render blocks
+- **Rewriter**: converts `UNARY_MATH ~ + IDENTIFIER fade` to `PROPERTY __transition__: STRING "fade"`
+- **Codegen**: `generateAttributes` intercepts `__transition__` → emits `this._t = "fade"` on the block
+- **Conditional**: checks `currentBlock._t` for async leave (callback-based) and enter (fire-and-forget)
+- **Runtime**: `__transition(el, name, dir, done)` manages CSS class dance (double-rAF + transitionend)
+- **Built-in presets**: `fade`, `slide`, `scale`, `blur`, `fly` — CSS injected lazily by `__transitionCSS()`
+- **Custom transitions**: `div ~anything` works with user-provided CSS using `{name}-enter-from`, `{name}-enter-active`, `{name}-leave-to` convention
+
 ### Testing Components
 
-Component tests live in `test/rip/components.rip` (31 tests). Use `code` tests with `{ skipPreamble: true, skipRuntimes: true }` options to verify generated JavaScript output for render blocks. Use `test` tests for runtime behavior (state, computed, methods — no DOM needed).
+Component tests live in `test/rip/components.rip` (100 tests). Use `code` tests with `{ skipPreamble: true, skipRuntimes: true }` options to verify generated JavaScript output for render blocks. Use `test` tests for runtime behavior (state, computed, methods, LIS algorithm, error boundaries — no DOM needed).
 
 ---
 
@@ -463,7 +498,7 @@ code "name", "x + y", "(x + y)"
 fail "name", "invalid syntax"
 ```
 
-### Test Files (26 files, 1,300 tests)
+### Test Files (26 files, 1,369 tests)
 
 ```
 test/rip/
