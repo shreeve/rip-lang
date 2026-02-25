@@ -8353,7 +8353,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.13";
-  var BUILD_DATE = "2026-02-25@00:01:59GMT";
+  var BUILD_DATE = "2026-02-25@05:34:54GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
