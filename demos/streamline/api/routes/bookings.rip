@@ -1,7 +1,7 @@
 # Booking routes — list and create bookings (Stripe stubbed)
 
 import { get, post, prefix, read, session } from '@rip-lang/api'
-import { schema } from '../setup.rip'
+import { schema } from '../../setup.rip'
 import { Stash } from '../lib/stash.rip'
 import configData from '../../config.rip'
 

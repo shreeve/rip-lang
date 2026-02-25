@@ -1,7 +1,7 @@
 # Session routes — list available swim sessions and check availability
 
 import { get, post, prefix, read } from '@rip-lang/api'
-import { schema } from '../setup.rip'
+import { schema } from '../../setup.rip'
 import { Stash } from '../lib/stash.rip'
 import configData from '../../config.rip'
 
