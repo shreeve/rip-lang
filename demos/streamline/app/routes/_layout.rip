@@ -25,6 +25,8 @@ export Layout = component
   closeMenu: ->
     menuOpen = false
 
+  logoHref ~= "/bookings" if user else "/auth"
+
   initials ~=
     return '' unless user
     parts = (user.firstName or '').split(' ')
