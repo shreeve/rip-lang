@@ -2345,6 +2345,36 @@ code "transition with ~scale preset", '''
   }
   ''', opts
 
+code "transition with ~blur preset", '''
+  export A = component
+    render
+      div ~blur
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {}
+    _create() {
+      this._el0 = document.createElement('div');
+      this._t = "blur";
+      return this._el0;
+    }
+  }
+  ''', opts
+
+code "transition with ~fly preset", '''
+  export A = component
+    render
+      div ~fly
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {}
+    _create() {
+      this._el0 = document.createElement('div');
+      this._t = "fly";
+      return this._el0;
+    }
+  }
+  ''', opts
+
 code "no transition — no _t on block", '''
   export A = component
     show := true

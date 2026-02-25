@@ -1941,6 +1941,11 @@ function __transitionCSS() {
     '.slide-leave-to{opacity:0;transform:translateY(8px)}',
     '.scale-enter-active,.scale-leave-active{transition:opacity .2s ease,transform .2s ease}',
     '.scale-enter-from,.scale-leave-to{opacity:0;transform:scale(.95)}',
+    '.blur-enter-active,.blur-leave-active{transition:opacity .2s ease,filter .2s ease}',
+    '.blur-enter-from,.blur-leave-to{opacity:0;filter:blur(4px)}',
+    '.fly-enter-active,.fly-leave-active{transition:opacity .2s ease,transform .2s ease}',
+    '.fly-enter-from{opacity:0;transform:translateY(-20px)}',
+    '.fly-leave-to{opacity:0;transform:translateY(20px)}',
   ].join('');
   document.head.appendChild(s);
 }
