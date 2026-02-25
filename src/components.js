@@ -570,8 +570,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     }
 
     // Dot access: transform the object but not the property name
-    if (sexpr[0] === '.') {
-      return ['.', this.transformComponentMembers(sexpr[1]), sexpr[2]];
+    if (sexpr[0] === '.' || sexpr[0] === '?.') {
+      return [sexpr[0], this.transformComponentMembers(sexpr[1]), sexpr[2]];
     }
 
     // Force thin arrows to fat arrows inside components to preserve this binding

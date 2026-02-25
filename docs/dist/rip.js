@@ -3827,8 +3827,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         }
         return sexpr;
       }
-      if (sexpr[0] === ".") {
-        return [".", this.transformComponentMembers(sexpr[1]), sexpr[2]];
+      if (sexpr[0] === "." || sexpr[0] === "?.") {
+        return [sexpr[0], this.transformComponentMembers(sexpr[1]), sexpr[2]];
       }
       if (sexpr[0] === "->") {
         return ["=>", ...sexpr.slice(1).map((item) => this.transformComponentMembers(item))];
@@ -8352,8 +8352,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.12";
-  var BUILD_DATE = "2026-02-24@21:59:49GMT";
+  var VERSION = "3.13.13";
+  var BUILD_DATE = "2026-02-25@00:01:59GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -8434,9 +8434,12 @@ ${js}
       if (ui?.launch) {
         const url = cfg.getAttribute("data-launch") || "";
         const hash = cfg.getAttribute("data-hash");
+        const persist = cfg.getAttribute("data-persist");
         const opts = { hash: hash !== "false" };
         if (url)
           opts.bundleUrl = url;
+        if (persist != null)
+          opts.persist = persist === "local" ? "local" : true;
         await ui.launch("", opts);
       }
     }
