@@ -1,0 +1,7 @@
+body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
+*:focus-visible { outline: 2px solid oklch(0.48 0.1148 29.62); outline-offset: 2px; }
+@keyframes menuFadeIn {
+  from { opacity: 0; transform: translateY(-4px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
