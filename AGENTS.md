@@ -33,7 +33,7 @@ bun run build
 
 | Metric | Value |
 |--------|-------|
-| Version | 3.13.12 |
+| Version | 3.13.13 |
 | Tests | 1,255 |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
