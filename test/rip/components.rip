@@ -1023,8 +1023,7 @@ code "child component with static props", '''
       return this._el0;
     }
     _setup() {
-      if (this._inst1._setup) this._inst1._setup();
-      if (this._inst1.mounted) this._inst1.mounted();
+      try { if (this._inst1._setup) this._inst1._setup(); if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); }
     }
   }
   ''', opts
@@ -1049,8 +1048,7 @@ code "child component with reactive prop (signal pass-through)", '''
       return this._el0;
     }
     _setup() {
-      if (this._inst1._setup) this._inst1._setup();
-      if (this._inst1.mounted) this._inst1.mounted();
+      try { if (this._inst1._setup) this._inst1._setup(); if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); }
     }
   }
   ''', opts
@@ -1073,8 +1071,7 @@ code "child component with children (slot)", '''
       return this._el1;
     }
     _setup() {
-      if (this._inst0._setup) this._inst0._setup();
-      if (this._inst0.mounted) this._inst0.mounted();
+      try { if (this._inst0._setup) this._inst0._setup(); if (this._inst0.mounted) this._inst0.mounted(); } catch (__e) { __handleComponentError(__e, this._inst0); }
     }
   }
   ''', opts
@@ -1100,8 +1097,7 @@ code "child component with props and children", '''
       return this._el0;
     }
     _setup() {
-      if (this._inst1._setup) this._inst1._setup();
-      if (this._inst1.mounted) this._inst1.mounted();
+      try { if (this._inst1._setup) this._inst1._setup(); if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); }
     }
   }
   ''', opts
@@ -1803,8 +1799,7 @@ code "bare component reference (no args)", '''
       return this._el0;
     }
     _setup() {
-      if (this._inst1._setup) this._inst1._setup();
-      if (this._inst1.mounted) this._inst1.mounted();
+      try { if (this._inst1._setup) this._inst1._setup(); if (this._inst1.mounted) this._inst1.mounted(); } catch (__e) { __handleComponentError(__e, this._inst1); }
     }
   }
   ''', opts
@@ -2176,3 +2171,50 @@ test "loop component computed reacts to items change", '''
   a.items.value = [1, 2, 3, 4, 5]
   a.count.value
   ''', 5
+
+# ==============================================================================
+# Error Boundaries — onError lifecycle hook
+# ==============================================================================
+
+test "onError catches error from effect in _init", '''
+  caught = null
+  A = component
+    onError = (err) -> caught = err.message
+    ~> raise "boom"
+  a = A.new()
+  caught
+  ''', "boom"
+
+test "onError receives source component", '''
+  source = null
+  A = component
+    onError = (err, comp) -> source = comp
+    ~> raise "test"
+  a = A.new()
+  source is a
+  ''', true
+
+test "error without onError throws normally", '''
+  threw = false
+  A = component
+    ~> raise "unhandled"
+  try
+    a = A.new()
+  catch e
+    threw = e.message
+  threw
+  ''', "unhandled"
+
+test "onError on parent catches child error", '''
+  caught = null
+  Parent = component
+    onError = (err, comp) -> caught = err.message
+    ~> noop()
+  Child = component
+    ~> raise "child boom"
+  p = Parent.new()
+  __pushComponent(p)
+  c = Child.new()
+  __popComponent(null)
+  caught
+  ''', "child boom"

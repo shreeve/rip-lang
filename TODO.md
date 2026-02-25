@@ -1,6 +1,6 @@
 # Rip Component System — Road to World Class
 
-## ~~1. Component Test Coverage~~ — DONE (79 tests)
+## ~~1. Component Test Coverage~~ — DONE (94 tests)
 
 `test/rip/components.rip` covers every code path in `src/components.js`:
 basic rendering, fragments, static/reactive/boolean attributes, reactive text,
@@ -14,20 +14,26 @@ lifecycle hooks (`mounted`/`unmounted`/`beforeMount`/`updated`), context API
 `setAttribute`), hyphenated attributes (`data-*`/`aria-*`), DOM properties
 (`innerHTML`/`textContent`), slot projection (`@children`, `@prop` rendering),
 expression-as-text (reactive and static), bare component references, bare `.()`,
-static `class:` attribute, computed/effect block bodies, and 15 runtime behavior
-tests. All 1,348 tests pass.
+static `class:` attribute, computed/effect block bodies, LIS algorithm
+correctness, loop component reactivity, and error boundaries. All 1,363
+tests pass.
 
-## 2. Efficient List Reconciliation
+## ~~2. Efficient List Reconciliation~~ — DONE
 
-Replace naive insertBefore-every-item reconciliation with a proper keyed
-diffing algorithm (longest increasing subsequence). Only move DOM nodes that
-actually changed position. Critical for list-heavy UIs.
+Runtime `__reconcile` function with best-in-class optimizations: prefix/suffix
+trimming with p()-skip (zero work for no-change and append cases), LIS-based
+minimal DOM moves, DocumentFragment creation batching (1 DOM op vs N on initial
+render), compile-time static block detection (`_s` flag skips p() entirely),
+and array-based block storage (no persistent Map). Generated loop code dropped
+from ~25 inlined lines to a single `__reconcile` call.
 
-## 3. Error Boundaries
+## ~~3. Error Boundaries~~ — DONE
 
-Wrap component `_create`/`_setup`/effects in try-catch. Propagate errors up
-the component tree to the nearest boundary. Prevent one broken component from
-taking down the entire app.
+`onError` lifecycle hook catches errors from `_init` effects, `mount()`, and
+child component `_setup`/`mounted`. Errors walk the `_parent` chain to the
+nearest `onError` handler via `__handleComponentError`. Without a boundary,
+errors throw normally. Constructor wraps `_init` in try-catch; child setup
+is wrapped at codegen time. 94 component tests, 1,363 total passing.
 
 ## 4. Transitions and Animations
 

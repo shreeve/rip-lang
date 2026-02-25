@@ -55,7 +55,7 @@ const TEMPLATE_TAGS = new Set([...HTML_TAGS, ...SVG_TAGS]);
 const BIND_PREFIX = '__bind_';
 const BIND_SUFFIX = '__';
 
-const LIFECYCLE_HOOKS = new Set(['beforeMount', 'mounted', 'updated', 'beforeUnmount', 'unmounted']);
+const LIFECYCLE_HOOKS = new Set(['beforeMount', 'mounted', 'updated', 'beforeUnmount', 'unmounted', 'onError']);
 const BOOLEAN_ATTRS = new Set([
   'disabled', 'hidden', 'readonly', 'required', 'checked', 'selected',
   'autofocus', 'autoplay', 'controls', 'loop', 'muted', 'multiple',
@@ -719,11 +719,12 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     // --- Lifecycle hooks ---
     for (const { name, value } of lifecycleHooks) {
       if (Array.isArray(value) && (value[0] === '->' || value[0] === '=>')) {
-        const [, , hookBody] = value;
+        const [, params, hookBody] = value;
+        const paramStr = Array.isArray(params) ? params.map(p => this.formatParam(p)).join(', ') : '';
         const transformed = this.reactiveMembers ? this.transformComponentMembers(hookBody) : hookBody;
         const isAsync = this.containsAwait(hookBody);
-        const bodyCode = this.generateFunctionBody(transformed, []);
-        lines.push(`  ${isAsync ? 'async ' : ''}${name}() ${bodyCode}`);
+        const bodyCode = this.generateFunctionBody(transformed, params || []);
+        lines.push(`  ${isAsync ? 'async ' : ''}${name}(${paramStr}) ${bodyCode}`);
       }
     }
 
@@ -1553,8 +1554,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     this._createLines.push(`${elVar} = ${instVar}._create();`);
     this._createLines.push(`(${s}._children || (${s}._children = [])).push(${instVar});`);
 
-    this._setupLines.push(`if (${instVar}._setup) ${instVar}._setup();`);
-    this._setupLines.push(`if (${instVar}.mounted) ${instVar}.mounted();`);
+    this._setupLines.push(`try { if (${instVar}._setup) ${instVar}._setup(); if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); }`);
 
     for (const { key, valueCode } of reactiveProps) {
       this._pushEffect(`if (${instVar}.${key}) ${instVar}.${key}.value = ${valueCode};`);
@@ -1904,21 +1904,36 @@ function __reconcile(anchor, state, items, ctx, factory, keyFn, ...outer) {
   state.blocks = newBlocks;
 }
 
+function __handleComponentError(error, component) {
+  let current = component;
+  while (current) {
+    if (current.onError) {
+      try { current.onError(error, component); return; } catch (_) {}
+    }
+    current = current._parent;
+  }
+  throw error;
+}
+
 class __Component {
   constructor(props = {}) {
     Object.assign(this, props);
     const prev = __pushComponent(this);
-    this._init(props);
+    try { this._init(props); } catch (e) { __popComponent(prev); __handleComponentError(e, this); return; }
     __popComponent(prev);
   }
   _init() {}
   mount(target) {
     if (typeof target === "string") target = document.querySelector(target);
     this._target = target;
-    this._root = this._create();
-    target.appendChild(this._root);
-    if (this._setup) this._setup();
-    if (this.mounted) this.mounted();
+    try {
+      this._root = this._create();
+      target.appendChild(this._root);
+      if (this._setup) this._setup();
+      if (this.mounted) this.mounted();
+    } catch (error) {
+      __handleComponentError(error, this);
+    }
     return this;
   }
   unmount() {
@@ -1939,7 +1954,7 @@ class __Component {
 
 // Register on globalThis for runtime deduplication
 if (typeof globalThis !== 'undefined') {
-  globalThis.__ripComponent = { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __Component };
+  globalThis.__ripComponent = { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __handleComponentError, __Component };
 }
 
 `;
