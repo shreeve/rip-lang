@@ -70,10 +70,20 @@ export setup = ->
     sql! stmt.trim() + ';' if stmt.trim()
   p '[setup] Tables created'
 
+  # Seed 4 weeks of spots starting from next Monday
+  today = new Date()
+  day = today.getDay()
+  daysUntilMonday = if day is 0 then 1 else if day is 1 then 0 else 8 - day
+  monday = new Date(today)
+  monday.setDate(today.getDate() + daysUntilMonday)
+
   values = []
-  for week in [1, 2, 3, 4]
+  for i in [0...4]
+    d = new Date(monday)
+    d.setDate(monday.getDate() + i * 7)
+    week = d.toISOString().slice(0, 10)
     for slot in ['09:00', '10:00', '11:00', '14:00']
-      for i in [1..4]
-        values.push "(#{week}, '#{slot}')"
+      for j in [1..4]
+        values.push "('#{week}', '#{slot}')"
   sql! "INSERT INTO spots (week, slot) VALUES #{values.join(', ')}"
-  p '[setup] Seeded 64 spots for weeks 1-4'
+  p "[setup] Seeded #{values.length} spots for 4 weeks starting #{monday.toISOString().slice(0, 10)}"

@@ -1,31 +1,36 @@
-# Booking routes — list and create bookings (Stripe stubbed)
+# Booking routes — list and create bookings
 
-import { get, post, prefix, read, session } from '@rip-lang/server'
+import { get, post, prefix, read } from '@rip-lang/server'
+import { userScope } from '../lib/auth.rip'
 import { schema, sql } from '../db.rip'
 
 Booking = schema.model 'Booking'
 
-requireAuth = ->
-  throw Object.assign(new Error('Not authenticated'), { status: 401 }) unless session.userId
-
 prefix '/api/bookings', ->
 
-  # List user's bookings
   get '' ->
-    requireAuth()
-    bookings = Booking.where!(user_id: session.userId).orderBy!('week').all!()
+    # auth
+    user = userScope!()
+
+    # work
+    bookings = Booking.where!(user_id: user.id).orderBy!('week').all!()
     items = for b in bookings
       { id: b.id, week: b.week, slot: b.slot, children: b.children }
+
+    # send
     { bookings: items }
 
-  # Create booking directly (Stripe stubbed — no payment)
   post '/create' ->
-    requireAuth()
-    items = read 'items', 'json!'
-    bookingIds = []
+    # auth
+    user = userScope!()
 
+    # read
+    items = read 'items', 'json!'
+
+    # work
+    bookingIds = []
     for item in items
-      booking = Booking.create!({ user_id: session.userId, week: item.week, slot: item.slot, children: item.children or [] })
+      booking = Booking.create!({ user_id: user.id, week: item.week, slot: item.slot, children: item.children or [] })
       bookingIds.push booking.id
 
       needed = item.children?.length or 1
@@ -33,6 +38,7 @@ prefix '/api/bookings', ->
 
       for row in (data.data or [])
         spotId = row[0]
-        sql! 'UPDATE spots SET status = ?, user_id = ?, booking_id = ? WHERE id = ?', ['booked', session.userId, booking.id, spotId]
+        sql! 'UPDATE spots SET status = ?, user_id = ?, booking_id = ? WHERE id = ?', ['booked', user.id, booking.id, spotId]
 
+    # send
     { bookingIds }

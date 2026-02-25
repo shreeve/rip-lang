@@ -1,0 +1,20 @@
+# Auth scope helpers — used in the auth phase of API route handlers
+
+import { session, error, bail } from '@rip-lang/server'
+import { schema } from '../db.rip'
+
+User = schema.model 'User'
+
+export userScope = ->
+  bail!() unless session.userId
+  user = User.find!(session.userId)
+  bail!() unless user
+  user
+
+export adminScope = ->
+  user = userScope!()
+  error! 'Admin only', 403 unless user.role is 'admin'
+  user
+
+export proxying = ->
+  session.adminId? and session.adminId isnt session.userId

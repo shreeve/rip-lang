@@ -3,9 +3,10 @@
 @enum SpotStatus: available, booked
 
 @model User
-  email!#          email
+  role?            string, [1, 20]
   firstName?       string, [1, 50]
   lastName?        string, [1, 50]
+  email!#          email
   phone?           string, [1, 20]
   source?          string, [0, 100]
   photo?           url
@@ -17,7 +18,7 @@
   @timestamps
 
 @model Spot
-  week!            integer
+  week!            date
   slot!            string, [5, 5]
   status           SpotStatus, [available]
   child?           json
@@ -28,7 +29,7 @@
   @index [week, slot]
 
 @model Booking
-  week!            integer
+  week!            date
   slot!            string, [5, 5]
   children         json, [[]]
   meta?            json
