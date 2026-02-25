@@ -813,7 +813,9 @@ All use `??=` (overridable by redeclaring). The REPL uses `skipPreamble: true` a
 bun run test      # Run all tests
 bun run parser    # Rebuild parser from grammar
 bun run build     # Build browser bundle
+bun run bump      # Bump version, rebuild, update docs
 bun run serve     # Start dev server (localhost:3000)
+bun publish       # Publish to npm (use bun, not npm)
 ```
 
 ---
