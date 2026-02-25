@@ -417,14 +417,14 @@ Rip includes optional packages for full-stack development:
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| [rip-lang](https://www.npmjs.com/package/rip-lang) | 3.13.26 | Core language compiler |
-| [@rip-lang/server](packages/server/) | 1.2.11 | Multi-worker app server (web framework, hot reload, HTTPS, mDNS) |
-| [@rip-lang/db](packages/db/) | 1.3.13 | DuckDB server with official UI + ActiveRecord-style client |
-| [@rip-lang/grid](packages/grid/) | 0.2.8 | Reactive data grid |
-| [@rip-lang/swarm](packages/swarm/) | 1.2.16 | Parallel job runner with worker pool |
-| [@rip-lang/csv](packages/csv/) | 1.3.4 | CSV parser + writer |
-| [@rip-lang/schema](packages/schema/) | 0.3.6 | Unified schema → TypeScript types, SQL DDL, validation, ORM |
-| [VS Code Extension](packages/vscode/) | 0.5.0 | Syntax highlighting, type intelligence, source maps |
+| [rip-lang](https://www.npmjs.com/package/rip-lang) | 3.13.27 | Core language compiler |
+| [@rip-lang/server](packages/server/) | 1.3.12 | Multi-worker app server (web framework, hot reload, HTTPS, mDNS) |
+| [@rip-lang/db](packages/db/) | 1.3.15 | DuckDB server with official UI + ActiveRecord-style client |
+| [@rip-lang/grid](packages/grid/) | 0.2.10 | Reactive data grid |
+| [@rip-lang/swarm](packages/swarm/) | 1.2.18 | Parallel job runner with worker pool |
+| [@rip-lang/csv](packages/csv/) | 1.3.6 | CSV parser + writer |
+| [@rip-lang/schema](packages/schema/) | 0.3.8 | Unified schema → TypeScript types, SQL DDL, validation, ORM |
+| [VS Code Extension](packages/vscode/) | 0.5.7 | Syntax highlighting, type intelligence, source maps |
 
 ```bash
 bun add -g @rip-lang/db    # Installs everything (rip-lang + server + db)
