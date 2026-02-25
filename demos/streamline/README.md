@@ -27,7 +27,7 @@ bun add -g rip-lang @rip-lang/db
 Verify both are installed:
 
 ```bash
-rip --version     # Should print: Rip 3.13.13 (or newer)
+rip --version     # Should print: Rip 3.13.16 (or newer)
 rip-db --version  # Should print: rip-db v1.3.x
 ```
 
@@ -43,12 +43,13 @@ bun install
 
 ```
 demos/streamline/
-├── api/                  # Server (runs on Bun via Rip)
-│   ├── index.rip         # Entry point — starts HTTP server on port 8304
-│   ├── config.rip        # App configuration (port, DB URL, session settings)
-│   ├── setup.rip         # Database bootstrap — creates tables and seeds data
-│   ├── app.schema        # Data model definitions (User, Spot, Booking)
-│   ├── .env              # Environment variables (DB_URL, OAuth keys)
+├── index.rip             # Entry point — starts HTTP server on port 8304
+├── config.rip            # App configuration (port, DB URL, session settings)
+├── setup.rip             # Setup shim — rip serve runs this before spawning workers
+├── app.schema            # Data model definitions (User, Spot, Booking)
+├── .env                  # Environment variables (DB_URL, OAuth keys)
+├── api/                  # Server-side logic
+│   ├── db.rip            # Database connection, queries, and bootstrap (auto-starts rip-db)
 │   ├── routes/
 │   │   ├── auth.rip      # Authentication routes (email code, Google, Apple)
 │   │   ├── bookings.rip  # Booking CRUD
@@ -56,17 +57,21 @@ demos/streamline/
 │   │   └── user.rip      # User profile
 │   └── lib/
 │       ├── stash.rip     # Config helper (nested dot-access)
+│       ├── jwt.rip       # JWT signing and verification
 │       ├── google.rip    # Google OAuth integration
 │       └── apple.rip     # Apple Sign-In integration
 │
 └── app/                  # Client (reactive SPA served by the API)
     ├── index.html        # Shell HTML (loads Tailwind + Rip UI runtime)
+    ├── app.css           # App-level styles
+    ├── favicon.png       # App icon (inlined as data URL in index.html)
     ├── routes/           # File-based routing (each .rip file = a page)
     │   ├── _layout.rip   # App shell (nav bar, drawer menu)
     │   ├── index.rip     # Home page
     │   ├── auth.rip      # Sign-in page
     │   ├── bookings.rip  # My bookings list
     │   ├── profile.rip   # User profile editor
+    │   ├── privacy.rip   # Privacy policy
     │   └── booking/
     │       ├── _layout.rip    # Booking flow layout (breadcrumb)
     │       ├── time.rip       # Step 1: Pick a week + time slot
@@ -84,41 +89,32 @@ demos/streamline/
 
 ## Running the App
 
-You need two processes: the DuckDB server and the Streamline API server.
-
-### Terminal 1 — Start rip-db (DuckDB server)
+From the project root:
 
 ```bash
-rip-db
+cd demos/streamline
+rip serve
 ```
 
-This starts an in-memory DuckDB instance on **http://localhost:4213**. You can
-optionally open that URL in a browser to see the official DuckDB UI for running
-queries directly.
+On first run the server will:
 
-To use a persistent database file instead of in-memory:
+1. Auto-start `rip-db` using `streamline.duckdb` (if not already running)
+2. Create all database tables from `app.schema`
+3. Seed 4 weeks of swim lesson time slots (09:00, 10:00, 11:00, 14:00)
+4. Start the HTTP server on **http://localhost:8304**
 
-```bash
-rip-db streamline.duckdb
-```
-
-### Terminal 2 — Start the Streamline server
-
-```bash
-cd demos/streamline/api
-rip index.rip
-```
-
-You should see:
+You should see output like:
 
 ```
-[setup] Database tables created
-[setup] Seeded spots for weeks 1-4
-rip-api listening on http://0.0.0.0:8304
+[setup] Starting rip-db streamline.duckdb...
+[setup] DuckDB UI: http://localhost:4213
+[setup] Tables created
+[setup] Seeded 64 spots for weeks 1-4
 ```
 
-The server automatically creates all database tables and seeds initial data on
-every startup (it drops and recreates them fresh each time).
+No separate `rip-db` terminal is needed — the server manages it automatically.
+The DuckDB UI is available at **http://localhost:4213** for running queries
+directly.
 
 ### Open the App
 
@@ -129,8 +125,9 @@ credentials needed for local development).
 
 ## Environment Variables
 
-The API reads from `api/.env`. The only required variable for local development
-is `DB_URL`, which defaults to `http://localhost:4213` if not set.
+The server reads from `.env` in the streamline directory. The only required
+variable for local development is `DB_URL`, which defaults to
+`http://localhost:4213` if not set.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -146,24 +143,21 @@ user sign-in.
 
 | What | Command |
 |------|---------|
-| Start DuckDB server | `rip-db` |
-| Start app server | `cd demos/streamline/api && rip index.rip` |
+| Start the app | `cd demos/streamline && rip serve` |
 | DuckDB UI | http://localhost:4213 |
 | Streamline app | http://localhost:8304 |
 | Health check | `curl http://localhost:8304/ping` |
 | View config | `curl http://localhost:8304/config` |
-| List tables | `curl http://localhost:4213/tables` |
 
 ## How It Works
 
-The Streamline server (`api/index.rip`) does the following on startup:
+The entry point (`index.rip`) does the following on startup:
 
-1. Connects to rip-db at the configured `DB_URL`
-2. Drops and recreates all tables from `app.schema` (User, Spot, Booking)
-3. Seeds 4 weeks of swim lesson time slots (09:00, 10:00, 11:00, 14:00)
-4. Starts an HTTP server on port 8304
-5. Serves the `app/` directory as a reactive SPA using Rip UI with file-based routing
-6. Provides JSON API routes for auth, bookings, sessions, and user profile
+1. Calls `setup()` from `api/db.rip` — auto-starts `rip-db` if needed, creates
+   tables from `app.schema` if they don't exist, and seeds initial data
+2. Starts an HTTP server on port 8304 using `@rip-lang/server`
+3. Serves the `app/` directory as a reactive SPA using Rip UI with file-based routing
+4. Provides JSON API routes for auth, bookings, sessions, and user profile
 
 The client is a single-page app that loads the Rip UI runtime and Tailwind CSS
 from `app/index.html`. Each `.rip` file in `app/routes/` becomes a route —
