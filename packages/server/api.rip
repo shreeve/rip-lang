@@ -156,9 +156,9 @@ createContext = (req, params = {}) ->
       file = Bun.file(path)
       etag = "W/\"#{file.lastModified}-#{file.size}\""
       if req.headers.get('if-none-match') is etag
-        return new Response(null, { status: 304, headers: { 'ETag': etag, 'Cache-Control': 'no-cache' } })
+        return new Response(null, { status: 304, headers: { 'ETag': etag, 'Cache-Control': out.get('Cache-Control') or 'no-cache' } })
       out.set 'Content-Type', (type or mimeType(path))
-      out.set 'Cache-Control', 'no-cache'
+      out.set 'Cache-Control', 'no-cache' unless out.has 'Cache-Control'
       out.set 'ETag', etag
       new Response file, { status: 200, headers: out }
 
@@ -167,6 +167,25 @@ createContext = (req, params = {}) ->
         if opts.append then out.append(name, value) else out.set(name, value)
         return
       out.get(name)
+
+    cache: (duration) ->
+      seconds = if typeof duration is 'number' then duration
+      else if typeof duration is 'string'
+        parts = duration.match(/^(\d+)\s*(s|sec|second|seconds|m|min|minute|minutes|h|hr|hour|hours|d|day|days|w|week|weeks|y|year|years)$/i)
+        if parts
+          n = parseInt(parts[1])
+          switch parts[2][0].toLowerCase()
+            when 's' then n
+            when 'm' then n * 60
+            when 'h' then n * 3600
+            when 'd' then n * 86400
+            when 'w' then n * 604800
+            when 'y' then n * 31536000
+            else n
+        else parseInt(duration) or 0
+      else 0
+      out.set 'Cache-Control', "public, max-age=#{seconds}"
+      return
 
     session: {}
 
