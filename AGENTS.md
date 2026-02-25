@@ -76,7 +76,7 @@ rip-lang/
 │   ├── RIP-TYPES.md     # Type system specification
 │   └── RIP-INTERNALS.md # Compiler architecture & design decisions
 ├── test/rip/            # 25 test files (1,255 tests)
-└── scripts/             # Build utilities
+└── scripts/             # Build utilities (all .js — run via `bun run <name>`)
 ```
 
 ### File Editing Rules
@@ -724,9 +724,11 @@ Static files (`demo.html`, `charts.html`, `sierpinski.html`) work from `file://`
 - **Never edit `src/grammar/solar.rip`** — It's given
 - **Never commit without running tests** — `bun run test` must pass
 - **Never add dependencies** — Zero dependencies is a core principle
+- **Never read or execute scripts directly** — Use `bun run <name>` (e.g. `bun run bump`, not `scripts/bump.js`)
 - Run `bun run test` before committing
 - Run `bun run parser` after grammar changes
 - Run `bun run build` after codegen or browser.js changes
+- Run `bun run bump` to release — it handles version, test, build, commit, push, and publish
 
 ---
 
@@ -804,14 +806,18 @@ All use `??=` (overridable by redeclaring). The REPL uses `skipPreamble: true` a
 
 ### Build Commands
 
+All scripts live in `scripts/` as `.js` files. Always use `bun run <name>` — never try to read or execute scripts directly.
+
 ```bash
 bun run test      # Run all tests
 bun run parser    # Rebuild parser from grammar
-bun run build     # Build browser bundle
-bun run bump      # Bump version, rebuild, update docs
+bun run build     # Build browser bundle (docs/dist/rip.min.js)
+bun run bump      # All-in-one release: bump version, test, build, commit, push, publish
 bun run serve     # Start dev server (localhost:3000)
 bun publish       # Publish to npm (use bun, not npm)
 ```
+
+**`bun run bump`** is the standard release workflow. It handles everything: increments the patch version, runs the test suite, rebuilds the browser bundle, commits, pushes, and publishes to npm. Use this instead of manually running build + commit + push separately.
 
 ---
 
