@@ -121,7 +121,7 @@ logAccessHuman = (app, req, res, totalSeconds, workerSeconds) ->
   type = if contentType.includes('/') then contentType.split('/')[1] else contentType
   console.log "[#{timestamp} #{timezone} #{d1} #{d2}] #{method} #{path} → #{status} #{type} #{len}"
 
-INTERNAL_HEADERS = new Set(['rip-worker-busy', 'rip-worker-id'])
+INTERNAL_HEADERS = new Set(['rip-worker-busy', 'rip-worker-id', 'rip-no-log'])
 
 stripInternalHeaders = (h) ->
   out = new Headers()
@@ -920,10 +920,11 @@ class Server
       logAccessHuman(@flags.appName, req, res, totalSeconds, workerSeconds)
 
   buildResponse: (res, req, start, workerSeconds) ->
+    silent = res.headers.get('rip-no-log') is '1'
     headers = stripInternalHeaders(res.headers)
     headers.delete('date')
     @maybeAddSecurityHeaders(headers)
-    @logAccess(req, res, (performance.now() - start) / 1000, workerSeconds)
+    @logAccess(req, res, (performance.now() - start) / 1000, workerSeconds) unless silent
     new Response(res.body, { status: res.status, statusText: res.statusText, headers })
 
   forwardToWorker: (req, socket) ->
