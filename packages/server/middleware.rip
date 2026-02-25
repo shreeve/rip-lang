@@ -541,8 +541,6 @@ export serve = (opts = {}) ->
     bundleCache.json = JSON.stringify({ components, data })
     bundleCache.etag = "W/\"#{Bun.hash(bundleCache.json).toString(36)}\""
 
-  buildBundle!
-
   get "#{prefix}/bundle", (c) ->
     buildBundle! unless bundleCache.json
     if c.req.header('if-none-match') is bundleCache.etag
