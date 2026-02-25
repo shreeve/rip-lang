@@ -7,6 +7,110 @@ All notable changes to Rip will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.13.16] - 2026-02-25
+
+### Breaking — Merge `@rip-lang/api` into `@rip-lang/server`
+
+- **One package for framework + server** — `@rip-lang/api` no longer exists. All imports change from `'@rip-lang/api'` to `'@rip-lang/server'` and `'@rip-lang/api/middleware'` to `'@rip-lang/server/middleware'`. The default export (`.`) is `api.rip` (the web framework), `./middleware` is `middleware.rip`, and `./server` is `server.rip` (the process manager).
+- **`packages/api/` deleted** — Files moved to `packages/server/` (api.rip, middleware.rip, tests/).
+
+### CLI — `rip serve` Subcommand
+
+- **`rip serve`** — New subcommand that resolves `@rip-lang/server/server` lazily and passes all args through. One tool to compile, run, and serve. Clear error message if `@rip-lang/server` isn't installed.
+- **File watching on by default** — `*.rip` files are watched automatically. `--watch=<glob>` to customize, `--static` to disable everything. The `-w`/`--watch` bare flags are removed.
+- **Removed `-w`/`--web` browser REPL** — The `rip -w` flag for launching a browser playground is removed.
+- **CLI cleanup** — Removed dead `startREPL` import, eliminated `__filename`, deduplicated `loaderPath`, removed narrating comments. 308 → 218 lines.
+
+### Compiler — Fix Postfix `if` with `@method` Calls in Value Context
+
+- **Bug fix** — `@method arg1, arg2 if condition` in value context (e.g., inside `->`) silently dropped the method call, compiling to just `condition ? arg2 : undefined` instead of `condition ? this.method(arg1, arg2) : undefined`. The issue was in `unwrapBlock` treating call expressions with array operators (like `['.', 'this', 'x']`) as lists of statements. Fixed by checking if `body[0]` is an s-expression operator. Added 2 regression tests (1,257 total).
+
+### Server — Bundle Caching + Brotli Compression
+
+- **Memory-cached bundle** — The component bundle JSON is built once per worker lifetime and served from memory. No more glob scan + file reads on every `/bundle` request.
+- **Brotli compression** — Bundle is pre-compressed with `zlib.brotliCompressSync` at cache time. When the browser sends `Accept-Encoding: br`, the pre-compressed version is served (~5KB instead of ~65KB).
+- **Client-side ETag caching** — The `launch()` function in `app.rip` stores the bundle ETag and data in `sessionStorage`. On subsequent page loads, it sends `If-None-Match` manually (browser `fetch()` doesn't do this automatically). Server returns 304 when content unchanged — zero bytes on the wire.
+- **Deterministic ETags** — Glob scan results are sorted before JSON serialization, ensuring identical hashes across requests.
+- **`Cache-Control: no-cache` on `send()`** — Makes caching explicit for subresources served via `@send`.
+
+### Server — `@cache` Helper
+
+- **Sinatra-style cache duration** — `@cache '1 day'` sets `Cache-Control: public, max-age=86400`. Supports seconds, minutes, hours, days, weeks, years, or raw numbers. `@send` respects pre-set `Cache-Control` instead of always overriding to `no-cache`.
+
+### Server — `Rip-No-Log` Header
+
+- **App-controlled log suppression** — Set `@header 'Rip-No-Log', '1'` in a `before` filter to suppress the server's access log for specific routes (e.g., `/favicon.png`, `/ping`). The header is stripped from the response before reaching the browser.
+
+### Server — Watch Improvements
+
+- **Filter non-existent watch dirs** — The `serve` middleware filters directories with `existsSync` before registering them with the file watcher, preventing `ENOENT` errors for missing `css/` directories.
+- **Cleaner watch error format** — `rip-server: watch skipped (ENOENT): app/css` with relative paths.
+
+### Server — Setup Fix
+
+- **`proc.unref()` for spawned processes** — The `startDb` function in `demos/streamline/api/db.rip` now unrefs the spawned `rip-db` child process so the setup subprocess can exit cleanly. Without this, `rip serve` would hang after setup because the child kept the parent alive.
+
+### Standard Library (added in 3.11.x)
+
+- **13 global helpers** — `abort`, `assert`, `exit`, `kind`, `noop`, `p`, `pp`, `raise`, `rand`, `sleep`, `todo`, `warn`, `zip`. All use `??=` (overridable). Injected via `globalThis` in compiled output, CLI REPL, and browser REPL.
+
+### Postfix `!?` Operator (added in 3.11.x)
+
+- **Defined check** — `val!?` compiles to `val !== undefined` (true if not undefined). Distinct from `val?` which checks `val != null` (not null and not undefined).
+
+### Rip Loader
+
+- **Rewrite `@rip-lang/*` imports to absolute paths** — The rip-loader now rewrites `@rip-lang/*` import specifiers to absolute filesystem paths via `import.meta.resolve`. This is necessary because Bun's worker threads ignore `NODE_PATH` and `onResolve` doesn't fire for imports in compiled source.
+
+### Swarm (`@rip-lang/swarm`)
+
+- **Worker error delivery** — Don't exit before error message arrives at the main thread.
+- **Startup failure detection** — Exit handler detects worker startup failures.
+- **Pre-flight module check** — Validates worker module exists before spawning.
+- **Quiet mode** — `-q`/`--quiet` flag suppresses progress output.
+- **Derive rip-loader path from swarm's own location** — Uses `import.meta.url` instead of `require.resolve` (which fails from directories without `node_modules`).
+
+### UI Framework
+
+- **Auto-detect hot reload under `rip serve`** — `watch: true` is automatically enabled when `SOCKET_PREFIX` env var is present.
+- **Brotli + ETag caching for `rip.min.js`** — Pre-compressed `.br` file served with ETag; 304 on reload.
+- **Auto-launch for server-backed apps** — `data-launch` attribute on script tag triggers `launch()` with bundle URL.
+- **Component remount on route param change** — Same route with different params now correctly remounts.
+- **CSS hot-swap** — `.css` file changes trigger style reload without full page refresh.
+- **Fix fragment removal** — Components with multiple root elements now clean up all nodes.
+
+### VS Code Extension
+
+- **v0.5.5** — Fix hover overshoot, source map interpolation.
+- **v0.5.3** — Hover support for component declarations.
+- **v0.5.2** — Type hover for all declarations.
+
+### Type System
+
+- **Generic return types** — `def foo():: Promise<User>` now emits correct `.d.ts`.
+
+### Documentation
+
+- **All `@rip-lang/api` references updated** — AGENTS.md, README.md, RIP-LANG.md, RIP-INTERNALS.md, all package READMEs, all demo files.
+- **Server README** — Merged 901 lines of web framework documentation (validators, routing, middleware, context, file serving, error handling, utility functions, Hono migration guide) from the deleted api README.
+- **Version numbers and test counts updated** across all documentation.
+
+### Packages Published
+
+| Package | Version |
+|---------|---------|
+| `rip-lang` | 3.13.16 |
+| `@rip-lang/server` | 1.3.7 |
+| `@rip-lang/db` | 1.3.14 |
+| `@rip-lang/grid` | 0.2.9 |
+| `@rip-lang/csv` | 1.3.5 |
+| `@rip-lang/http` | 1.1.7 |
+| `@rip-lang/print` | 1.1.8 |
+| `@rip-lang/x12` | 0.2.7 |
+| `@rip-lang/schema` | 0.3.7 |
+| `@rip-lang/swarm` | 1.2.17 |
+| `@rip-lang/all` | 3.13.26 |
+
 ## [3.10.12] - 2026-02-20
 
 ### Compiler — Fix Variable Scoping in Effect Blocks
