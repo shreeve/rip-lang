@@ -521,10 +521,11 @@ export serve = (opts = {}) ->
     name = c.req.path.slice("#{prefix}/components/".length)
     c.send "#{routesDir}/#{name}", 'text/plain; charset=UTF-8'
 
-  # Route: {prefix}/bundle — all components + app data as JSON (cached, rebuilt on file change)
-  bundleCache = { json: null, etag: null }
+  # Route: {prefix}/bundle — all components + app data as JSON (cached + Brotli)
+  bundleCache = { json: null, br: null, etag: null }
 
   buildBundle = ->
+    { brotliCompressSync } = require 'zlib'
     glob = new Bun.Glob("**/*.rip")
     components = {}
     for path in Array.from(glob.scanSync(routesDir)).sort()
@@ -539,13 +540,17 @@ export serve = (opts = {}) ->
     if appState
       data[k] = v for k, v of appState
     bundleCache.json = JSON.stringify({ components, data })
+    bundleCache.br = brotliCompressSync(bundleCache.json)
     bundleCache.etag = "W/\"#{Bun.hash(bundleCache.json).toString(36)}\""
 
   get "#{prefix}/bundle", (c) ->
     buildBundle! unless bundleCache.json
     if c.req.header('if-none-match') is bundleCache.etag
       return new Response(null, { status: 304, headers: { 'ETag': bundleCache.etag, 'Cache-Control': 'no-cache' } })
-    new Response bundleCache.json, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', 'ETag': bundleCache.etag }
+    useBr = (c.req.header('accept-encoding') or '').includes('br')
+    headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', 'ETag': bundleCache.etag }
+    headers['Content-Encoding'] = 'br' if useBr
+    new Response (if useBr then bundleCache.br else bundleCache.json), { headers }
 
   # Register watch directories with rip-server via control socket
   if enableWatch and process.env.SOCKET_PREFIX
