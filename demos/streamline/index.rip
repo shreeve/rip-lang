@@ -24,7 +24,7 @@ use serve
   title: config.app.name
   watch: true
 
-skip = ['/favicon.ico', '/ping']
+skip = ['/favicon.png', '/ping']
 
 before ->
   if @req.path in skip
@@ -32,7 +32,7 @@ before ->
   return
 
 get '/app.css'     -> @send "#{dir}/app.css"
-get '/favicon.ico' -> @send "#{dir}/favicon.png", 'image/png'
+get '/favicon.png' -> @send "#{dir}/favicon.png"
 
 # Diagnostic routes
 get '/ping' ->
