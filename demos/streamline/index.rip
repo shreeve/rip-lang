@@ -27,7 +27,9 @@ use serve
 skip = ['/favicon.ico', '/ping']
 
 before ->
-  @header 'Rip-No-Log', '1' if @req.path in skip
+  if @req.path in skip
+    @header 'Rip-No-Log', '1'
+  return
 
 get '/app.css'     -> @send "#{dir}/app.css"
 get '/favicon.ico' -> @send "#{dir}/favicon.png", 'image/png'
