@@ -186,6 +186,7 @@ createContext = (req, params = {}) ->
         else parseInt(duration) or 0
       else 0
       out.set 'Cache-Control', "public, max-age=#{seconds}, immutable"
+      out.set 'Expires', new Date(Date.now() + seconds * 1000).toUTCString()
       return
 
     session: {}

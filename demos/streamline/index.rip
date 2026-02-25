@@ -24,6 +24,7 @@ use serve
   title: config.app.name
   watch: true
 
+get '/favicon.ico', -> @cache '1y'; @send "#{dir}/favicon.png", 'image/png'
 get '/app.css' -> @send "#{dir}/app.css"
 
 # Diagnostic routes
