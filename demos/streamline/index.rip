@@ -1,6 +1,6 @@
 # Streamline Swim School — Server Entry Point
 
-import { get, use, start, before } from '@rip-lang/server'
+import { get, use, start } from '@rip-lang/server'
 import { htmlJson, sessions, serve } from '@rip-lang/server/middleware'
 import { setup } from './api/db.rip'
 import { Stash } from './api/lib/stash.rip'
@@ -24,14 +24,7 @@ use serve
   title: config.app.name
   watch: true
 
-skip = ['/favicon.png', '/ping']
-
-before ->
-  @header 'Rip-No-Log', '1' if @req.path in skip
-  return
-
-get '/app.css'     -> @send "#{dir}/app.css"
-get '/favicon.png' -> @cache '1 day'; @send "#{dir}/favicon.png"
+get '/app.css' -> @send "#{dir}/app.css"
 
 # Diagnostic routes
 get '/ping' ->
