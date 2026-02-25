@@ -1,10 +1,14 @@
 # Rip Component System — Road to World Class
 
-## 1. Component Test Coverage
+## 1. Component Test Coverage (in progress — 31/50+)
 
-Write comprehensive tests in `test/rip/components.rip` covering every render
-pattern, nesting combination, and edge case. Target: 50+ tests that exercise
-conditionals, loops, fragments, events, bindings, props, lifecycle, and context.
+`test/rip/components.rip` exists with 31 tests covering: basic rendering,
+fragment roots, static/reactive attributes, reactive text, conditional and loop
+block factories, nested variable threading (if-in-for, for-in-for), string
+content in factories, event handlers, refs, component state/computed/methods/
+effects/props. Still needed: two-way binding (`<=>`), dynamic classes (`.()`,
+`__clsx`), child component prop passing, lifecycle hooks, context API, SVG
+rendering, hyphenated attributes, and more edge cases.
 
 ## 2. Efficient List Reconciliation
 

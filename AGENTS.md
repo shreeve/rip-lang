@@ -101,7 +101,7 @@ rip-lang/
 
 ```
 Rip Source  ->  Lexer  ->  emitTypes  ->  Parser  ->  S-Expressions  ->  Codegen  ->  JavaScript
-               (1,761)     (types.js)     (359)       (arrays + .loc)     (3,293)      + source map
+               (1,778)     (types.js)     (357)       (arrays + .loc)     (3,334)      + source map
                               ↓
                            file.d.ts (when types: "emit")
 ```
@@ -265,6 +265,52 @@ Implementation: lexer tokenizes `<=>` as `BIND`, the render rewriter transforms 
 
 ---
 
+## Component System Architecture (`src/components.js`)
+
+The component system is a compiler sidecar — `installComponentSupport(CodeGenerator, Lexer)` adds methods to both prototypes. It has two major subsystems:
+
+### Render Rewriter (Lexer side)
+
+`rewriteRender()` runs on the token stream (after `normalizeLines`, before `tagPostfixConditionals`). Inside `render` blocks, it transforms template syntax into function-call syntax by injecting `, ->` or `CALL_START -> ... CALL_END` tokens:
+
+```coffee
+# Rip source:            # After rewriting:
+div                       div(->
+  span "hello"              span("hello"))
+```
+
+Key mechanisms:
+- **`startsWithTag`** — backward scan to determine if current line starts with a template tag
+- **`pendingCallEnds`** — indent-level stack for matching injected CALL_START/CALL_END pairs
+- **`fromThen` skip** — `normalizeLines` creates `fromThen` INDENTs for `if x then y else z`; these are always inline values, never template nesting
+
+### Component Codegen (CodeGenerator side)
+
+Generates fine-grained DOM operations at compile time (no virtual DOM):
+- **`buildRender`** — entry point, initializes counters, create/setup line arrays, and tracking state
+- **`generateNode`** — main dispatch for all render-tree nodes (elements, text, conditionals, loops, components)
+- **`generateConditional`** / **`generateTemplateLoop`** — produce **block factories** for dynamic regions
+- **`emitBlockFactory`** — shared factory emitter (c/m/p/d methods) used by both conditionals and loops
+
+### Factory Mode (`_factoryMode`)
+
+Block factories need local variables and `ctx` references instead of `this._elN` and `this.member`. Rather than generating with `this.` and regex-replacing after, the codegen uses a **factory mode** flag:
+
+- **`_factoryMode`** (bool) — when true, generation emits `_el0` (local) and `ctx.member` instead of `this._el0` and `this.member`
+- **`_self`** (getter) — returns `'this'` or `'ctx'` based on mode
+- **`_factoryVars`** (Set) — tracks variables created during factory generation (for `let` declarations)
+- **`_fragChildren`** (Map) — tracks fragment-to-children mappings (for proper removal after insertBefore)
+- **`_pushEffect(body)`** — emits `__effect(...)` normally or `disposers.push(__effect(...))` in factory mode
+- **`_loopVarStack`** — accumulates loop variables for threading through nested factories
+
+Factory mode is entered in `generateConditionBranch` and `generateTemplateLoop` via save/restore of `[_createLines, _setupLines, _factoryMode, _factoryVars]`.
+
+### Testing Components
+
+Component tests live in `test/rip/components.rip` (31 tests). Use `code` tests with `{ skipPreamble: true, skipRuntimes: true }` options to verify generated JavaScript output for render blocks. Use `test` tests for runtime behavior (state, computed, methods — no DOM needed).
+
+---
+
 ## Type System (Rip Types)
 
 Rip's optional type system adds compile-time type annotations that emit `.d.ts` files for TypeScript interoperability. Types are **erased** from JavaScript output — they exist only for IDE intelligence and documentation.
@@ -417,23 +463,23 @@ code "name", "x + y", "(x + y)"
 fail "name", "invalid syntax"
 ```
 
-### Test Files (25 files, 1,265 tests)
+### Test Files (26 files, 1,300 tests)
 
 ```
 test/rip/
-├── arrows.rip        ├── loops.rip
-├── assignment.rip    ├── modules.rip
-├── async.rip         ├── operators.rip
-├── basic.rip         ├── optional.rip
-├── classes.rip       ├── parens.rip
-├── commaless.rip     ├── precedence.rip
+├── arrows.rip        ├── literals.rip
+├── assignment.rip    ├── loops.rip
+├── async.rip         ├── modules.rip
+├── basic.rip         ├── operators.rip
+├── classes.rip       ├── optional.rip
+├── commaless.rip     ├── parens.rip
+├── components.rip    ├── precedence.rip
 ├── comprehensions.rip├── properties.rip
 ├── control.rip       ├── reactivity.rip
 ├── data.rip          ├── regex.rip
 ├── errors.rip        ├── semicolons.rip
 ├── functions.rip     ├── strings.rip
 ├── guards.rip        └── types.rip
-└── literals.rip
 ```
 
 ---
