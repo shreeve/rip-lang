@@ -1386,7 +1386,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
   // emitBlockFactory — shared factory generation for conditionals and loops
   // --------------------------------------------------------------------------
 
-  proto.emitBlockFactory = function(blockName, params, rootVar, createLines, setupLines, factoryVars) {
+  proto.emitBlockFactory = function(blockName, params, rootVar, createLines, setupLines, factoryVars, isStatic) {
     const factoryLines = [];
     factoryLines.push(`function ${blockName}(${params}) {`);
 
@@ -1401,13 +1401,20 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
     factoryLines.push(`  return {`);
 
+    if (isStatic) {
+      factoryLines.push(`    _s: true,`);
+    }
+
+    const fragChildren = this._fragChildren.get(rootVar);
+    const firstNode = fragChildren ? fragChildren[0] : rootVar;
+
     factoryLines.push(`    c() {`);
     for (const line of createLines) {
       factoryLines.push(`      ${line}`);
     }
+    factoryLines.push(`      this._first = ${firstNode};`);
     factoryLines.push(`    },`);
 
-    const fragChildren = this._fragChildren.get(rootVar);
     factoryLines.push(`    m(target, anchor) {`);
     if (fragChildren) {
       for (const child of fragChildren) {
@@ -1504,41 +1511,26 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
     [this._createLines, this._setupLines, this._factoryMode, this._factoryVars] = saved;
 
+    const isStatic = itemSetupLines.length === 0;
     const loopParams = `ctx, ${itemVar}, ${indexVar}${outerExtra}`;
-    this.emitBlockFactory(blockName, loopParams, itemNode, itemCreateLines, itemSetupLines, itemFactoryVars);
+    this.emitBlockFactory(blockName, loopParams, itemNode, itemCreateLines, itemSetupLines, itemFactoryVars, isStatic);
+
+    // Build key function argument (null = use item as key)
+    const hasCustomKey = keyExpr !== itemVar;
+    const keyFnCode = hasCustomKey ? `(${itemVar}, ${indexVar}) => ${keyExpr}` : 'null';
+
+    // Build outer vars argument list for nested loops
+    const outerArgs = outerParams ? `, ${outerParams}` : '';
 
     // Generate reconciliation code in _setup()
     const setupLines = [];
     setupLines.push(`// Loop: ${blockName}`);
     setupLines.push(`{`);
-    setupLines.push(`  const __anchor = ${anchorVar};`);
-    setupLines.push(`  const __map = new Map();`);
+    setupLines.push(`  const __s = { blocks: [], keys: [] };`);
     const effOpen = this._factoryMode ? 'disposers.push(__effect(() => {' : '__effect(() => {';
     const effClose = this._factoryMode ? '}));' : '});';
     setupLines.push(`  ${effOpen}`);
-    setupLines.push(`    const __items = ${collectionCode};`);
-    setupLines.push(`    const __parent = __anchor.parentNode;`);
-    setupLines.push(`    const __newMap = new Map();`);
-    setupLines.push(``);
-    setupLines.push(`    for (let ${indexVar} = 0; ${indexVar} < __items.length; ${indexVar}++) {`);
-    setupLines.push(`      const ${itemVar} = __items[${indexVar}];`);
-    setupLines.push(`      const __key = ${keyExpr};`);
-    setupLines.push(`      let __block = __map.get(__key);`);
-    setupLines.push(`      if (!__block) {`);
-    setupLines.push(`        __block = ${blockName}(${this._self}, ${itemVar}, ${indexVar}${outerExtra});`);
-    setupLines.push(`        __block.c();`);
-    setupLines.push(`      }`);
-    setupLines.push(`      __block.m(__parent, __anchor);`);
-    setupLines.push(`      __block.p(${this._self}, ${itemVar}, ${indexVar}${outerExtra});`);
-    setupLines.push(`      __newMap.set(__key, __block);`);
-    setupLines.push(`    }`);
-    setupLines.push(``);
-    setupLines.push(`    for (const [__k, __b] of __map) {`);
-    setupLines.push(`      if (!__newMap.has(__k)) __b.d(true);`);
-    setupLines.push(`    }`);
-    setupLines.push(``);
-    setupLines.push(`    __map.clear();`);
-    setupLines.push(`    for (const [__k, __v] of __newMap) __map.set(__k, __v);`);
+    setupLines.push(`    __reconcile(${anchorVar}, __s, ${collectionCode}, ${this._self}, ${blockName}, ${keyFnCode}${outerArgs});`);
     setupLines.push(`  ${effClose}`);
     setupLines.push(`}`);
 
@@ -1784,6 +1776,134 @@ function __clsx(...args) {
   return args.filter(Boolean).join(' ');
 }
 
+function __lis(arr) {
+  const n = arr.length;
+  if (n === 0) return [];
+  const tails = [], indices = [], prev = new Array(n).fill(-1);
+  for (let i = 0; i < n; i++) {
+    if (arr[i] === -1) continue;
+    let lo = 0, hi = tails.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (tails[mid] < arr[i]) lo = mid + 1; else hi = mid;
+    }
+    tails[lo] = arr[i];
+    indices[lo] = i;
+    if (lo > 0) prev[i] = indices[lo - 1];
+  }
+  const result = [];
+  let k = indices[tails.length - 1];
+  for (let i = tails.length - 1; i >= 0; i--) { result.push(k); k = prev[k]; }
+  result.reverse();
+  return result;
+}
+
+function __reconcile(anchor, state, items, ctx, factory, keyFn, ...outer) {
+  const parent = anchor.parentNode;
+  if (!parent) return;
+
+  const oldKeys = state.keys;
+  const oldBlocks = state.blocks;
+  const oldLen = oldKeys.length;
+  const newLen = items.length;
+  const newBlocks = new Array(newLen);
+  const hasKeyFn = keyFn != null;
+  const newKeys = hasKeyFn ? items.map((item, i) => keyFn(item, i)) : items;
+
+  // Phase 0: first render — batch create via DocumentFragment
+  if (oldLen === 0) {
+    if (newLen > 0) {
+      const frag = document.createDocumentFragment();
+      for (let i = 0; i < newLen; i++) {
+        const block = factory(ctx, items[i], i, ...outer);
+        block.c();
+        block.m(frag, null);
+        if (!block._s) block.p(ctx, items[i], i, ...outer);
+        newBlocks[i] = block;
+      }
+      parent.insertBefore(frag, anchor);
+    }
+    state.keys = hasKeyFn ? newKeys : items.slice();
+    state.blocks = newBlocks;
+    return;
+  }
+
+  // Phase 1: prefix scan — skip p() (item+index identical, effects already live)
+  let start = 0;
+  const minLen = oldLen < newLen ? oldLen : newLen;
+  while (start < minLen && oldKeys[start] === newKeys[start]) {
+    newBlocks[start] = oldBlocks[start];
+    start++;
+  }
+
+  // Phase 2: suffix scan — call p() (index may differ)
+  let oldEnd = oldLen - 1;
+  let newEnd = newLen - 1;
+  while (oldEnd >= start && newEnd >= start && oldKeys[oldEnd] === newKeys[newEnd]) {
+    const block = oldBlocks[oldEnd];
+    if (!block._s) block.p(ctx, items[newEnd], newEnd, ...outer);
+    newBlocks[newEnd] = block;
+    oldEnd--;
+    newEnd--;
+  }
+
+  // Remove old blocks in the middle that aren't in the new set
+  if (start > newEnd) {
+    for (let i = start; i <= oldEnd; i++) oldBlocks[i].d(true);
+  } else if (start > oldEnd) {
+    // Phase 3a: pure insertion — batch via DocumentFragment
+    const next = newEnd + 1 < newLen ? newBlocks[newEnd + 1]._first : anchor;
+    const frag = document.createDocumentFragment();
+    for (let i = start; i <= newEnd; i++) {
+      const block = factory(ctx, items[i], i, ...outer);
+      block.c();
+      block.m(frag, null);
+      if (!block._s) block.p(ctx, items[i], i, ...outer);
+      newBlocks[i] = block;
+    }
+    parent.insertBefore(frag, next);
+  } else {
+    // Phase 4: general case — temp Map + LIS
+    const oldKeyIdx = new Map();
+    for (let i = start; i <= oldEnd; i++) oldKeyIdx.set(oldKeys[i], i);
+
+    const seq = new Array(newEnd - start + 1);
+    for (let i = start; i <= newEnd; i++) {
+      const key = newKeys[i];
+      const oldIdx = oldKeyIdx.get(key);
+      if (oldIdx !== undefined) {
+        seq[i - start] = oldIdx - start;
+        const block = oldBlocks[oldIdx];
+        if (!block._s) block.p(ctx, items[i], i, ...outer);
+        newBlocks[i] = block;
+        oldKeyIdx.delete(key);
+      } else {
+        seq[i - start] = -1;
+        const block = factory(ctx, items[i], i, ...outer);
+        block.c();
+        if (!block._s) block.p(ctx, items[i], i, ...outer);
+        newBlocks[i] = block;
+      }
+    }
+
+    for (const idx of oldKeyIdx.values()) oldBlocks[idx].d(true);
+
+    const lis = __lis(seq);
+    const lisSet = new Set(lis);
+    let next = newEnd + 1 < newLen ? newBlocks[newEnd + 1]._first : anchor;
+    for (let i = newEnd; i >= start; i--) {
+      const block = newBlocks[i];
+      if (!lisSet.has(i - start)) {
+        block.m(parent, next);
+      }
+      next = block._first;
+    }
+  }
+
+  state.keys = hasKeyFn ? newKeys : items.slice();
+  state.blocks = newBlocks;
+}
+
 class __Component {
   constructor(props = {}) {
     Object.assign(this, props);
@@ -1819,7 +1939,7 @@ class __Component {
 
 // Register on globalThis for runtime deduplication
 if (typeof globalThis !== 'undefined') {
-  globalThis.__ripComponent = { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __Component };
+  globalThis.__ripComponent = { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __Component };
 }
 
 `;
