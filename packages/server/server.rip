@@ -12,9 +12,9 @@
 #   bun server.rip list                    # List registered hosts
 # ==============================================================================
 
-import { existsSync, statSync, readFileSync, writeFileSync, unlinkSync, mkdirSync, watch, utimesSync } from 'node:fs'
+import { existsSync, statSync, readFileSync, writeFileSync, unlinkSync, watch, utimesSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
-import { homedir, cpus, networkInterfaces } from 'node:os'
+import { cpus, networkInterfaces } from 'node:os'
 import { X509Certificate } from 'node:crypto'
 
 # Match capture holder for Rip's =~
@@ -33,6 +33,7 @@ SHUTDOWN_TIMEOUT_MS = 30000   # Max time to wait for in-flight requests on shutd
 # ==============================================================================
 
 nowMs = -> Date.now()
+formatPort = (protocol, port) -> if (protocol is 'https' and port is 443) or (protocol is 'http' and port is 80) then '' else ":#{port}"
 
 getWorkerSocketPath = (prefix, id) -> "/tmp/#{prefix}.#{id}.sock"
 getControlSocketPath = (prefix) -> "/tmp/#{prefix}.ctl.sock"
@@ -330,7 +331,6 @@ parseFlags = (argv) ->
     httpsPort
     certPath: getKV('--cert=')
     keyPath: getKV('--key=')
-    autoTls: has('--auto-tls')
     hsts: has('--hsts')
     redirectHttp: not has('--no-redirect-http')
     reload
@@ -739,6 +739,7 @@ class Server
     for alias in @flags.appAliases
       host = if alias.includes('.') then alias else "#{alias}.local"
       @hostRegistry.add(host)
+    @hostRegistry.add("#{@flags.appName}.ripdev.io")
 
   start: ->
     httpOnly = @flags.httpsPort is null
@@ -1009,6 +1010,10 @@ class Server
       host = if alias.includes('.') then alias else "#{alias}.local"
       @startMdnsAdvertisement(host)
 
+    port = @flags.httpsPort or @flags.httpPort or 80
+    protocol = if @flags.httpsPort then 'https' else 'http'
+    console.log "rip-server: #{protocol}://#{@flags.appName}.ripdev.io#{formatPort(protocol, port)}"
+
   controlFetch: (req) ->
     url = new URL(req.url)
 
@@ -1065,42 +1070,18 @@ class Server
         console.error 'Failed to read TLS cert/key from provided paths. Use http or fix paths.'
         process.exit(2)
 
-    # Ensure certs directory exists
-    certsDir = join(homedir(), '.rip', 'certs')
-    try mkdirSync(certsDir, { recursive: true }) catch then null
-
-    # Try mkcert first (trusted local CA)
-    if @flags.autoTls
-      certPath = join(certsDir, 'localhost.pem')
-      keyPath = join(certsDir, 'localhost-key.pem')
-      unless existsSync(certPath) and existsSync(keyPath)
-        try
-          Bun.spawnSync(['mkcert', '-install'])
-          Bun.spawnSync(['mkcert', '-key-file', keyPath, '-cert-file', certPath, 'localhost', '127.0.0.1', '::1'])
-        catch
-          null  # fall through to self-signed
-      if existsSync(certPath) and existsSync(keyPath)
-        cert = readFileSync(certPath, 'utf8')
-        key = readFileSync(keyPath, 'utf8')
-        @printCertSummary(cert)
-        return { cert, key }
-
-    # Self-signed via openssl
-    certPath = join(certsDir, 'selfsigned-localhost.pem')
-    keyPath = join(certsDir, 'selfsigned-localhost-key.pem')
-    unless existsSync(certPath) and existsSync(keyPath)
-      try
-        Bun.spawnSync(['openssl', 'req', '-x509', '-nodes', '-newkey', 'rsa:2048', '-keyout', keyPath, '-out', certPath, '-subj', '/CN=localhost', '-days', '3650'])
-      catch
-        console.error 'TLS required but could not provision a certificate (mkcert/openssl missing). Use http or provide --cert/--key.'
-        process.exit(2)
+    # Shipped wildcard cert for *.ripdev.io (GlobalSign, valid for all subdomains)
+    certsDir = join(import.meta.dir, 'certs')
+    certPath = join(certsDir, 'ripdev.io.crt')
+    keyPath = join(certsDir, 'ripdev.io.key')
     try
       cert = readFileSync(certPath, 'utf8')
       key = readFileSync(keyPath, 'utf8')
       @printCertSummary(cert)
       return { cert, key }
-    catch
-      console.error 'Failed to read generated self-signed cert/key from ~/.rip/certs'
+    catch e
+      console.error "rip-server: failed to load TLS certs from #{certsDir}: #{e.message}"
+      console.error 'Use --cert/--key to provide your own, or use http to disable TLS.'
       process.exit(2)
 
   printCertSummary: (certPem) ->
@@ -1153,7 +1134,7 @@ class Server
         stderr: 'ignore'
 
       @mdnsProcesses.set(host, proc)
-      console.log "rip-server: #{protocol}://#{host}:#{port}"
+      console.log "rip-server: #{protocol}://#{host}#{formatPort(protocol, port)}"
     catch e
       console.error "rip-server: failed to advertise #{host} via mDNS:", e.message
 
@@ -1191,11 +1172,10 @@ main = ->
 
       Network:
         http                    HTTP only (no TLS)
-        https                   HTTPS with auto TLS (default)
+        https                   HTTPS with trusted *.ripdev.io cert (default)
         <port>                  Listen on specific port
-        --cert=<path>           TLS certificate file
-        --key=<path>            TLS key file
-        --auto-tls              Generate TLS cert via mkcert
+        --cert=<path>           TLS certificate file (overrides shipped cert)
+        --key=<path>            TLS key file (overrides shipped cert)
         --hsts                  Enable HSTS header
         --no-redirect-http      Don't redirect HTTP to HTTPS
 
@@ -1301,8 +1281,9 @@ main = ->
   mgr.start!
 
   httpOnly = flags.httpsPort is null
-  url = if httpOnly then "http://localhost:#{flags.httpPort}/server" else "https://localhost:#{flags.httpsPort}/server"
-  console.log "rip-server: app=#{flags.appName} workers=#{flags.workers} url=#{url}"
+  protocol = if httpOnly then 'http' else 'https'
+  port = flags.httpsPort or flags.httpPort or 80
+  console.log "rip-server: app=#{flags.appName} workers=#{flags.workers} url=#{protocol}://#{flags.appName}.ripdev.io#{formatPort(protocol, port)}/server"
 
 # ==============================================================================
 # Entry Point

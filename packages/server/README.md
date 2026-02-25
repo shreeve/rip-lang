@@ -16,7 +16,7 @@ dependencies.
 - **Multi-worker architecture** — Automatic worker spawning based on CPU cores
 - **Hot module reloading** — Watches `*.rip` files by default, rolling restarts on change
 - **Rolling restarts** — Zero-downtime deployments
-- **Automatic HTTPS** — TLS with mkcert or self-signed certificates
+- **Automatic HTTPS** — Shipped `*.ripdev.io` wildcard cert (green lock, zero setup)
 - **mDNS discovery** — `.local` hostname advertisement
 - **Request queue** — Built-in request buffering and load balancing
 - **Built-in dashboard** — Server status UI at `rip.local`
@@ -846,9 +846,8 @@ rip serve [flags] [app-path]@<alias1>,<alias2>,...
 | `https:<port>` | Set HTTPS port | 443, fallback 3443 |
 | `w:<n>` | Worker count (`auto`, `half`, `2x`, `3x`, or number) | `half` of cores |
 | `r:<reqs>,<secs>s` | Restart policy: requests, seconds (e.g., `5000,3600s`) | `10000,3600s` |
-| `--cert=<path>` | TLS certificate path | Auto-generated |
-| `--key=<path>` | TLS private key path | Auto-generated |
-| `--auto-tls` | Try mkcert first, then self-signed | Self-signed only |
+| `--cert=<path>` | TLS certificate path | Shipped `*.ripdev.io` cert |
+| `--key=<path>` | TLS private key path | Shipped `*.ripdev.io` key |
 | `--hsts` | Enable HSTS headers | Disabled |
 | `--no-redirect-http` | Don't redirect HTTP to HTTPS | Redirects enabled |
 | `--json-logging` | Output JSON access logs | Human-readable |
@@ -869,9 +868,6 @@ rip serve
 
 # HTTP only
 rip serve http
-
-# HTTPS with mkcert
-rip serve --auto-tls
 
 # Production: 8 workers, no hot reload
 rip serve --static w:8
@@ -966,16 +962,21 @@ The server provides these endpoints automatically:
 
 ## TLS Certificates
 
-### Automatic Certificate Generation
+### Shipped Wildcard Cert (`*.ripdev.io`)
 
-When HTTPS is enabled without explicit certificates, the server will:
+The server ships with a GlobalSign wildcard certificate for `*.ripdev.io`. Combined with DNS (`*.ripdev.io → 127.0.0.1`), every app gets trusted HTTPS automatically:
 
-1. Try **mkcert** (if installed and `--auto-tls` flag used)
-2. Fall back to **self-signed** certificate via OpenSSL
+```bash
+rip serve streamline    # → https://streamline.ripdev.io (green lock)
+rip serve analytics     # → https://analytics.ripdev.io (green lock)
+rip serve myapp         # → https://myapp.ripdev.io (green lock)
+```
 
-Certificates are stored in `~/.rip/certs/`.
+No setup, no flags, no certificate generation. The app name becomes the subdomain.
 
 ### Custom Certificates
+
+For production domains or custom setups, provide your own cert/key:
 
 ```bash
 rip serve --cert=/path/to/cert.pem --key=/path/to/key.pem
