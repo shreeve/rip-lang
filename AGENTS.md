@@ -73,8 +73,7 @@ rip-lang/
 │   └── vscode/          # VS Code/Cursor extension
 ├── docs/
 │   ├── RIP-LANG.md      # Language reference (includes reactivity, future ideas)
-│   ├── RIP-TYPES.md     # Type system specification
-│   └── RIP-INTERNALS.md # Compiler architecture & design decisions
+│   └── RIP-TYPES.md     # Type system specification
 ├── test/rip/            # 26 test files (1,369 tests)
 └── scripts/             # Build utilities (all .js — run via `bun run <name>`)
 ```
@@ -114,6 +113,8 @@ Rip Source  ->  Lexer  ->  emitTypes  ->  Parser  ->  S-Expressions  ->  Codegen
 
 ### 1. S-Expression Patterns
 
+Common patterns:
+
 ```javascript
 ["=", "x", 42]                 // Assignment
 ["+", left, right]             // Binary operator
@@ -124,6 +125,115 @@ Rip Source  ->  Lexer  ->  emitTypes  ->  Parser  ->  S-Expressions  ->  Codegen
 ["computed", name, expr]       // Computed value (~=)
 ["enum", name, body]           // Enum declaration
 ```
+
+Complete node type reference:
+
+```javascript
+// Top Level
+['program', ...statements]
+
+// Variables & Assignment
+['=', target, value]
+['+=', target, value]  // And all compound assigns: -=, *=, /=, %=, **=
+['&&=', target, value]  ['||=', target, value]
+['?=', target, value]   ['??=', target, value]
+
+// Functions
+['def', name, params, body]     // Named function
+['->', params, body]            // Thin arrow (unbound this)
+['=>', params, body]            // Fat arrow (bound this)
+// Params: 'name', ['rest', 'name'], ['default', 'name', expr],
+//         ['expansion'], ['object', ...], ['array', ...]
+
+// Calls & Property Access
+[callee, ...args]               // Function call
+['await', expr]                 // Await
+['.', obj, 'prop']              // Property: obj.prop
+['?.', obj, 'prop']             // Optional: obj?.prop
+['[]', arr, index]              // Index: arr[index]
+['optindex', arr, index]        // Optional: arr?.[index]
+['optcall', fn, ...args]        // Optional: fn?.(args)
+['new', constructorExpr]        // Constructor
+['super', ...args]              // Super call
+['tagged-template', tag, str]   // Tagged template
+
+// Data Structures
+['array', ...elements]          // Array literal
+['object', ...pairs]            // Object literal (pairs: [key, value])
+['...', expr]                   // Spread (prefix only)
+
+// Operators
+['+', left, right]   ['-', left, right]   ['*', left, right]
+['/', left, right]   ['%', left, right]   ['**', left, right]
+['==', left, right]  ['!=', left, right]  // == compiles to ===
+['<', left, right]   ['<=', left, right]
+['>', left, right]   ['>=', left, right]
+['&&', left, right]  ['||', left, right]  ['??', left, right]
+['!', expr]          ['~', expr]          ['typeof', expr]
+['delete', expr]     ['instanceof', expr, type]
+['?', expr]          // Existence check
+['++', expr, isPostfix]  ['--', expr, isPostfix]
+
+// Control Flow
+['if', condition, thenBlock, elseBlock?]
+['unless', condition, body]
+['?:', condition, thenExpr, elseExpr]   // Ternary
+['switch', discriminant, cases, defaultCase?]
+
+// Loops
+['for-in', vars, iterable, step?, guard?, body]
+['for-of', vars, object, guard?, body]
+['for-as', vars, iterable, async?, guard?, body]
+['while', condition, body]  ['until', condition, body]  ['loop', body]
+['break']  ['continue']  ['break-if', condition]  ['continue-if', condition]
+
+// Comprehensions
+['comprehension', expr, iterators, guards]
+['object-comprehension', keyExpr, valueExpr, iterators, guards]
+
+// Exceptions
+['try', tryBlock, [catchParam, catchBlock]?, finallyBlock?]
+['throw', expr]
+
+// Classes & Types
+['class', name, parent?, ...members]
+['enum', name, body]
+
+// Ranges
+['..', from, to]      // Inclusive
+['...', from, to]     // Exclusive
+
+// Blocks & Modules
+['block', ...statements]
+['do-iife', expr]
+['import', specifiers, source]
+['export', statement]  ['export-default', expr]
+['export-all', source]  ['export-from', specifiers, source]
+
+// Reactivity
+['state', name, expr]           // :=
+['computed', name, expr]        // ~=
+['effect', name, expr]          // ~>
+['readonly', name, expr]        // =!
+
+// Components
+['component', null, body]       // component keyword
+['render', body]                // render block
+```
+
+### 1a. Lexer Token Format
+
+Token: `[tag, val]` array with properties:
+
+| Property | Type | Purpose |
+|----------|------|---------|
+| `.pre` | number | Whitespace count before this token |
+| `.data` | object/null | Metadata: `{await, predicate, quote, invert, parsedValue, ...}` |
+| `.loc` | `{r, c, n}` | Row, column, length |
+| `.spaced` | boolean | Sugar for `.pre > 0` |
+| `.newLine` | boolean | Preceded by a newline |
+
+Identifier suffixes: `!` sets `.data.await = true` (dammit operator), `?` sets `.data.predicate = true` (existence check). `as!` in for-loops emits `FORASAWAIT` for `for await`.
 
 ### 2. Context-Aware Generation
 
@@ -526,7 +636,6 @@ test/rip/
 | **README.md** | User guide, features, installation |
 | **docs/RIP-LANG.md** | Full language reference (syntax, operators, reactivity, packages, future ideas) |
 | **docs/RIP-TYPES.md** | Type system specification |
-| **docs/RIP-INTERNALS.md** | Compiler architecture, design decisions, S-expressions |
 
 ---
 

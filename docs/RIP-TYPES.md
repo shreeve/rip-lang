@@ -1978,4 +1978,4 @@ The type system uses a two-phase approach:
 
 **See Also:**
 - [RIP-LANG.md](RIP-LANG.md) — Language reference (includes reactivity and types)
-- [RIP-INTERNALS.md](RIP-INTERNALS.md) — Compiler internals
+- [AGENTS.md](../AGENTS.md) — Compiler architecture, S-expressions, design decisions

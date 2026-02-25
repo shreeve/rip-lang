@@ -473,9 +473,9 @@ bun run build          # Build browser bundle
 
 | Guide | Description |
 |-------|-------------|
-| [docs/RIP-LANG.md](docs/RIP-LANG.md) | Full language reference (syntax, operators, reactivity, types, future ideas) |
-| [docs/RIP-INTERNALS.md](docs/RIP-INTERNALS.md) | Compiler architecture (lexer, parser, codegen, S-expressions) |
+| [docs/RIP-LANG.md](docs/RIP-LANG.md) | Full language reference (syntax, operators, reactivity, types, components) |
 | [docs/RIP-TYPES.md](docs/RIP-TYPES.md) | Type system specification |
+| [AGENTS.md](AGENTS.md) | Compiler architecture, S-expressions, component system internals |
 | [AGENTS.md](AGENTS.md) | AI agents — get up to speed for working on the compiler |
 
 ---
