@@ -1,14 +1,21 @@
 # Rip Component System — Road to World Class
 
-## 1. Component Test Coverage (in progress — 31/50+)
+## ~~1. Component Test Coverage~~ — DONE (79 tests)
 
-`test/rip/components.rip` exists with 31 tests covering: basic rendering,
-fragment roots, static/reactive attributes, reactive text, conditional and loop
-block factories, nested variable threading (if-in-for, for-in-for), string
-content in factories, event handlers, refs, component state/computed/methods/
-effects/props. Still needed: two-way binding (`<=>`), dynamic classes (`.()`,
-`__clsx`), child component prop passing, lifecycle hooks, context API, SVG
-rendering, hyphenated attributes, and more edge cases.
+`test/rip/components.rip` covers every code path in `src/components.js`:
+basic rendering, fragments, static/reactive/boolean attributes, reactive text,
+conditional and loop block factories, nested variable threading, string content
+in factories, event handlers (method ref + inline arrow), refs, two-way binding
+(`<=>` — text, checkbox, number/valueAsNumber, smart auto-binding), dynamic
+classes (`.()` / `__clsx`, static+dynamic merge), child component prop passing
+(static, reactive signal pass-through, children/slots, props+children),
+lifecycle hooks (`mounted`/`unmounted`/`beforeMount`/`updated`), context API
+(`setContext`/`getContext`), SVG rendering (`createElementNS`, class via
+`setAttribute`), hyphenated attributes (`data-*`/`aria-*`), DOM properties
+(`innerHTML`/`textContent`), slot projection (`@children`, `@prop` rendering),
+expression-as-text (reactive and static), bare component references, bare `.()`,
+static `class:` attribute, computed/effect block bodies, and 15 runtime behavior
+tests. All 1,348 tests pass.
 
 ## 2. Efficient List Reconciliation
 
