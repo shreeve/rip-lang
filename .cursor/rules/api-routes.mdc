@@ -1,0 +1,63 @@
+---
+description: Five-phase pattern for API route handlers
+globs: **/api/routes/*.rip
+---
+
+# API Route Handler Pattern
+
+API route handlers follow five phases: **auth, read, meta, work, send**.
+
+This is the strong default. The phases should generally appear in this order,
+but use judgment — a 2-line handler doesn't need five comment markers, and
+sometimes phases blend naturally. If deviating, have a good reason.
+
+## Phases
+
+1. **auth** — Who is the caller? Use a scope helper (`userScope!`,
+   `adminScope!`) or mark as `# public`. Exits 401/403 on failure.
+2. **read** — What did they send? `read 'name', 'validator'` for all inputs.
+   No logic, no queries. The server handles validation errors.
+3. **meta** — Derived values and preconditions. Construct variables from
+   auth + read, load related records, check error conditions. Bail before
+   any mutations.
+4. **work** — Do the thing. Create records, update state, call services.
+   Everything needed should already be in named variables.
+5. **send** — The final expression. Usually an object literal for JSON, but
+   could be HTML, a file via `@send`, a redirect, etc.
+
+## Guidelines
+
+- Omit phases that don't apply — no empty comments.
+- Use phase comments (`# auth`, `# read`, etc.) when the handler is long
+  enough to benefit from visual separation.
+- Public endpoints use `# public` instead of a scope call.
+- Early exits belong to their phase — auth failures in auth, preconditions
+  in meta.
+- Use `error!` for HTTP errors, `notice!` for user-facing messages, `bail!`
+  to destroy session and force-logout.
+
+## Example
+
+```rip
+post '/create' ->
+  # auth
+  user = userScope!
+
+  # read
+  week     = read 'week', 'int!'
+  slot     = read 'slot', 'text!'
+  children = read 'children', 'json'
+
+  # meta
+  needed = children?.length or 1
+  spots = sql! '...', [week, slot, 'available', needed]
+  error! 'Not enough spots', 409 unless spots.data?.length >= needed
+
+  # work
+  booking = Booking.create!({ user_id: user.id, week, slot, children: children or [] })
+  for row in spots.data
+    sql! '...', ['booked', booking.id, row[0]]
+
+  # send
+  { bookingId: booking.id }
+```
