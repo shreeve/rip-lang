@@ -4558,6 +4558,8 @@ ${blockFactoriesCode}return ${lines.join(`
       const savedSetupLines = this._setupLines;
       this._createLines = [];
       this._setupLines = [];
+      const outerLoopParams = this._loopVarStack.map((v) => `${v.itemVar}, ${v.indexVar}`).join(", ");
+      const outerExtra = outerLoopParams ? `, ${outerLoopParams}` : "";
       this._loopVarStack.push({ itemVar, indexVar });
       const itemNode = this.generateTemplateBlock(body);
       this._loopVarStack.pop();
@@ -4567,7 +4569,7 @@ ${blockFactoriesCode}return ${lines.join(`
       this._setupLines = savedSetupLines;
       const localizeVar = (line) => this.localizeVar(line);
       const factoryLines = [];
-      factoryLines.push(`function ${blockName}(ctx, ${itemVar}, ${indexVar}) {`);
+      factoryLines.push(`function ${blockName}(ctx, ${itemVar}, ${indexVar}${outerExtra}) {`);
       const localVars = new Set;
       for (const line of itemCreateLines) {
         const match = line.match(/^this\.(_(?:el|t|anchor|frag|slot|c|inst|empty)\d+)\s*=/);
@@ -4597,7 +4599,7 @@ ${blockFactoriesCode}return ${lines.join(`
         factoryLines.push(`      if (target) target.insertBefore(${localizeVar(itemNode)}, anchor);`);
       }
       factoryLines.push(`    },`);
-      factoryLines.push(`    p(ctx, ${itemVar}, ${indexVar}) {`);
+      factoryLines.push(`    p(ctx, ${itemVar}, ${indexVar}${outerExtra}) {`);
       if (hasEffects) {
         factoryLines.push(`      disposers.forEach(d => d());`);
         factoryLines.push(`      disposers = [];`);
@@ -4639,11 +4641,11 @@ ${blockFactoriesCode}return ${lines.join(`
       setupLines.push(`      const __key = ${keyExpr};`);
       setupLines.push(`      let __block = __map.get(__key);`);
       setupLines.push(`      if (!__block) {`);
-      setupLines.push(`        __block = ${blockName}(this, ${itemVar}, ${indexVar});`);
+      setupLines.push(`        __block = ${blockName}(this, ${itemVar}, ${indexVar}${outerExtra});`);
       setupLines.push(`        __block.c();`);
       setupLines.push(`      }`);
       setupLines.push(`      __block.m(__parent, __anchor);`);
-      setupLines.push(`      __block.p(this, ${itemVar}, ${indexVar});`);
+      setupLines.push(`      __block.p(this, ${itemVar}, ${indexVar}${outerExtra});`);
       setupLines.push(`      __newMap.set(__key, __block);`);
       setupLines.push(`    }`);
       setupLines.push(``);
@@ -8372,8 +8374,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.22";
-  var BUILD_DATE = "2026-02-25@12:47:56GMT";
+  var VERSION = "3.13.23";
+  var BUILD_DATE = "2026-02-25@12:51:51GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

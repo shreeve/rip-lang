@@ -1521,6 +1521,10 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     this._createLines = [];
     this._setupLines = [];
 
+    // Capture enclosing loop variables before pushing current loop
+    const outerLoopParams = this._loopVarStack.map(v => `${v.itemVar}, ${v.indexVar}`).join(', ');
+    const outerExtra = outerLoopParams ? `, ${outerLoopParams}` : '';
+
     this._loopVarStack.push({ itemVar, indexVar });
     const itemNode = this.generateTemplateBlock(body);
     this._loopVarStack.pop();
@@ -1534,7 +1538,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
     // Generate block factory
     const factoryLines = [];
-    factoryLines.push(`function ${blockName}(ctx, ${itemVar}, ${indexVar}) {`);
+    factoryLines.push(`function ${blockName}(ctx, ${itemVar}, ${indexVar}${outerExtra}) {`);
 
     const localVars = new Set();
     for (const line of itemCreateLines) {
@@ -1572,7 +1576,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     factoryLines.push(`    },`);
 
     // p() - update
-    factoryLines.push(`    p(ctx, ${itemVar}, ${indexVar}) {`);
+    factoryLines.push(`    p(ctx, ${itemVar}, ${indexVar}${outerExtra}) {`);
     if (hasEffects) {
       factoryLines.push(`      disposers.forEach(d => d());`);
       factoryLines.push(`      disposers = [];`);
@@ -1625,11 +1629,11 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     setupLines.push(`      const __key = ${keyExpr};`);
     setupLines.push(`      let __block = __map.get(__key);`);
     setupLines.push(`      if (!__block) {`);
-    setupLines.push(`        __block = ${blockName}(this, ${itemVar}, ${indexVar});`);
+    setupLines.push(`        __block = ${blockName}(this, ${itemVar}, ${indexVar}${outerExtra});`);
     setupLines.push(`        __block.c();`);
     setupLines.push(`      }`);
     setupLines.push(`      __block.m(__parent, __anchor);`);
-    setupLines.push(`      __block.p(this, ${itemVar}, ${indexVar});`);
+    setupLines.push(`      __block.p(this, ${itemVar}, ${indexVar}${outerExtra});`);
     setupLines.push(`      __newMap.set(__key, __block);`);
     setupLines.push(`    }`);
     setupLines.push(``);
