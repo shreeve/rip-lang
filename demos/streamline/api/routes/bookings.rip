@@ -1,12 +1,8 @@
 # Booking routes — list and create bookings (Stripe stubbed)
 
 import { get, post, prefix, read, session } from '@rip-lang/api'
-import { schema } from '../../setup.rip'
-import { Stash } from '../lib/stash.rip'
-import configData from '../../config.rip'
+import { schema, dbFetch } from '../../db.rip'
 
-config = Stash configData
-DB_URL = config.database.url
 Booking = schema.model 'Booking'
 
 requireAuth = ->
@@ -29,27 +25,14 @@ prefix '/api/bookings', ->
     bookingIds = []
 
     for item in items
-      # Create the booking record
       booking = Booking.create!({ user_id: session.userId, week: item.week, slot: item.slot, children: item.children or [] })
       bookingIds.push booking.id
 
-      # Mark spots as booked
       needed = item.children?.length or 1
-      result = fetch! "#{DB_URL}/sql",
-        method: 'POST'
-        headers: { 'Content-Type': 'application/json' }
-        body: JSON.stringify
-          sql: 'SELECT id FROM spots WHERE week = ? AND slot = ? AND status = ? LIMIT ?'
-          params: [item.week, item.slot, 'available', needed]
-      data = result.json!
+      data = dbFetch! 'SELECT id FROM spots WHERE week = ? AND slot = ? AND status = ? LIMIT ?', [item.week, item.slot, 'available', needed]
 
       for row in (data.data or [])
         spotId = row[0]
-        fetch! "#{DB_URL}/sql",
-          method: 'POST'
-          headers: { 'Content-Type': 'application/json' }
-          body: JSON.stringify
-            sql: 'UPDATE spots SET status = ?, user_id = ?, booking_id = ? WHERE id = ?'
-            params: ['booked', session.userId, booking.id, spotId]
+        dbFetch! 'UPDATE spots SET status = ?, user_id = ?, booking_id = ? WHERE id = ?', ['booked', session.userId, booking.id, spotId]
 
     { bookingIds }
