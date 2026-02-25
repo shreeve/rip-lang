@@ -844,6 +844,11 @@
     monaco.languages.setMonarchTokensProvider 'rip', window.ripMonarch
     monaco.languages.setLanguageConfiguration 'rip', window.ripLanguageConfig
 
+    # Disable TypeScript diagnostics for JS output (prevents deprecated strikethrough on e.g. `name`)
+    monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions
+      noSemanticValidation: true
+      noSyntaxValidation: true
+
     # ====================================================================
     # Restore Persisted State
     # ====================================================================
@@ -883,7 +888,6 @@
       renderWhitespace: 'none'
       scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10, verticalSliderSize: 10, horizontalSliderSize: 10 }
       padding: { top: 10 }
-      'semanticHighlighting.enabled': false
 
     sourceEditor = monaco.editor.create document.getElementById('editor-container'), {
       ...sharedConfig, value: initialCode, language: 'rip', tabSize: 2, insertSpaces: true
