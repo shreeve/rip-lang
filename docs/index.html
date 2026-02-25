@@ -378,11 +378,6 @@
       border-radius: 5px !important;
     }
 
-    .monaco-editor .deprecated,
-    .monaco-editor .mtks {
-      text-decoration: none !important;
-    }
-
     /* Welcome message */
     .welcome {
       color: #858585;
@@ -888,6 +883,7 @@
       renderWhitespace: 'none'
       scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10, verticalSliderSize: 10, horizontalSliderSize: 10 }
       padding: { top: 10 }
+      'semanticHighlighting.enabled': false
 
     sourceEditor = monaco.editor.create document.getElementById('editor-container'), {
       ...sharedConfig, value: initialCode, language: 'rip', tabSize: 2, insertSpaces: true
