@@ -1337,6 +1337,225 @@ Counter = component
       button @click: @increment, "+"
 ```
 
+### Component Features
+
+**State and Computed:**
+
+```coffee
+App = component
+  count := 0              # reactive state
+  doubled ~= count * 2    # computed (auto-updates)
+  label =! "Counter"      # readonly (const)
+```
+
+**Public Props (passed from parent):**
+
+```coffee
+Card = component
+  @title =! "Untitled"    # readonly prop with default
+  @count := 0             # reactive prop (two-way capable)
+```
+
+```coffee
+# Parent passes props
+Card title: "Hello", count: 42
+```
+
+**Methods:**
+
+```coffee
+App = component
+  count := 0
+  inc = -> @count += 1
+  add = (n) -> @count += n
+```
+
+**Lifecycle Hooks:**
+
+```coffee
+App = component
+  beforeMount = -> p "about to mount"
+  mounted     = -> p "mounted"
+  updated     = -> p "updated"
+  beforeUnmount = -> p "about to unmount"
+  unmounted   = -> p "unmounted"
+  onError     = (err, comp) -> p "caught: #{err.message}"
+```
+
+**Effects:**
+
+```coffee
+App = component
+  count := 0
+  ~> p "count is now #{count}"    # re-runs when count changes
+```
+
+**Render Blocks — Template Syntax:**
+
+```coffee
+App = component
+  name := "world"
+  render
+    div.card                       # element with class
+      h1#title "Hello"             # element with id
+      span name                    # reactive text
+      input value <=> name         # two-way binding
+      button @click: -> @name = "Rip"
+        "Click me"
+```
+
+**Conditional Rendering:**
+
+```coffee
+App = component
+  show := true
+  render
+    if show
+      div "Visible!"
+    else
+      div "Hidden"
+```
+
+**List Rendering:**
+
+```coffee
+App = component
+  items := ["Apple", "Banana", "Cherry"]
+  render
+    ul
+      for item, i in items
+        li item
+```
+
+Lists use keyed reconciliation with LIS (Longest Increasing Subsequence) diffing — only items that actually move get repositioned. Appending to a list is nearly zero-cost.
+
+**Child Components and Slots:**
+
+```coffee
+Card = component
+  @title =! "Card"
+  @children =! null
+  render
+    div.card
+      h2 @title
+      @children
+
+App = component
+  render
+    Card title: "Welcome"
+      p "This is the card body"
+```
+
+**CSS Transitions:**
+
+Add `~name` to any element inside a conditional block for enter/leave animations:
+
+```coffee
+App = component
+  show := true
+  render
+    button @click: -> @show = !show
+      "Toggle"
+    if show
+      div ~fade
+        p "I fade in and out"
+```
+
+Built-in presets:
+
+| Preset | Effect |
+|--------|--------|
+| `~fade` | Opacity fade |
+| `~slide` | Slide up/down with opacity |
+| `~scale` | Scale from 95% with opacity |
+| `~blur` | Blur with opacity |
+| `~fly` | Fly in/out from distance with opacity |
+
+Custom transitions work with any name — just provide your own CSS:
+
+```css
+.wobble-enter-active, .wobble-leave-active { transition: transform 0.3s ease; }
+.wobble-enter-from { transform: rotate(-5deg); }
+.wobble-leave-to { transform: rotate(5deg); }
+```
+
+```coffee
+div ~wobble
+  span "Custom animation"
+```
+
+**Error Boundaries:**
+
+The `onError` lifecycle hook catches errors from child components:
+
+```coffee
+App = component
+  onError = (err, source) ->
+    p "Error in #{source}: #{err.message}"
+  render
+    ChildThatMightFail
+```
+
+Errors walk up the component tree (`_parent` chain) to the nearest `onError` handler. Without a boundary, errors throw normally.
+
+**Context API:**
+
+Share data across the component tree without prop drilling:
+
+```coffee
+ThemeProvider = component
+  ~> setContext "theme", "dark"
+
+ThemedButton = component
+  theme =! getContext "theme"
+  render
+    button class: theme
+```
+
+**SVG Rendering:**
+
+SVG elements use `createElementNS` automatically:
+
+```coffee
+Icon = component
+  render
+    svg.icon
+      path d: "M10 10 L20 20"
+      circle cx: "50", cy: "50", r: "40"
+```
+
+**Dynamic Classes:**
+
+```coffee
+App = component
+  isActive := true
+  render
+    div.card class: (isActive && "active")
+    div.("card", isActive && "active")       # .() syntax
+```
+
+**Hyphenated Attributes:**
+
+```coffee
+div data-testid: "main", aria-label: "content"
+```
+
+**DOM Properties:**
+
+```coffee
+div innerHTML: content     # reactive innerHTML
+div textContent: text      # reactive textContent
+```
+
+**Element Refs:**
+
+```coffee
+App = component
+  render
+    canvas ref: "canvas"
+  mounted = -> p @canvas   # access the DOM element
+```
+
 ## @rip-lang/db — DuckDB Server + Client
 
 HTTP server for DuckDB with the official DuckDB UI built in, plus an ActiveRecord-style client library.
