@@ -494,7 +494,7 @@ The `Compiler` class's lexer adapter reconstructs `new String()` wrapping from t
 
 **Solar** is a complete SLR(1) parser generator included with Rip — written in Rip, compiled by Rip, zero external dependencies.
 
-**Location:** `src/grammar/solar.rip` (916 lines)
+**Location:** `src/grammar/solar.rip` (929 lines)
 
 ## Grammar Syntax
 
@@ -533,7 +533,7 @@ Parenthetical: [
 | Parse time | 12,500ms | ~50ms |
 | Dependencies | Many | Zero |
 | Self-hosting | No | Yes |
-| Code size | 2,285 LOC | 916 LOC |
+| Code size | 2,285 LOC | 929 LOC |
 
 After modifying `src/grammar/grammar.rip`:
 

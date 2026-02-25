@@ -19,7 +19,7 @@ echo 'your code' | ./bin/rip -s  # S-expressions (parser)
 echo 'your code' | ./bin/rip -c  # JavaScript (codegen)
 
 # Run tests
-bun run test                             # All tests (1251)
+bun run test                             # All tests (1255)
 bun test/runner.js test/rip/FILE.rip     # Specific file
 
 # Rebuild parser (after grammar changes)
@@ -27,6 +27,9 @@ bun run parser
 
 # Build browser bundle
 bun run build
+
+# Serve an app (watches *.rip, HTTPS, mDNS)
+rip serve
 ```
 
 ### Current Status
@@ -59,9 +62,8 @@ rip-lang/
 │       ├── lunar.rip    # Recursive descent parser generator (2,412 LOC)
 │       └── solar.rip    # SLR(1) parser generator (929 LOC) — Don't edit!
 ├── packages/            # Optional packages (see Packages section below)
-│   ├── api/             # @rip-lang/api — Web framework
 │   ├── grid/            # @rip-lang/grid — Reactive data grid
-│   ├── server/          # @rip-lang/server — Production server
+│   ├── server/          # @rip-lang/server — Web framework + production server
 │   ├── db/              # @rip-lang/db — DuckDB server
 │   ├── schema/          # @rip-lang/schema — ORM + validation
 │   ├── swarm/           # @rip-lang/swarm — Parallel job runner
@@ -453,15 +455,19 @@ The `packages/` directory contains optional packages that extend Rip for
 full-stack development. All are written in Rip, have zero dependencies, and
 run on Bun.
 
-### @rip-lang/api (v1.1.10) — Web Framework
+### @rip-lang/server (v1.2.11) — Web Framework + Production Server
 
 Sinatra-style web framework with magic `@` context,
-built-in validators, file serving (`@send`), and middleware composition.
+built-in validators, file serving (`@send`), middleware composition,
+multi-worker process manager, hot reloading, automatic HTTPS, mDNS service
+discovery, and request queueing.
 
 | File | Lines | Role |
 |------|-------|------|
 | `api.rip` | ~662 | Core framework: routing, validation, `read()`, `session`, `@send`, server |
-| `middleware.rip` | ~464 | Built-in middleware: cors, logger, sessions, compression, security |
+| `middleware.rip` | ~559 | Built-in middleware: cors, logger, sessions, compression, security |
+| `server.rip` | ~1,323 | CLI, workers, load balancing, TLS, mDNS |
+| `server.html` | ~420 | Built-in dashboard UI |
 
 Key concepts:
 - **`@` magic** — Handlers use `@req`, `@json()`, `@send()`, `@session` (bound via `this`)
@@ -470,12 +476,16 @@ Key concepts:
 - **`use()`** — Koa-style middleware composition with `next()`
 
 ```coffee
-import { get, use, start, notFound } from '@rip-lang/api'
+import { get, use, start, notFound } from '@rip-lang/server'
 
 get '/', -> { message: 'Hello!' }
 get '/css/*', -> @send "public/#{@req.path.slice(5)}"
 notFound -> @send 'index.html', 'text/html; charset=UTF-8'
 start port: 3000
+```
+
+```bash
+rip serve        # Start server (watches *.rip by default)
 ```
 
 ### Rip UI (built into rip-lang) — Reactive Web Framework
@@ -501,29 +511,14 @@ Key concepts:
 
 ```coffee
 # Server (index.rip)
-import { get, use, start, notFound } from '@rip-lang/api'
-import { serve } from '@rip-lang/api/middleware'
+import { get, use, start, notFound } from '@rip-lang/server'
+import { serve } from '@rip-lang/server/middleware'
 
 dir = import.meta.dir
 use serve dir: dir, title: 'My App', watch: true
 get '/css/*', -> @send "#{dir}/css/#{@req.path.slice(5)}"
 notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 start port: 3000
-```
-
-### @rip-lang/server (v1.1.19) — Production Server
-
-Multi-worker process manager with hot reloading, automatic HTTPS, mDNS service
-discovery, and request queueing. Serves any `@rip-lang/api` app (including
-Rip UI apps with SSE hot-reload).
-
-| File | Lines | Role |
-|------|-------|------|
-| `server.rip` | ~1,323 | CLI, workers, load balancing, TLS, mDNS |
-| `server.html` | ~420 | Built-in dashboard UI |
-
-```bash
-rip-server -w    # Start with file watching + hot-reload
 ```
 
 ### Other Packages
@@ -542,10 +537,10 @@ a package locally, run `bun install` from the project root to ensure symlinks
 are correct. Key patterns:
 
 - Packages written in Rip (`.rip` files) need the Rip loader — run from the
-  project root where `bunfig.toml` is located, or use `rip-server`
+  project root where `bunfig.toml` is located, or use `rip serve`
 - `import.meta.dir` resolves to the package's actual filesystem path (important
   for serving files)
-- `@rip-lang/api` handlers bind `this` to the context object — use `@send`,
+- `@rip-lang/server` handlers bind `this` to the context object — use `@send`,
   `@json`, `@req`, etc.
 
 ---

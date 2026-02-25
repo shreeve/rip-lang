@@ -984,7 +984,7 @@ rip packages/schema/examples/orm-example.rip
 ### Full Test Suite
 
 ```bash
-bun test/runner.js test/rip     # 1243 tests, 100% passing
+bun test/runner.js test/rip     # 1255 tests, 100% passing
 ```
 
 ---

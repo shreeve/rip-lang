@@ -11,7 +11,7 @@
 <p align="center">
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.13.13-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
-  <a href="#"><img src="https://img.shields.io/badge/tests-1%2C251%2F1%2C251-brightgreen.svg" alt="Tests"></a>
+  <a href="#"><img src="https://img.shields.io/badge/tests-1%2C255%2F1%2C255-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
 </p>
 
@@ -417,18 +417,17 @@ Rip includes optional packages for full-stack development:
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| [rip-lang](https://www.npmjs.com/package/rip-lang) | 3.10.10 | Core language compiler |
-| [@rip-lang/api](packages/api/) | 1.1.10 | HTTP framework (Sinatra-style routing, 37 validators) |
-| [@rip-lang/server](packages/server/) | 1.1.19 | Multi-worker app server (hot reload, HTTPS, mDNS) |
-| [@rip-lang/db](packages/db/) | 1.2.0 | DuckDB server with official UI + ActiveRecord-style client |
-| [@rip-lang/grid](packages/grid/) | 0.2.0 | Reactive data grid |
-| [@rip-lang/swarm](packages/swarm/) | 1.1.4 | Parallel job runner with worker pool |
-| [@rip-lang/csv](packages/csv/) | 1.1.4 | CSV parser + writer |
-| [@rip-lang/schema](packages/schema/) | 0.2.1 | Unified schema → TypeScript types, SQL DDL, validation, ORM |
+| [rip-lang](https://www.npmjs.com/package/rip-lang) | 3.13.13 | Core language compiler |
+| [@rip-lang/server](packages/server/) | 1.2.11 | Multi-worker app server (web framework, hot reload, HTTPS, mDNS) |
+| [@rip-lang/db](packages/db/) | 1.3.13 | DuckDB server with official UI + ActiveRecord-style client |
+| [@rip-lang/grid](packages/grid/) | 0.2.8 | Reactive data grid |
+| [@rip-lang/swarm](packages/swarm/) | 1.2.16 | Parallel job runner with worker pool |
+| [@rip-lang/csv](packages/csv/) | 1.3.4 | CSV parser + writer |
+| [@rip-lang/schema](packages/schema/) | 0.3.6 | Unified schema → TypeScript types, SQL DDL, validation, ORM |
 | [VS Code Extension](packages/vscode/) | 0.5.0 | Syntax highlighting, type intelligence, source maps |
 
 ```bash
-bun add -g @rip-lang/db    # Installs everything (rip-lang + api + db)
+bun add -g @rip-lang/db    # Installs everything (rip-lang + server + db)
 ```
 
 ---
@@ -463,7 +462,7 @@ rip file.rip           # Run
 rip -c file.rip        # Compile
 rip -t file.rip        # Tokens
 rip -s file.rip        # S-expressions
-bun run test           # 1251 tests
+bun run test           # 1255 tests
 bun run parser         # Rebuild parser
 bun run build          # Build browser bundle
 ```

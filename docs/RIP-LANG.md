@@ -1232,8 +1232,7 @@ text =~ /line2/m        # Works with /m flag
 Rip includes optional packages for full-stack development. All are written in Rip, have zero dependencies, and run on Bun.
 
 ```bash
-bun add @rip-lang/api            # Web framework
-bun add @rip-lang/server         # Production server
+bun add @rip-lang/server         # Web framework + production server
 bun add @rip-lang/grid           # Reactive data grid
 bun add @rip-lang/db             # DuckDB server + client
 bun add @rip-lang/schema         # ORM + validation
@@ -1241,12 +1240,12 @@ bun add @rip-lang/swarm          # Parallel job runner
 bun add @rip-lang/csv            # CSV parser + writer
 ```
 
-## @rip-lang/api — Web Framework
+## @rip-lang/server — Web Framework & Production Server
 
-Sinatra-style routing with `@` context magic and built-in validators.
+Sinatra-style routing with `@` context magic and built-in validators. Run with `rip serve` for multi-worker production deployment with hot reload, HTTPS, and mDNS.
 
 ```coffee
-import { get, post, use, read, start, notFound } from '@rip-lang/api'
+import { get, post, use, read, start, notFound } from '@rip-lang/server'
 
 # Routes — return data directly
 get '/' -> { message: 'Hello!' }
@@ -1264,7 +1263,7 @@ get '/css/*' -> @send "public/#{@req.path.slice(5)}"
 notFound -> @send 'index.html', 'text/html; charset=UTF-8'
 
 # Middleware
-import { cors, logger, sessions } from '@rip-lang/api/middleware'
+import { cors, logger, sessions } from '@rip-lang/server/middleware'
 
 use logger()
 use cors origin: '*'
@@ -1275,6 +1274,15 @@ before -> @start = Date.now()
 after -> console.log "#{@req.method} #{@req.path} - #{Date.now() - @start}ms"
 
 start port: 3000
+```
+
+### Serving
+
+```bash
+rip serve                 # Start (uses ./index.rip)
+rip serve --static        # No watching, no hot reload (production)
+rip serve myapp           # Named (accessible at myapp.local)
+rip serve http:3000       # HTTP on specific port
 ```
 
 ### read() Validators
@@ -1298,25 +1306,14 @@ ids   = read 'ids', 'ids'       # "1,2,3" → [1, 2, 3]
 slug  = read 'slug', 'slug'     # URL-safe slug
 ```
 
-## @rip-lang/server — Production Server
-
-Multi-worker process manager with hot reload, automatic HTTPS, and mDNS.
-
-```bash
-rip-server                # Start (uses ./index.rip)
-rip-server -w             # With file watching + hot-reload
-rip-server myapp          # Named (accessible at myapp.local)
-rip-server http:3000      # HTTP on specific port
-```
-
 ## Rip UI — Reactive Web Framework (built into rip-lang)
 
 Zero-build reactive framework. Ships the compiler to the browser and compiles `.rip` components on demand. File-based routing, unified reactive stash, and SSE hot reload.
 
 ```coffee
 # Server setup (index.rip)
-import { get, use, start, notFound } from '@rip-lang/api'
-import { serve } from '@rip-lang/api/middleware'
+import { get, use, start, notFound } from '@rip-lang/server'
+import { serve } from '@rip-lang/server/middleware'
 
 dir = import.meta.dir
 use serve dir: dir, watch: true
@@ -1412,8 +1409,8 @@ user.save!()
 A complete API server in Rip:
 
 ```coffee
-import { get, post, use, read, start, notFound } from '@rip-lang/api'
-import { cors, logger } from '@rip-lang/api/middleware'
+import { get, post, use, read, start, notFound } from '@rip-lang/server'
+import { cors, logger } from '@rip-lang/server/middleware'
 
 use logger()
 use cors origin: '*'

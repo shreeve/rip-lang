@@ -20,7 +20,7 @@ independent implementations derived from the same grammar specification.
 | File | Lines | Purpose |
 |------|-------|---------|
 | `grammar.rip` | 944 | Grammar specification — defines all syntax rules |
-| `solar.rip` | 926 | SLR(1) parser generator — produces table-driven parsers |
+| `solar.rip` | 929 | SLR(1) parser generator — produces table-driven parsers |
 | `lunar.rip` | 2,412 | Predictive recursive descent generator — produces PRD parsers |
 
 ---

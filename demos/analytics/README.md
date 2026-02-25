@@ -191,7 +191,7 @@ Dashboard's `classify` method parses to determine chart type and extract display
 | Layer | Package | Role |
 |-------|---------|------|
 | Data | `@rip-lang/db` (`rip-db`) | DuckDB HTTP server (Bun FFI, JSON API) |
-| Server | `@rip-lang/api` | HTTP routing and middleware |
+| Server | `@rip-lang/server` | HTTP routing and middleware |
 | UI | `rip-lang` (built-in) | Reactive components, browser-side compilation |
 | Charts | ECharts 6 (CDN) | Chart rendering |
 | Styling | Tailwind CSS 4 (CDN) | Utility-first CSS |

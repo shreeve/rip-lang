@@ -55,5 +55,5 @@ These are hard-won rules learned while building this grid. Follow them.
 See `GRID.md` for the full specification. The grid is built as:
 
 - `grid.html` — single-file development with inline `<script type="text/rip">` blocks
-- `grid.rip` — minimal Bun server using `@rip-lang/api` and `@rip-lang/api/middleware`
+- `grid.rip` — minimal Bun server using `@rip-lang/server` and `@rip-lang/server/middleware`
 - Components: `Grid` (main grid) and `GridRow` (row renderer)

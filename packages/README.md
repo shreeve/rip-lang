@@ -10,7 +10,6 @@ All packages are written in Rip, run on Bun, and have zero dependencies (except 
 
 ```bash
 bun add rip-lang                 # Core language (required)
-bun add @rip-lang/api            # Web framework
 bun add @rip-lang/csv            # CSV parser + writer
 bun add @rip-lang/db             # DuckDB server
 bun add @rip-lang/print          # Syntax-highlighted code printer
@@ -26,25 +25,6 @@ cursor --install-extension rip-lang.rip
 ---
 
 ## Packages
-
-### [@rip-lang/api](api/) — Web Framework
-
-Hono-compatible web framework with Sinatra-style routing, AsyncLocalStorage context, 37 built-in validators, file serving (`@send`), and smart response handling. ~650 lines.
-
-```coffee
-import { get, post, read, start } from '@rip-lang/api'
-
-get '/', -> { message: 'Hello, Rip!' }
-get '/users/:id', -> User.find!(read 'id', 'id!')
-get '/css/*', -> @send "public/#{@req.path.slice(5)}"
-
-post '/signup' ->
-  email = read 'email', 'email!'
-  name = read 'name', 'string!'
-  { success: true, email, name }
-
-start port: 3000
-```
 
 ### [@rip-lang/csv](csv/) — CSV Parser + Writer
 
@@ -72,18 +52,18 @@ rip-db mydata.duckdb --port=4000
 Highlights source code using highlight.js and serves the result in the browser for viewing and printing. 14 themes (7 light, 7 dark), line numbers, native Rip highlighting, sticky theme selection, and print-optimized CSS. Serves once and exits. ~450 lines.
 
 ```bash
-rip-print src/                   # Print all source files
-rip-print -d packages/api/      # Dark theme
+rip-print src/                  # Print all source files
+rip-print -d packages/server/   # Dark theme
 rip-print file.rip file.js      # Specific files
 ```
 
 ### [@rip-lang/server](server/) — Production Server
 
-Multi-worker process manager with hot reloading, automatic HTTPS, mDNS service discovery, and request queueing. Serves Rip UI apps with SSE hot-reload out of the box. ~1,210 lines.
+Multi-worker process manager with hot reloading, automatic HTTPS, mDNS service discovery, and request queueing. Includes the web framework (Sinatra-style routing, 37 validators, file serving, middleware). Serves Rip UI apps with SSE hot-reload out of the box. ~1,210 lines.
 
 ```bash
-rip-server -w                    # Start with file watching + hot-reload
-rip-server myapp                 # Named (accessible at myapp.local)
+rip serve                        # Start server (watches *.rip by default)
+rip serve myapp                  # Named (accessible at myapp.local)
 ```
 
 ### [@rip-lang/swarm](swarm/) — Parallel Job Runner
@@ -109,8 +89,8 @@ swarm { setup, perform }
 Zero-build reactive web framework. The browser loads `rip.min.js` (compiler + UI framework), fetches an app bundle, and renders with fine-grained DOM updates. Includes file-based router (path + hash modes), reactive stash, component store, server middleware (`serve`), SSE hot-reload, and `launch bundle:` for self-contained static deployment.
 
 ```coffee
-import { get, use, start, notFound } from '@rip-lang/api'
-import { serve } from '@rip-lang/api/middleware'
+import { get, use, start, notFound } from '@rip-lang/server'
+import { serve } from '@rip-lang/server/middleware'
 
 dir = import.meta.dir
 use serve dir: dir, title: 'My App', watch: true

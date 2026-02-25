@@ -27,8 +27,8 @@ bun add -g rip-lang @rip-lang/db
 Verify both are installed:
 
 ```bash
-rip --version     # Should print: Rip 3.9.1 (or newer)
-rip-db --version  # Should print: rip-db v1.1.x
+rip --version     # Should print: Rip 3.13.13 (or newer)
+rip-db --version  # Should print: rip-db v1.3.x
 ```
 
 ## Clone the Repo
