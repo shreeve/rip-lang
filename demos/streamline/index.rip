@@ -27,12 +27,13 @@ use serve
 skip = ['/favicon.png', '/ping']
 
 before ->
-  if @req.path in skip
-    @header 'Rip-No-Log', '1'
+  @header 'Rip-No-Log', '1' if @req.path in skip
   return
 
 get '/app.css'     -> @send "#{dir}/app.css"
-get '/favicon.png' -> @send "#{dir}/favicon.png"
+get '/favicon.png' ->
+  file = Bun.file "#{dir}/favicon.png"
+  new Response file, headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' }
 
 # Diagnostic routes
 get '/ping' ->
