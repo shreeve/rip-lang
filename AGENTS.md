@@ -19,7 +19,7 @@ echo 'your code' | ./bin/rip -s  # S-expressions (parser)
 echo 'your code' | ./bin/rip -c  # JavaScript (codegen)
 
 # Run tests
-bun run test                             # All tests (1255)
+bun run test                             # All tests (1265)
 bun test/runner.js test/rip/FILE.rip     # Specific file
 
 # Rebuild parser (after grammar changes)
@@ -37,7 +37,7 @@ rip serve
 | Metric | Value |
 |--------|-------|
 | Version | 3.13.20 |
-| Tests | 1,255 |
+| Tests | 1,265 |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
 
@@ -75,7 +75,7 @@ rip-lang/
 │   ├── RIP-LANG.md      # Language reference (includes reactivity, future ideas)
 │   ├── RIP-TYPES.md     # Type system specification
 │   └── RIP-INTERNALS.md # Compiler architecture & design decisions
-├── test/rip/            # 25 test files (1,255 tests)
+├── test/rip/            # 25 test files (1,265 tests)
 └── scripts/             # Build utilities (all .js — run via `bun run <name>`)
 ```
 
@@ -417,7 +417,7 @@ code "name", "x + y", "(x + y)"
 fail "name", "invalid syntax"
 ```
 
-### Test Files (25 files, 1,255 tests)
+### Test Files (25 files, 1,265 tests)
 
 ```
 test/rip/
