@@ -2170,6 +2170,8 @@
       this.scanTokens((token, i) => {
         if (token[0] !== "IF" && token[0] !== "UNLESS")
           return 1;
+        if (this.tokens[i - 1]?.[0] === "INTERPOLATION_START")
+          return 1;
         original = token;
         this.detectEnd(i + 1, condition, action);
         return 1;
@@ -3711,7 +3713,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             return 2;
           }
         }
-        if (nextToken && nextToken[0] === "INDENT") {
+        if (nextToken && nextToken[0] === "INDENT" && !nextToken.fromThen) {
           if (tag === "->" || tag === "=>" || tag === "CALL_START" || tag === "(") {
             return 1;
           }
@@ -8357,8 +8359,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.20";
-  var BUILD_DATE = "2026-02-25@11:51:46GMT";
+  var VERSION = "3.13.21";
+  var BUILD_DATE = "2026-02-25@12:40:03GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

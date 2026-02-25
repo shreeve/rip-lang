@@ -521,6 +521,12 @@ test 'mixed hash and dollar', 'x = 1; y = 2; "hash #{x} dollar ${y}"', 'hash 1 d
 
 code 'dollar interpolation compiler', '"Value: ${x}"', '`Value: ${x}`'
 
+# Conditionals inside interpolation
+test 'if/then/else in interpolation', 'n = 1; "#{n} item#{if n is 1 then "" else "s"}"', '1 item'
+test 'if/then/else in interpolation plural', 'n = 3; "#{n} item#{if n is 1 then "" else "s"}"', '3 items'
+test 'ternary in interpolation', 'n = 1; "#{n} item#{n is 1 ? "" : "s"}"', '1 item'
+test 'postfix if in interpolation', 'n = 3; "#{n} item#{"" if n is 1 else "s"}"', '3 items'
+
 # Quote preservation - single quotes
 code 'single quote preserved', "'hello'", "'hello'"
 

@@ -28,6 +28,15 @@ export sql = (query, params) ->
   warn "[db] SQL warning: #{data.error}" if data.error
   data
 
+export bulk = (table, columns, rows) ->
+  res = fetch! "#{DB_URL}/sql",
+    method: 'POST'
+    headers: { 'Content-Type': 'application/json' }
+    body: JSON.stringify { table, columns, rows }
+  data = res.json!
+  warn "[db] Bulk warning: #{data.error}" if data.error
+  data
+
 # ==============================================================================
 # Setup (called once by manager or single-process — never by workers)
 # ==============================================================================
@@ -77,13 +86,24 @@ export setup = ->
   monday = new Date(today)
   monday.setDate(today.getDate() + daysUntilMonday)
 
-  values = []
+  spotRows = []
   for i in [0...4]
     d = new Date(monday)
     d.setDate(monday.getDate() + i * 7)
     week = d.toISOString().slice(0, 10)
     for slot in ['09:00', '10:00', '11:00', '14:00']
       for j in [1..4]
-        values.push "('#{week}', '#{slot}')"
-  sql! "INSERT INTO spots (week, slot) VALUES #{values.join(', ')}"
-  p "[setup] Seeded #{values.length} spots for 4 weeks starting #{monday.toISOString().slice(0, 10)}"
+        spotRows.push [week, slot]
+  bulk! 'spots', ['week', 'slot'], spotRows
+  p "[setup] Seeded #{spotRows.length} spots for 4 weeks starting #{monday.toISOString().slice(0, 10)}"
+
+  # Seed users
+  userRows = [
+    ['user',  'Test',  'User',     'test@streamlineschool.com']
+    ['admin', 'Steve', 'Shreeve',  'steve@streamlineschool.com']
+    ['user',  'Sarah', 'Johnson',  'sarah@example.com']
+    ['user',  'Mike',  'Chen',     'mike@example.com']
+    ['user',  'Emily', 'Williams', 'emily@example.com']
+  ]
+  bulk! 'users', ['role', 'first_name', 'last_name', 'email'], userRows
+  p "[setup] Seeded #{userRows.length} users"

@@ -36,7 +36,7 @@ rip serve
 
 | Metric | Value |
 |--------|-------|
-| Version | 3.13.20 |
+| Version | 3.13.21 |
 | Tests | 1,265 |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |

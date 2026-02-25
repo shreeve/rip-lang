@@ -397,7 +397,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       // ─────────────────────────────────────────────────────────────────────
       // Implicit nesting (inject -> before INDENT)
       // ─────────────────────────────────────────────────────────────────────
-      if (nextToken && nextToken[0] === 'INDENT') {
+      if (nextToken && nextToken[0] === 'INDENT' && !nextToken.fromThen) {
         if (tag === '->' || tag === '=>' || tag === 'CALL_START' || tag === '(') {
           return 1;
         }

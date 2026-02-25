@@ -1424,6 +1424,7 @@ export class Lexer {
 
     this.scanTokens((token, i) => {
       if (token[0] !== 'IF' && token[0] !== 'UNLESS') return 1;
+      if (this.tokens[i - 1]?.[0] === 'INTERPOLATION_START') return 1;
       original = token;
       this.detectEnd(i + 1, condition, action);
       return 1;

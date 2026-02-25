@@ -161,6 +161,6 @@ prefix '/api/auth', ->
     email = 'test@streamlineschool.com'
     user = User.where!(email: email).first!()
     unless user
-      user = User.create!({ email, firstName: 'Test', lastName: 'User', role: 'admin' })
+      user = User.create!({ email, firstName: 'Test', lastName: 'User', role: 'user' })
     session.userId = user.id
     { ok: true }

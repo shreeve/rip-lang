@@ -33,16 +33,14 @@ export Time = component
 
   weekInfo ~=
     months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    today = new Date()
-    offset = (2 - today.getDay() + 7) % 7
-    base = new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset)
     result = {}
     for s in sessions
-      tue = new Date(base)
-      tue.setDate(tue.getDate() + (s.week - 1) * 7)
-      fri = new Date(tue)
-      fri.setDate(fri.getDate() + 3)
-      wn = @isoWeek(tue)
+      mon = new Date(s.week + 'T00:00:00')
+      tue = new Date(mon)
+      tue.setDate(mon.getDate() + 1)
+      fri = new Date(mon)
+      fri.setDate(mon.getDate() + 4)
+      wn = @isoWeek(mon)
       sm = months[tue.getMonth()]
       fm = months[fri.getMonth()]
       dates = if sm is fm then "#{sm} #{tue.getDate()}–#{fri.getDate()}" else "#{sm} #{tue.getDate()} – #{fm} #{fri.getDate()}"
