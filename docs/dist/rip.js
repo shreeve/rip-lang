@@ -7615,8 +7615,11 @@ ${this.indent()}}`;
         return [body];
       if (body[0] === "block")
         return body.slice(1);
-      if (Array.isArray(body[0]))
+      if (Array.isArray(body[0])) {
+        if (typeof body[0][0] === "string")
+          return [body];
         return body;
+      }
       return [body];
     }
     indent() {
@@ -8352,8 +8355,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.15";
-  var BUILD_DATE = "2026-02-25@06:33:14GMT";
+  var VERSION = "3.13.17";
+  var BUILD_DATE = "2026-02-25@08:50:22GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
