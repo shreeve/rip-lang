@@ -1,7 +1,7 @@
 # Streamline Swim School — Server Entry Point
 
 import { get, use, start } from '@rip-lang/api'
-import { prettyJson, sessions, serve } from '@rip-lang/api/middleware'
+import { htmlJson, sessions, serve } from '@rip-lang/api/middleware'
 import { setup } from './api/db.rip'
 import { Stash } from './api/lib/stash.rip'
 import configData from './config.rip'
@@ -15,7 +15,7 @@ config = Stash configData
 dir = new URL('./app', import.meta.url).pathname
 
 # Middleware
-use prettyJson
+use htmlJson
 use sessions name: config.session.name, maxAge: config.session.maxAge
 
 # Serve the Rip app

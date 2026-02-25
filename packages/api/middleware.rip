@@ -3,14 +3,14 @@
 # ==============================================================================
 #
 # Usage:
-#   import { cors, logger, compress, sessions, prettyJson, serve } from '@rip-lang/api/middleware'
+#   import { cors, logger, compress, sessions, htmlJson, serve } from '@rip-lang/api/middleware'
 #   import { session } from '@rip-lang/api'
 #
 #   use logger()
 #   use cors origin: 'https://myapp.com'
 #   use compress()
 #   use sessions()
-#   use prettyJson   # Pretty JSON for iOS mobile browsers
+#   use htmlJson   # Pretty JSON for iOS mobile browsers
 #
 #   before ->
 #     session.userId = 123   # Works anywhere via AsyncLocalStorage
@@ -396,21 +396,21 @@ export bodyLimit = (opts = {}) ->
     await next()
 
 # ==============================================================================
-# prettyJson — Pretty JSON for iOS Mobile Browsers
+# htmlJson — Pretty JSON for iOS Mobile Browsers
 # ==============================================================================
 #
 # Renders JSON as syntax-highlighted HTML for iOS mobile browsers.
 # Solves the iOS Safari/Chrome "download" footer issue when viewing JSON.
 #
 # Usage:
-#   use prettyJson
+#   use htmlJson
 #
 # Only activates when:
 #   1. Request is from iOS (iPhone/iPad)
 #   2. Browser is directly viewing (Accept: text/html, not API call)
 #
 
-export prettyJson = (c, next) ->
+export htmlJson = (c, next) ->
   originalJson = c.json.bind(c)
 
   c.json = (data, status = 200, headers = {}) ->
