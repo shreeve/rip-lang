@@ -844,10 +844,9 @@
     monaco.languages.setMonarchTokensProvider 'rip', window.ripMonarch
     monaco.languages.setLanguageConfiguration 'rip', window.ripLanguageConfig
 
-    # Disable TypeScript diagnostics for JS output (prevents deprecated strikethrough on e.g. `name`)
+    # Disable TypeScript suggestion diagnostics (prevents deprecated strikethrough on e.g. `name`)
     monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions
-      noSemanticValidation: true
-      noSyntaxValidation: true
+      noSuggestionDiagnostics: true
 
     # ====================================================================
     # Restore Persisted State
