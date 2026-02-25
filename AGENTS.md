@@ -37,7 +37,7 @@ rip serve
 | Metric | Value |
 |--------|-------|
 | Version | 3.13.24 |
-| Tests | 1,265 |
+| Tests | 1,300 |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
 
@@ -48,10 +48,10 @@ rip serve
 ```
 rip-lang/
 ├── src/
-│   ├── lexer.js         # Lexer + Rewriter (1,761 LOC)
-│   ├── compiler.js      # Compiler + Code Generator (3,303 LOC)
-│   ├── types.js         # Type System — sidecar for lexer (1,099 LOC)
-│   ├── components.js    # Component System — sidecar for compiler (1,877 LOC)
+│   ├── lexer.js         # Lexer + Rewriter (1,778 LOC)
+│   ├── compiler.js      # Compiler + Code Generator (3,334 LOC)
+│   ├── types.js         # Type System — sidecar for lexer (1,091 LOC)
+│   ├── components.js    # Component System — sidecar for compiler (1,827 LOC)
 │   ├── sourcemaps.js    # Source Map V3 generator (189 LOC)
 │   ├── typecheck.js     # Shared type-checking infrastructure (443 LOC)
 │   ├── parser.js        # Generated parser (357 LOC) — Don't edit!
@@ -75,7 +75,7 @@ rip-lang/
 │   ├── RIP-LANG.md      # Language reference (includes reactivity, future ideas)
 │   ├── RIP-TYPES.md     # Type system specification
 │   └── RIP-INTERNALS.md # Compiler architecture & design decisions
-├── test/rip/            # 25 test files (1,265 tests)
+├── test/rip/            # 26 test files (1,300 tests)
 └── scripts/             # Build utilities (all .js — run via `bun run <name>`)
 ```
 

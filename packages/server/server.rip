@@ -108,19 +108,24 @@ logAccessJson = (app, req, res, totalSeconds, workerSeconds) ->
     type: type
     length: if len then Number(len) else undefined
 
+typeAbbrev =
+  html: 'html', css: 'css', javascript: 'js', json: 'json', plain: 'text'
+  png: 'png', jpeg: 'jpg', gif: 'gif', webp: 'webp', svg: 'svg'
+  'svg+xml': 'svg', 'x-icon': 'ico', 'octet-stream': 'bin'
+
 logAccessHuman = (app, req, res, totalSeconds, workerSeconds) ->
   { timestamp, timezone } = formatTimestamp()
-  d1 = scale(totalSeconds, 's')
-  d2 = scale(workerSeconds, 's')
+  dur = scale(totalSeconds, 's')
   method = req.method or 'GET'
   url = new URL(req.url)
   path = url.pathname
   status = res.status
-  lenHeader = res.headers.get('content-length') or ''
-  len = if lenHeader then "#{lenHeader}B" else ''
+  bytes = Number(res.headers.get('content-length') or 0)
+  size = scale(bytes, 'B')
   contentType = (res.headers.get('content-type') or '').split(';')[0] or ''
-  type = if contentType.includes('/') then contentType.split('/')[1] else contentType
-  console.log "[#{timestamp} #{timezone} #{d1} #{d2}] #{method} #{path} → #{status} #{type} #{len}"
+  sub = if contentType.includes('/') then contentType.split('/')[1] else contentType
+  type = (typeAbbrev[sub] or sub or '-').padEnd(4)
+  console.log "[#{timestamp} #{timezone} #{dur}] #{status} #{type} #{size} - #{method} #{path}"
 
 INTERNAL_HEADERS = new Set(['rip-worker-busy', 'rip-worker-id', 'rip-no-log'])
 
