@@ -40,6 +40,6 @@ get '/config' ->
 get '/*' -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 
 unless process.env.RIP_WORKER_MODE
-  { setup } = import!('./setup.rip')
+  { setup } = import!('./api/db.rip')
   setup!()
 start port: config.app.port

@@ -1,0 +1,76 @@
+# Database — connection, queries, and one-time setup
+
+import { Schema } from '../../../packages/schema/orm.js'
+import { openSync } from 'node:fs'
+import { Stash } from './lib/stash.rip'
+import configData from '../config.rip'
+
+config = Stash configData
+DB_URL = config.database.url
+DB_FILE = config.database.file
+
+# =============================================================================
+# Connection (runs on import — every worker gets a schema + query helper)
+# =============================================================================
+
+export schema = do ->
+  s = Schema.load '../app.schema', import.meta.url
+  s.connect DB_URL
+  s
+
+export dbFetch = (sql, params) ->
+  body = if params then { sql, params } else { sql }
+  res = fetch! "#{DB_URL}/sql",
+    method: 'POST'
+    headers: { 'Content-Type': 'application/json' }
+    body: JSON.stringify body
+  data = res.json!
+  warn "[db] SQL warning: #{data.error}" if data.error
+  data
+
+# =============================================================================
+# Setup (called once by manager or single-process — never by workers)
+# =============================================================================
+
+dbReachable = ->
+  try
+    fetch! "#{DB_URL}/sql",
+      method: 'POST'
+      headers: { 'Content-Type': 'application/json' }
+      body: JSON.stringify sql: 'SELECT 1'
+    true
+  catch
+    false
+
+startDb = ->
+  logFile = "#{DB_FILE}.log"
+  fd = openSync logFile, 'a'
+  Bun.spawn ['rip-db', DB_FILE],
+    stdout: fd
+    stderr: fd
+    stdio: ['ignore', fd, fd]
+
+  for attempt in [1..10]
+    sleep! 200
+    return if dbReachable!
+
+  abort "Failed to start rip-db — see #{logFile} for details"
+
+export setup = ->
+  unless dbReachable!
+    p "[setup] Starting rip-db #{DB_FILE}..."
+    startDb!
+    p "[setup] DuckDB UI: #{DB_URL}"
+
+  check = dbFetch! "SELECT count(*) FROM information_schema.tables WHERE table_name = 'spots'"
+  return if check.data?[0]?[0] > 0
+
+  for stmt in schema.toSQL().split(';')
+    dbFetch! stmt.trim() + ';' if stmt.trim()
+  p '[setup] Tables created'
+
+  for week in [1, 2, 3, 4]
+    for slot in ['09:00', '10:00', '11:00', '14:00']
+      for i in [1..4]
+        dbFetch! 'INSERT INTO spots (week, slot) VALUES (?, ?)', [week, slot]
+  p '[setup] Seeded spots for weeks 1-4'

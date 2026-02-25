@@ -1,7 +1,7 @@
 # Booking routes — list and create bookings (Stripe stubbed)
 
 import { get, post, prefix, read, session } from '@rip-lang/api'
-import { schema, dbFetch } from '../../db.rip'
+import { schema, dbFetch } from '../db.rip'
 
 Booking = schema.model 'Booking'
 
