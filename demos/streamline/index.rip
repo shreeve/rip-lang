@@ -27,8 +27,7 @@ use serve
 get '/app.css' -> @send "#{dir}/app.css"
 
 # Diagnostic routes
-get '/ping' ->
-  pong: true
+get '/ping' -> pong: true
 
 get '/config' ->
   now: new Date().toISOString()
