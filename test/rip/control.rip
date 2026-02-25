@@ -1005,3 +1005,27 @@ test "bare try statement swallows error", """
 """, "ok"
 
 code "bare try statement generates catch {}", "try foo()", "try {\n  foo();\n} catch {}"
+
+# ==============================================================================
+# Regression: postfix if in value context must wrap entire call, not just last arg
+# ==============================================================================
+
+code "postfix if with multi-arg call in value context", '''
+  f = -> foo "a", "b" if true
+  ''', '''
+  let f;
+
+  f = function() {
+    return (true ? foo("a", "b") : undefined);
+  }
+  '''
+
+code "postfix if with @method call in value context", '''
+  f = -> @header "a", "b" if cond
+  ''', '''
+  let f;
+
+  f = function() {
+    return (cond ? this.header("a", "b") : undefined);
+  }
+  '''

@@ -2632,7 +2632,10 @@ export class CodeGenerator {
   unwrapBlock(body) {
     if (!Array.isArray(body)) return [body];
     if (body[0] === 'block') return body.slice(1);
-    if (Array.isArray(body[0])) return body;
+    if (Array.isArray(body[0])) {
+      if (typeof body[0][0] === 'string') return [body];
+      return body;
+    }
     return [body];
   }
 
