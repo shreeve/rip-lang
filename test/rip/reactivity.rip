@@ -253,3 +253,91 @@ test "readonly prop receives value not signal", '''
   a = A.new label: "world"
   a.label
   ''', "world"
+
+# ==============================================================================
+# Postfix ternary in component computed members
+# ==============================================================================
+
+test "computed with postfix ternary false branch", '''
+  A = component
+    flag := false
+    result ~= "yes" if flag else "no"
+  a = A.new()
+  a.result.value
+  ''', "no"
+
+test "computed with postfix ternary true branch", '''
+  A = component
+    flag := true
+    result ~= "yes" if flag else "no"
+  a = A.new()
+  a.result.value
+  ''', "yes"
+
+test "computed with postfix ternary reacts to state change", '''
+  A = component
+    flag := false
+    result ~= "yes" if flag else "no"
+  a = A.new()
+  before = a.result.value
+  a.flag.value = true
+  after = a.result.value
+  before + "," + after
+  ''', "no,yes"
+
+test "computed with postfix ternary using nullable object", '''
+  A = component
+    user := null
+    dest ~= "/bookings" if user else "/auth"
+  a = A.new()
+  before = a.dest.value
+  a.user.value = { name: "Steve" }
+  after = a.dest.value
+  before + "," + after
+  ''', "/auth,/bookings"
+
+code "computed postfix ternary compiles to JS ternary", '''
+  export Foo = component
+    user := null
+    href ~= "/b" if user else "/a"
+    render
+      div "hello"
+  ''', '''
+  export const Foo = class extends __Component {
+    _init(props) {
+      this.user = __state(null);
+      this.href = __computed(() => (this.user.value ? "/b" : "/a"));
+    }
+    _create() {
+      this._el0 = document.createElement('div');
+      this._t0 = document.createTextNode("hello");
+      this._el0.appendChild(this._t0);
+      return this._el0;
+    }
+  }
+  ''', { skipPreamble: true, skipRuntimes: true }
+
+code "render block with identifier property value compiles to reactive setAttribute", '''
+  export Bar = component
+    user := null
+    href ~= "/b" if user else "/a"
+    render
+      a href: href
+        "click"
+  ''', '''
+  export const Bar = class extends __Component {
+    _init(props) {
+      this.user = __state(null);
+      this.href = __computed(() => (this.user.value ? "/b" : "/a"));
+    }
+    _create() {
+      this._el0 = document.createElement('a');
+      this._t0 = document.createTextNode("click");
+      this._el0.appendChild(this._t0);
+      return this._el0;
+    }
+    _setup() {
+      __effect(() => { this._el0.setAttribute('href', this.href.value); });
+    }
+  }
+  ''', { skipPreamble: true, skipRuntimes: true }

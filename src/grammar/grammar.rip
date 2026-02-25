@@ -565,6 +565,7 @@ grammar =
     o 'Statement POST_IF Expression'     , '["if", 3, [1]]'
     o 'Expression POST_IF Expression'    , '["if", 3, [1]]'
     o 'Expression POST_IF Expression ELSE INDENT Expression OUTDENT', '["?:", 3, 1, 6]'
+    o 'Expression POST_IF Expression ELSE Expression', '["?:", 3, 1, 5]'
     o 'Statement POST_UNLESS Expression' , '["if", ["!", 3], [1]]'
     o 'Expression POST_UNLESS Expression', '["if", ["!", 3], [1]]'
   ]

@@ -44,7 +44,7 @@ export Layout = component
       # ---- Desktop Sidebar (hidden below xl) ----
       aside.('hidden xl:sticky xl:top-0 xl:left-0 xl:flex xl:h-dvh xl:w-[250px] xl:flex-col xl:justify-between xl:border-r xl:border-primary xl:bg-primary xl:px-4 xl:py-5')
         .
-          a.('mb-7 ml-3.5 block') href: "/"
+          a.('mb-7 ml-3.5 block') href: logoHref
             Logo
 
           if user
@@ -70,7 +70,7 @@ export Layout = component
       # ---- Mobile Top Bar (hidden on desktop) ----
       .('min-h-dvh bg-secondary xl:w-0 xl:flex-auto xl:min-h-0')
         header.('flex xl:hidden h-[80px] items-center justify-between border-b border-primary bg-primary px-5')
-          a.('w-[65px]') href: "/"
+          a.('w-[65px]') href: logoHref
             Logo
 
           if user

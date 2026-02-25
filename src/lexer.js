@@ -1393,7 +1393,8 @@ export class Lexer {
       }
 
       if (SINGLE_LINERS.has(tag) && this.tokens[i + 1]?.[0] !== 'INDENT' &&
-          !(tag === 'ELSE' && this.tokens[i + 1]?.[0] === 'IF')) {
+          !(tag === 'ELSE' && this.tokens[i + 1]?.[0] === 'IF') &&
+          !(tag === 'ELSE' && this.tokens[i - 1]?.[0] !== 'OUTDENT')) {
         starter = tag;
         [indent, outdent] = this.makeIndentation();
         if (tag === 'THEN') indent.fromThen = true;

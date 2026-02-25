@@ -958,6 +958,16 @@ code "postfix if else compiles to ternary", '''
   x = (cond ? "a" : "b")
   '''
 
+test "postfix if else nested in function", '''
+  pick = (flag) -> "yes" if flag else "no"
+  pick(false)
+  ''', "no"
+
+test "postfix if else with complex condition", '''
+  x = 7
+  "pass" if x > 5 and x < 10 else "fail"
+  ''', "pass"
+
 # ==============================================================================
 # Regression: or-throw must not leak variables across sibling functions
 # ==============================================================================

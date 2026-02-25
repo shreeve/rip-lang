@@ -22,7 +22,8 @@ function writeJSON(file, obj) { write(file, JSON.stringify(obj, null, 2) + '\n')
 
 function run(cmd, opts = {}) {
   try {
-    return execSync(cmd, { cwd: opts.cwd || ROOT, encoding: 'utf8', stdio: opts.stdio || 'pipe', ...opts }).trim();
+    const result = execSync(cmd, { cwd: opts.cwd || ROOT, encoding: 'utf8', stdio: opts.stdio || 'pipe', ...opts });
+    return (result || '').trim();
   } catch (e) {
     if (opts.throws !== false) throw e;
     return null;
