@@ -1,25 +1,25 @@
 #!/usr/bin/env bun
 
-import { readFileSync, writeFileSync, existsSync, statSync, unlinkSync } from 'fs';
+import { readFileSync, readdirSync, writeFileSync, existsSync, statSync, unlinkSync } from 'fs';
 import { execSync, spawnSync, spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, basename, join } from 'path';
 import { Compiler } from '../src/compiler.js';
-import { startREPL } from '../src/repl.js';
 import packageJson from '../package.json' with { type: 'json' };
 
-// Get the directory where this script lives
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const loaderPath = join(__dirname, '../rip-loader.js');
 
-// Set NODE_PATH so spawned child processes can resolve @rip-lang/* packages
-const _nodeModules = join(__dirname, '..', '..');
-if (!process.env.NODE_PATH?.split(':').includes(_nodeModules)) {
-  process.env.NODE_PATH = [_nodeModules, process.env.NODE_PATH].filter(Boolean).join(':');
+// Ensure spawned processes can resolve @rip-lang/* packages
+const nodeModules = join(__dirname, '..', '..');
+if (!process.env.NODE_PATH?.split(':').includes(nodeModules)) {
+  process.env.NODE_PATH = [nodeModules, process.env.NODE_PATH].filter(Boolean).join(':');
 }
 
 const VERSION = packageJson.version;
 const SUMMARY = packageJson.description;
+
+const isFile = (path) => existsSync(path) && statSync(path).isFile();
 
 function printHelp() {
   console.log(`
@@ -40,15 +40,25 @@ Options:
   -s, --sexpr         Show s-expressions (only, unless -c also specified)
   -t, --tokens        Show token stream (only, unless -c also specified)
   -v, --version       Show version number
-  -w, --web           Launch browser REPL (auto-opens + auto-shutdown)
 
 Subcommands:
+  rip serve [flags] [app]       Start server (watches *.rip, HTTPS, mDNS)
   rip check [dir]               Type-check all .rip files in directory
+
+Serve flags:
+  --watch=<glob>      Watch glob pattern (default: *.rip)
+  --static            Disable hot reload and file watching
+  http                HTTP-only mode (no HTTPS)
+  http:<port>         Set HTTP port
+  w:<n>               Worker count (auto, half, 2x, 3x, or number)
 
 Examples:
   rip                           # Interactive REPL (terminal)
   rip script.rip                # Execute script directly
   rip script.rip arg1 arg2      # Execute with arguments
+  rip serve                     # Serve ./index.rip (watches *.rip)
+  rip serve http                # Serve HTTP-only
+  rip serve myapp               # Serve with mDNS name
   rip -c example.rip            # Compile and show JavaScript
   rip -o output.js example.rip  # Compile and save to file
   rip -s example.rip            # Show ONLY s-expressions
@@ -59,7 +69,6 @@ Examples:
   rip -m example.rip            # Compile with inline source map
   rip -cd example.rip           # Show compiled JS and type declarations
   rip -q -c example.rip         # Just the JS, no headers (for piping)
-  rip -w                        # Launch browser REPL (auto-opens)
   echo 'x = 1 + 2' | rip -c     # Compile from stdin
 
 Shebang support:
@@ -71,22 +80,14 @@ Shebang support:
 async function main() {
   const args = process.argv.slice(2);
 
-  // Find the script file position (first non-option argument)
-  // Everything BEFORE it is rip options, everything AFTER it is script arguments
+  // Find script file (first non-option argument)
+  // Everything before it is rip options, everything after is script arguments
   let scriptFileIndex = -1;
   for (let i = 0; i < args.length; i++) {
-    // Skip option values (like -o filename)
-    if (i > 0 && (args[i - 1] === '-o' || args[i - 1] === '--output')) {
-      continue;
-    }
-    // First non-option arg is the script file
-    if (!args[i].startsWith('-')) {
-      scriptFileIndex = i;
-      break;
-    }
+    if (i > 0 && (args[i - 1] === '-o' || args[i - 1] === '--output')) continue;
+    if (!args[i].startsWith('-')) { scriptFileIndex = i; break; }
   }
 
-  // Split into rip options and script arguments
   const rawOptions = scriptFileIndex === -1 ? args : args.slice(0, scriptFileIndex);
   const scriptArgs = scriptFileIndex === -1 ? [] : args.slice(scriptFileIndex + 1);
 
@@ -95,7 +96,6 @@ async function main() {
     /^-[a-zA-Z]{2,}$/.test(arg) ? [...arg.slice(1)].map(ch => `-${ch}`) : [arg]
   );
 
-  // Only check ripOptions for rip's flags (not script args!)
   if (ripOptions.includes('-h') || ripOptions.includes('--help')) {
     printHelp();
     process.exit(0);
@@ -104,13 +104,11 @@ async function main() {
   if (ripOptions.includes('-v') || ripOptions.includes('--version')) {
     console.log(`Rip ${VERSION} - ${SUMMARY}`);
     try {
-      const { readdirSync } = await import('fs');
       const home = process.env.HOME || process.env.USERPROFILE;
       const scopeDir = join(home, '.bun', 'install', 'global', 'node_modules', '@rip-lang');
       if (existsSync(scopeDir) && statSync(scopeDir).isDirectory()) {
-        const pkgs = readdirSync(scopeDir).sort();
         console.log();
-        for (const name of pkgs) {
+        for (const name of readdirSync(scopeDir).sort()) {
           try {
             const pkg = JSON.parse(readFileSync(join(scopeDir, name, 'package.json'), 'utf-8'));
             console.log(`  ${pkg.name.padEnd(24)} ${pkg.version}`);
@@ -121,58 +119,32 @@ async function main() {
     process.exit(0);
   }
 
-  // Launch local browser REPL (starts server + opens browser)
+  // --- Subcommands ---
+
   if (args[0] === 'check') {
-    const targetDir = args[1] || '.';
     const { runCheck } = await import('../src/typecheck.js');
-    const exitCode = await runCheck(targetDir, { quiet: args.includes('-q') || args.includes('--quiet') });
+    const exitCode = await runCheck(args[1] || '.', { quiet: args.includes('-q') || args.includes('--quiet') });
     process.exit(exitCode);
   }
 
-  if (ripOptions.includes('-w') || ripOptions.includes('--web')) {
-    console.log('🚀 Starting Rip browser REPL...\n');
-
-    // Start the server and capture output to get the actual port
-    const servePath = join(__dirname, '../scripts/serve.js');
-    const serverProcess = spawn('bun', [servePath], {
-      stdio: ['inherit', 'pipe', 'inherit'],
-      detached: false,
+  if (args[0] === 'serve') {
+    let serverPath;
+    try {
+      serverPath = fileURLToPath(import.meta.resolve('@rip-lang/server/server'));
+    } catch {
+      console.error('Error: @rip-lang/server is not installed.\n\n  bun add @rip-lang/server\n');
+      process.exit(1);
+    }
+    const result = spawnSync('bun', ['--preload', loaderPath, serverPath, ...args.slice(1)], {
+      stdio: 'inherit',
       env: process.env
     });
-
-    let actualPort = null;
-
-    // Capture server output and extract port
-    serverProcess.stdout.on('data', (data) => {
-      const output = data.toString();
-      process.stdout.write(output);
-
-      // Parse port from "Server running at http://localhost:PORT"
-      if (!actualPort) {
-        const match = output.match(/localhost:(\d+)/);
-        if (match) {
-          actualPort = match[1];
-
-          // Open browser once we know the port
-          setTimeout(() => {
-            const openCmd = process.platform === 'darwin' ? 'open' :
-                            process.platform === 'win32' ? 'start' : 'xdg-open';
-            execSync(`${openCmd} http://localhost:${actualPort}/`);
-            console.log('\n📱 Press Ctrl+C to stop server\n');
-          }, 300);
-        }
-      }
-    });
-
-    // Keep server running (don't exit)
-    return;
+    process.exit(result.status ?? 1);
   }
 
-  // Check if REPL should be started
-  // Launch REPL if: no args AND stdin is a TTY (not piped), OR explicit -r flag
-  const isTTY = process.stdin.isTTY;
-  if ((args.length === 0 && isTTY) || ripOptions.includes('-r') || ripOptions.includes('--repl')) {
-    // Spawn REPL with --experimental-vm-modules flag for proper ES module support
+  // --- REPL ---
+
+  if ((args.length === 0 && process.stdin.isTTY) || ripOptions.includes('-r') || ripOptions.includes('--repl')) {
     const replModule = join(__dirname, '../src/repl.js');
     const replProcess = spawn('bun', ['--experimental-vm-modules', '-e', `import('${replModule}').then(m => m.startREPL())`], {
       stdio: 'inherit',
@@ -182,6 +154,8 @@ async function main() {
     return;
   }
 
+  // --- Execute or compile ---
+
   const showTokens = ripOptions.includes('-t') || ripOptions.includes('--tokens');
   const showSExpr = ripOptions.includes('-s') || ripOptions.includes('--sexpr');
   const showCompiled = ripOptions.includes('-c') || ripOptions.includes('--compile');
@@ -189,133 +163,96 @@ async function main() {
   const generateMap = ripOptions.includes('-m') || ripOptions.includes('--map');
   const quiet = ripOptions.includes('-q') || ripOptions.includes('--quiet');
 
-  const options = {
-    showTokens,
-    showSExpr,
-    quiet,
-    types: generateDts ? 'emit' : undefined,
-    sourceMap: generateMap ? 'inline' : undefined,
-  };
-
-  // Find input file and output file from ripOptions only
   let inputFile = scriptFileIndex === -1 ? null : args[scriptFileIndex];
   let outputFile = null;
 
   for (let i = 0; i < ripOptions.length; i++) {
     if (ripOptions[i] === '-o' || ripOptions[i] === '--output') {
-      outputFile = ripOptions[i + 1];
-      i++;
+      outputFile = ripOptions[++i];
     }
   }
 
-  // Helper to check if path is a regular file (not a directory)
-  const isFile = (path) => existsSync(path) && statSync(path).isFile();
-
-  // If no compile flags and file exists → execute the script instead of compiling it
+  // Execute script directly (no compile flags)
   const hasCompileFlag = showCompiled || showTokens || showSExpr || generateDts || generateMap || outputFile;
   if (inputFile && !hasCompileFlag && isFile(inputFile)) {
-    const loaderPath = join(__dirname, '../rip-loader.js');
-
     if (inputFile.endsWith('.rip')) {
       const result = spawnSync('bun', ['--preload', loaderPath, inputFile, ...scriptArgs], {
         stdio: 'inherit',
         env: process.env
       });
       process.exit(result.status ?? 1);
-    } else {
-      // Non-.rip files (e.g. shebang scripts): compile, write temp file, execute
-      const source = readFileSync(inputFile, 'utf-8');
-      const compiler = new Compiler();
-      const result = compiler.compile(source);
-      const tmp = join(dirname(inputFile), `.${basename(inputFile)}.__rip__.mjs`);
-      let exitCode = 0;
-      try {
-        writeFileSync(tmp, result.code);
-        const r = spawnSync('bun', ['--preload', loaderPath, tmp, ...scriptArgs], { stdio: 'inherit', env: process.env });
-        exitCode = r.status ?? 1;
-      } catch (error) {
-        exitCode = error.status || 1;
-      }
-      try { unlinkSync(tmp); } catch {}
-      process.exit(exitCode);
     }
+
+    // Non-.rip files (e.g. shebang scripts): compile to temp file, execute, clean up
+    const source = readFileSync(inputFile, 'utf-8');
+    const result = new Compiler().compile(source);
+    const tmp = join(dirname(inputFile), `.${basename(inputFile)}.__rip__.mjs`);
+    let exitCode = 0;
+    try {
+      writeFileSync(tmp, result.code);
+      const r = spawnSync('bun', ['--preload', loaderPath, tmp, ...scriptArgs], { stdio: 'inherit', env: process.env });
+      exitCode = r.status ?? 1;
+    } catch (error) {
+      exitCode = error.status || 1;
+    }
+    try { unlinkSync(tmp); } catch {}
+    process.exit(exitCode);
   }
 
-  // Fallback: Check for bin/ script in git repo root
+  // Fallback: look for bin/{command} in git repo root
   // Allows `rip migrate --status` to find and run {repo}/bin/migrate
-  // Also triggers if inputFile is a directory (not a compilable file)
   if (inputFile && !inputFile.startsWith('-') && !isFile(inputFile)) {
     try {
-      // Check if we're in a git repo
       const repoRoot = execSync('git rev-parse --show-toplevel', {
         encoding: 'utf-8',
         stdio: ['pipe', 'pipe', 'pipe']
       }).trim();
-
-      // Look for bin/{command} in repo root
       const binScript = join(repoRoot, 'bin', inputFile);
-
       if (existsSync(binScript)) {
         const r = spawnSync(binScript, scriptArgs, { stdio: 'inherit', env: process.env });
         process.exit(r.status ?? 1);
       }
-    } catch {
-      // Not in a git repo, or git not available - fall through to normal error
-    }
+    } catch {}
   }
+
+  // --- Compile ---
 
   let source;
 
   try {
-    if (!inputFile) {
-      // Read from stdin if no file specified (file descriptor 0)
-      source = readFileSync(0, 'utf-8');
-    } else {
-      // Check if file exists and is a regular file
+    if (inputFile) {
       if (!isFile(inputFile)) {
         console.error(`Error: File not found: ${inputFile}`);
         process.exit(1);
       }
-      // Read source file
       source = readFileSync(inputFile, 'utf-8');
+    } else {
+      source = readFileSync(0, 'utf-8');
     }
 
-    // Compile
-    const compiler = new Compiler(options);
+    const compiler = new Compiler({ showTokens, showSExpr, quiet,
+      types: generateDts ? 'emit' : undefined,
+      sourceMap: generateMap ? 'inline' : undefined,
+    });
     const result = compiler.compile(source);
 
-    // Determine if we should show compiled output
-    // Show compiled JS if: -c flag, OR no debug flags (default mode), OR saving to file
     const shouldShowCompiled = showCompiled || (!showTokens && !showSExpr && !generateDts) || outputFile;
 
-    // Output
     if (outputFile) {
-      // Save to file
       writeFileSync(outputFile, result.code, 'utf-8');
-      if (!options.quiet) {
-        console.log(`Compiled to ${outputFile}`);
-      }
+      if (!quiet) console.log(`Compiled to ${outputFile}`);
     } else if (shouldShowCompiled) {
-      // Show compiled output to stdout
-      if (!options.quiet) {
-        console.log(`// == JavaScript output by Rip ${VERSION} == //\n`);
-      }
+      if (!quiet) console.log(`// == JavaScript output by Rip ${VERSION} == //\n`);
       console.log(result.code);
     }
 
-    // Show .d.ts type declarations to stdout
     if (generateDts && result.dts) {
-      if (!options.quiet) {
-        console.log(`// == Type declarations == //\n`);
-      }
+      if (!quiet) console.log(`// == Type declarations == //\n`);
       console.log(result.dts);
     }
-
   } catch (error) {
     console.error('Compilation Error:', error.message);
-    if (error.stack) {
-      console.error(error.stack);
-    }
+    if (error.stack) console.error(error.stack);
     process.exit(1);
   }
 }
