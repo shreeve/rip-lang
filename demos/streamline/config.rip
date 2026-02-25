@@ -10,6 +10,7 @@ export default
 
   database:
     url: process.env.DB_URL or 'http://localhost:4213'
+    file: 'streamline.duckdb'
 
   session:
     name: 'streamline'
