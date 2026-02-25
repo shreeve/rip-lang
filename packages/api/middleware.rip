@@ -3,7 +3,7 @@
 # ==============================================================================
 #
 # Usage:
-#   import { cors, logger, compress, sessions, prettyJson } from '@rip-lang/api/middleware'
+#   import { cors, logger, compress, sessions, prettyJson, serve } from '@rip-lang/api/middleware'
 #   import { session } from '@rip-lang/api'
 #
 #   use logger()
@@ -33,7 +33,10 @@
 #   preflight: boolean — handle OPTIONS before route matching (default: false)
 #
 
-import { enableCorsPreflight } from '@rip-lang/api'
+import { get, enableCorsPreflight } from '@rip-lang/api'
+import { fileURLToPath } from 'node:url'
+import { dirname } from 'node:path'
+import { existsSync } from 'node:fs'
 
 export cors = (opts = {}) ->
   origin = opts.origin or '*'
@@ -461,3 +464,95 @@ pre{margin:0;white-space:pre-wrap;word-break:break-word}
     status: status
     headers: new Headers({ 'content-type': 'text/html; charset=utf-8' })
   }
+
+# ==============================================================================
+# serve — Serve Rip Applications
+# ==============================================================================
+#
+# Serves the Rip browser bundle, app component files, and the component bundle.
+# Hot-reload SSE is handled by rip-server; this middleware registers watch dirs.
+#
+# Options:
+#   dir:        string    — app directory on disk (default: '.')
+#   routes:     string    — page components directory, relative to dir (default: 'routes')
+#   components: string[]  — shared component directories, relative to dir (default: ['components'])
+#   app:        string    — URL mount point (default: '')
+#   title:      string    — document title
+#   state:      object    — initial app state passed via bundle
+#   watch:      boolean   — enable hot-reload (registers watch dirs with rip-server)
+#
+
+export serve = (opts = {}) ->
+  prefix        = opts.app or ''
+  appDir        = opts.dir or '.'
+  routesDir     = "#{appDir}/#{opts.routes or 'routes'}"
+  componentDirs = (opts.components or ['components']).map (d) -> "#{appDir}/#{d}"
+  enableWatch   = opts.watch ? opts.watch : process.env.SOCKET_PREFIX?
+  appState      = opts.state or null
+  appTitle      = opts.title or null
+
+  # Resolve rip.min.js — walk up from cwd to find it (dev), then module resolution (prod)
+  bundlePath = do ->
+    dir = process.cwd()
+    while dir isnt dirname(dir)
+      candidate = "#{dir}/docs/dist/rip.min.js"
+      return candidate if existsSync(candidate)
+      dir = dirname(dir)
+    ripDir = dirname(dirname(fileURLToPath(import.meta.resolve('rip-lang'))))
+    "#{ripDir}/docs/dist/rip.min.js"
+  bundlePathBr = "#{bundlePath}.br"
+  hasBrotli = existsSync(bundlePathBr)
+
+  # Route: /rip/rip.min.js — serve the bundle, prefer pre-compressed Brotli
+  unless serve._registered
+    baseFile = Bun.file(bundlePath)
+    baseEtag = "W/\"#{baseFile.lastModified}-#{baseFile.size}\""
+    get "/rip/rip.min.js", (c) ->
+      if c.req.header('if-none-match') is baseEtag
+        return new Response(null, { status: 304, headers: { 'ETag': baseEtag, 'Cache-Control': 'no-cache' } })
+      useBr = hasBrotli and (c.req.header('Accept-Encoding') or '').includes('br')
+      headers = { 'Content-Type': 'application/javascript', 'Cache-Control': 'no-cache', 'ETag': baseEtag }
+      headers['Content-Encoding'] = 'br' if useBr
+      new Response (if useBr then Bun.file(bundlePathBr) else Bun.file(bundlePath)), { headers }
+    serve._registered = true
+
+  # Route: {prefix}/components/* — individual .rip component files
+  get "#{prefix}/components/*", (c) ->
+    name = c.req.path.slice("#{prefix}/components/".length)
+    c.send "#{routesDir}/#{name}", 'text/plain; charset=UTF-8'
+
+  # Route: {prefix}/bundle — all components + app data as JSON
+  get "#{prefix}/bundle", (c) ->
+    glob = new Bun.Glob("**/*.rip")
+    components = {}
+    paths = Array.from(glob.scanSync(routesDir))
+    for path in paths
+      components["components/#{path}"] = Bun.file("#{routesDir}/#{path}").text!
+
+    for dir in componentDirs
+      incPaths = Array.from(glob.scanSync(dir))
+      for path in incPaths
+        key = "components/_lib/#{path}"
+        components[key] = Bun.file("#{dir}/#{path}").text! unless components[key]
+
+    data = {}
+    data.title = appTitle if appTitle
+    data.watch = enableWatch
+    if appState
+      data[k] = v for k, v of appState
+
+    json = JSON.stringify({ components, data })
+    etag = "W/\"#{Bun.hash(json).toString(36)}\""
+    if c.req.header('if-none-match') is etag
+      return new Response(null, { status: 304, headers: { 'ETag': etag } })
+    new Response json, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', 'ETag': etag }
+
+  # Register watch directories with rip-server via control socket
+  if enableWatch and process.env.SOCKET_PREFIX
+    ctl = "/tmp/#{process.env.SOCKET_PREFIX}.ctl.sock"
+    dirs = [routesDir, ...componentDirs, "#{appDir}/css"]
+    body = JSON.stringify({ op: 'watch', prefix, dirs })
+    fetch('http://localhost/watch', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl }).catch (e) ->
+      console.warn "[Rip] Watch registration failed: #{e.message}"
+
+  (c, next) -> next!()

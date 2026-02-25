@@ -669,11 +669,11 @@ export default App ->
 
 ## Serving Rip UI Apps
 
-The `serve` middleware from `@rip-lang/api/serve` serves reactive Rip applications. It handles the framework bundle, component file serving, and hot-reload registration — everything needed to run a Rip UI app behind `@rip-lang/server`.
+The `serve` middleware from `@rip-lang/api/middleware` serves reactive Rip applications. It handles the framework bundle, component file serving, and hot-reload registration — everything needed to run a Rip UI app behind `@rip-lang/server`.
 
 ```coffee
 import { get, use, start, notFound } from '@rip-lang/api'
-import { serve } from '@rip-lang/api/serve'
+import { serve } from '@rip-lang/api/middleware'
 
 dir = import.meta.dir
 

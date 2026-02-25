@@ -1,7 +1,7 @@
 # Lab Results — Rip UI Demo
 
 import { get, use, start } from '@rip-lang/api'
-import { serve } from '@rip-lang/api/serve'
+import { serve } from '@rip-lang/api/middleware'
 
 dir = import.meta.dir
 

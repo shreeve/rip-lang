@@ -502,7 +502,7 @@ Key concepts:
 ```coffee
 # Server (index.rip)
 import { get, use, start, notFound } from '@rip-lang/api'
-import { serve } from '@rip-lang/api/serve'
+import { serve } from '@rip-lang/api/middleware'
 
 dir = import.meta.dir
 use serve dir: dir, title: 'My App', watch: true

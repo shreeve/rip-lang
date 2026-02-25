@@ -1316,7 +1316,7 @@ Zero-build reactive framework. Ships the compiler to the browser and compiles `.
 ```coffee
 # Server setup (index.rip)
 import { get, use, start, notFound } from '@rip-lang/api'
-import { serve } from '@rip-lang/api/serve'
+import { serve } from '@rip-lang/api/middleware'
 
 dir = import.meta.dir
 use serve dir: dir, watch: true

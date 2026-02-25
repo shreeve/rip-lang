@@ -489,7 +489,7 @@ Create `index.rip`:
 
 ```coffee
 import { get, use, start, notFound } from '@rip-lang/api'
-import { serve } from '@rip-lang/api/serve'
+import { serve } from '@rip-lang/api/middleware'
 
 dir = import.meta.dir
 

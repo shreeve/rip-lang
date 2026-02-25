@@ -110,7 +110,7 @@ Zero-build reactive web framework. The browser loads `rip.min.js` (compiler + UI
 
 ```coffee
 import { get, use, start, notFound } from '@rip-lang/api'
-import { serve } from '@rip-lang/api/serve'
+import { serve } from '@rip-lang/api/middleware'
 
 dir = import.meta.dir
 use serve dir: dir, title: 'My App', watch: true
