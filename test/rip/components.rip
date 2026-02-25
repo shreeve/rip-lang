@@ -287,7 +287,9 @@ code "simple conditional", '''
           const want = show ? 'then' : null;
           if (want === showing) return;
           if (currentBlock) {
-            currentBlock.d(true);
+            const leaving = currentBlock;
+            if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
+            else { leaving.d(true); }
             currentBlock = null;
           }
           showing = want;
@@ -296,6 +298,7 @@ code "simple conditional", '''
             currentBlock.c();
             if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
             currentBlock.p(this);
+            if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
           }
         });
       }
@@ -371,7 +374,9 @@ code "if-else conditional", '''
           const want = show ? 'then' : 'else';
           if (want === showing) return;
           if (currentBlock) {
-            currentBlock.d(true);
+            const leaving = currentBlock;
+            if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
+            else { leaving.d(true); }
             currentBlock = null;
           }
           showing = want;
@@ -380,12 +385,14 @@ code "if-else conditional", '''
             currentBlock.c();
             if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
             currentBlock.p(this);
+            if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
           }
           if (want === 'else') {
             currentBlock = create_block_1(this);
             currentBlock.c();
             if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
             currentBlock.p(this);
+            if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
           }
         });
       }
@@ -503,7 +510,9 @@ code "conditional inside loop threads loop vars", '''
             const want = show ? 'then' : null;
             if (want === showing) return;
             if (currentBlock) {
-              currentBlock.d(true);
+              const leaving = currentBlock;
+              if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
+              else { leaving.d(true); }
               currentBlock = null;
             }
             showing = want;
@@ -512,6 +521,7 @@ code "conditional inside loop threads loop vars", '''
               currentBlock.c();
               if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
               currentBlock.p(ctx, item, i);
+              if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
             }
           }));
         }
@@ -673,7 +683,9 @@ code "string containing 'this' in conditional factory", '''
           const want = show ? 'then' : null;
           if (want === showing) return;
           if (currentBlock) {
-            currentBlock.d(true);
+            const leaving = currentBlock;
+            if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
+            else { leaving.d(true); }
             currentBlock = null;
           }
           showing = want;
@@ -682,6 +694,7 @@ code "string containing 'this' in conditional factory", '''
             currentBlock.c();
             if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
             currentBlock.p(this);
+            if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
           }
         });
       }
@@ -1520,7 +1533,9 @@ code "conditional inside parent element", '''
           const want = show ? 'then' : null;
           if (want === showing) return;
           if (currentBlock) {
-            currentBlock.d(true);
+            const leaving = currentBlock;
+            if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
+            else { leaving.d(true); }
             currentBlock = null;
           }
           showing = want;
@@ -1529,6 +1544,7 @@ code "conditional inside parent element", '''
             currentBlock.c();
             if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
             currentBlock.p(this);
+            if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
           }
         });
       }
@@ -1592,7 +1608,9 @@ code "conditional with fragment (multiple then-children)", '''
           const want = show ? 'then' : null;
           if (want === showing) return;
           if (currentBlock) {
-            currentBlock.d(true);
+            const leaving = currentBlock;
+            if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
+            else { leaving.d(true); }
             currentBlock = null;
           }
           showing = want;
@@ -1601,6 +1619,7 @@ code "conditional with fragment (multiple then-children)", '''
             currentBlock.c();
             if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
             currentBlock.p(this);
+            if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
           }
         });
       }
@@ -1663,7 +1682,9 @@ code "reactive text inside conditional factory", '''
           const want = show ? 'then' : null;
           if (want === showing) return;
           if (currentBlock) {
-            currentBlock.d(true);
+            const leaving = currentBlock;
+            if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
+            else { leaving.d(true); }
             currentBlock = null;
           }
           showing = want;
@@ -1672,6 +1693,7 @@ code "reactive text inside conditional factory", '''
             currentBlock.c();
             if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
             currentBlock.p(this);
+            if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
           }
         });
       }
@@ -2218,3 +2240,173 @@ test "onError on parent catches child error", '''
   __popComponent(null)
   caught
   ''', "child boom"
+
+# ==============================================================================
+# Transitions — ~name syntax and codegen
+# ==============================================================================
+
+code "transition sets _t on block factory", '''
+  export A = component
+    show := true
+    render
+      if show
+        div ~fade
+          span "hello"
+  ''', '''
+  export const A = (() => {
+  function create_block_0(ctx) {
+    let _el1, _el2, _t0;
+    return {
+      c() {
+        _el1 = document.createElement('div');
+        this._t = "fade";
+        _el2 = document.createElement('span');
+        _t0 = document.createTextNode("hello");
+        _el2.appendChild(_t0);
+        _el1.appendChild(_el2);
+        this._first = _el1;
+      },
+      m(target, anchor) {
+        if (target) target.insertBefore(_el1, anchor);
+      },
+      p(ctx) {},
+      d(detaching) {
+        if (detaching && _el1) _el1.remove();
+      }
+    };
+  }
+
+  return class extends __Component {
+    _init(props) {
+      this.show = __state(true);
+    }
+    _create() {
+      this._anchor0 = document.createComment('if');
+      return this._anchor0;
+    }
+    _setup() {
+      // Conditional: create_block_0
+      {
+        const anchor = this._anchor0;
+        let currentBlock = null;
+        let showing = null;
+        __effect(() => {
+          const show = !!(this.show.value);
+          const want = show ? 'then' : null;
+          if (want === showing) return;
+          if (currentBlock) {
+            const leaving = currentBlock;
+            if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
+            else { leaving.d(true); }
+            currentBlock = null;
+          }
+          showing = want;
+          if (want === 'then') {
+            currentBlock = create_block_0(this);
+            currentBlock.c();
+            if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
+            currentBlock.p(this);
+            if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
+          }
+        });
+      }
+    }
+  };
+  })()
+  ''', opts
+
+code "transition with ~slide preset", '''
+  export A = component
+    render
+      div ~slide
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {}
+    _create() {
+      this._el0 = document.createElement('div');
+      this._t = "slide";
+      return this._el0;
+    }
+  }
+  ''', opts
+
+code "transition with ~scale preset", '''
+  export A = component
+    render
+      div ~scale
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {}
+    _create() {
+      this._el0 = document.createElement('div');
+      this._t = "scale";
+      return this._el0;
+    }
+  }
+  ''', opts
+
+code "no transition — no _t on block", '''
+  export A = component
+    show := true
+    render
+      if show
+        span "yes"
+  ''', '''
+  export const A = (() => {
+  function create_block_0(ctx) {
+    let _el1, _t0;
+    return {
+      c() {
+        _el1 = document.createElement('span');
+        _t0 = document.createTextNode("yes");
+        _el1.appendChild(_t0);
+        this._first = _el1;
+      },
+      m(target, anchor) {
+        if (target) target.insertBefore(_el1, anchor);
+      },
+      p(ctx) {},
+      d(detaching) {
+        if (detaching && _el1) _el1.remove();
+      }
+    };
+  }
+
+  return class extends __Component {
+    _init(props) {
+      this.show = __state(true);
+    }
+    _create() {
+      this._anchor0 = document.createComment('if');
+      return this._anchor0;
+    }
+    _setup() {
+      // Conditional: create_block_0
+      {
+        const anchor = this._anchor0;
+        let currentBlock = null;
+        let showing = null;
+        __effect(() => {
+          const show = !!(this.show.value);
+          const want = show ? 'then' : null;
+          if (want === showing) return;
+          if (currentBlock) {
+            const leaving = currentBlock;
+            if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }
+            else { leaving.d(true); }
+            currentBlock = null;
+          }
+          showing = want;
+          if (want === 'then') {
+            currentBlock = create_block_0(this);
+            currentBlock.c();
+            if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);
+            currentBlock.p(this);
+            if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');
+          }
+        });
+      }
+    }
+  };
+  })()
+  ''', opts

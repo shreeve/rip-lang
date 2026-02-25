@@ -241,6 +241,19 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       if (!inRender) return 1;
 
       // ─────────────────────────────────────────────────────────────────────
+      // Transition modifier
+      // div ~fade → div __transition__: "fade"
+      // ─────────────────────────────────────────────────────────────────────
+      if (tag === 'UNARY_MATH' && token[1] === '~' && nextToken && nextToken[0] === 'IDENTIFIER') {
+        token[0] = 'PROPERTY';
+        token[1] = '__transition__';
+        let colonToken = gen(':', ':', token);
+        let valueToken = gen('STRING', `"${nextToken[1]}"`, nextToken);
+        tokens.splice(i + 1, 1, colonToken, valueToken);
+        return 1;
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
       // Hyphenated attributes
       // data-lucide: "search" → "data-lucide": "search"
       // ─────────────────────────────────────────────────────────────────────
@@ -1189,6 +1202,13 @@ export function installComponentSupport(CodeGenerator, Lexer) {
           continue;
         }
 
+        // Transition: __transition__: "fade" → this._t = "fade" (on block, not DOM)
+        if (key === '__transition__') {
+          const transName = String(value).replace(/^["']|["']$/g, '');
+          this._createLines.push(`this._t = "${transName}";`);
+          continue;
+        }
+
         // Element ref: ref: "name" → this.name = element
         if (key === 'ref') {
           const refName = String(value).replace(/^["']|["']$/g, '');
@@ -1331,7 +1351,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     setupLines.push(`    if (want === showing) return;`);
     setupLines.push(``);
     setupLines.push(`    if (currentBlock) {`);
-    setupLines.push(`      currentBlock.d(true);`);
+    setupLines.push(`      const leaving = currentBlock;`);
+    setupLines.push(`      if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }`);
+    setupLines.push(`      else { leaving.d(true); }`);
     setupLines.push(`      currentBlock = null;`);
     setupLines.push(`    }`);
     setupLines.push(`    showing = want;`);
@@ -1341,6 +1363,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     setupLines.push(`      currentBlock.c();`);
     setupLines.push(`      if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);`);
     setupLines.push(`      currentBlock.p(${this._self}${outerExtra});`);
+    setupLines.push(`      if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');`);
     setupLines.push(`    }`);
     if (elseBlock) {
       setupLines.push(`    if (want === 'else') {`);
@@ -1348,6 +1371,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       setupLines.push(`      currentBlock.c();`);
       setupLines.push(`      if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);`);
       setupLines.push(`      currentBlock.p(${this._self}${outerExtra});`);
+      setupLines.push(`      if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');`);
       setupLines.push(`    }`);
     }
     setupLines.push(`  ${effClose}`);
@@ -1904,6 +1928,40 @@ function __reconcile(anchor, state, items, ctx, factory, keyFn, ...outer) {
   state.blocks = newBlocks;
 }
 
+let __cssInjected = false;
+function __transitionCSS() {
+  if (__cssInjected) return;
+  __cssInjected = true;
+  const s = document.createElement('style');
+  s.textContent = [
+    '.fade-enter-active,.fade-leave-active{transition:opacity .2s ease}',
+    '.fade-enter-from,.fade-leave-to{opacity:0}',
+    '.slide-enter-active,.slide-leave-active{transition:opacity .2s ease,transform .2s ease}',
+    '.slide-enter-from{opacity:0;transform:translateY(-8px)}',
+    '.slide-leave-to{opacity:0;transform:translateY(8px)}',
+    '.scale-enter-active,.scale-leave-active{transition:opacity .2s ease,transform .2s ease}',
+    '.scale-enter-from,.scale-leave-to{opacity:0;transform:scale(.95)}',
+  ].join('');
+  document.head.appendChild(s);
+}
+
+function __transition(el, name, dir, done) {
+  __transitionCSS();
+  const cl = el.classList;
+  const from = name + '-' + dir + '-from';
+  const active = name + '-' + dir + '-active';
+  const to = name + '-' + dir + '-to';
+  cl.add(from, active);
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      cl.remove(from);
+      cl.add(to);
+      const end = () => { cl.remove(active, to); if (done) done(); };
+      el.addEventListener('transitionend', end, { once: true });
+    });
+  });
+}
+
 function __handleComponentError(error, component) {
   let current = component;
   while (current) {
@@ -1954,7 +2012,7 @@ class __Component {
 
 // Register on globalThis for runtime deduplication
 if (typeof globalThis !== 'undefined') {
-  globalThis.__ripComponent = { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __handleComponentError, __Component };
+  globalThis.__ripComponent = { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __Component };
 }
 
 `;
