@@ -479,7 +479,7 @@ test/rip/
 ├── data.rip          ├── regex.rip
 ├── errors.rip        ├── semicolons.rip
 ├── functions.rip     ├── strings.rip
-├── guards.rip        └── types.rip
+└── guards.rip        └── types.rip
 ```
 
 ---
