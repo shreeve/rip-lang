@@ -398,16 +398,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       // Implicit nesting (inject -> before INDENT)
       // ─────────────────────────────────────────────────────────────────────
       if (nextToken && nextToken[0] === 'INDENT') {
-        // Skip fromThen INDENTs inside string interpolation (e.g. "#{if x then y else z}")
-        if (nextToken.fromThen) {
-          let depth = 0;
-          for (let j = i; j >= 0; j--) {
-            let jt = tokens[j][0];
-            if (jt === 'INTERPOLATION_END' || jt === 'STRING_END') depth++;
-            if (jt === 'INTERPOLATION_START' || jt === 'STRING_START') depth--;
-            if (depth < 0) { return 1; }
-          }
-        }
+        // fromThen INDENTs are inline conditional values (if x then y else z),
+        // never template nesting — normalizeLines only creates them for single-line then clauses
+        if (nextToken.fromThen) return 1;
         if (tag === '->' || tag === '=>' || tag === 'CALL_START' || tag === '(') {
           return 1;
         }
@@ -437,31 +430,17 @@ export function installComponentSupport(CodeGenerator, Lexer) {
           isTemplateElement = true;
         } else if (tag === 'IDENTIFIER' && isTemplateTag(token[1]) && !isAfterControlFlow) {
           isTemplateElement = true;
-        } else if (tag === 'PROPERTY' || tag === 'STRING' || tag === 'STRING_END' || tag === 'IDENTIFIER' || tag === 'NUMBER' || tag === 'BOOL' || tag === 'CALL_END' || tag === ')') {
+        } else if (tag === 'IDENTIFIER' && !isAfterControlFlow) {
           isTemplateElement = startsWithTag(tokens, i);
-        }
-        else if (tag === 'IDENTIFIER' && i > 1 && tokens[i - 1][0] === '...') {
-          if (startsWithTag(tokens, i)) {
-            let commaToken = gen(',', ',', token);
-            let arrowToken = gen('->', '->', token);
-            arrowToken.newLine = true;
-            tokens.splice(i + 1, 0, commaToken, arrowToken);
-            return 3;
-          }
+        } else if (tag === 'PROPERTY' || tag === 'STRING' || tag === 'STRING_END' || tag === 'NUMBER' || tag === 'BOOL' || tag === 'CALL_END' || tag === ')') {
+          isTemplateElement = startsWithTag(tokens, i);
         }
 
         if (isTemplateElement) {
           let isClassOrIdTail = tag === 'PROPERTY' && i > 0 && (tokens[i - 1][0] === '.' || tokens[i - 1][0] === '#');
+          let isBareTag = isClsxCallEnd || (tag === 'IDENTIFIER' && isTemplateTag(token[1])) || isClassOrIdTail;
 
-          if (isClsxCallEnd) {
-            let callStartToken = gen('CALL_START', '(', token);
-            let arrowToken = gen('->', '->', token);
-            arrowToken.newLine = true;
-            tokens.splice(i + 1, 0, callStartToken, arrowToken);
-            pendingCallEnds.push(currentIndent + 1);
-            return 3;
-          } else if ((tag === 'IDENTIFIER' && isTemplateTag(token[1])) || isClassOrIdTail) {
-            // Bare tag or tag.class/tag#id (no other args): inject CALL_START -> and manage CALL_END
+          if (isBareTag) {
             let callStartToken = gen('CALL_START', '(', token);
             let arrowToken = gen('->', '->', token);
             arrowToken.newLine = true;
@@ -469,7 +448,6 @@ export function installComponentSupport(CodeGenerator, Lexer) {
             pendingCallEnds.push(currentIndent + 1);
             return 3;
           } else {
-            // Tag with args: inject , -> (call wrapping handled by addImplicitBracesAndParens)
             let commaToken = gen(',', ',', token);
             let arrowToken = gen('->', '->', token);
             arrowToken.newLine = true;
@@ -1328,9 +1306,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
     const condCode = this.generateInComponent(condition, 'value');
 
-    // Collect loop variables from enclosing for-loops
-    const loopParams = this._loopVarStack.map(v => `${v.itemVar}, ${v.indexVar}`).join(', ');
-    const extraArgs = loopParams ? `, ${loopParams}` : '';
+    const outerParams = this._loopVarStack.map(v => `${v.itemVar}, ${v.indexVar}`).join(', ');
+    const outerExtra = outerParams ? `, ${outerParams}` : '';
 
     const thenBlockName = this.newBlockVar();
     this.generateConditionBranch(thenBlockName, thenBlock);
@@ -1359,17 +1336,17 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     setupLines.push(`    showing = want;`);
     setupLines.push(``);
     setupLines.push(`    if (want === 'then') {`);
-    setupLines.push(`      currentBlock = ${thenBlockName}(this${extraArgs});`);
+    setupLines.push(`      currentBlock = ${thenBlockName}(this${outerExtra});`);
     setupLines.push(`      currentBlock.c();`);
     setupLines.push(`      if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);`);
-    setupLines.push(`      currentBlock.p(this${extraArgs});`);
+    setupLines.push(`      currentBlock.p(this${outerExtra});`);
     setupLines.push(`    }`);
     if (elseBlock) {
       setupLines.push(`    if (want === 'else') {`);
-      setupLines.push(`      currentBlock = ${elseBlockName}(this${extraArgs});`);
+      setupLines.push(`      currentBlock = ${elseBlockName}(this${outerExtra});`);
       setupLines.push(`      currentBlock.c();`);
       setupLines.push(`      if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);`);
-      setupLines.push(`      currentBlock.p(this${extraArgs});`);
+      setupLines.push(`      currentBlock.p(this${outerExtra});`);
       setupLines.push(`    }`);
     }
     setupLines.push(`  });`);
@@ -1398,16 +1375,22 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     this._createLines = savedCreateLines;
     this._setupLines = savedSetupLines;
 
+    const outerParams = this._loopVarStack.map(v => `${v.itemVar}, ${v.indexVar}`).join(', ');
+    const extraParams = outerParams ? `, ${outerParams}` : '';
+
+    this.emitBlockFactory(blockName, `ctx${extraParams}`, rootVar, createLines, setupLines);
+  };
+
+  // --------------------------------------------------------------------------
+  // emitBlockFactory — shared factory generation for conditionals and loops
+  // --------------------------------------------------------------------------
+
+  proto.emitBlockFactory = function(blockName, params, rootVar, createLines, setupLines) {
     const localizeVar = (line) => this.localizeVar(line);
 
-    // Include enclosing loop variables in the factory signature
-    const loopParams = this._loopVarStack.map(v => `${v.itemVar}, ${v.indexVar}`).join(', ');
-    const extraParams = loopParams ? `, ${loopParams}` : '';
-
     const factoryLines = [];
-    factoryLines.push(`function ${blockName}(ctx${extraParams}) {`);
+    factoryLines.push(`function ${blockName}(${params}) {`);
 
-    // Declare local variables
     const localVars = new Set();
     for (const line of createLines) {
       const match = line.match(/^this\.(_(?:el|t|anchor|frag|slot|c|inst|empty)\d+)\s*=/);
@@ -1424,20 +1407,24 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
     factoryLines.push(`  return {`);
 
-    // c() - create
     factoryLines.push(`    c() {`);
     for (const line of createLines) {
       factoryLines.push(`      ${localizeVar(line)}`);
     }
     factoryLines.push(`    },`);
 
-    // m() - mount
+    const fragChildren = getFragChildren(rootVar, createLines, localizeVar);
     factoryLines.push(`    m(target, anchor) {`);
-    factoryLines.push(`      target.insertBefore(${localizeVar(rootVar)}, anchor);`);
+    if (fragChildren) {
+      for (const child of fragChildren) {
+        factoryLines.push(`      if (target) target.insertBefore(${child}, anchor);`);
+      }
+    } else {
+      factoryLines.push(`      if (target) target.insertBefore(${localizeVar(rootVar)}, anchor);`);
+    }
     factoryLines.push(`    },`);
 
-    // p() - update/patch
-    factoryLines.push(`    p(ctx${extraParams}) {`);
+    factoryLines.push(`    p(${params}) {`);
     if (hasEffects) {
       factoryLines.push(`      disposers.forEach(d => d());`);
       factoryLines.push(`      disposers = [];`);
@@ -1455,14 +1442,12 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     }
     factoryLines.push(`    },`);
 
-    // d() - destroy
     factoryLines.push(`    d(detaching) {`);
     if (hasEffects) {
       factoryLines.push(`      disposers.forEach(d => d());`);
     }
-    const condFragChildren = getFragChildren(rootVar, createLines, localizeVar);
-    if (condFragChildren) {
-      for (const child of condFragChildren) {
+    if (fragChildren) {
+      for (const child of fragChildren) {
         factoryLines.push(`      if (detaching && ${child}) ${child}.remove();`);
       }
     } else {
@@ -1521,9 +1506,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     this._createLines = [];
     this._setupLines = [];
 
-    // Capture enclosing loop variables before pushing current loop
-    const outerLoopParams = this._loopVarStack.map(v => `${v.itemVar}, ${v.indexVar}`).join(', ');
-    const outerExtra = outerLoopParams ? `, ${outerLoopParams}` : '';
+    const outerParams = this._loopVarStack.map(v => `${v.itemVar}, ${v.indexVar}`).join(', ');
+    const outerExtra = outerParams ? `, ${outerParams}` : '';
 
     this._loopVarStack.push({ itemVar, indexVar });
     const itemNode = this.generateTemplateBlock(body);
@@ -1534,84 +1518,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     this._createLines = savedCreateLines;
     this._setupLines = savedSetupLines;
 
-    const localizeVar = (line) => this.localizeVar(line);
-
-    // Generate block factory
-    const factoryLines = [];
-    factoryLines.push(`function ${blockName}(ctx, ${itemVar}, ${indexVar}${outerExtra}) {`);
-
-    const localVars = new Set();
-    for (const line of itemCreateLines) {
-      const match = line.match(/^this\.(_(?:el|t|anchor|frag|slot|c|inst|empty)\d+)\s*=/);
-      if (match) localVars.add(match[1]);
-    }
-    if (localVars.size > 0) {
-      factoryLines.push(`  let ${[...localVars].join(', ')};`);
-    }
-
-    const hasEffects = itemSetupLines.length > 0;
-    if (hasEffects) {
-      factoryLines.push(`  let disposers = [];`);
-    }
-
-    factoryLines.push(`  return {`);
-
-    // c() - create
-    factoryLines.push(`    c() {`);
-    for (const line of itemCreateLines) {
-      factoryLines.push(`      ${localizeVar(line)}`);
-    }
-    factoryLines.push(`    },`);
-
-    // m() - mount (also repositions already-mounted blocks)
-    const loopFragChildren = getFragChildren(itemNode, itemCreateLines, localizeVar);
-    factoryLines.push(`    m(target, anchor) {`);
-    if (loopFragChildren) {
-      for (const child of loopFragChildren) {
-        factoryLines.push(`      if (target) target.insertBefore(${child}, anchor);`);
-      }
-    } else {
-      factoryLines.push(`      if (target) target.insertBefore(${localizeVar(itemNode)}, anchor);`);
-    }
-    factoryLines.push(`    },`);
-
-    // p() - update
-    factoryLines.push(`    p(ctx, ${itemVar}, ${indexVar}${outerExtra}) {`);
-    if (hasEffects) {
-      factoryLines.push(`      disposers.forEach(d => d());`);
-      factoryLines.push(`      disposers = [];`);
-      for (const line of itemSetupLines) {
-        const localizedLine = localizeVar(line);
-        const wrappedLine = localizedLine.replace(
-          /__effect\(\(\) => \{/g,
-          'disposers.push(__effect(() => {'
-        ).replace(
-          /\}\);$/gm,
-          '}));'
-        );
-        factoryLines.push(`      ${wrappedLine}`);
-      }
-    }
-    factoryLines.push(`    },`);
-
-    // d() - destroy
-    factoryLines.push(`    d(detaching) {`);
-    if (hasEffects) {
-      factoryLines.push(`      disposers.forEach(d => d());`);
-    }
-    if (loopFragChildren) {
-      for (const child of loopFragChildren) {
-        factoryLines.push(`      if (detaching && ${child}) ${child}.remove();`);
-      }
-    } else {
-      factoryLines.push(`      if (detaching && ${localizeVar(itemNode)}) ${localizeVar(itemNode)}.remove();`);
-    }
-    factoryLines.push(`    }`);
-
-    factoryLines.push(`  };`);
-    factoryLines.push(`}`);
-
-    this._blockFactories.push(factoryLines.join('\n'));
+    const loopParams = `ctx, ${itemVar}, ${indexVar}${outerExtra}`;
+    this.emitBlockFactory(blockName, loopParams, itemNode, itemCreateLines, itemSetupLines);
 
     // Generate reconciliation code in _setup()
     const setupLines = [];
@@ -1688,56 +1596,43 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     let childrenVar = null;
     const childrenSetupLines = [];
 
+    // Simple reactive values pass the signal directly for shared reactivity;
+    // complex expressions use normal .value unwrapping to compute the value.
+    const addProp = (key, value) => {
+      const isDirectSignal = this.reactiveMembers && (
+        (typeof value === 'string' && this.reactiveMembers.has(value)) ||
+        (Array.isArray(value) && value[0] === '.' && value[1] === 'this' && typeof value[2] === 'string' && this.reactiveMembers.has(value[2]))
+      );
+      if (isDirectSignal) {
+        const member = typeof value === 'string' ? value : value[2];
+        props.push(`${key}: this.${member}`);
+      } else {
+        const valueCode = this.generateInComponent(value, 'value');
+        props.push(`${key}: ${valueCode}`);
+        if (this.hasReactiveDeps(value)) {
+          reactiveProps.push({ key, valueCode });
+        }
+      }
+    };
+
+    const addObjectProps = (objExpr) => {
+      for (let i = 1; i < objExpr.length; i++) {
+        const [key, value] = objExpr[i];
+        if (typeof key === 'string') addProp(key, value);
+      }
+    };
+
     for (const arg of args) {
       if (this.is(arg, 'object')) {
-        for (let i = 1; i < arg.length; i++) {
-          const [key, value] = arg[i];
-          if (typeof key === 'string') {
-            // Simple reactive identifier — pass signal directly for shared reactivity.
-            // Complex expressions — use normal .value unwrapping to compute the value.
-            const isSimpleReactive = this.reactiveMembers && (
-              (typeof value === 'string' && this.reactiveMembers.has(value)) ||
-              (Array.isArray(value) && value[0] === '.' && value[1] === 'this' && typeof value[2] === 'string' && this.reactiveMembers.has(value[2]))
-            );
-            if (isSimpleReactive) {
-              const member = typeof value === 'string' ? value : value[2];
-              props.push(`${key}: this.${member}`);
-            } else {
-              const valueCode = this.generateInComponent(value, 'value');
-              props.push(`${key}: ${valueCode}`);
-              if (this.hasReactiveDeps(value)) {
-                reactiveProps.push({ key, valueCode });
-              }
-            }
-          }
-        }
+        addObjectProps(arg);
       } else if (Array.isArray(arg) && (arg[0] === '->' || arg[0] === '=>')) {
         let block = arg[2];
         if (block) {
-          // Indented attributes: extract object nodes from block as props
           if (this.is(block, 'block')) {
             const domChildren = [];
             for (const child of block.slice(1)) {
               if (this.is(child, 'object')) {
-                for (let i = 1; i < child.length; i++) {
-                  const [key, value] = child[i];
-                  if (typeof key === 'string') {
-                    const isSimpleReactive = this.reactiveMembers && (
-                      (typeof value === 'string' && this.reactiveMembers.has(value)) ||
-                      (Array.isArray(value) && value[0] === '.' && value[1] === 'this' && typeof value[2] === 'string' && this.reactiveMembers.has(value[2]))
-                    );
-                    if (isSimpleReactive) {
-                      const member = typeof value === 'string' ? value : value[2];
-                      props.push(`${key}: this.${member}`);
-                    } else {
-                      const valueCode = this.generateInComponent(value, 'value');
-                      props.push(`${key}: ${valueCode}`);
-                      if (this.hasReactiveDeps(value)) {
-                        reactiveProps.push({ key, valueCode });
-                      }
-                    }
-                  }
-                }
+                addObjectProps(child);
               } else {
                 domChildren.push(child);
               }
