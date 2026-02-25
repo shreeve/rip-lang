@@ -50,6 +50,8 @@ startDb = ->
 
 export setup = ->
   unless dbReachable!
+    if process.env.RIP_WORKER_MODE
+      abort "Database not available at #{DB_URL}"
     p "[setup] Starting rip-db #{DB_FILE}..."
     startDb!
     p "[setup] DuckDB UI: #{DB_URL}"
