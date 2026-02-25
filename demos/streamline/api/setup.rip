@@ -23,7 +23,10 @@ dbFetch = (sql, params) ->
   data
 
 export setup = ->
-  check = dbFetch! "SELECT count(*) FROM information_schema.tables WHERE table_name = 'spots'"
+  try
+    check = dbFetch! "SELECT count(*) FROM information_schema.tables WHERE table_name = 'spots'"
+  catch
+    abort "Database not available at #{DB_URL}\n\n  Start it with: rip-db streamline.duckdb\n"
   return if check.data?[0]?[0] > 0
 
   for stmt in schema.toSQL().split(';')
