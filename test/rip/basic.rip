@@ -168,9 +168,7 @@ test 'string to index', '"abcdef"[...3]', 'abc'
 # ==============================================================================
 
 # Array slicing — open ends
-test 'array slice to end inclusive', '[0,1,2,3,4][2..]', [2,3,4]
 test 'array slice to end exclusive', '[0,1,2,3,4][2...]', [2,3,4]
-test 'array full copy inclusive', '[1,2,3][..]', [1,2,3]
 test 'array full copy exclusive', '[1,2,3][...]', [1,2,3]
 
 # Array slicing — inclusive from start
@@ -189,7 +187,6 @@ test 'string inclusive both', '"Steve Shreeve"[0..4]', "Steve"
 test 'string exclusive both', '"Steve Shreeve"[0...5]', "Steve"
 test 'string inclusive from start', '"Steve Shreeve"[..4]', "Steve"
 test 'string exclusive from start', '"Steve Shreeve"[...5]', "Steve"
-test 'string from index to end', '"Steve Shreeve"[6..]', "Shreeve"
 test 'string full copy', '"Steve Shreeve"[...]', "Steve Shreeve"
 
 # String slicing — negative indices

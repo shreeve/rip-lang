@@ -172,14 +172,28 @@ async function main() {
     }
   }
 
-  // Execute script directly (no compile flags)
+  // Stdin: write to temp .rip file so it flows through the normal execution/compile paths
   const hasCompileFlag = showCompiled || showTokens || showSExpr || generateDts || generateMap || outputFile;
+  if (!inputFile) {
+    const tmp = join(process.cwd(), '.__rip_stdin__.rip');
+    try {
+      writeFileSync(tmp, readFileSync(0, 'utf-8'));
+      inputFile = tmp;
+    } catch (error) {
+      console.error('Error reading stdin:', error.message);
+      process.exit(1);
+    }
+  }
+
+  // Execute script directly (no compile flags)
+  const isStdin = inputFile?.endsWith('.__rip_stdin__.rip');
   if (inputFile && !hasCompileFlag && isFile(inputFile)) {
     if (inputFile.endsWith('.rip')) {
       const result = spawnSync('bun', ['--preload', loaderPath, inputFile, ...scriptArgs], {
         stdio: 'inherit',
         env: process.env
       });
+      if (isStdin) try { unlinkSync(inputFile); } catch {}
       process.exit(result.status ?? 1);
     }
 
@@ -215,21 +229,16 @@ async function main() {
     } catch {}
   }
 
-  // --- Compile ---
+  // --- Compile (with flags) ---
 
-  let source;
+  if (!isFile(inputFile)) {
+    console.error(`Error: File not found: ${inputFile}`);
+    process.exit(1);
+  }
+
+  let source = readFileSync(inputFile, 'utf-8');
 
   try {
-    if (inputFile) {
-      if (!isFile(inputFile)) {
-        console.error(`Error: File not found: ${inputFile}`);
-        process.exit(1);
-      }
-      source = readFileSync(inputFile, 'utf-8');
-    } else {
-      source = readFileSync(0, 'utf-8');
-    }
-
     const compiler = new Compiler({ showTokens, showSExpr, quiet,
       types: generateDts ? 'emit' : undefined,
       sourceMap: generateMap ? 'inline' : undefined,
@@ -242,17 +251,6 @@ async function main() {
     } else if (showCompiled) {
       if (!quiet) console.log(`// == JavaScript output by Rip ${VERSION} == //\n`);
       console.log(result.code);
-    } else if (!showTokens && !showSExpr && !generateDts) {
-      // No compile flags: execute the compiled code
-      const tmp = join(process.cwd(), '.__rip_stdin__.mjs');
-      let exitCode = 0;
-      try {
-        writeFileSync(tmp, result.code);
-        const r = spawnSync('bun', ['--preload', loaderPath, tmp], { stdio: 'inherit', env: process.env });
-        exitCode = r.status ?? 1;
-      } catch (e) { exitCode = 1; }
-      try { unlinkSync(tmp); } catch {}
-      process.exit(exitCode);
     }
 
     if (generateDts && result.dts) {
@@ -263,6 +261,8 @@ async function main() {
     console.error('Compilation Error:', error.message);
     if (error.stack) console.error(error.stack);
     process.exit(1);
+  } finally {
+    if (isStdin) try { unlinkSync(inputFile); } catch {}
   }
 }
 
