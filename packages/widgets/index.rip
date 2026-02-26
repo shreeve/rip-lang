@@ -1,13 +1,13 @@
 # Widget Gallery — dev server for testing all widgets
 
-import { get, use, start } from '@rip-lang/server'
+import { get, use, start, notFound } from '@rip-lang/server'
 import { serve } from '@rip-lang/server/middleware'
 
 dir = import.meta.dir
 
-use serve dir: "#{dir}/demo"
+use serve dir: dir, watch: true
 
-get '/*.rip' -> @send "#{dir}/#{@req.path.slice(1)}", 'text/plain; charset=UTF-8'
-get '/*' -> @send "#{dir}/demo/index.html", 'text/html; charset=UTF-8'
+get '/*.rip', -> @send "#{dir}/#{@req.path.slice(1)}", 'text/plain; charset=UTF-8'
+notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 
 start port: 3005
