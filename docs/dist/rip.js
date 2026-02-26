@@ -1522,7 +1522,7 @@
             return 0;
           let m = /^#([a-zA-Z_][\w-]*)/.exec(this.chunk);
           if (m) {
-            this.emit("IDENTIFIER", "div#" + m[1]);
+            this.emit("IDENTIFIER", m[1] === "content" ? "slot" : "div#" + m[1]);
             return m[0].length;
           }
         }
@@ -4197,19 +4197,25 @@ ${blockFactoriesCode}return ${lines.join(`
         } else if (this.is(arg, "object")) {
           this.generateAttributes(elVar, arg);
         } else if (typeof arg === "string" || arg instanceof String) {
-          const textVar = this.newTextVar();
           const val = arg.valueOf();
-          if (val.startsWith('"') || val.startsWith("'") || val.startsWith("`")) {
-            this._createLines.push(`${textVar} = document.createTextNode(${val});`);
-          } else if (this.reactiveMembers && this.reactiveMembers.has(val)) {
-            this._createLines.push(`${textVar} = document.createTextNode('');`);
-            this._pushEffect(`${textVar}.data = ${this._self}.${val}.value;`);
-          } else if (this.componentMembers && this.componentMembers.has(val)) {
-            this._createLines.push(`${textVar} = document.createTextNode(String(${this._self}.${val}));`);
+          const [tagPart, idPart] = val.split("#");
+          if (this.isHtmlTag(tagPart || "div") || this.isComponent(val)) {
+            const childVar = this.generateNode(arg);
+            this._createLines.push(`${elVar}.appendChild(${childVar});`);
           } else {
-            this._createLines.push(`${textVar} = document.createTextNode(${this.generateInComponent(arg, "value")});`);
+            const textVar = this.newTextVar();
+            if (val.startsWith('"') || val.startsWith("'") || val.startsWith("`")) {
+              this._createLines.push(`${textVar} = document.createTextNode(${val});`);
+            } else if (this.reactiveMembers && this.reactiveMembers.has(val)) {
+              this._createLines.push(`${textVar} = document.createTextNode('');`);
+              this._pushEffect(`${textVar}.data = ${this._self}.${val}.value;`);
+            } else if (this.componentMembers && this.componentMembers.has(val)) {
+              this._createLines.push(`${textVar} = document.createTextNode(String(${this._self}.${val}));`);
+            } else {
+              this._createLines.push(`${textVar} = document.createTextNode(${this.generateInComponent(arg, "value")});`);
+            }
+            this._createLines.push(`${elVar}.appendChild(${textVar});`);
           }
-          this._createLines.push(`${elVar}.appendChild(${textVar});`);
         } else if (arg) {
           const childVar = this.generateNode(arg);
           this._createLines.push(`${elVar}.appendChild(${childVar});`);
@@ -8514,7 +8520,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.27";
-  var BUILD_DATE = "2026-02-26@04:30:45GMT";
+  var BUILD_DATE = "2026-02-26@05:09:19GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -9589,7 +9595,7 @@ ${indented}`);
               mp.appendChild(wrapper);
               inst.mount(wrapper);
               layoutInstances.push(inst);
-              slot = wrapper.querySelector("#content") || wrapper;
+              slot = wrapper.querySelector("slot") || wrapper;
               mp = slot;
             }
             currentLayouts = [...layoutFiles];
