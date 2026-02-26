@@ -205,6 +205,7 @@ All use `globalThis` with `??=` — override any by redeclaring locally.
 | `!` (void) | `def process!` | Suppresses implicit return |
 | `!?` (otherwise) | `val !? 5` | Default only if `undefined` (infix) |
 | `!?` (defined) | `val!?` | True if not `undefined` (postfix) |
+| `?!` (presence) | `@checked?!` | True if truthy, else `undefined` (Houdini operator) |
 | `?` (existence) | `x?` | True if `x != null` |
 | `?:` (ternary) | `x > 0 ? 'yes' : 'no'` | JS-style ternary expression |
 | `if...else` (postfix) | `"yes" if cond else "no"` | Python-style ternary expression |

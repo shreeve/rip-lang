@@ -172,6 +172,8 @@ Complete node type reference:
 ['!', expr]          ['~', expr]          ['typeof', expr]
 ['delete', expr]     ['instanceof', expr, type]
 ['?', expr]          // Existence check
+['defined', expr]    // Defined check (!?)
+['presence', expr]   // Presence check (?!) — Houdini operator
 ['++', expr, isPostfix]  ['--', expr, isPostfix]
 
 // Control Flow
@@ -963,6 +965,7 @@ Static files (`demo.html`, `charts.html`, `sierpinski.html`) work from `file://`
 | `for...as` iteration | `for x as iter` | ES6 `for...of` on iterables |
 | `as!` async shorthand | `for x as! iter` | Shorthand for `for await x as iter` |
 | Defined check | `x!?` | Postfix `!?` — true if not undefined |
+| Presence check | `x?!` | Postfix `?!` — true if truthy, else undefined (Houdini operator) |
 
 ### Kept
 
@@ -1018,6 +1021,7 @@ rip> .js      # Toggle JS display
 | `=!` | Readonly | `MAX =! 100` — const ("equals, dammit!") |
 | `!?` | Otherwise | `val !? 5` — default if undefined (infix) |
 | `!?` | Defined | `val!?` — true if not undefined (postfix) |
+| `?!` | Presence | `@checked?!` — true if truthy, else undefined (Houdini) |
 | `?` | Existence | `x?` — true if not null/undefined |
 | `//` | Floor div | `7 // 2` — 3 |
 | `%%` | True mod | `-1 %% 3` — 2 |

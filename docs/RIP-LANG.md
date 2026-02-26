@@ -295,6 +295,7 @@ Multiple lines
 | `of` | `k of obj` | Object key existence |
 | `?` (postfix) | `a?` | Existence check (`a != null`) |
 | `!?` (postfix) | `a!?` | Defined check (`a !== undefined`) |
+| `?!` (postfix) | `a?!` | Presence check — true if truthy, else undefined |
 | `?` (ternary) | `a ? b : c` | Ternary conditional |
 | `if...else` (postfix) | `b if a else c` | Python-style ternary |
 | `?.` `?.[]` `?.()` | `a?.b` `a?.[0]` `a?.()` | Optional chaining (ES6) |
@@ -315,6 +316,7 @@ Multiple lines
 | `!` | Void | `def process!` | Suppresses implicit return |
 | `!?` | Otherwise | `val !? 5` | Default if undefined (infix) |
 | `!?` | Defined | `val!?` | True if not undefined (postfix) |
+| `?!` | Presence | `@checked?!` | `(this.checked ? true : undefined)` — Houdini operator |
 | `=~` | Match | `str =~ /pat/` | Ruby-style regex match, captures in `_` |
 | `::` | Prototype | `String::trim` | `String.prototype.trim` |
 | `[-n]` | Negative index | `arr[-1]` | `arr.at(-1)` |
@@ -404,6 +406,40 @@ The postfix form mirrors `?` (existence check) but with tighter semantics:
 |----------|--------|--------|-------------|-----|---------|------|
 | `v?` | not nullish | false | false | true | true | true |
 | `v!?` | not undefined | true | false | true | true | true |
+| `v?!` | truthy presence | `undefined` | `undefined` | `undefined` | `undefined` | `undefined` |
+
+Note: `v?!` returns `true` for truthy values, `undefined` for falsy values.
+
+## Presence Operator (`?!`) — The Houdini
+
+The `?!` operator (postfix, unspaced) returns `true` if the value is truthy,
+or `undefined` if it's falsy. Now you see it… now you don't.
+
+```coffee
+@checked?!           # (this.checked ? true : undefined)
+(idx is active)?!    # ((idx === active) ? true : undefined)
+```
+
+Designed for `data-*` attributes in headless UI components, where falsy values
+need to *remove* the attribute rather than set it to `"false"`:
+
+```coffee
+# Before — verbose and repetitive
+data-checked: (@checked or undefined),
+data-disabled: (@disabled or undefined),
+
+# After — clean and expressive
+data-checked: @checked?!,
+data-disabled: @disabled?!,
+```
+
+Works with any expression, not just identifiers:
+
+```coffee
+data-highlighted: (idx is highlightedIndex)?!,
+data-selected: (opt.value is String(@value))?!,
+data-active: (tab is @active)?!,
+```
 
 ## Method Assignment (`.=`)
 
@@ -1952,6 +1988,7 @@ X.new(a: 1)
 a!             # await a()
 a !? b         # a if defined, else b (infix otherwise)
 a!?            # true if a is defined (postfix defined check)
+a?!            # true if truthy, else undefined (Houdini)
 a // b         # floor divide
 a %% b         # true modulo
 a =~ /pat/     # regex match, captures in _
