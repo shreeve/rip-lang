@@ -100,12 +100,12 @@ export Menu = component
       button._triggerEl
         aria-haspopup: "menu",
         aria-expanded: (if open then 'true' else 'false'),
-        data-open: (open or undefined),
-        data-disabled: (@disabled or undefined),
+        data-open: open?!,
+        data-disabled: @disabled?!,
         disabled: @disabled,
         @click: @toggle,
         @keydown: @onTriggerKeydown
-        #content
+        slot
 
       if open
         .('fixed inset-0 z-50') @click: @onBackdropClick
@@ -113,8 +113,8 @@ export Menu = component
           for item, idx in items
             div role: "menuitem",
               tabindex: "-1",
-              data-highlighted: (idx is highlightedIndex or undefined),
-              data-disabled: (item.dataset.disabled or undefined),
+              data-highlighted: (idx is highlightedIndex)?!,
+              data-disabled: item.dataset.disabled?!,
               @click: (=> @selectItem(idx)),
               @mouseenter: (=> highlightedIndex = idx)
               item.textContent

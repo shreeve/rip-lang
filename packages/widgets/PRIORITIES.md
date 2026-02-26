@@ -31,7 +31,7 @@ before it. The theme: stop building new things and start proving what exists.
    work, selected value updates the trigger label, `data-highlighted` and
    `data-selected` are set correctly.
 
-6. **Fix the Menu structural issue.** The `#content` slot renders inside the
+6. **Fix the Menu structural issue.** The `slot` slot renders inside the
    trigger button, making menu items unreachable by `_menuEl`. Adopt the
    same hidden-slot pattern that Select uses for option discovery. This is
    a real bug, not a design preference.
@@ -75,7 +75,7 @@ before it. The theme: stop building new things and start proving what exists.
     your content in a div with `data-content`") or restructure the widget
     to query `[data-trigger]` and `[data-content]` children explicitly.
     The current "first child is trigger, second is content" is ambiguous
-    because `#content` renders everything into one slot.
+    because `slot` renders everything into one slot.
 
 14. **Add dark mode tokens to the labs app CSS.** The patterns are documented
     in ARCHITECTURE.md. Add `@media (prefers-color-scheme: dark)` blocks to

@@ -140,8 +140,8 @@ export Select = component
       button._triggerEl role: "combobox",
         aria-expanded: (if open then 'true' else 'false'),
         aria-haspopup: "listbox",
-        data-open: (open or undefined),
-        data-disabled: (@disabled or undefined),
+        data-open: open?!,
+        data-disabled: @disabled?!,
         disabled: @disabled,
         @click: @toggle,
         @keydown: @onTriggerKeydown
@@ -149,7 +149,7 @@ export Select = component
 
       # Hidden slot for reading option definitions
       ._slotEl style: "display:none"
-        #content
+        slot
 
       # Dropdown listbox
       if open
@@ -161,8 +161,8 @@ export Select = component
             div role: "option",
               tabindex: "-1",
               data-value: opt.dataset.value,
-              data-highlighted: (idx is highlightedIndex or undefined),
-              data-selected: (opt.dataset.value is String(@value) or undefined),
+              data-highlighted: (idx is highlightedIndex)?!,
+              data-selected: (opt.dataset.value is String(@value))?!,
               aria-selected: (if opt.dataset.value is String(@value) then 'true' else 'false'),
               @click: (=> @onOptionClick(idx)),
               @mouseenter: (=> @onOptionMouseenter(idx))

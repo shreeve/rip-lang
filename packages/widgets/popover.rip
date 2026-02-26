@@ -87,9 +87,9 @@ export Popover = component
         aria-haspopup: "dialog",
         @click: @toggle,
         @keydown: @onTriggerKeydown
-        #content
+        slot
 
       if open
         .('fixed inset-0 z-50') @click: @onBackdropClick, @keydown: @onKeydown
         div._floatingEl data-open: true, data-placement: @placement
-          #content
+          slot

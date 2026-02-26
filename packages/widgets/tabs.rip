@@ -59,12 +59,12 @@ export Tabs = component
           button role: "tab",
             aria-selected: (if tab.dataset.tab is @active then 'true' else 'false'),
             tabindex: (if tab.dataset.tab is @active then '0' else '-1'),
-            data-active: (tab.dataset.tab is @active or undefined),
+            data-active: (tab.dataset.tab is @active)?!,
             @click: (=> @select(tab.dataset.tab))
             tab.textContent
 
       for panel in _panelEls
         div role: "tabpanel",
-          data-active: (panel.dataset.panel is @active or undefined),
-          hidden: (panel.dataset.panel isnt @active or undefined)
-          #content
+          data-active: (panel.dataset.panel is @active)?!,
+          hidden: (panel.dataset.panel isnt @active)?!
+          slot

@@ -28,10 +28,14 @@ export Checkbox = component
       e.preventDefault()
       @toggle()
 
-  _role ~= if @switch then 'switch' else 'checkbox'
-  _ariaChecked ~= if @indeterminate then 'mixed' else if @checked then 'true' else 'false'
-  _ariaDisabled ~= if @disabled then 'true' else undefined
-
   render
-    button role: _role, aria-checked: _ariaChecked, aria-disabled: _ariaDisabled, tabindex: '0', data-checked: (@checked or undefined), data-indeterminate: (@indeterminate or undefined), data-disabled: (@disabled or undefined), @click: @toggle, @keydown: @onKeydown,
-      #content
+    button role: (if @switch then 'switch' else 'checkbox'),
+      aria-checked: (if @indeterminate then 'mixed' else if @checked then 'true' else 'false'),
+      aria-disabled: (if @disabled then 'true' else undefined),
+      tabindex: '0',
+      data-checked: @checked?!,
+      data-indeterminate: @indeterminate?!,
+      data-disabled: @disabled?!,
+      @click: @toggle,
+      @keydown: @onKeydown
+      slot

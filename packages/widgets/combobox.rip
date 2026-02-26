@@ -85,7 +85,7 @@ export Combobox = component
     @openMenu()
 
   render
-    . data-open: (open or undefined)
+    . data-open: open?!
 
       # Text input
       input._inputEl role: "combobox",
@@ -94,7 +94,7 @@ export Combobox = component
         aria-expanded: (if open then 'true' else 'false'),
         aria-haspopup: "listbox",
         aria-autocomplete: "list",
-        data-disabled: (@disabled or undefined),
+        data-disabled: @disabled?!,
         disabled: @disabled,
         placeholder: @placeholder,
         value: @query,
@@ -106,9 +106,9 @@ export Combobox = component
       if open and items.length > 0
         .('fixed inset-0 z-40') @click: @onBackdropClick
         div._listEl role: "listbox", data-open: true
-          #content
+          slot
 
       # Pass slot content to hidden container when closed (for reading items)
       unless open
         div._listEl style: "display:none"
-          #content
+          slot

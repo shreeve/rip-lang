@@ -83,4 +83,4 @@ export Dialog = component
         @click: @onBackdropClick,
         @keydown: @onKeydown
         div._panelEl role: "dialog", aria-modal: "true", tabindex: "-1"
-          #content
+          slot

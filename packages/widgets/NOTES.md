@@ -59,7 +59,7 @@ semantic state attributes. This keeps the headless contract clean.
   popup open on selection.
 - The slot content approach (hidden div holding `<option>` definitions) is a
   workaround for reading children declaratively. Investigate whether Rip's
-  `#content` slot can be queried directly without a hidden container.
+  `slot` slot can be queried directly without a hidden container.
 
 ## Combobox
 
@@ -112,9 +112,9 @@ semantic state attributes. This keeps the headless contract clean.
 - No arrow/caret element. Many popover designs want a small triangle pointing
   at the trigger. This requires knowing the placement direction and
   positioning a pseudo-element. Doable with CSS `[data-placement]` attribute.
-- The trigger is the first child of `#content` and the popover body is the
+- The trigger is the first child of `slot` and the popover body is the
   second child. This slot-based approach works but the two children need to
-  be distinguished — currently both render into the same `#content` slot.
+  be distinguished — currently both render into the same `slot` slot.
   This may need Rip UI named slots or a different structural approach.
 
 ## Tooltip
@@ -149,7 +149,7 @@ semantic state attributes. This keeps the headless contract clean.
   `role="region"` on content panels. Every other interactive widget has
   proper ARIA. This needs to be added.
 - **Incomplete render wiring.** The render block is just `div._el` →
-  `#content`. The component defines methods (`toggle`, `isOpen`,
+  `slot`. The component defines methods (`toggle`, `isOpen`,
   `onTriggerKeydown`) but doesn't wire them to any DOM elements. Consumers
   must wire events manually. Consider whether the widget should manage
   rendering like Select/Tabs do.
@@ -174,7 +174,7 @@ semantic state attributes. This keeps the headless contract clean.
 
 ## Menu
 
-- **Structural `#content` issue.** The `#content` slot renders inside the
+- **Structural `slot` issue.** The `slot` slot renders inside the
   trigger button, but the items computed queries `_menuEl` (a separate
   container that only exists when open). This means item discovery may not
   work correctly. Needs architectural review — probably needs the trigger
@@ -313,18 +313,18 @@ here so future contributors understand the failure modes.
 These are known architectural problems that require more thought than a
 quick fix. They're documented here so they aren't forgotten.
 
-**Accordion — incomplete wiring.** The render block passes `#content`
+**Accordion — incomplete wiring.** The render block passes `slot`
 through without wiring events or setting `data-open` attributes. The
 component provides methods but doesn't use them in its own render. This
 makes it the least "widget-like" widget — more of a behavior mixin.
 
-**Menu — `#content` in wrong container.** Slot children (trigger + items)
+**Menu — `slot` in wrong container.** Slot children (trigger + items)
 all render inside the trigger button. The items computed queries `_menuEl`
 which is a separate element. Items aren't reachable. Needs the same
 hidden-slot pattern that Select uses, or a different structural approach.
 
-**Popover — dual `#content`.** Both the trigger div and the floating panel
-contain `#content`. There's no mechanism to split children between the two
+**Popover — dual `slot`.** Both the trigger div and the floating panel
+contain `slot`. There's no mechanism to split children between the two
 slots. Rip UI would need named slots for this to work correctly.
 
 **Grid — hardcoded selection color.** `#3b82f6` appears in the selection

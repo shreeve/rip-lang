@@ -172,7 +172,7 @@ button { font: inherit; cursor: pointer; }
 @keyframes slideIn { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
   </style>
   <script defer src="/rip/rip.min.js"
-    data-src="/checkbox.rip"
+    data-src="/checkbox.rip /toast.rip /dialog.rip /select.rip /combobox.rip /popover.rip /tooltip.rip /tabs.rip /accordion.rip /menu.rip /grid.rip"
     data-mount="WidgetGallery">
   </script>
 </head>
@@ -181,21 +181,193 @@ button { font: inherit; cursor: pointer; }
 <script type="text/rip">
 export WidgetGallery = component
 
+  # ---- State ----
   check1 := false
+  check2 := true
+  switch1 := false
+  # toasts := []
+  # showDialog := false
+  # fruit := null
+  # role := null
+  # searchQuery := ''
+  # allFruits := ['Apple', 'Apricot', 'Avocado', 'Banana', 'Blueberry', 'Cherry', 'Cranberry', 'Date', 'Fig', 'Grape', 'Kiwi', 'Lemon', 'Lime', 'Mango', 'Orange', 'Papaya', 'Peach', 'Pear', 'Plum', 'Raspberry', 'Strawberry']
+  # filteredFruits := allFruits
+  # currentTab := 'overview'
 
   render
     .gallery
+
       .gallery-header
         h1 "Rip Widget Gallery"
-        p "Smoke test — checkbox widget"
+        p "Visual smoke test for all headless widgets. Uncomment sections one at a time."
 
+      # ================================================================
+      # CHECKBOX (start here — simplest widget)
+      # ================================================================
       .section
-        .section-title "Checkbox"
+        .section-title
+          "Checkbox"
+          span.badge "42 lines"
+        .section-desc "Toggle with checkbox or switch semantics. Supports indeterminate."
+
         .demo-row
-          .demo-label "Basic checkbox"
-          Checkbox checked <=> check1
+          .demo-label "Checkbox (unchecked)"
+          Checkbox checked <=> check1, @change: (=> null)
             "Enable notifications"
           .status "checked: #{check1}"
+
+        .demo-row
+          .demo-label "Checkbox (pre-checked)"
+          Checkbox checked <=> check2
+            "Accept terms"
+          .status "checked: #{check2}"
+
+        .demo-row
+          .demo-label "Switch variant"
+          Checkbox checked <=> switch1, switch: true
+            "Dark mode"
+          .status "on: #{switch1}"
+
+      # ================================================================
+      # TOAST — uncomment state above: toasts := []
+      # ================================================================
+      # .section
+      #   .section-title
+      #     "Toast"
+      #     span.badge "44 lines"
+      #   .section-desc "Auto-dismiss notification with ARIA live region."
+      #   .demo-row
+      #     .demo-label "Click to show toasts"
+      #     button style: "padding:6px 16px;border:1px solid #cbd5e1;border-radius:6px;background:white", @click: (=> toasts = [...toasts, { id: Date.now(), msg: 'Hello!', type: 'info' }])
+      #       "Info Toast"
+      #     button style: "margin-left:8px;padding:6px 16px;border:1px solid #cbd5e1;border-radius:6px;background:white", @click: (=> toasts = [...toasts, { id: Date.now(), msg: 'Saved!', type: 'success' }])
+      #       "Success Toast"
+      #   .toast-wrap
+      #     for t in toasts
+      #       Toast message: t.msg, type: t.type, duration: 3000, @dismiss: (=> toasts = toasts.filter (x) -> x.id isnt t.id)
+
+      # ================================================================
+      # DIALOG — uncomment state above: showDialog := false
+      # ================================================================
+      # .section
+      #   .section-title
+      #     "Dialog"
+      #     span.badge "86 lines"
+      #   .section-desc "Modal with focus trap, scroll lock, escape/click-outside dismiss."
+      #   .demo-row
+      #     .demo-label "Click to open"
+      #     button style: "padding:6px 16px;border:1px solid #cbd5e1;border-radius:6px;background:white", @click: (=> showDialog = true)
+      #       "Open Dialog"
+      #     .status "open: #{showDialog}"
+      #   Dialog open <=> showDialog, @close: (=> showDialog = false)
+      #     .dialog-panel
+      #       h2 style: "font-size:18px;font-weight:600;margin-bottom:8px", "Confirm Action"
+      #       p style: "color:#64748b;margin-bottom:20px", "Are you sure you want to proceed?"
+      #       . style: "display:flex;gap:8px;justify-content:flex-end"
+      #         button style: "padding:6px 16px;border:1px solid #cbd5e1;border-radius:6px;background:white", @click: (=> showDialog = false)
+      #           "Cancel"
+      #         button style: "padding:6px 16px;border:none;border-radius:6px;background:#1d4ed8;color:white;font-weight:600", @click: (=> showDialog = false)
+      #           "Confirm"
+
+      # ================================================================
+      # SELECT — uncomment state above: fruit, role
+      # ================================================================
+      # .section
+      #   .section-title
+      #     "Select"
+      #     span.badge "169 lines"
+      #   .section-desc "Dropdown with typeahead, keyboard nav, ARIA listbox."
+      #   .demo-row
+      #     .demo-label "Basic select"
+      #     Select value <=> fruit, @change: (=> null)
+      #       option value: "apple", "Apple"
+      #       option value: "banana", "Banana"
+      #       option value: "cherry", "Cherry"
+      #       option value: "date", "Date"
+      #       option value: "elderberry", "Elderberry"
+      #     .status "selected: #{fruit ?? 'none'}"
+      #   .demo-row
+      #     .demo-label "With placeholder"
+      #     Select value <=> role, placeholder: "Choose a role..."
+      #       option value: "eng", "Engineer"
+      #       option value: "des", "Designer"
+      #       option value: "mgr", "Manager"
+      #       option value: "dir", "Director"
+      #     .status "selected: #{role ?? 'none'}"
+
+      # ================================================================
+      # COMBOBOX — uncomment state above: searchQuery, allFruits, filteredFruits
+      # ================================================================
+      # .section
+      #   .section-title
+      #     "Combobox"
+      #     span.badge "114 lines"
+      #   .section-desc "Filterable input + listbox for search-as-you-type."
+      #   .demo-row
+      #     .demo-label "Search fruits"
+      #     Combobox query <=> searchQuery, placeholder: "Type to search...", @select: (e) => (searchQuery = e.detail), @filter: (=> filteredFruits = allFruits.filter (f) -> f.toLowerCase().includes(searchQuery.toLowerCase()))
+      #       for item in filteredFruits
+      #         div data-value: item
+      #           item
+      #     .status "query: '#{searchQuery}'"
+
+      # ================================================================
+      # TOOLTIP
+      # ================================================================
+      # .section
+      #   .section-title
+      #     "Tooltip"
+      #     span.badge "89 lines"
+      #   .section-desc "Hover/focus tooltip with delay and positioning."
+      #   .demo-row
+      #     .demo-label "Hover the buttons"
+      #     . style: "display:flex;gap:12px"
+      #       Tooltip text: "Save your changes", placement: "top"
+      #         button style: "padding:6px 16px;border:1px solid #cbd5e1;border-radius:6px;background:white"
+      #           "Save (top)"
+      #       Tooltip text: "Delete this item", placement: "bottom"
+      #         button style: "padding:6px 16px;border:1px solid #cbd5e1;border-radius:6px;background:white"
+      #           "Delete (bottom)"
+
+      # ================================================================
+      # TABS — uncomment state above: currentTab
+      # ================================================================
+      # .section
+      #   .section-title
+      #     "Tabs"
+      #     span.badge "70 lines"
+      #   .section-desc "Tab panel with roving tabindex and arrow key navigation."
+      #   .demo-row
+      #     .demo-label "Basic tabs"
+      #     Tabs active <=> currentTab
+      #       div data-tab: "overview", "Overview"
+      #       div data-tab: "details", "Details"
+      #       div data-tab: "settings", "Settings"
+      #       div data-panel: "overview"
+      #         p "This is the overview panel."
+      #       div data-panel: "details"
+      #         p "These are the details."
+      #       div data-panel: "settings"
+      #         p "Settings go here."
+      #     .status "active: #{currentTab}"
+
+      # ================================================================
+      # MENU
+      # ================================================================
+      # .section
+      #   .section-title
+      #     "Menu"
+      #     span.badge "120 lines"
+      #   .section-desc "Dropdown action menu with keyboard navigation."
+      #   .demo-row
+      #     .demo-label "Click to open menu"
+      #     Menu @select: (e) => (p "Selected: #{e.detail}")
+      #       button data-trigger: true
+      #         "Actions"
+      #       div data-item: "edit", "Edit"
+      #       div data-item: "duplicate", "Duplicate"
+      #       div data-item: "archive", "Archive"
+      #       div data-item: "delete", "Delete"
 </script>
 
 </body>

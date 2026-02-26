@@ -830,8 +830,8 @@ export Grid = component
   render
     .
       div._containerEl role: "grid", tabindex: "0",
-        data-editing: (editing or undefined),
-        data-selecting: (selecting or undefined),
+        data-editing: editing?!,
+        data-selecting: selecting?!,
         @scroll: @handleScroll,
         @mousedown: @handleMousedown,
         @mousemove: @handleMousemove,
