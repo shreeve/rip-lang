@@ -3,7 +3,7 @@
 # Keyboard: ArrowDown/Up to navigate, Enter/Space to select, Escape to close,
 #           Home/End for first/last, typeahead to jump by character.
 #
-# Exposes data-open on button, data-highlighted and data-selected on options.
+# Exposes data-open and data-placeholder on button, data-highlighted and data-selected on options.
 # Ships zero CSS — style entirely via attribute selectors in your stylesheet.
 #
 # Usage:
@@ -134,6 +134,7 @@ export Select = component
         aria-expanded: !!open
         aria-haspopup: "listbox"
         data-open: open?!
+        data-placeholder: (!@value)?!
         data-disabled: @disabled?!
         disabled: @disabled
         @click: @toggle

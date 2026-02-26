@@ -1362,7 +1362,11 @@ export function installComponentSupport(CodeGenerator, Lexer) {
             this._createLines.push(`if (${valueCode}) ${elVar}.setAttribute('${key}', '');`);
           }
         } else if (this.hasReactiveDeps(value)) {
-          this._pushEffect(`${elVar}.setAttribute('${key}', ${valueCode});`);
+          if (Array.isArray(value) && value[0] === 'presence') {
+            this._pushEffect(`{ const __v = ${valueCode}; __v == null ? ${elVar}.removeAttribute('${key}') : ${elVar}.setAttribute('${key}', __v); }`);
+          } else {
+            this._pushEffect(`${elVar}.setAttribute('${key}', ${valueCode});`);
+          }
         } else {
           this._createLines.push(`${elVar}.setAttribute('${key}', ${valueCode});`);
         }

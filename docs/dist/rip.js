@@ -4458,7 +4458,11 @@ ${blockFactoriesCode}return ${lines.join(`
               this._createLines.push(`if (${valueCode}) ${elVar}.setAttribute('${key}', '');`);
             }
           } else if (this.hasReactiveDeps(value)) {
-            this._pushEffect(`${elVar}.setAttribute('${key}', ${valueCode});`);
+            if (Array.isArray(value) && value[0] === "presence") {
+              this._pushEffect(`{ const __v = ${valueCode}; __v == null ? ${elVar}.removeAttribute('${key}') : ${elVar}.setAttribute('${key}', __v); }`);
+            } else {
+              this._pushEffect(`${elVar}.setAttribute('${key}', ${valueCode});`);
+            }
           } else {
             this._createLines.push(`${elVar}.setAttribute('${key}', ${valueCode});`);
           }
@@ -8613,7 +8617,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.32";
-  var BUILD_DATE = "2026-02-26@16:58:41GMT";
+  var BUILD_DATE = "2026-02-26@17:50:29GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
