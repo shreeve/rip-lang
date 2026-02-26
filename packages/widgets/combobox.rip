@@ -3,26 +3,32 @@
 # Keyboard: ArrowDown/Up to navigate, Enter to select, Escape to close,
 #           typing filters the list via the @filter callback.
 #
-# Exposes data-open on the wrapper, data-highlighted and data-selected on items.
+# Exposes data-open on the wrapper, data-highlighted on options.
 # Ships zero CSS — style entirely via attribute selectors in your stylesheet.
 #
 # Usage:
-#   Combobox query <=> searchText, @select: handleSelect, @filter: filterFn
-#     for item in filteredItems
-#       div data-value: item.id
-#         span item.name
+#   Combobox query <=> searchText, items <=> filteredItems, @select: handleSelect, @filter: filterFn
 
 export Combobox = component
   @query := ''
+  @items := []
   @placeholder := 'Search...'
   @disabled := false
 
   open := false
   highlightedIndex := -1
 
-  items ~=
-    return [] unless @_listEl
-    Array.from(@_listEl?.querySelectorAll('[data-value]') or [])
+  getItems: ->
+    return [] unless @_list
+    Array.from(@_list.querySelectorAll('[role="option"]'))
+
+  _updateHighlight: ->
+    idx = highlightedIndex
+    @getItems().forEach (item, i) ->
+      item.toggleAttribute 'data-highlighted', i is idx
+
+  _scrollToItem: ->
+    @getItems()[highlightedIndex]?.scrollIntoView({ block: 'nearest' })
 
   onInput: (e) ->
     @query = e.target.value
@@ -39,23 +45,26 @@ export Combobox = component
     highlightedIndex = -1
 
   selectIndex: (idx) ->
-    item = items[idx]
+    item = @getItems()[idx]
     return unless item
-    @emit 'select', item.dataset.value
+    val = item.dataset.value ?? item.textContent.trim()
+    @emit 'select', val
     @close()
 
-  onInputKeydown: (e) ->
-    len = items.length
+  onKeydown: (e) ->
+    len = @getItems().length
     switch e.key
       when 'ArrowDown'
         e.preventDefault()
         @openMenu() unless open
         highlightedIndex = if highlightedIndex < len - 1 then highlightedIndex + 1 else 0
-        @_scrollToHighlighted()
+        @_updateHighlight()
+        @_scrollToItem()
       when 'ArrowUp'
         e.preventDefault()
         highlightedIndex = if highlightedIndex > 0 then highlightedIndex - 1 else len - 1
-        @_scrollToHighlighted()
+        @_updateHighlight()
+        @_scrollToItem()
       when 'Enter'
         e.preventDefault()
         if highlightedIndex >= 0
@@ -68,27 +77,25 @@ export Combobox = component
       when 'Tab'
         @close()
 
-  _scrollToHighlighted: ->
-    item = items[highlightedIndex]
-    item?.scrollIntoView({ block: 'nearest' })
+  onListClick: (e) ->
+    item = e.target.closest('[role="option"]')
+    return unless item
+    idx = @getItems().indexOf(item)
+    @selectIndex(idx) if idx >= 0
 
-  onItemClick: (idx) ->
-    @selectIndex(idx)
-
-  onItemMouseenter: (idx) ->
-    highlightedIndex = idx
-
-  onBackdropClick: (e) ->
-    @close() if e.target is e.currentTarget
-
-  onFocus: ->
-    @openMenu()
+  onListMousemove: (e) ->
+    item = e.target.closest('[role="option"]')
+    return unless item
+    idx = @getItems().indexOf(item)
+    if idx >= 0 and idx isnt highlightedIndex
+      highlightedIndex = idx
+      @_updateHighlight()
 
   render
     . data-open: open?!
 
       # Text input
-      input._inputEl role: "combobox"
+      input ref: "_input", role: "combobox"
         type: "text"
         autocomplete: "off"
         aria-expanded: !!open
@@ -98,17 +105,17 @@ export Combobox = component
         disabled: @disabled
         placeholder: @placeholder
         value: @query
-        @input: @onInput
-        @keydown: @onInputKeydown
-        @focus: @onFocus
+        @focus: @openMenu
 
-      # Dropdown listbox
-      if open and items.length > 0
-        .('fixed inset-0 z-40') @click: @onBackdropClick
-        div._listEl role: "listbox", data-open: true
-          slot
+      # Listbox — always in DOM, items rendered reactively from @items prop
+      div ref: "_list", role: "listbox"
+        data-open: (open and @items.length > 0)?!
+        @click: @onListClick
+        @mousemove: @onListMousemove
+        for item in @items
+          div role: "option", tabindex: "-1", data-value: item
+            "#{item}"
 
-      # Pass slot content to hidden container when closed (for reading items)
-      unless open
-        div._listEl style: "display:none"
-          slot
+      # Backdrop for click-outside dismiss
+      if open
+        .('fixed inset-0 z-40') @click: (e) => @close() if e.target is e.currentTarget
