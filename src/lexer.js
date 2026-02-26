@@ -209,12 +209,12 @@ let UNARY_MATH = new Set(['!', '~']);
 // ==========================================================================
 
 // Identifier: word chars + optional trailing ! (await) or ? (predicate)
-// The ? suffix is only captured when NOT followed by . ? [ ( to avoid
-// conflict with ?. (optional chaining), ?? (nullish), ?.( and ?.[
+// The ? suffix is only captured when NOT followed by . ? ! [ ( to avoid
+// conflict with ?. (optional chaining), ?? (nullish), ?! (presence), ?.( and ?.[
 // The ! suffix is NOT captured when followed by ? to preserve !? as operator
-let IDENTIFIER_RE = /^(?!\d)((?:(?!\s)[$\w\x7f-\uffff])+(?:!(?!\?)|[?](?![.?[(]))?)([^\n\S]*:(?![=:]))?/;
+let IDENTIFIER_RE = /^(?!\d)((?:(?!\s)[$\w\x7f-\uffff])+(?:!(?!\?)|[?](?![.?![(]))?)([^\n\S]*:(?![=:]))?/;
 let NUMBER_RE     = /^0b[01](?:_?[01])*n?|^0o[0-7](?:_?[0-7])*n?|^0x[\da-f](?:_?[\da-f])*n?|^\d+(?:_\d+)*n|^(?:\d+(?:_\d+)*)?\.?\d+(?:_\d+)*(?:e[+-]?\d+(?:_\d+)*)?/i;
-let OPERATOR_RE   = /^(?:<=>|::=|::|[-=]>|~>|~=|:=|=!|===|!==|!\?|\?\?|=~|\|>|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?\.?|\.{2,3})/;
+let OPERATOR_RE   = /^(?:<=>|::=|::|[-=]>|~>|~=|:=|=!|===|!==|!\?|\?\!|\?\?|=~|\|>|[-+*\/%<>&|^!?=]=|>>>=?|([-+:])\1|([&|<>*\/%])\2=?|\?\.?|\.{2,3})/;
 let WHITESPACE_RE = /^[^\n\S]+/;
 let NEWLINE_RE    = /^(?:\n[^\n\S]*)+/;
 let COMMENT_RE    = /^(\s*)###([^#][\s\S]*?)(?:###([^\n\S]*)|###$)|^((?:\s*#(?!##[^#]).*)+)/;
@@ -634,7 +634,10 @@ export class Lexer {
         if (prev && (prev[0] === 'IDENTIFIER' || prev[0] === 'PROPERTY'))
           return 0;  // after a tag (div#main) → let # become a token for rewriter
         let m = /^#([a-zA-Z_][\w-]*)/.exec(this.chunk);
-        if (m) { this.emit('IDENTIFIER', 'div#' + m[1]); return m[0].length; }
+        if (m) {
+          this.emit('IDENTIFIER', m[1] === 'content' ? 'slot' : 'div#' + m[1]);
+          return m[0].length;
+        }
       }
       if (/^\s+#[a-zA-Z_]/.test(this.chunk)) return 0;  // let lineToken handle indentation first
     }
@@ -1229,6 +1232,8 @@ export class Lexer {
     else if (val === '?' && prev?.spaced) tag = 'SPACE?';
     // Unspaced !? → DEFINED (postfix defined check: v!? → v !== undefined)
     else if (val === '!?' && prev && !prev.spaced) tag = 'DEFINED';
+    // Unspaced ?! → PRESENCE (Houdini: v?! → v ? true : undefined)
+    else if (val === '?!' && prev && !prev.spaced) tag = 'PRESENCE';
     // ?[ and ?( without dot → treat as optional chaining (?.)
     else if (val === '?' && (this.chunk[1] === '[' || this.chunk[1] === '(')) tag = '?.';
     // Call/index context (ES6 optional chaining only)

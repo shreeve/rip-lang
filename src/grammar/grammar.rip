@@ -853,6 +853,9 @@ grammar =
     # Postfix defined check: expr!? → (expr !== undefined)
     o 'Value DEFINED'         , '["defined", 1]'
 
+    # Postfix presence check: expr?! → (expr ? true : undefined) — Houdini operator
+    o 'Value PRESENCE'        , '["presence", 1]'
+
     # Await
     o 'AWAIT Expression'            , '["await", 2]'
     o 'AWAIT INDENT Object OUTDENT' , '["await", 3]'
@@ -916,7 +919,7 @@ operators = """
   right       DO_IIFE
   left        . ?.
   left        CALL_START CALL_END
-  nonassoc    ++ -- ? DEFINED
+  nonassoc    ++ -- ? DEFINED PRESENCE
   right       UNARY DO
   right       AWAIT
   right       **

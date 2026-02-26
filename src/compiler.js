@@ -205,6 +205,7 @@ export class CodeGenerator {
     'continue': 'generateContinue',
     '?': 'generateExistential',
     'defined': 'generateDefined',
+    'presence': 'generatePresence',
     '?:': 'generateTernary',
     '|>': 'generatePipe',
     'loop': 'generateLoop',
@@ -1143,6 +1144,10 @@ export class CodeGenerator {
 
   generateDefined(head, rest) {
     return `(${this.generate(rest[0], 'value')} !== undefined)`;
+  }
+
+  generatePresence(head, rest) {
+    return `(${this.generate(rest[0], 'value')} ? true : undefined)`;
   }
 
   generateTernary(head, rest, context) {
