@@ -24,7 +24,7 @@ export Tabs = component
     return [] unless @_el
     Array.from(@_el?.querySelectorAll('[data-panel]') or [])
 
-  onMount: ->
+  mounted: ->
     unless @active
       first = _tabEls[0]
       @active = first?.dataset.tab if first
@@ -65,6 +65,6 @@ export Tabs = component
 
       for panel in _panelEls
         div role: "tabpanel",
-          data-active: (panel.dataset.tab is @active or undefined),
-          hidden: (panel.dataset.tab isnt @active or undefined)
+          data-active: (panel.dataset.panel is @active or undefined),
+          hidden: (panel.dataset.panel isnt @active or undefined)
           #content

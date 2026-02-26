@@ -14,9 +14,8 @@
 export Dialog = component
   @open := false
 
-  _prevFocus := null
-  _unlockScroll := null
-  _cleanupTrap := null
+  _prevFocus = null
+  _cleanupTrap = null
 
   ~>
     if @open

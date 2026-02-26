@@ -217,10 +217,12 @@ Grid
 **Column properties:** `key`, `title`, `width`, `align`, `type` (text/number/
 checkbox/select), `source` (for select type)
 **Methods:** `getCell(row, col)`, `setCell(row, col, value)`, `getData()`,
-`setData(data)`, `sort(col, direction)`, `scrollToRow(index)`
+`setData(data)`, `sort(col, direction)`, `scrollToRow(index)`,
+`copySelection()`, `cutSelection()`, `pasteAtActive()`
 **Keyboard:** Arrows navigate, Tab/Shift+Tab move cells, Enter/F2 edit,
 Escape cancel, Home/End, Ctrl+arrows jump to edge, PageUp/Down, Ctrl+A
-select all, Delete/Backspace clear, Space toggle checkboxes, type-to-edit
+select all, Ctrl+C copy, Ctrl+V paste, Ctrl+X cut, Delete/Backspace clear,
+Space toggle checkboxes, type-to-edit
 **Data attributes:** `[data-active]` and `[data-selected]` on cells,
 `[data-sorted]` on headers, `[data-editing]` and `[data-selecting]` on
 container
@@ -228,6 +230,11 @@ container
 multi-column sort
 **Editing:** Double-click, Enter, F2, or start typing to edit. Enter/Tab
 commit, Escape cancel. Checkbox cells toggle on click/Space.
+**Clipboard:** Ctrl+C copies the selection as TSV (tab-separated values) —
+the universal spreadsheet interchange format. Ctrl+V pastes TSV from
+clipboard starting at the active cell, respecting column types and format
+parsers. Ctrl+X copies then clears the selection. Full interop with Excel,
+Google Sheets, and Numbers.
 **CSS theming:** Uses `--grid-*` custom properties (see `GRID.md` in
 `packages/grid/` for the full property list and dark mode example)
 
@@ -258,13 +265,13 @@ styling using Open Props design tokens.
 |------|-------|-------------|
 | `select.rip` | 169 | Dropdown select with typeahead |
 | `combobox.rip` | 114 | Filterable input + listbox |
-| `dialog.rip` | 87 | Modal with focus trap and scroll lock |
-| `toast.rip` | 47 | Auto-dismiss notification |
-| `popover.rip` | 91 | Anchored floating content |
+| `dialog.rip` | 86 | Modal with focus trap and scroll lock |
+| `toast.rip` | 44 | Auto-dismiss notification |
+| `popover.rip` | 95 | Anchored floating content |
 | `tooltip.rip` | 89 | Hover/focus tooltip |
 | `tabs.rip` | 70 | Tab panel with roving tabindex |
 | `accordion.rip` | 71 | Expand/collapse sections |
 | `checkbox.rip` | 42 | Checkbox and switch toggle |
 | `menu.rip` | 120 | Dropdown action menu |
-| `grid.rip` | 725 | Virtual-scrolling data grid |
-| **Total** | **1,624** | |
+| `grid.rip` | 858 | Virtual-scrolling data grid with clipboard |
+| **Total** | **1,758** | |

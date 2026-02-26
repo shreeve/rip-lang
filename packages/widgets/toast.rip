@@ -6,9 +6,6 @@
 #
 # Usage:
 #   Toast message: "Order submitted!", duration: 4000, @dismiss: handleDismiss
-#
-# Or use the static method for imperative usage:
-#   Toast.show("Order submitted!", { duration: 4000 })
 
 export Toast = component
   @message := ''
@@ -19,7 +16,7 @@ export Toast = component
   leaving := false
   _timer := null
 
-  onMount: ->
+  mounted: ->
     if @duration > 0
       _timer = setTimeout =>
         @dismiss()

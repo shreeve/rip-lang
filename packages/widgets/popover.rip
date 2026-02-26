@@ -82,7 +82,11 @@ export Popover = component
 
   render
     .
-      div._triggerEl @click: @toggle, @keydown: @onTriggerKeydown
+      div._triggerEl
+        aria-expanded: (if open then 'true' else 'false'),
+        aria-haspopup: "dialog",
+        @click: @toggle,
+        @keydown: @onTriggerKeydown
         #content
 
       if open

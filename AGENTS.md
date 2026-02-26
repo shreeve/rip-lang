@@ -62,7 +62,7 @@ rip-lang/
 │       ├── lunar.rip    # Recursive descent parser generator (2,412 LOC)
 │       └── solar.rip    # SLR(1) parser generator (929 LOC) — Don't edit!
 ├── packages/            # Optional packages (see Packages section below)
-│   ├── grid/            # @rip-lang/grid — Reactive data grid
+│   ├── widgets/         # Headless UI widgets — Select, Dialog, Grid, etc. (see below)
 │   ├── server/          # @rip-lang/server — Web framework + production server
 │   ├── db/              # @rip-lang/db — DuckDB server
 │   ├── schema/          # @rip-lang/schema — ORM + validation
@@ -719,6 +719,74 @@ start port: 3000
 - **@rip-lang/csv** — CSV parser + writer with indexOf ratchet engine (~432 lines)
 - **@rip-lang/http** — Zero-dependency HTTP client (ky-inspired convenience over native fetch)
 - **@rip-lang/print** — Syntax-highlighted code printer using highlight.js (190+ languages). Serves once, caches via service worker for offline refresh.
+
+### Rip Widgets (`packages/widgets/`) — Headless UI Components
+
+Accessible, headless interactive components written in Rip. Zero dependencies,
+zero CSS. Every widget exposes `data-*` attributes for styling and handles
+keyboard interactions per WAI-ARIA Authoring Practices. Widgets are plain
+`.rip` source files — no build step. The browser compiles them on the fly.
+
+| File | Lines | What It Does |
+|------|-------|-------------|
+| `select.rip` | 169 | Dropdown with typeahead, ARIA listbox |
+| `combobox.rip` | 114 | Filterable input + listbox |
+| `dialog.rip` | 86 | Modal: focus trap, scroll lock, escape/click-outside dismiss |
+| `toast.rip` | 44 | Auto-dismiss notification, ARIA live region |
+| `popover.rip` | 95 | Anchored floating content with flip/shift |
+| `tooltip.rip` | 89 | Hover/focus tooltip with delay |
+| `tabs.rip` | 70 | Tab panel with roving tabindex |
+| `accordion.rip` | 71 | Expand/collapse, single or multiple |
+| `checkbox.rip` | 42 | Checkbox and switch toggle |
+| `menu.rip` | 120 | Dropdown action menu |
+| `grid.rip` | 858 | Virtual-scrolling data grid (100K+ rows at 60fps) |
+
+**Integration:** Add the widgets directory to your serve middleware:
+
+```coffee
+use serve
+  dir: dir
+  components: ['components', '../../../packages/widgets']
+```
+
+All widgets become available by name (`Select`, `Dialog`, `Grid`, etc.) in
+the shared scope — no imports needed.
+
+**Grid highlights:**
+- DOM recycling: pooled `<tr>` elements, `textContent` updates, zero allocation per scroll frame
+- Full keyboard: arrows, Tab, Enter/F2 edit, Ctrl+arrows, PageUp/Down, Ctrl+A, type-to-edit
+- Clipboard: Ctrl+C/V/X with TSV format (interop with Excel/Sheets/Numbers)
+- Multi-column sorting: click header, Shift+click for secondary sort
+- Column resizing: drag header borders
+- Inline editing: text, checkbox toggle, select dropdown
+
+**Rip-specific gotchas learned building widgets:**
+- **Lifecycle hooks:** The recognized hooks are `beforeMount`, `mounted`,
+  `updated`, `beforeUnmount`, `unmounted`, `onError`. Nothing else.
+  `onMount` compiles as a regular method and never fires. This is the #1
+  trap for widget authors.
+- **`->` inside components:** The compiler auto-converts all thin arrows
+  (`->`) to fat arrows (`=>`) inside component contexts. `this` binding is
+  always preserved. Use `->` everywhere — it's cleaner and the compiler
+  handles it.
+- **`:=` vs `=` for internal storage:** Use `:=` (reactive state) only for
+  values that should trigger DOM updates. For internal bookkeeping (pools,
+  caches, timer IDs, saved DOM references), use `=` (plain assignment).
+  Reactive state has overhead and can cause unwanted effect re-runs.
+- **Imperative DOM in effects:** For performance-critical paths (Grid's
+  60fps scroll), bypass the reactive render loop and do imperative DOM
+  manipulation inside `~>` effects. The effect still triggers reactively
+  but the DOM updates use `textContent`/`nodeValue`/`replaceChildren`.
+- **`data-*` attributes, not classes:** All widget state is exposed via
+  `data-*` attributes (`[data-open]`, `[data-selected]`, etc.). Consumers
+  style these with CSS attribute selectors. Widgets never apply visual
+  styles — they only set semantic state.
+
+**Documentation in `packages/widgets/`:**
+- `README.md` — Usage examples and API for every widget
+- `NOTES.md` — Implementation details, known issues, Rip patterns
+- `ARCHITECTURE.md` — Philosophy and CSS strategy (Open Props, `@layer`, etc.)
+- `PRIORITIES.md` — Top 15 priorities and postmortem review
 
 ### Package Development
 
