@@ -418,6 +418,27 @@ Block factories need local variables and `ctx` references instead of `this._elN`
 
 Factory mode is entered in `generateConditionBranch` and `generateTemplateLoop` via save/restore of `[_createLines, _setupLines, _factoryMode, _factoryVars]`.
 
+### Auto-Wired Event Handlers (`on*` convention)
+
+Component methods named `onClick`, `onKeydown`, `onMouseenter`, etc. are automatically bound to the component's root DOM element. The rule: `on` + capitalized event name → `addEventListener(lowercased, handler)` on the root element. No explicit `@click: @onClick` wiring needed.
+
+- **Detection**: `generateComponent` builds `_autoEventHandlers` (Map of event name → method name) from methods matching `/^on[A-Z]/` that aren't in `LIFECYCLE_HOOKS`
+- **Root only**: `_claimAutoWire` claims the first HTML tag generated in `buildRender`. Non-tag roots (conditionals, loops, components) clear `_pendingAutoWire` to prevent inner elements from claiming
+- **Explicit override**: An `@event: handler` binding on the root element suppresses auto-wiring for that event (tracked via `_autoWireExplicit` in `generateAttributes`). Explicit bindings on child elements don't affect auto-wiring — standard DOM propagation handles interaction
+- **Lifecycle exclusion**: `onError` (in `LIFECYCLE_HOOKS`) is not auto-wired
+
+```coffee
+# onClick and onKeydown auto-wire to the root button — no @click/@keydown needed
+export Checkbox = component
+  @checked := false
+  onClick: -> @checked = not @checked
+  onKeydown: (e) ->
+    @onClick() if e.key in ['Enter', ' ']
+  render
+    button role: 'checkbox', aria-checked: !!@checked
+      slot
+```
+
 ### List Reconciliation (`__reconcile`)
 
 Loop rendering uses a runtime `__reconcile` function instead of inlined reconciliation code. The algorithm:
@@ -454,7 +475,7 @@ CSS enter/leave transitions on conditional blocks:
 
 ### Testing Components
 
-Component tests live in `test/rip/components.rip` (100 tests). Use `code` tests with `{ skipPreamble: true, skipRuntimes: true }` options to verify generated JavaScript output for render blocks. Use `test` tests for runtime behavior (state, computed, methods, LIS algorithm, error boundaries — no DOM needed).
+Component tests live in `test/rip/components.rip` (107 tests). Use `code` tests with `{ skipPreamble: true, skipRuntimes: true }` options to verify generated JavaScript output for render blocks. Use `test` tests for runtime behavior (state, computed, methods, LIS algorithm, error boundaries — no DOM needed).
 
 ---
 
@@ -771,6 +792,11 @@ the shared scope — no imports needed.
   (`->`) to fat arrows (`=>`) inside component contexts. `this` binding is
   always preserved. Use `->` everywhere — it's cleaner and the compiler
   handles it.
+- **Auto-wired event handlers:** Methods named `onClick`, `onKeydown`,
+  etc. are automatically bound to the root element — no `@click: @onClick`
+  boilerplate needed. Use an explicit binding only when the handler differs
+  from the `on*` method. Child element bindings coexist via normal DOM
+  propagation; use `e.stopPropagation()` to suppress the root handler.
 - **`:=` vs `=` for internal storage:** Use `:=` (reactive state) only for
   values that should trigger DOM updates. For internal bookkeeping (pools,
   caches, timer IDs, saved DOM references), use `=` (plain assignment).

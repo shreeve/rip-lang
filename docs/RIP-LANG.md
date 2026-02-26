@@ -1440,6 +1440,25 @@ App = component
         "Click me"
 ```
 
+**Auto-Wired Event Handlers:**
+
+Methods named `on` + capitalized event name are automatically bound to the component's root element:
+
+```coffee
+Checkbox = component
+  @checked := false
+  onClick: -> @checked = not @checked
+  onKeydown: (e) ->
+    if e.key in ['Enter', ' ']
+      e.preventDefault()
+      @onClick()
+  render
+    button role: 'checkbox', aria-checked: !!@checked
+      slot
+```
+
+The compiler wires `addEventListener('click', ...)` and `addEventListener('keydown', ...)` to the root `button`. To override for a specific event, write an explicit binding on the root: `button @click: someOtherHandler`. Lifecycle hooks (`onError`) are not auto-wired.
+
 **Conditional Rendering:**
 
 ```coffee

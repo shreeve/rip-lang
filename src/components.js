@@ -664,11 +664,21 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       }
     }
 
+    // Auto-event map: onClick → 'click', onKeydown → 'keydown', etc.
+    const autoEventHandlers = new Map();
+    for (const { name } of methods) {
+      if (/^on[A-Z]/.test(name) && !LIFECYCLE_HOOKS.has(name)) {
+        autoEventHandlers.set(name[2].toLowerCase() + name.slice(3), name);
+      }
+    }
+
     // Save and set component context
     const prevComponentMembers = this.componentMembers;
     const prevReactiveMembers = this.reactiveMembers;
+    const prevAutoEventHandlers = this._autoEventHandlers;
     this.componentMembers = memberNames;
     this.reactiveMembers = reactiveMembers;
+    this._autoEventHandlers = autoEventHandlers.size > 0 ? autoEventHandlers : null;
 
     const lines = [];
     let blockFactoriesCode = '';
@@ -776,6 +786,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     // Restore context
     this.componentMembers = prevComponentMembers;
     this.reactiveMembers = prevReactiveMembers;
+    this._autoEventHandlers = prevAutoEventHandlers;
 
     // If block factories exist, wrap in IIFE so they're in scope
     if (blockFactoriesCode) {
@@ -828,6 +839,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     this._factoryMode = false;
     this._factoryVars = null;
     this._fragChildren = new Map();
+    this._pendingAutoWire = false;
+    this._autoWireEl = null;
+    this._autoWireExplicit = null;
 
     const statements = this.is(body, 'block') ? body.slice(1) : [body];
 
@@ -835,7 +849,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     if (statements.length === 0) {
       rootVar = 'null';
     } else if (statements.length === 1) {
+      this._pendingAutoWire = !!this._autoEventHandlers;
       rootVar = this.generateNode(statements[0]);
+      this._pendingAutoWire = false;
     } else {
       rootVar = this.newElementVar('frag');
       this._createLines.push(`${rootVar} = document.createDocumentFragment();`);
@@ -1075,6 +1091,29 @@ export function installComponentSupport(CodeGenerator, Lexer) {
   };
 
   // --------------------------------------------------------------------------
+  // Auto-wire event handlers — claim/emit helpers for on* convention
+  // --------------------------------------------------------------------------
+
+  proto._claimAutoWire = function(elVar) {
+    if (!this._pendingAutoWire || !this._autoEventHandlers?.size) return false;
+    this._pendingAutoWire = false;
+    this._autoWireEl = elVar;
+    this._autoWireExplicit = new Set();
+    return true;
+  };
+
+  proto._emitAutoWire = function(elVar, claimed) {
+    if (!claimed) return;
+    for (const [eventName, methodName] of this._autoEventHandlers) {
+      if (!this._autoWireExplicit.has(eventName)) {
+        this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => __batch(() => ${this._self}.${methodName}(e)));`);
+      }
+    }
+    this._autoWireEl = null;
+    this._autoWireExplicit = null;
+  };
+
+  // --------------------------------------------------------------------------
   // generateTag — HTML element with static classes and children
   // --------------------------------------------------------------------------
 
@@ -1090,6 +1129,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     if (id) {
       this._createLines.push(`${elVar}.id = '${id}';`);
     }
+
+    const autoWireClaimed = this._claimAutoWire(elVar);
 
     // Defer class emission when selector classes exist so class: attributes merge
     const prevClassArgs = this._pendingClassArgs;
@@ -1123,6 +1164,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       this._pendingClassEl = prevClassEl;
     }
 
+    this._emitAutoWire(elVar, autoWireClaimed);
+
     return elVar;
   };
 
@@ -1137,6 +1180,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     } else {
       this._createLines.push(`${elVar} = document.createElement('${tag}');`);
     }
+
+    const autoWireClaimed = this._claimAutoWire(elVar);
 
     // Defer className emission so class: attributes can merge with .() classes
     const classArgs = classExprs.map(e => this.generateInComponent(e, 'value'));
@@ -1161,6 +1206,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     this._pendingClassArgs = prevClassArgs;
     this._pendingClassEl = prevClassEl;
 
+    this._emitAutoWire(elVar, autoWireClaimed);
+
     return elVar;
   };
 
@@ -1177,6 +1224,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       // Event handler: @click or (. this eventName)
       if (this.is(key, '.') && key[1] === 'this') {
         const eventName = key[2];
+        if (this._autoWireExplicit && this._autoWireEl === elVar) {
+          this._autoWireExplicit.add(eventName);
+        }
         if (typeof value === 'string' && this.componentMembers?.has(value)) {
           this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => __batch(() => ${this._self}.${value}(e)));`);
         } else {
@@ -1330,6 +1380,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
   // --------------------------------------------------------------------------
 
   proto.generateConditional = function(sexpr) {
+    this._pendingAutoWire = false;
     const [, condition, thenBlock, elseBlock] = sexpr;
 
     const anchorVar = this.newElementVar('anchor');
@@ -1496,6 +1547,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
   // --------------------------------------------------------------------------
 
   proto.generateTemplateLoop = function(sexpr) {
+    this._pendingAutoWire = false;
     const [head, vars, collection, guard, step, body] = sexpr;
 
     const blockName = this.newBlockVar();
@@ -1581,6 +1633,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
   // --------------------------------------------------------------------------
 
   proto.generateChildComponent = function(componentName, args) {
+    this._pendingAutoWire = false;
     const instVar = this.newElementVar('inst');
     const elVar = this.newElementVar('el');
     const { propsCode, reactiveProps, childrenSetupLines } = this.buildComponentProps(args);

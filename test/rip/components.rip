@@ -1,9 +1,10 @@
-# Test: Component System (79 tests)
+# Test: Component System (86 tests)
 # Covers every code path in src/components.js — render blocks, conditional/loop
-# codegen, block factories, attributes, events, two-way binding (<=>), dynamic
-# classes (__clsx), child component prop passing, slot projection (@children),
-# lifecycle hooks, context API, SVG rendering, hyphenated attributes, DOM
-# properties, expression-as-text, computed/effect block bodies, and edge cases.
+# codegen, block factories, attributes, events, auto-wired event handlers (on*
+# convention), two-way binding (<=>), dynamic classes (__clsx), child component
+# prop passing, slot projection (@children), lifecycle hooks, context API, SVG
+# rendering, hyphenated attributes, DOM properties, expression-as-text,
+# computed/effect block bodies, and edge cases.
 
 opts = { skipPreamble: true, skipRuntimes: true }
 
@@ -768,6 +769,150 @@ code "event handler with method reference", '''
     _create() {
       this._el0 = document.createElement('button');
       this._el0.addEventListener('click', (e) => __batch(() => this.handleClick(e)));
+      return this._el0;
+    }
+  }
+  ''', opts
+
+# ==============================================================================
+# Auto-wired Event Handlers (on* convention)
+# ==============================================================================
+
+code "auto-wire onClick to root element", '''
+  export A = component
+    onClick: -> p "clicked"
+    render
+      button "Click me"
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {}
+    onClick() { return p("clicked"); }
+    _create() {
+      this._el0 = document.createElement('button');
+      this._t0 = document.createTextNode("Click me");
+      this._el0.appendChild(this._t0);
+      this._el0.addEventListener('click', (e) => __batch(() => this.onClick(e)));
+      return this._el0;
+    }
+  }
+  ''', opts
+
+code "auto-wire multiple on* methods", '''
+  export A = component
+    onClick: -> p "click"
+    onKeydown: (e) -> p e.key
+    render
+      button "Press"
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {}
+    onClick() { return p("click"); }
+    onKeydown(e) { return p(e.key); }
+    _create() {
+      this._el0 = document.createElement('button');
+      this._t0 = document.createTextNode("Press");
+      this._el0.appendChild(this._t0);
+      this._el0.addEventListener('click', (e) => __batch(() => this.onClick(e)));
+      this._el0.addEventListener('keydown', (e) => __batch(() => this.onKeydown(e)));
+      return this._el0;
+    }
+  }
+  ''', opts
+
+code "explicit event on root overrides auto-wire", '''
+  export A = component
+    onClick: -> p "auto"
+    toggle: -> p "explicit"
+    render
+      button @click: toggle
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {}
+    onClick() { return p("auto"); }
+    toggle() { return p("explicit"); }
+    _create() {
+      this._el0 = document.createElement('button');
+      this._el0.addEventListener('click', (e) => __batch(() => this.toggle(e)));
+      return this._el0;
+    }
+  }
+  ''', opts
+
+code "partial override — one overridden, one auto-wired", '''
+  export A = component
+    onClick: -> p "auto-click"
+    onKeydown: -> p "auto-key"
+    ring: -> p "ring"
+    render
+      button @keydown: ring
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {}
+    onClick() { return p("auto-click"); }
+    onKeydown() { return p("auto-key"); }
+    ring() { return p("ring"); }
+    _create() {
+      this._el0 = document.createElement('button');
+      this._el0.addEventListener('keydown', (e) => __batch(() => this.ring(e)));
+      this._el0.addEventListener('click', (e) => __batch(() => this.onClick(e)));
+      return this._el0;
+    }
+  }
+  ''', opts
+
+code "onError is not auto-wired (lifecycle hook)", '''
+  export A = component
+    onError: (e) -> p e.message
+    render
+      div "safe"
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {}
+    onError(e) { return p(e.message); }
+    _create() {
+      this._el0 = document.createElement('div');
+      this._t0 = document.createTextNode("safe");
+      this._el0.appendChild(this._t0);
+      return this._el0;
+    }
+  }
+  ''', opts
+
+code "no auto-wire for non-on* methods", '''
+  export A = component
+    handleClick: -> p "hi"
+    render
+      button "Go"
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {}
+    handleClick() { return p("hi"); }
+    _create() {
+      this._el0 = document.createElement('button');
+      this._t0 = document.createTextNode("Go");
+      this._el0.appendChild(this._t0);
+      return this._el0;
+    }
+  }
+  ''', opts
+
+code "auto-wire with nested children", '''
+  export A = component
+    onClick: -> p "clicked"
+    render
+      div
+        span "inner"
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {}
+    onClick() { return p("clicked"); }
+    _create() {
+      this._el0 = document.createElement('div');
+      this._el1 = document.createElement('span');
+      this._t0 = document.createTextNode("inner");
+      this._el1.appendChild(this._t0);
+      this._el0.appendChild(this._el1);
+      this._el0.addEventListener('click', (e) => __batch(() => this.onClick(e)));
       return this._el0;
     }
   }
