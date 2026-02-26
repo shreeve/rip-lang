@@ -2,16 +2,16 @@
 
 import { User, Booking, Session } from './models.rip'
 
-export def fetchUser(id:: number):: User
+export def fetchUser(id:: number):: Promise<User>
   res = await fetch('/api/users/' + id)
   res.json()
 
-export def fetchBookings(userId:: number):: Booking[]
+export def fetchBookings(userId:: number):: Promise<Booking[]>
   res = await fetch('/api/users/' + userId + '/bookings')
   data = await res.json()
   data.bookings
 
-export def fetchSessions():: Session[]
+export def fetchSessions():: Promise<Session[]>
   res = await fetch('/api/sessions')
   data = await res.json()
   data.sessions
