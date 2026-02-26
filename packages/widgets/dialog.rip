@@ -1,0 +1,87 @@
+# Dialog — accessible headless modal dialog
+#
+# Traps focus, locks scroll, dismisses on Escape or click outside.
+# Restores focus to the previously focused element on close.
+#
+# Exposes data-open on the backdrop. Ships zero CSS.
+#
+# Usage:
+#   Dialog open <=> showDialog, @close: handleClose
+#     h2 "Title"
+#     p "Content"
+#     button @click: (=> showDialog = false), "Close"
+
+export Dialog = component
+  @open := false
+
+  _prevFocus := null
+  _unlockScroll := null
+  _cleanupTrap := null
+
+  ~>
+    if @open
+      _prevFocus = document.activeElement
+
+      # Lock scroll
+      scrollY = window.scrollY
+      document.body.style.position = 'fixed'
+      document.body.style.top = "-#{scrollY}px"
+      document.body.style.width = '100%'
+
+      # Trap focus after render
+      setTimeout =>
+        panel = @_panelEl
+        if panel
+          focusable = panel.querySelectorAll 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+          focusable[0]?.focus()
+
+          _cleanupTrap = (e) ->
+            return unless e.key is 'Tab'
+            list = Array.from(panel.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')).filter (f) -> f.offsetParent isnt null
+            return unless list.length
+            first = list[0]
+            last = list[list.length - 1]
+            if e.shiftKey
+              if document.activeElement is first
+                e.preventDefault()
+                last.focus()
+            else
+              if document.activeElement is last
+                e.preventDefault()
+                first.focus()
+          panel.addEventListener 'keydown', _cleanupTrap
+      , 0
+
+      # Cleanup
+      ->
+        # Unlock scroll
+        document.body.style.position = ''
+        document.body.style.top = ''
+        document.body.style.width = ''
+        window.scrollTo 0, scrollY
+
+        # Remove trap
+        @_panelEl?.removeEventListener 'keydown', _cleanupTrap if _cleanupTrap
+
+        # Restore focus
+        _prevFocus?.focus()
+
+  close: ->
+    @open = false
+    @emit 'close'
+
+  onKeydown: (e) ->
+    if e.key is 'Escape'
+      e.preventDefault()
+      @close()
+
+  onBackdropClick: (e) ->
+    @close() if e.target is e.currentTarget
+
+  render
+    if @open
+      div._backdropEl data-open: true,
+        @click: @onBackdropClick,
+        @keydown: @onKeydown
+        div._panelEl role: "dialog", aria-modal: "true", tabindex: "-1"
+          #content

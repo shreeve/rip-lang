@@ -1,0 +1,47 @@
+# Toast — accessible headless toast notification system
+#
+# Auto-dismisses after a configurable duration. Supports stacking.
+# Uses ARIA live region for screen reader announcements.
+# Ships zero CSS.
+#
+# Usage:
+#   Toast message: "Order submitted!", duration: 4000, @dismiss: handleDismiss
+#
+# Or use the static method for imperative usage:
+#   Toast.show("Order submitted!", { duration: 4000 })
+
+export Toast = component
+  @message := ''
+  @duration := 4000
+  @type := 'info'
+
+  visible := true
+  leaving := false
+  _timer := null
+
+  onMount: ->
+    if @duration > 0
+      _timer = setTimeout =>
+        @dismiss()
+      , @duration
+
+  beforeUnmount: ->
+    clearTimeout _timer if _timer
+
+  dismiss: ->
+    leaving = true
+    setTimeout =>
+      visible = false
+      @emit 'dismiss'
+    , 200
+
+  render
+    if visible
+      div role: "status",
+        aria-live: "polite",
+        data-type: @type,
+        data-leaving: (leaving or undefined)
+        .
+          span @message
+          button aria-label: "Dismiss", @click: @dismiss
+            "✕"

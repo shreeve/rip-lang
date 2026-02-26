@@ -1,0 +1,89 @@
+# Tooltip — accessible headless tooltip with delay and positioning
+#
+# Shows on hover/focus with configurable delay. Uses aria-describedby.
+# Exposes data-open, data-entering, data-exiting. Ships zero CSS.
+#
+# Usage:
+#   Tooltip text: "Helpful info", placement: "top"
+#     button "Hover me"
+
+export Tooltip = component
+  @text := ''
+  @placement := 'top'
+  @delay := 300
+  @offset := 6
+
+  open := false
+  entering := false
+  exiting := false
+  _showTimer := null
+  _hideTimer := null
+  _id := "tip-#{Math.random().toString(36).slice(2, 8)}"
+
+  show: ->
+    clearTimeout _hideTimer if _hideTimer
+    _showTimer = setTimeout =>
+      open = true
+      entering = true
+      setTimeout =>
+        entering = false
+        @_position()
+      , 0
+    , @delay
+
+  hide: ->
+    clearTimeout _showTimer if _showTimer
+    exiting = true
+    _hideTimer = setTimeout =>
+      open = false
+      exiting = false
+    , 150
+
+  _position: ->
+    return unless @_triggerEl and @_tipEl
+    tr = @_triggerEl.getBoundingClientRect()
+    tl = @_tipEl.getBoundingClientRect()
+    off = @offset
+    [side] = @placement.split('-')
+
+    x = tr.left + (tr.width - tl.width) / 2
+    y = switch side
+      when 'top' then tr.top - tl.height - off
+      when 'bottom' then tr.bottom + off
+      when 'left' then tr.top + (tr.height - tl.height) / 2
+      when 'right' then tr.top + (tr.height - tl.height) / 2
+
+    if side is 'left'
+      x = tr.left - tl.width - off
+    if side is 'right'
+      x = tr.right + off
+
+    if y < 0 then y = tr.bottom + off
+    if y + tl.height > window.innerHeight then y = tr.top - tl.height - off
+    x = Math.max(4, Math.min(x, window.innerWidth - tl.width - 4))
+
+    @_tipEl.style.position = 'fixed'
+    @_tipEl.style.left = "#{x}px"
+    @_tipEl.style.top = "#{y}px"
+
+  beforeUnmount: ->
+    clearTimeout _showTimer if _showTimer
+    clearTimeout _hideTimer if _hideTimer
+
+  render
+    .
+      div._triggerEl
+        aria-describedby: (if open then _id else undefined),
+        @mouseenter: @show,
+        @mouseleave: @hide,
+        @focusin: @show,
+        @focusout: @hide
+        #content
+
+      if open
+        div._tipEl id: _id, role: "tooltip",
+          data-open: true,
+          data-entering: (entering or undefined),
+          data-exiting: (exiting or undefined),
+          data-placement: @placement
+          @text

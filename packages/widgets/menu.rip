@@ -1,0 +1,120 @@
+# Menu — accessible headless dropdown menu
+#
+# Keyboard: ArrowDown/Up to navigate, Enter/Space to select, Escape to close,
+# Home/End for first/last. Exposes data-open on menu, data-highlighted on items.
+# Ships zero CSS.
+#
+# Usage:
+#   Menu
+#     button data-trigger: true, "Actions"
+#     div data-item: "edit", "Edit"
+#     div data-item: "delete", "Delete"
+#     div data-item: "archive", "Archive"
+
+export Menu = component
+  @disabled := false
+
+  open := false
+  highlightedIndex := -1
+
+  items ~=
+    return [] unless @_menuEl
+    Array.from(@_menuEl?.querySelectorAll('[data-item]') or [])
+
+  toggle: ->
+    return if @disabled
+    if open then @close() else @openMenu()
+
+  openMenu: ->
+    open = true
+    highlightedIndex = 0
+    setTimeout =>
+      @_position()
+      items[0]?.focus()
+    , 0
+
+  close: ->
+    open = false
+    highlightedIndex = -1
+    @_triggerEl?.focus()
+
+  selectItem: (idx) ->
+    item = items[idx]
+    return unless item
+    return if item.dataset.disabled?
+    @emit 'select', item.dataset.item
+    @close()
+
+  _position: ->
+    return unless @_triggerEl and @_menuEl
+    tr = @_triggerEl.getBoundingClientRect()
+    @_menuEl.style.position = 'fixed'
+    @_menuEl.style.left = "#{tr.left}px"
+    @_menuEl.style.top = "#{tr.bottom + 4}px"
+    @_menuEl.style.minWidth = "#{tr.width}px"
+    mr = @_menuEl.getBoundingClientRect()
+    if mr.bottom > window.innerHeight
+      @_menuEl.style.top = "#{tr.top - mr.height - 4}px"
+
+  onTriggerKeydown: (e) ->
+    return if @disabled
+    if e.key in ['ArrowDown', 'Enter', ' ']
+      e.preventDefault()
+      @openMenu()
+
+  onMenuKeydown: (e) ->
+    len = items.length
+    return unless len
+
+    switch e.key
+      when 'ArrowDown'
+        e.preventDefault()
+        highlightedIndex = (highlightedIndex + 1) %% len
+        items[highlightedIndex]?.focus()
+      when 'ArrowUp'
+        e.preventDefault()
+        highlightedIndex = (highlightedIndex - 1) %% len
+        items[highlightedIndex]?.focus()
+      when 'Home'
+        e.preventDefault()
+        highlightedIndex = 0
+        items[0]?.focus()
+      when 'End'
+        e.preventDefault()
+        highlightedIndex = len - 1
+        items[len - 1]?.focus()
+      when 'Enter', ' '
+        e.preventDefault()
+        @selectItem(highlightedIndex)
+      when 'Escape'
+        e.preventDefault()
+        @close()
+      when 'Tab'
+        @close()
+
+  onBackdropClick: (e) ->
+    @close() if e.target is e.currentTarget
+
+  render
+    .
+      button._triggerEl
+        aria-haspopup: "menu",
+        aria-expanded: (if open then 'true' else 'false'),
+        data-open: (open or undefined),
+        data-disabled: (@disabled or undefined),
+        disabled: @disabled,
+        @click: @toggle,
+        @keydown: @onTriggerKeydown
+        #content
+
+      if open
+        .('fixed inset-0 z-50') @click: @onBackdropClick
+        div._menuEl role: "menu", data-open: true, @keydown: @onMenuKeydown
+          for item, idx in items
+            div role: "menuitem",
+              tabindex: "-1",
+              data-highlighted: (idx is highlightedIndex or undefined),
+              data-disabled: (item.dataset.disabled or undefined),
+              @click: (=> @selectItem(idx)),
+              @mouseenter: (=> highlightedIndex = idx)
+              item.textContent

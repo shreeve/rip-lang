@@ -1,0 +1,70 @@
+# Tabs — accessible headless tab widget
+#
+# Keyboard: ArrowLeft/Right to navigate tabs, Home/End for first/last.
+# Manages focus via roving tabindex. Exposes data-active on tabs and panels.
+# Ships zero CSS.
+#
+# Usage:
+#   Tabs active <=> currentTab
+#     div data-tab: "one", "Tab One"
+#     div data-tab: "two", "Tab Two"
+#     div data-panel: "one"
+#       p "Content for tab one"
+#     div data-panel: "two"
+#       p "Content for tab two"
+
+export Tabs = component
+  @active := null
+
+  _tabEls ~=
+    return [] unless @_el
+    Array.from(@_el?.querySelectorAll('[data-tab]') or [])
+
+  _panelEls ~=
+    return [] unless @_el
+    Array.from(@_el?.querySelectorAll('[data-panel]') or [])
+
+  onMount: ->
+    unless @active
+      first = _tabEls[0]
+      @active = first?.dataset.tab if first
+
+  select: (id) ->
+    @active = id
+    @emit 'change', id
+
+  onKeydown: (e) ->
+    ids = _tabEls.map (t) -> t.dataset.tab
+    idx = ids.indexOf @active
+    return if idx is -1
+
+    next = switch e.key
+      when 'ArrowRight' then ids[(idx + 1) %% ids.length]
+      when 'ArrowLeft'  then ids[(idx - 1) %% ids.length]
+      when 'Home'       then ids[0]
+      when 'End'        then ids[ids.length - 1]
+      else null
+
+    if next
+      e.preventDefault()
+      @select(next)
+      tab = _tabEls.find (t) -> t.dataset.tab is next
+      tab?.focus()
+
+  render
+    div._el
+
+      div role: "tablist", @keydown: @onKeydown
+        for tab in _tabEls
+          button role: "tab",
+            aria-selected: (if tab.dataset.tab is @active then 'true' else 'false'),
+            tabindex: (if tab.dataset.tab is @active then '0' else '-1'),
+            data-active: (tab.dataset.tab is @active or undefined),
+            @click: (=> @select(tab.dataset.tab))
+            tab.textContent
+
+      for panel in _panelEls
+        div role: "tabpanel",
+          data-active: (panel.dataset.tab is @active or undefined),
+          hidden: (panel.dataset.tab isnt @active or undefined)
+          #content

@@ -1,0 +1,169 @@
+# Select — accessible headless select widget
+#
+# Keyboard: ArrowDown/Up to navigate, Enter/Space to select, Escape to close,
+#           Home/End for first/last, typeahead to jump by character.
+#
+# Exposes data-open on trigger, data-highlighted and data-selected on options.
+# Ships zero CSS — style entirely via attribute selectors in your stylesheet.
+#
+# Usage:
+#   Select value <=> selectedValue, @change: (=> handle(event.detail))
+#     option value: "a", "Option A"
+#     option value: "b", "Option B"
+
+export Select = component
+  @value := null
+  @placeholder := 'Select...'
+  @disabled := false
+
+  open := false
+  highlightedIndex := -1
+  typeaheadBuffer := ''
+  typeaheadTimer := null
+
+  options ~=
+    return [] unless @_slotEl
+    Array.from(@_slotEl?.querySelectorAll('[data-value]') or [])
+
+  selectedLabel ~=
+    if @value?
+      el = options.find (o) -> o.dataset.value is String(@value)
+      el?.textContent?.trim() or String(@value)
+    else
+      @placeholder
+
+  toggle: ->
+    return if @disabled
+    if open then @close() else @openMenu()
+
+  openMenu: ->
+    open = true
+    highlightedIndex = Math.max(0, options.findIndex (o) -> o.dataset.value is String(@value))
+    @_schedulePosition()
+    setTimeout =>
+      @_focusHighlighted()
+    , 0
+
+  close: ->
+    open = false
+    highlightedIndex = -1
+    @_triggerEl?.focus()
+
+  selectIndex: (idx) ->
+    opt = options[idx]
+    return unless opt
+    @value = opt.dataset.value
+    @emit 'change', @value
+    @close()
+
+  onTriggerKeydown: (e) ->
+    return if @disabled
+    switch e.key
+      when 'ArrowDown', 'ArrowUp', 'Enter', ' '
+        e.preventDefault()
+        @openMenu()
+      when 'Escape'
+        e.preventDefault()
+        @close() if open
+
+  onListKeydown: (e) ->
+    len = options.length
+    return unless len
+
+    switch e.key
+      when 'ArrowDown'
+        e.preventDefault()
+        highlightedIndex = (highlightedIndex + 1) %% len
+        @_focusHighlighted()
+      when 'ArrowUp'
+        e.preventDefault()
+        highlightedIndex = (highlightedIndex - 1) %% len
+        @_focusHighlighted()
+      when 'Home'
+        e.preventDefault()
+        highlightedIndex = 0
+        @_focusHighlighted()
+      when 'End'
+        e.preventDefault()
+        highlightedIndex = len - 1
+        @_focusHighlighted()
+      when 'Enter', ' '
+        e.preventDefault()
+        @selectIndex(highlightedIndex)
+      when 'Escape'
+        e.preventDefault()
+        @close()
+      when 'Tab'
+        @close()
+      else
+        if e.key.length is 1
+          @_typeahead(e.key)
+
+  _typeahead: (char) ->
+    clearTimeout typeaheadTimer if typeaheadTimer
+    typeaheadBuffer += char.toLowerCase()
+    typeaheadTimer = setTimeout (-> typeaheadBuffer = ''), 500
+    idx = options.findIndex (o) -> o.textContent.trim().toLowerCase().startsWith(typeaheadBuffer)
+    if idx >= 0
+      highlightedIndex = idx
+      @_focusHighlighted()
+
+  _focusHighlighted: ->
+    opt = options[highlightedIndex]
+    opt?.focus()
+
+  _schedulePosition: ->
+    return unless @_triggerEl and @_listEl
+    tr = @_triggerEl.getBoundingClientRect()
+    @_listEl.style.position = 'fixed'
+    @_listEl.style.left = "#{tr.left}px"
+    @_listEl.style.top = "#{tr.bottom + 4}px"
+    @_listEl.style.minWidth = "#{tr.width}px"
+    # Flip up if overflows
+    lr = @_listEl.getBoundingClientRect()
+    if lr.bottom > window.innerHeight
+      @_listEl.style.top = "#{tr.top - lr.height - 4}px"
+
+  onOptionClick: (idx) ->
+    @selectIndex(idx)
+
+  onOptionMouseenter: (idx) ->
+    highlightedIndex = idx
+
+  onBackdropClick: (e) ->
+    @close() if open and e.target is e.currentTarget
+
+  render
+    .
+
+      # Trigger button
+      button._triggerEl role: "combobox",
+        aria-expanded: (if open then 'true' else 'false'),
+        aria-haspopup: "listbox",
+        data-open: (open or undefined),
+        data-disabled: (@disabled or undefined),
+        disabled: @disabled,
+        @click: @toggle,
+        @keydown: @onTriggerKeydown
+        span selectedLabel
+
+      # Hidden slot for reading option definitions
+      ._slotEl style: "display:none"
+        #content
+
+      # Dropdown listbox
+      if open
+        .('fixed inset-0 z-50') @click: @onBackdropClick
+        div._listEl role: "listbox",
+          data-open: true,
+          @keydown: @onListKeydown
+          for opt, idx in options
+            div role: "option",
+              tabindex: "-1",
+              data-value: opt.dataset.value,
+              data-highlighted: (idx is highlightedIndex or undefined),
+              data-selected: (opt.dataset.value is String(@value) or undefined),
+              aria-selected: (if opt.dataset.value is String(@value) then 'true' else 'false'),
+              @click: (=> @onOptionClick(idx)),
+              @mouseenter: (=> @onOptionMouseenter(idx))
+              opt.textContent

@@ -1,0 +1,114 @@
+# Combobox — accessible headless combobox (input + filterable listbox)
+#
+# Keyboard: ArrowDown/Up to navigate, Enter to select, Escape to close,
+#           typing filters the list via the @filter callback.
+#
+# Exposes data-open on the wrapper, data-highlighted and data-selected on items.
+# Ships zero CSS — style entirely via attribute selectors in your stylesheet.
+#
+# Usage:
+#   Combobox query <=> searchText, @select: handleSelect, @filter: filterFn
+#     for item in filteredItems
+#       div data-value: item.id
+#         span item.name
+
+export Combobox = component
+  @query := ''
+  @placeholder := 'Search...'
+  @disabled := false
+
+  open := false
+  highlightedIndex := -1
+
+  items ~=
+    return [] unless @_listEl
+    Array.from(@_listEl?.querySelectorAll('[data-value]') or [])
+
+  onInput: (e) ->
+    @query = e.target.value
+    open = true
+    highlightedIndex = -1
+    @emit 'filter', @query
+
+  openMenu: ->
+    open = true
+    highlightedIndex = -1
+
+  close: ->
+    open = false
+    highlightedIndex = -1
+
+  selectIndex: (idx) ->
+    item = items[idx]
+    return unless item
+    @emit 'select', item.dataset.value
+    @close()
+
+  onInputKeydown: (e) ->
+    len = items.length
+    switch e.key
+      when 'ArrowDown'
+        e.preventDefault()
+        @openMenu() unless open
+        highlightedIndex = if highlightedIndex < len - 1 then highlightedIndex + 1 else 0
+        @_scrollToHighlighted()
+      when 'ArrowUp'
+        e.preventDefault()
+        highlightedIndex = if highlightedIndex > 0 then highlightedIndex - 1 else len - 1
+        @_scrollToHighlighted()
+      when 'Enter'
+        e.preventDefault()
+        if highlightedIndex >= 0
+          @selectIndex(highlightedIndex)
+        else if len is 1
+          @selectIndex(0)
+      when 'Escape'
+        e.preventDefault()
+        if open then @close() else @query = ''
+      when 'Tab'
+        @close()
+
+  _scrollToHighlighted: ->
+    item = items[highlightedIndex]
+    item?.scrollIntoView({ block: 'nearest' })
+
+  onItemClick: (idx) ->
+    @selectIndex(idx)
+
+  onItemMouseenter: (idx) ->
+    highlightedIndex = idx
+
+  onBackdropClick: (e) ->
+    @close() if e.target is e.currentTarget
+
+  onFocus: ->
+    @openMenu()
+
+  render
+    . data-open: (open or undefined)
+
+      # Text input
+      input._inputEl role: "combobox",
+        type: "text",
+        autocomplete: "off",
+        aria-expanded: (if open then 'true' else 'false'),
+        aria-haspopup: "listbox",
+        aria-autocomplete: "list",
+        data-disabled: (@disabled or undefined),
+        disabled: @disabled,
+        placeholder: @placeholder,
+        value: @query,
+        @input: @onInput,
+        @keydown: @onInputKeydown,
+        @focus: @onFocus
+
+      # Dropdown listbox
+      if open and items.length > 0
+        .('fixed inset-0 z-40') @click: @onBackdropClick
+        div._listEl role: "listbox", data-open: true
+          #content
+
+      # Pass slot content to hidden container when closed (for reading items)
+      unless open
+        div._listEl style: "display:none"
+          #content
