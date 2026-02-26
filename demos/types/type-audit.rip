@@ -201,12 +201,12 @@ def clamp(val:: number, lo:: number, hi:: number):: number
 
 # Array return
 def makeRange(start:: number, end:: number):: number[]
-  result = []
+  range = []
   i = start
   while i <= end
-    result.push(i)
+    range.push(i)
     i++
-  result
+  range
 
 # Object return with structural type
 def makePoint(x:: number, y:: number):: Point
@@ -214,8 +214,8 @@ def makePoint(x:: number, y:: number):: Point
 
 # Union return type
 def parse(input:: string):: number | null
-  result = parseInt(input)
-  if isNaN(result) then null else result
+  num = parseInt(input)
+  if isNaN(num) then null else num
 
 # Type narrowing
 def describe(val:: string | number):: string
