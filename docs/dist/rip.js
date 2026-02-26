@@ -3934,7 +3934,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       }
       for (const { name, value, isPublic } of stateVars) {
         const val = this.generateInComponent(value, "value");
-        lines.push(isPublic ? `    this.${name} = __state(props.${name} ?? ${val});` : `    this.${name} = __state(${val});`);
+        lines.push(isPublic ? `    this.${name} = __state(props.__bind_${name}__ ?? props.${name} ?? ${val});` : `    this.${name} = __state(${val});`);
       }
       for (const { name, expr } of derivedVars) {
         if (this.is(expr, "block") && expr.length > 2) {
@@ -4134,6 +4134,12 @@ ${blockFactoriesCode}return ${lines.join(`
       const headStr = typeof head === "string" ? head : head instanceof String ? head.valueOf() : null;
       if (headStr && this.isComponent(headStr)) {
         return this.generateChildComponent(headStr, rest);
+      }
+      if (headStr === "slot" && this.componentMembers) {
+        const s = this._self;
+        const slotVar = this.newElementVar("slot");
+        this._createLines.push(`${slotVar} = ${s}.children instanceof Node ? ${s}.children : (${s}.children != null ? document.createTextNode(String(${s}.children)) : document.createComment(''));`);
+        return slotVar;
       }
       if (headStr && this.isHtmlTag(headStr)) {
         let [tagName, id] = headStr.split("#");
@@ -4661,11 +4667,15 @@ ${blockFactoriesCode}return ${lines.join(`
       this._pendingAutoWire = false;
       const instVar = this.newElementVar("inst");
       const elVar = this.newElementVar("el");
-      const { propsCode, reactiveProps, childrenSetupLines } = this.buildComponentProps(args);
+      const { propsCode, reactiveProps, eventBindings, childrenSetupLines } = this.buildComponentProps(args);
       const s = this._self;
       this._createLines.push(`${instVar} = new ${componentName}(${propsCode});`);
       this._createLines.push(`${elVar} = ${instVar}._root = ${instVar}._create();`);
       this._createLines.push(`(${s}._children || (${s}._children = [])).push(${instVar});`);
+      for (const { event, value } of eventBindings) {
+        const handlerCode = this.generateInComponent(value, "value");
+        this._createLines.push(`${elVar}.addEventListener('${event}', (e) => __batch(() => (${handlerCode})(e)));`);
+      }
       this._setupLines.push(`try { if (${instVar}._setup) ${instVar}._setup(); if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); }`);
       for (const { key, valueCode } of reactiveProps) {
         this._pushEffect(`if (${instVar}.${key}) ${instVar}.${key}.value = ${valueCode};`);
@@ -4678,9 +4688,14 @@ ${blockFactoriesCode}return ${lines.join(`
     proto.buildComponentProps = function(args) {
       const props = [];
       const reactiveProps = [];
+      const eventBindings = [];
       let childrenVar = null;
       const childrenSetupLines = [];
       const addProp = (key, value) => {
+        if (key.startsWith("@")) {
+          eventBindings.push({ event: key.slice(1).split(".")[0], value });
+          return;
+        }
         const isDirectSignal = this.reactiveMembers && (typeof value === "string" && this.reactiveMembers.has(value) || Array.isArray(value) && value[0] === "." && value[1] === "this" && typeof value[2] === "string" && this.reactiveMembers.has(value[2]));
         if (isDirectSignal) {
           const member = typeof value === "string" ? value : value[2];
@@ -4696,8 +4711,11 @@ ${blockFactoriesCode}return ${lines.join(`
       const addObjectProps = (objExpr) => {
         for (let i = 1;i < objExpr.length; i++) {
           const [key, value] = objExpr[i];
-          if (typeof key === "string")
+          if (typeof key === "string") {
             addProp(key, value);
+          } else if (Array.isArray(key) && key[0] === "." && key[1] === "this" && typeof key[2] === "string") {
+            eventBindings.push({ event: key[2], value });
+          }
         }
       };
       for (const arg of args) {
@@ -4737,7 +4755,7 @@ ${blockFactoriesCode}return ${lines.join(`
         }
       }
       const propsCode = props.length > 0 ? `{ ${props.join(", ")} }` : "{}";
-      return { propsCode, reactiveProps, childrenSetupLines };
+      return { propsCode, reactiveProps, eventBindings, childrenSetupLines };
     };
     proto.hasReactiveDeps = function(sexpr) {
       if (typeof sexpr === "string") {
@@ -8575,8 +8593,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.31";
-  var BUILD_DATE = "2026-02-26@09:14:06GMT";
+  var VERSION = "3.13.32";
+  var BUILD_DATE = "2026-02-26@09:33:18GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

@@ -18,6 +18,7 @@ export Checkbox = component
   @switch := false
 
   toggle: ->
+    alert 'toggle' # Can we get this to work???
     return if @disabled
     @indeterminate = false
     @checked = not @checked

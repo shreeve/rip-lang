@@ -700,7 +700,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     for (const { name, value, isPublic } of stateVars) {
       const val = this.generateInComponent(value, 'value');
       lines.push(isPublic
-        ? `    this.${name} = __state(props.${name} ?? ${val});`
+        ? `    this.${name} = __state(props.__bind_${name}__ ?? props.${name} ?? ${val});`
         : `    this.${name} = __state(${val});`);
     }
 
@@ -950,6 +950,14 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     // Component instantiation (PascalCase)
     if (headStr && this.isComponent(headStr)) {
       return this.generateChildComponent(headStr, rest);
+    }
+
+    // Slot projection — replace <slot> with @children in component render
+    if (headStr === 'slot' && this.componentMembers) {
+      const s = this._self;
+      const slotVar = this.newElementVar('slot');
+      this._createLines.push(`${slotVar} = ${s}.children instanceof Node ? ${s}.children : (${s}.children != null ? document.createTextNode(String(${s}.children)) : document.createComment(''));`);
+      return slotVar;
     }
 
     // HTML tag (possibly with #id, e.g. div#content)
@@ -1636,12 +1644,17 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     this._pendingAutoWire = false;
     const instVar = this.newElementVar('inst');
     const elVar = this.newElementVar('el');
-    const { propsCode, reactiveProps, childrenSetupLines } = this.buildComponentProps(args);
+    const { propsCode, reactiveProps, eventBindings, childrenSetupLines } = this.buildComponentProps(args);
 
     const s = this._self;
     this._createLines.push(`${instVar} = new ${componentName}(${propsCode});`);
     this._createLines.push(`${elVar} = ${instVar}._root = ${instVar}._create();`);
     this._createLines.push(`(${s}._children || (${s}._children = [])).push(${instVar});`);
+
+    for (const { event, value } of eventBindings) {
+      const handlerCode = this.generateInComponent(value, 'value');
+      this._createLines.push(`${elVar}.addEventListener('${event}', (e) => __batch(() => (${handlerCode})(e)));`);
+    }
 
     this._setupLines.push(`try { if (${instVar}._setup) ${instVar}._setup(); if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); }`);
 
@@ -1663,12 +1676,17 @@ export function installComponentSupport(CodeGenerator, Lexer) {
   proto.buildComponentProps = function(args) {
     const props = [];
     const reactiveProps = [];
+    const eventBindings = [];
     let childrenVar = null;
     const childrenSetupLines = [];
 
     // Simple reactive values pass the signal directly for shared reactivity;
     // complex expressions use normal .value unwrapping to compute the value.
     const addProp = (key, value) => {
+      if (key.startsWith('@')) {
+        eventBindings.push({ event: key.slice(1).split('.')[0], value });
+        return;
+      }
       const isDirectSignal = this.reactiveMembers && (
         (typeof value === 'string' && this.reactiveMembers.has(value)) ||
         (Array.isArray(value) && value[0] === '.' && value[1] === 'this' && typeof value[2] === 'string' && this.reactiveMembers.has(value[2]))
@@ -1688,7 +1706,11 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     const addObjectProps = (objExpr) => {
       for (let i = 1; i < objExpr.length; i++) {
         const [key, value] = objExpr[i];
-        if (typeof key === 'string') addProp(key, value);
+        if (typeof key === 'string') {
+          addProp(key, value);
+        } else if (Array.isArray(key) && key[0] === '.' && key[1] === 'this' && typeof key[2] === 'string') {
+          eventBindings.push({ event: key[2], value });
+        }
       }
     };
 
@@ -1735,7 +1757,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     }
 
     const propsCode = props.length > 0 ? `{ ${props.join(', ')} }` : '{}';
-    return { propsCode, reactiveProps, childrenSetupLines };
+    return { propsCode, reactiveProps, eventBindings, childrenSetupLines };
   };
 
   // --------------------------------------------------------------------------
