@@ -102,7 +102,7 @@ export WeekPicker = component
     .('relative inline-block') @focusout: @closePopover,
       # Trigger - wraps the slotted content
       . @click: @togglePopover,
-        #content
+        slot
 
       # Popover calendar
       if popoverOpen

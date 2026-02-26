@@ -17,4 +17,4 @@ export Layout = component
       h2.('mt-2 text-3xl font-semibold md:mt-3 md:text-4xl lg:mt-4')
         if isTimePage then "Select time" else "Review and confirm"
 
-      #content
+      slot

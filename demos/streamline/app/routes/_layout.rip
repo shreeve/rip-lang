@@ -108,4 +108,4 @@ export Layout = component
         # ---- Main Content ----
         .('px-5')
           .('mx-auto max-w-[940px] py-6 md:py-8 xl:py-10')
-            #content
+            slot
