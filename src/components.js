@@ -1046,19 +1046,26 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         this.generateAttributes(elVar, arg);
       }
       else if (typeof arg === 'string' || arg instanceof String) {
-        const textVar = this.newTextVar();
         const val = arg.valueOf();
-        if (val.startsWith('"') || val.startsWith("'") || val.startsWith('`')) {
-          this._createLines.push(`${textVar} = document.createTextNode(${val});`);
-        } else if (this.reactiveMembers && this.reactiveMembers.has(val)) {
-          this._createLines.push(`${textVar} = document.createTextNode('');`);
-          this._pushEffect(`${textVar}.data = ${this._self}.${val}.value;`);
-        } else if (this.componentMembers && this.componentMembers.has(val)) {
-          this._createLines.push(`${textVar} = document.createTextNode(String(${this._self}.${val}));`);
+        // Template tag appearing as a string arg (e.g., slot after multi-line attrs)
+        const [tagPart, idPart] = val.split('#');
+        if (this.isHtmlTag(tagPart || 'div') || this.isComponent(val)) {
+          const childVar = this.generateNode(arg);
+          this._createLines.push(`${elVar}.appendChild(${childVar});`);
         } else {
-          this._createLines.push(`${textVar} = document.createTextNode(${this.generateInComponent(arg, 'value')});`);
+          const textVar = this.newTextVar();
+          if (val.startsWith('"') || val.startsWith("'") || val.startsWith('`')) {
+            this._createLines.push(`${textVar} = document.createTextNode(${val});`);
+          } else if (this.reactiveMembers && this.reactiveMembers.has(val)) {
+            this._createLines.push(`${textVar} = document.createTextNode('');`);
+            this._pushEffect(`${textVar}.data = ${this._self}.${val}.value;`);
+          } else if (this.componentMembers && this.componentMembers.has(val)) {
+            this._createLines.push(`${textVar} = document.createTextNode(String(${this._self}.${val}));`);
+          } else {
+            this._createLines.push(`${textVar} = document.createTextNode(${this.generateInComponent(arg, 'value')});`);
+          }
+          this._createLines.push(`${elVar}.appendChild(${textVar});`);
         }
-        this._createLines.push(`${elVar}.appendChild(${textVar});`);
       }
       else if (arg) {
         const childVar = this.generateNode(arg);
