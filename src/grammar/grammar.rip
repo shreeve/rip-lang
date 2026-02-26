@@ -898,7 +898,7 @@ grammar =
     o 'Expression RELATION Expression', '[2, 1, 3]'     # in, of, instanceof
 
     # Ternary
-    o 'Expression SPACE? Expression : Expression', '["?:", 1, 3, 5]'
+    o 'Expression TERNARY Expression : Expression', '["?:", 1, 3, 5]'
 
     # Compound assignment
     o 'SimpleAssignable COMPOUND_ASSIGN Expression'               , '[2, 1, 3]'
@@ -935,7 +935,7 @@ operators = """
   left        &&
   left        ||
   left        PIPE
-  right       SPACE?
+  right       TERNARY
   nonassoc    INDENT OUTDENT
   right       YIELD
   right       = : COMPOUND_ASSIGN RETURN THROW EXTENDS

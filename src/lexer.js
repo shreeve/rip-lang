@@ -180,7 +180,7 @@ let CALL_CLOSERS = new Set(['.', '?.']);
 let UNFINISHED = new Set([
   '\\', '.', '?.', 'UNARY', 'DO', 'DO_IIFE',
   'MATH', 'UNARY_MATH', '+', '-', '**', 'SHIFT', 'RELATION',
-  'COMPARE', '&', '^', '|', '&&', '||', 'SPACE?', 'EXTENDS',
+  'COMPARE', '&', '^', '|', '&&', '||', 'TERNARY', 'EXTENDS',
 ]);
 
 // Tokens that are not followed by regex (division context)
@@ -500,7 +500,7 @@ export class Lexer {
     let prev = this.prev();
 
     // Don't treat colon as property when in ternary context
-    if (colon && prev && prev[0] === 'SPACE?') colon = null;
+    if (colon && prev && prev[0] === 'TERNARY') colon = null;
 
     // Property vs identifier
     if (colon || (prev && (prev[0] === '.' || prev[0] === '?.' || (!prev.spaced && prev[0] === '@')))) {
@@ -1228,8 +1228,8 @@ export class Lexer {
     else if (COMPOUND_ASSIGN.has(val)) tag = 'COMPOUND_ASSIGN';
     else if (UNARY_MATH.has(val))      tag = 'UNARY_MATH';
     else if (SHIFT.has(val))           tag = 'SHIFT';
-    // Spaced ? → SPACE? (ternary)
-    else if (val === '?' && prev?.spaced) tag = 'SPACE?';
+    // Spaced ? → TERNARY (ternary)
+    else if (val === '?' && prev?.spaced) tag = 'TERNARY';
     // Unspaced !? → DEFINED (postfix defined check: v!? → v !== undefined)
     else if (val === '!?' && prev && !prev.spaced) tag = 'DEFINED';
     // Unspaced ?! → PRESENCE (Houdini: v?! → v ? true : undefined)
@@ -1534,7 +1534,7 @@ export class Lexer {
       }
 
       // Track ternary
-      if (tag === 'SPACE?') inTernary = true;
+      if (tag === 'TERNARY') inTernary = true;
 
       // Implicit objects start at ':'
       if (tag === ':') {
