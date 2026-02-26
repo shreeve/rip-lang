@@ -3445,7 +3445,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
   var TEMPLATE_TAGS = new Set([...HTML_TAGS, ...SVG_TAGS]);
   var BIND_PREFIX = "__bind_";
   var BIND_SUFFIX = "__";
-  var LIFECYCLE_HOOKS = new Set(["beforeMount", "mounted", "updated", "beforeUnmount", "unmounted"]);
+  var LIFECYCLE_HOOKS = new Set(["beforeMount", "mounted", "updated", "beforeUnmount", "unmounted", "onError"]);
   var BOOLEAN_ATTRS = new Set([
     "disabled",
     "hidden",
@@ -3491,19 +3491,6 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
   }
   function isPublicProp(target) {
     return Array.isArray(target) && target[0] === "." && target[1] === "this";
-  }
-  function getFragChildren(rootVar, createLines, localizeVar) {
-    const root = localizeVar(rootVar);
-    if (!/_frag\d+$/.test(root))
-      return null;
-    const children = [];
-    const re = new RegExp(`^${root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.appendChild\\(([^)]+)\\);`);
-    for (const line of createLines) {
-      const m = localizeVar(line).match(re);
-      if (m)
-        children.push(m[1]);
-    }
-    return children.length > 0 ? children : null;
   }
   function installComponentSupport(CodeGenerator, Lexer2) {
     Lexer2.prototype.rewriteRender = function() {
@@ -3608,6 +3595,14 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         }
         if (!inRender)
           return 1;
+        if (tag === "UNARY_MATH" && token[1] === "~" && nextToken && nextToken[0] === "IDENTIFIER") {
+          token[0] = "PROPERTY";
+          token[1] = "__transition__";
+          let colonToken = gen2(":", ":", token);
+          let valueToken = gen2("STRING", `"${nextToken[1]}"`, nextToken);
+          tokens.splice(i + 1, 1, colonToken, valueToken);
+          return 1;
+        }
         if (tag === "IDENTIFIER" && !token.spaced) {
           let parts = [token[1]];
           let j = i + 1;
@@ -3635,9 +3630,12 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           let prevTag = prevToken ? prevToken[0] : null;
           if (prevTag === "INDENT" || prevTag === "TERMINATOR") {
             if (nextToken && nextToken[0] === "PROPERTY") {
-              let divToken = gen2("IDENTIFIER", "div", token);
-              tokens.splice(i, 0, divToken);
-              return 2;
+              let nextNext = i + 2 < tokens.length ? tokens[i + 2] : null;
+              if (!nextNext || nextNext[0] !== ":") {
+                let divToken = gen2("IDENTIFIER", "div", token);
+                tokens.splice(i, 0, divToken);
+                return 2;
+              }
             }
             if (!nextToken || nextToken[0] !== "(") {
               token[0] = "IDENTIFIER";
@@ -3714,19 +3712,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           }
         }
         if (nextToken && nextToken[0] === "INDENT") {
-          if (nextToken.fromThen) {
-            let depth = 0;
-            for (let j = i;j >= 0; j--) {
-              let jt = tokens[j][0];
-              if (jt === "INTERPOLATION_END" || jt === "STRING_END")
-                depth++;
-              if (jt === "INTERPOLATION_START" || jt === "STRING_START")
-                depth--;
-              if (depth < 0) {
-                return 1;
-              }
-            }
-          }
+          if (nextToken.fromThen)
+            return 1;
           if (tag === "->" || tag === "=>" || tag === "CALL_START" || tag === "(") {
             return 1;
           }
@@ -3751,27 +3738,15 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             isTemplateElement = true;
           } else if (tag === "IDENTIFIER" && isTemplateTag(token[1]) && !isAfterControlFlow) {
             isTemplateElement = true;
-          } else if (tag === "PROPERTY" || tag === "STRING" || tag === "STRING_END" || tag === "IDENTIFIER" || tag === "NUMBER" || tag === "BOOL" || tag === "CALL_END" || tag === ")") {
+          } else if (tag === "IDENTIFIER" && !isAfterControlFlow) {
             isTemplateElement = startsWithTag(tokens, i);
-          } else if (tag === "IDENTIFIER" && i > 1 && tokens[i - 1][0] === "...") {
-            if (startsWithTag(tokens, i)) {
-              let commaToken = gen2(",", ",", token);
-              let arrowToken = gen2("->", "->", token);
-              arrowToken.newLine = true;
-              tokens.splice(i + 1, 0, commaToken, arrowToken);
-              return 3;
-            }
+          } else if (tag === "PROPERTY" || tag === "STRING" || tag === "STRING_END" || tag === "NUMBER" || tag === "BOOL" || tag === "CALL_END" || tag === ")") {
+            isTemplateElement = startsWithTag(tokens, i);
           }
           if (isTemplateElement) {
             let isClassOrIdTail = tag === "PROPERTY" && i > 0 && (tokens[i - 1][0] === "." || tokens[i - 1][0] === "#");
-            if (isClsxCallEnd) {
-              let callStartToken = gen2("CALL_START", "(", token);
-              let arrowToken = gen2("->", "->", token);
-              arrowToken.newLine = true;
-              tokens.splice(i + 1, 0, callStartToken, arrowToken);
-              pendingCallEnds.push(currentIndent + 1);
-              return 3;
-            } else if (tag === "IDENTIFIER" && isTemplateTag(token[1]) || isClassOrIdTail) {
+            let isBareTag = isClsxCallEnd || tag === "IDENTIFIER" && isTemplateTag(token[1]) || isClassOrIdTail;
+            if (isBareTag) {
               let callStartToken = gen2("CALL_START", "(", token);
               let arrowToken = gen2("->", "->", token);
               arrowToken.newLine = true;
@@ -3795,11 +3770,6 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       });
     };
     const proto = CodeGenerator.prototype;
-    proto.localizeVar = function(line) {
-      let result = line.replace(/this\.(_el\d+|_t\d+|_anchor\d+|_frag\d+|_slot\d+|_c\d+|_inst\d+|_empty\d+)/g, "$1");
-      result = result.replace(/\bthis\b/g, "ctx");
-      return result;
-    };
     proto.isHtmlTag = function(name) {
       const tagPart = name.split("#")[0];
       return TEMPLATE_TAGS.has(tagPart.toLowerCase());
@@ -3828,21 +3798,22 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       return { tag, classes, id };
     };
     proto.transformComponentMembers = function(sexpr) {
+      const self = this._self;
       if (!Array.isArray(sexpr)) {
         if (typeof sexpr === "string" && this.reactiveMembers && this.reactiveMembers.has(sexpr)) {
-          return [".", [".", "this", sexpr], "value"];
+          return [".", [".", self, sexpr], "value"];
         }
         if (typeof sexpr === "string" && this.componentMembers && this.componentMembers.has(sexpr)) {
-          return [".", "this", sexpr];
+          return [".", self, sexpr];
         }
         return sexpr;
       }
       if (sexpr[0] === "." && sexpr[1] === "this" && typeof sexpr[2] === "string") {
         const memberName = sexpr[2];
         if (this.reactiveMembers && this.reactiveMembers.has(memberName)) {
-          return [".", sexpr, "value"];
+          return [".", [".", self, memberName], "value"];
         }
-        return sexpr;
+        return this._factoryMode ? [".", self, sexpr[2]] : sexpr;
       }
       if (sexpr[0] === "." || sexpr[0] === "?.") {
         return [sexpr[0], this.transformComponentMembers(sexpr[1]), sexpr[2]];
@@ -3988,11 +3959,12 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       }
       for (const { name, value } of lifecycleHooks) {
         if (Array.isArray(value) && (value[0] === "->" || value[0] === "=>")) {
-          const [, , hookBody] = value;
+          const [, params, hookBody] = value;
+          const paramStr = Array.isArray(params) ? params.map((p) => this.formatParam(p)).join(", ") : "";
           const transformed = this.reactiveMembers ? this.transformComponentMembers(hookBody) : hookBody;
           const isAsync = this.containsAwait(hookBody);
-          const bodyCode = this.generateFunctionBody(transformed, []);
-          lines.push(`  ${isAsync ? "async " : ""}${name}() ${bodyCode}`);
+          const bodyCode = this.generateFunctionBody(transformed, params || []);
+          lines.push(`  ${isAsync ? "async " : ""}${name}(${paramStr}) ${bodyCode}`);
         }
       }
       if (renderBlock) {
@@ -4033,10 +4005,10 @@ ${blockFactoriesCode}return ${lines.join(`
     };
     proto.generateInComponent = function(sexpr, context) {
       if (typeof sexpr === "string" && this.reactiveMembers && this.reactiveMembers.has(sexpr)) {
-        return `this.${sexpr}.value`;
+        return `${this._self}.${sexpr}.value`;
       }
       if (typeof sexpr === "string" && this.componentMembers && this.componentMembers.has(sexpr)) {
-        return `this.${sexpr}`;
+        return `${this._self}.${sexpr}`;
       }
       if (Array.isArray(sexpr) && this.reactiveMembers) {
         const transformed = this.transformComponentMembers(sexpr);
@@ -4055,6 +4027,9 @@ ${blockFactoriesCode}return ${lines.join(`
       this._setupLines = [];
       this._blockFactories = [];
       this._loopVarStack = [];
+      this._factoryMode = false;
+      this._factoryVars = null;
+      this._fragChildren = new Map;
       const statements = this.is(body, "block") ? body.slice(1) : [body];
       let rootVar;
       if (statements.length === 0) {
@@ -4064,10 +4039,13 @@ ${blockFactoriesCode}return ${lines.join(`
       } else {
         rootVar = this.newElementVar("frag");
         this._createLines.push(`${rootVar} = document.createDocumentFragment();`);
+        const children = [];
         for (const stmt of statements) {
           const childVar = this.generateNode(stmt);
           this._createLines.push(`${rootVar}.appendChild(${childVar});`);
+          children.push(childVar);
         }
+        this._fragChildren.set(rootVar, children);
       }
       return {
         createLines: this._createLines,
@@ -4080,10 +4058,28 @@ ${blockFactoriesCode}return ${lines.join(`
       return `create_block_${this._blockCount++}`;
     };
     proto.newElementVar = function(hint = "el") {
-      return `this._${hint}${this._elementCount++}`;
+      const name = `_${hint}${this._elementCount++}`;
+      if (this._factoryVars)
+        this._factoryVars.add(name);
+      return this._factoryMode ? name : `this.${name}`;
     };
     proto.newTextVar = function() {
-      return `this._t${this._textCount++}`;
+      const name = `_t${this._textCount++}`;
+      if (this._factoryVars)
+        this._factoryVars.add(name);
+      return this._factoryMode ? name : `this.${name}`;
+    };
+    Object.defineProperty(proto, "_self", {
+      get() {
+        return this._factoryMode ? "ctx" : "this";
+      }
+    });
+    proto._pushEffect = function(body) {
+      if (this._factoryMode) {
+        this._setupLines.push(`disposers.push(__effect(() => { ${body} }));`);
+      } else {
+        this._setupLines.push(`__effect(() => { ${body} });`);
+      }
     };
     proto.generateNode = function(sexpr) {
       if (typeof sexpr === "string" || sexpr instanceof String) {
@@ -4096,7 +4092,7 @@ ${blockFactoriesCode}return ${lines.join(`
         if (this.reactiveMembers && this.reactiveMembers.has(str)) {
           const textVar2 = this.newTextVar();
           this._createLines.push(`${textVar2} = document.createTextNode('');`);
-          this._setupLines.push(`__effect(() => { ${textVar2}.data = this.${str}.value; });`);
+          this._pushEffect(`${textVar2}.data = ${this._self}.${str}.value;`);
           return textVar2;
         }
         const [tagStr, idStr] = str.split("#");
@@ -4128,14 +4124,15 @@ ${blockFactoriesCode}return ${lines.join(`
       if (headStr === ".") {
         const [, obj, prop] = sexpr;
         if (obj === "this" && typeof prop === "string") {
+          const s = this._self;
           if (this.reactiveMembers && this.reactiveMembers.has(prop)) {
             const textVar3 = this.newTextVar();
             this._createLines.push(`${textVar3} = document.createTextNode('');`);
-            this._setupLines.push(`__effect(() => { ${textVar3}.data = this.${prop}.value; });`);
+            this._pushEffect(`${textVar3}.data = ${s}.${prop}.value;`);
             return textVar3;
           }
           const slotVar = this.newElementVar("slot");
-          this._createLines.push(`${slotVar} = this.${prop} instanceof Node ? this.${prop} : (this.${prop} != null ? document.createTextNode(String(this.${prop})) : document.createComment(''));`);
+          this._createLines.push(`${slotVar} = ${s}.${prop} instanceof Node ? ${s}.${prop} : (${s}.${prop} != null ? document.createTextNode(String(${s}.${prop})) : document.createComment(''));`);
           return slotVar;
         }
         const { tag, classes, id } = this.collectTemplateClasses(sexpr);
@@ -4174,7 +4171,7 @@ ${blockFactoriesCode}return ${lines.join(`
       const exprCode = this.generateInComponent(sexpr, "value");
       if (this.hasReactiveDeps(sexpr)) {
         this._createLines.push(`${textVar} = document.createTextNode('');`);
-        this._setupLines.push(`__effect(() => { ${textVar}.data = ${exprCode}; });`);
+        this._pushEffect(`${textVar}.data = ${exprCode};`);
       } else {
         this._createLines.push(`${textVar} = document.createTextNode(String(${exprCode}));`);
       }
@@ -4206,9 +4203,9 @@ ${blockFactoriesCode}return ${lines.join(`
             this._createLines.push(`${textVar} = document.createTextNode(${val});`);
           } else if (this.reactiveMembers && this.reactiveMembers.has(val)) {
             this._createLines.push(`${textVar} = document.createTextNode('');`);
-            this._setupLines.push(`__effect(() => { ${textVar}.data = this.${val}.value; });`);
+            this._pushEffect(`${textVar}.data = ${this._self}.${val}.value;`);
           } else if (this.componentMembers && this.componentMembers.has(val)) {
-            this._createLines.push(`${textVar} = document.createTextNode(String(this.${val}));`);
+            this._createLines.push(`${textVar} = document.createTextNode(String(${this._self}.${val}));`);
           } else {
             this._createLines.push(`${textVar} = document.createTextNode(${this.generateInComponent(arg, "value")});`);
           }
@@ -4251,9 +4248,9 @@ ${blockFactoriesCode}return ${lines.join(`
         } else {
           const combined = this._pendingClassArgs.join(", ");
           if (isSvg) {
-            this._setupLines.push(`__effect(() => { ${elVar}.setAttribute('class', __clsx(${combined})); });`);
+            this._pushEffect(`${elVar}.setAttribute('class', __clsx(${combined}));`);
           } else {
-            this._setupLines.push(`__effect(() => { ${elVar}.className = __clsx(${combined}); });`);
+            this._pushEffect(`${elVar}.className = __clsx(${combined});`);
           }
         }
         this._pendingClassArgs = prevClassArgs;
@@ -4282,9 +4279,9 @@ ${blockFactoriesCode}return ${lines.join(`
         const combined = this._pendingClassArgs.join(", ");
         const isSvg = SVG_TAGS.has(tag) || this._svgDepth > 0;
         if (isSvg) {
-          this._setupLines.push(`__effect(() => { ${elVar}.setAttribute('class', __clsx(${combined})); });`);
+          this._pushEffect(`${elVar}.setAttribute('class', __clsx(${combined}));`);
         } else {
-          this._setupLines.push(`__effect(() => { ${elVar}.className = __clsx(${combined}); });`);
+          this._pushEffect(`${elVar}.className = __clsx(${combined});`);
         }
       }
       this._pendingClassArgs = prevClassArgs;
@@ -4298,7 +4295,7 @@ ${blockFactoriesCode}return ${lines.join(`
         if (this.is(key, ".") && key[1] === "this") {
           const eventName = key[2];
           if (typeof value === "string" && this.componentMembers?.has(value)) {
-            this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => __batch(() => this.${value}(e)));`);
+            this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => __batch(() => ${this._self}.${value}(e)));`);
           } else {
             const handlerCode = this.generateInComponent(value, "value");
             this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => __batch(() => (${handlerCode})(e)));`);
@@ -4315,9 +4312,9 @@ ${blockFactoriesCode}return ${lines.join(`
               this._pendingClassArgs.push(valueCode2);
             } else if (this.hasReactiveDeps(value)) {
               if (this._svgDepth > 0) {
-                this._setupLines.push(`__effect(() => { ${elVar}.setAttribute('class', __clsx(${valueCode2})); });`);
+                this._pushEffect(`${elVar}.setAttribute('class', __clsx(${valueCode2}));`);
               } else {
-                this._setupLines.push(`__effect(() => { ${elVar}.className = __clsx(${valueCode2}); });`);
+                this._pushEffect(`${elVar}.className = __clsx(${valueCode2});`);
               }
             } else {
               if (this._svgDepth > 0) {
@@ -4328,9 +4325,14 @@ ${blockFactoriesCode}return ${lines.join(`
             }
             continue;
           }
+          if (key === "__transition__") {
+            const transName = String(value).replace(/^["']|["']$/g, "");
+            this._createLines.push(`this._t = "${transName}";`);
+            continue;
+          }
           if (key === "ref") {
             const refName = String(value).replace(/^["']|["']$/g, "");
-            this._createLines.push(`this.${refName} = ${elVar};`);
+            this._createLines.push(`${this._self}.${refName} = ${elVar};`);
             continue;
           }
           if (key.startsWith(BIND_PREFIX) && key.endsWith(BIND_SUFFIX)) {
@@ -4344,25 +4346,25 @@ ${blockFactoriesCode}return ${lines.join(`
               event = "input";
               valueAccessor = inputType === "number" || inputType === "range" ? "e.target.valueAsNumber" : "e.target.value";
             }
-            this._setupLines.push(`__effect(() => { ${elVar}.${prop} = ${valueCode2}; });`);
+            this._pushEffect(`${elVar}.${prop} = ${valueCode2};`);
             let assignCode = `${valueCode2} = ${valueAccessor}`;
             const rootMember = !this.isSimpleAssignable(value) && this.findRootReactiveMember(value);
             if (rootMember) {
-              assignCode += `; this.${rootMember}.touch?.()`;
+              assignCode += `; ${this._self}.${rootMember}.touch?.()`;
             }
             this._createLines.push(`${elVar}.addEventListener('${event}', (e) => { ${assignCode}; });`);
             continue;
           }
           const valueCode = this.generateInComponent(value, "value");
           if ((key === "value" || key === "checked") && this.hasReactiveDeps(value)) {
-            this._setupLines.push(`__effect(() => { ${elVar}.${key} = ${valueCode}; });`);
+            this._pushEffect(`${elVar}.${key} = ${valueCode};`);
             const rootMemberImplicit = !this.isSimpleAssignable(value) && this.findRootReactiveMember(value);
             if (this.isSimpleAssignable(value) || rootMemberImplicit) {
               const event = key === "checked" ? "change" : "input";
               const accessor = key === "checked" ? "e.target.checked" : inputType === "number" || inputType === "range" ? "e.target.valueAsNumber" : "e.target.value";
               let assignCode = `${valueCode} = ${accessor}`;
               if (rootMemberImplicit) {
-                assignCode += `; this.${rootMemberImplicit}.touch?.()`;
+                assignCode += `; ${this._self}.${rootMemberImplicit}.touch?.()`;
               }
               this._createLines.push(`${elVar}.addEventListener('${event}', (e) => { ${assignCode}; });`);
             }
@@ -4370,18 +4372,18 @@ ${blockFactoriesCode}return ${lines.join(`
           }
           if (key === "innerHTML" || key === "textContent" || key === "innerText") {
             if (this.hasReactiveDeps(value)) {
-              this._setupLines.push(`__effect(() => { ${elVar}.${key} = ${valueCode}; });`);
+              this._pushEffect(`${elVar}.${key} = ${valueCode};`);
             } else {
               this._createLines.push(`${elVar}.${key} = ${valueCode};`);
             }
           } else if (BOOLEAN_ATTRS.has(key)) {
             if (this.hasReactiveDeps(value)) {
-              this._setupLines.push(`__effect(() => { ${elVar}.toggleAttribute('${key}', !!${valueCode}); });`);
+              this._pushEffect(`${elVar}.toggleAttribute('${key}', !!${valueCode});`);
             } else {
               this._createLines.push(`if (${valueCode}) ${elVar}.setAttribute('${key}', '');`);
             }
           } else if (this.hasReactiveDeps(value)) {
-            this._setupLines.push(`__effect(() => { ${elVar}.setAttribute('${key}', ${valueCode}); });`);
+            this._pushEffect(`${elVar}.setAttribute('${key}', ${valueCode});`);
           } else {
             this._createLines.push(`${elVar}.setAttribute('${key}', ${valueCode});`);
           }
@@ -4403,10 +4405,13 @@ ${blockFactoriesCode}return ${lines.join(`
       }
       const fragVar = this.newElementVar("frag");
       this._createLines.push(`${fragVar} = document.createDocumentFragment();`);
+      const children = [];
       for (const stmt of statements) {
         const childVar = this.generateNode(stmt);
         this._createLines.push(`${fragVar}.appendChild(${childVar});`);
+        children.push(childVar);
       }
+      this._fragChildren.set(fragVar, children);
       return fragVar;
     };
     proto.generateConditional = function(sexpr) {
@@ -4414,8 +4419,8 @@ ${blockFactoriesCode}return ${lines.join(`
       const anchorVar = this.newElementVar("anchor");
       this._createLines.push(`${anchorVar} = document.createComment('if');`);
       const condCode = this.generateInComponent(condition, "value");
-      const loopParams = this._loopVarStack.map((v) => `${v.itemVar}, ${v.indexVar}`).join(", ");
-      const extraArgs = loopParams ? `, ${loopParams}` : "";
+      const outerParams = this._loopVarStack.map((v) => `${v.itemVar}, ${v.indexVar}`).join(", ");
+      const outerExtra = outerParams ? `, ${outerParams}` : "";
       const thenBlockName = this.newBlockVar();
       this.generateConditionBranch(thenBlockName, thenBlock);
       let elseBlockName = null;
@@ -4429,82 +4434,95 @@ ${blockFactoriesCode}return ${lines.join(`
       setupLines.push(`  const anchor = ${anchorVar};`);
       setupLines.push(`  let currentBlock = null;`);
       setupLines.push(`  let showing = null;`);
-      setupLines.push(`  __effect(() => {`);
+      const effOpen = this._factoryMode ? "disposers.push(__effect(() => {" : "__effect(() => {";
+      const effClose = this._factoryMode ? "}));" : "});";
+      setupLines.push(`  ${effOpen}`);
       setupLines.push(`    const show = !!(${condCode});`);
       setupLines.push(`    const want = show ? 'then' : ${elseBlock ? "'else'" : "null"};`);
       setupLines.push(`    if (want === showing) return;`);
       setupLines.push(``);
       setupLines.push(`    if (currentBlock) {`);
-      setupLines.push(`      currentBlock.d(true);`);
+      setupLines.push(`      const leaving = currentBlock;`);
+      setupLines.push(`      if (leaving._t) { __transition(leaving._first, leaving._t, 'leave', () => leaving.d(true)); }`);
+      setupLines.push(`      else { leaving.d(true); }`);
       setupLines.push(`      currentBlock = null;`);
       setupLines.push(`    }`);
       setupLines.push(`    showing = want;`);
       setupLines.push(``);
       setupLines.push(`    if (want === 'then') {`);
-      setupLines.push(`      currentBlock = ${thenBlockName}(this${extraArgs});`);
+      setupLines.push(`      currentBlock = ${thenBlockName}(${this._self}${outerExtra});`);
       setupLines.push(`      currentBlock.c();`);
       setupLines.push(`      if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);`);
-      setupLines.push(`      currentBlock.p(this${extraArgs});`);
+      setupLines.push(`      currentBlock.p(${this._self}${outerExtra});`);
+      setupLines.push(`      if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');`);
       setupLines.push(`    }`);
       if (elseBlock) {
         setupLines.push(`    if (want === 'else') {`);
-        setupLines.push(`      currentBlock = ${elseBlockName}(this${extraArgs});`);
+        setupLines.push(`      currentBlock = ${elseBlockName}(${this._self}${outerExtra});`);
         setupLines.push(`      currentBlock.c();`);
         setupLines.push(`      if (anchor.parentNode) currentBlock.m(anchor.parentNode, anchor.nextSibling);`);
-        setupLines.push(`      currentBlock.p(this${extraArgs});`);
+        setupLines.push(`      currentBlock.p(${this._self}${outerExtra});`);
+        setupLines.push(`      if (currentBlock._t) __transition(currentBlock._first, currentBlock._t, 'enter');`);
         setupLines.push(`    }`);
       }
-      setupLines.push(`  });`);
+      setupLines.push(`  ${effClose}`);
       setupLines.push(`}`);
       this._setupLines.push(setupLines.join(`
     `));
       return anchorVar;
     };
     proto.generateConditionBranch = function(blockName, block) {
-      const savedCreateLines = this._createLines;
-      const savedSetupLines = this._setupLines;
+      const saved = [this._createLines, this._setupLines, this._factoryMode, this._factoryVars];
       this._createLines = [];
       this._setupLines = [];
+      this._factoryMode = true;
+      this._factoryVars = new Set;
       const rootVar = this.generateTemplateBlock(block);
       const createLines = this._createLines;
       const setupLines = this._setupLines;
-      this._createLines = savedCreateLines;
-      this._setupLines = savedSetupLines;
-      const localizeVar = (line) => this.localizeVar(line);
-      const loopParams = this._loopVarStack.map((v) => `${v.itemVar}, ${v.indexVar}`).join(", ");
-      const extraParams = loopParams ? `, ${loopParams}` : "";
+      const factoryVars = this._factoryVars;
+      [this._createLines, this._setupLines, this._factoryMode, this._factoryVars] = saved;
+      const outerParams = this._loopVarStack.map((v) => `${v.itemVar}, ${v.indexVar}`).join(", ");
+      const extraParams = outerParams ? `, ${outerParams}` : "";
+      this.emitBlockFactory(blockName, `ctx${extraParams}`, rootVar, createLines, setupLines, factoryVars);
+    };
+    proto.emitBlockFactory = function(blockName, params, rootVar, createLines, setupLines, factoryVars, isStatic) {
       const factoryLines = [];
-      factoryLines.push(`function ${blockName}(ctx${extraParams}) {`);
-      const localVars = new Set;
-      for (const line of createLines) {
-        const match = line.match(/^this\.(_(?:el|t|anchor|frag|slot|c|inst|empty)\d+)\s*=/);
-        if (match)
-          localVars.add(match[1]);
-      }
-      if (localVars.size > 0) {
-        factoryLines.push(`  let ${[...localVars].join(", ")};`);
+      factoryLines.push(`function ${blockName}(${params}) {`);
+      if (factoryVars.size > 0) {
+        factoryLines.push(`  let ${[...factoryVars].join(", ")};`);
       }
       const hasEffects = setupLines.length > 0;
       if (hasEffects) {
         factoryLines.push(`  let disposers = [];`);
       }
       factoryLines.push(`  return {`);
+      if (isStatic) {
+        factoryLines.push(`    _s: true,`);
+      }
+      const fragChildren = this._fragChildren.get(rootVar);
+      const firstNode = fragChildren ? fragChildren[0] : rootVar;
       factoryLines.push(`    c() {`);
       for (const line of createLines) {
-        factoryLines.push(`      ${localizeVar(line)}`);
+        factoryLines.push(`      ${line}`);
       }
+      factoryLines.push(`      this._first = ${firstNode};`);
       factoryLines.push(`    },`);
       factoryLines.push(`    m(target, anchor) {`);
-      factoryLines.push(`      target.insertBefore(${localizeVar(rootVar)}, anchor);`);
+      if (fragChildren) {
+        for (const child of fragChildren) {
+          factoryLines.push(`      if (target) target.insertBefore(${child}, anchor);`);
+        }
+      } else {
+        factoryLines.push(`      if (target) target.insertBefore(${rootVar}, anchor);`);
+      }
       factoryLines.push(`    },`);
-      factoryLines.push(`    p(ctx${extraParams}) {`);
+      factoryLines.push(`    p(${params}) {`);
       if (hasEffects) {
         factoryLines.push(`      disposers.forEach(d => d());`);
         factoryLines.push(`      disposers = [];`);
         for (const line of setupLines) {
-          const localizedLine = localizeVar(line);
-          const wrappedLine = localizedLine.replace(/__effect\(\(\) => \{/g, "disposers.push(__effect(() => {").replace(/\}\);$/gm, "}));");
-          factoryLines.push(`      ${wrappedLine}`);
+          factoryLines.push(`      ${line}`);
         }
       }
       factoryLines.push(`    },`);
@@ -4512,13 +4530,12 @@ ${blockFactoriesCode}return ${lines.join(`
       if (hasEffects) {
         factoryLines.push(`      disposers.forEach(d => d());`);
       }
-      const condFragChildren = getFragChildren(rootVar, createLines, localizeVar);
-      if (condFragChildren) {
-        for (const child of condFragChildren) {
+      if (fragChildren) {
+        for (const child of fragChildren) {
           factoryLines.push(`      if (detaching && ${child}) ${child}.remove();`);
         }
       } else {
-        factoryLines.push(`      if (detaching && ${localizeVar(rootVar)}) ${localizeVar(rootVar)}.remove();`);
+        factoryLines.push(`      if (detaching && ${rootVar}) ${rootVar}.remove();`);
       }
       factoryLines.push(`    }`);
       factoryLines.push(`  };`);
@@ -4554,108 +4571,35 @@ ${blockFactoriesCode}return ${lines.join(`
           }
         }
       }
-      const savedCreateLines = this._createLines;
-      const savedSetupLines = this._setupLines;
+      const saved = [this._createLines, this._setupLines, this._factoryMode, this._factoryVars];
       this._createLines = [];
       this._setupLines = [];
-      const outerLoopParams = this._loopVarStack.map((v) => `${v.itemVar}, ${v.indexVar}`).join(", ");
-      const outerExtra = outerLoopParams ? `, ${outerLoopParams}` : "";
+      this._factoryMode = true;
+      this._factoryVars = new Set;
+      const outerParams = this._loopVarStack.map((v) => `${v.itemVar}, ${v.indexVar}`).join(", ");
+      const outerExtra = outerParams ? `, ${outerParams}` : "";
       this._loopVarStack.push({ itemVar, indexVar });
       const itemNode = this.generateTemplateBlock(body);
       this._loopVarStack.pop();
       const itemCreateLines = this._createLines;
       const itemSetupLines = this._setupLines;
-      this._createLines = savedCreateLines;
-      this._setupLines = savedSetupLines;
-      const localizeVar = (line) => this.localizeVar(line);
-      const factoryLines = [];
-      factoryLines.push(`function ${blockName}(ctx, ${itemVar}, ${indexVar}${outerExtra}) {`);
-      const localVars = new Set;
-      for (const line of itemCreateLines) {
-        const match = line.match(/^this\.(_(?:el|t|anchor|frag|slot|c|inst|empty)\d+)\s*=/);
-        if (match)
-          localVars.add(match[1]);
-      }
-      if (localVars.size > 0) {
-        factoryLines.push(`  let ${[...localVars].join(", ")};`);
-      }
-      const hasEffects = itemSetupLines.length > 0;
-      if (hasEffects) {
-        factoryLines.push(`  let disposers = [];`);
-      }
-      factoryLines.push(`  return {`);
-      factoryLines.push(`    c() {`);
-      for (const line of itemCreateLines) {
-        factoryLines.push(`      ${localizeVar(line)}`);
-      }
-      factoryLines.push(`    },`);
-      const loopFragChildren = getFragChildren(itemNode, itemCreateLines, localizeVar);
-      factoryLines.push(`    m(target, anchor) {`);
-      if (loopFragChildren) {
-        for (const child of loopFragChildren) {
-          factoryLines.push(`      if (target) target.insertBefore(${child}, anchor);`);
-        }
-      } else {
-        factoryLines.push(`      if (target) target.insertBefore(${localizeVar(itemNode)}, anchor);`);
-      }
-      factoryLines.push(`    },`);
-      factoryLines.push(`    p(ctx, ${itemVar}, ${indexVar}${outerExtra}) {`);
-      if (hasEffects) {
-        factoryLines.push(`      disposers.forEach(d => d());`);
-        factoryLines.push(`      disposers = [];`);
-        for (const line of itemSetupLines) {
-          const localizedLine = localizeVar(line);
-          const wrappedLine = localizedLine.replace(/__effect\(\(\) => \{/g, "disposers.push(__effect(() => {").replace(/\}\);$/gm, "}));");
-          factoryLines.push(`      ${wrappedLine}`);
-        }
-      }
-      factoryLines.push(`    },`);
-      factoryLines.push(`    d(detaching) {`);
-      if (hasEffects) {
-        factoryLines.push(`      disposers.forEach(d => d());`);
-      }
-      if (loopFragChildren) {
-        for (const child of loopFragChildren) {
-          factoryLines.push(`      if (detaching && ${child}) ${child}.remove();`);
-        }
-      } else {
-        factoryLines.push(`      if (detaching && ${localizeVar(itemNode)}) ${localizeVar(itemNode)}.remove();`);
-      }
-      factoryLines.push(`    }`);
-      factoryLines.push(`  };`);
-      factoryLines.push(`}`);
-      this._blockFactories.push(factoryLines.join(`
-`));
+      const itemFactoryVars = this._factoryVars;
+      [this._createLines, this._setupLines, this._factoryMode, this._factoryVars] = saved;
+      const isStatic = itemSetupLines.length === 0;
+      const loopParams = `ctx, ${itemVar}, ${indexVar}${outerExtra}`;
+      this.emitBlockFactory(blockName, loopParams, itemNode, itemCreateLines, itemSetupLines, itemFactoryVars, isStatic);
+      const hasCustomKey = keyExpr !== itemVar;
+      const keyFnCode = hasCustomKey ? `(${itemVar}, ${indexVar}) => ${keyExpr}` : "null";
+      const outerArgs = outerParams ? `, ${outerParams}` : "";
       const setupLines = [];
       setupLines.push(`// Loop: ${blockName}`);
       setupLines.push(`{`);
-      setupLines.push(`  const __anchor = ${anchorVar};`);
-      setupLines.push(`  const __map = new Map();`);
-      setupLines.push(`  __effect(() => {`);
-      setupLines.push(`    const __items = ${collectionCode};`);
-      setupLines.push(`    const __parent = __anchor.parentNode;`);
-      setupLines.push(`    const __newMap = new Map();`);
-      setupLines.push(``);
-      setupLines.push(`    for (let ${indexVar} = 0; ${indexVar} < __items.length; ${indexVar}++) {`);
-      setupLines.push(`      const ${itemVar} = __items[${indexVar}];`);
-      setupLines.push(`      const __key = ${keyExpr};`);
-      setupLines.push(`      let __block = __map.get(__key);`);
-      setupLines.push(`      if (!__block) {`);
-      setupLines.push(`        __block = ${blockName}(this, ${itemVar}, ${indexVar}${outerExtra});`);
-      setupLines.push(`        __block.c();`);
-      setupLines.push(`      }`);
-      setupLines.push(`      __block.m(__parent, __anchor);`);
-      setupLines.push(`      __block.p(this, ${itemVar}, ${indexVar}${outerExtra});`);
-      setupLines.push(`      __newMap.set(__key, __block);`);
-      setupLines.push(`    }`);
-      setupLines.push(``);
-      setupLines.push(`    for (const [__k, __b] of __map) {`);
-      setupLines.push(`      if (!__newMap.has(__k)) __b.d(true);`);
-      setupLines.push(`    }`);
-      setupLines.push(``);
-      setupLines.push(`    __map.clear();`);
-      setupLines.push(`    for (const [__k, __v] of __newMap) __map.set(__k, __v);`);
-      setupLines.push(`  });`);
+      setupLines.push(`  const __s = { blocks: [], keys: [] };`);
+      const effOpen = this._factoryMode ? "disposers.push(__effect(() => {" : "__effect(() => {";
+      const effClose = this._factoryMode ? "}));" : "});";
+      setupLines.push(`  ${effOpen}`);
+      setupLines.push(`    __reconcile(${anchorVar}, __s, ${collectionCode}, ${this._self}, ${blockName}, ${keyFnCode}${outerArgs});`);
+      setupLines.push(`  ${effClose}`);
       setupLines.push(`}`);
       this._setupLines.push(setupLines.join(`
     `));
@@ -4665,13 +4609,13 @@ ${blockFactoriesCode}return ${lines.join(`
       const instVar = this.newElementVar("inst");
       const elVar = this.newElementVar("el");
       const { propsCode, reactiveProps, childrenSetupLines } = this.buildComponentProps(args);
+      const s = this._self;
       this._createLines.push(`${instVar} = new ${componentName}(${propsCode});`);
       this._createLines.push(`${elVar} = ${instVar}._create();`);
-      this._createLines.push(`(this._children || (this._children = [])).push(${instVar});`);
-      this._setupLines.push(`if (${instVar}._setup) ${instVar}._setup();`);
-      this._setupLines.push(`if (${instVar}.mounted) ${instVar}.mounted();`);
+      this._createLines.push(`(${s}._children || (${s}._children = [])).push(${instVar});`);
+      this._setupLines.push(`try { if (${instVar}._setup) ${instVar}._setup(); if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); }`);
       for (const { key, valueCode } of reactiveProps) {
-        this._setupLines.push(`__effect(() => { if (${instVar}.${key}) ${instVar}.${key}.value = ${valueCode}; });`);
+        this._pushEffect(`if (${instVar}.${key}) ${instVar}.${key}.value = ${valueCode};`);
       }
       for (const line of childrenSetupLines) {
         this._setupLines.push(line);
@@ -4683,24 +4627,29 @@ ${blockFactoriesCode}return ${lines.join(`
       const reactiveProps = [];
       let childrenVar = null;
       const childrenSetupLines = [];
+      const addProp = (key, value) => {
+        const isDirectSignal = this.reactiveMembers && (typeof value === "string" && this.reactiveMembers.has(value) || Array.isArray(value) && value[0] === "." && value[1] === "this" && typeof value[2] === "string" && this.reactiveMembers.has(value[2]));
+        if (isDirectSignal) {
+          const member = typeof value === "string" ? value : value[2];
+          props.push(`${key}: ${this._self}.${member}`);
+        } else {
+          const valueCode = this.generateInComponent(value, "value");
+          props.push(`${key}: ${valueCode}`);
+          if (this.hasReactiveDeps(value)) {
+            reactiveProps.push({ key, valueCode });
+          }
+        }
+      };
+      const addObjectProps = (objExpr) => {
+        for (let i = 1;i < objExpr.length; i++) {
+          const [key, value] = objExpr[i];
+          if (typeof key === "string")
+            addProp(key, value);
+        }
+      };
       for (const arg of args) {
         if (this.is(arg, "object")) {
-          for (let i = 1;i < arg.length; i++) {
-            const [key, value] = arg[i];
-            if (typeof key === "string") {
-              const isSimpleReactive = this.reactiveMembers && (typeof value === "string" && this.reactiveMembers.has(value) || Array.isArray(value) && value[0] === "." && value[1] === "this" && typeof value[2] === "string" && this.reactiveMembers.has(value[2]));
-              if (isSimpleReactive) {
-                const member = typeof value === "string" ? value : value[2];
-                props.push(`${key}: this.${member}`);
-              } else {
-                const valueCode = this.generateInComponent(value, "value");
-                props.push(`${key}: ${valueCode}`);
-                if (this.hasReactiveDeps(value)) {
-                  reactiveProps.push({ key, valueCode });
-                }
-              }
-            }
-          }
+          addObjectProps(arg);
         } else if (Array.isArray(arg) && (arg[0] === "->" || arg[0] === "=>")) {
           let block = arg[2];
           if (block) {
@@ -4708,22 +4657,7 @@ ${blockFactoriesCode}return ${lines.join(`
               const domChildren = [];
               for (const child of block.slice(1)) {
                 if (this.is(child, "object")) {
-                  for (let i = 1;i < child.length; i++) {
-                    const [key, value] = child[i];
-                    if (typeof key === "string") {
-                      const isSimpleReactive = this.reactiveMembers && (typeof value === "string" && this.reactiveMembers.has(value) || Array.isArray(value) && value[0] === "." && value[1] === "this" && typeof value[2] === "string" && this.reactiveMembers.has(value[2]));
-                      if (isSimpleReactive) {
-                        const member = typeof value === "string" ? value : value[2];
-                        props.push(`${key}: this.${member}`);
-                      } else {
-                        const valueCode = this.generateInComponent(value, "value");
-                        props.push(`${key}: ${valueCode}`);
-                        if (this.hasReactiveDeps(value)) {
-                          reactiveProps.push({ key, valueCode });
-                        }
-                      }
-                    }
-                  }
+                  addObjectProps(child);
                 } else {
                   domChildren.push(child);
                 }
@@ -4847,21 +4781,203 @@ function __clsx(...args) {
   return args.filter(Boolean).join(' ');
 }
 
+function __lis(arr) {
+  const n = arr.length;
+  if (n === 0) return [];
+  const tails = [], indices = [], prev = new Array(n).fill(-1);
+  for (let i = 0; i < n; i++) {
+    if (arr[i] === -1) continue;
+    let lo = 0, hi = tails.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (tails[mid] < arr[i]) lo = mid + 1; else hi = mid;
+    }
+    tails[lo] = arr[i];
+    indices[lo] = i;
+    if (lo > 0) prev[i] = indices[lo - 1];
+  }
+  const result = [];
+  let k = indices[tails.length - 1];
+  for (let i = tails.length - 1; i >= 0; i--) { result.push(k); k = prev[k]; }
+  result.reverse();
+  return result;
+}
+
+function __reconcile(anchor, state, items, ctx, factory, keyFn, ...outer) {
+  const parent = anchor.parentNode;
+  if (!parent) return;
+
+  const oldKeys = state.keys;
+  const oldBlocks = state.blocks;
+  const oldLen = oldKeys.length;
+  const newLen = items.length;
+  const newBlocks = new Array(newLen);
+  const hasKeyFn = keyFn != null;
+  const newKeys = hasKeyFn ? items.map((item, i) => keyFn(item, i)) : items;
+
+  // Phase 0: first render — batch create via DocumentFragment
+  if (oldLen === 0) {
+    if (newLen > 0) {
+      const frag = document.createDocumentFragment();
+      for (let i = 0; i < newLen; i++) {
+        const block = factory(ctx, items[i], i, ...outer);
+        block.c();
+        block.m(frag, null);
+        if (!block._s) block.p(ctx, items[i], i, ...outer);
+        newBlocks[i] = block;
+      }
+      parent.insertBefore(frag, anchor);
+    }
+    state.keys = hasKeyFn ? newKeys : items.slice();
+    state.blocks = newBlocks;
+    return;
+  }
+
+  // Phase 1: prefix scan — skip p() (item+index identical, effects already live)
+  let start = 0;
+  const minLen = oldLen < newLen ? oldLen : newLen;
+  while (start < minLen && oldKeys[start] === newKeys[start]) {
+    newBlocks[start] = oldBlocks[start];
+    start++;
+  }
+
+  // Phase 2: suffix scan — call p() (index may differ)
+  let oldEnd = oldLen - 1;
+  let newEnd = newLen - 1;
+  while (oldEnd >= start && newEnd >= start && oldKeys[oldEnd] === newKeys[newEnd]) {
+    const block = oldBlocks[oldEnd];
+    if (!block._s) block.p(ctx, items[newEnd], newEnd, ...outer);
+    newBlocks[newEnd] = block;
+    oldEnd--;
+    newEnd--;
+  }
+
+  // Remove old blocks in the middle that aren't in the new set
+  if (start > newEnd) {
+    for (let i = start; i <= oldEnd; i++) oldBlocks[i].d(true);
+  } else if (start > oldEnd) {
+    // Phase 3a: pure insertion — batch via DocumentFragment
+    const next = newEnd + 1 < newLen ? newBlocks[newEnd + 1]._first : anchor;
+    const frag = document.createDocumentFragment();
+    for (let i = start; i <= newEnd; i++) {
+      const block = factory(ctx, items[i], i, ...outer);
+      block.c();
+      block.m(frag, null);
+      if (!block._s) block.p(ctx, items[i], i, ...outer);
+      newBlocks[i] = block;
+    }
+    parent.insertBefore(frag, next);
+  } else {
+    // Phase 4: general case — temp Map + LIS
+    const oldKeyIdx = new Map();
+    for (let i = start; i <= oldEnd; i++) oldKeyIdx.set(oldKeys[i], i);
+
+    const seq = new Array(newEnd - start + 1);
+    for (let i = start; i <= newEnd; i++) {
+      const key = newKeys[i];
+      const oldIdx = oldKeyIdx.get(key);
+      if (oldIdx !== undefined) {
+        seq[i - start] = oldIdx - start;
+        const block = oldBlocks[oldIdx];
+        if (!block._s) block.p(ctx, items[i], i, ...outer);
+        newBlocks[i] = block;
+        oldKeyIdx.delete(key);
+      } else {
+        seq[i - start] = -1;
+        const block = factory(ctx, items[i], i, ...outer);
+        block.c();
+        if (!block._s) block.p(ctx, items[i], i, ...outer);
+        newBlocks[i] = block;
+      }
+    }
+
+    for (const idx of oldKeyIdx.values()) oldBlocks[idx].d(true);
+
+    const lis = __lis(seq);
+    const lisSet = new Set(lis);
+    let next = newEnd + 1 < newLen ? newBlocks[newEnd + 1]._first : anchor;
+    for (let i = newEnd; i >= start; i--) {
+      const block = newBlocks[i];
+      if (!lisSet.has(i - start)) {
+        block.m(parent, next);
+      }
+      next = block._first;
+    }
+  }
+
+  state.keys = hasKeyFn ? newKeys : items.slice();
+  state.blocks = newBlocks;
+}
+
+let __cssInjected = false;
+function __transitionCSS() {
+  if (__cssInjected) return;
+  __cssInjected = true;
+  const s = document.createElement('style');
+  s.textContent = [
+    '.fade-enter-active,.fade-leave-active{transition:opacity .2s ease}',
+    '.fade-enter-from,.fade-leave-to{opacity:0}',
+    '.slide-enter-active,.slide-leave-active{transition:opacity .2s ease,transform .2s ease}',
+    '.slide-enter-from{opacity:0;transform:translateY(-8px)}',
+    '.slide-leave-to{opacity:0;transform:translateY(8px)}',
+    '.scale-enter-active,.scale-leave-active{transition:opacity .2s ease,transform .2s ease}',
+    '.scale-enter-from,.scale-leave-to{opacity:0;transform:scale(.95)}',
+    '.blur-enter-active,.blur-leave-active{transition:opacity .2s ease,filter .2s ease}',
+    '.blur-enter-from,.blur-leave-to{opacity:0;filter:blur(4px)}',
+    '.fly-enter-active,.fly-leave-active{transition:opacity .2s ease,transform .2s ease}',
+    '.fly-enter-from{opacity:0;transform:translateY(-20px)}',
+    '.fly-leave-to{opacity:0;transform:translateY(20px)}',
+  ].join('');
+  document.head.appendChild(s);
+}
+
+function __transition(el, name, dir, done) {
+  __transitionCSS();
+  const cl = el.classList;
+  const from = name + '-' + dir + '-from';
+  const active = name + '-' + dir + '-active';
+  const to = name + '-' + dir + '-to';
+  cl.add(from, active);
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      cl.remove(from);
+      cl.add(to);
+      const end = () => { cl.remove(active, to); if (done) done(); };
+      el.addEventListener('transitionend', end, { once: true });
+    });
+  });
+}
+
+function __handleComponentError(error, component) {
+  let current = component;
+  while (current) {
+    if (current.onError) {
+      try { current.onError(error, component); return; } catch (_) {}
+    }
+    current = current._parent;
+  }
+  throw error;
+}
+
 class __Component {
   constructor(props = {}) {
     Object.assign(this, props);
     const prev = __pushComponent(this);
-    this._init(props);
+    try { this._init(props); } catch (e) { __popComponent(prev); __handleComponentError(e, this); return; }
     __popComponent(prev);
   }
   _init() {}
   mount(target) {
     if (typeof target === "string") target = document.querySelector(target);
     this._target = target;
-    this._root = this._create();
-    target.appendChild(this._root);
-    if (this._setup) this._setup();
-    if (this.mounted) this.mounted();
+    try {
+      this._root = this._create();
+      target.appendChild(this._root);
+      if (this._setup) this._setup();
+      if (this.mounted) this.mounted();
+    } catch (error) {
+      __handleComponentError(error, this);
+    }
     return this;
   }
   unmount() {
@@ -4882,7 +4998,7 @@ class __Component {
 
 // Register on globalThis for runtime deduplication
 if (typeof globalThis !== 'undefined') {
-  globalThis.__ripComponent = { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __Component };
+  globalThis.__ripComponent = { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __Component };
 }
 
 `;
@@ -5671,10 +5787,10 @@ if (typeof globalThis !== 'undefined') {
       }
       if (this.usesTemplates && !skip) {
         if (skipRT) {
-          code += `var { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __Component } = globalThis.__ripComponent;
+          code += `var { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __Component } = globalThis.__ripComponent;
 `;
         } else if (typeof globalThis !== "undefined" && globalThis.__ripComponent) {
-          code += `const { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __Component } = globalThis.__ripComponent;
+          code += `const { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __Component } = globalThis.__ripComponent;
 `;
         } else {
           code += this.getComponentRuntime();
@@ -5899,13 +6015,36 @@ function _setDataSection() {
         let isIncl = index[0] === "..";
         let arrCode = this.generate(arr, "value");
         let [start, end] = index.slice(1);
+        let numericLiteral = (node) => {
+          if (node === null)
+            return null;
+          let v = str(node) ?? node;
+          if (typeof v === "number")
+            return v;
+          if (typeof v === "string" && /^\d+$/.test(v))
+            return +v;
+          if (Array.isArray(node) && node[0] === "-" && node.length === 2) {
+            let inner = str(node[1]) ?? node[1];
+            if (typeof inner === "number")
+              return -inner;
+            if (typeof inner === "string" && /^\d+$/.test(inner))
+              return -inner;
+          }
+          return null;
+        };
+        let inclEnd = (s2, e2, endNode) => {
+          let n = numericLiteral(endNode);
+          if (n !== null && n !== -1)
+            return `${arrCode}.slice(${s2}, ${n + 1})`;
+          return `${arrCode}.slice(${s2}, +${e2} + 1 || 9e9)`;
+        };
         if (start === null && end === null)
           return `${arrCode}.slice()`;
         if (start === null) {
           if (isIncl && this.is(end, "-", 1) && (str(end[1]) ?? end[1]) == 1)
             return `${arrCode}.slice(0)`;
           let e2 = this.generate(end, "value");
-          return isIncl ? `${arrCode}.slice(0, +${e2} + 1 || 9e9)` : `${arrCode}.slice(0, ${e2})`;
+          return isIncl ? inclEnd("0", e2, end) : `${arrCode}.slice(0, ${e2})`;
         }
         if (end === null)
           return `${arrCode}.slice(${this.generate(start, "value")})`;
@@ -5913,7 +6052,7 @@ function _setDataSection() {
         if (isIncl && this.is(end, "-", 1) && (str(end[1]) ?? end[1]) == 1)
           return `${arrCode}.slice(${s})`;
         let e = this.generate(end, "value");
-        return isIncl ? `${arrCode}.slice(${s}, +${e} + 1 || 9e9)` : `${arrCode}.slice(${s}, ${e})`;
+        return isIncl ? inclEnd(s, e, end) : `${arrCode}.slice(${s}, ${e})`;
       }
       if (this.is(index, "-", 1)) {
         let n = str(index[1]) ?? index[1];
@@ -8374,8 +8513,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.23";
-  var BUILD_DATE = "2026-02-25@12:51:51GMT";
+  var VERSION = "3.13.27";
+  var BUILD_DATE = "2026-02-26@04:30:45GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

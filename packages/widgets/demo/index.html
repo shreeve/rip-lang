@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rip Widget Gallery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #1e293b;
+  background: #f8fafc;
+}
+
+.gallery { max-width: 900px; margin: 0 auto; padding: 32px 24px; }
+.gallery-header { margin-bottom: 32px; }
+.gallery-header h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+.gallery-header p { color: #64748b; margin-top: 4px; }
+
+.section { margin-bottom: 48px; }
+.section-title {
+  font-size: 16px; font-weight: 700; letter-spacing: -0.01em;
+  padding-bottom: 8px; margin-bottom: 16px;
+  border-bottom: 2px solid #e2e8f0;
+  display: flex; align-items: center; gap: 8px;
+}
+.section-title .badge {
+  font-size: 10px; font-weight: 600; padding: 2px 8px;
+  border-radius: 10px; background: #dbeafe; color: #1d4ed8;
+}
+.section-desc { color: #64748b; font-size: 13px; margin-bottom: 16px; }
+
+.demo-row {
+  padding: 16px; margin-bottom: 12px;
+  background: white; border: 1px solid #e2e8f0; border-radius: 8px;
+}
+.demo-label {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: #94a3b8; margin-bottom: 8px;
+}
+
+.status {
+  margin-top: 8px; padding: 8px 12px; border-radius: 6px;
+  font-size: 12px; font-family: monospace;
+  background: #f1f5f9; color: #475569;
+}
+
+/* Widget styles for the gallery */
+button { font: inherit; cursor: pointer; }
+
+.gallery .select-trigger {
+  display: inline-flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 6px 12px; height: 36px;
+  border: 1px solid #cbd5e1; border-radius: 6px; background: white;
+  cursor: pointer; min-width: 200px; font-size: 14px;
+}
+.gallery .select-trigger[data-open] { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+
+.gallery .select-popup, .gallery .combobox-popup, .gallery .menu-popup {
+  background: white; border: 1px solid #cbd5e1; border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12); padding: 4px; z-index: 100;
+  overflow-y: auto; max-height: 280px;
+}
+.gallery .option, .gallery [role="menuitem"] {
+  padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 14px; outline: none;
+}
+.gallery .option[data-highlighted], .gallery [role="menuitem"][data-highlighted] { background: #eff6ff; }
+.gallery .option[data-selected] { font-weight: 600; color: #1d4ed8; }
+
+.gallery .combobox-input, .gallery input[type="text"] {
+  width: 100%; height: 36px; padding: 0 12px;
+  border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px;
+  color: #1e293b; background: white; outline: none;
+}
+.gallery .combobox-input:focus, .gallery input[type="text"]:focus {
+  border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+}
+
+.gallery .dialog-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+  display: grid; place-items: center; z-index: 100;
+}
+.gallery .dialog-backdrop[data-open] { animation: fadeIn 150ms ease; }
+.gallery .dialog-panel {
+  background: white; border-radius: 12px; padding: 24px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12); max-width: min(90vw, 420px); width: 100%;
+}
+
+.gallery .toast-wrap { position: fixed; top: 16px; right: 16px; z-index: 200; display: flex; flex-direction: column; gap: 8px; }
+.gallery [role="status"] {
+  padding: 12px 16px; border-radius: 6px; background: white;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12); display: flex; align-items: center; gap: 12px;
+  animation: slideIn 200ms ease;
+}
+.gallery [role="status"][data-type="success"] { border-left: 3px solid #16a34a; }
+.gallery [role="status"][data-type="error"] { border-left: 3px solid #dc2626; }
+.gallery [role="status"][data-leaving] { animation: fadeOut 200ms ease forwards; }
+.gallery [role="status"] button { background: none; border: none; color: #94a3b8; cursor: pointer; }
+
+.gallery [role="tooltip"] {
+  background: #1e293b; color: white; font-size: 12px;
+  padding: 4px 8px; border-radius: 4px; z-index: 200;
+}
+.gallery [role="tooltip"][data-entering] { animation: fadeIn 100ms ease; }
+
+.gallery [role="tablist"] { display: flex; gap: 4px; border-bottom: 1px solid #e2e8f0; margin-bottom: 12px; }
+.gallery [role="tab"] {
+  padding: 8px 16px; border: none; background: none;
+  font-size: 14px; font-weight: 500; color: #64748b; cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.gallery [role="tab"][data-active] { color: #1d4ed8; border-bottom-color: #1d4ed8; }
+
+.gallery [role="checkbox"], .gallery [role="switch"] {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 12px; border: 1px solid #cbd5e1; border-radius: 6px;
+  background: white; cursor: pointer; font-size: 14px;
+}
+.gallery [role="checkbox"][data-checked], .gallery [role="switch"][data-checked] {
+  background: #eff6ff; border-color: #3b82f6; color: #1d4ed8;
+}
+
+.gallery [aria-haspopup="menu"] {
+  padding: 6px 16px; height: 36px; border: 1px solid #cbd5e1;
+  border-radius: 6px; background: white; font-size: 14px;
+}
+.gallery [aria-haspopup="menu"][data-open] { border-color: #3b82f6; }
+
+/* Grid styles */
+.grid-container {
+  position: relative; overflow: auto; height: 300px;
+  background: white; border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.grid-container:focus { outline: none; }
+.rip-grid {
+  width: 100%; border-collapse: collapse; table-layout: fixed;
+  font-size: 13px; color: #1e293b;
+}
+.rip-grid thead th {
+  position: sticky; top: 0; z-index: 2; height: 36px; padding: 0 10px;
+  background: #f8fafc; color: #475569; font-weight: 600; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  border-bottom: 2px solid #e2e8f0; white-space: nowrap; user-select: none;
+}
+.rip-grid tbody td {
+  height: 32px; padding: 0 10px;
+  border-bottom: 1px solid #e2e8f0; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; cursor: cell; user-select: none;
+}
+.rip-grid tbody tr.even td { background: #f8fafc; }
+.rip-grid tbody tr:hover td { background: rgba(59,130,246,0.04); }
+.rip-grid tbody td[data-selected] { background: rgba(59,130,246,0.08); }
+.rip-grid tbody td[data-active] { background: rgba(59,130,246,0.12); outline: 2px solid #3b82f6; outline-offset: -2px; position: relative; z-index: 1; }
+.rip-grid tr.spacer td { padding: 0; border: none; line-height: 0; font-size: 0; }
+.sort-arrow { color: #94a3b8; font-size: 11px; margin-left: 3px; }
+.sort-badge { display: inline-block; font-size: 9px; color: #64748b; background: #e2e8f0; border-radius: 50%; width: 14px; height: 14px; line-height: 14px; text-align: center; margin-left: 2px; }
+.resize-handle { position: absolute; right: 0; top: 0; bottom: 0; width: 2px; cursor: col-resize; z-index: 3; background: transparent; }
+.rip-grid thead tr:hover .resize-handle { background: rgba(0,0,0,0.08); }
+.resize-handle:hover, .resize-handle.active { background: rgba(59,130,246,0.3); }
+.rip-grid-editor { position: absolute; z-index: 10; box-sizing: border-box; border: 2px solid #3b82f6; font: 13px system-ui; padding: 0 8px; outline: none; background: white; color: #1e293b; }
+.cell-checkbox { pointer-events: none; margin: 0; vertical-align: middle; }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes slideIn { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+  </style>
+  <script defer src="/rip/rip.min.js"
+    data-src="/checkbox.rip"
+    data-mount="WidgetGallery">
+  </script>
+</head>
+<body>
+
+<script type="text/rip">
+export WidgetGallery = component
+
+  check1 := false
+
+  render
+    .gallery
+      .gallery-header
+        h1 "Rip Widget Gallery"
+        p "Smoke test — checkbox widget"
+
+      .section
+        .section-title "Checkbox"
+        .demo-row
+          .demo-label "Basic checkbox"
+          Checkbox checked <=> check1
+            "Enable notifications"
+          .status "checked: #{check1}"
+</script>
+
+</body>
+</html>

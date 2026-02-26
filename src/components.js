@@ -289,9 +289,14 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         let prevTag = prevToken ? prevToken[0] : null;
         if (prevTag === 'INDENT' || prevTag === 'TERMINATOR') {
           if (nextToken && nextToken[0] === 'PROPERTY') {
-            let divToken = gen('IDENTIFIER', 'div', token);
-            tokens.splice(i, 0, divToken);
-            return 2;
+            // Check if property is followed by : — if so, it's an attribute
+            // (. foo: bar → div foo: bar), not a class (. foo → div.foo)
+            let nextNext = i + 2 < tokens.length ? tokens[i + 2] : null;
+            if (!nextNext || nextNext[0] !== ':') {
+              let divToken = gen('IDENTIFIER', 'div', token);
+              tokens.splice(i, 0, divToken);
+              return 2;
+            }
           }
           // Skip .('classes') — handled by dynamic classes handler below
           if (!nextToken || nextToken[0] !== '(') {

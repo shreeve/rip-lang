@@ -36,7 +36,7 @@ export Popover = component
     fl = @_floatingEl.getBoundingClientRect()
     [side, align] = @placement.split('-')
     align ?= 'center'
-    off = @offset
+    gap = @offset
 
     x = switch side
       when 'bottom', 'top'
@@ -44,12 +44,12 @@ export Popover = component
           when 'start' then tr.left
           when 'end' then tr.right - fl.width
           else tr.left + (tr.width - fl.width) / 2
-      when 'right' then tr.right + off
-      when 'left' then tr.left - fl.width - off
+      when 'right' then tr.right + gap
+      when 'left' then tr.left - fl.width - gap
 
     y = switch side
-      when 'bottom' then tr.bottom + off
-      when 'top' then tr.top - fl.height - off
+      when 'bottom' then tr.bottom + gap
+      when 'top' then tr.top - fl.height - gap
       when 'left', 'right'
         switch align
           when 'start' then tr.top
@@ -57,9 +57,9 @@ export Popover = component
           else tr.top + (tr.height - fl.height) / 2
 
     if side is 'bottom' and y + fl.height > window.innerHeight
-      y = tr.top - fl.height - off
+      y = tr.top - fl.height - gap
     if side is 'top' and y < 0
-      y = tr.bottom + off
+      y = tr.bottom + gap
 
     x = Math.max(4, Math.min(x, window.innerWidth - fl.width - 4))
 
