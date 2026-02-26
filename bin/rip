@@ -69,6 +69,7 @@ Examples:
   rip -m example.rip            # Compile with inline source map
   rip -cd example.rip           # Show compiled JS and type declarations
   rip -q -c example.rip         # Just the JS, no headers (for piping)
+  echo 'p 1 + 2' | rip          # Execute from stdin
   echo 'x = 1 + 2' | rip -c     # Compile from stdin
 
 Shebang support:
@@ -174,11 +175,13 @@ async function main() {
 
   // Stdin: write to temp .rip file so it flows through the normal execution/compile paths
   const hasCompileFlag = showCompiled || showTokens || showSExpr || generateDts || generateMap || outputFile;
+  let isStdin = false;
   if (!inputFile) {
     const tmp = join(process.cwd(), '.__rip_stdin__.rip');
     try {
       writeFileSync(tmp, readFileSync(0, 'utf-8'));
       inputFile = tmp;
+      isStdin = true;
     } catch (error) {
       console.error('Error reading stdin:', error.message);
       process.exit(1);
@@ -186,8 +189,7 @@ async function main() {
   }
 
   // Execute script directly (no compile flags)
-  const isStdin = inputFile?.endsWith('.__rip_stdin__.rip');
-  if (inputFile && !hasCompileFlag && isFile(inputFile)) {
+  if (!hasCompileFlag && isFile(inputFile)) {
     if (inputFile.endsWith('.rip')) {
       const result = spawnSync('bun', ['--preload', loaderPath, inputFile, ...scriptArgs], {
         stdio: 'inherit',
@@ -215,7 +217,7 @@ async function main() {
 
   // Fallback: look for bin/{command} in git repo root
   // Allows `rip migrate --status` to find and run {repo}/bin/migrate
-  if (inputFile && !inputFile.startsWith('-') && !isFile(inputFile)) {
+  if (!isStdin && inputFile && !inputFile.startsWith('-') && !isFile(inputFile)) {
     try {
       const repoRoot = execSync('git rev-parse --show-toplevel', {
         encoding: 'utf-8',
