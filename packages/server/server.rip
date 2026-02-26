@@ -124,7 +124,7 @@ logAccessHuman = (app, req, res, totalSeconds, workerSeconds) ->
   size = scale(bytes, 'B')
   contentType = (res.headers.get('content-type') or '').split(';')[0] or ''
   sub = if contentType.includes('/') then contentType.split('/')[1] else contentType
-  type = (typeAbbrev[sub] or sub or '-').padEnd(4)
+  type = (typeAbbrev[sub] or sub or '').padEnd(4)
   console.log "[#{timestamp} #{timezone} #{dur}] #{status} #{type} #{size} - #{method} #{path}"
 
 INTERNAL_HEADERS = new Set(['rip-worker-busy', 'rip-worker-id', 'rip-no-log'])
@@ -590,7 +590,7 @@ class Manager
     for dir in dirs
       try
         w = watch dir, { recursive: true }, (event, filename) ->
-          if filename?.endsWith('.rip')
+          if filename?.endsWith('.rip') or filename?.endsWith('.html')
             broadcast('reload')
           else if filename?.endsWith('.css')
             broadcast('css')

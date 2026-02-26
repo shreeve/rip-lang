@@ -1175,7 +1175,7 @@ code "child component with static props", '''
     _create() {
       this._el0 = document.createElement('div');
       this._inst1 = new Child({ label: "hello" });
-      this._el2 = this._inst1._create();
+      this._el2 = this._inst1._root = this._inst1._create();
       (this._children || (this._children = [])).push(this._inst1);
       this._el0.appendChild(this._el2);
       return this._el0;
@@ -1200,7 +1200,7 @@ code "child component with reactive prop (signal pass-through)", '''
     _create() {
       this._el0 = document.createElement('div');
       this._inst1 = new Child({ count: this.count });
-      this._el2 = this._inst1._create();
+      this._el2 = this._inst1._root = this._inst1._create();
       (this._children || (this._children = [])).push(this._inst1);
       this._el0.appendChild(this._el2);
       return this._el0;
@@ -1224,7 +1224,7 @@ code "child component with children (slot)", '''
       this._t0 = document.createTextNode("slot content");
       this._el2.appendChild(this._t0);
       this._inst0 = new Child({ children: this._el2 });
-      this._el1 = this._inst0._create();
+      this._el1 = this._inst0._root = this._inst0._create();
       (this._children || (this._children = [])).push(this._inst0);
       return this._el1;
     }
@@ -1249,7 +1249,7 @@ code "child component with props and children", '''
       this._t0 = document.createTextNode("child content");
       this._el3.appendChild(this._t0);
       this._inst1 = new Child({ label: "hello", children: this._el3 });
-      this._el2 = this._inst1._create();
+      this._el2 = this._inst1._root = this._inst1._create();
       (this._children || (this._children = [])).push(this._inst1);
       this._el0.appendChild(this._el2);
       return this._el0;
@@ -1960,7 +1960,7 @@ code "bare component reference (no args)", '''
     _create() {
       this._el0 = document.createElement('div');
       this._inst1 = new Counter({});
-      this._el2 = this._inst1._create();
+      this._el2 = this._inst1._root = this._inst1._create();
       (this._children || (this._children = [])).push(this._inst1);
       this._el0.appendChild(this._el2);
       return this._el0;

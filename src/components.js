@@ -1640,7 +1640,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
     const s = this._self;
     this._createLines.push(`${instVar} = new ${componentName}(${propsCode});`);
-    this._createLines.push(`${elVar} = ${instVar}._create();`);
+    this._createLines.push(`${elVar} = ${instVar}._root = ${instVar}._create();`);
     this._createLines.push(`(${s}._children || (${s}._children = [])).push(${instVar});`);
 
     this._setupLines.push(`try { if (${instVar}._setup) ${instVar}._setup(); if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); }`);
@@ -2073,6 +2073,11 @@ class __Component {
     if (this.unmounted) this.unmounted();
     if (this._root && this._root.parentNode) {
       this._root.parentNode.removeChild(this._root);
+    }
+  }
+  emit(name, detail) {
+    if (this._root) {
+      this._root.dispatchEvent(new CustomEvent(name, { detail, bubbles: true }));
     }
   }
   static mount(target = 'body') {

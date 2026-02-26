@@ -172,13 +172,19 @@ button { font: inherit; cursor: pointer; }
 @keyframes slideIn { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
   </style>
   <script defer src="/rip/rip.min.js"
-    data-src="/checkbox.rip"
+    data-src="/checkbox.rip /toast.rip"
     data-mount="WidgetGallery">
+  </script>
+  <script>
+    let ready = false;
+    const es = new EventSource('/watch');
+    es.addEventListener('connected', () => ready ? location.reload() : (ready = true));
+    es.addEventListener('reload', () => location.reload());
   </script>
 </head>
 <body>
 
-  <!-- data-src="/checkbox.rip /toast.rip /dialog.rip /select.rip /combobox.rip /popover.rip /tooltip.rip /tabs.rip /accordion.rip /menu.rip /grid.rip" -->
+  <!-- data-src="/checkbox.rip  /dialog.rip /select.rip /combobox.rip /popover.rip /tooltip.rip /tabs.rip /accordion.rip /menu.rip /grid.rip" -->
 
 <script type="text/rip">
 export WidgetGallery = component
@@ -187,7 +193,7 @@ export WidgetGallery = component
   check1 := false
   check2 := true
   switch1 := false
-  # toasts := []
+  toasts := []
   # showDialog := false
   # fruit := null
   # role := null
@@ -200,7 +206,7 @@ export WidgetGallery = component
     .gallery
 
       .gallery-header
-        h1 "Rip Widget Gallery"
+        h1 "Rip Widget Gallerys"
         p "Visual smoke test for all headless widgets. Uncomment sections one at a time."
 
       # ================================================================
@@ -233,20 +239,20 @@ export WidgetGallery = component
       # ================================================================
       # TOAST — uncomment state above: toasts := []
       # ================================================================
-      # .section
-      #   .section-title
-      #     "Toast"
-      #     span.badge "44 lines"
-      #   .section-desc "Auto-dismiss notification with ARIA live region."
-      #   .demo-row
-      #     .demo-label "Click to show toasts"
-      #     button style: "padding:6px 16px;border:1px solid #cbd5e1;border-radius:6px;background:white", @click: (=> toasts = [...toasts, { id: Date.now(), msg: 'Hello!', type: 'info' }])
-      #       "Info Toast"
-      #     button style: "margin-left:8px;padding:6px 16px;border:1px solid #cbd5e1;border-radius:6px;background:white", @click: (=> toasts = [...toasts, { id: Date.now(), msg: 'Saved!', type: 'success' }])
-      #       "Success Toast"
-      #   .toast-wrap
-      #     for t in toasts
-      #       Toast message: t.msg, type: t.type, duration: 3000, @dismiss: (=> toasts = toasts.filter (x) -> x.id isnt t.id)
+      .section
+        .section-title
+          "Toast"
+          span.badge "44 lines"
+        .section-desc "Auto-dismiss notification with ARIA live region."
+        .demo-row
+          .demo-label "Click to show toasts"
+          button style: "padding:6px 16px;border:1px solid #cbd5e1;border-radius:6px;background:white", @click: (=> toasts = [...toasts, { id: Date.now(), msg: 'Hello!', type: 'info' }])
+            "Info Toast"
+          button style: "margin-left:8px;padding:6px 16px;border:1px solid #cbd5e1;border-radius:6px;background:white", @click: (=> toasts = [...toasts, { id: Date.now(), msg: 'Saved!', type: 'success' }])
+            "Success Toast"
+        .toast-wrap
+          for t in toasts
+            Toast message: t.msg, type: t.type, duration: 3000, @dismiss: (=> toasts = toasts.filter (x) -> x.id isnt t.id)
 
       # ================================================================
       # DIALOG — uncomment state above: showDialog := false

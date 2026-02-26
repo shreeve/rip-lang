@@ -4664,7 +4664,7 @@ ${blockFactoriesCode}return ${lines.join(`
       const { propsCode, reactiveProps, childrenSetupLines } = this.buildComponentProps(args);
       const s = this._self;
       this._createLines.push(`${instVar} = new ${componentName}(${propsCode});`);
-      this._createLines.push(`${elVar} = ${instVar}._create();`);
+      this._createLines.push(`${elVar} = ${instVar}._root = ${instVar}._create();`);
       this._createLines.push(`(${s}._children || (${s}._children = [])).push(${instVar});`);
       this._setupLines.push(`try { if (${instVar}._setup) ${instVar}._setup(); if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); }`);
       for (const { key, valueCode } of reactiveProps) {
@@ -5042,6 +5042,11 @@ class __Component {
     if (this.unmounted) this.unmounted();
     if (this._root && this._root.parentNode) {
       this._root.parentNode.removeChild(this._root);
+    }
+  }
+  emit(name, detail) {
+    if (this._root) {
+      this._root.dispatchEvent(new CustomEvent(name, { detail, bubbles: true }));
     }
   }
   static mount(target = 'body') {
@@ -8570,8 +8575,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.29";
-  var BUILD_DATE = "2026-02-26@08:25:52GMT";
+  var VERSION = "3.13.31";
+  var BUILD_DATE = "2026-02-26@09:14:06GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
