@@ -433,7 +433,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
           isTemplateElement = true;
         } else if (tag === 'IDENTIFIER' && !isAfterControlFlow) {
           isTemplateElement = startsWithTag(tokens, i);
-        } else if (tag === 'PROPERTY' || tag === 'STRING' || tag === 'STRING_END' || tag === 'NUMBER' || tag === 'BOOL' || tag === 'CALL_END' || tag === ')') {
+        } else if (tag === 'PROPERTY' || tag === 'STRING' || tag === 'STRING_END' || tag === 'NUMBER' || tag === 'BOOL' || tag === 'CALL_END' || tag === ')' || tag === 'PRESENCE') {
           isTemplateElement = startsWithTag(tokens, i);
         }
 
@@ -1048,8 +1048,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       else if (typeof arg === 'string' || arg instanceof String) {
         const val = arg.valueOf();
         // Template tag appearing as a string arg (e.g., slot after multi-line attrs)
-        const [tagPart, idPart] = val.split('#');
-        if (this.isHtmlTag(tagPart || 'div') || this.isComponent(val)) {
+        const baseName = val.split(/[#.]/)[0];
+        if (this.isHtmlTag(baseName || 'div') || this.isComponent(baseName)) {
           const childVar = this.generateNode(arg);
           this._createLines.push(`${elVar}.appendChild(${childVar});`);
         } else {

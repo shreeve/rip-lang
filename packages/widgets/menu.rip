@@ -98,12 +98,12 @@ export Menu = component
   render
     .
       button._triggerEl
-        aria-haspopup: "menu",
-        aria-expanded: (if open then 'true' else 'false'),
-        data-open: open?!,
-        data-disabled: @disabled?!,
-        disabled: @disabled,
-        @click: @toggle,
+        aria-haspopup: "menu"
+        aria-expanded: !!open
+        data-open: open?!
+        data-disabled: @disabled?!
+        disabled: @disabled
+        @click: @toggle
         @keydown: @onTriggerKeydown
         slot
 
@@ -111,10 +111,10 @@ export Menu = component
         .('fixed inset-0 z-50') @click: @onBackdropClick
         div._menuEl role: "menu", data-open: true, @keydown: @onMenuKeydown
           for item, idx in items
-            div role: "menuitem",
-              tabindex: "-1",
-              data-highlighted: (idx is highlightedIndex)?!,
-              data-disabled: item.dataset.disabled?!,
-              @click: (=> @selectItem(idx)),
+            div role: "menuitem"
+              tabindex: "-1"
+              data-highlighted: (idx is highlightedIndex)?!
+              data-disabled: item.dataset.disabled?!
+              @click: (=> @selectItem(idx))
               @mouseenter: (=> highlightedIndex = idx)
               item.textContent

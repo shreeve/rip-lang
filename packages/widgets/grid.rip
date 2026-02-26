@@ -286,7 +286,7 @@ export Grid = component
       dataVersion++
       return
     val = @data[sortIndex[activeRow]][col.key]
-    orig = String(if val? then val else '')
+    orig = String(val ?? '')
     numeric = col.align is 'right'
     selectAll = false
     if initial isnt undefined and col.type isnt 'select'

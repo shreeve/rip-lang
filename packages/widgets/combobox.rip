@@ -88,18 +88,18 @@ export Combobox = component
     . data-open: open?!
 
       # Text input
-      input._inputEl role: "combobox",
-        type: "text",
-        autocomplete: "off",
-        aria-expanded: (if open then 'true' else 'false'),
-        aria-haspopup: "listbox",
-        aria-autocomplete: "list",
-        data-disabled: @disabled?!,
-        disabled: @disabled,
-        placeholder: @placeholder,
-        value: @query,
-        @input: @onInput,
-        @keydown: @onInputKeydown,
+      input._inputEl role: "combobox"
+        type: "text"
+        autocomplete: "off"
+        aria-expanded: !!open
+        aria-haspopup: "listbox"
+        aria-autocomplete: "list"
+        data-disabled: @disabled?!
+        disabled: @disabled
+        placeholder: @placeholder
+        value: @query
+        @input: @onInput
+        @keydown: @onInputKeydown
         @focus: @onFocus
 
       # Dropdown listbox

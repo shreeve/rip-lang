@@ -73,17 +73,17 @@ export Tooltip = component
   render
     .
       div._triggerEl
-        aria-describedby: (if open then _id else undefined),
-        @mouseenter: @show,
-        @mouseleave: @hide,
-        @focusin: @show,
+        aria-describedby: open ? _id : undefined
+        @mouseenter: @show
+        @mouseleave: @hide
+        @focusin: @show
         @focusout: @hide
         slot
 
       if open
-        div._tipEl id: _id, role: "tooltip",
-          data-open: true,
-          data-entering: entering?!,
-          data-exiting: exiting?!,
+        div._tipEl id: _id, role: "tooltip"
+          data-open: true
+          data-entering: entering?!
+          data-exiting: exiting?!
           data-placement: @placement
           @text

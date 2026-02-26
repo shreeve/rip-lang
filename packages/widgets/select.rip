@@ -137,13 +137,13 @@ export Select = component
     .
 
       # Trigger button
-      button._triggerEl role: "combobox",
-        aria-expanded: (if open then 'true' else 'false'),
-        aria-haspopup: "listbox",
-        data-open: open?!,
-        data-disabled: @disabled?!,
-        disabled: @disabled,
-        @click: @toggle,
+      button._triggerEl role: "combobox"
+        aria-expanded: !!open
+        aria-haspopup: "listbox"
+        data-open: open?!
+        data-disabled: @disabled?!
+        disabled: @disabled
+        @click: @toggle
         @keydown: @onTriggerKeydown
         span selectedLabel
 
@@ -154,16 +154,16 @@ export Select = component
       # Dropdown listbox
       if open
         .('fixed inset-0 z-50') @click: @onBackdropClick
-        div._listEl role: "listbox",
-          data-open: true,
+        div._listEl role: "listbox"
+          data-open: true
           @keydown: @onListKeydown
           for opt, idx in options
-            div role: "option",
-              tabindex: "-1",
-              data-value: opt.dataset.value,
-              data-highlighted: (idx is highlightedIndex)?!,
-              data-selected: (opt.dataset.value is String(@value))?!,
-              aria-selected: (if opt.dataset.value is String(@value) then 'true' else 'false'),
-              @click: (=> @onOptionClick(idx)),
+            div role: "option"
+              tabindex: "-1"
+              data-value: opt.dataset.value
+              data-highlighted: (idx is highlightedIndex)?!
+              data-selected: (opt.dataset.value is String(@value))?!
+              aria-selected: opt.dataset.value is String(@value)
+              @click: (=> @onOptionClick(idx))
               @mouseenter: (=> @onOptionMouseenter(idx))
               opt.textContent

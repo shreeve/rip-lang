@@ -56,15 +56,15 @@ export Tabs = component
 
       div role: "tablist", @keydown: @onKeydown
         for tab in _tabEls
-          button role: "tab",
-            aria-selected: (if tab.dataset.tab is @active then 'true' else 'false'),
-            tabindex: (if tab.dataset.tab is @active then '0' else '-1'),
-            data-active: (tab.dataset.tab is @active)?!,
+          button role: "tab"
+            aria-selected: tab.dataset.tab is @active
+            tabindex: tab.dataset.tab is @active ? '0' : '-1'
+            data-active: (tab.dataset.tab is @active)?!
             @click: (=> @select(tab.dataset.tab))
             tab.textContent
 
       for panel in _panelEls
-        div role: "tabpanel",
-          data-active: (panel.dataset.panel is @active)?!,
+        div role: "tabpanel"
+          data-active: (panel.dataset.panel is @active)?!
           hidden: (panel.dataset.panel isnt @active)?!
           slot
