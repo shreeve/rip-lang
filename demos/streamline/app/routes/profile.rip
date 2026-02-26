@@ -31,11 +31,11 @@ export Profile = component
     saved = false
     error = null
     try
-      res = await fetch '/api/user',
+      res = fetch! '/api/user',
         method: 'PATCH'
         headers: { 'Content-Type': 'application/json' }
         body: JSON.stringify { ["firstName"]: firstName, ["lastName"]: lastName, ["phone"]: phone }
-      data = await res.json()
+      data = res.json!
       if data.error
         error = data.error
       else

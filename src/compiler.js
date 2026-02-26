@@ -941,17 +941,38 @@ export class CodeGenerator {
       let isIncl = index[0] === '..';
       let arrCode = this.generate(arr, 'value');
       let [start, end] = index.slice(1);
+
+      // Detect compile-time numeric literals (positive, negative, String objects)
+      let numericLiteral = (node) => {
+        if (node === null) return null;
+        let v = str(node) ?? node;
+        if (typeof v === 'number') return v;
+        if ((typeof v === 'string') && /^\d+$/.test(v)) return +v;
+        if (Array.isArray(node) && node[0] === '-' && node.length === 2) {
+          let inner = str(node[1]) ?? node[1];
+          if (typeof inner === 'number') return -inner;
+          if ((typeof inner === 'string') && /^\d+$/.test(inner)) return -inner;
+        }
+        return null;
+      };
+
+      let inclEnd = (s, e, endNode) => {
+        let n = numericLiteral(endNode);
+        if (n !== null && n !== -1) return `${arrCode}.slice(${s}, ${n + 1})`;
+        return `${arrCode}.slice(${s}, +${e} + 1 || 9e9)`;
+      };
+
       if (start === null && end === null) return `${arrCode}.slice()`;
       if (start === null) {
         if (isIncl && this.is(end, '-', 1) && (str(end[1]) ?? end[1]) == 1) return `${arrCode}.slice(0)`;
         let e = this.generate(end, 'value');
-        return isIncl ? `${arrCode}.slice(0, +${e} + 1 || 9e9)` : `${arrCode}.slice(0, ${e})`;
+        return isIncl ? inclEnd('0', e, end) : `${arrCode}.slice(0, ${e})`;
       }
       if (end === null) return `${arrCode}.slice(${this.generate(start, 'value')})`;
       let s = this.generate(start, 'value');
       if (isIncl && this.is(end, '-', 1) && (str(end[1]) ?? end[1]) == 1) return `${arrCode}.slice(${s})`;
       let e = this.generate(end, 'value');
-      return isIncl ? `${arrCode}.slice(${s}, +${e} + 1 || 9e9)` : `${arrCode}.slice(${s}, ${e})`;
+      return isIncl ? inclEnd(s, e, end) : `${arrCode}.slice(${s}, ${e})`;
     }
     // Negative literal index: arr[-1] → arr.at(-1)
     if (this.is(index, '-', 1)) {

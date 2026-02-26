@@ -236,14 +236,23 @@ async function main() {
     });
     const result = compiler.compile(source);
 
-    const shouldShowCompiled = showCompiled || (!showTokens && !showSExpr && !generateDts) || outputFile;
-
     if (outputFile) {
       writeFileSync(outputFile, result.code, 'utf-8');
       if (!quiet) console.log(`Compiled to ${outputFile}`);
-    } else if (shouldShowCompiled) {
+    } else if (showCompiled) {
       if (!quiet) console.log(`// == JavaScript output by Rip ${VERSION} == //\n`);
       console.log(result.code);
+    } else if (!showTokens && !showSExpr && !generateDts) {
+      // No compile flags: execute the compiled code
+      const tmp = join(process.cwd(), '.__rip_stdin__.mjs');
+      let exitCode = 0;
+      try {
+        writeFileSync(tmp, result.code);
+        const r = spawnSync('bun', ['--preload', loaderPath, tmp], { stdio: 'inherit', env: process.env });
+        exitCode = r.status ?? 1;
+      } catch (e) { exitCode = 1; }
+      try { unlinkSync(tmp); } catch {}
+      process.exit(exitCode);
     }
 
     if (generateDts && result.dts) {

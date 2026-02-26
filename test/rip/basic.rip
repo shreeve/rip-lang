@@ -162,3 +162,44 @@ test 'string inclusive slice', '"abcdef"[1..3]', 'bcd'
 test 'string exclusive slice', '"abcdef"[1...3]', 'bc'
 test 'string from index', '"abcdef"[3..]', 'def'
 test 'string to index', '"abcdef"[...3]', 'abc'
+
+# ==============================================================================
+# Comprehensive Slice Tests — all forms with literal and negative indices
+# ==============================================================================
+
+# Array slicing — open ends
+test 'array slice to end inclusive', '[0,1,2,3,4][2..]', [2,3,4]
+test 'array slice to end exclusive', '[0,1,2,3,4][2...]', [2,3,4]
+test 'array full copy inclusive', '[1,2,3][..]', [1,2,3]
+test 'array full copy exclusive', '[1,2,3][...]', [1,2,3]
+
+# Array slicing — inclusive from start
+test 'array inclusive from start', '[0,1,2,3,4][..2]', [0,1,2]
+test 'array inclusive from start zero', '[0,1,2,3,4][..0]', [0]
+
+# Array slicing — negative indices
+test 'array slice last 3', '[0,1,2,3,4][-3..]', [2,3,4]
+test 'array slice last 1', '[0,1,2,3,4][-1..]', [4]
+test 'array slice except last', '[0,1,2,3,4][..-2]', [0,1,2,3]
+test 'array slice except last 2', '[0,1,2,3,4][..-3]', [0,1,2]
+test 'array slice all inclusive', '[0,1,2,3,4][..-1]', [0,1,2,3,4]
+
+# String slicing — all forms
+test 'string inclusive both', '"Steve Shreeve"[0..4]', "Steve"
+test 'string exclusive both', '"Steve Shreeve"[0...5]', "Steve"
+test 'string inclusive from start', '"Steve Shreeve"[..4]', "Steve"
+test 'string exclusive from start', '"Steve Shreeve"[...5]', "Steve"
+test 'string from index to end', '"Steve Shreeve"[6..]', "Shreeve"
+test 'string full copy', '"Steve Shreeve"[...]', "Steve Shreeve"
+
+# String slicing — negative indices
+test 'string last 3 chars', '"abcdef"[-3..]', "def"
+test 'string except last char', '"abcdef"[..-2]', "abcde"
+test 'string except last 2', '"abcdef"[..-3]', "abcd"
+test 'string all via -1', '"abcdef"[..-1]', "abcdef"
+test 'string negative to negative', '"abcdef"[-4..-2]', "cde"
+
+# Slice with variable (runtime guard preserved)
+test 'slice with variable end', 'x = [0,1,2,3,4]; n = 3; x[1..n]', [1,2,3]
+test 'slice with variable start', 'x = [0,1,2,3,4]; n = 2; x[n..4]', [2,3,4]
+test 'slice with both variable', 'x = [0,1,2,3,4]; a = 1; b = 3; x[a..b]', [1,2,3]

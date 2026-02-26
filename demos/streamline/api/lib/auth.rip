@@ -2,6 +2,7 @@
 
 import { session, error, bail } from '@rip-lang/server'
 import { schema } from '../db.rip'
+import { createHash, createCipheriv } from 'crypto'
 
 User = schema.model 'User'
 
@@ -18,3 +19,15 @@ export adminScope = ->
 
 export proxying = ->
   session.adminId? and session.adminId isnt session.userId
+
+# export hashed = (str, len = null) ->
+#   return "" unless str
+#   sha = createHash('sha1').update(str).digest('hex')
+#   len ? sha[0...len] : sha
+
+# export encrypt = (obj, len = null) ->
+#   return "" unless obj
+#   key = Buffer.from(hashed(config.secret_salt, 24), 'utf8')
+#   enc = createCipheriv('des-ede3-cbc', key, Buffer.alloc(8))
+#   str = enc.update(String(obj), 'utf8', 'hex') + enc.final('hex')
+#   len ? str[0..len] : str
