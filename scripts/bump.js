@@ -109,6 +109,8 @@ for (let i = 0; i < pkgEntries.length; i++) {
 
   if (!published || published !== pkg.version) {
     changed.push({ dir, pkg, pkgPath, reason: 'version mismatch' });
+  } else if (pkg.dependencies?.['rip-lang']) {
+    changed.push({ dir, pkg, pkgPath, reason: 'rip-lang dependency' });
   } else {
     const diff = run(`git diff HEAD -- packages/${dir}/`, { throws: false });
     if (diff && diff.length > 0) {
