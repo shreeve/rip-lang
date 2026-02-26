@@ -925,6 +925,13 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         this._pushEffect(`${textVar}.data = ${this._self}.${str}.value;`);
         return textVar;
       }
+      // Slot projection — bare <slot> tag → project @children
+      if (str === 'slot' && this.componentMembers) {
+        const s = this._self;
+        const slotVar = this.newElementVar('slot');
+        this._createLines.push(`${slotVar} = ${s}.children instanceof Node ? ${s}.children : (${s}.children != null ? document.createTextNode(String(${s}.children)) : document.createComment(''));`);
+        return slotVar;
+      }
       // Static tag without content (possibly with #id)
       const [tagStr, idStr] = str.split('#');
       const elVar = this.newElementVar();

@@ -19,7 +19,7 @@ echo 'your code' | ./bin/rip -s  # S-expressions (parser)
 echo 'your code' | ./bin/rip -c  # JavaScript (codegen)
 
 # Run tests
-bun run test                             # All tests (1369)
+bun run test                             # All tests (1407)
 bun test/runner.js test/rip/FILE.rip     # Specific file
 
 # Rebuild parser (after grammar changes)
@@ -36,8 +36,8 @@ rip serve
 
 | Metric | Value |
 |--------|-------|
-| Version | 3.13.32 |
-| Tests | 1,369 |
+| Version | 3.13.31 |
+| Tests | 1,407 |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
 
@@ -375,6 +375,8 @@ Dialog open <=> @show
 
 Implementation: lexer tokenizes `<=>` as `BIND`, the render rewriter transforms `value <=> x` to `__bind_value__: x`, and the component code generator emits the effect + event listener pair. See `src/components.js`.
 
+**How `<=>` works on components (signal sharing):** For HTML elements, `<=>` compiles to an effect + event listener pair. For **components**, it works differently — the parent's signal is passed directly via `__bind_propName__` prop. The child's `_init` checks for this prop first: `this.checked = __state(props.__bind_checked__ ?? props.checked ?? false)`. Since `__state()` has signal passthrough (returns existing signals as-is), parent and child share the exact same signal object. Mutations in either direction are instantly visible to both — no events or sync needed. This is why `<=>` on components is more efficient than on HTML elements.
+
 ---
 
 ## Component System Architecture (`src/components.js`)
@@ -631,7 +633,7 @@ code "name", "x + y", "(x + y)"
 fail "name", "invalid syntax"
 ```
 
-### Test Files (26 files, 1,369 tests)
+### Test Files (26 files, 1,407 tests)
 
 ```
 test/rip/
@@ -783,6 +785,50 @@ the shared scope — no imports needed.
 - Column resizing: drag header borders
 - Inline editing: text, checkbox toggle, select dropdown
 
+**Widget Gallery dev server (`packages/widgets/`):**
+
+The widget gallery uses `data-src` mode (not `data-launch`) for testing individual
+widgets. The dev server is `index.rip` (14 lines) and the gallery is `index.html`.
+
+```coffee
+# index.rip — minimal dev server
+import { get, use, start, notFound } from '@rip-lang/server'
+import { serve } from '@rip-lang/server/middleware'
+
+dir = import.meta.dir
+use serve dir: dir, components: ['.'], watch: true
+get '/*.rip', -> @send "#{dir}/#{@req.path.slice(1)}", 'text/plain; charset=UTF-8'
+notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
+start port: 3005
+```
+
+Hot reload: `rip serve` from `packages/widgets/` gives auto-HTTPS + mDNS
+(`https://widgets.local`). The browser connects to the server's built-in
+`/watch` SSE endpoint. Two reload mechanisms work together:
+- **`.rip` file changes**: Manager detects the change, does a rolling restart.
+  The SSE connection drops and EventSource auto-reconnects. The browser
+  script detects the reconnection and calls `location.reload()`.
+- **`.html`/`.css` changes**: The serve middleware's `watchDirs` (registered
+  via `components: ['.']` and `watch: true`) detects the change and broadcasts
+  a `reload` SSE event directly — no rolling restart needed.
+
+The browser reload script is 4 lines in `index.html`:
+```html
+<script>
+  let ready = false;
+  const es = new EventSource('/watch');
+  es.addEventListener('connected', () => ready ? location.reload() : (ready = true));
+  es.addEventListener('reload', () => location.reload());
+</script>
+```
+
+**Important architecture note for AI assistants:** Do NOT implement custom file
+watchers or SSE endpoints in the worker `index.rip`. The `rip serve` process
+manager (rip-server) already handles file watching and SSE at the server level.
+The `/watch` SSE endpoint is intercepted by rip-server's proxy before reaching
+workers. Use `notFound` (not `get '/*'`) for the catch-all route — `get '/*'`
+will intercept requests meant for the serve middleware (like `/rip/rip.min.js`).
+
 **Rip-specific gotchas learned building widgets:**
 - **Lifecycle hooks:** The recognized hooks are `beforeMount`, `mounted`,
   `updated`, `beforeUnmount`, `unmounted`, `onError`. Nothing else.
@@ -809,6 +855,24 @@ the shared scope — no imports needed.
   `data-*` attributes (`[data-open]`, `[data-selected]`, etc.). Consumers
   style these with CSS attribute selectors. Widgets never apply visual
   styles — they only set semantic state.
+- **`slot` in render blocks:** The bare `slot` tag in a component render
+  block projects `this.children` (the DOM content passed by the parent).
+  It does NOT create an HTML `<slot>` element — Shadow DOM is not used.
+- **`@event:` handlers on child components:** `@change: handler` on a
+  child component compiles to `addEventListener('change', handler)` on
+  the child's root DOM element. The child dispatches events via
+  `@emit 'eventName', detail` which creates a `CustomEvent` on `this._root`.
+- **`emit()` method:** Every component has an `emit(name, detail)` method
+  that dispatches a `CustomEvent` with `{ detail, bubbles: true }` on the
+  component's root element. Use it for non-binding event communication.
+- **`_root` on child components:** When a parent instantiates a child
+  component, `_root` is set during `_create()` (via
+  `el = inst._root = inst._create()`). This is necessary for `emit()` to
+  work — without `_root`, `emit` silently does nothing.
+- **`rip.min.js` must be rebuilt after `components.js` changes:** The
+  browser bundle includes the component runtime. After modifying
+  `src/components.js`, run `bun run build` to regenerate `rip.min.js`.
+  Then restart `rip serve` to pick up the new bundle.
 
 **Documentation in `packages/widgets/`:**
 - `README.md` — Usage examples and API for every widget
@@ -828,6 +892,15 @@ are correct. Key patterns:
   for serving files)
 - `@rip-lang/server` handlers bind `this` to the context object — use `@send`,
   `@json`, `@req`, etc.
+
+**`rip serve` uses the global install:** The `rip serve` command runs
+`@rip-lang/server/server.rip` from the **globally installed** package
+(`~/.bun/install/global/node_modules/@rip-lang/server/`), not the workspace.
+Changes to `packages/server/` won't take effect until published. For
+server-only changes, publish just that package: `cd packages/server && bun publish`,
+then `bun update` to pull into global. Use `bun run bump` only for full releases
+(it bumps ALL packages). Workers spawned by rip-server DO use the workspace's
+`node_modules` for imports in the app entry file (`index.rip`).
 
 ---
 

@@ -4113,6 +4113,12 @@ ${blockFactoriesCode}return ${lines.join(`
           this._pushEffect(`${textVar2}.data = ${this._self}.${str}.value;`);
           return textVar2;
         }
+        if (str === "slot" && this.componentMembers) {
+          const s = this._self;
+          const slotVar = this.newElementVar("slot");
+          this._createLines.push(`${slotVar} = ${s}.children instanceof Node ? ${s}.children : (${s}.children != null ? document.createTextNode(String(${s}.children)) : document.createComment(''));`);
+          return slotVar;
+        }
         const [tagStr, idStr] = str.split("#");
         const elVar = this.newElementVar();
         const actualTag = tagStr || "div";
@@ -8594,7 +8600,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.32";
-  var BUILD_DATE = "2026-02-26@09:33:18GMT";
+  var BUILD_DATE = "2026-02-26@09:34:00GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
