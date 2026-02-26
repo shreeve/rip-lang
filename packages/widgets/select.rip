@@ -3,7 +3,7 @@
 # Keyboard: ArrowDown/Up to navigate, Enter/Space to select, Escape to close,
 #           Home/End for first/last, typeahead to jump by character.
 #
-# Exposes data-open on trigger, data-highlighted and data-selected on options.
+# Exposes data-open on button, data-highlighted and data-selected on options.
 # Ships zero CSS — style entirely via attribute selectors in your stylesheet.
 #
 # Usage:
@@ -21,13 +21,15 @@ export Select = component
   typeaheadBuffer := ''
   typeaheadTimer := null
 
+  getOpt: (o) -> o.dataset.value ?? o.value
+
   options ~=
-    return [] unless @_slotEl
-    Array.from(@_slotEl?.querySelectorAll('[data-value]') or [])
+    return [] unless @_slot
+    Array.from(@_slot.querySelectorAll('[data-value], option[value]') or [])
 
   selectedLabel ~=
     if @value?
-      el = options.find (o) -> o.dataset.value is String(@value)
+      el = options.find (o) -> @getOpt(o) is String(@value)
       el?.textContent?.trim() or String(@value)
     else
       @placeholder
@@ -38,8 +40,8 @@ export Select = component
 
   openMenu: ->
     open = true
-    highlightedIndex = Math.max(0, options.findIndex (o) -> o.dataset.value is String(@value))
-    @_schedulePosition()
+    highlightedIndex = Math.max(0, options.findIndex (o) -> @getOpt(o) is String(@value))
+    @_positionList()
     setTimeout =>
       @_focusHighlighted()
     , 0
@@ -47,16 +49,16 @@ export Select = component
   close: ->
     open = false
     highlightedIndex = -1
-    @_triggerEl?.focus()
+    @_btn?.focus()
 
   selectIndex: (idx) ->
     opt = options[idx]
     return unless opt
-    @value = opt.dataset.value
+    @value = @getOpt(opt)
     @emit 'change', @value
     @close()
 
-  onTriggerKeydown: (e) ->
+  onBtnKeydown: (e) ->
     return if @disabled
     switch e.key
       when 'ArrowDown', 'ArrowUp', 'Enter', ' '
@@ -112,58 +114,49 @@ export Select = component
     opt = options[highlightedIndex]
     opt?.focus()
 
-  _schedulePosition: ->
-    return unless @_triggerEl and @_listEl
-    tr = @_triggerEl.getBoundingClientRect()
-    @_listEl.style.position = 'fixed'
-    @_listEl.style.left = "#{tr.left}px"
-    @_listEl.style.top = "#{tr.bottom + 4}px"
-    @_listEl.style.minWidth = "#{tr.width}px"
-    # Flip up if overflows
-    lr = @_listEl.getBoundingClientRect()
-    if lr.bottom > window.innerHeight
-      @_listEl.style.top = "#{tr.top - lr.height - 4}px"
-
-  onOptionClick: (idx) ->
-    @selectIndex(idx)
-
-  onOptionMouseenter: (idx) ->
-    highlightedIndex = idx
-
-  onBackdropClick: (e) ->
-    @close() if open and e.target is e.currentTarget
+  _positionList: ->
+    return unless @_btn and @_list
+    btnRect = @_btn.getBoundingClientRect()
+    @_list.style.position = 'fixed'
+    @_list.style.left = "#{btnRect.left}px"
+    @_list.style.top = "#{btnRect.bottom + 4}px"
+    @_list.style.minWidth = "#{btnRect.width}px"
+    # Flip up if overflows viewport
+    listRect = @_list.getBoundingClientRect()
+    if listRect.bottom > window.innerHeight
+      @_list.style.top = "#{btnRect.top - listRect.height - 4}px"
 
   render
     .
 
-      # Trigger button
-      button._triggerEl role: "combobox"
+      # Button
+      button ref: "_btn", role: "combobox"
         aria-expanded: !!open
         aria-haspopup: "listbox"
         data-open: open?!
         data-disabled: @disabled?!
         disabled: @disabled
         @click: @toggle
-        @keydown: @onTriggerKeydown
+        @keydown: @onBtnKeydown
         span selectedLabel
 
       # Hidden slot for reading option definitions
-      ._slotEl style: "display:none"
+      . ref: "_slot", style: "display:none"
         slot
 
       # Dropdown listbox
       if open
-        .('fixed inset-0 z-50') @click: @onBackdropClick
-        div._listEl role: "listbox"
+        .('fixed inset-0 z-50') @click: (e) => @close() if open and e.target is e.currentTarget
+        div ref: "_list", role: "listbox"
           data-open: true
           @keydown: @onListKeydown
           for opt, idx in options
             div role: "option"
               tabindex: "-1"
-              data-value: opt.dataset.value
+              data-value: @getOpt(opt)
               data-highlighted: (idx is highlightedIndex)?!
-              data-selected: (opt.dataset.value is String(@value))?!
-              aria-selected: opt.dataset.value is String(@value)
-              @click: (=> @onOptionClick(idx))
-              @mouseenter: (=> @onOptionMouseenter(idx))
+              data-selected: (@getOpt(opt) is String(@value))?!
+              aria-selected: @getOpt(opt) is String(@value)
+              @click: (=> @selectIndex(idx))
+              @mouseenter: (=> highlightedIndex = idx)
               opt.textContent

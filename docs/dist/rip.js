@@ -3801,23 +3801,36 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         tag = "div";
       return { tag, classes, id };
     };
+    const _str = (s) => typeof s === "string" ? s : s instanceof String ? s.valueOf() : null;
+    const _transferMeta = (from, to) => {
+      if (!(from instanceof String))
+        return to;
+      const s = new String(to);
+      if (from.predicate)
+        s.predicate = true;
+      if (from.await)
+        s.await = true;
+      return s.predicate || s.await ? s : to;
+    };
     proto.transformComponentMembers = function(sexpr) {
       const self = this._self;
       if (!Array.isArray(sexpr)) {
-        if (typeof sexpr === "string" && this.reactiveMembers && this.reactiveMembers.has(sexpr)) {
-          return [".", [".", self, sexpr], "value"];
+        const sv = _str(sexpr);
+        if (sv && this.reactiveMembers && this.reactiveMembers.has(sv)) {
+          return [".", [".", self, sv], _transferMeta(sexpr, "value")];
         }
-        if (typeof sexpr === "string" && this.componentMembers && this.componentMembers.has(sexpr)) {
-          return [".", self, sexpr];
+        if (sv && this.componentMembers && this.componentMembers.has(sv)) {
+          return [".", self, _transferMeta(sexpr, sv)];
         }
         return sexpr;
       }
-      if (sexpr[0] === "." && sexpr[1] === "this" && typeof sexpr[2] === "string") {
-        const memberName = sexpr[2];
+      if (sexpr[0] === "." && sexpr[1] === "this" && _str(sexpr[2]) != null) {
+        const prop = sexpr[2];
+        const memberName = _str(prop);
         if (this.reactiveMembers && this.reactiveMembers.has(memberName)) {
-          return [".", [".", self, memberName], "value"];
+          return [".", [".", self, memberName], _transferMeta(prop, "value")];
         }
-        return this._factoryMode ? [".", self, sexpr[2]] : sexpr;
+        return this._factoryMode ? [".", self, prop] : sexpr;
       }
       if (sexpr[0] === "." || sexpr[0] === "?.") {
         return [sexpr[0], this.transformComponentMembers(sexpr[1]), sexpr[2]];
@@ -3937,7 +3950,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         lines.push(isPublic ? `    this.${name} = __state(props.__bind_${name}__ ?? props.${name} ?? ${val});` : `    this.${name} = __state(${val});`);
       }
       for (const { name, expr } of derivedVars) {
-        if (this.is(expr, "block") && expr.length > 2) {
+        if (this.is(expr, "block")) {
           const transformed = this.transformComponentMembers(expr);
           const body2 = this.generateFunctionBody(transformed);
           lines.push(`    this.${name} = __computed(() => ${body2});`);
@@ -3949,7 +3962,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       for (const effect of effects) {
         const effectBody = effect[2];
         const isAsync = this.containsAwait(effectBody) ? "async " : "";
-        if (this.is(effectBody, "block") && effectBody.length > 2) {
+        if (this.is(effectBody, "block")) {
           const transformed = this.transformComponentMembers(effectBody);
           const body2 = this.generateFunctionBody(transformed, [], true);
           lines.push(`    __effect(${isAsync}() => ${body2});`);
@@ -8600,7 +8613,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.32";
-  var BUILD_DATE = "2026-02-26@09:34:00GMT";
+  var BUILD_DATE = "2026-02-26@16:58:41GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
