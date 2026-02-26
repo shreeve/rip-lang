@@ -135,6 +135,17 @@ test "defined with empty string", "''!?", true
 test "defined with undefined", "undefined!?", false
 code "defined operator parens", "a!?", "(a !== undefined)"
 
+# Postfix presence check: "?!" (Houdini — truthy or undefined)
+test "presence with true", "true?!", true
+test "presence with value", "5?!", true
+test "presence with string", "'hello'?!", true
+test "presence with false", "false?!", undefined
+test "presence with zero", "0?!", undefined
+test "presence with null", "null?!", undefined
+test "presence with undefined", "undefined?!", undefined
+test "presence with empty string", "''?!", undefined
+code "presence operator parens", "a?!", "(a ? true : undefined)"
+
 # ==============================================================================
 # Bitwise Operators
 # ==============================================================================
