@@ -295,21 +295,22 @@ export WidgetGallery = component
           .status "active: #{currentTab}"
 
       # ================================================================
-      # MENU — parse error in render block (string + div children at same indent)
+      # MENU
       # ================================================================
-      # .section
-      #   .section-title
-      #     "Menu"
-      #     span.badge "124 lines"
-      #   .section-desc "Dropdown action menu with keyboard navigation."
-      #   .demo-row
-      #     .demo-label "Click to open menu"
-      #     Menu @select: (e) => console.log("Selected: #{e.detail}")
-      #       "Actions"
-      #       div data-item: "edit", "Edit"
-      #       div data-item: "duplicate", "Duplicate"
-      #       div data-item: "archive", "Archive"
-      #       div data-item: "delete", "Delete"
+      .section
+        .section-title
+          "Menu"
+          span.badge "124 lines"
+        .section-desc "Dropdown action menu with keyboard navigation."
+        .demo-row
+          .demo-label "Click to open menu"
+          Menu
+            @select: (e) => console.log("Selected: #{e.detail}")
+            span "Actions"
+            div data-item: "edit", "Edit"
+            div data-item: "duplicate", "Duplicate"
+            div data-item: "archive", "Archive"
+            div data-item: "delete", "Delete"
 
       # ================================================================
       # POPOVER
