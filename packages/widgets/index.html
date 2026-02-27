@@ -213,16 +213,11 @@ select.rip-grid-editor { cursor: pointer; padding-left: 4px; }
 </head>
 <body>
 
-<script>
-(function() {
-  var orig = HTMLElement.prototype.focus;
-  HTMLElement.prototype.focus = function(o) {
-    return orig.call(this, Object.assign({ preventScroll: true }, o));
-  };
-})();
-</script>
-
 <script type="text/rip">
+do ->
+  orig = HTMLElement::focus
+  HTMLElement::focus = (o) -> orig.call this, { preventScroll: true, ...o }
+
 export WidgetGallery = component
 
   # ---- State ----
