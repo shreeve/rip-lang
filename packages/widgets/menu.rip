@@ -6,7 +6,7 @@
 #
 # Usage:
 #   Menu
-#     button data-trigger: true, "Actions"
+#     span "Actions"
 #     div data-item: "edit", "Edit"
 #     div data-item: "delete", "Delete"
 #     div data-item: "archive", "Archive"
@@ -18,8 +18,13 @@ export Menu = component
   highlightedIndex := -1
 
   items ~=
-    return [] unless @_list
-    Array.from(@_list.querySelectorAll('[data-item]') or [])
+    return [] unless @_slot
+    Array.from(@_slot.querySelectorAll('[data-item]') or [])
+
+  triggerLabel ~=
+    return '' unless @_slot
+    el = @_slot.querySelector(':not([data-item])')
+    el?.textContent?.trim() or ''
 
   toggle: ->
     return if @disabled
@@ -30,7 +35,7 @@ export Menu = component
     highlightedIndex = 0
     requestAnimationFrame =>
       @_position()
-      items[0]?.focus()
+      @_list?.querySelectorAll('[role="menuitem"]')[0]?.focus()
 
   close: ->
     open = false
@@ -70,19 +75,19 @@ export Menu = component
       when 'ArrowDown'
         e.preventDefault()
         highlightedIndex = (highlightedIndex + 1) %% len
-        items[highlightedIndex]?.focus()
+        @_list?.querySelectorAll('[role="menuitem"]')[highlightedIndex]?.focus()
       when 'ArrowUp'
         e.preventDefault()
         highlightedIndex = (highlightedIndex - 1) %% len
-        items[highlightedIndex]?.focus()
+        @_list?.querySelectorAll('[role="menuitem"]')[highlightedIndex]?.focus()
       when 'Home'
         e.preventDefault()
         highlightedIndex = 0
-        items[0]?.focus()
+        @_list?.querySelectorAll('[role="menuitem"]')[0]?.focus()
       when 'End'
         e.preventDefault()
         highlightedIndex = len - 1
-        items[len - 1]?.focus()
+        @_list?.querySelectorAll('[role="menuitem"]')[len - 1]?.focus()
       when 'Enter', ' '
         e.preventDefault()
         @selectIndex(highlightedIndex)
@@ -110,6 +115,9 @@ export Menu = component
         disabled: @disabled
         @click: @toggle
         @keydown: @onTriggerKeydown
+        triggerLabel
+
+      . ref: "_slot", style: "display:none"
         slot
 
       if open
