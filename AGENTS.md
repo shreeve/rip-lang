@@ -333,8 +333,36 @@ Rip provides reactivity as **language-level operators**, not library imports:
 | `~=` | Computed | "always equals" | `const x = __computed(() => expr)` |
 | `~>` | Effect | "always calls" | `__effect(() => { ... })` or `const x = __effect(...)` |
 | `=!` | Readonly | "equals, dammit!" | `const x = value` (just const) |
+| `offer` | Context provide | "share with descendants" | `__state(value)` + `setContext('name', this.name)` |
+| `accept` | Context consume | "receive from ancestor" | `this.name = getContext('name')` |
 
 The reactive runtime is embedded in compiler.js and only included when needed.
+
+### Context Sharing: `offer` / `accept`
+
+Context-sensitive keywords (only active inside `component` bodies — plain identifiers elsewhere). Share reactive state between ancestor and descendant components without prop drilling.
+
+```coffee
+# Parent — creates state and shares it with all descendants
+export Tabs = component
+  offer active := 'overview'
+
+# Child — receives the signal from nearest ancestor
+export TabContent = component
+  accept active
+```
+
+`offer` wraps any assignment operator (`:=`, `~=`, `=`, `=!`). The signal passes through directly — parent and child share the same reactive object. Mutations in either direction are instant.
+
+**Three-tier state model:**
+
+| Tier | Scope | Mechanism | Example |
+|------|-------|-----------|---------|
+| **Props** | Parent → child | `value <=> x`, `placeholder: "..."` | Configuring a Select |
+| **Offer/Accept** | Ancestor → subtree | `offer`/`accept` keywords | Tabs sharing `active` with panels |
+| **Stash** | Application-wide | Shared reactive proxy | User email, auth state, theme |
+
+Implementation: `offer`/`accept` are handled as context-sensitive keywords via `classifyKeyword` override in `src/components.js`. They only tokenize as `OFFER`/`ACCEPT` inside component bodies; elsewhere they're plain identifiers. The grammar rules live in `ComponentLine`. The runtime uses the existing `setContext`/`getContext`/`_parent` chain — zero new runtime code.
 
 ### Two-Way Binding (`<=>`)
 
@@ -754,17 +782,27 @@ keyboard interactions per WAI-ARIA Authoring Practices. Widgets are plain
 
 | File | Lines | What It Does |
 |------|-------|-------------|
-| `select.rip` | 169 | Dropdown with typeahead, ARIA listbox |
-| `combobox.rip` | 114 | Filterable input + listbox |
-| `dialog.rip` | 86 | Modal: focus trap, scroll lock, escape/click-outside dismiss |
-| `toast.rip` | 44 | Auto-dismiss notification, ARIA live region |
-| `popover.rip` | 95 | Anchored floating content with flip/shift |
-| `tooltip.rip` | 89 | Hover/focus tooltip with delay |
-| `tabs.rip` | 70 | Tab panel with roving tabindex |
-| `accordion.rip` | 71 | Expand/collapse, single or multiple |
 | `checkbox.rip` | 42 | Checkbox and switch toggle |
-| `menu.rip` | 120 | Dropdown action menu |
-| `grid.rip` | 858 | Virtual-scrolling data grid (100K+ rows at 60fps) |
+| `toast.rip` | 45 | Auto-dismiss notification, ARIA live region |
+| `accordion.rip` | 93 | Expand/collapse, single or multiple |
+| `dialog.rip` | 91 | Modal: focus trap, scroll lock, escape/click-outside dismiss |
+| `tabs.rip` | 93 | Tab panel with roving tabindex, orientation, activation modes |
+| `popover.rip` | 96 | Anchored floating content with flip/shift |
+| `tooltip.rip` | 100 | Hover/focus tooltip with delay and positioning |
+| `menu.rip` | 121 | Dropdown action menu |
+| `combobox.rip` | 134 | Filterable input + listbox |
+| `select.rip` | 176 | Dropdown with typeahead, ARIA listbox |
+| `grid.rip` | 855 | Virtual-scrolling data grid (100K+ rows at 60fps) |
+
+**Widget conventions:**
+- All DOM refs use `ref: "_name"` — never `div._name` (dot syntax sets CSS classes)
+- Trigger elements: `_trigger` (select, menu, popover, tooltip)
+- Dropdown lists: `_list` (select, combobox, menu)
+- Content areas: `_content` (tabs, accordion)
+- Auto-wired events: `onKeydown`, `onScroll`, etc. (root element, no explicit binding)
+- Child-element handlers: `_headerClick`, `_resizeStart` (underscore prefix, explicit binding)
+- Public methods: `toggle`, `close`, `select`, `selectIndex` (no underscore)
+- Use `=!` for constant values (IDs), `:=` only for reactive state that drives DOM
 
 **Integration:** Add the widgets directory to your serve middleware:
 
@@ -847,6 +885,18 @@ will intercept requests meant for the serve middleware (like `/rip/rip.min.js`).
   values that should trigger DOM updates. For internal bookkeeping (pools,
   caches, timer IDs, saved DOM references), use `=` (plain assignment).
   Reactive state has overhead and can cause unwanted effect re-runs.
+- **`_ready` flag pattern:** Effects run during `_init` (before `_create`),
+  so `ref:` DOM elements don't exist yet. Add `_ready := false` to state,
+  set `_ready = true` in `mounted`, and guard effects with
+  `return unless _ready`. The reactive `_ready` flag triggers the effect
+  to re-run after mount when DOM refs are available. Used by Tabs,
+  Accordion, and Grid.
+- **`ref:` is not reactive:** `ref: "_foo"` sets `this._foo` as a plain
+  property during `_create`, not a reactive signal. Effects cannot track
+  when refs are set. Use the `_ready` pattern above to bridge the gap.
+- **`offer`/`accept` are context-sensitive:** They are only keywords inside
+  `component` bodies. Outside components, `offer` and `accept` are plain
+  identifiers (safe to use as variable names in server code, etc.).
 - **Imperative DOM in effects:** For performance-critical paths (Grid's
   60fps scroll), bypass the reactive render loop and do imperative DOM
   manipulation inside `~>` effects. The effect still triggers reactively
