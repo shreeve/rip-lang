@@ -104,11 +104,11 @@ button { font: inherit; cursor: pointer; }
   border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
 }
 
-.gallery .dialog-backdrop {
+.gallery [data-open]:has([role="dialog"]) {
   position: fixed; inset: 0; background: rgba(0,0,0,0.4);
   display: grid; place-items: center; z-index: 100;
+  animation: fadeIn 150ms ease;
 }
-.gallery .dialog-backdrop[data-open] { animation: fadeIn 150ms ease; }
 .gallery .dialog-panel {
   background: white; border-radius: 12px; padding: 24px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.12); max-width: min(90vw, 420px); width: 100%;
