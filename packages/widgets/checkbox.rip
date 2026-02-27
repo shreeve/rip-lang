@@ -17,11 +17,14 @@ export Checkbox = component
   @indeterminate := false
   @switch := false
 
-  onClick: ->
+  onMousedown: (e) -> e.preventDefault()
+
+  onClick: (e) ->
     return if @disabled
     @indeterminate = false
     @checked = not @checked
     @emit 'change', @checked
+    e.target.closest('button')?.focus({ preventScroll: true })
 
   render
     button role: @switch ? 'switch' : 'checkbox'
