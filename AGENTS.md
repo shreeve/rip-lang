@@ -952,10 +952,8 @@ widgets are both the product and the test suite.
   Then restart `rip server` to pick up the new bundle.
 
 **Documentation in `packages/widgets/`:**
-- `README.md` — Usage examples and API for every widget
-- `NOTES.md` — Implementation details, known issues, Rip patterns
-- `ARCHITECTURE.md` — Philosophy and CSS strategy (Open Props, `@layer`, etc.)
-- `PRIORITIES.md` — Top 15 priorities and postmortem review
+- `README.md` — Usage examples, API for every widget, styling guide (Open Props, CSS patterns, dark mode)
+- `NOTES.md` — Architecture rationale, behavioral primitives, per-widget implementation notes, known issues, roadmap
 
 ### Package Development
 

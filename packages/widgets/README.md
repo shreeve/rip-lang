@@ -14,6 +14,31 @@ use serve
   components: ['components', '../../../packages/widgets']
 ```
 
+Every widget:
+- Handles all keyboard interactions per WAI-ARIA Authoring Practices
+- Sets correct ARIA attributes automatically
+- Exposes `data-*` attributes for CSS styling (`[data-open]`, `[data-selected]`, etc.)
+- Ships zero CSS — styling is entirely in the user's stylesheets
+- Uses Rip's reactive primitives for all state management
+
+---
+
+## Overview
+
+| Component | What It Handles |
+|-----------|----------------|
+| **Select** | Keyboard navigation, typeahead, ARIA listbox, positioning |
+| **Combobox** | Input filtering, keyboard nav, ARIA combobox, positioning |
+| **Dialog** | Focus trap, scroll lock, escape/click-outside dismiss, ARIA roles |
+| **Toast** | Auto-dismiss timer, stacking, ARIA live region |
+| **Popover** | Anchor positioning, flip/shift, dismiss behavior, ARIA |
+| **Tooltip** | Show/hide with delay, anchor positioning, ARIA describedby |
+| **Tabs** | Arrow key navigation, ARIA tablist/tab/tabpanel |
+| **Accordion** | Expand/collapse, single or multiple, ARIA |
+| **Checkbox** | Toggle state, indeterminate, ARIA checked |
+| **Menu** | Keyboard navigation, ARIA menu roles |
+| **Grid** | Virtual scrolling, DOM recycling, cell selection, inline editing, sorting, resizing, clipboard |
+
 ---
 
 ## Widgets
@@ -254,8 +279,343 @@ attribute selectors in your own stylesheets:
 .toast[data-leaving] { animation: fade-out 200ms; }
 ```
 
-See `demos/labs/app/styles/components.css` for a complete example of widget
-styling using Open Props design tokens.
+No JavaScript styling logic. No className toggling. The component sets the
+attribute; CSS handles the rest.
+
+### Open Props — Design Tokens
+
+[Open Props](https://open-props.style/) provides consistent scales for spacing,
+color, shadow, radius, easing, and typography as CSS custom properties. Pure CSS
+(4KB), no runtime, no build step.
+
+```bash
+bun add open-props
+```
+
+Import what you need:
+
+```css
+@import "open-props/sizes";
+@import "open-props/colors";
+@import "open-props/shadows";
+@import "open-props/radii";
+@import "open-props/easings";
+@import "open-props/fonts";
+```
+
+Or import everything:
+
+```css
+@import "open-props/style";
+```
+
+Override or extend any token:
+
+```css
+:root {
+  --color-primary: oklch(55% 0.25 260);
+  --radius-card: var(--radius-3);
+}
+```
+
+**Token categories:**
+
+- **Spacing** — `--size-1` through `--size-15` (0.25rem to 7.5rem)
+- **Colors** — Full palettes (`--blue-0` through `--blue-12`, etc.) plus semantic surface tokens
+- **Shadows** — `--shadow-1` through `--shadow-6`, progressively stronger
+- **Radii** — `--radius-1` through `--radius-6` plus `--radius-round`
+- **Easing** — `--ease-1` through `--ease-5` (standard) and `--ease-spring-1` through `--ease-spring-5`
+- **Typography** — `--font-size-0` through `--font-size-8`, `--font-weight-1` through `--font-weight-9`, `--font-lineheight-0` through `--font-lineheight-5`
+
+Define project-level aliases:
+
+```css
+:root {
+  --color-primary: var(--indigo-7);
+  --color-danger: var(--red-7);
+  --color-success: var(--green-7);
+  --color-text: var(--gray-9);
+  --color-text-muted: var(--gray-6);
+  --surface-1: var(--gray-0);
+  --surface-2: var(--gray-1);
+  --surface-3: var(--gray-2);
+}
+```
+
+### CSS Architecture
+
+Modern CSS eliminates the need for preprocessors. Use these features directly:
+
+**Nesting** — group related rules:
+
+```css
+.card {
+  padding: var(--size-4);
+
+  & .title {
+    font-size: var(--font-size-4);
+    font-weight: var(--font-weight-7);
+  }
+
+  &:hover {
+    box-shadow: var(--shadow-3);
+  }
+}
+```
+
+**Cascade Layers** — control specificity:
+
+```css
+@layer base, components, overrides;
+
+@layer base {
+  button { font: inherit; }
+}
+
+@layer components {
+  .dialog { border-radius: var(--radius-3); }
+}
+```
+
+**Container Queries** — style based on the container, not the viewport:
+
+```css
+.sidebar {
+  container-type: inline-size;
+}
+
+@container (min-width: 400px) {
+  .sidebar .nav { flex-direction: row; }
+}
+```
+
+**`color-mix()`** — derive colors without Sass:
+
+```css
+.muted {
+  color: color-mix(in oklch, var(--color-text), transparent 40%);
+}
+```
+
+### Dark Mode
+
+Use `prefers-color-scheme` with CSS variable swapping:
+
+```css
+:root {
+  color-scheme: light dark;
+
+  --surface-1: var(--gray-0);
+  --surface-2: var(--gray-1);
+  --color-text: var(--gray-9);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-1: var(--gray-11);
+    --surface-2: var(--gray-10);
+    --color-text: var(--gray-1);
+  }
+}
+```
+
+For a manual toggle, use a `[data-theme]` attribute on the root element:
+
+```css
+[data-theme="dark"] {
+  --surface-1: var(--gray-11);
+  --surface-2: var(--gray-10);
+  --color-text: var(--gray-1);
+}
+```
+
+```js
+document.documentElement.dataset.theme = 'dark'
+```
+
+### Common Patterns
+
+**Button:**
+
+```css
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-2);
+  padding: var(--size-2) var(--size-4);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-2);
+  background: var(--color-primary);
+  color: white;
+  font-weight: var(--font-weight-6);
+  cursor: pointer;
+  transition: background 150ms var(--ease-2);
+
+  &:hover { background: color-mix(in oklch, var(--color-primary), black 15%); }
+  &:active { scale: 0.98; }
+  &[data-disabled] { opacity: 0.5; cursor: not-allowed; }
+}
+
+.ghost {
+  background: transparent;
+  color: var(--color-primary);
+
+  &:hover { background: color-mix(in oklch, var(--color-primary), transparent 90%); }
+}
+```
+
+**Form Input:**
+
+```css
+.input {
+  padding: var(--size-2) var(--size-3);
+  border: 1px solid var(--gray-4);
+  border-radius: var(--radius-2);
+  font-size: var(--font-size-1);
+  background: var(--surface-1);
+  color: var(--color-text);
+  transition: border-color 150ms var(--ease-2);
+
+  &:focus {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 1px;
+    border-color: var(--color-primary);
+  }
+
+  &[data-invalid] { border-color: var(--color-danger); }
+  &[data-disabled] { opacity: 0.5; }
+  &::placeholder { color: var(--color-text-muted); }
+}
+```
+
+**Card:**
+
+```css
+.card {
+  background: var(--surface-1);
+  border-radius: var(--radius-3);
+  padding: var(--size-5);
+  box-shadow: var(--shadow-2);
+  transition: box-shadow 200ms var(--ease-2);
+
+  &:hover { box-shadow: var(--shadow-3); }
+
+  & .title {
+    font-size: var(--font-size-3);
+    font-weight: var(--font-weight-7);
+    margin-block-end: var(--size-2);
+  }
+
+  & .body {
+    color: var(--color-text-muted);
+    line-height: var(--font-lineheight-3);
+  }
+}
+```
+
+**Dialog:**
+
+```css
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: oklch(0% 0 0 / 40%);
+  display: grid;
+  place-items: center;
+
+  &[data-open] { animation: fade-in 150ms var(--ease-2); }
+}
+
+.panel {
+  background: var(--surface-1);
+  border-radius: var(--radius-3);
+  padding: var(--size-6);
+  box-shadow: var(--shadow-4);
+  max-width: min(90vw, 32rem);
+  width: 100%;
+  animation: slide-in-up 200ms var(--ease-spring-3);
+}
+
+.panel .title {
+  font-size: var(--font-size-4);
+  font-weight: var(--font-weight-7);
+  margin-block-end: var(--size-2);
+}
+```
+
+**Select:**
+
+```css
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-2);
+  padding: var(--size-2) var(--size-3);
+  border: 1px solid var(--gray-4);
+  border-radius: var(--radius-2);
+  background: var(--surface-1);
+  cursor: pointer;
+  min-width: 10rem;
+
+  &[data-open] { border-color: var(--color-primary); }
+}
+
+.popup {
+  background: var(--surface-1);
+  border: 1px solid var(--gray-3);
+  border-radius: var(--radius-2);
+  box-shadow: var(--shadow-3);
+  padding: var(--size-1);
+}
+
+.option {
+  padding: var(--size-2) var(--size-3);
+  border-radius: var(--radius-1);
+  cursor: pointer;
+
+  &[data-highlighted] { background: var(--surface-2); }
+  &[data-selected] { font-weight: var(--font-weight-6); color: var(--color-primary); }
+}
+```
+
+**Tooltip:**
+
+```css
+.tooltip {
+  background: var(--gray-10);
+  color: var(--gray-0);
+  font-size: var(--font-size-0);
+  padding: var(--size-1) var(--size-2);
+  border-radius: var(--radius-2);
+  max-width: 20rem;
+
+  &[data-entering] { animation: fade-in 100ms var(--ease-2); }
+  &[data-exiting]  { animation: fade-out 75ms var(--ease-2); }
+}
+```
+
+### What We Don't Use
+
+**React or any framework runtime** — Rip widgets are written in Rip, compiled
+to JavaScript, with zero runtime dependencies.
+
+**Tailwind CSS** — utility classes in markup are write-only and semantically
+empty. We write real CSS with real selectors.
+
+**CSS-in-JS runtimes** (styled-components, Emotion) — runtime style injection
+adds bundle size and creates hydration complexity.
+
+**Sass / Less** — native CSS nesting, `color-mix()`, and custom properties
+eliminate the need for preprocessors.
+
+**Inline styles for layout** — the `style` prop is for truly dynamic values
+(e.g., positioning from a calculation). Layout, spacing, color, and typography
+go in CSS.
+
+**Third-party headless libraries** (Base UI, Radix, Headless UI, Zag.js) —
+we implement the same WAI-ARIA patterns natively in Rip. The patterns are
+standard; the implementation is ours.
 
 ---
 
@@ -263,15 +623,15 @@ styling using Open Props design tokens.
 
 | File | Lines | Description |
 |------|-------|-------------|
-| `select.rip` | 169 | Dropdown select with typeahead |
-| `combobox.rip` | 114 | Filterable input + listbox |
-| `dialog.rip` | 86 | Modal with focus trap and scroll lock |
+| `select.rip` | 182 | Dropdown select with typeahead |
+| `combobox.rip` | 152 | Filterable input + listbox |
+| `dialog.rip` | 93 | Modal with focus trap and scroll lock |
 | `toast.rip` | 44 | Auto-dismiss notification |
-| `popover.rip` | 95 | Anchored floating content |
-| `tooltip.rip` | 89 | Hover/focus tooltip |
-| `tabs.rip` | 70 | Tab panel with roving tabindex |
-| `accordion.rip` | 71 | Expand/collapse sections |
-| `checkbox.rip` | 42 | Checkbox and switch toggle |
-| `menu.rip` | 120 | Dropdown action menu |
-| `grid.rip` | 858 | Virtual-scrolling data grid with clipboard |
-| **Total** | **1,758** | |
+| `popover.rip` | 116 | Anchored floating content |
+| `tooltip.rip` | 99 | Hover/focus tooltip |
+| `tabs.rip` | 92 | Tab panel with roving tabindex |
+| `accordion.rip` | 92 | Expand/collapse sections |
+| `checkbox.rip` | 33 | Checkbox and switch toggle |
+| `menu.rip` | 132 | Dropdown action menu |
+| `grid.rip` | 901 | Virtual-scrolling data grid with clipboard |
+| **Total** | **1,936** | |
