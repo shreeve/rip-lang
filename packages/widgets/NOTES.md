@@ -17,10 +17,16 @@ regular method and never gets called. We hit this bug in both Tabs and Toast.
 
 ### `->` vs `=>` Inside Components
 
-Not a concern. The compiler automatically converts all `->` (thin arrow) to
-`=>` (fat arrow) inside component contexts. The `this` binding is always
-preserved. Use `->` everywhere inside components — it's cleaner to read and
-the compiler does the right thing.
+Not a concern for component methods. The compiler automatically converts all
+`->` to `=>` inside component contexts. Use `->` everywhere inside components.
+
+**Caveat**: If you need `this` to refer to something OTHER than the component
+(e.g., patching `HTMLElement.prototype.focus` where `this` must be the DOM
+element), put it OUTSIDE the component body — at module scope, `->` stays as
+`->` and `this` refers to the caller. We hit this with the focus-scroll
+override: inside a component `mounted`, `->` became `=>` and `this` bound to
+the component, causing "Illegal invocation" when calling `focus()` on a DOM
+element.
 
 ### `:=` vs `=` for Internal Storage
 
