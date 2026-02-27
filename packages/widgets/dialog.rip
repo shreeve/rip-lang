@@ -44,7 +44,7 @@ export Dialog = component
         if panel
           @_wireAria()
           focusable = panel.querySelectorAll 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
-          focusable[0]?.focus({ preventScroll: true })
+          focusable[0]?.focus()
           _cleanupTrap = (e) ->
             return unless e.key is 'Tab'
             list = Array.from(panel.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')).filter (f) -> f.offsetParent isnt null
@@ -52,9 +52,9 @@ export Dialog = component
             first = list[0]
             last = list[list.length - 1]
             if e.shiftKey
-              if document.activeElement is first then (e.preventDefault(); last.focus({ preventScroll: true }))
+              if document.activeElement is first then (e.preventDefault(); last.focus())
             else
-              if document.activeElement is last then (e.preventDefault(); first.focus({ preventScroll: true }))
+              if document.activeElement is last then (e.preventDefault(); first.focus())
           panel.addEventListener 'keydown', _cleanupTrap
       , 0
 
@@ -63,7 +63,7 @@ export Dialog = component
         document.body.style.top = ''
         document.body.style.width = ''
         window.scrollTo 0, _scrollY
-        _prevFocus?.focus({ preventScroll: true })
+        _prevFocus?.focus()
 
   close: ->
     @open = false

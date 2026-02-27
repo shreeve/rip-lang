@@ -39,7 +39,7 @@ export Popover = component
 
   close: ->
     open = false
-    @_content?.querySelector('[data-trigger]')?.focus({ preventScroll: true })
+    @_content?.querySelector('[data-trigger]')?.focus()
 
   _position: ->
     trigger = @_content?.querySelector('[data-trigger]')

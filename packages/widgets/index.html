@@ -251,8 +251,7 @@ export WidgetGallery = component
   ]
 
   mounted: ->
-    @_root?.addEventListener 'mousedown', (e) ->
-      e.preventDefault() if e.target.closest('button')
+    orig = HTMLElement::focus; HTMLElement::focus = (o) -> orig.call @, { preventScroll: true, ...o }
 
   render
     .gallery

@@ -353,7 +353,7 @@ export Grid = component
           if el.selectionStart isnt undefined
             el.selectionStart = el.value.length
             el.selectionEnd = el.value.length
-          el.focus({ preventScroll: true })
+          el.focus()
 
   commitEditor: ->
     if editing
@@ -371,7 +371,7 @@ export Grid = component
       dataVersion++
       editing = false
       @_removeEditor()
-      @_container.focus({ preventScroll: true }) if @_container
+      @_container.focus() if @_container
       if @afterEdit
         @afterEdit(di, activeCol, oldVal, val)
 
@@ -380,7 +380,7 @@ export Grid = component
     @_removeEditor()
     anchorRow = activeRow
     anchorCol = activeCol
-    @_container.focus({ preventScroll: true }) if @_container
+    @_container.focus() if @_container
 
   _editorKeydown: (e) ->
     numCols = @columns.length
@@ -496,7 +496,7 @@ export Grid = component
     td = e.target.closest('td')
     if td and not td.parentElement.classList.contains('spacer')
       e.preventDefault()
-      @_container.focus({ preventScroll: true }) if @_container
+      @_container.focus() if @_container
       selecting = true
       el = @_container
       rect = el.getBoundingClientRect()

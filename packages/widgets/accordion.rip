@@ -80,12 +80,12 @@ export Accordion = component
     idx = triggers.indexOf(document.activeElement)
     return if idx is -1
     next = (idx + dir) %% triggers.length
-    triggers[next]?.focus({ preventScroll: true })
+    triggers[next]?.focus()
 
   _focusTrigger: (idx) ->
     triggers = @_triggers()
     target = if idx < 0 then triggers[triggers.length - 1] else triggers[idx]
-    target?.focus({ preventScroll: true })
+    target?.focus()
 
   render
     div ref: "_content"
