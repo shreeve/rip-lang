@@ -258,10 +258,12 @@ export Grid = component
             c++
         r++
 
-    if activeRow >= startRow and activeRow <= endRow and activeCol >= 0
-      tr = trs[activeRow - startRow]
+    cursorRow = if selecting then anchorRow else activeRow
+    cursorCol = if selecting then anchorCol else activeCol
+    if cursorRow >= startRow and cursorRow <= endRow and cursorCol >= 0
+      tr = trs[cursorRow - startRow]
       if tr
-        td = tr.children[activeCol]
+        td = tr.children[cursorCol]
         if td
           td.dataset.active = ''
 
@@ -493,6 +495,10 @@ export Grid = component
           anchorCol = td.cellIndex
 
   onMouseup: (e) ->
+    if selecting
+      r = anchorRow; c = anchorCol
+      anchorRow = activeRow; anchorCol = activeCol
+      activeRow = r; activeCol = c
     selecting = false
 
   onMousemove: (e) ->
