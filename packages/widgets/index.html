@@ -194,10 +194,9 @@ button { font: inherit; cursor: pointer; }
 @keyframes slideIn { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
   </style>
   <script defer src="/rip/rip.min.js"
-    data-src="/checkbox.rip /toast.rip /dialog.rip /select.rip /combobox.rip /tooltip.rip /tabs.rip /menu.rip"
+    data-src="/checkbox.rip /toast.rip /dialog.rip /select.rip /combobox.rip /tooltip.rip /tabs.rip /menu.rip /popover.rip /accordion.rip /grid.rip"
     data-mount="WidgetGallery">
   </script>
-  <!-- /popover.rip /accordion.rip /grid.rip" -->
   <script>
     let ready = false;
     const es = new EventSource('/watch');
@@ -223,12 +222,32 @@ export WidgetGallery = component
   allFruits := ['Apple', 'Apricot', 'Avocado', 'Banana', 'Blueberry', 'Cherry', 'Cranberry', 'Date', 'Fig', 'Grape', 'Kiwi', 'Lemon', 'Lime', 'Mango', 'Orange', 'Papaya', 'Peach', 'Pear', 'Plum', 'Raspberry', 'Strawberry']
   filteredFruits := allFruits
   currentTab := 'overview'
+  gridColumns := [
+    { key: 'name', title: 'Name', width: 180 }
+    { key: 'role', title: 'Role', width: 140 }
+    { key: 'age', title: 'Age', width: 80, align: 'right' }
+    { key: 'city', title: 'City', width: 140 }
+  ]
+  gridData := [
+    { name: 'Alice Chen', role: 'Engineer', age: 28, city: 'Seattle' }
+    { name: 'Bob Park', role: 'Designer', age: 34, city: 'Portland' }
+    { name: 'Carol Singh', role: 'Manager', age: 41, city: 'Denver' }
+    { name: 'Dan Nakamura', role: 'Engineer', age: 26, city: 'Austin' }
+    { name: 'Eve Torres', role: 'Director', age: 45, city: 'Chicago' }
+    { name: 'Frank Liu', role: 'Designer', age: 31, city: 'Boston' }
+    { name: 'Grace Kim', role: 'Engineer', age: 29, city: 'Seattle' }
+    { name: 'Hank Patel', role: 'Manager', age: 38, city: 'Denver' }
+    { name: 'Iris Wang', role: 'Engineer', age: 33, city: 'Austin' }
+    { name: 'Jack Brown', role: 'Designer', age: 27, city: 'Portland' }
+    { name: 'Karen Lee', role: 'Director', age: 52, city: 'Chicago' }
+    { name: 'Leo Martin', role: 'Engineer', age: 24, city: 'Boston' }
+  ]
 
   render
     .gallery
 
       .gallery-header
-        h1 "Rip Widget Gallerys"
+        h1 "Rip Widget Gallery"
         p "Visual smoke test for all headless widgets."
 
       # ================================================================
@@ -256,23 +275,79 @@ export WidgetGallery = component
       # ================================================================
       # MENU
       # ================================================================
-      # .section
-      #   .section-title
-      #     "Menu"
-      #     span.badge "120 lines"
-      #   .section-desc "Dropdown action menu with keyboard navigation."
-      #   .demo-row
-      #     .demo-label "Click to open menu"
-      #     Menu @select: (e) => (p "Selected: #{e.detail}")
-      #       button data-trigger: true
-      #         "Actions"
-      #       div data-item: "edit", "Edit"
-      #       div data-item: "duplicate", "Duplicate"
-      #       div data-item: "archive", "Archive"
-      #       div data-item: "delete", "Delete"
+      .section
+        .section-title
+          "Menu"
+          span.badge "121 lines"
+        .section-desc "Dropdown action menu with keyboard navigation."
+        .demo-row
+          .demo-label "Click to open menu"
+          Menu @select: (e) => (p "Selected: #{e.detail}")
+            button data-trigger: true
+              "Actions"
+            div data-item: "edit", "Edit"
+            div data-item: "duplicate", "Duplicate"
+            div data-item: "archive", "Archive"
+            div data-item: "delete", "Delete"
 
       # ================================================================
-      # CHECKBOX (start here — simplest widget)
+      # POPOVER
+      # ================================================================
+      .section
+        .section-title
+          "Popover"
+          span.badge "96 lines"
+        .section-desc "Anchored floating content with flip/shift positioning."
+        .demo-row
+          .demo-label "Click to toggle"
+          Popover placement: "bottom-start"
+            button style: "padding:6px 16px;border:1px solid #cbd5e1;border-radius:6px;background:white"
+              "Open Popover"
+            . style: "padding:16px;background:white;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.12);min-width:200px"
+              p style: "font-weight:600;margin-bottom:8px", "Popover Content"
+              p style: "color:#64748b;font-size:13px", "This is anchored to the trigger button."
+
+      # ================================================================
+      # ACCORDION
+      # ================================================================
+      .section
+        .section-title
+          "Accordion"
+          span.badge "72 lines"
+        .section-desc "Expand/collapse sections, single or multiple mode."
+        .demo-row
+          .demo-label "Single mode"
+          Accordion
+            div data-item: "a"
+              button data-trigger: true, style: "width:100%;text-align:left;padding:8px 12px;border:1px solid #e2e8f0;border-radius:6px;background:white;font-size:14px;cursor:pointer;margin-bottom:4px"
+                "Section A"
+              div data-content: true, style: "padding:8px 12px;color:#64748b;font-size:13px"
+                p "Content for section A."
+            div data-item: "b"
+              button data-trigger: true, style: "width:100%;text-align:left;padding:8px 12px;border:1px solid #e2e8f0;border-radius:6px;background:white;font-size:14px;cursor:pointer;margin-bottom:4px"
+                "Section B"
+              div data-content: true, style: "padding:8px 12px;color:#64748b;font-size:13px"
+                p "Content for section B."
+            div data-item: "c"
+              button data-trigger: true, style: "width:100%;text-align:left;padding:8px 12px;border:1px solid #e2e8f0;border-radius:6px;background:white;font-size:14px;cursor:pointer;margin-bottom:4px"
+                "Section C"
+              div data-content: true, style: "padding:8px 12px;color:#64748b;font-size:13px"
+                p "Content for section C."
+
+      # ================================================================
+      # GRID
+      # ================================================================
+      .section
+        .section-title
+          "Grid"
+          span.badge "858 lines"
+        .section-desc "Virtual-scrolling data grid. Click to select, arrows to navigate, double-click to edit."
+        .demo-row
+          .demo-label "12 rows, 4 columns"
+          Grid data: gridData, columns: gridColumns, striped: true
+
+      # ================================================================
+      # CHECKBOX
       # ================================================================
       .section
         .section-title
