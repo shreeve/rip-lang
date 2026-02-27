@@ -237,7 +237,7 @@ export Grid = component
 
     unless _selBorder
       _selBorder = document.createElement('div')
-      _selBorder.style.cssText = 'position:absolute;pointer-events:none;border:0;outline:1px solid #3b82f6;outline-offset:-1px;z-index:5;display:none'
+      _selBorder.style.cssText = 'position:absolute;pointer-events:none;border:0;outline:1px solid #3b82f6;outline-offset:-1px;z-index:1;display:none'
       @_container.appendChild(_selBorder)
 
     if anchorRow >= 0 and activeRow >= 0 and anchorCol >= 0 and activeCol >= 0
