@@ -1295,7 +1295,16 @@ main = ->
 
   httpOnly = flags.httpsPort is null
   protocol = if httpOnly then 'http' else 'https'
-  process.env.RIP_HTTP_ONLY = '1' if httpOnly
+  port = flags.httpsPort or flags.httpPort or 80
+  portStr = formatPort(protocol, port)
+  appUrls = flags.appAliases.map (alias) ->
+    host = if alias.includes('.') then alias else "#{alias}.local"
+    "#{protocol}://#{host}#{portStr}"
+  process.env.RIP_URLS = [
+    "#{protocol}://rip.local#{portStr}"
+    ...appUrls
+    "#{protocol}://#{flags.appName}.ripdev.io#{portStr}"
+  ].join(',')
 
   svr.start!
   mgr.start!
