@@ -27,7 +27,6 @@ export Checkbox = component
     button role: @switch ? 'switch' : 'checkbox'
       aria-checked: @indeterminate ? 'mixed' : !!@checked
       aria-disabled: @disabled?!
-      tabindex: '0'
       data-checked: @checked?!
       data-indeterminate: @indeterminate?!
       data-disabled: @disabled?!
