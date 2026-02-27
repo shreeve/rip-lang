@@ -105,6 +105,7 @@ export Grid = component
       ki++
     { arrows, ranks }
 
+  cellRef     ~= if activeRow >= 0 and activeCol >= 0 then "R#{activeRow + 1}:C#{activeCol + 1}" else ''
   totalRows   ~= @data.length
   startRow    ~= Math.max(0, Math.floor(scrollTop / @rowHeight) - @overscan)
   endRow      ~= Math.min(totalRows - 1, Math.ceil((scrollTop + containerHeight) / @rowHeight) + @overscan)
