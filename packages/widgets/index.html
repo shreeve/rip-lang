@@ -166,6 +166,7 @@ button { font: inherit; cursor: pointer; }
   box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
 .grid-container:focus { outline: none; }
+.grid-container:not(:focus) .rip-grid tbody td[data-active] { outline-color: #94a3b8; }
 .rip-grid {
   width: 100%; border-collapse: collapse; table-layout: fixed;
   font-family: system-ui, -apple-system, sans-serif; font-size: 13px; color: #1e293b;
@@ -183,9 +184,9 @@ button { font: inherit; cursor: pointer; }
 }
 .rip-grid tbody tr.even td { background: #f8fafc; }
 .rip-grid tbody tr:hover td { background: rgba(59,130,246,0.06); }
-.rip-grid tbody td[data-selected] { background: rgba(59,130,246,0.12); border-bottom-color: transparent; }
+.rip-grid tbody td[data-selected] { background: rgba(59,130,246,0.12); }
 .rip-grid tbody tr.even td[data-selected] { background: rgba(59,130,246,0.18); }
-.rip-grid tbody td[data-active] { background: rgba(59,130,246,0.20); border-bottom-color: transparent; outline: 2px solid #3b82f6; outline-offset: -2px; position: relative; z-index: 1; }
+.rip-grid tbody td[data-active] { background: rgba(59,130,246,0.20); outline: 2px solid #3b82f6; outline-offset: -2px; position: relative; z-index: 1; }
 .rip-grid tr.spacer td { padding: 0; border: none; line-height: 0; font-size: 0; }
 .sort-arrow { color: #94a3b8; font-size: 11px; margin-left: 3px; }
 .sort-badge { display: inline-block; font-size: 9px; color: #64748b; background: #e2e8f0; border-radius: 50%; width: 14px; height: 14px; line-height: 14px; text-align: center; margin-left: 2px; }

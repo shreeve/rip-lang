@@ -232,6 +232,7 @@ export Grid = component
       delete el.dataset.active
       delete el.dataset.selected
       el.style.boxShadow = ''
+      el.style.borderColor = ''
 
     if anchorRow >= 0 and activeRow >= 0 and anchorCol >= 0 and activeCol >= 0
       minR = Math.min(anchorRow, activeRow)
@@ -248,12 +249,13 @@ export Grid = component
             td = tr.children[c]
             if td
               td.dataset.selected = ''
+              td.style.borderColor = 'transparent'
               if multi and not selecting
                 shadows = []
-                shadows.push('inset 0 1px 0 0 #3b82f6') if r is minR
-                shadows.push('inset 0 -1px 0 0 #3b82f6') if r is maxR
-                shadows.push('inset 1px 0 0 0 #3b82f6') if c is minC
-                shadows.push('inset -1px 0 0 0 #3b82f6') if c is maxC
+                shadows.push('inset 0 2px 0 0 #3b82f6') if r is minR
+                shadows.push('inset 0 -2px 0 0 #3b82f6') if r is maxR
+                shadows.push('inset 2px 0 0 0 #3b82f6') if c is minC
+                shadows.push('inset -2px 0 0 0 #3b82f6') if c is maxC
                 td.style.boxShadow = shadows.join(', ') if shadows.length > 0
             c++
         r++
@@ -320,10 +322,10 @@ export Grid = component
         if td
           tdRect = td.getBoundingClientRect()
           cRect = @_container.getBoundingClientRect()
-          el.style.top = "#{tdRect.top - cRect.top + @_container.scrollTop - 2}px"
-          el.style.left = "#{tdRect.left - cRect.left + @_container.scrollLeft - 2}px"
-          el.style.width = "#{tdRect.width + 4}px"
-          el.style.height = "#{tdRect.height + 4}px"
+          el.style.top = "#{tdRect.top - cRect.top + @_container.scrollTop}px"
+          el.style.left = "#{tdRect.left - cRect.left + @_container.scrollLeft}px"
+          el.style.width = "#{tdRect.width}px"
+          el.style.height = "#{tdRect.height}px"
           if el.selectionStart isnt undefined
             el.selectionStart = el.value.length
             el.selectionEnd = el.value.length
@@ -509,6 +511,26 @@ export Grid = component
     activeCol = ci
     @scrollToRow(ri)
 
+  _jumpToEdge: (row, col, dr, dc) ->
+    key = @columns[col]?.key
+    return { row, col } unless key
+    cur = @data[sortIndex[row]]?[key]
+    empty = not cur? or cur is ''
+    r = row + dr
+    c = col + dc
+    while r >= 0 and r < totalRows and c >= 0 and c < @columns.length
+      k = @columns[c].key
+      v = @data[sortIndex[r]]?[k]
+      ve = not v? or v is ''
+      if empty
+        return { row: r, col: c } unless ve
+      else
+        if ve then return { row: r - dr, col: c - dc }
+      r += dr
+      c += dc
+    row: Math.max(0, Math.min(totalRows - 1, r - dr))
+    col: Math.max(0, Math.min(@columns.length - 1, c - dc))
+
   onKeydown: (e) ->
     if editing
       return
@@ -521,14 +543,16 @@ export Grid = component
           activeRow = 0
           activeCol = 0 if activeCol < 0
         else if e.ctrlKey or e.metaKey
-          activeRow = totalRows - 1
+          pos = @_jumpToEdge(activeRow, activeCol, 1, 0)
+          activeRow = pos.row
         else if activeRow < totalRows - 1
           activeRow = activeRow + 1
         @scrollToRow(activeRow)
       when 'ArrowUp'
         e.preventDefault()
         if e.ctrlKey or e.metaKey
-          activeRow = 0
+          pos = @_jumpToEdge(activeRow, activeCol, -1, 0)
+          activeRow = pos.row
           activeCol = 0 if activeCol < 0
         else if activeRow > 0
           activeRow = activeRow - 1
@@ -539,13 +563,15 @@ export Grid = component
           activeCol = 0
           activeRow = 0 if activeRow < 0
         else if e.ctrlKey or e.metaKey
-          activeCol = numCols - 1
+          pos = @_jumpToEdge(activeRow, activeCol, 0, 1)
+          activeCol = pos.col
         else if activeCol < numCols - 1
           activeCol = activeCol + 1
       when 'ArrowLeft'
         e.preventDefault()
         if e.ctrlKey or e.metaKey
-          activeCol = 0
+          pos = @_jumpToEdge(activeRow, activeCol, 0, -1)
+          activeCol = pos.col
           activeRow = 0 if activeRow < 0
         else if activeCol > 0
           activeCol = activeCol - 1
