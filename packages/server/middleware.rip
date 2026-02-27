@@ -532,6 +532,7 @@ export serve = (opts = {}) ->
       components["components/#{path}"] = Bun.file("#{routesDir}/#{path}").text!
     for dir in componentDirs
       for path in Array.from(glob.scanSync(dir)).sort()
+        continue if path is 'index.rip' or path.endsWith('/index.rip')
         key = "components/_lib/#{path}"
         components[key] = Bun.file("#{dir}/#{path}").text! unless components[key]
     data = {}

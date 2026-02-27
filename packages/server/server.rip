@@ -125,7 +125,7 @@ logAccessHuman = (app, req, res, totalSeconds, workerSeconds) ->
   contentType = (res.headers.get('content-type') or '').split(';')[0] or ''
   sub = if contentType.includes('/') then contentType.split('/')[1] else contentType
   type = (typeAbbrev[sub] or sub or '').padEnd(4)
-  console.log "[#{timestamp} #{timezone} #{dur}] #{status} #{type} #{size} - #{method} #{path}"
+  console.log "[#{timestamp} #{timezone} #{dur}] #{status} #{type} #{size} │ #{method} #{path}"
 
 INTERNAL_HEADERS = new Set(['rip-worker-busy', 'rip-worker-id', 'rip-no-log'])
 
