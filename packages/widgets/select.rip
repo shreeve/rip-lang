@@ -135,6 +135,7 @@ export Select = component
     fl = @_list.getBoundingClientRect()
     if fl.bottom > window.innerHeight
       @_list.style.top = "#{tr.top - fl.height - 4}px"
+    @_list.style.visibility = 'visible'
 
   ~>
     if open
@@ -165,7 +166,7 @@ export Select = component
 
       # Dropdown listbox
       if open
-        div ref: "_list", role: "listbox"
+        div ref: "_list", role: "listbox", style: "visibility:hidden"
           data-open: true
           @keydown: @onListKeydown
           for opt, idx in options
