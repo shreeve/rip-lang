@@ -295,16 +295,16 @@ export WidgetGallery = component
           .status "active: #{currentTab}"
 
       # ================================================================
-      # MENU — needs hidden slot pattern (like Select) to read data-item children
+      # MENU — parse error in render block (string + div children at same indent)
       # ================================================================
       # .section
       #   .section-title
       #     "Menu"
-      #     span.badge "121 lines"
+      #     span.badge "124 lines"
       #   .section-desc "Dropdown action menu with keyboard navigation."
       #   .demo-row
       #     .demo-label "Click to open menu"
-      #     Menu @select: (e) => (p "Selected: #{e.detail}")
+      #     Menu @select: (e) => console.log("Selected: #{e.detail}")
       #       "Actions"
       #       div data-item: "edit", "Edit"
       #       div data-item: "duplicate", "Duplicate"
