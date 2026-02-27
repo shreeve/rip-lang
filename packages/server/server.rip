@@ -125,7 +125,7 @@ logAccessHuman = (app, req, res, totalSeconds, workerSeconds) ->
   contentType = (res.headers.get('content-type') or '').split(';')[0] or ''
   sub = if contentType.includes('/') then contentType.split('/')[1] else contentType
   type = (typeAbbrev[sub] or sub or '').padEnd(4)
-  console.log "[#{timestamp} #{timezone} #{dur}] #{status} #{type} #{size} │ #{method} #{path}"
+  console.log "#{timestamp} #{timezone} #{dur} │ #{status} #{type} #{size} │ #{method} #{path}"
 
 INTERNAL_HEADERS = new Set(['rip-worker-busy', 'rip-worker-id', 'rip-no-log'])
 
@@ -362,9 +362,6 @@ runSetup = ->
     fn = mod?.setup or mod?.default
     if typeof fn is 'function'
       await fn()
-    # Send the DB URL to the Manager via IPC (null if rip-db was already running)
-    url = if typeof mod?.dbUrl is 'function' then mod.dbUrl() else null
-    process.send({ dbUrl: url }) if process.send
   catch e
     console.error "rip-server: setup failed:", e
     process.exit(1)
@@ -515,6 +512,11 @@ class Manager
     # Run one-time setup if setup.rip exists next to the entry file
     setupFile = join(dirname(@flags.appEntry), 'setup.rip')
     if existsSync(setupFile)
+      # Check reachability before setup — determines if WE will start the DB
+      dbUrl = process.env.DB_URL or 'http://localhost:4213'
+      dbAlreadyRunning = await (try fetch(dbUrl + '/health').then(-> true) catch -> false)
+      @dbUrl = dbUrl unless dbAlreadyRunning
+
       setupEnv = Object.assign {}, process.env,
         RIP_SETUP_MODE: '1'
         RIP_SETUP_FILE: setupFile
@@ -524,7 +526,6 @@ class Manager
         stdin: 'ignore'
         cwd: process.cwd()
         env: setupEnv
-        ipc: (msg) => @dbUrl = msg.dbUrl if msg?.dbUrl
 
       code = await proc.exited
       if code isnt 0
@@ -717,7 +718,6 @@ class Manager
     return if @shuttingDown
     @shuttingDown = true
     @stop!
-    # Shutdown rip-db if we launched it — HTTP call, clean WAL checkpoint
     try fetch!(@dbUrl + '/shutdown', { method: 'POST' }) if @dbUrl catch then null
     process.exit(0)
 

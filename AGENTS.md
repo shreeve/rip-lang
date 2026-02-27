@@ -36,7 +36,7 @@ rip server
 
 | Metric | Value |
 |--------|-------|
-| Version | 3.13.38 |
+| Version | 3.13.39 |
 | Tests | 1,407 |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
