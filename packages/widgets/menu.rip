@@ -30,13 +30,13 @@ export Menu = component
     highlightedIndex = 0
     setTimeout =>
       @_position()
-      items[0]?.focus()
+      items[0]?.focus({ preventScroll: true })
     , 0
 
   close: ->
     open = false
     highlightedIndex = -1
-    @_trigger?.focus()
+    @_trigger?.focus({ preventScroll: true })
 
   selectIndex: (idx) ->
     item = items[idx]
@@ -70,19 +70,19 @@ export Menu = component
       when 'ArrowDown'
         e.preventDefault()
         highlightedIndex = (highlightedIndex + 1) %% len
-        items[highlightedIndex]?.focus()
+        items[highlightedIndex]?.focus({ preventScroll: true })
       when 'ArrowUp'
         e.preventDefault()
         highlightedIndex = (highlightedIndex - 1) %% len
-        items[highlightedIndex]?.focus()
+        items[highlightedIndex]?.focus({ preventScroll: true })
       when 'Home'
         e.preventDefault()
         highlightedIndex = 0
-        items[0]?.focus()
+        items[0]?.focus({ preventScroll: true })
       when 'End'
         e.preventDefault()
         highlightedIndex = len - 1
-        items[len - 1]?.focus()
+        items[len - 1]?.focus({ preventScroll: true })
       when 'Enter', ' '
         e.preventDefault()
         @selectIndex(highlightedIndex)

@@ -74,7 +74,7 @@ export Tabs = component
     if next
       e.preventDefault()
       tab = tabs.find (t) -> t.dataset.tab is next
-      tab?.focus()
+      tab?.focus({ preventScroll: true })
       @select(next) if @activation is 'automatic'
 
   render

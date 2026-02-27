@@ -52,9 +52,9 @@ export Dialog = component
             first = list[0]
             last = list[list.length - 1]
             if e.shiftKey
-              if document.activeElement is first then (e.preventDefault(); last.focus())
+              if document.activeElement is first then (e.preventDefault(); last.focus({ preventScroll: true }))
             else
-              if document.activeElement is last then (e.preventDefault(); first.focus())
+              if document.activeElement is last then (e.preventDefault(); first.focus({ preventScroll: true }))
           panel.addEventListener 'keydown', _cleanupTrap
       , 0
 
@@ -63,7 +63,7 @@ export Dialog = component
         document.body.style.top = ''
         document.body.style.width = ''
         window.scrollTo 0, _scrollY
-        _prevFocus?.focus()
+        _prevFocus?.focus({ preventScroll: true })
 
   close: ->
     @open = false
