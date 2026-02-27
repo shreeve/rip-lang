@@ -256,7 +256,7 @@ export Grid = component
             td = tr.children[c]
             if td
               td.dataset.selected = ''
-              td.style.borderColor = 'transparent'
+              td.style.borderColor = '#bfdbfe'
             c++
         r++
 

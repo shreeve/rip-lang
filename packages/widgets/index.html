@@ -179,12 +179,12 @@ button { font: inherit; cursor: pointer; }
 .rip-grid tbody td {
   height: 32px; padding: 0 10px;
   border-bottom: 1px solid #e2e8f0; white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis; cursor: cell; user-select: none;
+  overflow: hidden; text-overflow: ellipsis; cursor: default; user-select: none;
 }
 .rip-grid tbody tr.even td { background: #f8fafc; }
-.rip-grid tbody tr:hover td { background: rgba(59,130,246,0.06); }
-.rip-grid tbody td[data-selected] { background: rgba(59,130,246,0.12); }
-.rip-grid tbody tr.even td[data-selected] { background: rgba(59,130,246,0.18); }
+.grid-container:not([data-selecting]) .rip-grid tbody tr:hover td { background: rgba(59,130,246,0.06); }
+.rip-grid tbody td[data-selected] { background: rgba(59,130,246,0.08); }
+.rip-grid tbody tr.even td[data-selected] { background: rgba(59,130,246,0.12); }
 .rip-grid tbody td[data-active] { background: rgba(59,130,246,0.20); outline: 2px solid #3b82f6; outline-offset: -2px; position: relative; z-index: 1; }
 .rip-grid tr.spacer td { padding: 0; border: none; line-height: 0; font-size: 0; }
 .sort-arrow { color: #94a3b8; font-size: 11px; margin-left: 3px; }
