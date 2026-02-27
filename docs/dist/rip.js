@@ -1004,7 +1004,6 @@
     "component",
     "render",
     "offer",
-    "accept",
     "enum",
     "interface"
   ]);
@@ -3513,6 +3512,23 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     return Array.isArray(target) && target[0] === "." && target[1] === "this";
   }
   function installComponentSupport(CodeGenerator, Lexer2) {
+    const origClassify = Lexer2.prototype.classifyKeyword;
+    Lexer2.prototype.classifyKeyword = function(id, fallback, data) {
+      if (id === "accept") {
+        let depth = 0;
+        for (let i = this.tokens.length - 1;i >= 0; i--) {
+          const tag = this.tokens[i][0];
+          if (tag === "OUTDENT")
+            depth++;
+          else if (tag === "INDENT")
+            depth--;
+          if (depth < 0 && this.tokens[i - 1]?.[0] === "COMPONENT")
+            return "ACCEPT";
+        }
+        return fallback;
+      }
+      return origClassify.call(this, id, fallback, data);
+    };
     Lexer2.prototype.rewriteRender = function() {
       let gen2 = (tag, val, origin) => {
         let t = [tag, val];
@@ -8664,8 +8680,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.52";
-  var BUILD_DATE = "2026-02-27@09:18:12GMT";
+  var VERSION = "3.13.54";
+  var BUILD_DATE = "2026-02-27@09:22:40GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

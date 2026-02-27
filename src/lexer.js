@@ -61,7 +61,7 @@ let JS_KEYWORDS = new Set([
 let RIP_KEYWORDS = new Set([
   'undefined', 'Infinity', 'NaN',
   'then', 'unless', 'until', 'loop', 'of', 'by', 'when', 'def',
-  'component', 'render', 'offer', 'accept',
+  'component', 'render', 'offer',
   'enum', 'interface',
 ]);
 
