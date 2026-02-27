@@ -39,6 +39,19 @@ still triggers reactively (when `startRow`, `endRow`, etc. change), but the
 DOM updates use `textContent`, `nodeValue`, and `replaceChildren` directly.
 This is the correct pattern when the framework's reconciler is too expensive.
 
+### CSS Specificity: Check Computed Styles First
+
+When CSS looks right in the source but renders wrong in the browser, **copy
+the computed styles from DevTools**. The browser never lies. We spent hours
+trying to fix a 1px text shift in the Grid editor — `appearance: none`,
+`contenteditable`, `getComputedStyle` copying, `font: inherit`, longhand vs
+shorthand — when the actual bug was a gallery-level `.gallery input[type="text"]`
+rule silently overriding `.rip-grid-editor` with 14px font, 12px padding, and
+rounded corners. The fix was one `:not(.rip-grid-editor)` selector. Comparing
+the computed styles of the cell vs the editor made the mismatch immediately
+obvious. Always check what the browser actually computed before debugging
+what you *think* it should be.
+
 ### `data-*` Attributes vs Class Toggling
 
 All interactive state should be exposed via `data-*` attributes, not CSS

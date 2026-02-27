@@ -280,19 +280,17 @@ export Grid = component
       return
     val = @data[sortIndex[activeRow]][col.key]
     orig = String(val ?? '')
-    numeric = col.align is 'right'
-    selectAll = false
     if initial isnt undefined and col.type isnt 'select'
       editValue = initial
     else
       editValue = orig
-      selectAll = not cursorEnd and not numeric
     editing = true
     @_removeEditor()
     el = undefined
     if col.type is 'select'
       el = document.createElement('select')
       el.className = 'rip-grid-editor'
+      el.style.borderRadius = '0'
       for opt in (col.source or [])
         o = document.createElement('option')
         o.value = opt
@@ -312,7 +310,6 @@ export Grid = component
       el.style.textAlign = align
       el.addEventListener 'input', (e) =>
         editValue = e.target.value
-        e.target.style.textAlign = if /[a-z]/i.test(editValue) then 'left' else align
       el.addEventListener 'keydown', (e) => @_editorKeydown(e)
     @_container.appendChild(el)
     requestAnimationFrame =>
@@ -327,9 +324,7 @@ export Grid = component
           el.style.left = "#{tdRect.left - cRect.left + @_container.scrollLeft}px"
           el.style.width = "#{tdRect.width}px"
           el.style.height = "#{tdRect.height}px"
-          if selectAll and el.select and el.tagName is 'INPUT'
-            el.select()
-          else if el.selectionStart isnt undefined
+          if el.selectionStart isnt undefined
             el.selectionStart = el.value.length
             el.selectionEnd = el.value.length
           el.focus()
