@@ -514,7 +514,7 @@ class Manager
     if existsSync(setupFile)
       # Check reachability before setup — determines if WE will start the DB
       dbUrl = process.env.DB_URL or 'http://localhost:4213'
-      dbAlreadyRunning = do ->
+      dbAlreadyRunning = do! ->
         try
           await fetch(dbUrl + '/health')
           true
