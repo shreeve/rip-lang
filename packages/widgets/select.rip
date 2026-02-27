@@ -136,6 +136,14 @@ export Select = component
     if fl.bottom > window.innerHeight
       @_list.style.top = "#{tr.top - fl.height - 4}px"
 
+  ~>
+    if open
+      onDown = (e) =>
+        unless @_trigger?.contains(e.target) or @_list?.contains(e.target)
+          @close()
+      document.addEventListener 'mousedown', onDown
+      return -> document.removeEventListener 'mousedown', onDown
+
   render
     .
 
@@ -157,7 +165,6 @@ export Select = component
 
       # Dropdown listbox
       if open
-        .('fixed inset-0 z-50') @click: (e) => @close() if open and e.target is e.currentTarget
         div ref: "_list", role: "listbox"
           data-open: true
           @keydown: @onListKeydown

@@ -17,16 +17,11 @@ export Checkbox = component
   @indeterminate := false
   @switch := false
 
-  toggle: ->
+  onClick: ->
     return if @disabled
     @indeterminate = false
     @checked = not @checked
     @emit 'change', @checked
-
-  onKeydown: (e) ->
-    if e.key in ['Enter', ' ']
-      e.preventDefault()
-      @toggle()
 
   render
     button role: @switch ? 'switch' : 'checkbox'
@@ -36,6 +31,4 @@ export Checkbox = component
       data-checked: @checked?!
       data-indeterminate: @indeterminate?!
       data-disabled: @disabled?!
-      @click: @toggle
-      @keydown: @onKeydown
       slot

@@ -1,12 +1,12 @@
 # Popover — accessible headless popover with anchor positioning
 #
 # Positions itself relative to the trigger. Dismisses on Escape or click outside.
-# Exposes data-open, data-placement. Ships zero CSS.
+# Exposes data-open, data-placement on content. Ships zero CSS.
 #
 # Usage:
 #   Popover placement: "bottom-start"
-#     button "Click me"      # first child is the trigger
-#     div                    # second child is the popover content
+#     button data-trigger: true, "Click me"
+#     div data-content: true
 #       p "Popover content"
 
 export Popover = component
@@ -15,6 +15,19 @@ export Popover = component
   @disabled := false
 
   open := false
+  _ready := false
+
+  mounted: ->
+    _ready = true
+    trigger = @_content?.querySelector('[data-trigger]')
+    if trigger
+      trigger.setAttribute 'aria-expanded', false
+      trigger.setAttribute 'aria-haspopup', 'dialog'
+      trigger.addEventListener 'click', => @toggle()
+      trigger.addEventListener 'keydown', (e) =>
+        if e.key in ['Enter', ' ', 'ArrowDown']
+          e.preventDefault()
+          @toggle()
 
   toggle: ->
     return if @disabled
@@ -22,18 +35,18 @@ export Popover = component
 
   openPopover: ->
     open = true
-    setTimeout =>
-      @_position()
-    , 0
+    setTimeout => @_position(), 0
 
   close: ->
     open = false
-    @_trigger?.focus()
+    @_content?.querySelector('[data-trigger]')?.focus()
 
   _position: ->
-    return unless @_trigger and @_floating
-    tr = @_trigger.getBoundingClientRect()
-    fl = @_floating.getBoundingClientRect()
+    trigger = @_content?.querySelector('[data-trigger]')
+    floating = @_content?.querySelector('[data-content]')
+    return unless trigger and floating
+    tr = trigger.getBoundingClientRect()
+    fl = floating.getBoundingClientRect()
     [side, align] = @placement.split('-')
     align ?= 'center'
     gap = @offset
@@ -63,33 +76,41 @@ export Popover = component
 
     x = Math.max(4, Math.min(x, window.innerWidth - fl.width - 4))
 
-    @_floating.style.position = 'fixed'
-    @_floating.style.left = "#{x}px"
-    @_floating.style.top = "#{y}px"
+    floating.style.position = 'fixed'
+    floating.style.left = "#{x}px"
+    floating.style.top = "#{y}px"
+    floating.style.zIndex = '50'
+
+  ~>
+    return unless _ready
+    trigger = @_content?.querySelector('[data-trigger]')
+    floating = @_content?.querySelector('[data-content]')
+    if trigger
+      trigger.setAttribute 'aria-expanded', !!open
+    if floating
+      floating.hidden = not open
+      if open
+        floating.setAttribute 'data-open', ''
+        floating.setAttribute 'data-placement', @placement
+      else
+        floating.removeAttribute 'data-open'
+
+  ~>
+    return unless _ready
+    if open
+      onDown = (e) =>
+        trigger = @_content?.querySelector('[data-trigger]')
+        floating = @_content?.querySelector('[data-content]')
+        unless trigger?.contains(e.target) or floating?.contains(e.target)
+          @close()
+      document.addEventListener 'mousedown', onDown
+      return -> document.removeEventListener 'mousedown', onDown
 
   onKeydown: (e) ->
-    if e.key is 'Escape'
+    if e.key is 'Escape' and open
       e.preventDefault()
       @close()
 
-  onBackdropClick: (e) ->
-    @close() if e.target is e.currentTarget
-
-  onTriggerKeydown: (e) ->
-    if e.key in ['Enter', ' ', 'ArrowDown']
-      e.preventDefault()
-      @toggle()
-
   render
-    .
-      div ref: "_trigger"
-        aria-expanded: !!open
-        aria-haspopup: "dialog"
-        @click: @toggle
-        @keydown: @onTriggerKeydown
-        slot
-
-      if open
-        .('fixed inset-0 z-50') @click: @onBackdropClick, @keydown: @onKeydown
-        div ref: "_floating", data-open: true, data-placement: @placement
-          slot
+    div ref: "_content"
+      slot

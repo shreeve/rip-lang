@@ -24,23 +24,23 @@ export Tabs = component
   @activation  := 'automatic'
   _ready       := false
 
-  _tabEls ~=
+  tabs ~=
     return [] unless _ready
     Array.from(@_content?.querySelectorAll('[data-tab]') or [])
 
-  _panelEls ~=
+  panels ~=
     return [] unless _ready
     Array.from(@_content?.querySelectorAll('[data-panel]') or [])
 
   mounted: ->
     _ready = true
     unless @active
-      @active = _tabEls[0]?.dataset.tab
+      @active = tabs[0]?.dataset.tab
 
   ~>
     return unless _ready
-    _tabEls.forEach (el) -> el.hidden = true
-    _panelEls.forEach (el) =>
+    tabs.forEach (el) -> el.hidden = true
+    panels.forEach (el) =>
       isActive = el.dataset.panel is @active
       el.setAttribute 'role', 'tabpanel'
       el.toggleAttribute 'hidden', not isActive
@@ -51,7 +51,7 @@ export Tabs = component
     @emit 'change', id
 
   onKeydown: (e) ->
-    ids = _tabEls.map (t) -> t.dataset.tab
+    ids = tabs.map (t) -> t.dataset.tab
     idx = ids.indexOf @active
     return if idx is -1
 
@@ -73,14 +73,14 @@ export Tabs = component
 
     if next
       e.preventDefault()
-      tab = _tabEls.find (t) -> t.dataset.tab is next
+      tab = tabs.find (t) -> t.dataset.tab is next
       tab?.focus()
       @select(next) if @activation is 'automatic'
 
   render
     .
       div role: "tablist", aria-orientation: @orientation, @keydown: @onKeydown
-        for tab in _tabEls
+        for tab in tabs
           button role: "tab"
             aria-selected: tab.dataset.tab is @active
             tabindex: tab.dataset.tab is @active ? '0' : '-1'

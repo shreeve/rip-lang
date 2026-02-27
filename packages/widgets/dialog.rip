@@ -64,10 +64,6 @@ export Dialog = component
         document.body.style.width = ''
         window.scrollTo 0, _scrollY
         _prevFocus?.focus()
-    else
-      document.body.style.position = ''
-      document.body.style.top = ''
-      document.body.style.width = ''
 
   close: ->
     @open = false

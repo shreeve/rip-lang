@@ -92,8 +92,13 @@ export Menu = component
       when 'Tab'
         @close()
 
-  onBackdropClick: (e) ->
-    @close() if e.target is e.currentTarget
+  ~>
+    if open
+      onDown = (e) =>
+        unless @_trigger?.contains(e.target) or @_list?.contains(e.target)
+          @close()
+      document.addEventListener 'mousedown', onDown
+      return -> document.removeEventListener 'mousedown', onDown
 
   render
     .
@@ -108,7 +113,6 @@ export Menu = component
         slot
 
       if open
-        .('fixed inset-0 z-50') @click: @onBackdropClick
         div ref: "_list", role: "menu", data-open: true, @keydown: @onMenuKeydown
           for item, idx in items
             div role: "menuitem"

@@ -36,6 +36,8 @@ export Combobox = component
     highlightedIndex = -1
     @emit 'filter', @query
 
+  onFocusin: -> @openMenu()
+
   openMenu: ->
     open = true
     highlightedIndex = -1
@@ -103,8 +105,17 @@ export Combobox = component
       highlightedIndex = idx
       @_updateHighlight()
 
+  ~>
+    if open
+      onDown = (e) =>
+        root = @_content
+        unless root?.contains(e.target)
+          @close()
+      document.addEventListener 'mousedown', onDown
+      return -> document.removeEventListener 'mousedown', onDown
+
   render
-    . data-open: open?!
+    . ref: "_content", data-open: open?!
 
       # Text input
       input ref: "_input", role: "combobox"
@@ -117,7 +128,6 @@ export Combobox = component
         disabled: @disabled
         placeholder: @placeholder
         value: @query
-        @focus: @openMenu
 
       # Listbox — always in DOM, items rendered reactively from @items prop
       div ref: "_list", role: "listbox"
@@ -128,6 +138,3 @@ export Combobox = component
           div role: "option", tabindex: "-1", data-value: item
             "#{item}"
 
-      # Backdrop for click-outside dismiss
-      if open
-        .('fixed inset-0 z-40') @click: (e) => @close() if e.target is e.currentTarget
