@@ -5,7 +5,7 @@ before it. The theme: stop building new things and start proving what exists.
 
 ---
 
-1. **Run the widgets.** Spin up the labs app with `rip serve`, open the
+1. **Run the widgets.** Spin up the labs app with `rip server`, open the
    browser, and see what compiles and what doesn't. Every bug found here
    is a bug that won't surprise a user later. Nothing else matters until
    the code actually executes.

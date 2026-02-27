@@ -29,14 +29,14 @@ bun run parser
 bun run build
 
 # Serve an app (watches *.rip, HTTPS, mDNS)
-rip serve
+rip server
 ```
 
 ### Current Status
 
 | Metric | Value |
 |--------|-------|
-| Version | 3.13.33 |
+| Version | 3.13.34 |
 | Tests | 1,407 |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
@@ -700,7 +700,7 @@ start port: 3000
 ```
 
 ```bash
-rip serve        # Start server (watches *.rip by default)
+rip server        # Start server (watches *.rip by default)
 ```
 
 ### Rip UI (built into rip-lang) — Reactive Web Framework
@@ -802,7 +802,7 @@ notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 start port: 3005
 ```
 
-Hot reload: `rip serve` from `packages/widgets/` gives auto-HTTPS + mDNS
+Hot reload: `rip server` from `packages/widgets/` gives auto-HTTPS + mDNS
 (`https://widgets.local`). The browser connects to the server's built-in
 `/watch` SSE endpoint. Two reload mechanisms work together:
 - **`.rip` file changes**: Manager detects the change, does a rolling restart.
@@ -823,7 +823,7 @@ The browser reload script is 4 lines in `index.html`:
 ```
 
 **Important architecture note for AI assistants:** Do NOT implement custom file
-watchers or SSE endpoints in the worker `index.rip`. The `rip serve` process
+watchers or SSE endpoints in the worker `index.rip`. The `rip server` process
 manager (rip-server) already handles file watching and SSE at the server level.
 The `/watch` SSE endpoint is intercepted by rip-server's proxy before reaching
 workers. Use `notFound` (not `get '/*'`) for the catch-all route — `get '/*'`
@@ -872,7 +872,7 @@ will intercept requests meant for the serve middleware (like `/rip/rip.min.js`).
 - **`rip.min.js` must be rebuilt after `components.js` changes:** The
   browser bundle includes the component runtime. After modifying
   `src/components.js`, run `bun run build` to regenerate `rip.min.js`.
-  Then restart `rip serve` to pick up the new bundle.
+  Then restart `rip server` to pick up the new bundle.
 
 **Documentation in `packages/widgets/`:**
 - `README.md` — Usage examples and API for every widget
@@ -887,13 +887,13 @@ a package locally, run `bun install` from the project root to ensure symlinks
 are correct. Key patterns:
 
 - Packages written in Rip (`.rip` files) need the Rip loader — run from the
-  project root where `bunfig.toml` is located, or use `rip serve`
+  project root where `bunfig.toml` is located, or use `rip server`
 - `import.meta.dir` resolves to the package's actual filesystem path (important
   for serving files)
 - `@rip-lang/server` handlers bind `this` to the context object — use `@send`,
   `@json`, `@req`, etc.
 
-**`rip serve` uses the global install:** The `rip serve` command runs
+**`rip server` uses the global install:** The `rip server` command runs
 `@rip-lang/server/server.rip` from the **globally installed** package
 (`~/.bun/install/global/node_modules/@rip-lang/server/`), not the workspace.
 Changes to `packages/server/` won't take effect until published. For

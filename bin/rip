@@ -42,7 +42,7 @@ Options:
   -v, --version       Show version number
 
 Subcommands:
-  rip serve [flags] [app]       Start server (watches *.rip, HTTPS, mDNS)
+  rip server [flags] [app]      Start server (watches *.rip, HTTPS, mDNS)
   rip check [dir]               Type-check all .rip files in directory
 
 Serve flags:
@@ -56,9 +56,9 @@ Examples:
   rip                           # Interactive REPL (terminal)
   rip script.rip                # Execute script directly
   rip script.rip arg1 arg2      # Execute with arguments
-  rip serve                     # Serve ./index.rip (watches *.rip)
-  rip serve http                # Serve HTTP-only
-  rip serve myapp               # Serve with mDNS name
+  rip server                    # Serve ./index.rip (watches *.rip)
+  rip server http               # Serve HTTP-only
+  rip server myapp              # Serve with mDNS name
   rip -c example.rip            # Compile and show JavaScript
   rip -o output.js example.rip  # Compile and save to file
   rip -s example.rip            # Show ONLY s-expressions
@@ -128,7 +128,7 @@ async function main() {
     process.exit(exitCode);
   }
 
-  if (args[0] === 'serve') {
+  if (args[0] === 'server') {
     let serverPath;
     try {
       serverPath = fileURLToPath(import.meta.resolve('@rip-lang/server/server'));

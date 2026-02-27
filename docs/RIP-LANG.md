@@ -1278,7 +1278,7 @@ bun add @rip-lang/csv            # CSV parser + writer
 
 ## @rip-lang/server — Web Framework & Production Server
 
-Sinatra-style routing with `@` context magic and built-in validators. Run with `rip serve` for multi-worker production deployment with hot reload, HTTPS, and mDNS.
+Sinatra-style routing with `@` context magic and built-in validators. Run with `rip server` for multi-worker production deployment with hot reload, HTTPS, and mDNS.
 
 ```coffee
 import { get, post, use, read, start, notFound } from '@rip-lang/server'
@@ -1315,10 +1315,10 @@ start port: 3000
 ### Serving
 
 ```bash
-rip serve                 # Start (uses ./index.rip)
-rip serve --static        # No watching, no hot reload (production)
-rip serve myapp           # Named (accessible at myapp.local)
-rip serve http:3000       # HTTP on specific port
+rip server                 # Start (uses ./index.rip)
+rip server --static        # No watching, no hot reload (production)
+rip server myapp           # Named (accessible at myapp.local)
+rip server http:3000       # HTTP on specific port
 ```
 
 ### read() Validators
