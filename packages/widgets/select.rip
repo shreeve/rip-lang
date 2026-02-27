@@ -41,8 +41,8 @@ export Select = component
   openMenu: ->
     open = true
     highlightedIndex = Math.max(0, options.findIndex (o) -> @getOpt(o) is String(@value))
-    @_position()
     setTimeout =>
+      @_position()
       @_focusHighlighted()
     , 0
 
