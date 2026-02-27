@@ -1037,12 +1037,26 @@ migrations, table creation, and seeding.
 export setup = ->
   await createTables()
   await seedData()
-  console.log 'Database ready'
+  p 'Database ready'
 ```
 
 The setup function can export as `setup` or `default`. If the file doesn't
 exist, the setup phase is skipped entirely (no overhead). If setup fails,
 the server exits immediately.
+
+When `setup.rip` is present, the `rip-server: https://...` URL lines are
+**suppressed at the top** of the output — they will appear later via `[setup]`
+instead, after migrations complete. The actual server URLs are passed to the
+setup process as `process.env.RIP_URLS` (comma-separated), so you can display
+them exactly as rip-server computed them:
+
+```coffee
+# setup.rip — print URLs at the bottom after setup completes
+export setup = ->
+  await runMigrations()
+  urls = process.env.RIP_URLS?.split(',') or []
+  p "[setup] #{urls.join(' | ')}"
+```
 
 ## Environment Variables
 
