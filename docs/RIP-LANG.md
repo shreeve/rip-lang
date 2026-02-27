@@ -1269,11 +1269,11 @@ Rip includes optional packages for full-stack development. All are written in Ri
 
 ```bash
 bun add @rip-lang/server         # Web framework + production server
-bun add @rip-lang/grid           # Reactive data grid
 bun add @rip-lang/db             # DuckDB server + client
 bun add @rip-lang/schema         # ORM + validation
 bun add @rip-lang/swarm          # Parallel job runner
 bun add @rip-lang/csv            # CSV parser + writer
+# Widgets are included in packages/widgets/ (not a separate npm package)
 ```
 
 ## @rip-lang/server — Web Framework & Production Server

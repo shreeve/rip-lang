@@ -782,27 +782,32 @@ keyboard interactions per WAI-ARIA Authoring Practices. Widgets are plain
 
 | File | Lines | What It Does |
 |------|-------|-------------|
-| `checkbox.rip` | 42 | Checkbox and switch toggle |
-| `toast.rip` | 45 | Auto-dismiss notification, ARIA live region |
-| `accordion.rip` | 93 | Expand/collapse, single or multiple |
-| `dialog.rip` | 91 | Modal: focus trap, scroll lock, escape/click-outside dismiss |
-| `tabs.rip` | 93 | Tab panel with roving tabindex, orientation, activation modes |
-| `popover.rip` | 96 | Anchored floating content with flip/shift |
-| `tooltip.rip` | 100 | Hover/focus tooltip with delay and positioning |
-| `menu.rip` | 121 | Dropdown action menu |
-| `combobox.rip` | 134 | Filterable input + listbox |
-| `select.rip` | 176 | Dropdown with typeahead, ARIA listbox |
-| `grid.rip` | 855 | Virtual-scrolling data grid (100K+ rows at 60fps) |
+| `checkbox.rip` | 33 | Checkbox and switch toggle |
+| `toast.rip` | 44 | Auto-dismiss notification, ARIA live region |
+| `accordion.rip` | 92 | Expand/collapse, single or multiple |
+| `dialog.rip` | 93 | Modal: focus trap, scroll lock, escape/click-outside dismiss |
+| `tabs.rip` | 92 | Tab panel with roving tabindex, orientation, activation modes |
+| `popover.rip` | 116 | Anchored floating content with data-trigger/data-content |
+| `tooltip.rip` | 99 | Hover/focus tooltip with delay and positioning |
+| `menu.rip` | 132 | Dropdown action menu with hidden-slot pattern |
+| `combobox.rip` | 152 | Filterable input + listbox |
+| `select.rip` | 182 | Dropdown with typeahead, ARIA listbox |
+| `grid.rip` | 901 | Virtual-scrolling data grid (100K+ rows at 60fps) |
 
 **Widget conventions:**
 - All DOM refs use `ref: "_name"` — never `div._name` (dot syntax sets CSS classes)
 - Trigger elements: `_trigger` (select, menu, popover, tooltip)
 - Dropdown lists: `_list` (select, combobox, menu)
 - Content areas: `_content` (tabs, accordion)
+- Hidden slot: `_slot` with `style: "display:none"` for reading child definitions (select, menu)
 - Auto-wired events: `onKeydown`, `onScroll`, etc. (root element, no explicit binding)
 - Child-element handlers: `_headerClick`, `_resizeStart` (underscore prefix, explicit binding)
 - Public methods: `toggle`, `close`, `select`, `selectIndex` (no underscore)
+- Domain data names: `options` (select), `items` (menu, combobox), `tabs`/`panels` (tabs)
 - Use `=!` for constant values (IDs), `:=` only for reactive state that drives DOM
+- Click-outside: document `mousedown` listener with effect cleanup (not backdrop divs)
+- Dropdown positioning: `position:fixed;visibility:hidden` inline, then `_position()` via rAF
+- Focus override: `preventScroll: true` globally at module scope (outside component body)
 
 **Integration:** Add the widgets directory to your serve middleware:
 
@@ -815,13 +820,17 @@ use serve
 All widgets become available by name (`Select`, `Dialog`, `Grid`, etc.) in
 the shared scope — no imports needed.
 
-**Grid highlights:**
+**Grid highlights (Google Sheets-grade UX):**
 - DOM recycling: pooled `<tr>` elements, `textContent` updates, zero allocation per scroll frame
-- Full keyboard: arrows, Tab, Enter/F2 edit, Ctrl+arrows, PageUp/Down, Ctrl+A, type-to-edit
+- Sheets-style selection: anchor stays at mousedown, swap on mouseup, selection overlay div
+- Full keyboard: arrows, Tab, Enter/F2 edit, Ctrl+Arrow data-boundary jump, PageUp/Down, Ctrl+A, type-to-edit
+- Smart Enter: commit-stay on first press, move-down-and-edit on second (via `_enterCommit` flag)
 - Clipboard: Ctrl+C/V/X with TSV format (interop with Excel/Sheets/Numbers)
 - Multi-column sorting: click header, Shift+click for secondary sort
 - Column resizing: drag header borders
-- Inline editing: text, checkbox toggle, select dropdown
+- Inline editing: pixel-perfect text alignment, `border: 2px` inset, `outline` outset, system-ui font
+- Stripe-aware selection fill with blue-tinted internal gridlines
+- No hover during drag (`data-selecting` suppresses hover CSS)
 
 **Widget Gallery dev server (`packages/widgets/`):**
 
@@ -867,6 +876,21 @@ The `/watch` SSE endpoint is intercepted by rip-server's proxy before reaching
 workers. Use `notFound` (not `get '/*'`) for the catch-all route — `get '/*'`
 will intercept requests meant for the serve middleware (like `/rip/rip.min.js`).
 
+**Why Rip builds its own widgets (not Radix, Headless UI, etc.):**
+
+Rip's component system (`component`, `render`, `:=`, `~=`, `~>`, `<=>`,
+`slot`, `@emit`, auto-wired events) is a unique reactive model. No existing
+component library targets these primitives — Radix targets React, Headless UI
+targets React/Vue, Ark UI targets multiple frameworks but not Rip. Building
+widgets in Rip proves the component system works and exercises every feature.
+At ~2,000 lines total for 11 widgets (including a 901-line Google Sheets-grade
+Grid), the investment is modest — the same functionality in React + Radix
+requires thousands of lines of glue code plus a build system. Rip widgets
+compile on the fly in the browser from plain `.rip` source files. No bundler,
+no `npm install`, no `node_modules`. One `<script>` tag loads everything.
+Building these widgets also discovered and fixed real compiler bugs — the
+widgets are both the product and the test suite.
+
 **Rip-specific gotchas learned building widgets:**
 - **Lifecycle hooks:** The recognized hooks are `beforeMount`, `mounted`,
   `updated`, `beforeUnmount`, `unmounted`, `onError`. Nothing else.
@@ -875,7 +899,10 @@ will intercept requests meant for the serve middleware (like `/rip/rip.min.js`).
 - **`->` inside components:** The compiler auto-converts all thin arrows
   (`->`) to fat arrows (`=>`) inside component contexts. `this` binding is
   always preserved. Use `->` everywhere — it's cleaner and the compiler
-  handles it.
+  handles it. **Caveat:** If you need `this` to refer to a DOM element (e.g.,
+  patching `HTMLElement.prototype.focus`), put the code OUTSIDE the component
+  body at module scope — `->` stays as `->` there and `this` refers to the
+  caller.
 - **Auto-wired event handlers:** Methods named `onClick`, `onKeydown`,
   etc. are automatically bound to the root element — no `@click: @onClick`
   boilerplate needed. Use an explicit binding only when the handler differs

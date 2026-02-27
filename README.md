@@ -421,7 +421,7 @@ Rip includes optional packages for full-stack development:
 | [rip-lang](https://www.npmjs.com/package/rip-lang) | 3.13.27 | Core language compiler |
 | [@rip-lang/server](packages/server/) | 1.3.12 | Multi-worker app server (web framework, hot reload, HTTPS, mDNS) |
 | [@rip-lang/db](packages/db/) | 1.3.15 | DuckDB server with official UI + ActiveRecord-style client |
-| [@rip-lang/grid](packages/grid/) | 0.2.10 | Reactive data grid |
+| [widgets](packages/widgets/) | — | 11 headless UI widgets (Grid, Select, Dialog, Tabs, etc.) |
 | [@rip-lang/swarm](packages/swarm/) | 1.2.18 | Parallel job runner with worker pool |
 | [@rip-lang/csv](packages/csv/) | 1.3.6 | CSV parser + writer |
 | [@rip-lang/schema](packages/schema/) | 0.3.8 | Unified schema → TypeScript types, SQL DDL, validation, ORM |
