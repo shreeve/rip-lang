@@ -222,7 +222,7 @@
 
     {"comment": "=== KEYWORDS ==="},
     {
-      "match": "\\b(return|throw|break|continue|switch|when|then|if|else|unless|for|in|of|by|as|while|until|loop|do|try|catch|finally|yield|await|import|export|from|default|delete|typeof|instanceof|new|super|debugger|use|own|extends|component|render)\\b",
+      "match": "\\b(return|throw|break|continue|switch|when|then|if|else|unless|for|in|of|by|as|while|until|loop|do|try|catch|finally|yield|await|import|export|from|default|delete|typeof|instanceof|new|super|debugger|use|own|extends|component|render|offer|accept)\\b",
       "name": "keyword.control.rip"
     },
     {
