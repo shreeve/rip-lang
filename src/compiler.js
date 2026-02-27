@@ -237,6 +237,8 @@ export class CodeGenerator {
     // Components
     'component': 'generateComponent',
     'render': 'generateRender',
+    'offer': 'generateOffer',
+    'accept': 'generateAccept',
 
     // Types
     'enum': 'generateEnum',

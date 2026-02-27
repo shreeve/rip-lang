@@ -743,6 +743,8 @@ grammar =
     o 'Expression'
     o 'ExpressionLine'
     o 'Statement'
+    o 'OFFER Expression', '["offer", 2]'
+    o 'ACCEPT IDENTIFIER', '["accept", 2]'
   ]
 
   # Render block: template DSL for fine-grained reactive DOM.
@@ -940,7 +942,7 @@ operators = """
   right       YIELD
   right       = : COMPOUND_ASSIGN RETURN THROW EXTENDS
   right       FORIN FOROF FORAS FORASAWAIT BY WHEN
-  right       IF ELSE FOR WHILE UNTIL LOOP SUPER CLASS COMPONENT RENDER IMPORT EXPORT DYNAMIC_IMPORT
+  right       IF ELSE FOR WHILE UNTIL LOOP SUPER CLASS COMPONENT RENDER IMPORT EXPORT DYNAMIC_IMPORT OFFER ACCEPT
   left        POST_IF
 """.trim().split('\n').reverse().map (line) -> line.trim().split /\s+/
 

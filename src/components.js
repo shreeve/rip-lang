@@ -610,16 +610,33 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     const methods = [];
     const lifecycleHooks = [];
     const effects = [];
+    const offeredVars = [];
+    const acceptedVars = [];
     let renderBlock = null;
 
     const memberNames = new Set();
     const reactiveMembers = new Set();
 
-    for (const stmt of statements) {
+    for (let stmt of statements) {
       if (!Array.isArray(stmt)) continue;
-      const [op] = stmt;
+      let [op] = stmt;
 
-      if (op === 'state') {
+      if (op === 'offer') {
+        stmt = stmt[1];
+        if (!Array.isArray(stmt)) continue;
+        op = stmt[0];
+        const varName = getMemberName(stmt[1]);
+        if (varName) offeredVars.push(varName);
+      }
+
+      if (op === 'accept') {
+        const varName = typeof stmt[1] === 'string' ? stmt[1] : getMemberName(stmt[1]);
+        if (varName) {
+          acceptedVars.push(varName);
+          memberNames.add(varName);
+          reactiveMembers.add(varName);
+        }
+      } else if (op === 'state') {
         const varName = getMemberName(stmt[1]);
         if (varName) {
           stateVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]) });
@@ -707,6 +724,11 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         : `    this.${name} = ${val};`);
     }
 
+    // Accepted vars (from ancestor context via getContext)
+    for (const name of acceptedVars) {
+      lines.push(`    this.${name} = getContext('${name}');`);
+    }
+
     // State variables (__state handles signal passthrough)
     for (const { name, value, isPublic } of stateVars) {
       const val = this.generateInComponent(value, 'value');
@@ -725,6 +747,11 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         const val = this.generateInComponent(expr, 'value');
         lines.push(`    this.${name} = __computed(() => ${val});`);
       }
+    }
+
+    // Offered vars (share with descendants via setContext — after all members are initialized)
+    for (const name of offeredVars) {
+      lines.push(`    setContext('${name}', this.${name});`);
     }
 
     // Effects
@@ -829,6 +856,14 @@ export function installComponentSupport(CodeGenerator, Lexer) {
    */
   proto.generateRender = function(head, rest, context, sexpr) {
     throw new Error('render blocks can only be used inside a component');
+  };
+
+  proto.generateOffer = function(head, rest, context, sexpr) {
+    throw new Error('offer can only be used inside a component');
+  };
+
+  proto.generateAccept = function(head, rest, context, sexpr) {
+    throw new Error('accept can only be used inside a component');
   };
 
   // ==========================================================================

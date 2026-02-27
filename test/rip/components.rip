@@ -1314,6 +1314,76 @@ test "getContext returns undefined when not set", '''
   ''', undefined
 
 # ==============================================================================
+# offer / accept — context keywords
+# ==============================================================================
+
+code "offer compiles to state + setContext", '''
+  export A = component
+    offer active := "hello"
+    render
+      div
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {
+      this.active = __state("hello");
+      setContext('active', this.active);
+    }
+    _create() {
+      this._el0 = document.createElement('div');
+      return this._el0;
+    }
+  };
+  ''', opts
+
+code "accept compiles to getContext", '''
+  export A = component
+    accept active
+    render
+      div
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {
+      this.active = getContext('active');
+    }
+    _create() {
+      this._el0 = document.createElement('div');
+      return this._el0;
+    }
+  };
+  ''', opts
+
+code "offer public prop with @", '''
+  export A = component
+    offer @active := "hello"
+    render
+      div
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {
+      this.active = __state(props.__bind_active__ ?? props.active ?? "hello");
+      setContext('active', this.active);
+    }
+    _create() {
+      this._el0 = document.createElement('div');
+      return this._el0;
+    }
+  };
+  ''', opts
+
+test "offer and accept share the same signal", '''
+  result = null
+  Child = component
+    accept active
+    ~> result = active
+  Parent = component
+    offer active := "hello"
+  p = __pushComponent(Parent.new())
+  c = Child.new()
+  __popComponent(null)
+  result
+  ''', "hello"
+
+# ==============================================================================
 # SVG Rendering — createElementNS
 # ==============================================================================
 
