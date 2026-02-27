@@ -28,10 +28,9 @@ export Menu = component
   openMenu: ->
     open = true
     highlightedIndex = 0
-    setTimeout =>
+    requestAnimationFrame =>
       @_position()
       items[0]?.focus()
-    , 0
 
   close: ->
     open = false
@@ -55,6 +54,7 @@ export Menu = component
     fl = @_list.getBoundingClientRect()
     if fl.bottom > window.innerHeight
       @_list.style.top = "#{tr.top - fl.height - 4}px"
+    @_list.style.visibility = 'visible'
 
   onTriggerKeydown: (e) ->
     return if @disabled
@@ -113,7 +113,7 @@ export Menu = component
         slot
 
       if open
-        div ref: "_list", role: "menu", data-open: true, @keydown: @onMenuKeydown
+        div ref: "_list", role: "menu", data-open: true, style: "position:fixed;visibility:hidden", @keydown: @onMenuKeydown
           for item, idx in items
             div role: "menuitem"
               tabindex: "-1"

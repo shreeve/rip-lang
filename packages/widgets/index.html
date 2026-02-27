@@ -158,6 +158,12 @@ button { font: inherit; cursor: pointer; }
   border-radius: 6px; background: white; font-size: 14px;
 }
 .gallery [aria-haspopup="menu"][data-open] { border-color: #3b82f6; }
+.gallery [role="menu"] {
+  background: white; border: 1px solid #cbd5e1; border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12); padding: 4px;
+  overflow-y: auto; max-height: 280px; min-width: 160px;
+}
+.gallery [role="menu"]:not([data-open]) { display: none; }
 
 /* Grid styles */
 .grid-container {
