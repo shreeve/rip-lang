@@ -18,7 +18,7 @@ export Tooltip = component
   exiting := false
   _showTimer := null
   _hideTimer := null
-  _id := "tip-#{Math.random().toString(36).slice(2, 8)}"
+  _id =! "tip-#{Math.random().toString(36).slice(2, 8)}"
 
   show: ->
     clearTimeout _hideTimer if _hideTimer
@@ -40,31 +40,41 @@ export Tooltip = component
     , 150
 
   _position: ->
-    return unless @_triggerEl and @_tipEl
-    tr = @_triggerEl.getBoundingClientRect()
-    tl = @_tipEl.getBoundingClientRect()
+    return unless @_trigger and @_tip
+    tr = @_trigger.getBoundingClientRect()
+    fl = @_tip.getBoundingClientRect()
+    [side, align] = @placement.split('-')
+    align ?= 'center'
     gap = @offset
-    [side] = @placement.split('-')
 
-    x = tr.left + (tr.width - tl.width) / 2
+    x = switch side
+      when 'bottom', 'top'
+        switch align
+          when 'start' then tr.left
+          when 'end' then tr.right - fl.width
+          else tr.left + (tr.width - fl.width) / 2
+      when 'right' then tr.right + gap
+      when 'left' then tr.left - fl.width - gap
+
     y = switch side
-      when 'top' then tr.top - tl.height - gap
       when 'bottom' then tr.bottom + gap
-      when 'left' then tr.top + (tr.height - tl.height) / 2
-      when 'right' then tr.top + (tr.height - tl.height) / 2
+      when 'top' then tr.top - fl.height - gap
+      when 'left', 'right'
+        switch align
+          when 'start' then tr.top
+          when 'end' then tr.bottom - fl.height
+          else tr.top + (tr.height - fl.height) / 2
 
-    if side is 'left'
-      x = tr.left - tl.width - gap
-    if side is 'right'
-      x = tr.right + gap
+    if side is 'bottom' and y + fl.height > window.innerHeight
+      y = tr.top - fl.height - gap
+    if side is 'top' and y < 0
+      y = tr.bottom + gap
 
-    if y < 0 then y = tr.bottom + gap
-    if y + tl.height > window.innerHeight then y = tr.top - tl.height - gap
-    x = Math.max(4, Math.min(x, window.innerWidth - tl.width - 4))
+    x = Math.max(4, Math.min(x, window.innerWidth - fl.width - 4))
 
-    @_tipEl.style.position = 'fixed'
-    @_tipEl.style.left = "#{x}px"
-    @_tipEl.style.top = "#{y}px"
+    @_tip.style.position = 'fixed'
+    @_tip.style.left = "#{x}px"
+    @_tip.style.top = "#{y}px"
 
   beforeUnmount: ->
     clearTimeout _showTimer if _showTimer
@@ -72,7 +82,7 @@ export Tooltip = component
 
   render
     .
-      div._triggerEl
+      div ref: "_trigger"
         aria-describedby: open ? _id : undefined
         @mouseenter: @show
         @mouseleave: @hide
@@ -81,7 +91,7 @@ export Tooltip = component
         slot
 
       if open
-        div._tipEl id: _id, role: "tooltip"
+        div ref: "_tip", id: _id, role: "tooltip"
           data-open: true
           data-entering: entering?!
           data-exiting: exiting?!

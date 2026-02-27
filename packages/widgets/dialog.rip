@@ -2,6 +2,7 @@
 #
 # Traps focus, locks scroll, dismisses on Escape or click outside.
 # Restores focus to the previously focused element on close.
+# Auto-wires aria-labelledby (first h1-h6) and aria-describedby (first p).
 #
 # Exposes data-open on the backdrop. Ships zero CSS.
 #
@@ -16,21 +17,34 @@ export Dialog = component
 
   _prevFocus = null
   _cleanupTrap = null
+  _id =! "dlg-#{Math.random().toString(36).slice(2, 8)}"
+
+  _wireAria: ->
+    panel = @_panel
+    return unless panel
+    heading = panel.querySelector('h1,h2,h3,h4,h5,h6')
+    if heading
+      heading.id ?= "#{_id}-title"
+      panel.setAttribute 'aria-labelledby', heading.id
+    desc = panel.querySelector('p')
+    if desc
+      desc.id ?= "#{_id}-desc"
+      panel.setAttribute 'aria-describedby', desc.id
 
   ~>
     if @open
       _prevFocus = document.activeElement
 
-      # Lock scroll
       scrollY = window.scrollY
       document.body.style.position = 'fixed'
       document.body.style.top = "-#{scrollY}px"
       document.body.style.width = '100%'
 
-      # Trap focus after render
       setTimeout =>
-        panel = @_panelEl
+        panel = @_panel
         if panel
+          @_wireAria()
+
           focusable = panel.querySelectorAll 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
           focusable[0]?.focus()
 
@@ -51,18 +65,14 @@ export Dialog = component
           panel.addEventListener 'keydown', _cleanupTrap
       , 0
 
-      # Cleanup
       ->
-        # Unlock scroll
         document.body.style.position = ''
         document.body.style.top = ''
         document.body.style.width = ''
         window.scrollTo 0, scrollY
 
-        # Remove trap
-        @_panelEl?.removeEventListener 'keydown', _cleanupTrap if _cleanupTrap
+        @_panel?.removeEventListener 'keydown', _cleanupTrap if _cleanupTrap
 
-        # Restore focus
         _prevFocus?.focus()
 
   close: ->
@@ -79,8 +89,8 @@ export Dialog = component
 
   render
     if @open
-      div._backdropEl data-open: true,
+      div ref: "_backdrop", data-open: true,
         @click: @onBackdropClick,
         @keydown: @onKeydown
-        div._panelEl role: "dialog", aria-modal: "true", tabindex: "-1"
+        div ref: "_panel", role: "dialog", aria-modal: "true", tabindex: "-1"
           slot

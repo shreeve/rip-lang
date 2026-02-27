@@ -18,8 +18,8 @@ export Menu = component
   highlightedIndex := -1
 
   items ~=
-    return [] unless @_menuEl
-    Array.from(@_menuEl?.querySelectorAll('[data-item]') or [])
+    return [] unless @_menu
+    Array.from(@_menu.querySelectorAll('[data-item]') or [])
 
   toggle: ->
     return if @disabled
@@ -36,7 +36,7 @@ export Menu = component
   close: ->
     open = false
     highlightedIndex = -1
-    @_triggerEl?.focus()
+    @_trigger?.focus()
 
   selectItem: (idx) ->
     item = items[idx]
@@ -46,15 +46,15 @@ export Menu = component
     @close()
 
   _position: ->
-    return unless @_triggerEl and @_menuEl
-    tr = @_triggerEl.getBoundingClientRect()
-    @_menuEl.style.position = 'fixed'
-    @_menuEl.style.left = "#{tr.left}px"
-    @_menuEl.style.top = "#{tr.bottom + 4}px"
-    @_menuEl.style.minWidth = "#{tr.width}px"
-    mr = @_menuEl.getBoundingClientRect()
-    if mr.bottom > window.innerHeight
-      @_menuEl.style.top = "#{tr.top - mr.height - 4}px"
+    return unless @_trigger and @_menu
+    tr = @_trigger.getBoundingClientRect()
+    @_menu.style.position = 'fixed'
+    @_menu.style.left = "#{tr.left}px"
+    @_menu.style.top = "#{tr.bottom + 4}px"
+    @_menu.style.minWidth = "#{tr.width}px"
+    fl = @_menu.getBoundingClientRect()
+    if fl.bottom > window.innerHeight
+      @_menu.style.top = "#{tr.top - fl.height - 4}px"
 
   onTriggerKeydown: (e) ->
     return if @disabled
@@ -97,7 +97,7 @@ export Menu = component
 
   render
     .
-      button._triggerEl
+      button ref: "_trigger"
         aria-haspopup: "menu"
         aria-expanded: !!open
         data-open: open?!
@@ -109,7 +109,7 @@ export Menu = component
 
       if open
         .('fixed inset-0 z-50') @click: @onBackdropClick
-        div._menuEl role: "menu", data-open: true, @keydown: @onMenuKeydown
+        div ref: "_menu", role: "menu", data-open: true, @keydown: @onMenuKeydown
           for item, idx in items
             div role: "menuitem"
               tabindex: "-1"

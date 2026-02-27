@@ -44,12 +44,24 @@ export Combobox = component
     open = false
     highlightedIndex = -1
 
+  isDisabled: (item) -> item?.hasAttribute?('data-disabled')
+
   selectIndex: (idx) ->
     item = @getItems()[idx]
     return unless item
+    return if @isDisabled(item)
     val = item.dataset.value ?? item.textContent.trim()
     @emit 'select', val
     @close()
+
+  _nextEnabled: (from, dir) ->
+    items = @getItems()
+    len = items.length
+    i = from
+    loop len
+      i = (i + dir) %% len
+      return i unless @isDisabled(items[i])
+    from
 
   onKeydown: (e) ->
     len = @getItems().length
@@ -57,12 +69,12 @@ export Combobox = component
       when 'ArrowDown'
         e.preventDefault()
         @openMenu() unless open
-        highlightedIndex = if highlightedIndex < len - 1 then highlightedIndex + 1 else 0
+        highlightedIndex = @_nextEnabled(highlightedIndex, 1)
         @_updateHighlight()
         @_scrollToItem()
       when 'ArrowUp'
         e.preventDefault()
-        highlightedIndex = if highlightedIndex > 0 then highlightedIndex - 1 else len - 1
+        highlightedIndex = @_nextEnabled(highlightedIndex, -1)
         @_updateHighlight()
         @_scrollToItem()
       when 'Enter'

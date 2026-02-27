@@ -67,5 +67,5 @@ export Accordion = component
     target?.focus()
 
   render
-    div._el
+    div ref: "_el"
       slot

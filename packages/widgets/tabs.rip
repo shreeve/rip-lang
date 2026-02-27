@@ -1,8 +1,13 @@
 # Tabs — accessible headless tab widget
 #
-# Keyboard: ArrowLeft/Right to navigate tabs, Home/End for first/last.
-# Manages focus via roving tabindex. Exposes data-active on tabs and panels.
-# Ships zero CSS.
+# Keyboard: ArrowLeft/Right (horizontal) or ArrowUp/Down (vertical) to navigate,
+# Home/End for first/last. Manages focus via roving tabindex.
+# Exposes data-active on tabs and panels. Ships zero CSS.
+#
+# Props:
+#   active       — currently active tab id (two-way bindable)
+#   orientation  — 'horizontal' (default) or 'vertical'
+#   activation   — 'automatic' (default, selects on focus) or 'manual' (Enter/Space to select)
 #
 # Usage:
 #   Tabs active <=> currentTab
@@ -14,20 +19,32 @@
 #       p "Content for tab two"
 
 export Tabs = component
-  @active := null
+  @active      := null
+  @orientation := 'horizontal'
+  @activation  := 'automatic'
+  _ready       := false
 
   _tabEls ~=
-    return [] unless @_el
-    Array.from(@_el?.querySelectorAll('[data-tab]') or [])
+    return [] unless _ready
+    Array.from(@_content?.querySelectorAll('[data-tab]') or [])
 
   _panelEls ~=
-    return [] unless @_el
-    Array.from(@_el?.querySelectorAll('[data-panel]') or [])
+    return [] unless _ready
+    Array.from(@_content?.querySelectorAll('[data-panel]') or [])
 
   mounted: ->
+    _ready = true
     unless @active
-      first = _tabEls[0]
-      @active = first?.dataset.tab if first
+      @active = _tabEls[0]?.dataset.tab
+
+  ~>
+    return unless _ready
+    _tabEls.forEach (el) -> el.hidden = true
+    _panelEls.forEach (el) =>
+      isActive = el.dataset.panel is @active
+      el.setAttribute 'role', 'tabpanel'
+      el.toggleAttribute 'hidden', not isActive
+      el.toggleAttribute 'data-active', isActive
 
   select: (id) ->
     @active = id
@@ -38,23 +55,31 @@ export Tabs = component
     idx = ids.indexOf @active
     return if idx is -1
 
+    horiz = @orientation is 'horizontal'
+    prevKey = if horiz then 'ArrowLeft' else 'ArrowUp'
+    nextKey = if horiz then 'ArrowRight' else 'ArrowDown'
+
     next = switch e.key
-      when 'ArrowRight' then ids[(idx + 1) %% ids.length]
-      when 'ArrowLeft'  then ids[(idx - 1) %% ids.length]
-      when 'Home'       then ids[0]
-      when 'End'        then ids[ids.length - 1]
+      when nextKey then ids[(idx + 1) %% ids.length]
+      when prevKey then ids[(idx - 1) %% ids.length]
+      when 'Home'  then ids[0]
+      when 'End'   then ids[ids.length - 1]
+      when 'Enter', ' '
+        if @activation is 'manual'
+          e.preventDefault()
+          @select(ids[idx])
+        null
       else null
 
     if next
       e.preventDefault()
-      @select(next)
       tab = _tabEls.find (t) -> t.dataset.tab is next
       tab?.focus()
+      @select(next) if @activation is 'automatic'
 
   render
-    div._el
-
-      div role: "tablist", @keydown: @onKeydown
+    .
+      div role: "tablist", aria-orientation: @orientation, @keydown: @onKeydown
         for tab in _tabEls
           button role: "tab"
             aria-selected: tab.dataset.tab is @active
@@ -63,8 +88,5 @@ export Tabs = component
             @click: (=> @select(tab.dataset.tab))
             tab.textContent
 
-      for panel in _panelEls
-        div role: "tabpanel"
-          data-active: (panel.dataset.panel is @active)?!
-          hidden: (panel.dataset.panel isnt @active)?!
-          slot
+      . ref: "_content"
+        slot

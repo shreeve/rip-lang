@@ -28,12 +28,12 @@ export Popover = component
 
   close: ->
     open = false
-    @_triggerEl?.focus()
+    @_trigger?.focus()
 
   _position: ->
-    return unless @_triggerEl and @_floatingEl
-    tr = @_triggerEl.getBoundingClientRect()
-    fl = @_floatingEl.getBoundingClientRect()
+    return unless @_trigger and @_floating
+    tr = @_trigger.getBoundingClientRect()
+    fl = @_floating.getBoundingClientRect()
     [side, align] = @placement.split('-')
     align ?= 'center'
     gap = @offset
@@ -63,9 +63,9 @@ export Popover = component
 
     x = Math.max(4, Math.min(x, window.innerWidth - fl.width - 4))
 
-    @_floatingEl.style.position = 'fixed'
-    @_floatingEl.style.left = "#{x}px"
-    @_floatingEl.style.top = "#{y}px"
+    @_floating.style.position = 'fixed'
+    @_floating.style.left = "#{x}px"
+    @_floating.style.top = "#{y}px"
 
   onKeydown: (e) ->
     if e.key is 'Escape'
@@ -82,7 +82,7 @@ export Popover = component
 
   render
     .
-      div._triggerEl
+      div ref: "_trigger"
         aria-expanded: !!open
         aria-haspopup: "dialog"
         @click: @toggle
@@ -91,5 +91,5 @@ export Popover = component
 
       if open
         .('fixed inset-0 z-50') @click: @onBackdropClick, @keydown: @onKeydown
-        div._floatingEl data-open: true, data-placement: @placement
+        div ref: "_floating", data-open: true, data-placement: @placement
           slot

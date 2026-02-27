@@ -49,11 +49,14 @@ export Select = component
   close: ->
     open = false
     highlightedIndex = -1
-    @_btn?.focus()
+    @_trigger?.focus()
+
+  isDisabled: (opt) -> opt?.hasAttribute?('data-disabled') or opt?.disabled
 
   selectIndex: (idx) ->
     opt = options[idx]
     return unless opt
+    return if @isDisabled(opt)
     @value = @getOpt(opt)
     @emit 'change', @value
     @close()
@@ -68,6 +71,14 @@ export Select = component
         e.preventDefault()
         @close() if open
 
+  _nextEnabled: (from, dir) ->
+    len = options.length
+    i = from
+    loop len
+      i = (i + dir) %% len
+      return i unless @isDisabled(options[i])
+    from
+
   onListKeydown: (e) ->
     len = options.length
     return unless len
@@ -75,11 +86,11 @@ export Select = component
     switch e.key
       when 'ArrowDown'
         e.preventDefault()
-        highlightedIndex = (highlightedIndex + 1) %% len
+        highlightedIndex = @_nextEnabled(highlightedIndex, 1)
         @_focusHighlighted()
       when 'ArrowUp'
         e.preventDefault()
-        highlightedIndex = (highlightedIndex - 1) %% len
+        highlightedIndex = @_nextEnabled(highlightedIndex, -1)
         @_focusHighlighted()
       when 'Home'
         e.preventDefault()
@@ -115,22 +126,21 @@ export Select = component
     opt?.focus()
 
   _positionList: ->
-    return unless @_btn and @_list
-    btnRect = @_btn.getBoundingClientRect()
+    return unless @_trigger and @_list
+    tr = @_trigger.getBoundingClientRect()
     @_list.style.position = 'fixed'
-    @_list.style.left = "#{btnRect.left}px"
-    @_list.style.top = "#{btnRect.bottom + 4}px"
-    @_list.style.minWidth = "#{btnRect.width}px"
-    # Flip up if overflows viewport
-    listRect = @_list.getBoundingClientRect()
-    if listRect.bottom > window.innerHeight
-      @_list.style.top = "#{btnRect.top - listRect.height - 4}px"
+    @_list.style.left = "#{tr.left}px"
+    @_list.style.top = "#{tr.bottom + 4}px"
+    @_list.style.minWidth = "#{tr.width}px"
+    fl = @_list.getBoundingClientRect()
+    if fl.bottom > window.innerHeight
+      @_list.style.top = "#{tr.top - fl.height - 4}px"
 
   render
     .
 
       # Button
-      button ref: "_btn", role: "combobox"
+      button ref: "_trigger", role: "combobox"
         aria-expanded: !!open
         aria-haspopup: "listbox"
         data-open: open?!
@@ -157,7 +167,9 @@ export Select = component
               data-value: @getOpt(opt)
               data-highlighted: (idx is highlightedIndex)?!
               data-selected: (@getOpt(opt) is String(@value))?!
+              data-disabled: @isDisabled(opt)?!
               aria-selected: @getOpt(opt) is String(@value)
+              aria-disabled: @isDisabled(opt)?!
               @click: (=> @selectIndex(idx))
               @mouseenter: (=> highlightedIndex = idx)
               opt.textContent
