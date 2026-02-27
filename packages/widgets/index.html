@@ -250,6 +250,10 @@ export WidgetGallery = component
     { name: 'Leo Martin', role: 'Engineer', age: 24, city: 'Boston' },
   ]
 
+  mounted: ->
+    @_root?.addEventListener 'mousedown', (e) ->
+      e.preventDefault() if e.target.closest('button')
+
   render
     .gallery
 
