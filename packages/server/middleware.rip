@@ -519,7 +519,7 @@ export serve = (opts = {}) ->
   # Route: {prefix}/components/* — individual .rip component files
   get "#{prefix}/components/*", (c) ->
     name = c.req.path.slice("#{prefix}/components/".length)
-    c.send "#{routesDir}/#{name}", 'text/plain; charset=UTF-8'
+    c.send "#{routesDir}/#{name}", 'text/x-rip; charset=UTF-8'
 
   # Route: {prefix}/bundle — all components + app data as JSON (cached + Brotli)
   bundleCache = { json: null, br: null, etag: null }

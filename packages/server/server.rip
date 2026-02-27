@@ -111,7 +111,7 @@ logAccessJson = (app, req, res, totalSeconds, workerSeconds) ->
 typeAbbrev =
   html: 'html', css: 'css', javascript: 'js', json: 'json', plain: 'text'
   png: 'png', jpeg: 'jpg', gif: 'gif', webp: 'webp', svg: 'svg'
-  'svg+xml': 'svg', 'x-icon': 'ico', 'octet-stream': 'bin'
+  'svg+xml': 'svg', 'x-icon': 'ico', 'octet-stream': 'bin', 'x-rip': 'rip'
 
 logAccessHuman = (app, req, res, totalSeconds, workerSeconds) ->
   { timestamp, timezone } = formatTimestamp()
@@ -996,6 +996,14 @@ class Server
         return new Response('Gateway timeout', { status: 504 })
       throw err
 
+  processJob: (job, worker) ->
+    @forwardToWorker(job.req, worker)
+      .then((r) -> job.resolve(r))
+      .catch((e) -> job.resolve(if e instanceof Response then e else new Response('Internal error', { status: 500 })))
+      .finally =>
+        @inflightTotal--
+        setImmediate => @drainQueue()
+
   drainQueue: ->
     while @inflightTotal < Math.max(1, @sockets.length) and @availableWorkers.length > 0
       job = @queue.shift()
@@ -1008,12 +1016,7 @@ class Server
       unless worker
         @inflightTotal--
         break
-      @forwardToWorker(job.req, worker)
-        .then((r) -> job.resolve(r))
-        .catch((e) -> job.resolve(if e instanceof Response then e else new Response('Internal error', { status: 500 })))
-        .finally =>
-          @inflightTotal--
-          setImmediate => @drainQueue()
+      @processJob(job, worker)
 
   startControl: ->
     ctlPath = getControlSocketPath(@flags.socketPrefix)
