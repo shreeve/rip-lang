@@ -28,10 +28,6 @@ packages/vscode/dist/
 
 # Project-specific
 notes.txt
-.tool-versions
 /demos/candor
-/demos/streamline/ARCHIVE
+/demos/trustlabs
 /demos/websites/
-/labs
-/demos/labs
-/demos/data
