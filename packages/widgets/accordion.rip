@@ -19,6 +19,27 @@ export Accordion = component
   @multiple := false
 
   openItems := new Set()
+  _ready    := false
+
+  mounted: ->
+    _ready = true
+    @_content?.querySelectorAll('[data-trigger]').forEach (trigger) =>
+      item = trigger.closest('[data-item]')
+      return unless item
+      id = item.dataset.item
+      trigger.addEventListener 'click', => @toggle(id)
+      trigger.addEventListener 'keydown', (e) => @onTriggerKeydown(e, id)
+
+  ~>
+    return unless _ready
+    @_content?.querySelectorAll('[data-item]').forEach (item) =>
+      id = item.dataset.item
+      isOpen = openItems.has(id)
+      item.toggleAttribute 'data-open', isOpen
+      content = item.querySelector('[data-content]')
+      if content
+        content.hidden = not isOpen
+        content.setAttribute 'role', 'region'
 
   toggle: (id) ->
     if openItems.has(id)

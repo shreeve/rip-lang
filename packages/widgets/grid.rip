@@ -309,7 +309,7 @@ export Grid = component
       el.addEventListener 'change', (e) =>
         editValue = e.target.value
         @commitEditor()
-      el.addEventListener 'keydown', (e) => @handleEditorKeydown(e)
+      el.addEventListener 'keydown', (e) => @_editorKeydown(e)
     else
       el = document.createElement('input')
       el.className = 'rip-grid-editor'
@@ -320,7 +320,7 @@ export Grid = component
       el.addEventListener 'input', (e) =>
         editValue = e.target.value
         e.target.style.textAlign = if /[a-z]/i.test(editValue) then 'left' else align
-      el.addEventListener 'keydown', (e) => @handleEditorKeydown(e)
+      el.addEventListener 'keydown', (e) => @_editorKeydown(e)
     @_container.appendChild(el)
     requestAnimationFrame =>
       trs = @_body.querySelectorAll('tr:not(.spacer)')
@@ -368,7 +368,7 @@ export Grid = component
     @_container.focus() if @_container
     editing = false
 
-  handleEditorKeydown: (e) ->
+  _editorKeydown: (e) ->
     numCols = @columns.length
     switch e.key
       when 'Enter'
@@ -408,7 +408,7 @@ export Grid = component
         e.stopPropagation()
         @cancelEditor()
 
-  handleResizeStart: (e) ->
+  _resizeStart: (e) ->
     e.stopPropagation()
     e.preventDefault()
     th = e.target.closest('th')
@@ -431,7 +431,7 @@ export Grid = component
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
 
-  handleHeaderClick: (e) ->
+  _headerClick: (e) ->
     if e.target.classList.contains('resize-handle') then return
     th = e.target.closest('th')
     if not th then return
@@ -457,12 +457,12 @@ export Grid = component
         sortKeys = [{ col: ci, dir: 'asc' }]
     dataVersion++
 
-  handleDblclick: (e) ->
+  onDblclick: (e) ->
     td = e.target.closest('td')
     if td and not td.parentElement.classList.contains('spacer')
       @openEditor()
 
-  handleScroll: (e) ->
+  onScroll: (e) ->
     @commitEditor() if editing
     @_nextST = e.currentTarget.scrollTop
     if not @_rafPending
@@ -480,7 +480,7 @@ export Grid = component
       else if top + @rowHeight + @headerHeight > el.scrollTop + containerHeight
         el.scrollTop = top + @rowHeight + @headerHeight - containerHeight
 
-  handleMousedown: (e) ->
+  onMousedown: (e) ->
     if e.button isnt 0
       return
     if e.target.classList.contains('rip-grid-editor')
@@ -501,10 +501,10 @@ export Grid = component
           anchorRow = ri
           anchorCol = td.cellIndex
 
-  handleMouseup: (e) ->
+  onMouseup: (e) ->
     selecting = false
 
-  handleMousemove: (e) ->
+  onMousemove: (e) ->
     if not selecting or e.buttons isnt 1
       return
     el = @_container
@@ -517,7 +517,7 @@ export Grid = component
     activeCol = ci
     @scrollToRow(ri)
 
-  handleKeydown: (e) ->
+  onKeydown: (e) ->
     if editing
       return
     numCols = @columns.length
@@ -820,7 +820,6 @@ export Grid = component
           containerHeight = entry.contentRect.height
       @_resizeObs = new ResizeObserver(handler)
       @_resizeObs.observe(@_container)
-      @_container.focus()
 
   unmounted: ->
     if @_resizeObs
@@ -828,30 +827,24 @@ export Grid = component
 
   render
     .
-      div ref: "_container", role: "grid", tabindex: "0",
+      div.grid-container ref: "_container", role: "grid", tabindex: "0",
         data-editing: editing?!,
-        data-selecting: selecting?!,
-        @scroll: @handleScroll,
-        @mousedown: @handleMousedown,
-        @mousemove: @handleMousemove,
-        @mouseup: @handleMouseup,
-        @keydown: @handleKeydown,
-        @dblclick: @handleDblclick
+        data-selecting: selecting?!
 
-        table.rip-grid
-          colgroup
-            for c in @columns
-              col style: "width: #{c.width}px"
-          thead
-            tr @click: @handleHeaderClick
-              for c, ci in @columns
-                th style: "text-align: #{c.align or 'left'}; cursor: pointer",
-                  data-sorted: (if sortInfo.arrows[ci] then (if sortInfo.arrows[ci].includes('↓') then 'asc' else 'desc') else undefined)
-                  "#{c.title}"
-                  span.sort-arrow
-                    sortInfo.arrows[ci]
-                  if sortKeys.length > 1 and sortInfo.ranks[ci] > 0
-                    span.sort-badge
-                      "#{sortInfo.ranks[ci]}"
-                  span.resize-handle @mousedown: @handleResizeStart
-          tbody ref: "_body"
+      table.rip-grid
+        colgroup
+          for c in @columns
+            col style: "width: #{c.width}px"
+        thead
+          tr @click: @_headerClick
+            for c, ci in @columns
+              th style: "text-align: #{c.align or 'left'}; cursor: pointer",
+                data-sorted: (if sortInfo.arrows[ci] then (if sortInfo.arrows[ci].includes('↓') then 'asc' else 'desc') else undefined)
+                "#{c.title}"
+                span.sort-arrow
+                  sortInfo.arrows[ci]
+                if sortKeys.length > 1 and sortInfo.ranks[ci] > 0
+                  span.sort-badge
+                    "#{sortInfo.ranks[ci]}"
+                span.resize-handle @mousedown: @_resizeStart
+        tbody ref: "_body"
