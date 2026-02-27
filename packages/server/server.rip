@@ -362,6 +362,13 @@ runSetup = ->
     fn = mod?.setup or mod?.default
     if typeof fn is 'function'
       await fn()
+    # Signal the Manager that setup is complete
+    process.stdout.write '__setup_done__\n'
+    # If teardown exported, stay alive until Manager sends SIGTERM
+    if typeof mod?.teardown is 'function'
+      await new Promise (resolve) ->
+        process.once 'SIGTERM', ->
+          Promise.resolve(mod.teardown()).finally(resolve)
   catch e
     console.error "rip-server: setup failed:", e
     process.exit(1)
@@ -500,6 +507,7 @@ class Manager
     @retiringIds = new Set()
     @currentVersion = 1
     @server = null
+    @setupProc = null
     @appWatchers = new Map()
 
     process.on 'SIGTERM', => @shutdown!
@@ -515,15 +523,32 @@ class Manager
         RIP_SETUP_MODE: '1'
         RIP_SETUP_FILE: setupFile
       proc = Bun.spawn ['rip', import.meta.path],
-        stdout: 'inherit'
+        stdout: 'pipe'
         stderr: 'inherit'
         stdin: 'ignore'
         cwd: process.cwd()
         env: setupEnv
-      code = await proc.exited
-      if code isnt 0
-        console.error "rip-server: setup exited with code #{code}"
-        process.exit(1)
+
+      # Stream stdout to our stdout, watching for the __setup_done__ signal
+      setupDone = new Promise (resolve, reject) ->
+        buf = ''
+        reader = proc.stdout.getReader()
+        dec = new TextDecoder()
+        readLoop = ->
+          { done, value } = await reader.read()
+          if done
+            code = await proc.exited
+            if code isnt 0 then reject new Error "setup exited #{code}" else resolve()
+            return
+          buf += dec.decode(value)
+          lines = buf.split('\n')
+          buf = lines.pop()
+          for line in lines
+            if line is '__setup_done__' then resolve() else process.stdout.write line + '\n'
+          readLoop()
+        readLoop()
+      await setupDone
+      @setupProc = proc
 
     @workers = []
     for i in [0...@flags.workers]
@@ -711,6 +736,8 @@ class Manager
     return if @shuttingDown
     @shuttingDown = true
     @stop!
+    # Signal the setup process to run teardown (kills rip-db if we launched it)
+    @setupProc?.kill('SIGTERM')
     process.exit(0)
 
   getEntryMtime: ->
