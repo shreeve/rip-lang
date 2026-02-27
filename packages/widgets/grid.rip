@@ -67,6 +67,7 @@ export Grid = component
   selecting       := false
   editing         := false
   editValue       := ''
+  _enterCommit    = false
   dataVersion     := 0
   sortKeys        := []
 
@@ -122,6 +123,7 @@ export Grid = component
   _trPool = []
   _topSpacer = null
   _botSpacer = null
+  _selBorder = null
 
   _createSpacer: ->
     tr = document.createElement('tr')
@@ -231,8 +233,12 @@ export Grid = component
     for el in tbody.querySelectorAll('td[data-active], td[data-selected]')
       delete el.dataset.active
       delete el.dataset.selected
-      el.style.boxShadow = ''
       el.style.borderColor = ''
+
+    unless _selBorder
+      _selBorder = document.createElement('div')
+      _selBorder.style.cssText = 'position:absolute;pointer-events:none;border:0;outline:1px solid #3b82f6;outline-offset:-1px;z-index:5;display:none'
+      @_container.appendChild(_selBorder)
 
     if anchorRow >= 0 and activeRow >= 0 and anchorCol >= 0 and activeCol >= 0
       minR = Math.min(anchorRow, activeRow)
@@ -250,15 +256,32 @@ export Grid = component
             if td
               td.dataset.selected = ''
               td.style.borderColor = 'transparent'
-              if multi and not selecting
-                shadows = []
-                shadows.push('inset 0 2px 0 0 #3b82f6') if r is minR
-                shadows.push('inset 0 -2px 0 0 #3b82f6') if r is maxR
-                shadows.push('inset 2px 0 0 0 #3b82f6') if c is minC
-                shadows.push('inset -2px 0 0 0 #3b82f6') if c is maxC
-                td.style.boxShadow = shadows.join(', ') if shadows.length > 0
             c++
         r++
+
+      if multi and not selecting
+        topTr = trs[Math.max(minR, startRow) - startRow]
+        botTr = trs[Math.min(maxR, endRow) - startRow]
+        if topTr and botTr
+          topTd = topTr.children[minC]
+          botTd = botTr.children[maxC]
+          if topTd and botTd
+            cRect = @_container.getBoundingClientRect()
+            tl = topTd.getBoundingClientRect()
+            br = botTd.getBoundingClientRect()
+            _selBorder.style.top = "#{tl.top - cRect.top + @_container.scrollTop}px"
+            _selBorder.style.left = "#{tl.left - cRect.left + @_container.scrollLeft}px"
+            _selBorder.style.width = "#{br.right - tl.left}px"
+            _selBorder.style.height = "#{br.bottom - tl.top}px"
+            _selBorder.style.display = 'block'
+          else
+            _selBorder.style.display = 'none'
+        else
+          _selBorder.style.display = 'none'
+      else
+        _selBorder.style.display = 'none'
+    else
+      _selBorder.style.display = 'none'
 
     cursorRow = if selecting then anchorRow else activeRow
     cursorCol = if selecting then anchorCol else activeCol
@@ -363,19 +386,12 @@ export Grid = component
     switch e.key
       when 'Enter'
         e.preventDefault()
+        e.stopPropagation()
         @commitEditor()
-        if e.shiftKey
-          if activeRow > 0
-            activeRow = activeRow - 1
-            @scrollToRow(activeRow)
-        else
-          if activeRow < totalRows - 1
-            activeRow = activeRow + 1
-            @scrollToRow(activeRow)
-        anchorRow = activeRow
-        anchorCol = activeCol
+        _enterCommit = true
       when 'Tab'
         e.preventDefault()
+        e.stopPropagation()
         @commitEditor()
         if e.shiftKey
           if activeCol > 0
@@ -536,6 +552,7 @@ export Grid = component
       return
     numCols = @columns.length
     key = e.key
+    _enterCommit = false if key isnt 'Enter'
     switch key
       when 'ArrowDown'
         e.preventDefault()
@@ -617,6 +634,20 @@ export Grid = component
         if activeRow < 0 or activeCol < 0
           activeRow = 0
           activeCol = 0
+        else if _enterCommit
+          _enterCommit = false
+          if e.shiftKey
+            if activeRow > 0
+              activeRow = activeRow - 1
+              anchorRow = activeRow
+              @scrollToRow(activeRow)
+          else
+            if activeRow < totalRows - 1
+              activeRow = activeRow + 1
+              anchorRow = activeRow
+              @scrollToRow(activeRow)
+          @openEditor()
+          return
         else
           @openEditor()
           return
