@@ -183,16 +183,16 @@ button { font: inherit; cursor: pointer; }
 }
 .rip-grid tbody tr.even td { background: #f8fafc; }
 .rip-grid tbody tr:hover td { background: rgba(59,130,246,0.06); }
-.rip-grid tbody td[data-selected] { background: rgba(59,130,246,0.12); border-color: transparent; }
+.rip-grid tbody td[data-selected] { background: rgba(59,130,246,0.12); border-bottom-color: transparent; }
 .rip-grid tbody tr.even td[data-selected] { background: rgba(59,130,246,0.18); }
-.rip-grid tbody td[data-active] { background: rgba(59,130,246,0.20); outline: 2px solid #3b82f6; outline-offset: -2px; position: relative; z-index: 1; }
+.rip-grid tbody td[data-active] { background: rgba(59,130,246,0.20); border-bottom-color: transparent; outline: 2px solid #3b82f6; outline-offset: -2px; position: relative; z-index: 1; }
 .rip-grid tr.spacer td { padding: 0; border: none; line-height: 0; font-size: 0; }
 .sort-arrow { color: #94a3b8; font-size: 11px; margin-left: 3px; }
 .sort-badge { display: inline-block; font-size: 9px; color: #64748b; background: #e2e8f0; border-radius: 50%; width: 14px; height: 14px; line-height: 14px; text-align: center; margin-left: 2px; }
 .resize-handle { position: absolute; right: 0; top: 0; bottom: 0; width: 2px; cursor: col-resize; z-index: 3; background: transparent; }
 .rip-grid thead tr:hover .resize-handle { background: rgba(0,0,0,0.08); }
 .resize-handle:hover, .resize-handle.active { background: rgba(59,130,246,0.3); }
-.rip-grid-editor { position: absolute; z-index: 10; box-sizing: border-box; border: 2px solid #3b82f6; border-radius: 0; font-family: system-ui, -apple-system, sans-serif; font-size: 13px; padding: 0 8px; outline: none; box-shadow: 0 0 0 2px #60a5fa; background: white; color: #1e293b; }
+.rip-grid-editor { position: absolute; z-index: 10; box-sizing: border-box; border: 2px solid #3b82f6; border-radius: 0; font-family: system-ui, -apple-system, sans-serif; font-size: 13px; padding: 0 8px; outline: 2px solid #60a5fa; background: white; color: #1e293b; }
 select.rip-grid-editor { cursor: pointer; padding-left: 4px; }
 .cell-checkbox { pointer-events: none; margin: 0; vertical-align: middle; }
 

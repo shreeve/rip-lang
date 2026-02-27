@@ -177,7 +177,7 @@ export Grid = component
         row = @data[di]
 
         # Stripe class
-        if @striped and n % 2 is 0
+        if @striped and n % 2 is 1
           tr.className = 'even'
         else
           tr.className = ''
@@ -320,10 +320,10 @@ export Grid = component
         if td
           tdRect = td.getBoundingClientRect()
           cRect = @_container.getBoundingClientRect()
-          el.style.top = "#{tdRect.top - cRect.top + @_container.scrollTop}px"
-          el.style.left = "#{tdRect.left - cRect.left + @_container.scrollLeft}px"
-          el.style.width = "#{tdRect.width}px"
-          el.style.height = "#{tdRect.height}px"
+          el.style.top = "#{tdRect.top - cRect.top + @_container.scrollTop - 2}px"
+          el.style.left = "#{tdRect.left - cRect.left + @_container.scrollLeft - 2}px"
+          el.style.width = "#{tdRect.width + 4}px"
+          el.style.height = "#{tdRect.height + 4}px"
           if el.selectionStart isnt undefined
             el.selectionStart = el.value.length
             el.selectionEnd = el.value.length
