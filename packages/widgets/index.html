@@ -251,6 +251,18 @@ export WidgetGallery = component
         p "Visual smoke test for all headless widgets."
 
       # ================================================================
+      # GRID
+      # ================================================================
+      .section
+        .section-title
+          "Grid"
+          span.badge "858 lines"
+        .section-desc "Virtual-scrolling data grid. Click to select, arrows to navigate, double-click to edit."
+        .demo-row
+          .demo-label "12 rows, 4 columns"
+          Grid data: gridData, columns: gridColumns, striped: true
+
+      # ================================================================
       # TABS
       # ================================================================
       .section
@@ -329,18 +341,6 @@ export WidgetGallery = component
                 "Section C"
               div data-content: true, style: "padding:8px 12px;color:#64748b;font-size:13px"
                 p "Content for section C."
-
-      # ================================================================
-      # GRID
-      # ================================================================
-      .section
-        .section-title
-          "Grid"
-          span.badge "858 lines"
-        .section-desc "Virtual-scrolling data grid. Click to select, arrows to navigate, double-click to edit."
-        .demo-row
-          .demo-label "12 rows, 4 columns"
-          Grid data: gridData, columns: gridColumns, striped: true
 
       # ================================================================
       # CHECKBOX

@@ -105,7 +105,6 @@ export Grid = component
     { arrows, ranks }
 
   totalRows   ~= @data.length
-  totalHeight ~= totalRows * @rowHeight
   startRow    ~= Math.max(0, Math.floor(scrollTop / @rowHeight) - @overscan)
   endRow      ~= Math.min(totalRows - 1, Math.ceil((scrollTop + containerHeight) / @rowHeight) + @overscan)
   offsetY     ~= startRow * @rowHeight
@@ -123,6 +122,17 @@ export Grid = component
   _trPool = []
   _topSpacer = null
   _botSpacer = null
+
+  _createSpacer: ->
+    tr = document.createElement('tr')
+    tr.className = 'spacer'
+    td = document.createElement('td')
+    td.style.padding = '0'
+    td.style.border = 'none'
+    td.style.lineHeight = '0'
+    td.style.fontSize = '0'
+    tr.appendChild(td)
+    tr
 
   _ensurePool: (needed, numCols) ->
     while _trPool.length < needed
@@ -149,28 +159,8 @@ export Grid = component
 
     @_ensurePool(count, numCols)
 
-    # Spacers
-    unless _topSpacer
-      _topSpacer = document.createElement('tr')
-      _topSpacer.className = 'spacer'
-      td = document.createElement('td')
-      td.style.padding = '0'
-      td.style.border = 'none'
-      td.style.lineHeight = '0'
-      td.style.fontSize = '0'
-      _topSpacer.appendChild(td)
     _topSpacer.children[0].colSpan = numCols
     _topSpacer.children[0].style.height = "#{offsetY}px"
-
-    unless _botSpacer
-      _botSpacer = document.createElement('tr')
-      _botSpacer.className = 'spacer'
-      td = document.createElement('td')
-      td.style.padding = '0'
-      td.style.border = 'none'
-      td.style.lineHeight = '0'
-      td.style.fontSize = '0'
-      _botSpacer.appendChild(td)
     _botSpacer.children[0].colSpan = numCols
     _botSpacer.children[0].style.height = "#{bottomSpace}px"
 
@@ -276,9 +266,7 @@ export Grid = component
           td.dataset.active = ''
 
   _removeEditor: ->
-    els = @_container.querySelectorAll('.rip-grid-editor')
-    for el in els
-      el.remove()
+    @_container.querySelector('.rip-grid-editor')?.remove()
 
   openEditor: (initial, cursorEnd) ->
     if activeRow < 0 or activeCol < 0 or editing
@@ -365,11 +353,11 @@ export Grid = component
         @afterEdit(di, activeCol, oldVal, val)
 
   cancelEditor: ->
+    editing = false
     @_removeEditor()
     anchorRow = activeRow
     anchorCol = activeCol
     @_container.focus() if @_container
-    editing = false
 
   _editorKeydown: (e) ->
     numCols = @columns.length
@@ -817,6 +805,8 @@ export Grid = component
   sort: (col, dir) -> sortKeys = if dir then [{ col, dir }] else []; dataVersion++
 
   mounted: ->
+    _topSpacer = @_createSpacer()
+    _botSpacer = @_createSpacer()
     _ready = true
     if @_container
       handler = (entries) =>
@@ -830,11 +820,9 @@ export Grid = component
       @_resizeObs.disconnect()
 
   render
-    .
-      div.grid-container ref: "_container", role: "grid", tabindex: "0",
-        data-editing: editing?!,
-        data-selecting: selecting?!
-
+    div.grid-container ref: "_container", role: "grid", tabindex: "0",
+      data-editing: editing?!,
+      data-selecting: selecting?!
       table.rip-grid
         colgroup
           for c in @columns
