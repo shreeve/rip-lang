@@ -737,6 +737,7 @@ class Server
     @availableWorkers = []
     @inflightTotal = 0
     @queue = []
+    @urls = []
     @startedAt = nowMs()
     @newestVersion = null
     @httpsActive = false
@@ -1026,7 +1027,9 @@ class Server
 
     port = @flags.httpsPort or @flags.httpPort or 80
     protocol = if @flags.httpsPort then 'https' else 'http'
-    console.log "rip-server: #{protocol}://#{@flags.appName}.ripdev.io#{formatPort(protocol, port)}" unless @flags.quiet
+    url = "#{protocol}://#{@flags.appName}.ripdev.io#{formatPort(protocol, port)}"
+    @urls.push(url)
+    p "rip-server: #{url}" unless @flags.quiet or @flags.hideUrls
 
   controlFetch: (req) ->
     url = new URL(req.url)
@@ -1148,7 +1151,9 @@ class Server
         stderr: 'ignore'
 
       @mdnsProcesses.set(host, proc)
-      console.log "rip-server: #{protocol}://#{host}#{formatPort(protocol, port)}" unless @flags.quiet
+      url = "#{protocol}://#{host}#{formatPort(protocol, port)}"
+      @urls.push(url)
+      p "rip-server: #{url}" unless @flags.quiet or @flags.hideUrls
     catch e
       console.error "rip-server: failed to advertise #{host} via mDNS:", e.message
 
@@ -1293,21 +1298,16 @@ main = ->
     console.error 'rip-server: unhandled rejection:', err
     cleanup()
 
-  httpOnly = flags.httpsPort is null
-  protocol = if httpOnly then 'http' else 'https'
-  port = flags.httpsPort or flags.httpPort or 80
-  portStr = formatPort(protocol, port)
-  appUrls = flags.appAliases.map (alias) ->
-    host = if alias.includes('.') then alias else "#{alias}.local"
-    "#{protocol}://#{host}#{portStr}"
-  process.env.RIP_URLS = [
-    "#{protocol}://rip.local#{portStr}"
-    ...appUrls
-    "#{protocol}://#{flags.appName}.ripdev.io#{portStr}"
-  ].join(',')
+  # Suppress top URL lines if setup.rip will print them at the bottom
+  setupFile = join(dirname(flags.appEntry), 'setup.rip')
+  flags.hideUrls = existsSync(setupFile)
 
   svr.start!
+  process.env.RIP_URLS = svr.urls.join(',')  # exact URLs the Server just built
   mgr.start!
+
+  httpOnly = flags.httpsPort is null
+  protocol = if httpOnly then 'http' else 'https'
   port = flags.httpsPort or flags.httpPort or 80
   console.log "rip-server: app=#{flags.appName} workers=#{flags.workers} url=#{protocol}://#{flags.appName}.ripdev.io#{formatPort(protocol, port)}/server"
 
