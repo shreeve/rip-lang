@@ -166,7 +166,6 @@ button { font: inherit; cursor: pointer; }
   box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
 .grid-container:focus { outline: none; }
-.grid-container:not(:focus) .rip-grid tbody td[data-active] { outline-color: #94a3b8; }
 .rip-grid {
   width: 100%; border-collapse: collapse; table-layout: fixed;
   font-family: system-ui, -apple-system, sans-serif; font-size: 13px; color: #1e293b;
@@ -193,7 +192,7 @@ button { font: inherit; cursor: pointer; }
 .resize-handle { position: absolute; right: 0; top: 0; bottom: 0; width: 2px; cursor: col-resize; z-index: 3; background: transparent; }
 .rip-grid thead tr:hover .resize-handle { background: rgba(0,0,0,0.08); }
 .resize-handle:hover, .resize-handle.active { background: rgba(59,130,246,0.3); }
-.rip-grid-editor { position: absolute; z-index: 10; box-sizing: border-box; border: 2px solid #3b82f6; border-radius: 0; font-family: system-ui, -apple-system, sans-serif; font-size: 13px; padding: 0 8px; outline: 2px solid #60a5fa; background: white; color: #1e293b; }
+.rip-grid-editor { position: absolute; z-index: 10; box-sizing: border-box; border: 2px solid #3b82f6; border-radius: 0; font-family: system-ui, -apple-system, sans-serif; font-size: 13px; padding: 0 8px; outline: none; background: white; color: #1e293b; }
 select.rip-grid-editor { cursor: pointer; padding-left: 4px; }
 .cell-checkbox { pointer-events: none; margin: 0; vertical-align: middle; }
 
