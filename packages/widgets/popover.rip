@@ -45,7 +45,9 @@ export Popover = component
     trigger = @_content?.querySelector('[data-trigger]')
     floating = @_content?.querySelector('[data-content]')
     return unless trigger and floating
+    @_content.style.position = 'relative'
     tr = trigger.getBoundingClientRect()
+    cr = @_content.getBoundingClientRect()
     fl = floating.getBoundingClientRect()
     [side, align] = @placement.split('-')
     align ?= 'center'
@@ -54,29 +56,27 @@ export Popover = component
     x = switch side
       when 'bottom', 'top'
         switch align
-          when 'start' then tr.left
-          when 'end' then tr.right - fl.width
-          else tr.left + (tr.width - fl.width) / 2
-      when 'right' then tr.right + gap
-      when 'left' then tr.left - fl.width - gap
+          when 'start' then tr.left - cr.left
+          when 'end' then tr.right - cr.left - fl.width
+          else tr.left - cr.left + (tr.width - fl.width) / 2
+      when 'right' then tr.right - cr.left + gap
+      when 'left' then tr.left - cr.left - fl.width - gap
 
     y = switch side
-      when 'bottom' then tr.bottom + gap
-      when 'top' then tr.top - fl.height - gap
+      when 'bottom' then tr.bottom - cr.top + gap
+      when 'top' then tr.top - cr.top - fl.height - gap
       when 'left', 'right'
         switch align
-          when 'start' then tr.top
-          when 'end' then tr.bottom - fl.height
-          else tr.top + (tr.height - fl.height) / 2
+          when 'start' then tr.top - cr.top
+          when 'end' then tr.bottom - cr.top - fl.height
+          else tr.top - cr.top + (tr.height - fl.height) / 2
 
-    if side is 'bottom' and y + fl.height > window.innerHeight
-      y = tr.top - fl.height - gap
-    if side is 'top' and y < 0
-      y = tr.bottom + gap
+    if side is 'bottom' and tr.bottom + gap + fl.height > window.innerHeight
+      y = tr.top - cr.top - fl.height - gap
+    if side is 'top' and tr.top - fl.height - gap < 0
+      y = tr.bottom - cr.top + gap
 
-    x = Math.max(4, Math.min(x, window.innerWidth - fl.width - 4))
-
-    floating.style.position = 'fixed'
+    floating.style.position = 'absolute'
     floating.style.left = "#{x}px"
     floating.style.top = "#{y}px"
     floating.style.zIndex = '50'
