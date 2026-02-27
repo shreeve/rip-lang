@@ -57,8 +57,9 @@ export Grid = component
     fid = formatMap.get("#{row + 1},#{col + 1}")
     if fid isnt undefined then formatRegistry[fid] else colFormatCache[col]
 
+  _ready          := false
   scrollTop       := 0
-  containerHeight := 600
+  containerHeight := 0
   activeRow       := -1
   activeCol       := -1
   anchorRow       := -1
@@ -139,6 +140,7 @@ export Grid = component
 
   # Effect: update tbody rows from pool on every viewport/data change
   ~>
+    return unless _ready
     tbody = @_body
     return unless tbody
     numCols = @columns.length
@@ -231,6 +233,7 @@ export Grid = component
 
   # Selection overlay — applies data-* attributes to active/selected cells
   ~>
+    return unless _ready
     tbody = @_body
     return unless tbody
     trs = tbody.querySelectorAll('tr:not(.spacer)')
@@ -814,6 +817,7 @@ export Grid = component
   sort: (col, dir) -> sortKeys = if dir then [{ col, dir }] else []; dataVersion++
 
   mounted: ->
+    _ready = true
     if @_container
       handler = (entries) =>
         for entry in entries
