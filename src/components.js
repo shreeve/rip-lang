@@ -113,18 +113,18 @@ function isPublicProp(target) {
 export function installComponentSupport(CodeGenerator, Lexer) {
 
   // ==========================================================================
-  // Lexer: Context-sensitive 'accept' keyword (only inside component bodies)
+  // Lexer: Context-sensitive 'offer'/'accept' (only inside component bodies)
   // ==========================================================================
 
   const origClassify = Lexer.prototype.classifyKeyword;
   Lexer.prototype.classifyKeyword = function(id, fallback, data) {
-    if (id === 'accept') {
+    if (id === 'offer' || id === 'accept') {
       let depth = 0;
       for (let i = this.tokens.length - 1; i >= 0; i--) {
         const tag = this.tokens[i][0];
         if (tag === 'OUTDENT') depth++;
         else if (tag === 'INDENT') depth--;
-        if (depth < 0 && this.tokens[i - 1]?.[0] === 'COMPONENT') return 'ACCEPT';
+        if (depth < 0 && this.tokens[i - 1]?.[0] === 'COMPONENT') return id.toUpperCase();
       }
       return fallback;
     }
