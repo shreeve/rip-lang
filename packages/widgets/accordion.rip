@@ -51,8 +51,8 @@ export Accordion = component
         @_focusTrigger(-1)
 
   _triggers: ->
-    return [] unless @_el
-    Array.from(@_el.querySelectorAll('[data-trigger]'))
+    return [] unless @_content
+    Array.from(@_content.querySelectorAll('[data-trigger]'))
 
   _focusNext: (dir) ->
     triggers = @_triggers()
@@ -67,5 +67,5 @@ export Accordion = component
     target?.focus()
 
   render
-    div ref: "_el"
+    div ref: "_content"
       slot

@@ -53,6 +53,41 @@ This is the same approach Rip took with CoffeeScript's syntax (reimplemented
 better) and React's reactivity model (reimplemented as language-level
 operators). The patterns are documented. The code is ours.
 
+### Why Our Pattern Differs from Radix / Base UI
+
+Radix and Base UI use a **compositional** pattern — `Tabs.Root`, `Tabs.List`,
+`Tabs.Trigger`, `Tabs.Content` — as separate sub-components wired through
+React Context. This is not a design choice. It's a constraint of React.
+React components cannot inspect or control their children's rendering. The
+only way for a parent to share state with descendants is through a Context
+Provider wrapper, which forces every compound component into multiple
+sub-components.
+
+Rip has capabilities React lacks:
+
+| Capability | React | Rip |
+|-----------|-------|-----|
+| Child projection | No equivalent | `slot` |
+| DOM ownership | Virtual DOM abstraction | Direct DOM access + `ref:` |
+| State sharing | Context Provider wrappers | `offer` / `accept` keywords |
+| Two-way binding | `value` + `onChange` pair | `<=>` operator |
+| Reactivity | `useState` + `useEffect` + dependency arrays | `:=` / `~=` / `~>` |
+
+These capabilities let Rip choose the **right pattern for the right situation**:
+
+- **Single-component** for data-driven widgets where children are pure metadata
+  (Select, Combobox, Menu, Toast, Checkbox). The widget reads child data from
+  a hidden slot and renders its own optimized DOM. Less boilerplate for users,
+  full control over the render tree.
+
+- **Compositional** (via `offer`/`accept`) when children contain complex
+  renderable content the parent shouldn't own — form field groups, layout
+  containers, or any compound component where descendants need shared state.
+
+We follow Radix and Base UI's *principles* (headless, accessible, data-attribute
+styling, WAI-ARIA compliance) while transcending their *constraints*. That's the
+advantage of a purpose-built language.
+
 ### How Rip's Primitives Map to Component Behavior
 
 | Need | React (Base UI) | Rip |
@@ -60,15 +95,70 @@ operators). The patterns are documented. The code is ours.
 | Mutable state | `useState` | `:=` (reactive state) |
 | Derived values | `useMemo` | `~=` (computed) |
 | Side effects + cleanup | `useEffect` | `~>` (effect with cleanup) |
-| DOM references | `useRef` | Direct DOM access — components own their elements |
-| Shared state (compound components) | React Context | Component props / shared stash |
+| DOM references | `useRef` | Direct DOM access via `ref:` |
+| Shared state (compound) | React Context + Provider | `offer` / `accept` |
 | Batched updates | `unstable_batchedUpdates` | `__batch` |
+| Two-way binding | `value` + `onChange` (8 lines) | `<=>` (1 operator) |
 | Events | Synthetic event system | Native DOM events |
 
 Rip's model is simpler. Fine-grained reactivity means no virtual DOM diffing,
 no hook ordering rules, no dependency arrays. An effect that returns a function
 automatically cleans up. State changes propagate to exactly the DOM nodes that
 depend on them.
+
+### Context Sharing: `offer` / `accept`
+
+Rip provides language-level keywords for sharing reactive state between
+ancestor and descendant components. These compile to the existing
+`setContext`/`getContext` runtime with zero overhead.
+
+**`offer`** — creates a reactive value and shares it with all descendants:
+
+```coffee
+export Parent = component
+  offer active := 'overview'     # descendants can accept this signal
+  offer count := 0               # multiple values can be offered
+  offer doubled ~= count * 2     # computed values can be offered too
+  render
+    div
+      slot
+```
+
+**`accept`** — receives a signal from the nearest ancestor that offers it:
+
+```coffee
+export Child = component
+  accept active                  # shared signal — same object, not a copy
+  render
+    div hidden: active isnt @value
+      slot
+```
+
+The signal passes through directly. Parent and child share the same reactive
+object — mutations in either direction are instantly visible to both. No
+Provider wrappers, no string keys, no import ceremony.
+
+Comparison across frameworks:
+
+```coffee
+# React — 8 lines, two APIs, manual wiring
+const ActiveCtx = createContext(null)
+function Parent() {
+  const [active, setActive] = useState('overview')
+  return <ActiveCtx.Provider value={{ active, setActive }}>...
+}
+function Child() {
+  const { active } = useContext(ActiveCtx)
+}
+
+# Svelte — 4 lines, string keys, function calls
+setContext('active', writable('overview'))    // parent
+const active = getContext('active')           // child
+
+# Rip — 2 lines
+offer active := 'overview'                   // parent
+accept active                                // child
+```
 
 ### The Components
 
@@ -93,6 +183,9 @@ Each component:
 - Exposes `data-*` attributes for CSS styling (`[data-open]`, `[data-selected]`, etc.)
 - Ships zero CSS — styling is entirely in the user's stylesheets
 - Uses Rip's reactive primitives for all state management
+- Uses `ref:` for DOM element references — **never** `div._name` (dot syntax sets a CSS class, not a ref)
+- Uses `_trigger` consistently for trigger elements across all widgets
+- Uses `=!` for constant values (IDs, timers) and `:=` only for values that drive DOM updates
 
 ### Behavioral Primitives
 
@@ -229,65 +322,114 @@ anchorPosition = (anchor, floating, opts = {}) ->
 A complete headless dialog in Rip, showing how the primitives compose:
 
 ```coffee
-component Dialog
+export Dialog = component
   @open := false
+
+  _wireAria: ->
+    panel = @_panel
+    return unless panel
+    heading = panel.querySelector('h1,h2,h3,h4,h5,h6')
+    if heading
+      heading.id ?= "#{_id}-title"
+      panel.setAttribute 'aria-labelledby', heading.id
+    desc = panel.querySelector('p')
+    if desc
+      desc.id ?= "#{_id}-desc"
+      panel.setAttribute 'aria-describedby', desc.id
 
   ~>
     if @open
       prevFocus = document.activeElement
-      trapFocus @el
-      lockScroll()
+      # Lock scroll, trap focus, wire ARIA
+      ...
       ->
-        releaseScroll()
-        prevFocus?.focus()
+        # Cleanup: unlock scroll, restore focus
+        ...
+
+  close: -> @open = false; @emit 'close'
 
   onKeydown: (e) ->
-    @open = false if e.key is 'Escape'
+    @close() if e.key is 'Escape'
 
   onBackdropClick: (e) ->
-    @open = false if e.target is e.currentTarget
+    @close() if e.target is e.currentTarget
 
   render
-    div.backdrop @click: @onBackdropClick, data-open: @open
-      div.panel role: "dialog", aria-modal: "true"
-        slot
+    if @open
+      div ref: "_backdrop", data-open: true,
+        @click: @onBackdropClick, @keydown: @onKeydown
+        div ref: "_panel", role: "dialog", aria-modal: "true", tabindex: "-1"
+          slot
 ```
 
-That's the entire behavioral core — focus trap, scroll lock, escape dismiss,
-click-outside dismiss, ARIA attributes — in ~20 lines of Rip. The effect
-cleanup handles teardown automatically when `@open` becomes false.
+Focus trap, scroll lock, ARIA wiring, escape dismiss, click-outside dismiss —
+in ~30 lines of Rip. The effect cleanup handles teardown automatically when
+`@open` becomes false.
 
 ### Example: Tabs Component
 
 ```coffee
-component Tabs
-  @active := @items?[0]?.id or ''
+export Tabs = component
+  @active      := null
+  @orientation := 'horizontal'
+  @activation  := 'automatic'
+  _ready       := false
 
-  select: (id) -> @active = id
+  _tabEls ~=
+    return [] unless _ready
+    Array.from(@_content?.querySelectorAll('[data-tab]') or [])
+
+  _panelEls ~=
+    return [] unless _ready
+    Array.from(@_content?.querySelectorAll('[data-panel]') or [])
+
+  mounted: ->
+    _ready = true
+    @active = _tabEls[0]?.dataset.tab unless @active
+
+  # Hide tab-definition nodes; show only the active panel
+  ~>
+    return unless _ready
+    _tabEls.forEach (el) -> el.hidden = true
+    _panelEls.forEach (el) =>
+      isActive = el.dataset.panel is @active
+      el.setAttribute 'role', 'tabpanel'
+      el.toggleAttribute 'hidden', not isActive
+      el.toggleAttribute 'data-active', isActive
+
+  select: (id) -> @active = id; @emit 'change', id
 
   onKeydown: (e) ->
-    ids = @items.map -> it.id
+    ids = _tabEls.map (t) -> t.dataset.tab
     idx = ids.indexOf @active
-    switch e.key
-      when 'ArrowRight' then @active = ids[(idx + 1) %% ids.length]
-      when 'ArrowLeft'  then @active = ids[(idx - 1) %% ids.length]
-      when 'Home'       then @active = ids[0]
-      when 'End'        then @active = ids[-1]
+    return if idx is -1
+    horiz = @orientation is 'horizontal'
+    prevKey = if horiz then 'ArrowLeft' else 'ArrowUp'
+    nextKey = if horiz then 'ArrowRight' else 'ArrowDown'
+    next = switch e.key
+      when nextKey then ids[(idx + 1) %% ids.length]
+      when prevKey then ids[(idx - 1) %% ids.length]
+      when 'Home'  then ids[0]
+      when 'End'   then ids[ids.length - 1]
+      else null
+    if next
+      e.preventDefault()
+      tab = _tabEls.find (t) -> t.dataset.tab is next
+      tab?.focus()
+      @select(next) if @activation is 'automatic'
 
   render
-    div role: "tablist", @keydown: @onKeydown
-      for item in @items
-        button role: "tab",
-          aria-selected: item.id is @active,
-          tabindex: (if item.id is @active then 0 else -1),
-          data-active: item.id is @active,
-          @click: -> @select item.id
-          item.label
-    for item in @items
-      div role: "tabpanel",
-        data-active: item.id is @active,
-        hidden: item.id isnt @active
-        item.content
+    .
+      div role: "tablist", aria-orientation: @orientation, @keydown: @onKeydown
+        for tab in _tabEls
+          button role: "tab"
+            aria-selected: tab.dataset.tab is @active
+            tabindex: tab.dataset.tab is @active ? '0' : '-1'
+            data-active: (tab.dataset.tab is @active)?!
+            @click: (=> @select(tab.dataset.tab))
+            tab.textContent
+      . ref: "_content"
+        slot
 ```
 
 ### Reference Material
@@ -693,8 +835,9 @@ layers, container queries, `color-mix()` — for everything else.
 
 Build accessible interactive components in Rip, following WAI-ARIA patterns
 and Base UI's behavioral specifications. Rip's reactive primitives (`:=`,
-`~=`, `~>`) handle all state, effects, and cleanup. Zero framework
-dependencies. Zero runtime overhead.
+`~=`, `~>`) handle all state, effects, and cleanup. Share state between
+compound components with `offer` / `accept`. Bind bidirectionally with `<=>`.
+Zero framework dependencies. Zero runtime overhead.
 
 The result: accessible components, consistent design tokens, scoped styles,
 and clean readable code in both Rip and CSS. No class soup. No framework

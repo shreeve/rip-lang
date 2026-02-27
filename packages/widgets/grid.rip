@@ -139,7 +139,7 @@ export Grid = component
 
   # Effect: update tbody rows from pool on every viewport/data change
   ~>
-    tbody = @_tbodyEl
+    tbody = @_body
     return unless tbody
     numCols = @columns.length
     count = endRow - startRow + 1
@@ -231,7 +231,7 @@ export Grid = component
 
   # Selection overlay — applies data-* attributes to active/selected cells
   ~>
-    tbody = @_tbodyEl
+    tbody = @_body
     return unless tbody
     trs = tbody.querySelectorAll('tr:not(.spacer)')
 
@@ -323,7 +323,7 @@ export Grid = component
       el.addEventListener 'keydown', (e) => @handleEditorKeydown(e)
     @_container.appendChild(el)
     requestAnimationFrame =>
-      trs = @_tbodyEl.querySelectorAll('tr:not(.spacer)')
+      trs = @_body.querySelectorAll('tr:not(.spacer)')
       tr = trs[activeRow - startRow]
       if tr
         td = tr.children[activeCol]
@@ -814,7 +814,6 @@ export Grid = component
   sort: (col, dir) -> sortKeys = if dir then [{ col, dir }] else []; dataVersion++
 
   mounted: ->
-    @_container = @_containerEl
     if @_container
       handler = (entries) =>
         for entry in entries
@@ -829,7 +828,7 @@ export Grid = component
 
   render
     .
-      div._containerEl role: "grid", tabindex: "0",
+      div ref: "_container", role: "grid", tabindex: "0",
         data-editing: editing?!,
         data-selecting: selecting?!,
         @scroll: @handleScroll,
@@ -855,4 +854,4 @@ export Grid = component
                     span.sort-badge
                       "#{sortInfo.ranks[ci]}"
                   span.resize-handle @mousedown: @handleResizeStart
-          tbody._tbodyEl
+          tbody ref: "_body"

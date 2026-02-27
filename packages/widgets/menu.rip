@@ -18,8 +18,8 @@ export Menu = component
   highlightedIndex := -1
 
   items ~=
-    return [] unless @_menu
-    Array.from(@_menu.querySelectorAll('[data-item]') or [])
+    return [] unless @_list
+    Array.from(@_list.querySelectorAll('[data-item]') or [])
 
   toggle: ->
     return if @disabled
@@ -38,7 +38,7 @@ export Menu = component
     highlightedIndex = -1
     @_trigger?.focus()
 
-  selectItem: (idx) ->
+  selectIndex: (idx) ->
     item = items[idx]
     return unless item
     return if item.dataset.disabled?
@@ -46,15 +46,15 @@ export Menu = component
     @close()
 
   _position: ->
-    return unless @_trigger and @_menu
+    return unless @_trigger and @_list
     tr = @_trigger.getBoundingClientRect()
-    @_menu.style.position = 'fixed'
-    @_menu.style.left = "#{tr.left}px"
-    @_menu.style.top = "#{tr.bottom + 4}px"
-    @_menu.style.minWidth = "#{tr.width}px"
-    fl = @_menu.getBoundingClientRect()
+    @_list.style.position = 'fixed'
+    @_list.style.left = "#{tr.left}px"
+    @_list.style.top = "#{tr.bottom + 4}px"
+    @_list.style.minWidth = "#{tr.width}px"
+    fl = @_list.getBoundingClientRect()
     if fl.bottom > window.innerHeight
-      @_menu.style.top = "#{tr.top - fl.height - 4}px"
+      @_list.style.top = "#{tr.top - fl.height - 4}px"
 
   onTriggerKeydown: (e) ->
     return if @disabled
@@ -85,7 +85,7 @@ export Menu = component
         items[len - 1]?.focus()
       when 'Enter', ' '
         e.preventDefault()
-        @selectItem(highlightedIndex)
+        @selectIndex(highlightedIndex)
       when 'Escape'
         e.preventDefault()
         @close()
@@ -109,12 +109,12 @@ export Menu = component
 
       if open
         .('fixed inset-0 z-50') @click: @onBackdropClick
-        div ref: "_menu", role: "menu", data-open: true, @keydown: @onMenuKeydown
+        div ref: "_list", role: "menu", data-open: true, @keydown: @onMenuKeydown
           for item, idx in items
             div role: "menuitem"
               tabindex: "-1"
               data-highlighted: (idx is highlightedIndex)?!
               data-disabled: item.dataset.disabled?!
-              @click: (=> @selectItem(idx))
+              @click: (=> @selectIndex(idx))
               @mouseenter: (=> highlightedIndex = idx)
               item.textContent

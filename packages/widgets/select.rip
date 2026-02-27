@@ -41,7 +41,7 @@ export Select = component
   openMenu: ->
     open = true
     highlightedIndex = Math.max(0, options.findIndex (o) -> @getOpt(o) is String(@value))
-    @_positionList()
+    @_position()
     setTimeout =>
       @_focusHighlighted()
     , 0
@@ -61,7 +61,7 @@ export Select = component
     @emit 'change', @value
     @close()
 
-  onBtnKeydown: (e) ->
+  onTriggerKeydown: (e) ->
     return if @disabled
     switch e.key
       when 'ArrowDown', 'ArrowUp', 'Enter', ' '
@@ -125,7 +125,7 @@ export Select = component
     opt = options[highlightedIndex]
     opt?.focus()
 
-  _positionList: ->
+  _position: ->
     return unless @_trigger and @_list
     tr = @_trigger.getBoundingClientRect()
     @_list.style.position = 'fixed'
@@ -148,7 +148,7 @@ export Select = component
         data-disabled: @disabled?!
         disabled: @disabled
         @click: @toggle
-        @keydown: @onBtnKeydown
+        @keydown: @onTriggerKeydown
         span selectedLabel
 
       # Hidden slot for reading option definitions
