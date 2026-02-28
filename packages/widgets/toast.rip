@@ -36,8 +36,8 @@ export Toast = component
     if visible
       div role: "status",
         aria-live: "polite",
-        data-type: @type,
-        data-leaving: leaving?!
+        $type: @type,
+        $leaving: leaving?!
         .
           span @message
           button aria-label: "Dismiss", @click: @dismiss

@@ -28,7 +28,7 @@ reactive primitives. Zero framework dependencies.
 | **Behavior** | Rip Widgets | Accessible headless components — keyboard nav, ARIA, focus management |
 | **Design Tokens** | Open Props | Consistent scales for spacing, color, shadow, radius, easing, typography |
 | **Scoping** | CSS (scoped) | Component-scoped styles via CSS Modules or Rip UI's built-in scoping |
-| **Platform** | Native CSS | Nesting, `@layer`, `data-*` selectors, `prefers-color-scheme` |
+| **Platform** | Native CSS | Nesting, `@layer`, `$` sigil / `data-*` selectors, `prefers-color-scheme` |
 
 ### Why We Build Our Own
 
@@ -325,7 +325,7 @@ export Dialog = component
 
   render
     if @open
-      div ref: "_backdrop", data-open: true,
+      div ref: "_backdrop", $open: true,
         @click: @onBackdropClick, @keydown: @onKeydown
         div ref: "_panel", role: "dialog", aria-modal: "true", tabindex: "-1"
           slot
@@ -394,7 +394,7 @@ export Tabs = component
           button role: "tab"
             aria-selected: tab.dataset.tab is @active
             tabindex: tab.dataset.tab is @active ? '0' : '-1'
-            data-active: (tab.dataset.tab is @active)?!
+            $active: (tab.dataset.tab is @active)?!
             @click: (=> @select(tab.dataset.tab))
             tab.textContent
       . ref: "_content"
@@ -463,12 +463,12 @@ the computed styles of the cell vs the editor made the mismatch immediately
 obvious. Always check what the browser actually computed before debugging
 what you *think* it should be.
 
-### `data-*` Attributes vs Class Toggling
+### `$` Sigil and `data-*` Attributes
 
-All interactive state should be exposed via `data-*` attributes, not CSS
-classes. The consumer styles `[data-open]`, `[data-selected]`, etc. in their
-own stylesheets. The widget never applies visual styles — it only sets
-semantic state attributes. This keeps the headless contract clean.
+In render blocks, use the `$` sigil (`$open`, `$selected`) which compiles to
+`data-*` attributes in the HTML output. Consumers style with CSS `[data-open]`,
+`[data-selected]` selectors. The widget never applies visual styles — it only
+sets semantic state attributes. This keeps the headless contract clean.
 
 ### Widget Conventions
 
@@ -808,8 +808,8 @@ before it. The theme: stop building new things and start proving what exists.
 
 5. **Write tests for Select.** Test: ArrowDown/Up navigate options, Enter
    selects, Escape closes, typeahead jumps to matching option, Home/End
-   work, selected value updates the trigger label, `data-highlighted` and
-   `data-selected` are set correctly.
+   work,    selected value updates the trigger label, `$highlighted` and
+   `$selected` are set correctly.
 
 6. **Fix the Menu structural issue.** The `slot` slot renders inside the
    trigger button, making menu items unreachable by `_menuEl`. Adopt the
@@ -818,7 +818,7 @@ before it. The theme: stop building new things and start proving what exists.
 
 7. **Fix the Accordion wiring.** Add ARIA attributes (`aria-expanded`,
    `aria-controls`, `role="region"`). Wire `@click` and `@keydown` to
-   trigger elements in the render block. Set `data-open` on items. Right
+   trigger elements in the render block. Set `$open` on items. Right
    now it's a behavior mixin pretending to be a widget.
 
 8. **Grid: frozen columns.** The CSS is documented, the column definition
@@ -946,7 +946,7 @@ Not a toy.
 
 - No framework dependency — works anywhere Rip runs
 - Ships as source `.rip` files — the browser compiles them, no build step
-- Truly headless — zero CSS, only `data-*` attributes
+- Truly headless — zero CSS, only `$` attributes (`data-*` in HTML)
 - One file per widget, not a tree of hooks and context providers
 
 **What's missing to be taken seriously:**

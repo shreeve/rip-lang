@@ -425,6 +425,7 @@ Key mechanisms:
 - **`startsWithTag`** — backward scan to determine if current line starts with a template tag
 - **`pendingCallEnds`** — indent-level stack for matching injected CALL_START/CALL_END pairs
 - **`fromThen` skip** — `normalizeLines` creates `fromThen` INDENTs for `if x then y else z`; these are always inline values, never template nesting
+- **Data attribute sigil** — `$open: true` → `"data-open": true`
 
 ### Component Codegen (CodeGenerator side)
 
@@ -776,7 +777,7 @@ start port: 3000
 ### Rip Widgets (`packages/widgets/`) — Headless UI Components
 
 Accessible, headless interactive components written in Rip. Zero dependencies,
-zero CSS. Every widget exposes `data-*` attributes for styling and handles
+zero CSS. Every widget exposes `$` attributes (compiled to `data-*` in HTML) for styling and handles
 keyboard interactions per WAI-ARIA Authoring Practices. Widgets are plain
 `.rip` source files — no build step. The browser compiles them on the fly.
 
@@ -830,7 +831,7 @@ the shared scope — no imports needed.
 - Column resizing: drag header borders
 - Inline editing: pixel-perfect text alignment, `border: 2px` inset, `outline` outset, system-ui font
 - Stripe-aware selection fill with blue-tinted internal gridlines
-- No hover during drag (`data-selecting` suppresses hover CSS)
+- No hover during drag (`$selecting` suppresses hover CSS)
 
 **Widget Gallery dev server (`packages/widgets/`):**
 
@@ -928,10 +929,11 @@ widgets are both the product and the test suite.
   60fps scroll), bypass the reactive render loop and do imperative DOM
   manipulation inside `~>` effects. The effect still triggers reactively
   but the DOM updates use `textContent`/`nodeValue`/`replaceChildren`.
-- **`data-*` attributes, not classes:** All widget state is exposed via
-  `data-*` attributes (`[data-open]`, `[data-selected]`, etc.). Consumers
-  style these with CSS attribute selectors. Widgets never apply visual
-  styles — they only set semantic state.
+- **`$` sigil for data attributes:** In render blocks, use `$open`, `$selected`,
+  etc. — the compiler expands `$` to `data-` in the generated HTML. Consumers
+  style with CSS attribute selectors (`[data-open]`, `[data-selected]`). Widgets
+  never apply visual styles — they only set semantic state. The `data-` form
+  still works but `$` is preferred for brevity.
 - **`slot` in render blocks:** The bare `slot` tag in a component render
   block projects `this.children` (the DOM content passed by the parent).
   It does NOT create an HTML `<slot>` element — Shadow DOM is not used.

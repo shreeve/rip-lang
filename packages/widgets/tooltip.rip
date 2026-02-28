@@ -1,7 +1,7 @@
 # Tooltip — accessible headless tooltip with delay and positioning
 #
 # Shows on hover/focus with configurable delay. Uses aria-describedby.
-# Exposes data-open, data-entering, data-exiting. Ships zero CSS.
+# Exposes $open, $entering, $exiting. Ships zero CSS.
 #
 # Usage:
 #   Tooltip text: "Helpful info", placement: "top"
@@ -92,8 +92,8 @@ export Tooltip = component
 
       if open
         div ref: "_tip", id: _id, role: "tooltip"
-          data-open: true
-          data-entering: entering?!
-          data-exiting: exiting?!
-          data-placement: @placement
+          $open: true
+          $entering: entering?!
+          $exiting: exiting?!
+          $placement: @placement
           @text

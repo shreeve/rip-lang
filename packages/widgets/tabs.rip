@@ -2,7 +2,7 @@
 #
 # Keyboard: ArrowLeft/Right (horizontal) or ArrowUp/Down (vertical) to navigate,
 # Home/End for first/last. Manages focus via roving tabindex.
-# Exposes data-active on tabs and panels. Ships zero CSS.
+# Exposes $active on tabs and panels. Ships zero CSS.
 #
 # Props:
 #   active       — currently active tab id (two-way bindable)
@@ -11,11 +11,11 @@
 #
 # Usage:
 #   Tabs active <=> currentTab
-#     div data-tab: "one", "Tab One"
-#     div data-tab: "two", "Tab Two"
-#     div data-panel: "one"
+#     div $tab: "one", "Tab One"
+#     div $tab: "two", "Tab Two"
+#     div $panel: "one"
 #       p "Content for tab one"
-#     div data-panel: "two"
+#     div $panel: "two"
 #       p "Content for tab two"
 
 export Tabs = component
@@ -84,7 +84,7 @@ export Tabs = component
           button role: "tab"
             aria-selected: tab.dataset.tab is @active
             tabindex: tab.dataset.tab is @active ? '0' : '-1'
-            data-active: (tab.dataset.tab is @active)?!
+            $active: (tab.dataset.tab is @active)?!
             @click: (=> @select(tab.dataset.tab))
             tab.textContent
 

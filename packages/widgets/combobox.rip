@@ -3,7 +3,7 @@
 # Keyboard: ArrowDown/Up to navigate, Enter to select, Escape to close,
 #           typing filters the list via the @filter callback.
 #
-# Exposes data-open on the wrapper, data-highlighted on options.
+# Exposes $open on the wrapper, $highlighted on options.
 # Ships zero CSS — style entirely via attribute selectors in your stylesheet.
 #
 # Usage:
@@ -127,7 +127,7 @@ export Combobox = component
       return -> document.removeEventListener 'mousedown', onDown
 
   render
-    . ref: "_content", data-open: open?!
+    . ref: "_content", $open: open?!
 
       # Text input
       input ref: "_input", role: "combobox"
@@ -136,17 +136,17 @@ export Combobox = component
         aria-expanded: !!open
         aria-haspopup: "listbox"
         aria-autocomplete: "list"
-        data-disabled: @disabled?!
+        $disabled: @disabled?!
         disabled: @disabled
         placeholder: @placeholder
         value: @query
 
       # Listbox — always in DOM, items rendered reactively from @items prop
       div ref: "_list", role: "listbox"
-        data-open: (open and @items.length > 0)?!
+        $open: (open and @items.length > 0)?!
         @click: @onListClick
         @mousemove: @onListMousemove
         for item in @items
-          div role: "option", tabindex: "-1", data-value: item
+          div role: "option", tabindex: "-1", $value: item
             "#{item}"
 

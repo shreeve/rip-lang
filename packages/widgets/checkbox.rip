@@ -1,7 +1,7 @@
 # Checkbox — accessible headless checkbox/switch widget
 #
 # Toggles on click, Enter, or Space. Supports indeterminate state.
-# Exposes data-checked, data-indeterminate, data-disabled. Ships zero CSS.
+# Exposes $checked, $indeterminate, $disabled. Ships zero CSS.
 # Set @switch to true for switch semantics (role="switch").
 #
 # Usage:
@@ -27,7 +27,7 @@ export Checkbox = component
     button role: @switch ? 'switch' : 'checkbox'
       aria-checked: @indeterminate ? 'mixed' : !!@checked
       aria-disabled: @disabled?!
-      data-checked: @checked?!
-      data-indeterminate: @indeterminate?!
-      data-disabled: @disabled?!
+      $checked: @checked?!
+      $indeterminate: @indeterminate?!
+      $disabled: @disabled?!
       slot

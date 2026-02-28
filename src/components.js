@@ -141,6 +141,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
   //   - Event modifiers: @click.prevent: → [@click.prevent]:
   //   - Dynamic classes: div.('card', x && 'active') → div.__clsx(...)
   //   - Implicit nesting: inject -> before INDENT for template elements
+  //   - Data attribute sigil: $open: true → "data-open": true
   //   - Hyphenated attributes: data-foo: "x" → "data-foo": "x"
   // ==========================================================================
 
@@ -273,8 +274,19 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       }
 
       // ─────────────────────────────────────────────────────────────────────
+      // Data attribute sigil
+      // $open: true → "data-open": true
+      // ─────────────────────────────────────────────────────────────────────
+      if (tag === 'PROPERTY' && token[1][0] === '$' && token[1].length > 1) {
+        token[0] = 'STRING';
+        token[1] = `"data-${token[1].slice(1)}"`;
+        return 1;
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
       // Hyphenated attributes
       // data-lucide: "search" → "data-lucide": "search"
+      // $my-thing: "x" → "data-my-thing": "x"
       // ─────────────────────────────────────────────────────────────────────
       if (tag === 'IDENTIFIER' && !token.spaced) {
         let parts = [token[1]];
@@ -292,8 +304,10 @@ export function installComponentSupport(CodeGenerator, Lexer) {
           }
         }
         if (parts.length > 1 && j > i + 1 && tokens[j - 1][0] === 'PROPERTY') {
+          let joined = parts.join('-');
+          if (joined[0] === '$') joined = 'data-' + joined.slice(1);
           token[0] = 'STRING';
-          token[1] = `"${parts.join('-')}"`;
+          token[1] = `"${joined}"`;
           tokens.splice(i + 1, j - i - 1);
           return 1;
         }

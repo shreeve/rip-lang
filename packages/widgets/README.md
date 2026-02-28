@@ -1,7 +1,7 @@
 # Rip Widgets
 
 Headless, accessible UI components written in Rip. Zero dependencies. Zero CSS.
-Every widget exposes `data-*` attributes for styling and handles keyboard
+Every widget exposes `$` attributes (compiled to `data-*`) for styling and handles keyboard
 interactions per WAI-ARIA Authoring Practices.
 
 Widgets are plain `.rip` source files — no build step. The browser compiles
@@ -17,7 +17,7 @@ use serve
 Every widget:
 - Handles all keyboard interactions per WAI-ARIA Authoring Practices
 - Sets correct ARIA attributes automatically
-- Exposes `data-*` attributes for CSS styling (`[data-open]`, `[data-selected]`, etc.)
+- Exposes state via `$` sigil (`$open`, `$selected`) — compiles to `data-*` attributes for CSS
 - Ships zero CSS — styling is entirely in the user's stylesheets
 - Uses Rip's reactive primitives for all state management
 
@@ -59,8 +59,7 @@ Select value <=> selectedRole, @change: handleChange
 **Events:** `@change` (detail: selected value)
 **Keyboard:** ArrowDown/Up navigate, Enter/Space select, Escape close, Home/End
 jump, type-ahead character matching
-**Data attributes:** `[data-open]` on trigger, `[data-highlighted]` and
-`[data-selected]` on options, `[data-disabled]` on trigger
+**Data attributes:** `$open` / `[data-open]` on trigger, `$highlighted` / `[data-highlighted]` and `$selected` / `[data-selected]` on options, `$disabled` / `[data-disabled]` on trigger
 
 ### Combobox
 
@@ -70,7 +69,7 @@ search, autocomplete, or any large list that needs filtering.
 ```coffee
 Combobox query <=> searchText, @select: handleSelect, @filter: handleFilter
   for item in filteredItems
-    div data-value: item.id
+    div $value: item.id
       span item.name
 ```
 
@@ -78,7 +77,7 @@ Combobox query <=> searchText, @select: handleSelect, @filter: handleFilter
 **Events:** `@select` (detail: selected data-value), `@filter` (detail: query string)
 **Keyboard:** ArrowDown/Up navigate, Enter select (or first if only one match),
 Escape close/clear, Tab close
-**Data attributes:** `[data-open]` on wrapper, `[data-highlighted]` on items
+**Data attributes:** `$open` / `[data-open]` on wrapper, `$highlighted` / `[data-highlighted]` on items
 
 ### Dialog
 
@@ -96,7 +95,7 @@ Dialog open <=> showDialog, @close: handleClose
 **Props:** `@open`
 **Events:** `@close`
 **Keyboard:** Escape to close, Tab trapped within dialog
-**Data attributes:** `[data-open]` on backdrop
+**Data attributes:** `$open` / `[data-open]` on backdrop
 **Behavior:** Focus trap confines Tab to dialog content. Body scroll is locked
 while open. Previous focus is restored on close.
 
@@ -111,7 +110,7 @@ Toast message: "Order submitted!", duration: 4000, type: "success", @dismiss: ha
 
 **Props:** `@message`, `@duration` (ms, 0 = no auto-dismiss), `@type` (info/success/error)
 **Events:** `@dismiss`
-**Data attributes:** `[data-type]`, `[data-leaving]` (during exit animation)
+**Data attributes:** `$type` / `[data-type]`, `$leaving` / `[data-leaving]` (during exit animation)
 
 ### Popover
 
@@ -127,7 +126,7 @@ Popover placement: "bottom-start"
 
 **Props:** `@placement`, `@offset`, `@disabled`
 **Keyboard:** Enter/Space/ArrowDown toggle, Escape close
-**Data attributes:** `[data-open]`, `[data-placement]` on floating element
+**Data attributes:** `$open` / `[data-open]`, `$placement` / `[data-placement]` on floating element
 
 ### Tooltip
 
@@ -139,8 +138,7 @@ Tooltip text: "Save your changes", placement: "top"
 ```
 
 **Props:** `@text`, `@placement`, `@delay` (ms), `@offset`
-**Data attributes:** `[data-open]`, `[data-entering]`, `[data-exiting]`,
-`[data-placement]`
+**Data attributes:** `$open` / `[data-open]`, `$entering` / `[data-entering]`, `$exiting` / `[data-exiting]`, `$placement` / `[data-placement]`
 **Behavior:** Shows on mouseenter/focusin after delay, hides on
 mouseleave/focusout. Uses `aria-describedby` for accessibility.
 
@@ -150,18 +148,18 @@ Keyboard-navigable tab panel with roving tabindex.
 
 ```coffee
 Tabs active <=> currentTab
-  div data-tab: "one", "Tab One"
-  div data-tab: "two", "Tab Two"
-  div data-panel: "one"
+  div $tab: "one", "Tab One"
+  div $tab: "two", "Tab Two"
+  div $panel: "one"
     p "Content for tab one"
-  div data-panel: "two"
+  div $panel: "two"
     p "Content for tab two"
 ```
 
 **Props:** `@active`
 **Events:** `@change` (detail: tab id)
 **Keyboard:** ArrowLeft/Right navigate tabs, Home/End jump
-**Data attributes:** `[data-active]` on active tab and panel
+**Data attributes:** `$active` / `[data-active]` on active tab and panel
 
 ### Accordion
 
@@ -169,9 +167,9 @@ Expand/collapse sections. Single or multiple mode.
 
 ```coffee
 Accordion multiple: false
-  div data-item: "a"
-    button data-trigger: true, "Section A"
-    div data-content: true
+  div $item: "a"
+    button $trigger: true, "Section A"
+    div $content: true
       p "Content A"
 ```
 
@@ -195,7 +193,7 @@ Checkbox checked <=> isDark, switch: true
 **Props:** `@checked`, `@disabled`, `@indeterminate`, `@switch`
 **Events:** `@change` (detail: boolean)
 **Keyboard:** Enter/Space toggle
-**Data attributes:** `[data-checked]`, `[data-indeterminate]`, `[data-disabled]`
+**Data attributes:** `$checked` / `[data-checked]`, `$indeterminate` / `[data-indeterminate]`, `$disabled` / `[data-disabled]`
 **ARIA:** `role="checkbox"` or `role="switch"`, `aria-checked` (true/false/mixed)
 
 ### Menu
@@ -204,16 +202,16 @@ Dropdown menu with keyboard navigation. For action menus, context menus.
 
 ```coffee
 Menu @select: handleAction
-  button data-trigger: true, "Actions"
-  div data-item: "edit", "Edit"
-  div data-item: "delete", "Delete"
-  div data-item: "archive", "Archive"
+  button $trigger: true, "Actions"
+  div $item: "edit", "Edit"
+  div $item: "delete", "Delete"
+  div $item: "archive", "Archive"
 ```
 
 **Props:** `@disabled`
 **Events:** `@select` (detail: item id)
 **Keyboard:** ArrowDown/Up navigate, Enter/Space select, Escape close, Home/End
-**Data attributes:** `[data-open]` on trigger, `[data-highlighted]` on items
+**Data attributes:** `$open` / `[data-open]` on trigger, `$highlighted` / `[data-highlighted]` on items
 
 ### Grid
 
@@ -248,9 +246,7 @@ checkbox/select), `source` (for select type)
 Escape cancel, Home/End, Ctrl+arrows jump to edge, PageUp/Down, Ctrl+A
 select all, Ctrl+C copy, Ctrl+V paste, Ctrl+X cut, Delete/Backspace clear,
 Space toggle checkboxes, type-to-edit
-**Data attributes:** `[data-active]` and `[data-selected]` on cells,
-`[data-sorted]` on headers, `[data-editing]` and `[data-selecting]` on
-container
+**Data attributes:** `$active` / `[data-active]` and `$selected` / `[data-selected]` on cells, `$sorted` / `[data-sorted]` on headers, `$editing` / `[data-editing]` and `$selecting` / `[data-selecting]` on container
 **Sorting:** Click header to sort (asc/desc/none cycle), Shift+click for
 multi-column sort
 **Editing:** Double-click, Enter, F2, or start typing to edit. Enter/Tab
@@ -267,8 +263,7 @@ Google Sheets, and Numbers.
 
 ## Styling
 
-All widgets ship zero CSS. Style them with semantic classes and `data-*`
-attribute selectors in your own stylesheets:
+All widgets ship zero CSS. Write `$name` in Rip (compiles to `data-name` in HTML), then style with `[data-name]` selectors in CSS:
 
 ```css
 .select-trigger[data-open] { border-color: var(--color-primary); }
@@ -279,8 +274,7 @@ attribute selectors in your own stylesheets:
 .toast[data-leaving] { animation: fade-out 200ms; }
 ```
 
-No JavaScript styling logic. No className toggling. The component sets the
-attribute; CSS handles the rest.
+No JavaScript styling logic. No className toggling. Write `$open` in Rip, style `[data-open]` in CSS.
 
 ### Open Props — Design Tokens
 

@@ -1,18 +1,18 @@
 # Accordion — accessible headless expand/collapse widget
 #
 # Supports single or multiple expanded sections. Keyboard: Enter/Space to
-# toggle, ArrowDown/Up to move between triggers. Exposes data-open on items.
+# toggle, ArrowDown/Up to move between triggers. Exposes $open on items.
 # Ships zero CSS.
 #
 # Usage:
 #   Accordion multiple: false
-#     div data-item: "a"
-#       button data-trigger: true, "Section A"
-#       div data-content: true
+#     div $item: "a"
+#       button $trigger: true, "Section A"
+#       div $content: true
 #         p "Content A"
-#     div data-item: "b"
-#       button data-trigger: true, "Section B"
-#       div data-content: true
+#     div $item: "b"
+#       button $trigger: true, "Section B"
+#       div $content: true
 #         p "Content B"
 
 export Accordion = component

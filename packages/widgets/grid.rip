@@ -880,8 +880,8 @@ export Grid = component
 
   render
     div.grid-container ref: "_container", role: "grid", tabindex: "0",
-      data-editing: editing?!,
-      data-selecting: selecting?!
+      $editing: editing?!,
+      $selecting: selecting?!
       table.rip-grid
         colgroup
           for c in @columns
@@ -890,7 +890,7 @@ export Grid = component
           tr @click: @_headerClick
             for c, ci in @columns
               th style: "text-align: #{c.align or 'left'}; cursor: pointer",
-                data-sorted: (if sortInfo.arrows[ci] then (if sortInfo.arrows[ci].includes('↓') then 'asc' else 'desc') else undefined)
+                $sorted: (if sortInfo.arrows[ci] then (if sortInfo.arrows[ci].includes('↓') then 'asc' else 'desc') else undefined)
                 "#{c.title}"
                 span.sort-arrow
                   sortInfo.arrows[ci]

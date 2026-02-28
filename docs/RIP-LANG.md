@@ -420,25 +420,25 @@ or `undefined` if it's falsy. Now you see it… now you don't.
 (idx is active)?!    # ((idx === active) ? true : undefined)
 ```
 
-Designed for `data-*` attributes in headless UI components, where falsy values
+Designed for `$` attributes (data-* sigil) in headless UI components, where falsy values
 need to *remove* the attribute rather than set it to `"false"`:
 
 ```coffee
 # Before — verbose and repetitive
-data-checked: (@checked or undefined),
-data-disabled: (@disabled or undefined),
+$checked: (@checked or undefined),
+$disabled: (@disabled or undefined),
 
 # After — clean and expressive
-data-checked: @checked?!,
-data-disabled: @disabled?!,
+$checked: @checked?!,
+$disabled: @disabled?!,
 ```
 
 Works with any expression, not just identifiers:
 
 ```coffee
-data-highlighted: (idx is highlightedIndex)?!,
-data-selected: (opt.value is String(@value))?!,
-data-active: (tab is @active)?!,
+$highlighted: (idx is highlightedIndex)?!,
+$selected: (opt.value is String(@value))?!,
+$active: (tab is @active)?!,
 ```
 
 ## Method Assignment (`.=`)
@@ -1592,7 +1592,7 @@ App = component
 **Hyphenated Attributes:**
 
 ```coffee
-div data-testid: "main", aria-label: "content"
+div $testid: "main", aria-label: "content"
 ```
 
 **DOM Properties:**

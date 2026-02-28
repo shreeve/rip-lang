@@ -3,7 +3,7 @@
 # Keyboard: ArrowDown/Up to navigate, Enter/Space to select, Escape to close,
 #           Home/End for first/last, typeahead to jump by character.
 #
-# Exposes data-open and data-placeholder on button, data-highlighted and data-selected on options.
+# Exposes $open and $placeholder on button, $highlighted and $selected on options.
 # Ships zero CSS — style entirely via attribute selectors in your stylesheet.
 #
 # Usage:
@@ -151,9 +151,9 @@ export Select = component
       button ref: "_trigger", role: "combobox"
         aria-expanded: !!open
         aria-haspopup: "listbox"
-        data-open: open?!
-        data-placeholder: (!@value)?!
-        data-disabled: @disabled?!
+        $open: open?!
+        $placeholder: (!@value)?!
+        $disabled: @disabled?!
         disabled: @disabled
         @click: @toggle
         @keydown: @onTriggerKeydown
@@ -166,15 +166,15 @@ export Select = component
       # Dropdown listbox
       if open
         div ref: "_list", role: "listbox", style: "position:fixed;visibility:hidden"
-          data-open: true
+          $open: true
           @keydown: @onListKeydown
           for opt, idx in options
             div role: "option"
               tabindex: "-1"
-              data-value: @getOpt(opt)
-              data-highlighted: (idx is highlightedIndex)?!
-              data-selected: (@getOpt(opt) is String(@value))?!
-              data-disabled: @isDisabled(opt)?!
+              $value: @getOpt(opt)
+              $highlighted: (idx is highlightedIndex)?!
+              $selected: (@getOpt(opt) is String(@value))?!
+              $disabled: @isDisabled(opt)?!
               aria-selected: @getOpt(opt) is String(@value)
               aria-disabled: @isDisabled(opt)?!
               @click: (=> @selectIndex(idx))

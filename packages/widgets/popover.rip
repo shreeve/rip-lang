@@ -1,12 +1,12 @@
 # Popover — accessible headless popover with anchor positioning
 #
 # Positions itself relative to the trigger. Dismisses on Escape or click outside.
-# Exposes data-open, data-placement on content. Ships zero CSS.
+# Exposes $open, $placement on content. Ships zero CSS.
 #
 # Usage:
 #   Popover placement: "bottom-start"
-#     button data-trigger: true, "Click me"
-#     div data-content: true
+#     button $trigger: true, "Click me"
+#     div $content: true
 #       p "Popover content"
 
 export Popover = component

@@ -1477,6 +1477,63 @@ code "hyphenated attributes (data-* and aria-*)", '''
   ''', opts
 
 # ==============================================================================
+# Data Attribute Sigil — $name expands to data-name
+# ==============================================================================
+
+code "data attribute sigil ($open → data-open)", '''
+  export A = component
+    render
+      div $testid: "main", $open: true
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {
+    }
+    _create() {
+      this._el0 = document.createElement('div');
+      this._el0.setAttribute('data-testid', "main");
+      this._el0.setAttribute('data-open', true);
+      return this._el0;
+    }
+  }
+  ''', opts
+
+code "data attribute sigil hyphenated ($my-thing → data-my-thing)", '''
+  export A = component
+    render
+      div $my-thing: "test"
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {
+    }
+    _create() {
+      this._el0 = document.createElement('div');
+      this._el0.setAttribute('data-my-thing', "test");
+      return this._el0;
+    }
+  }
+  ''', opts
+
+code "data attribute sigil with presence operator ($open: val?!)", '''
+  export A = component
+    @active := false
+    render
+      div $open: @active?!
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {
+      this.active = __state(props.__bind_active__ ?? props.active ?? false);
+    }
+    _create() {
+      this._el0 = document.createElement('div');
+      return this._el0;
+    }
+    _setup() {
+      __effect(() => { { const __v = (this.active.value ? true : undefined); __v == null ? this._el0.removeAttribute('data-open') : this._el0.setAttribute('data-open', __v); } });
+    }
+  }
+  ''', opts
+
+# ==============================================================================
 # DOM Properties — innerHTML, textContent
 # ==============================================================================
 

@@ -4,7 +4,7 @@
 # Restores focus to the previously focused element on close.
 # Auto-wires aria-labelledby (first h1-h6) and aria-describedby (first p).
 #
-# Exposes data-open on the backdrop. Ships zero CSS.
+# Exposes $open on the backdrop. Ships zero CSS.
 #
 # Usage:
 #   Dialog open <=> showDialog, @close: handleClose
@@ -86,7 +86,7 @@ export Dialog = component
 
   render
     if @open
-      div ref: "_backdrop", data-open: true,
+      div ref: "_backdrop", $open: true,
         @click: @onBackdropClick,
         @keydown: @onKeydown
         div ref: "_panel", role: "dialog", aria-modal: "true", tabindex: "-1"

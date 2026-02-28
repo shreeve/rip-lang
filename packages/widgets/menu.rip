@@ -1,15 +1,15 @@
 # Menu — accessible headless dropdown menu
 #
 # Keyboard: ArrowDown/Up to navigate, Enter/Space to select, Escape to close,
-# Home/End for first/last. Exposes data-open on menu, data-highlighted on items.
+# Home/End for first/last. Exposes $open on menu, $highlighted on items.
 # Ships zero CSS.
 #
 # Usage:
 #   Menu
 #     span "Actions"
-#     div data-item: "edit", "Edit"
-#     div data-item: "delete", "Delete"
-#     div data-item: "archive", "Archive"
+#     div $item: "edit", "Edit"
+#     div $item: "delete", "Delete"
+#     div $item: "archive", "Archive"
 
 export Menu = component
   @disabled := false
@@ -110,8 +110,8 @@ export Menu = component
       button ref: "_trigger"
         aria-haspopup: "menu"
         aria-expanded: !!open
-        data-open: open?!
-        data-disabled: @disabled?!
+        $open: open?!
+        $disabled: @disabled?!
         disabled: @disabled
         @click: @toggle
         @keydown: @onTriggerKeydown
@@ -121,12 +121,12 @@ export Menu = component
         slot
 
       if open
-        div ref: "_list", role: "menu", data-open: true, style: "position:fixed;visibility:hidden", @keydown: @onMenuKeydown
+        div ref: "_list", role: "menu", $open: true, style: "position:fixed;visibility:hidden", @keydown: @onMenuKeydown
           for item, idx in items
             div role: "menuitem"
               tabindex: "-1"
-              data-highlighted: (idx is highlightedIndex)?!
-              data-disabled: item.dataset.disabled?!
+              $highlighted: (idx is highlightedIndex)?!
+              $disabled: item.dataset.disabled?!
               @click: (=> @selectIndex(idx))
               @mouseenter: (=> highlightedIndex = idx)
               item.textContent
