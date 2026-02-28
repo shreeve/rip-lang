@@ -101,16 +101,28 @@ while open. Previous focus is restored on close.
 
 ### Toast
 
-Auto-dismissing notification with ARIA live region for screen reader
-announcements.
+Managed toast system with stacking and timer pause on hover. The state is
+the array, the operation is assignment — no helpers needed.
 
 ```coffee
-Toast message: "Order submitted!", duration: 4000, type: "success", @dismiss: handleDismiss
+toasts := []
+
+# Add — reactive assignment is the API
+toasts = [...toasts, { message: "Saved!", type: "success" }]
+
+# Dismiss — filter it out
+toasts = toasts.filter (t) -> t isnt target
+
+# Render
+ToastViewport toasts <=> toasts
 ```
 
-**Props:** `@message`, `@duration` (ms, 0 = no auto-dismiss), `@type` (info/success/error)
-**Events:** `@dismiss`
+**ToastViewport props:** `@toasts`, `@placement` (bottom-right, top-right, etc.)
+**Toast props:** `@toast` (object with `message`, `type`, `duration`, `title`, `action`)
+**Toast defaults:** `duration` = 4000ms, `type` = 'info'
+**Events:** `@dismiss` (detail: toast object)
 **Data attributes:** `$type` / `[data-type]`, `$leaving` / `[data-leaving]` (during exit animation)
+**Behavior:** Timer pauses on hover and keyboard focus, resumes on leave.
 
 ### Popover
 

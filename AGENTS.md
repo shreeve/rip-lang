@@ -809,6 +809,11 @@ keyboard interactions per WAI-ARIA Authoring Practices. Widgets are plain
 - Click-outside: document `mousedown` listener with effect cleanup (not backdrop divs)
 - Dropdown positioning: `position:fixed;visibility:hidden` inline, then `_position()` via rAF
 - Focus override: `preventScroll: true` globally at module scope (outside component body)
+- Reactive arrays over helper functions: the state *is* the array, the operation
+  *is* assignment, there's nothing to abstract. `toasts = [...toasts, { message: "Saved!" }]`
+  — no `addToast()` helpers, no manager objects, no import ceremony. This applies to every
+  widget that manages a list (toasts, tabs, accordion items). React needs helper APIs because
+  its state model forces it; Rip's reactive assignment eliminates the need.
 
 **Integration:** Add the widgets directory to your serve middleware:
 

@@ -4,52 +4,27 @@
 # Uses ARIA live region for screen reader announcements. Ships zero CSS.
 #
 # Usage:
-#   # Module-scope manager
 #   toasts := []
 #
-#   # Add toasts from anywhere
+#   # Add a toast — reactive assignment is the API
 #   toasts = [...toasts, { message: "Saved!", type: "success" }]
+#
+#   # Dismiss — filter it out
+#   toasts = toasts.filter (t) -> t isnt target
+#
+#   # Clear all
+#   toasts = []
 #
 #   # In render block
 #   ToastViewport toasts <=> toasts
-#
-#   # Helper functions
-#   addToast toasts, message: "Saved!", type: "success"
-#   promiseToast toasts, fetch!('/api/save'),
-#     loading: "Saving...", success: "Done!", error: "Failed"
-
-nextId = 0
-
-export addToast = (toasts, opts) ->
-  id = ++nextId
-  entry = { ...opts, _id: id }
-  entry.duration ?= 4000
-  entry.type ?= 'info'
-  toasts.push entry
-  id
-
-export promiseToast = (toasts, promise, opts) ->
-  id = addToast toasts, message: opts.loading, type: 'loading', duration: 0
-  promise.then(
-    ->
-      idx = toasts.findIndex (t) -> t._id is id
-      if idx >= 0
-        toasts[idx] = { ...toasts[idx], message: opts.success, type: 'success', duration: opts.duration or 4000 }
-    (err) ->
-      idx = toasts.findIndex (t) -> t._id is id
-      if idx >= 0
-        msg = if typeof opts.error is 'function' then opts.error(err) else opts.error
-        toasts[idx] = { ...toasts[idx], message: msg, type: 'error', duration: opts.duration or 4000 }
-  )
-  id
 
 export ToastViewport = component
   @toasts := []
   @placement := 'bottom-right'
 
-  onDismiss: (id) ->
-    @toasts = @toasts.filter (t) -> t._id isnt id
-    @emit 'dismiss', id
+  onDismiss: (toast) ->
+    @toasts = @toasts.filter (t) -> t isnt toast
+    @emit 'dismiss', toast
 
   render
     div role: "region", aria-label: "Notifications", $placement: @placement
@@ -65,7 +40,7 @@ export Toast = component
   _started = 0
 
   _startTimer: ->
-    dur = @toast.duration
+    dur = @toast.duration ?? 4000
     return unless dur > 0
     _remaining = dur
     _started = Date.now()
@@ -90,13 +65,13 @@ export Toast = component
   dismiss: ->
     leaving = true
     setTimeout =>
-      @emit 'dismiss', @toast._id
+      @emit 'dismiss', @toast
     , 200
 
   render
     div role: (if @toast.type is 'error' then 'alert' else 'status'),
       aria-live: (if @toast.type is 'error' then 'assertive' else 'polite'),
-      $type: @toast.type,
+      $type: @toast.type ?? 'info',
       $leaving: leaving?!,
       @mouseenter: @_pauseTimer,
       @mouseleave: @_resumeTimer,
