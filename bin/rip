@@ -173,18 +173,31 @@ async function main() {
     }
   }
 
-  // Stdin: write to temp .rip file so it flows through the normal execution/compile paths
+  // Stdin handling — read into memory; only write temp file for the execute path
   const hasCompileFlag = showCompiled || showTokens || showSExpr || generateDts || generateMap || outputFile;
-  let isStdin = false;
+  let source;
+
   if (!inputFile) {
-    const tmp = join(process.cwd(), '.__rip_stdin__.rip');
     try {
-      writeFileSync(tmp, readFileSync(0, 'utf-8'));
-      inputFile = tmp;
-      isStdin = true;
+      source = readFileSync(0, 'utf-8');
     } catch (error) {
       console.error('Error reading stdin:', error.message);
       process.exit(1);
+    }
+
+    if (!hasCompileFlag) {
+      const tmp = join(process.cwd(), '.__rip_stdin__.rip');
+      try {
+        writeFileSync(tmp, source);
+        const result = spawnSync('bun', ['--preload', loaderPath, tmp, ...scriptArgs], {
+          stdio: 'inherit', env: process.env
+        });
+        try { unlinkSync(tmp); } catch {}
+        process.exit(result.status ?? 1);
+      } catch {
+        try { unlinkSync(tmp); } catch {}
+        process.exit(1);
+      }
     }
   }
 
@@ -195,7 +208,6 @@ async function main() {
         stdio: 'inherit',
         env: process.env
       });
-      if (isStdin) try { unlinkSync(inputFile); } catch {}
       process.exit(result.status ?? 1);
     }
 
@@ -217,7 +229,7 @@ async function main() {
 
   // Fallback: look for bin/{command} in git repo root
   // Allows `rip migrate --status` to find and run {repo}/bin/migrate
-  if (!isStdin && inputFile && !inputFile.startsWith('-') && !isFile(inputFile)) {
+  if (inputFile && !inputFile.startsWith('-') && !isFile(inputFile)) {
     try {
       const repoRoot = execSync('git rev-parse --show-toplevel', {
         encoding: 'utf-8',
@@ -233,12 +245,13 @@ async function main() {
 
   // --- Compile (with flags) ---
 
-  if (!isFile(inputFile)) {
-    console.error(`Error: File not found: ${inputFile}`);
-    process.exit(1);
+  if (source === undefined) {
+    if (!isFile(inputFile)) {
+      console.error(`Error: File not found: ${inputFile}`);
+      process.exit(1);
+    }
+    source = readFileSync(inputFile, 'utf-8');
   }
-
-  let source = readFileSync(inputFile, 'utf-8');
 
   try {
     const compiler = new Compiler({ showTokens, showSExpr, quiet,
@@ -263,8 +276,6 @@ async function main() {
     console.error('Compilation Error:', error.message);
     if (error.stack) console.error(error.stack);
     process.exit(1);
-  } finally {
-    if (isStdin) try { unlinkSync(inputFile); } catch {}
   }
 }
 
