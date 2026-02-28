@@ -588,26 +588,25 @@ export class CodeGenerator {
 
   generateProgram(head, statements, context, sexpr) {
     let code = '';
-    let imports = [], exports = [], other = [];
+    let imports = [], body = [];
 
     for (let stmt of statements) {
-      if (!Array.isArray(stmt)) { other.push(stmt); continue; }
+      if (!Array.isArray(stmt)) { body.push(stmt); continue; }
       let h = stmt[0];
       if (h === 'import') imports.push(stmt);
-      else if (h === 'export' || h === 'export-default' || h === 'export-all' || h === 'export-from') exports.push(stmt);
-      else other.push(stmt);
+      else body.push(stmt);
     }
 
     // Generate body first to detect needed helpers
     let blockStmts = ['def', 'class', 'if', 'for-in', 'for-of', 'for-as', 'while', 'loop', 'switch', 'try'];
-    let stmtEntries = other.map((stmt, index) => {
-      let isSingle = other.length === 1 && imports.length === 0 && exports.length === 0;
+    let stmtEntries = body.map((stmt, index) => {
+      let isSingle = body.length === 1 && imports.length === 0;
       let isObj = this.is(stmt, 'object');
       let isObjComp = isObj && stmt.length === 2 && Array.isArray(stmt[1]) && Array.isArray(stmt[1][1]) && stmt[1][1][0] === 'comprehension';
       let isAlreadyExpr = (this.is(stmt, 'comprehension') || this.is(stmt, 'object-comprehension') || this.is(stmt, 'do-iife'));
       let hasNoVars = this.programVars.size === 0;
       let needsParens = isSingle && isObj && hasNoVars && !isAlreadyExpr && !isObjComp;
-      let isLast = index === other.length - 1;
+      let isLast = index === body.length - 1;
       let isLastComp = isLast && isAlreadyExpr;
 
       let generated;
@@ -672,12 +671,6 @@ export class CodeGenerator {
       }
     }
 
-    // Generate exports code early so component/reactivity flags are set before runtime checks
-    let exportsCode = '';
-    if (exports.length > 0) {
-      exportsCode = '\n' + exports.map(s => this.addSemicolon(s, this.generate(s, 'statement'))).join('\n');
-    }
-
     if (this.usesReactivity && !skip) {
       if (skipRT) {
         code += 'var { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;\n';
@@ -709,7 +702,6 @@ export class CodeGenerator {
     this._stmtEntries = stmtEntries;
     this._preambleLines = code.length === 0 ? 0 : code.split('\n').length - 1;
     code += statementsCode;
-    code += exportsCode;
 
     if (this.dataSection !== null && this.dataSection !== undefined) {
       code += `\n\nfunction _setDataSection() {\n  DATA = ${JSON.stringify(this.dataSection)};\n}`;
