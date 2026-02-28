@@ -9,14 +9,24 @@
 # Usage:
 #   Combobox query <=> searchText, items <=> filteredItems, @select: handleSelect, @filter: filterFn
 
+collator = new Intl.Collator(undefined, { sensitivity: 'base' })
+
 export Combobox = component
   @query := ''
   @items := []
   @placeholder := 'Search...'
   @disabled := false
+  @autoHighlight := true
 
   open := false
   highlightedIndex := -1
+
+  filteredItems ~=
+    q = @query.trim()
+    return @items unless q
+    @items.filter (item) ->
+      label = if typeof item is 'string' then item else (item.label or item.name or String(item))
+      collator.compare(label.slice(0, q.length), q) is 0
 
   getItems: ->
     return [] unless @_list
@@ -30,10 +40,15 @@ export Combobox = component
   _scrollToItem: ->
     @getItems()[highlightedIndex]?.scrollIntoView({ block: 'nearest' })
 
+  clear: ->
+    @query = ''
+    highlightedIndex = -1
+    @emit 'filter', ''
+
   onInput: (e) ->
     @query = e.target.value
     open = true
-    highlightedIndex = -1
+    highlightedIndex = if @autoHighlight and filteredItems.length > 0 then 0 else -1
     @emit 'filter', @query
 
   onFocusin: -> @openMenu()
@@ -130,23 +145,30 @@ export Combobox = component
     . ref: "_content", $open: open?!
 
       # Text input
-      input ref: "_input", role: "combobox"
-        type: "text"
-        autocomplete: "off"
-        aria-expanded: !!open
-        aria-haspopup: "listbox"
-        aria-autocomplete: "list"
-        $disabled: @disabled?!
-        disabled: @disabled
-        placeholder: @placeholder
-        value: @query
+      . style: "position:relative;display:inline-flex;align-items:center"
+        input ref: "_input", role: "combobox"
+          type: "text"
+          autocomplete: "off"
+          aria-expanded: !!open
+          aria-haspopup: "listbox"
+          aria-autocomplete: "list"
+          $disabled: @disabled?!
+          disabled: @disabled
+          placeholder: @placeholder
+          value: @query
+        if @query
+          button aria-label: "Clear", $clear: true, @click: @clear
+            "✕"
 
-      # Listbox — always in DOM, items rendered reactively from @items prop
+      # Listbox — always in DOM, items rendered reactively
       div ref: "_list", role: "listbox"
-        $open: (open and @items.length > 0)?!
+        $open: (open and filteredItems.length > 0)?!
         @click: @onListClick
         @mousemove: @onListMousemove
-        for item in @items
+        for item in filteredItems
           div role: "option", tabindex: "-1", $value: item
             "#{item}"
+      if open and filteredItems.length is 0 and @query
+        div role: "status", aria-live: "polite", $empty: true
+          "No results"
 

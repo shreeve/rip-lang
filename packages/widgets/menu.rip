@@ -16,6 +16,8 @@ export Menu = component
 
   open := false
   highlightedIndex := -1
+  typeaheadBuffer := ''
+  typeaheadTimer := null
 
   items ~=
     return [] unless @_slot
@@ -46,8 +48,30 @@ export Menu = component
     item = items[idx]
     return unless item
     return if item.dataset.disabled?
-    @emit 'select', item.dataset.item
-    @close()
+    role = item.getAttribute('role')
+    if role is 'menuitemcheckbox'
+      checked = item.getAttribute('aria-checked') is 'true'
+      item.setAttribute 'aria-checked', not checked
+      @emit 'select', { id: item.dataset.item, checked: not checked }
+    else if role is 'menuitemradio'
+      group = item.closest('[data-radio-group]')
+      if group
+        group.querySelectorAll('[role="menuitemradio"]').forEach (r) ->
+          r.setAttribute 'aria-checked', false
+      item.setAttribute 'aria-checked', true
+      @emit 'select', { id: item.dataset.item, value: item.dataset.item }
+    else
+      @emit 'select', item.dataset.item
+      @close()
+
+  _typeahead: (char) ->
+    clearTimeout typeaheadTimer if typeaheadTimer
+    typeaheadBuffer += char.toLowerCase()
+    typeaheadTimer = setTimeout (-> typeaheadBuffer = ''), 500
+    idx = items.findIndex (o) -> o.textContent.trim().toLowerCase().startsWith(typeaheadBuffer)
+    if idx >= 0
+      highlightedIndex = idx
+      @_list?.querySelectorAll('[role="menuitem"]')[idx]?.focus()
 
   _position: ->
     return unless @_trigger and @_list
@@ -59,6 +83,8 @@ export Menu = component
     fl = @_list.getBoundingClientRect()
     if fl.bottom > window.innerHeight
       @_list.style.top = "#{tr.top - fl.height - 4}px"
+    if fl.right > window.innerWidth
+      @_list.style.left = "#{window.innerWidth - fl.width - 4}px"
     @_list.style.visibility = 'visible'
 
   onTriggerKeydown: (e) ->
@@ -96,6 +122,9 @@ export Menu = component
         @close()
       when 'Tab'
         @close()
+      else
+        if e.key.length is 1
+          @_typeahead(e.key)
 
   ~>
     if open
@@ -123,8 +152,9 @@ export Menu = component
       if open
         div ref: "_list", role: "menu", $open: true, style: "position:fixed;visibility:hidden", @keydown: @onMenuKeydown
           for item, idx in items
-            div role: "menuitem"
+            div role: item.getAttribute('role') or 'menuitem'
               tabindex: "-1"
+              aria-checked: item.getAttribute('aria-checked')?!
               $highlighted: (idx is highlightedIndex)?!
               $disabled: item.dataset.disabled?!
               @click: (=> @selectIndex(idx))

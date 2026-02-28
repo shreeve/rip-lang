@@ -13,9 +13,15 @@ export Popover = component
   @placement := 'bottom-start'
   @offset := 4
   @disabled := false
+  @openOnHover := false
+  @hoverDelay := 300
+  @hoverCloseDelay := 200
 
   open := false
   _ready := false
+  _hoverTimer := null
+  _hoverCloseTimer := null
+  _id =! "pop-#{Math.random().toString(36).slice(2, 8)}"
 
   mounted: ->
     _ready = true
@@ -28,6 +34,13 @@ export Popover = component
         if e.key in ['Enter', ' ', 'ArrowDown']
           e.preventDefault()
           @toggle()
+      if @openOnHover
+        trigger.addEventListener 'mouseenter', =>
+          clearTimeout _hoverCloseTimer if _hoverCloseTimer
+          _hoverTimer = setTimeout (=> @openPopover()), @hoverDelay
+        trigger.addEventListener 'mouseleave', =>
+          clearTimeout _hoverTimer if _hoverTimer
+          _hoverCloseTimer = setTimeout (=> @close()), @hoverCloseDelay
 
   toggle: ->
     return if @disabled
@@ -75,6 +88,12 @@ export Popover = component
       y = tr.top - cr.top - fl.height - gap
     if side is 'top' and tr.top - fl.height - gap < 0
       y = tr.bottom - cr.top + gap
+    if side is 'right' and tr.right + gap + fl.width > window.innerWidth
+      x = tr.left - cr.left - fl.width - gap
+    if side is 'left' and tr.left - fl.width - gap < 0
+      x = tr.right - cr.left + gap
+
+    x = Math.max(4 - cr.left, Math.min(x, window.innerWidth - cr.left - fl.width - 4))
 
     floating.style.position = 'absolute'
     floating.style.left = "#{x}px"
@@ -92,6 +111,14 @@ export Popover = component
       if open
         floating.setAttribute 'data-open', ''
         floating.setAttribute 'data-placement', @placement
+        heading = floating.querySelector('h1,h2,h3,h4,h5,h6')
+        if heading
+          heading.id ?= "#{_id}-title"
+          floating.setAttribute 'aria-labelledby', heading.id
+        desc = floating.querySelector('p')
+        if desc
+          desc.id ?= "#{_id}-desc"
+          floating.setAttribute 'aria-describedby', desc.id
       else
         floating.removeAttribute 'data-open'
 

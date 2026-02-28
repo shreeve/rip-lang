@@ -20,6 +20,7 @@ export Accordion = component
 
   openItems := new Set()
   _ready    := false
+  _id =! "acc-#{Math.random().toString(36).slice(2, 8)}"
 
   mounted: ->
     _ready = true
@@ -27,7 +28,9 @@ export Accordion = component
       item = trigger.closest('[data-item]')
       return unless item
       id = item.dataset.item
-      trigger.addEventListener 'click', => @toggle(id)
+      trigger.addEventListener 'click', =>
+        return if item.hasAttribute('data-disabled')
+        @toggle(id)
       trigger.addEventListener 'keydown', (e) => @onTriggerKeydown(e, id)
 
   ~>
@@ -36,10 +39,26 @@ export Accordion = component
       id = item.dataset.item
       isOpen = openItems.has(id)
       item.toggleAttribute 'data-open', isOpen
+      trigger = item.querySelector('[data-trigger]')
       content = item.querySelector('[data-content]')
+      triggerId = "#{_id}-trigger-#{id}"
+      panelId   = "#{_id}-panel-#{id}"
+      if trigger
+        isDisabled = item.hasAttribute('data-disabled')
+        trigger.id = triggerId
+        trigger.setAttribute 'aria-expanded', isOpen
+        trigger.setAttribute 'aria-controls', panelId
+        trigger.setAttribute 'aria-disabled', isDisabled if isDisabled
+        trigger.tabIndex = if isDisabled then -1 else 0
       if content
-        content.hidden = not isOpen
+        content.id = panelId
+        content.hidden = if isOpen then false else 'until-found'
         content.setAttribute 'role', 'region'
+        content.setAttribute 'aria-labelledby', triggerId
+        if isOpen
+          rect = content.getBoundingClientRect()
+          content.style.setProperty '--accordion-panel-height', "#{rect.height}px"
+          content.style.setProperty '--accordion-panel-width', "#{rect.width}px"
 
   toggle: (id) ->
     if openItems.has(id)
@@ -54,6 +73,8 @@ export Accordion = component
     openItems.has(id)
 
   onTriggerKeydown: (e, id) ->
+    item = e.currentTarget.closest('[data-item]')
+    return if item?.hasAttribute('data-disabled') and e.key in ['Enter', ' ']
     switch e.key
       when 'Enter', ' '
         e.preventDefault()

@@ -20,6 +20,7 @@ export Select = component
   highlightedIndex := -1
   typeaheadBuffer := ''
   typeaheadTimer := null
+  _listId =! "sel-#{Math.random().toString(36).slice(2, 8)}"
 
   getOpt: (o) -> o.dataset.value ?? o.value
 
@@ -151,6 +152,7 @@ export Select = component
       button ref: "_trigger", role: "combobox"
         aria-expanded: !!open
         aria-haspopup: "listbox"
+        aria-controls: open ? _listId : undefined
         $open: open?!
         $placeholder: (!@value)?!
         $disabled: @disabled?!
@@ -165,7 +167,7 @@ export Select = component
 
       # Dropdown listbox
       if open
-        div ref: "_list", role: "listbox", style: "position:fixed;visibility:hidden"
+        div ref: "_list", id: _listId, role: "listbox", style: "position:fixed;visibility:hidden"
           $open: true
           @keydown: @onListKeydown
           for opt, idx in options

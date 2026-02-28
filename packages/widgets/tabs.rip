@@ -23,6 +23,8 @@ export Tabs = component
   @orientation := 'horizontal'
   @activation  := 'automatic'
   _ready       := false
+  _id =! "tabs-#{Math.random().toString(36).slice(2, 8)}"
+  activationDirection := 'none'
 
   tabs ~=
     return [] unless _ready
@@ -41,14 +43,40 @@ export Tabs = component
     return unless _ready
     tabs.forEach (el) -> el.hidden = true
     panels.forEach (el) =>
-      isActive = el.dataset.panel is @active
+      id = el.dataset.panel
+      isActive = id is @active
+      el.id = "#{_id}-panel-#{id}"
       el.setAttribute 'role', 'tabpanel'
+      el.setAttribute 'aria-labelledby', "#{_id}-tab-#{id}"
       el.toggleAttribute 'hidden', not isActive
       el.toggleAttribute 'data-active', isActive
 
+  _isDisabled: (el) -> el?.hasAttribute('data-disabled')
+
   select: (id) ->
+    prev = @active
+    horiz = @orientation is 'horizontal'
+    if prev and id isnt prev
+      oldTab = tabs.find (t) -> t.dataset.tab is prev
+      newTab = tabs.find (t) -> t.dataset.tab is id
+      if oldTab and newTab
+        oldRect = oldTab.getBoundingClientRect()
+        newRect = newTab.getBoundingClientRect()
+        activationDirection = if horiz
+          if newRect.left > oldRect.left then 'right' else 'left'
+        else
+          if newRect.top > oldRect.top then 'down' else 'up'
     @active = id
     @emit 'change', id
+
+  _nextEnabled: (ids, from, dir) ->
+    len = ids.length
+    i = from
+    loop len
+      i = (i + dir) %% len
+      tab = tabs.find (t) -> t.dataset.tab is ids[i]
+      return ids[i] unless @_isDisabled(tab)
+    ids[from]
 
   onKeydown: (e) ->
     ids = tabs.map (t) -> t.dataset.tab
@@ -60,10 +88,10 @@ export Tabs = component
     nextKey = if horiz then 'ArrowRight' else 'ArrowDown'
 
     next = switch e.key
-      when nextKey then ids[(idx + 1) %% ids.length]
-      when prevKey then ids[(idx - 1) %% ids.length]
-      when 'Home'  then ids[0]
-      when 'End'   then ids[ids.length - 1]
+      when nextKey then @_nextEnabled(ids, idx, 1)
+      when prevKey then @_nextEnabled(ids, idx, -1)
+      when 'Home'  then @_nextEnabled(ids, ids.length - 1, 1)
+      when 'End'   then @_nextEnabled(ids, 0, -1)
       when 'Enter', ' '
         if @activation is 'manual'
           e.preventDefault()
@@ -79,13 +107,17 @@ export Tabs = component
 
   render
     .
-      div role: "tablist", aria-orientation: @orientation, @keydown: @onKeydown
+      div role: "tablist", aria-orientation: @orientation, data-activation-direction: activationDirection, @keydown: @onKeydown
         for tab in tabs
           button role: "tab"
+            id: "#{_id}-tab-#{tab.dataset.tab}"
             aria-selected: tab.dataset.tab is @active
-            tabindex: tab.dataset.tab is @active ? '0' : '-1'
+            aria-controls: "#{_id}-panel-#{tab.dataset.tab}"
+            aria-disabled: @_isDisabled(tab)?!
+            tabindex: if @_isDisabled(tab) then '-1' else (tab.dataset.tab is @active ? '0' : '-1')
             $active: (tab.dataset.tab is @active)?!
-            @click: (=> @select(tab.dataset.tab))
+            $disabled: @_isDisabled(tab)?!
+            @click: (=> @select(tab.dataset.tab) unless @_isDisabled(tab))
             tab.textContent
 
       . ref: "_content"

@@ -12,8 +12,12 @@
 #     p "Content"
 #     button @click: (=> showDialog = false), "Close"
 
+dialogStack = []
+
 export Dialog = component
   @open := false
+  @dismissable := true
+  @initialFocus := null
 
   _prevFocus = null
   _cleanupTrap = null
@@ -36,6 +40,7 @@ export Dialog = component
     if @open
       _prevFocus = document.activeElement
       _scrollY = window.scrollY
+      dialogStack.push this
       document.body.style.position = 'fixed'
       document.body.style.top = "-#{_scrollY}px"
       document.body.style.width = '100%'
@@ -44,8 +49,12 @@ export Dialog = component
         panel = @_panel
         if panel
           @_wireAria()
-          focusable = panel.querySelectorAll 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
-          focusable[0]?.focus()
+          if @initialFocus
+            target = if typeof @initialFocus is 'string' then panel.querySelector(@initialFocus) else @initialFocus
+            target?.focus()
+          else
+            focusable = panel.querySelectorAll 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+            focusable[0]?.focus()
           _cleanupTrap = (e) ->
             return unless e.key is 'Tab'
             list = Array.from(panel.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')).filter (f) -> f.offsetParent isnt null
@@ -60,16 +69,21 @@ export Dialog = component
       , 0
 
       return ->
+        idx = dialogStack.indexOf this
+        dialogStack.splice(idx, 1) if idx >= 0
+        document.body.style.position = '' unless dialogStack.length
+        document.body.style.top = '' unless dialogStack.length
+        document.body.style.width = '' unless dialogStack.length
+        window.scrollTo 0, _scrollY unless dialogStack.length
+        _prevFocus?.focus()
+    else
+      idx = dialogStack.indexOf this
+      dialogStack.splice(idx, 1) if idx >= 0
+      unless dialogStack.length
         document.body.style.position = ''
         document.body.style.top = ''
         document.body.style.width = ''
         window.scrollTo 0, _scrollY
-        _prevFocus?.focus()
-    else
-      document.body.style.position = ''
-      document.body.style.top = ''
-      document.body.style.width = ''
-      window.scrollTo 0, _scrollY
       _prevFocus?.focus()
 
   close: ->
@@ -77,12 +91,12 @@ export Dialog = component
     @emit 'close'
 
   onKeydown: (e) ->
-    if e.key is 'Escape'
+    if e.key is 'Escape' and dialogStack[dialogStack.length - 1] is this
       e.preventDefault()
-      @close()
+      @close() if @dismissable
 
   onBackdropClick: (e) ->
-    @close() if e.target is e.currentTarget
+    @close() if e.target is e.currentTarget and @dismissable
 
   render
     if @open

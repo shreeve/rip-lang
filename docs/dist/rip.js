@@ -3638,6 +3638,11 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
           tokens.splice(i + 1, 1, colonToken, valueToken);
           return 1;
         }
+        if (tag === "PROPERTY" && token[1][0] === "$" && token[1].length > 1) {
+          token[0] = "STRING";
+          token[1] = `"data-${token[1].slice(1)}"`;
+          return 1;
+        }
         if (tag === "IDENTIFIER" && !token.spaced) {
           let parts = [token[1]];
           let j = i + 1;
@@ -3654,8 +3659,11 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             }
           }
           if (parts.length > 1 && j > i + 1 && tokens[j - 1][0] === "PROPERTY") {
+            let joined = parts.join("-");
+            if (joined[0] === "$")
+              joined = "data-" + joined.slice(1);
             token[0] = "STRING";
-            token[1] = `"${parts.join("-")}"`;
+            token[1] = `"${joined}"`;
             tokens.splice(i + 1, j - i - 1);
             return 1;
           }
@@ -8680,7 +8688,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.55";
-  var BUILD_DATE = "2026-02-27@09:25:16GMT";
+  var BUILD_DATE = "2026-02-28@03:24:49GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

@@ -1,26 +1,88 @@
 # Toast — accessible headless toast notification system
 #
-# Auto-dismisses after a configurable duration. Supports stacking.
-# Uses ARIA live region for screen reader announcements.
-# Ships zero CSS.
+# Managed toast system with stacking, timer pause on hover, and promise support.
+# Uses ARIA live region for screen reader announcements. Ships zero CSS.
 #
 # Usage:
-#   Toast message: "Order submitted!", duration: 4000, @dismiss: handleDismiss
+#   # Module-scope manager
+#   toasts := []
+#
+#   # Add toasts from anywhere
+#   toasts = [...toasts, { message: "Saved!", type: "success" }]
+#
+#   # In render block
+#   ToastViewport toasts <=> toasts
+#
+#   # Helper functions
+#   addToast toasts, message: "Saved!", type: "success"
+#   promiseToast toasts, fetch!('/api/save'),
+#     loading: "Saving...", success: "Done!", error: "Failed"
+
+nextId = 0
+
+export addToast = (toasts, opts) ->
+  id = ++nextId
+  entry = { ...opts, _id: id }
+  entry.duration ?= 4000
+  entry.type ?= 'info'
+  toasts.push entry
+  id
+
+export promiseToast = (toasts, promise, opts) ->
+  id = addToast toasts, message: opts.loading, type: 'loading', duration: 0
+  promise.then(
+    ->
+      idx = toasts.findIndex (t) -> t._id is id
+      if idx >= 0
+        toasts[idx] = { ...toasts[idx], message: opts.success, type: 'success', duration: opts.duration or 4000 }
+    (err) ->
+      idx = toasts.findIndex (t) -> t._id is id
+      if idx >= 0
+        msg = if typeof opts.error is 'function' then opts.error(err) else opts.error
+        toasts[idx] = { ...toasts[idx], message: msg, type: 'error', duration: opts.duration or 4000 }
+  )
+  id
+
+export ToastViewport = component
+  @toasts := []
+  @placement := 'bottom-right'
+
+  onDismiss: (id) ->
+    @toasts = @toasts.filter (t) -> t._id isnt id
+    @emit 'dismiss', id
+
+  render
+    div role: "region", aria-label: "Notifications", $placement: @placement
+      for toast in @toasts
+        Toast toast: toast, @dismiss: (e) => @onDismiss(e.detail)
 
 export Toast = component
-  @message := ''
-  @duration := 4000
-  @type := 'info'
+  @toast := {}
 
-  visible := true
   leaving := false
   _timer := null
+  _remaining = 0
+  _started = 0
 
-  mounted: ->
-    if @duration > 0
-      _timer = setTimeout =>
-        @dismiss()
-      , @duration
+  _startTimer: ->
+    dur = @toast.duration
+    return unless dur > 0
+    _remaining = dur
+    _started = Date.now()
+    _timer = setTimeout => @dismiss(), dur
+
+  _pauseTimer: ->
+    return unless _timer
+    clearTimeout _timer
+    _remaining -= Date.now() - _started
+    _timer = null
+
+  _resumeTimer: ->
+    return if _timer or _remaining <= 0
+    _started = Date.now()
+    _timer = setTimeout => @dismiss(), _remaining
+
+  mounted: -> @_startTimer()
 
   beforeUnmount: ->
     clearTimeout _timer if _timer
@@ -28,17 +90,24 @@ export Toast = component
   dismiss: ->
     leaving = true
     setTimeout =>
-      visible = false
-      @emit 'dismiss'
+      @emit 'dismiss', @toast._id
     , 200
 
   render
-    if visible
-      div role: "status",
-        aria-live: "polite",
-        $type: @type,
-        $leaving: leaving?!
-        .
-          span @message
-          button aria-label: "Dismiss", @click: @dismiss
-            "✕"
+    div role: (if @toast.type is 'error' then 'alert' else 'status'),
+      aria-live: (if @toast.type is 'error' then 'assertive' else 'polite'),
+      $type: @toast.type,
+      $leaving: leaving?!,
+      @mouseenter: @_pauseTimer,
+      @mouseleave: @_resumeTimer,
+      @focusin: @_pauseTimer,
+      @focusout: @_resumeTimer
+      .
+        if @toast.title
+          strong @toast.title
+        span @toast.message
+        if @toast.action
+          button @click: @toast.action.onClick
+            @toast.action.label or 'Action'
+        button aria-label: "Dismiss", @click: @dismiss
+          "✕"

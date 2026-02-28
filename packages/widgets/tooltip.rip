@@ -7,11 +7,15 @@
 #   Tooltip text: "Helpful info", placement: "top"
 #     button "Hover me"
 
+lastCloseTime = 0
+GROUP_TIMEOUT = 400
+
 export Tooltip = component
   @text := ''
   @placement := 'top'
   @delay := 300
   @offset := 6
+  @hoverable := false
 
   open := false
   entering := false
@@ -22,6 +26,7 @@ export Tooltip = component
 
   show: ->
     clearTimeout _hideTimer if _hideTimer
+    delay = if (Date.now() - lastCloseTime) < GROUP_TIMEOUT then 0 else @delay
     _showTimer = setTimeout =>
       open = true
       entering = true
@@ -29,7 +34,7 @@ export Tooltip = component
         entering = false
         @_position()
       , 0
-    , @delay
+    , delay
 
   hide: ->
     clearTimeout _showTimer if _showTimer
@@ -37,7 +42,12 @@ export Tooltip = component
     _hideTimer = setTimeout =>
       open = false
       exiting = false
+      lastCloseTime = Date.now()
     , 150
+
+  _cancelHide: ->
+    clearTimeout _hideTimer if _hideTimer
+    exiting = false
 
   _position: ->
     return unless @_trigger and @_tip
@@ -69,6 +79,10 @@ export Tooltip = component
       y = tr.top - fl.height - gap
     if side is 'top' and y < 0
       y = tr.bottom + gap
+    if side is 'right' and x + fl.width > window.innerWidth
+      x = tr.left - fl.width - gap
+    if side is 'left' and x < 0
+      x = tr.right + gap
 
     x = Math.max(4, Math.min(x, window.innerWidth - fl.width - 4))
 
@@ -96,4 +110,6 @@ export Tooltip = component
           $entering: entering?!
           $exiting: exiting?!
           $placement: @placement
+          @mouseenter: (=> @_cancelHide() if @hoverable)
+          @mouseleave: (=> @hide() if @hoverable)
           @text
