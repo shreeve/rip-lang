@@ -17,3 +17,25 @@ This would enable:
 - Breakpoints set directly in `.rip` files via DevTools Sources panel
 
 The `SourceMapGenerator` in `src/sourcemaps.js` (189 LOC) already produces the VLQ-encoded mappings. The browser entry point `src/browser.js` compiles each `<script type="text/rip">` source — it just needs to pass `{ sourceMap: true }` and append the map to the compiled output.
+
+---
+
+## Render Rewriter: Inline Attribute CALL_START Injection
+
+When a template tag has inline attributes ending with a property access expression, the rewriter's `, ->` injection attaches the callback to the attribute value instead of the tag.
+
+Example that breaks:
+```coffee
+button "data-nav-trigger": navItem.dataset.trigger
+  = navItem.dataset.trigger
+```
+The rewriter injects `, ->` after `trigger`, making the parser see `navItem.dataset.trigger(-> ...)` — a function call.
+
+Workaround: put the property-access attribute on an indented line:
+```coffee
+button tabindex: "0"
+  "data-nav-trigger": navItem.dataset.trigger
+  = navItem.dataset.trigger
+```
+
+The proper fix: when injecting `, ->` for non-bare tags, also inject `CALL_START` after the tag identifier at the start of the line, so `button CALL_START ... , -> INDENT` forms a clean call.
