@@ -2727,7 +2727,7 @@ code 'render = prefix: property access', '''
     }
     _create() {
       this._el0 = document.createElement('div');
-      this._t0 = document.createTextNode(String(`${item.textContent}`));
+      this._t0 = document.createTextNode(String(item.textContent));
       this._el0.appendChild(this._t0);
       return this._el0;
     }
@@ -2745,7 +2745,7 @@ code 'render = prefix: deep property (nav is HTML tag)', '''
     }
     _create() {
       this._el0 = document.createElement('div');
-      this._t0 = document.createTextNode(String(`${nav.dataset.trigger}`));
+      this._t0 = document.createTextNode(String(nav.dataset.trigger));
       this._el0.appendChild(this._t0);
       return this._el0;
     }
@@ -2763,7 +2763,7 @@ code 'render = prefix: link.href (link is HTML tag)', '''
     }
     _create() {
       this._el0 = document.createElement('div');
-      this._t0 = document.createTextNode(String(`${link.href}`));
+      this._t0 = document.createTextNode(String(link.href));
       this._el0.appendChild(this._t0);
       return this._el0;
     }

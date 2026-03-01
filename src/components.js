@@ -112,6 +112,8 @@ function isPublicProp(target) {
 
 export function installComponentSupport(CodeGenerator, Lexer) {
 
+  let meta = (node, key) => node instanceof String ? node[key] : undefined;
+
   // ==========================================================================
   // Lexer: Context-sensitive 'offer'/'accept' (only inside component bodies)
   // ==========================================================================
@@ -261,16 +263,18 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       if (!inRender) return 1;
 
       // ─────────────────────────────────────────────────────────────────────
-      // Expression output: = expr → "#{expr}" (text node, never a tag)
+      // Expression output: = expr → text node (stamp .text, skip tag detection)
       // ─────────────────────────────────────────────────────────────────────
       if (tag === '=' && i > 0) {
         let prev = tokens[i - 1][0];
         if (prev === 'TERMINATOR' || prev === 'INDENT' || prev === 'RENDER') {
-          let end = i + 1;
-          while (end < tokens.length && tokens[end][0] !== 'TERMINATOR' && tokens[end][0] !== 'INDENT' && tokens[end][0] !== 'OUTDENT') end++;
-          tokens.splice(end, 0, gen('INTERPOLATION_END', ')', token), gen('STRING', '""', token), gen('STRING_END', ')', token));
-          tokens.splice(i, 1, gen('STRING_START', '(', token), gen('STRING', '""', token), gen('INTERPOLATION_START', '(', token));
-          return 3;
+          tokens.splice(i, 1);
+          if (tokens[i] && tokens[i][0] === 'IDENTIFIER') {
+            let val = tokens[i][1];
+            if (typeof val === 'string') { val = new String(val); tokens[i][1] = val; }
+            val.text = true;
+          }
+          return 0;
         }
       }
 
@@ -560,11 +564,11 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       current = current[1];
     }
     let raw = typeof current === 'string' ? current : (current instanceof String ? current.valueOf() : null);
-    if (raw === null) return { tag: null, classes, id: undefined };
+    if (raw === null) return { tag: null, classes, id: undefined, base: current };
     // Split tag#id — e.g. "div#content" → tag: "div", id: "content"
     let [tag, id] = raw.split('#');
     if (!tag) tag = 'div';  // bare #id → div
-    return { tag, classes, id };
+    return { tag, classes, id, base: current };
   };
 
   // ==========================================================================
@@ -1061,7 +1065,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     }
 
     // HTML tag (possibly with #id, e.g. div#content)
-    if (headStr && this.isHtmlTag(headStr)) {
+    if (headStr && this.isHtmlTag(headStr) && !meta(head, 'text')) {
       let [tagName, id] = headStr.split('#');
       return this.generateTag(tagName || 'div', [], rest, id);
     }
@@ -1084,9 +1088,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         return slotVar;
       }
 
-      // HTML tag with classes (div.class) and optional #id
-      const { tag, classes, id } = this.collectTemplateClasses(sexpr);
-      if (tag && this.isHtmlTag(tag)) {
+      // HTML tag with classes (div.class) — skip if base is marked .text by = prefix
+      const { tag, classes, id, base } = this.collectTemplateClasses(sexpr);
+      if (!meta(base, 'text') && tag && this.isHtmlTag(tag)) {
         return this.generateTag(tag, classes, [], id);
       }
 
