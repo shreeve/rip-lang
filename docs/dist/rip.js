@@ -3630,6 +3630,17 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         }
         if (!inRender)
           return 1;
+        if (tag === "=" && i > 0) {
+          let prev = tokens[i - 1][0];
+          if (prev === "TERMINATOR" || prev === "INDENT" || prev === "RENDER") {
+            let end = i + 1;
+            while (end < tokens.length && tokens[end][0] !== "TERMINATOR" && tokens[end][0] !== "INDENT" && tokens[end][0] !== "OUTDENT")
+              end++;
+            tokens.splice(end, 0, gen2("INTERPOLATION_END", ")", token), gen2("STRING", '""', token), gen2("STRING_END", ")", token));
+            tokens.splice(i, 1, gen2("STRING_START", "(", token), gen2("STRING", '""', token), gen2("INTERPOLATION_START", "(", token));
+            return 3;
+          }
+        }
         if (tag === "UNARY_MATH" && token[1] === "~" && nextToken && nextToken[0] === "IDENTIFIER") {
           token[0] = "PROPERTY";
           token[1] = "__transition__";
@@ -8703,8 +8714,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.56";
-  var BUILD_DATE = "2026-03-01@02:18:54GMT";
+  var VERSION = "3.13.62";
+  var BUILD_DATE = "2026-03-01@06:05:45GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
