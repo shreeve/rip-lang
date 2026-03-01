@@ -1491,7 +1491,7 @@ export WidgetGallery = component
         .section-desc "Hover or focus the link to see a preview card."
         .demo-row
           PreviewCard delay: 300
-            a $trigger: true, href: "#"
+            a $trigger: true, href: "#preview-card", @click: ((e) => e.preventDefault())
               "Hover me for preview"
             div $content: true, hidden: true
               .floating-panel style: "width:240px"
