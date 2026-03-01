@@ -489,7 +489,19 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         }
 
         if (isTemplateElement) {
-          let isClassOrIdTail = tag === 'PROPERTY' && i > 0 && (tokens[i - 1][0] === '.' || tokens[i - 1][0] === '#');
+          let isClassOrIdTail = false;
+          if (tag === 'PROPERTY' && i > 0 && tokens[i - 1][0] === '.') {
+            // Trace backward through the .PROPERTY chain to find its root —
+            // only a CSS class tail if the chain starts from a line-starting template tag
+            let j = i;
+            while (j >= 2 && tokens[j - 1][0] === '.' && tokens[j - 2][0] === 'PROPERTY') j -= 2;
+            if (j >= 2 && tokens[j - 1][0] === '.' && tokens[j - 2][0] === 'IDENTIFIER' && isTemplateTag(tokens[j - 2][1])) {
+              let before = j >= 3 ? tokens[j - 3][0] : null;
+              if (!before || before === 'INDENT' || before === 'OUTDENT' || before === 'TERMINATOR' || before === 'RENDER') {
+                isClassOrIdTail = true;
+              }
+            }
+          }
           let isBareTag = isClsxCallEnd || (tag === 'IDENTIFIER' && isTemplateTag(token[1])) || isClassOrIdTail;
 
           if (isBareTag) {

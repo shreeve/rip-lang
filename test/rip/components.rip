@@ -2769,3 +2769,92 @@ code 'render = prefix: link.href (link is HTML tag)', '''
     }
   };
   ''', opts
+
+# ==============================================================================
+# Property access as last attribute value before children
+# ==============================================================================
+
+code 'render: property access attr value with children', '''
+  export Test = component
+    render
+      button data-trigger: navItem.dataset.trigger
+        span "child"
+  ''', '''
+  export const Test = class extends __Component {
+    _init(props) {
+    }
+    _create() {
+      this._el0 = document.createElement('button');
+      this._el0.setAttribute('data-trigger', navItem.dataset.trigger);
+      this._el1 = document.createElement('span');
+      this._t0 = document.createTextNode("child");
+      this._el1.appendChild(this._t0);
+      this._el0.appendChild(this._el1);
+      return this._el0;
+    }
+  };
+  ''', opts
+
+code 'render: deep property chain attr value with children', '''
+  export Test = component
+    render
+      button data-x: a.b.c.d
+        span "child"
+  ''', '''
+  export const Test = class extends __Component {
+    _init(props) {
+    }
+    _create() {
+      this._el0 = document.createElement('button');
+      this._el0.setAttribute('data-x', a.b.c.d);
+      this._el1 = document.createElement('span');
+      this._t0 = document.createTextNode("child");
+      this._el1.appendChild(this._t0);
+      this._el0.appendChild(this._el1);
+      return this._el0;
+    }
+  };
+  ''', opts
+
+code 'render: CSS class tail still works with children', '''
+  export Test = component
+    render
+      button.primary
+        span "child"
+  ''', '''
+  export const Test = class extends __Component {
+    _init(props) {
+    }
+    _create() {
+      this._el0 = document.createElement('button');
+      this._el1 = document.createElement('span');
+      this._t0 = document.createTextNode("child");
+      this._el1.appendChild(this._t0);
+      this._el0.appendChild(this._el1);
+      this._el0.className = 'primary';
+      return this._el0;
+    }
+  };
+  ''', opts
+
+code 'render: CSS class + property access attr coexist', '''
+  export Test = component
+    render
+      button.active data-trigger: obj.prop
+        span "child"
+  ''', '''
+  export const Test = class extends __Component {
+    _init(props) {
+    }
+    _create() {
+      this._el0 = document.createElement('button');
+      this._el0.setAttribute('data-trigger', obj.prop);
+      this._el1 = document.createElement('span');
+      this._t0 = document.createTextNode("child");
+      this._el1.appendChild(this._t0);
+      this._el0.appendChild(this._el1);
+      this._el0.className = 'active';
+      return this._el0;
+    }
+  };
+  ''', opts
