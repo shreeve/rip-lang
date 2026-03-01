@@ -22,14 +22,13 @@ export ToastViewport = component
   @toasts := []
   @placement := 'bottom-right'
 
-  onDismiss: (toast) ->
+  _onDismiss: (toast) ->
     @toasts = @toasts.filter (t) -> t isnt toast
-    @emit 'dismiss', toast
 
   render
     div role: "region", aria-label: "Notifications", $placement: @placement
       for toast in @toasts
-        Toast toast: toast, @dismiss: (e) => @onDismiss(e.detail)
+        Toast toast: toast, @dismiss: (e) => @_onDismiss(e.detail)
 
 export Toast = component
   @toast := {}
