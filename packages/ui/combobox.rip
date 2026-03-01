@@ -70,6 +70,7 @@ export Combobox = component
     return unless item
     return if @isDisabled(item)
     val = item.dataset.value ?? item.textContent.trim()
+    @query = val
     @emit 'select', val
     @close()
 
