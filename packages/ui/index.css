@@ -866,16 +866,15 @@ html { scroll-behavior: auto; }
 }
 
 .toc-nav {
-  display: flex; flex-wrap: wrap; align-content: flex-start;
-  gap: 14px; padding: 16px 20px;
+  display: flex; flex-wrap: wrap;
+  gap: 12px 20px; padding: 16px 20px;
 }
 
-.toc-group { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 6px; }
+.toc-group { display: flex; flex-direction: column; gap: 3px; }
 
 .toc-label {
   font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
-  text-transform: uppercase; color: #94a3b8; width: 100%;
-  margin-bottom: -2px;
+  text-transform: uppercase; color: #94a3b8; margin-bottom: 2px;
 }
 
 .toc a {
