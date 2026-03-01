@@ -921,7 +921,7 @@ html.no-transition, html.no-transition * { transition: none !important; }
 .toc-detail {
   border-left: 1px solid #e2e8f0; background: #fafbfc;
   padding: 16px 20px; display: flex; flex-direction: column;
-  position: relative;
+  position: relative; min-height: 280px;
 }
 
 .toc-detail h3 {
