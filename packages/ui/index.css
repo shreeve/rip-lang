@@ -683,6 +683,7 @@ select.rip-grid-editor { cursor: pointer; padding-left: 4px; }
 .gallery [data-trigger][aria-haspopup] {
   padding: 8px 14px; border: 1px solid #cbd5e1; border-radius: 6px;
   background: white; cursor: pointer; font-size: 14px; color: #1e293b;
+  min-width: 180px; min-height: 38px;
 
   &:hover { border-color: #94a3b8; }
   &[aria-expanded="true"] { border-color: #3b82f6; }
