@@ -108,8 +108,8 @@ export NavigationMenu = component
             = navItem.textContent
         else if navItem.dataset.trigger?
           . style: "display:inline-block;position:relative"
-            button "data-nav-trigger": navItem.dataset.trigger
-              tabindex: "0"
+            button tabindex: "0"
+              "data-nav-trigger": navItem.dataset.trigger
               aria-expanded: activePanel is navItem.dataset.trigger
               $open: (activePanel is navItem.dataset.trigger)?!
               @click: (=> if activePanel is navItem.dataset.trigger then @_closePanel() else @_openPanel(navItem.dataset.trigger))
