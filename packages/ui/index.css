@@ -824,13 +824,15 @@ select.rip-grid-editor { cursor: pointer; padding-left: 4px; }
 
   button[aria-pressed] {
     padding: 6px 14px; border: 1px solid #cbd5e1; background: white;
-    cursor: pointer; font-size: 13px; color: #475569; transition: all 0.15s;
+    cursor: pointer; font-size: 13px; color: #94a3b8; transition: all 0.15s;
+    user-select: none;
 
     &:first-of-type { border-radius: 6px 0 0 6px; }
     &:last-of-type  { border-radius: 0 6px 6px 0; }
     &:not(:first-of-type) { margin-left: -1px; }
-    &[data-pressed] { background: #eff6ff; color: #1d4ed8; border-color: #3b82f6; z-index: 1; }
-    &:hover:not([data-pressed]) { background: #f8fafc; }
+    &[data-pressed="true"] { background: #3b82f6; color: white; border-color: #3b82f6; z-index: 1; }
+    &:hover:not([data-pressed="true"]) { background: #f8fafc; color: #475569; }
+    &:active { transform: scale(0.97); }
     &:focus-visible { outline: 2px solid #3b82f6; outline-offset: -2px; z-index: 2; }
   }
 }
@@ -1217,9 +1219,9 @@ html.no-transition, html.no-transition * { transition: none !important; }
   .gallery nav[role="navigation"] [data-nav-panel] a:hover { background: #334155; color: #e2e8f0; }
 
   /* ToggleGroup / RadioGroup / CheckboxGroup */
-  .gallery [role="group"][data-orientation] button[aria-pressed] { border-color: #475569; background: #1e293b; color: #94a3b8; }
-  .gallery [role="group"][data-orientation] button[aria-pressed][data-pressed] { background: #172554; color: #60a5fa; border-color: #3b82f6; }
-  .gallery [role="group"][data-orientation] button[aria-pressed]:hover:not([data-pressed]) { background: #334155; }
+  .gallery [role="group"][data-orientation] button[aria-pressed] { border-color: #475569; background: #1e293b; color: #64748b; }
+  .gallery [role="group"][data-orientation] button[aria-pressed][data-pressed="true"] { background: #3b82f6; color: white; border-color: #3b82f6; }
+  .gallery [role="group"][data-orientation] button[aria-pressed]:hover:not([data-pressed="true"]) { background: #334155; color: #94a3b8; }
   .gallery [role="radiogroup"] [role="radio"] { border-color: #475569; background: #1e293b; color: #94a3b8; }
   .gallery [role="radiogroup"] [role="radio"][data-checked] { background: #172554; color: #60a5fa; border-color: #3b82f6; }
   .gallery [role="radiogroup"] [role="radio"]:hover:not([data-checked]) { background: #334155; }

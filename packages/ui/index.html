@@ -104,7 +104,8 @@ export WidgetGallery = component
   price := 9.99
   alignment := 'left'
   fontSize := 'md'
-  toppings := ['cheese']
+  toppings := ['Cheese']
+  cbToppings := ['Cheese']
   fieldEmail := ''
   fieldError := ''
   otpCode := ''
@@ -778,9 +779,9 @@ export WidgetGallery = component
         .demo-row
           .demo-label "Multi-select"
           ToggleGroup value <=> toppings, multiple: true
-            div $value: "cheese", "Cheese"
-            div $value: "bacon", "Bacon"
-            div $value: "lettuce", "Lettuce"
+            div $value: "Cheese", "Cheese"
+            div $value: "Bacon", "Bacon"
+            div $value: "Lettuce", "Lettuce"
           .status "toppings: #{toppings.join(', ')}"
         .api
           dl
@@ -861,12 +862,12 @@ export WidgetGallery = component
         .section-desc "Multiple options checked independently."
         .demo-row
           .demo-label "Toppings"
-          CheckboxGroup value <=> toppings, label: "Pizza toppings"
-            div $value: "cheese", "Cheese"
-            div $value: "bacon", "Bacon"
-            div $value: "lettuce", "Lettuce"
-            div $value: "tomato", "Tomato"
-          .status "selected: #{toppings.join(', ')}"
+          CheckboxGroup value <=> cbToppings, label: "Pizza toppings"
+            div $value: "Cheese", "Cheese"
+            div $value: "Bacon", "Bacon"
+            div $value: "Lettuce", "Lettuce"
+            div $value: "Tomato", "Tomato"
+          .status "selected: #{cbToppings.join(', ')}"
         .api
           dl
             dt "Props"
