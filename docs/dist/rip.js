@@ -3803,7 +3803,18 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             isTemplateElement = startsWithTag(tokens, i);
           }
           if (isTemplateElement) {
-            let isClassOrIdTail = tag === "PROPERTY" && i > 0 && (tokens[i - 1][0] === "." || tokens[i - 1][0] === "#");
+            let isClassOrIdTail = false;
+            if (tag === "PROPERTY" && i > 0 && tokens[i - 1][0] === ".") {
+              let j = i;
+              while (j >= 2 && tokens[j - 1][0] === "." && tokens[j - 2][0] === "PROPERTY")
+                j -= 2;
+              if (j >= 2 && tokens[j - 1][0] === "." && tokens[j - 2][0] === "IDENTIFIER" && isTemplateTag(tokens[j - 2][1])) {
+                let before = j >= 3 ? tokens[j - 3][0] : null;
+                if (!before || before === "INDENT" || before === "OUTDENT" || before === "TERMINATOR" || before === "RENDER") {
+                  isClassOrIdTail = true;
+                }
+              }
+            }
             let isBareTag = isClsxCallEnd || tag === "IDENTIFIER" && isTemplateTag(token[1]) || isClassOrIdTail;
             if (isBareTag) {
               let callStartToken = gen2("CALL_START", "(", token);
@@ -4539,7 +4550,11 @@ ${blockFactoriesCode}return ${lines.join(`
               this._pushEffect(`${elVar}.setAttribute('${key}', ${valueCode});`);
             }
           } else {
-            this._createLines.push(`${elVar}.setAttribute('${key}', ${valueCode});`);
+            if (Array.isArray(value) && value[0] === "presence") {
+              this._createLines.push(`{ const __v = ${valueCode}; if (__v != null) ${elVar}.setAttribute('${key}', __v); }`);
+            } else {
+              this._createLines.push(`${elVar}.setAttribute('${key}', ${valueCode});`);
+            }
           }
         }
       }
@@ -4877,6 +4892,11 @@ ${blockFactoriesCode}return ${lines.join(`
       }
       if (sexpr[0] === "." && this._rootsAtThis(sexpr[1])) {
         return true;
+      }
+      if (Array.isArray(sexpr[0]) && sexpr[0][0] === "." && sexpr[0][1] === "this") {
+        const name = _str(sexpr[0][2]);
+        if (name && this.componentMembers?.has(name))
+          return true;
       }
       for (const child of sexpr) {
         if (this.hasReactiveDeps(child))
@@ -6323,7 +6343,7 @@ function _setDataSection() {
       if (rest.length === 0)
         return "return";
       let [expr] = rest;
-      if (this.sideEffectOnly)
+      if (this.sideEffectOnly && !(this.is(expr, "->") || this.is(expr, "=>")))
         return "return";
       if (this.is(expr, "if")) {
         let [, condition, body, ...elseParts] = expr;
@@ -8719,8 +8739,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.63";
-  var BUILD_DATE = "2026-03-01@06:49:01GMT";
+  var VERSION = "3.13.65";
+  var BUILD_DATE = "2026-03-01@20:19:11GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
