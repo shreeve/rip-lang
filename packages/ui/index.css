@@ -39,6 +39,19 @@ button { font: inherit; cursor: pointer; }
   }
 
   .section-desc { color: #64748b; font-size: 13px; margin-bottom: 16px; }
+
+  .section-nav {
+    margin-left: auto; display: flex; gap: 2px;
+
+    a {
+      font-size: 13px; color: #c0c8d4; cursor: pointer;
+      width: 26px; height: 26px; display: grid; place-items: center;
+      border-radius: 4px; text-decoration: none;
+      transition: color 0.12s, background 0.12s;
+
+      &:hover { color: #3b82f6; background: #eff6ff; }
+    }
+  }
 }
 
 .demo-row {

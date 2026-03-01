@@ -162,18 +162,38 @@ export WidgetGallery = component
     { name: 'Leo Martin', role: 'Engineer', age: 24, city: 'Boston' },
   ]
 
-  _jumpTo: (e) ->
-    e.preventDefault()
-    target = document.getElementById(tocActive)
-    return unless target
+  sectionIds =! ['select', 'combobox', 'multi-select', 'autocomplete', 'checkbox', 'toggle', 'toggle-group', 'radio-group', 'checkbox-group', 'input', 'number-field', 'slider', 'otp-field', 'date-picker', 'editable-value', 'tabs', 'menu', 'context-menu', 'menubar', 'nav-menu', 'toolbar', 'dialog', 'drawer', 'popover', 'tooltip', 'preview-card', 'toast', 'button', 'separator', 'progress', 'meter', 'avatar', 'scroll-area', 'field', 'form', 'grid', 'accordion']
+
+  _fadeTo: (el) ->
+    return unless el
     gallery = document.querySelector('.gallery')
     gallery.style.transition = 'opacity 80ms ease-out'
     gallery.style.opacity = '0'
     setTimeout =>
-      target.scrollIntoView({ behavior: 'instant', block: 'start' })
+      el.scrollIntoView({ behavior: 'instant', block: 'start' })
       gallery.style.transition = 'opacity 120ms ease-in'
       gallery.style.opacity = '1'
     , 80
+
+  _jumpTo: (e) ->
+    e.preventDefault()
+    @_fadeTo(document.getElementById(tocActive))
+
+  _navSection: (currentId, dir) ->
+    if dir is 'home'
+      gallery = document.querySelector('.gallery')
+      gallery.style.transition = 'opacity 80ms ease-out'
+      gallery.style.opacity = '0'
+      setTimeout =>
+        window.scrollTo({ top: 0, behavior: 'instant' })
+        gallery.style.transition = 'opacity 120ms ease-in'
+        gallery.style.opacity = '1'
+      , 80
+      return
+    idx = sectionIds.indexOf(currentId)
+    return if idx < 0
+    nextId = sectionIds[if dir is 'prev' then idx - 1 else idx + 1]
+    @_fadeTo(document.getElementById(nextId)) if nextId
 
   render
     .gallery
@@ -276,6 +296,10 @@ export WidgetGallery = component
       .section id: "select"
         .section-title "Select"
           span.badge "184 lines"
+          .section-nav
+            a @click: (=> @_navSection('select', 'prev')), "‹"
+            a @click: (=> @_navSection('select', 'home')), "⌂"
+            a @click: (=> @_navSection('select', 'next')), "›"
         .section-desc "Dropdown with typeahead, keyboard nav, ARIA listbox."
         .demo-row
           .demo-label "Basic select"
@@ -325,6 +349,10 @@ export WidgetGallery = component
       .section id: "combobox"
         .section-title "Combobox"
           span.badge "153 lines"
+          .section-nav
+            a @click: (=> @_navSection('combobox', 'prev')), "‹"
+            a @click: (=> @_navSection('combobox', 'home')), "⌂"
+            a @click: (=> @_navSection('combobox', 'next')), "›"
         .section-desc "Filterable input + listbox for search-as-you-type."
         .demo-row
           .demo-label "Search fruits"
@@ -366,6 +394,10 @@ export WidgetGallery = component
       .section id: "multi-select"
         .section-title "MultiSelect"
           span.badge "158 lines"
+          .section-nav
+            a @click: (=> @_navSection('multi-select', 'prev')), "‹"
+            a @click: (=> @_navSection('multi-select', 'home')), "⌂"
+            a @click: (=> @_navSection('multi-select', 'next')), "›"
         .section-desc "Multi-select with chips, filtering, and keyboard navigation."
         .demo-row
           .demo-label "Pick colors"
@@ -406,6 +438,10 @@ export WidgetGallery = component
       .section id: "autocomplete"
         .section-title "Autocomplete"
           span.badge "141 lines"
+          .section-nav
+            a @click: (=> @_navSection('autocomplete', 'prev')), "‹"
+            a @click: (=> @_navSection('autocomplete', 'home')), "⌂"
+            a @click: (=> @_navSection('autocomplete', 'next')), "›"
         .section-desc "Suggestion input — type to filter, select to fill."
         .demo-row
           .demo-label "Search cities"
@@ -440,6 +476,10 @@ export WidgetGallery = component
       .section id: "checkbox"
         .section-title "Checkbox"
           span.badge "33 lines"
+          .section-nav
+            a @click: (=> @_navSection('checkbox', 'prev')), "‹"
+            a @click: (=> @_navSection('checkbox', 'home')), "⌂"
+            a @click: (=> @_navSection('checkbox', 'next')), "›"
         .section-desc "Toggle with checkbox or switch semantics. Supports indeterminate."
         .demo-row
           .demo-label "Checkbox (unchecked)"
@@ -479,6 +519,10 @@ export WidgetGallery = component
       .section id: "toggle"
         .section-title "Toggle"
           span.badge "24 lines"
+          .section-nav
+            a @click: (=> @_navSection('toggle', 'prev')), "‹"
+            a @click: (=> @_navSection('toggle', 'home')), "⌂"
+            a @click: (=> @_navSection('toggle', 'next')), "›"
         .section-desc "Stateful toggle button with pressed state."
         .demo-row
           .demo-label "Tap to toggle"
@@ -505,6 +549,10 @@ export WidgetGallery = component
       .section id: "toggle-group"
         .section-title "ToggleGroup"
           span.badge "78 lines"
+          .section-nav
+            a @click: (=> @_navSection('toggle-group', 'prev')), "‹"
+            a @click: (=> @_navSection('toggle-group', 'home')), "⌂"
+            a @click: (=> @_navSection('toggle-group', 'next')), "›"
         .section-desc "Single or multi-select toggle buttons."
         .demo-row
           .demo-label "Text alignment"
@@ -550,6 +598,10 @@ export WidgetGallery = component
       .section id: "radio-group"
         .section-title "RadioGroup"
           span.badge "67 lines"
+          .section-nav
+            a @click: (=> @_navSection('radio-group', 'prev')), "‹"
+            a @click: (=> @_navSection('radio-group', 'home')), "⌂"
+            a @click: (=> @_navSection('radio-group', 'next')), "›"
         .section-desc "Exactly one option selected. Arrow keys move focus and selection."
         .demo-row
           .demo-label "Font size"
@@ -588,6 +640,10 @@ export WidgetGallery = component
       .section id: "checkbox-group"
         .section-title "CheckboxGroup"
           span.badge "65 lines"
+          .section-nav
+            a @click: (=> @_navSection('checkbox-group', 'prev')), "‹"
+            a @click: (=> @_navSection('checkbox-group', 'home')), "⌂"
+            a @click: (=> @_navSection('checkbox-group', 'next')), "›"
         .section-desc "Multiple options checked independently."
         .demo-row
           .demo-label "Toppings"
@@ -625,6 +681,10 @@ export WidgetGallery = component
       .section id: "input"
         .section-title "Input"
           span.badge "35 lines"
+          .section-nav
+            a @click: (=> @_navSection('input', 'prev')), "‹"
+            a @click: (=> @_navSection('input', 'home')), "⌂"
+            a @click: (=> @_navSection('input', 'next')), "›"
         .section-desc "Headless input tracking focus, touch, and validation state."
         .demo-row
           .demo-label "Text input"
@@ -651,6 +711,10 @@ export WidgetGallery = component
       .section id: "number-field"
         .section-title "NumberField"
           span.badge "162 lines"
+          .section-nav
+            a @click: (=> @_navSection('number-field', 'prev')), "‹"
+            a @click: (=> @_navSection('number-field', 'home')), "⌂"
+            a @click: (=> @_navSection('number-field', 'next')), "›"
         .section-desc "Number input with increment/decrement buttons, hold-to-repeat, and keyboard stepping."
         .demo-row
           .demo-label "Quantity (1-99)"
@@ -696,6 +760,10 @@ export WidgetGallery = component
       .section id: "slider"
         .section-title "Slider"
           span.badge "165 lines"
+          .section-nav
+            a @click: (=> @_navSection('slider', 'prev')), "‹"
+            a @click: (=> @_navSection('slider', 'home')), "⌂"
+            a @click: (=> @_navSection('slider', 'next')), "›"
         .section-desc "Draggable range input with pointer capture and keyboard stepping."
         .demo-row
           .demo-label "Single thumb"
@@ -745,6 +813,10 @@ export WidgetGallery = component
       .section id: "otp-field"
         .section-title "OTPField"
           span.badge "89 lines"
+          .section-nav
+            a @click: (=> @_navSection('otp-field', 'prev')), "‹"
+            a @click: (=> @_navSection('otp-field', 'home')), "⌂"
+            a @click: (=> @_navSection('otp-field', 'next')), "›"
         .section-desc "Multi-digit code input with auto-advance, backspace nav, and paste."
         .demo-row
           .demo-label "6-digit code"
@@ -784,6 +856,10 @@ export WidgetGallery = component
       .section id: "date-picker"
         .section-title "DatePicker"
           span.badge "214 lines"
+          .section-nav
+            a @click: (=> @_navSection('date-picker', 'prev')), "‹"
+            a @click: (=> @_navSection('date-picker', 'home')), "⌂"
+            a @click: (=> @_navSection('date-picker', 'next')), "›"
         .section-desc "Calendar dropdown for single date or range selection."
         .demo-row
           .demo-label "Single date"
@@ -826,6 +902,10 @@ export WidgetGallery = component
       .section id: "editable-value"
         .section-title "EditableValue"
           span.badge "80 lines"
+          .section-nav
+            a @click: (=> @_navSection('editable-value', 'prev')), "‹"
+            a @click: (=> @_navSection('editable-value', 'home')), "⌂"
+            a @click: (=> @_navSection('editable-value', 'next')), "›"
         .section-desc "Click the edit icon to modify the value inline."
         .demo-row
           EditableValue @save: (=> editName = editName)
@@ -859,6 +939,10 @@ export WidgetGallery = component
       .section id: "tabs"
         .section-title "Tabs"
           span.badge "124 lines"
+          .section-nav
+            a @click: (=> @_navSection('tabs', 'prev')), "‹"
+            a @click: (=> @_navSection('tabs', 'home')), "⌂"
+            a @click: (=> @_navSection('tabs', 'next')), "›"
         .section-desc "Tab panel with roving tabindex and arrow key navigation."
         .demo-row
           .demo-label "Basic tabs"
@@ -904,6 +988,10 @@ export WidgetGallery = component
       .section id: "menu"
         .section-title "Menu"
           span.badge "162 lines"
+          .section-nav
+            a @click: (=> @_navSection('menu', 'prev')), "‹"
+            a @click: (=> @_navSection('menu', 'home')), "⌂"
+            a @click: (=> @_navSection('menu', 'next')), "›"
         .section-desc "Dropdown action menu with keyboard navigation."
         .demo-row
           .demo-label "Click to open menu"
@@ -945,6 +1033,10 @@ export WidgetGallery = component
       .section id: "context-menu"
         .section-title "ContextMenu"
           span.badge "98 lines"
+          .section-nav
+            a @click: (=> @_navSection('context-menu', 'prev')), "‹"
+            a @click: (=> @_navSection('context-menu', 'home')), "⌂"
+            a @click: (=> @_navSection('context-menu', 'next')), "›"
         .section-desc "Right-click the dashed area to open a context menu."
         ContextMenu
           div $trigger: true
@@ -983,6 +1075,10 @@ export WidgetGallery = component
       .section id: "menubar"
         .section-title "Menubar"
           span.badge "155 lines"
+          .section-nav
+            a @click: (=> @_navSection('menubar', 'prev')), "‹"
+            a @click: (=> @_navSection('menubar', 'home')), "⌂"
+            a @click: (=> @_navSection('menubar', 'next')), "›"
         .section-desc "Horizontal menu bar with dropdown menus."
         .demo-row
           Menubar
@@ -1026,6 +1122,10 @@ export WidgetGallery = component
       .section id: "nav-menu"
         .section-title "NavigationMenu"
           span.badge "132 lines"
+          .section-nav
+            a @click: (=> @_navSection('nav-menu', 'prev')), "‹"
+            a @click: (=> @_navSection('nav-menu', 'home')), "⌂"
+            a @click: (=> @_navSection('nav-menu', 'next')), "›"
         .section-desc "Site navigation with dropdown panels."
         .demo-row
           NavigationMenu
@@ -1065,6 +1165,10 @@ export WidgetGallery = component
       .section id: "toolbar"
         .section-title "Toolbar"
           span.badge "46 lines"
+          .section-nav
+            a @click: (=> @_navSection('toolbar', 'prev')), "‹"
+            a @click: (=> @_navSection('toolbar', 'home')), "⌂"
+            a @click: (=> @_navSection('toolbar', 'next')), "›"
         .section-desc "Groups controls with roving tabindex keyboard navigation."
         .demo-row
           Toolbar label: "Formatting"
@@ -1099,6 +1203,10 @@ export WidgetGallery = component
       .section id: "dialog"
         .section-title "Dialog"
           span.badge "107 lines"
+          .section-nav
+            a @click: (=> @_navSection('dialog', 'prev')), "‹"
+            a @click: (=> @_navSection('dialog', 'home')), "⌂"
+            a @click: (=> @_navSection('dialog', 'next')), "›"
         .section-desc "Modal with focus trap, scroll lock, escape/click-outside dismiss."
         .demo-row
           .demo-label "Click to open"
@@ -1138,6 +1246,10 @@ export WidgetGallery = component
       .section id: "drawer"
         .section-title "Drawer"
           span.badge "79 lines"
+          .section-nav
+            a @click: (=> @_navSection('drawer', 'prev')), "‹"
+            a @click: (=> @_navSection('drawer', 'home')), "⌂"
+            a @click: (=> @_navSection('drawer', 'next')), "›"
         .section-desc "Slide-out panel from edge of screen with focus trap and scroll lock."
         .demo-row
           .demo-label "Open from right"
@@ -1177,6 +1289,10 @@ export WidgetGallery = component
       .section id: "popover"
         .section-title "Popover"
           span.badge "143 lines"
+          .section-nav
+            a @click: (=> @_navSection('popover', 'prev')), "‹"
+            a @click: (=> @_navSection('popover', 'home')), "⌂"
+            a @click: (=> @_navSection('popover', 'next')), "›"
         .section-desc "Anchored floating content with flip/shift positioning."
         .demo-row
           .demo-label "Click to toggle"
@@ -1213,6 +1329,10 @@ export WidgetGallery = component
       .section id: "tooltip"
         .section-title "Tooltip"
           span.badge "115 lines"
+          .section-nav
+            a @click: (=> @_navSection('tooltip', 'prev')), "‹"
+            a @click: (=> @_navSection('tooltip', 'home')), "⌂"
+            a @click: (=> @_navSection('tooltip', 'next')), "›"
         .section-desc "Hover/focus tooltip with delay and positioning."
         .demo-row
           .demo-label "Hover the buttons"
@@ -1245,6 +1365,10 @@ export WidgetGallery = component
       .section id: "preview-card"
         .section-title "PreviewCard"
           span.badge "73 lines"
+          .section-nav
+            a @click: (=> @_navSection('preview-card', 'prev')), "‹"
+            a @click: (=> @_navSection('preview-card', 'home')), "⌂"
+            a @click: (=> @_navSection('preview-card', 'next')), "›"
         .section-desc "Hover or focus the link to see a preview card."
         .demo-row
           PreviewCard delay: 300
@@ -1272,6 +1396,10 @@ export WidgetGallery = component
       .section id: "toast"
         .section-title "Toast"
           span.badge "88 lines"
+          .section-nav
+            a @click: (=> @_navSection('toast', 'prev')), "‹"
+            a @click: (=> @_navSection('toast', 'home')), "⌂"
+            a @click: (=> @_navSection('toast', 'next')), "›"
         .section-desc "Auto-dismiss notification with ARIA live region."
         .demo-row
           .demo-label "Click to show toasts"
@@ -1303,6 +1431,10 @@ export WidgetGallery = component
       .section id: "button"
         .section-title "Button"
           span.badge "23 lines"
+          .section-nav
+            a @click: (=> @_navSection('button', 'prev')), "‹"
+            a @click: (=> @_navSection('button', 'home')), "⌂"
+            a @click: (=> @_navSection('button', 'next')), "›"
         .section-desc "Headless button with disabled-but-focusable pattern."
         .demo-row.btn-demo
           .demo-label "Normal, primary, and disabled"
@@ -1331,6 +1463,10 @@ export WidgetGallery = component
       .section id: "separator"
         .section-title "Separator"
           span.badge "17 lines"
+          .section-nav
+            a @click: (=> @_navSection('separator', 'prev')), "‹"
+            a @click: (=> @_navSection('separator', 'home')), "⌂"
+            a @click: (=> @_navSection('separator', 'next')), "›"
         .section-desc "Decorative or semantic divider between sections."
         .demo-row
           .demo-label "Horizontal (default)"
@@ -1360,6 +1496,10 @@ export WidgetGallery = component
       .section id: "progress"
         .section-title "Progress"
           span.badge "25 lines"
+          .section-nav
+            a @click: (=> @_navSection('progress', 'prev')), "‹"
+            a @click: (=> @_navSection('progress', 'home')), "⌂"
+            a @click: (=> @_navSection('progress', 'next')), "›"
         .section-desc "Progress bar with value exposed as CSS custom property."
         .demo-row
           .demo-label "65% complete"
@@ -1383,6 +1523,10 @@ export WidgetGallery = component
       .section id: "meter"
         .section-title "Meter"
           span.badge "36 lines"
+          .section-nav
+            a @click: (=> @_navSection('meter', 'prev')), "‹"
+            a @click: (=> @_navSection('meter', 'home')), "⌂"
+            a @click: (=> @_navSection('meter', 'next')), "›"
         .section-desc "Gauge for known-range measurements with low/high/optimum thresholds."
         .demo-row
           .demo-label "Score: 72/100"
@@ -1408,6 +1552,10 @@ export WidgetGallery = component
       .section id: "avatar"
         .section-title "Avatar"
           span.badge "37 lines"
+          .section-nav
+            a @click: (=> @_navSection('avatar', 'prev')), "‹"
+            a @click: (=> @_navSection('avatar', 'home')), "⌂"
+            a @click: (=> @_navSection('avatar', 'next')), "›"
         .section-desc "Image with fallback to initials or placeholder."
         .demo-row
           .demo-label "With image"
@@ -1437,6 +1585,10 @@ export WidgetGallery = component
       .section id: "scroll-area"
         .section-title "ScrollArea"
           span.badge "145 lines"
+          .section-nav
+            a @click: (=> @_navSection('scroll-area', 'prev')), "‹"
+            a @click: (=> @_navSection('scroll-area', 'home')), "⌂"
+            a @click: (=> @_navSection('scroll-area', 'next')), "›"
         .section-desc "Custom scrollbar with draggable thumb and auto-hide."
         .demo-row
           .demo-label "Scrollable content"
@@ -1479,6 +1631,10 @@ export WidgetGallery = component
       .section id: "field"
         .section-title "Field + Fieldset"
           span.badge "75 lines"
+          .section-nav
+            a @click: (=> @_navSection('field', 'prev')), "‹"
+            a @click: (=> @_navSection('field', 'home')), "⌂"
+            a @click: (=> @_navSection('field', 'next')), "›"
         .section-desc "Form field wrapper with label, description, and error."
         .demo-row
           Field label: "Email", description: "We'll never share your email.", required: true, error: fieldError
@@ -1521,6 +1677,10 @@ export WidgetGallery = component
       .section id: "form"
         .section-title "Form"
           span.badge "39 lines"
+          .section-nav
+            a @click: (=> @_navSection('form', 'prev')), "‹"
+            a @click: (=> @_navSection('form', 'home')), "⌂"
+            a @click: (=> @_navSection('form', 'next')), "›"
         .section-desc "Form wrapper with submit handling and validation state."
         .demo-row
           Form
@@ -1550,6 +1710,10 @@ export WidgetGallery = component
       .section id: "grid"
         .section-title "Grid"
           span.badge "901 lines"
+          .section-nav
+            a @click: (=> @_navSection('grid', 'prev')), "‹"
+            a @click: (=> @_navSection('grid', 'home')), "⌂"
+            a @click: (=> @_navSection('grid', 'next')), "›"
         .section-desc "Virtual-scrolling data grid. Click to select, arrows to navigate, double-click to edit."
         .demo-row
           .demo-label "12 rows, 4 columns"
@@ -1592,6 +1756,10 @@ export WidgetGallery = component
       .section id: "accordion"
         .section-title "Accordion"
           span.badge "113 lines"
+          .section-nav
+            a @click: (=> @_navSection('accordion', 'prev')), "‹"
+            a @click: (=> @_navSection('accordion', 'home')), "⌂"
+            a @click: (=> @_navSection('accordion', 'next')), "›"
         .section-desc "Expand/collapse sections, single or multiple mode."
         .demo-row
           .demo-label "Single mode"
