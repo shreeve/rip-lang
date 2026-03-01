@@ -877,13 +877,25 @@ html { scroll-behavior: auto; }
   text-transform: uppercase; color: #94a3b8; margin-bottom: 2px;
 }
 
+.toc-search {
+  width: 100%; padding: 6px 10px; margin-bottom: 6px;
+  border: 1px solid #e2e8f0; border-radius: 6px;
+  font-size: 13px; background: white; color: #1e293b; outline: none;
+
+  &:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.1); }
+  &::placeholder { color: #94a3b8; }
+}
+
 .toc a {
   font-size: 12px; color: #475569; text-decoration: none;
   padding: 2px 8px; border-radius: 4px; background: #f1f5f9;
   cursor: pointer; transition: background 0.12s, color 0.12s, transform 0.12s;
 
   &:hover, &[data-active] { background: #dbeafe; color: #1d4ed8; transform: scale(1.05); }
+  &[data-hidden] { display: none; }
 }
+
+.toc-group:not(:has(a:not([data-hidden]))) { display: none; }
 
 .toc-detail {
   border-left: 1px solid #e2e8f0; background: #fafbfc;

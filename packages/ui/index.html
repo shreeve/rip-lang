@@ -101,6 +101,19 @@ export WidgetGallery = component
   pickedDate := null
   dateRange := null
   tocActive := null
+  tocFilter := ''
+  tocGroups =! [
+    { label: 'Selection', ids: ['select', 'combobox', 'multi-select', 'autocomplete'] }
+    { label: 'Toggle', ids: ['checkbox', 'toggle', 'toggle-group', 'radio-group', 'checkbox-group'] }
+    { label: 'Input', ids: ['input', 'number-field', 'slider', 'otp-field', 'date-picker', 'editable-value'] }
+    { label: 'Navigation', ids: ['tabs', 'menu', 'context-menu', 'menubar', 'nav-menu', 'toolbar'] }
+    { label: 'Overlay', ids: ['dialog', 'drawer', 'popover', 'tooltip', 'preview-card', 'toast'] }
+    { label: 'Display', ids: ['button', 'separator', 'progress', 'meter', 'avatar', 'scroll-area'] }
+    { label: 'Form', ids: ['field', 'fieldset', 'form'] }
+    { label: 'Data', ids: ['grid', 'accordion'] }
+  ]
+  _nameFor: (id) -> (tocData.find((c) -> c.id is id))?.name or id
+  _isHidden: (name) -> tocFilter and not name.toLowerCase().includes(tocFilter.toLowerCase())
   tocData := [
     { id: 'select', name: 'Select', lines: 184, desc: 'Dropdown with typeahead, keyboard nav, ARIA listbox.', props: ['@value', '@placeholder', '@disabled'], events: ['change'], keys: ['↕', 'Enter', 'Space', 'Esc', 'Home', 'End', 'type-ahead'], attrs: ['$open', '$placeholder', '$disabled', '$value', '$highlighted', '$selected'] }
     { id: 'combobox', name: 'Combobox', lines: 153, desc: 'Filterable input + listbox for search-as-you-type.', props: ['@query', '@items', '@placeholder', '@disabled', '@autoHighlight'], events: ['filter', 'select'], keys: ['↕', 'Enter', 'Esc', 'Tab'], attrs: ['$open', '$disabled', '$clear', '$value', '$highlighted', '$empty'] }
@@ -236,60 +249,15 @@ export WidgetGallery = component
 
       .toc
         .toc-nav
-          .toc-group
-            .toc-label "Selection"
-            a @mouseenter: (=> tocActive = 'select'), @click: (=> tocActive = 'select'), href: "#select", $active: (tocActive is 'select')?!, "Select"
-            a @mouseenter: (=> tocActive = 'combobox'), @click: (=> tocActive = 'combobox'), href: "#combobox", $active: (tocActive is 'combobox')?!, "Combobox"
-            a @mouseenter: (=> tocActive = 'multi-select'), @click: (=> tocActive = 'multi-select'), href: "#multi-select", $active: (tocActive is 'multi-select')?!, "MultiSelect"
-            a @mouseenter: (=> tocActive = 'autocomplete'), @click: (=> tocActive = 'autocomplete'), href: "#autocomplete", $active: (tocActive is 'autocomplete')?!, "Autocomplete"
-          .toc-group
-            .toc-label "Toggle"
-            a @mouseenter: (=> tocActive = 'checkbox'), @click: (=> tocActive = 'checkbox'), href: "#checkbox", $active: (tocActive is 'checkbox')?!, "Checkbox"
-            a @mouseenter: (=> tocActive = 'toggle'), @click: (=> tocActive = 'toggle'), href: "#toggle", $active: (tocActive is 'toggle')?!, "Toggle"
-            a @mouseenter: (=> tocActive = 'toggle-group'), @click: (=> tocActive = 'toggle-group'), href: "#toggle-group", $active: (tocActive is 'toggle-group')?!, "ToggleGroup"
-            a @mouseenter: (=> tocActive = 'radio-group'), @click: (=> tocActive = 'radio-group'), href: "#radio-group", $active: (tocActive is 'radio-group')?!, "RadioGroup"
-            a @mouseenter: (=> tocActive = 'checkbox-group'), @click: (=> tocActive = 'checkbox-group'), href: "#checkbox-group", $active: (tocActive is 'checkbox-group')?!, "CheckboxGroup"
-          .toc-group
-            .toc-label "Input"
-            a @mouseenter: (=> tocActive = 'input'), @click: (=> tocActive = 'input'), href: "#input", $active: (tocActive is 'input')?!, "Input"
-            a @mouseenter: (=> tocActive = 'number-field'), @click: (=> tocActive = 'number-field'), href: "#number-field", $active: (tocActive is 'number-field')?!, "NumberField"
-            a @mouseenter: (=> tocActive = 'slider'), @click: (=> tocActive = 'slider'), href: "#slider", $active: (tocActive is 'slider')?!, "Slider"
-            a @mouseenter: (=> tocActive = 'otp-field'), @click: (=> tocActive = 'otp-field'), href: "#otp-field", $active: (tocActive is 'otp-field')?!, "OTPField"
-            a @mouseenter: (=> tocActive = 'date-picker'), @click: (=> tocActive = 'date-picker'), href: "#date-picker", $active: (tocActive is 'date-picker')?!, "DatePicker"
-            a @mouseenter: (=> tocActive = 'editable-value'), @click: (=> tocActive = 'editable-value'), href: "#editable-value", $active: (tocActive is 'editable-value')?!, "EditableValue"
-          .toc-group
-            .toc-label "Navigation"
-            a @mouseenter: (=> tocActive = 'tabs'), @click: (=> tocActive = 'tabs'), href: "#tabs", $active: (tocActive is 'tabs')?!, "Tabs"
-            a @mouseenter: (=> tocActive = 'menu'), @click: (=> tocActive = 'menu'), href: "#menu", $active: (tocActive is 'menu')?!, "Menu"
-            a @mouseenter: (=> tocActive = 'context-menu'), @click: (=> tocActive = 'context-menu'), href: "#context-menu", $active: (tocActive is 'context-menu')?!, "ContextMenu"
-            a @mouseenter: (=> tocActive = 'menubar'), @click: (=> tocActive = 'menubar'), href: "#menubar", $active: (tocActive is 'menubar')?!, "Menubar"
-            a @mouseenter: (=> tocActive = 'nav-menu'), @click: (=> tocActive = 'nav-menu'), href: "#nav-menu", $active: (tocActive is 'nav-menu')?!, "NavMenu"
-            a @mouseenter: (=> tocActive = 'toolbar'), @click: (=> tocActive = 'toolbar'), href: "#toolbar", $active: (tocActive is 'toolbar')?!, "Toolbar"
-          .toc-group
-            .toc-label "Overlay"
-            a @mouseenter: (=> tocActive = 'dialog'), @click: (=> tocActive = 'dialog'), href: "#dialog", $active: (tocActive is 'dialog')?!, "Dialog"
-            a @mouseenter: (=> tocActive = 'drawer'), @click: (=> tocActive = 'drawer'), href: "#drawer", $active: (tocActive is 'drawer')?!, "Drawer"
-            a @mouseenter: (=> tocActive = 'popover'), @click: (=> tocActive = 'popover'), href: "#popover", $active: (tocActive is 'popover')?!, "Popover"
-            a @mouseenter: (=> tocActive = 'tooltip'), @click: (=> tocActive = 'tooltip'), href: "#tooltip", $active: (tocActive is 'tooltip')?!, "Tooltip"
-            a @mouseenter: (=> tocActive = 'preview-card'), @click: (=> tocActive = 'preview-card'), href: "#preview-card", $active: (tocActive is 'preview-card')?!, "PreviewCard"
-            a @mouseenter: (=> tocActive = 'toast'), @click: (=> tocActive = 'toast'), href: "#toast", $active: (tocActive is 'toast')?!, "Toast"
-          .toc-group
-            .toc-label "Display"
-            a @mouseenter: (=> tocActive = 'button'), @click: (=> tocActive = 'button'), href: "#button", $active: (tocActive is 'button')?!, "Button"
-            a @mouseenter: (=> tocActive = 'separator'), @click: (=> tocActive = 'separator'), href: "#separator", $active: (tocActive is 'separator')?!, "Separator"
-            a @mouseenter: (=> tocActive = 'progress'), @click: (=> tocActive = 'progress'), href: "#progress", $active: (tocActive is 'progress')?!, "Progress"
-            a @mouseenter: (=> tocActive = 'meter'), @click: (=> tocActive = 'meter'), href: "#meter", $active: (tocActive is 'meter')?!, "Meter"
-            a @mouseenter: (=> tocActive = 'avatar'), @click: (=> tocActive = 'avatar'), href: "#avatar", $active: (tocActive is 'avatar')?!, "Avatar"
-            a @mouseenter: (=> tocActive = 'scroll-area'), @click: (=> tocActive = 'scroll-area'), href: "#scroll-area", $active: (tocActive is 'scroll-area')?!, "ScrollArea"
-          .toc-group
-            .toc-label "Form"
-            a @mouseenter: (=> tocActive = 'field'), @click: (=> tocActive = 'field'), href: "#field", $active: (tocActive is 'field')?!, "Field"
-            a @mouseenter: (=> tocActive = 'fieldset'), @click: (=> tocActive = 'fieldset'), href: "#fieldset", $active: (tocActive is 'fieldset')?!, "Fieldset"
-            a @mouseenter: (=> tocActive = 'form'), @click: (=> tocActive = 'form'), href: "#form", $active: (tocActive is 'form')?!, "Form"
-          .toc-group
-            .toc-label "Data"
-            a @mouseenter: (=> tocActive = 'grid'), @click: (=> tocActive = 'grid'), href: "#grid", $active: (tocActive is 'grid')?!, "Grid"
-            a @mouseenter: (=> tocActive = 'accordion'), @click: (=> tocActive = 'accordion'), href: "#accordion", $active: (tocActive is 'accordion')?!, "Accordion"
+          input.toc-search type: "text", placeholder: "Filter components..."
+            @input: (e) => tocFilter = e.target.value
+            @keydown: (e) => (tocFilter = ''; e.target.value = '') if e.key is 'Escape'
+          for group, gIdx in tocGroups
+            .toc-group
+              .toc-label group.label
+              for comp, cIdx in group.ids
+                a @mouseenter: (=> tocActive = comp), @click: (=> tocActive = comp), href: "##{comp}", $active: (tocActive is comp)?!, $hidden: @_isHidden(@_nameFor(comp))?!
+                  @_nameFor(comp)
         .toc-detail
           if tocActive
             .
