@@ -158,6 +158,15 @@ export WidgetGallery = component
       _infoEvents = info.events
       _infoKeys = info.keys
       _infoAttrs = info.attrs
+
+  mounted: ->
+    hash = location.hash.slice(1)
+    if hash and document.getElementById(hash)
+      tocActive = hash
+      setTimeout =>
+        document.getElementById(hash)?.scrollIntoView({ behavior: 'instant', block: 'start' })
+      , 50
+
   gridColumns := [
     { key: 'name', title: 'Name', width: 180 },
     { key: 'role', title: 'Role', width: 140 },
@@ -188,6 +197,7 @@ export WidgetGallery = component
     gallery.style.opacity = '0'
     setTimeout =>
       el.scrollIntoView({ behavior: 'instant', block: 'start' })
+      history.replaceState(null, '', '#' + el.id) if el.id
       gallery.style.transition = 'opacity 120ms ease-in'
       gallery.style.opacity = '1'
     , 80
@@ -203,6 +213,7 @@ export WidgetGallery = component
       gallery.style.opacity = '0'
       setTimeout =>
         window.scrollTo({ top: 0, behavior: 'instant' })
+        history.replaceState(null, '', location.pathname)
         gallery.style.transition = 'opacity 120ms ease-in'
         gallery.style.opacity = '1'
       , 80
