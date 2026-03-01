@@ -140,7 +140,7 @@ export Menubar = component
           $open: (activeMenu is menu.dataset.menu)?!
           @click: (=> if activeMenu is menu.dataset.menu then @_closeMenu() else @_openMenu(menu.dataset.menu))
           @keydown: @_onBarKeydown
-          menu.dataset.menu
+          = menu.dataset.menu
 
         if activeMenu is menu.dataset.menu
           div role: "menu", $open: true, style: "position:fixed"
