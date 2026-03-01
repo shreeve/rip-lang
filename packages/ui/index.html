@@ -114,6 +114,9 @@ export WidgetGallery = component
   pickedDate := null
   dateRange := null
   darkMode := false
+  sourceCode := null
+  sourceName := ''
+  sourceLines := 0
   tocActive := null
   tocFilter := ''
   tocGroups := [
@@ -127,6 +130,24 @@ export WidgetGallery = component
     { label: 'Data', ids: ['grid', 'accordion'] }
   ]
   _nameFor: (id) -> (tocData.find((c) -> c.id is id))?.name or id
+  _viewSource: (id) ->
+    entry = tocData.find((c) -> c.id is id)
+    return unless entry
+    sourceName = entry.name
+    sourceLines = entry.lines
+    resp = fetch! "/#{id}.rip"
+    sourceCode = resp.text!
+  _closeSource: -> sourceCode = null
+  _ensureHljs: (cb) ->
+    if window.hljs then return cb()
+    link = document.createElement('link')
+    link.rel = 'stylesheet'
+    link.href = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github.min.css'
+    document.head.appendChild(link)
+    script = document.createElement('script')
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js'
+    script.onload = cb
+    document.head.appendChild(script)
   _onFilter: (e) -> tocFilter = e.target.value
   _getVisibleLinks: -> Array.from(document.querySelectorAll('.toc-nav .toc-group a:not([data-hidden])') or [])
 
@@ -289,6 +310,27 @@ export WidgetGallery = component
       _infoEvents = info.events
       _infoKeys = info.keys
       _infoAttrs = info.attrs
+
+  ~>
+    raw = sourceCode
+    return unless raw
+    setTimeout =>
+      codeEl = document.querySelector('.source-code')
+      gutterEl = document.querySelector('.source-gutter')
+      return unless codeEl
+      text = raw.replace(/^\n+/, '').replace(/\n+$/, '')
+      lines = text.split('\n')
+      gutterEl.textContent = lines.map((_, i) -> String(i + 1)).join('\n') if gutterEl
+      codeEl.textContent = text
+      @_ensureHljs =>
+        hljs.highlightElement(codeEl) if window.hljs
+    , 0
+
+  ~>
+    if sourceCode
+      onKey = (e) => @_closeSource() if e.key is 'Escape'
+      document.addEventListener 'keydown', onKey
+      return -> document.removeEventListener 'keydown', onKey
 
   _toggleDark: ->
     darkMode = not darkMode
@@ -478,7 +520,7 @@ export WidgetGallery = component
             .
               h3
                 _infoName
-                span.badge "#{_infoLines} lines"
+                span.badge @click: (=> @_viewSource(tocActive)), "#{_infoLines} lines ❐"
               p.toc-desc _infoDesc
               .api
                 dl
@@ -510,7 +552,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "select"
         .section-title "Select"
-          span.badge "184 lines"
+          span.badge @click: (=> @_viewSource('select')), "184 lines ❐"
           .section-nav
             a @click: (=> @_navSection('select', 'prev')), "‹"
             a @click: (=> @_navSection('select', 'home')), "⌂"
@@ -563,7 +605,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "combobox"
         .section-title "Combobox"
-          span.badge "153 lines"
+          span.badge @click: (=> @_viewSource('combobox')), "153 lines ❐"
           .section-nav
             a @click: (=> @_navSection('combobox', 'prev')), "‹"
             a @click: (=> @_navSection('combobox', 'home')), "⌂"
@@ -608,7 +650,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "multi-select"
         .section-title "MultiSelect"
-          span.badge "158 lines"
+          span.badge @click: (=> @_viewSource('multi-select')), "158 lines ❐"
           .section-nav
             a @click: (=> @_navSection('multi-select', 'prev')), "‹"
             a @click: (=> @_navSection('multi-select', 'home')), "⌂"
@@ -652,7 +694,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "autocomplete"
         .section-title "Autocomplete"
-          span.badge "141 lines"
+          span.badge @click: (=> @_viewSource('autocomplete')), "141 lines ❐"
           .section-nav
             a @click: (=> @_navSection('autocomplete', 'prev')), "‹"
             a @click: (=> @_navSection('autocomplete', 'home')), "⌂"
@@ -690,7 +732,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "checkbox"
         .section-title "Checkbox"
-          span.badge "33 lines"
+          span.badge @click: (=> @_viewSource('checkbox')), "33 lines ❐"
           .section-nav
             a @click: (=> @_navSection('checkbox', 'prev')), "‹"
             a @click: (=> @_navSection('checkbox', 'home')), "⌂"
@@ -733,7 +775,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "toggle"
         .section-title "Toggle"
-          span.badge "24 lines"
+          span.badge @click: (=> @_viewSource('toggle')), "24 lines ❐"
           .section-nav
             a @click: (=> @_navSection('toggle', 'prev')), "‹"
             a @click: (=> @_navSection('toggle', 'home')), "⌂"
@@ -763,7 +805,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "toggle-group"
         .section-title "ToggleGroup"
-          span.badge "78 lines"
+          span.badge @click: (=> @_viewSource('toggle-group')), "78 lines ❐"
           .section-nav
             a @click: (=> @_navSection('toggle-group', 'prev')), "‹"
             a @click: (=> @_navSection('toggle-group', 'home')), "⌂"
@@ -812,7 +854,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "radio-group"
         .section-title "RadioGroup"
-          span.badge "67 lines"
+          span.badge @click: (=> @_viewSource('radio-group')), "67 lines ❐"
           .section-nav
             a @click: (=> @_navSection('radio-group', 'prev')), "‹"
             a @click: (=> @_navSection('radio-group', 'home')), "⌂"
@@ -854,7 +896,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "checkbox-group"
         .section-title "CheckboxGroup"
-          span.badge "65 lines"
+          span.badge @click: (=> @_viewSource('checkbox-group')), "65 lines ❐"
           .section-nav
             a @click: (=> @_navSection('checkbox-group', 'prev')), "‹"
             a @click: (=> @_navSection('checkbox-group', 'home')), "⌂"
@@ -895,7 +937,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "input"
         .section-title "Input"
-          span.badge "35 lines"
+          span.badge @click: (=> @_viewSource('input')), "35 lines ❐"
           .section-nav
             a @click: (=> @_navSection('input', 'prev')), "‹"
             a @click: (=> @_navSection('input', 'home')), "⌂"
@@ -925,7 +967,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "number-field"
         .section-title "NumberField"
-          span.badge "162 lines"
+          span.badge @click: (=> @_viewSource('number-field')), "162 lines ❐"
           .section-nav
             a @click: (=> @_navSection('number-field', 'prev')), "‹"
             a @click: (=> @_navSection('number-field', 'home')), "⌂"
@@ -974,7 +1016,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "slider"
         .section-title "Slider"
-          span.badge "165 lines"
+          span.badge @click: (=> @_viewSource('slider')), "165 lines ❐"
           .section-nav
             a @click: (=> @_navSection('slider', 'prev')), "‹"
             a @click: (=> @_navSection('slider', 'home')), "⌂"
@@ -1027,7 +1069,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "otp-field"
         .section-title "OTPField"
-          span.badge "89 lines"
+          span.badge @click: (=> @_viewSource('otp-field')), "89 lines ❐"
           .section-nav
             a @click: (=> @_navSection('otp-field', 'prev')), "‹"
             a @click: (=> @_navSection('otp-field', 'home')), "⌂"
@@ -1070,7 +1112,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "date-picker"
         .section-title "DatePicker"
-          span.badge "214 lines"
+          span.badge @click: (=> @_viewSource('date-picker')), "214 lines ❐"
           .section-nav
             a @click: (=> @_navSection('date-picker', 'prev')), "‹"
             a @click: (=> @_navSection('date-picker', 'home')), "⌂"
@@ -1116,7 +1158,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "editable-value"
         .section-title "EditableValue"
-          span.badge "80 lines"
+          span.badge @click: (=> @_viewSource('editable-value')), "80 lines ❐"
           .section-nav
             a @click: (=> @_navSection('editable-value', 'prev')), "‹"
             a @click: (=> @_navSection('editable-value', 'home')), "⌂"
@@ -1153,7 +1195,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "tabs"
         .section-title "Tabs"
-          span.badge "124 lines"
+          span.badge @click: (=> @_viewSource('tabs')), "124 lines ❐"
           .section-nav
             a @click: (=> @_navSection('tabs', 'prev')), "‹"
             a @click: (=> @_navSection('tabs', 'home')), "⌂"
@@ -1202,7 +1244,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "menu"
         .section-title "Menu"
-          span.badge "162 lines"
+          span.badge @click: (=> @_viewSource('menu')), "162 lines ❐"
           .section-nav
             a @click: (=> @_navSection('menu', 'prev')), "‹"
             a @click: (=> @_navSection('menu', 'home')), "⌂"
@@ -1247,7 +1289,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "context-menu"
         .section-title "ContextMenu"
-          span.badge "98 lines"
+          span.badge @click: (=> @_viewSource('context-menu')), "98 lines ❐"
           .section-nav
             a @click: (=> @_navSection('context-menu', 'prev')), "‹"
             a @click: (=> @_navSection('context-menu', 'home')), "⌂"
@@ -1289,7 +1331,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "menubar"
         .section-title "Menubar"
-          span.badge "155 lines"
+          span.badge @click: (=> @_viewSource('menubar')), "155 lines ❐"
           .section-nav
             a @click: (=> @_navSection('menubar', 'prev')), "‹"
             a @click: (=> @_navSection('menubar', 'home')), "⌂"
@@ -1336,7 +1378,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "nav-menu"
         .section-title "NavigationMenu"
-          span.badge "132 lines"
+          span.badge @click: (=> @_viewSource('nav-menu')), "132 lines ❐"
           .section-nav
             a @click: (=> @_navSection('nav-menu', 'prev')), "‹"
             a @click: (=> @_navSection('nav-menu', 'home')), "⌂"
@@ -1380,7 +1422,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "toolbar"
         .section-title "Toolbar"
-          span.badge "46 lines"
+          span.badge @click: (=> @_viewSource('toolbar')), "46 lines ❐"
           .section-nav
             a @click: (=> @_navSection('toolbar', 'prev')), "‹"
             a @click: (=> @_navSection('toolbar', 'home')), "⌂"
@@ -1443,7 +1485,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "dialog"
         .section-title "Dialog"
-          span.badge "107 lines"
+          span.badge @click: (=> @_viewSource('dialog')), "107 lines ❐"
           .section-nav
             a @click: (=> @_navSection('dialog', 'prev')), "‹"
             a @click: (=> @_navSection('dialog', 'home')), "⌂"
@@ -1486,7 +1528,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "drawer"
         .section-title "Drawer"
-          span.badge "79 lines"
+          span.badge @click: (=> @_viewSource('drawer')), "79 lines ❐"
           .section-nav
             a @click: (=> @_navSection('drawer', 'prev')), "‹"
             a @click: (=> @_navSection('drawer', 'home')), "⌂"
@@ -1529,7 +1571,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "popover"
         .section-title "Popover"
-          span.badge "143 lines"
+          span.badge @click: (=> @_viewSource('popover')), "143 lines ❐"
           .section-nav
             a @click: (=> @_navSection('popover', 'prev')), "‹"
             a @click: (=> @_navSection('popover', 'home')), "⌂"
@@ -1569,7 +1611,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "tooltip"
         .section-title "Tooltip"
-          span.badge "115 lines"
+          span.badge @click: (=> @_viewSource('tooltip')), "115 lines ❐"
           .section-nav
             a @click: (=> @_navSection('tooltip', 'prev')), "‹"
             a @click: (=> @_navSection('tooltip', 'home')), "⌂"
@@ -1605,7 +1647,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "preview-card"
         .section-title "PreviewCard"
-          span.badge "73 lines"
+          span.badge @click: (=> @_viewSource('preview-card')), "73 lines ❐"
           .section-nav
             a @click: (=> @_navSection('preview-card', 'prev')), "‹"
             a @click: (=> @_navSection('preview-card', 'home')), "⌂"
@@ -1634,7 +1676,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "toast"
         .section-title "Toast"
-          span.badge "88 lines"
+          span.badge @click: (=> @_viewSource('toast')), "88 lines ❐"
           .section-nav
             a @click: (=> @_navSection('toast', 'prev')), "‹"
             a @click: (=> @_navSection('toast', 'home')), "⌂"
@@ -1669,7 +1711,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "button"
         .section-title "Button"
-          span.badge "23 lines"
+          span.badge @click: (=> @_viewSource('button')), "23 lines ❐"
           .section-nav
             a @click: (=> @_navSection('button', 'prev')), "‹"
             a @click: (=> @_navSection('button', 'home')), "⌂"
@@ -1701,7 +1743,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "separator"
         .section-title "Separator"
-          span.badge "17 lines"
+          span.badge @click: (=> @_viewSource('separator')), "17 lines ❐"
           .section-nav
             a @click: (=> @_navSection('separator', 'prev')), "‹"
             a @click: (=> @_navSection('separator', 'home')), "⌂"
@@ -1734,7 +1776,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "progress"
         .section-title "Progress"
-          span.badge "25 lines"
+          span.badge @click: (=> @_viewSource('progress')), "25 lines ❐"
           .section-nav
             a @click: (=> @_navSection('progress', 'prev')), "‹"
             a @click: (=> @_navSection('progress', 'home')), "⌂"
@@ -1761,7 +1803,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "meter"
         .section-title "Meter"
-          span.badge "36 lines"
+          span.badge @click: (=> @_viewSource('meter')), "36 lines ❐"
           .section-nav
             a @click: (=> @_navSection('meter', 'prev')), "‹"
             a @click: (=> @_navSection('meter', 'home')), "⌂"
@@ -1790,7 +1832,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "avatar"
         .section-title "Avatar"
-          span.badge "37 lines"
+          span.badge @click: (=> @_viewSource('avatar')), "37 lines ❐"
           .section-nav
             a @click: (=> @_navSection('avatar', 'prev')), "‹"
             a @click: (=> @_navSection('avatar', 'home')), "⌂"
@@ -1823,7 +1865,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "scroll-area"
         .section-title "ScrollArea"
-          span.badge "145 lines"
+          span.badge @click: (=> @_viewSource('scroll-area')), "145 lines ❐"
           .section-nav
             a @click: (=> @_navSection('scroll-area', 'prev')), "‹"
             a @click: (=> @_navSection('scroll-area', 'home')), "⌂"
@@ -1869,7 +1911,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "field"
         .section-title "Field + Fieldset"
-          span.badge "75 lines"
+          span.badge @click: (=> @_viewSource('field')), "75 lines ❐"
           .section-nav
             a @click: (=> @_navSection('field', 'prev')), "‹"
             a @click: (=> @_navSection('field', 'home')), "⌂"
@@ -1915,7 +1957,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "form"
         .section-title "Form"
-          span.badge "39 lines"
+          span.badge @click: (=> @_viewSource('form')), "39 lines ❐"
           .section-nav
             a @click: (=> @_navSection('form', 'prev')), "‹"
             a @click: (=> @_navSection('form', 'home')), "⌂"
@@ -1948,7 +1990,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "grid"
         .section-title "Grid"
-          span.badge "901 lines"
+          span.badge @click: (=> @_viewSource('grid')), "901 lines ❐"
           .section-nav
             a @click: (=> @_navSection('grid', 'prev')), "‹"
             a @click: (=> @_navSection('grid', 'home')), "⌂"
@@ -2003,7 +2045,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "accordion"
         .section-title "Accordion"
-          span.badge "113 lines"
+          span.badge @click: (=> @_viewSource('accordion')), "113 lines ❐"
           .section-nav
             a @click: (=> @_navSection('accordion', 'prev')), "‹"
             a @click: (=> @_navSection('accordion', 'home')), "⌂"
@@ -2049,6 +2091,23 @@ export WidgetGallery = component
               code "$content"
               code "$open"
               code "$disabled"
+
+      # ================================================================
+      # SOURCE CODE VIEWER
+      # ================================================================
+      if sourceCode
+        .source-overlay @click: @_closeSource
+          .source-modal @click: (e => e.stopPropagation())
+            .source-header
+              .source-title
+                span.source-name sourceName
+                span.source-badge "#{sourceLines} lines"
+              button.source-close @click: @_closeSource
+                "×"
+            .source-body
+              pre.source-pre
+                span.source-gutter
+                code.source-code
 
 </script>
 
