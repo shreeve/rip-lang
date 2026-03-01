@@ -1,0 +1,23 @@
+# Button — accessible headless button
+#
+# Handles disabled-but-focusable pattern and pressed state.
+# Ships zero CSS.
+#
+# Usage:
+#   Button @click: handleClick
+#     "Save"
+#   Button disabled: true
+#     "Unavailable"
+
+export Button = component
+  @disabled := false
+
+  onClick: ->
+    return if @disabled
+    @emit 'press'
+
+  render
+    button disabled: @disabled
+      aria-disabled: @disabled?!
+      $disabled: @disabled?!
+      slot

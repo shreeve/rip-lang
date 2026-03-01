@@ -4502,16 +4502,6 @@ ${blockFactoriesCode}return ${lines.join(`
           const valueCode = this.generateInComponent(value, "value");
           if ((key === "value" || key === "checked") && this.hasReactiveDeps(value)) {
             this._pushEffect(`${elVar}.${key} = ${valueCode};`);
-            const rootMemberImplicit = !this.isSimpleAssignable(value) && this.findRootReactiveMember(value);
-            if (this.isSimpleAssignable(value) || rootMemberImplicit) {
-              const event = key === "checked" ? "change" : "input";
-              const accessor = key === "checked" ? "e.target.checked" : inputType === "number" || inputType === "range" ? "e.target.valueAsNumber" : "e.target.value";
-              let assignCode = `${valueCode} = ${accessor}`;
-              if (rootMemberImplicit) {
-                assignCode += `; ${this._self}.${rootMemberImplicit}.touch?.()`;
-              }
-              this._createLines.push(`${elVar}.addEventListener('${event}', (e) => { ${assignCode}; });`);
-            }
             continue;
           }
           if (key === "innerHTML" || key === "textContent" || key === "innerText") {
@@ -4700,7 +4690,18 @@ ${blockFactoriesCode}return ${lines.join(`
       this._createLines.push(`${anchorVar} = document.createComment('for');`);
       const varNames = Array.isArray(vars) ? vars : [vars];
       const itemVar = varNames[0];
-      const indexVar = varNames[1] || "i";
+      let indexVar = varNames[1] || null;
+      if (!indexVar) {
+        const usedNames = new Set(this._loopVarStack.flatMap((v) => [v.itemVar, v.indexVar]));
+        usedNames.add(itemVar);
+        for (const candidate of ["i", "j", "k", "l", "m", "n"]) {
+          if (!usedNames.has(candidate)) {
+            indexVar = candidate;
+            break;
+          }
+        }
+        indexVar = indexVar || `_i${this._loopVarStack.length}`;
+      }
       const collectionCode = this.generateInComponent(collection, "value");
       let keyExpr = itemVar;
       if (this.is(body, "block") && body.length > 1) {
@@ -5831,29 +5832,27 @@ if (typeof globalThis !== 'undefined') {
     }
     generateProgram(head, statements, context, sexpr) {
       let code = "";
-      let imports = [], exports = [], other = [];
+      let imports = [], body = [];
       for (let stmt of statements) {
         if (!Array.isArray(stmt)) {
-          other.push(stmt);
+          body.push(stmt);
           continue;
         }
         let h = stmt[0];
         if (h === "import")
           imports.push(stmt);
-        else if (h === "export" || h === "export-default" || h === "export-all" || h === "export-from")
-          exports.push(stmt);
         else
-          other.push(stmt);
+          body.push(stmt);
       }
       let blockStmts = ["def", "class", "if", "for-in", "for-of", "for-as", "while", "loop", "switch", "try"];
-      let stmtEntries = other.map((stmt, index) => {
-        let isSingle = other.length === 1 && imports.length === 0 && exports.length === 0;
+      let stmtEntries = body.map((stmt, index) => {
+        let isSingle = body.length === 1 && imports.length === 0;
         let isObj = this.is(stmt, "object");
         let isObjComp = isObj && stmt.length === 2 && Array.isArray(stmt[1]) && Array.isArray(stmt[1][1]) && stmt[1][1][0] === "comprehension";
         let isAlreadyExpr = this.is(stmt, "comprehension") || this.is(stmt, "object-comprehension") || this.is(stmt, "do-iife");
         let hasNoVars = this.programVars.size === 0;
         let needsParens = isSingle && isObj && hasNoVars && !isAlreadyExpr && !isObjComp;
-        let isLast = index === other.length - 1;
+        let isLast = index === body.length - 1;
         let isLastComp = isLast && isAlreadyExpr;
         let generated;
         if (needsParens)
@@ -5938,12 +5937,6 @@ if (typeof globalThis !== 'undefined') {
           needsBlank = true;
         }
       }
-      let exportsCode = "";
-      if (exports.length > 0) {
-        exportsCode = `
-` + exports.map((s) => this.addSemicolon(s, this.generate(s, "statement"))).join(`
-`);
-      }
       if (this.usesReactivity && !skip) {
         if (skipRT) {
           code += `var { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;
@@ -5981,7 +5974,6 @@ _setDataSection();
       this._preambleLines = code.length === 0 ? 0 : code.split(`
 `).length - 1;
       code += statementsCode;
-      code += exportsCode;
       if (this.dataSection !== null && this.dataSection !== undefined) {
         code += `
 
@@ -8688,7 +8680,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.55";
-  var BUILD_DATE = "2026-02-28@03:24:49GMT";
+  var BUILD_DATE = "2026-02-28@19:43:03GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -8740,13 +8732,14 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
         if (!s.code)
           continue;
         try {
-          compiled.push(compileToJS(s.code, opts));
+          const js = compileToJS(s.code, opts);
+          compiled.push({ js, url: s.url || "inline" });
         } catch (e) {
-          console.error("Rip compile error:", e.message);
+          console.error(`Rip compile error in ${s.url || "inline"}:`, e.message);
         }
       }
       if (compiled.length > 0) {
-        let js = compiled.join(`
+        let js = compiled.map((c) => c.js).join(`
 `);
         const mount = runtimeTag?.getAttribute("data-mount");
         if (mount) {
@@ -8759,7 +8752,20 @@ ${mount}.mount(${JSON.stringify(target)});`;
 ${js}
 })()`);
         } catch (e) {
-          console.error("Rip runtime error:", e);
+          if (e instanceof SyntaxError) {
+            console.error(`Rip syntax error in combined output: ${e.message}`);
+            for (const c of compiled) {
+              try {
+                new Function(`(async()=>{
+${c.js}
+})()`);
+              } catch (e2) {
+                console.error(`  → source: ${c.url}`, e2.message);
+              }
+            }
+          } else {
+            console.error("Rip runtime error:", e);
+          }
         }
       }
     }
@@ -9061,252 +9067,6 @@ ${indented}`);
     }
     return value;
   };
-  _toFn = function(source) {
-    return typeof source === "function" ? source : function() {
-      return source.value;
-    };
-  };
-  _proxy = function(out, source) {
-    let obj;
-    obj = { read: function() {
-      return out.read();
-    } };
-    Object.defineProperty(obj, "value", { get: function() {
-      return out.value;
-    }, set: function(v) {
-      return source.value = v;
-    } });
-    return obj;
-  };
-  fileToPattern = function(rel) {
-    let pattern;
-    pattern = rel.replace(/\.rip$/, "");
-    pattern = pattern.replace(/\[\.\.\.(\w+)\]/g, "*$1");
-    pattern = pattern.replace(/\[(\w+)\]/g, ":$1");
-    if (pattern === "index")
-      return "/";
-    pattern = pattern.replace(/\/index$/, "");
-    return "/" + pattern;
-  };
-  patternToRegex = function(pattern) {
-    let names, str2;
-    names = [];
-    str2 = pattern.replace(/\*(\w+)/g, function(_, name) {
-      names.push(name);
-      return "(.+)";
-    }).replace(/:(\w+)/g, function(_, name) {
-      names.push(name);
-      return "([^/]+)";
-    });
-    return { regex: new RegExp("^" + str2 + "$"), names };
-  };
-  matchRoute = function(path, routes) {
-    let match, params;
-    for (const route of routes) {
-      match = path.match(route.regex.regex);
-      if (match) {
-        params = {};
-        for (let i = 0;i < route.regex.names.length; i++) {
-          const name = route.regex.names[i];
-          params[name] = decodeURIComponent(match[i + 1]);
-        }
-        return { route, params };
-      }
-    }
-    return null;
-  };
-  buildRoutes = function(components, root = "components") {
-    let allFiles, dir, layouts, name, regex, rel, routes, segs, urlPattern;
-    routes = [];
-    layouts = new Map;
-    allFiles = components.listAll(root);
-    for (const filePath of allFiles) {
-      rel = filePath.slice(root.length + 1);
-      if (!rel.endsWith(".rip"))
-        continue;
-      name = rel.split("/").pop();
-      if (name === "_layout.rip") {
-        dir = rel === "_layout.rip" ? "" : rel.slice(0, -"/_layout.rip".length);
-        layouts.set(dir, filePath);
-        continue;
-      }
-      if (name.startsWith("_"))
-        continue;
-      segs = rel.split("/");
-      if (segs.length > 1 && segs.some(function(s, i) {
-        return i < segs.length - 1 && s.startsWith("_");
-      }))
-        continue;
-      urlPattern = fileToPattern(rel);
-      regex = patternToRegex(urlPattern);
-      routes.push({ pattern: urlPattern, regex, file: filePath, rel });
-    }
-    routes.sort(function(a, b) {
-      let aCatch, aDyn, bCatch, bDyn;
-      aDyn = (a.pattern.match(/:/g) || []).length;
-      bDyn = (b.pattern.match(/:/g) || []).length;
-      aCatch = a.pattern.includes("*") ? 1 : 0;
-      bCatch = b.pattern.includes("*") ? 1 : 0;
-      if (aCatch !== bCatch)
-        return aCatch - bCatch;
-      if (aDyn !== bDyn)
-        return aDyn - bDyn;
-      return a.pattern.localeCompare(b.pattern);
-    });
-    return { routes, layouts };
-  };
-  getLayoutChain = function(routeFile, root, layouts) {
-    let chain, dir, rel, segments;
-    chain = [];
-    rel = routeFile.slice(root.length + 1);
-    segments = rel.split("/");
-    dir = "";
-    if (layouts.has(""))
-      chain.push(layouts.get(""));
-    for (let i = 0;i < segments.length; i++) {
-      const seg = segments[i];
-      if (i === segments.length - 1)
-        break;
-      dir = dir ? dir + "/" + seg : seg;
-      if (layouts.has(dir))
-        chain.push(layouts.get(dir));
-    }
-    return chain;
-  };
-  arraysEqual = function(a, b) {
-    if (a.length !== b.length)
-      return false;
-    for (let i = 0;i < a.length; i++) {
-      const item = a[i];
-      if (item !== b[i])
-        return false;
-    }
-    return true;
-  };
-  findComponent = function(mod) {
-    for (const key in mod) {
-      const val = mod[key];
-      if (typeof val === "function" && (val.prototype?.mount || val.prototype?._create))
-        return val;
-    }
-    return typeof mod.default === "function" ? mod.default : undefined;
-  };
-  findAllComponents = function(mod) {
-    let result;
-    result = {};
-    for (const key in mod) {
-      const val = mod[key];
-      if (typeof val === "function" && (val.prototype?.mount || val.prototype?._create)) {
-        result[key] = val;
-      }
-    }
-    return result;
-  };
-  fileToComponentName = function(filePath) {
-    let name;
-    name = filePath.split("/").pop().replace(/\.rip$/, "");
-    return name.replace(/(^|[-_])([a-z])/g, function(_, sep, ch) {
-      return ch.toUpperCase();
-    });
-  };
-  buildComponentMap = function(components, root = "components") {
-    let fileName, map, name;
-    map = {};
-    for (const path of components.listAll(root)) {
-      if (!path.endsWith(".rip"))
-        continue;
-      fileName = path.split("/").pop();
-      if (fileName.startsWith("_"))
-        continue;
-      name = fileToComponentName(path);
-      if (map[name]) {
-        console.warn(`[Rip] Component name collision: ${name} (${map[name]} vs ${path})`);
-      }
-      map[name] = path;
-    }
-    return map;
-  };
-  compileAndImport = async function(source, compile2, components = null, path = null, resolver = null) {
-    let blob, cached, depMod, depSource, found, header, js, mod, names, needed, preamble, url;
-    if (components && path) {
-      cached = components.getCompiled(path);
-      if (cached)
-        return cached;
-    }
-    js = compile2(source);
-    if (resolver) {
-      needed = {};
-      for (const name in resolver.map) {
-        const depPath = resolver.map[name];
-        if (depPath !== path && js.includes(`new ${name}(`)) {
-          if (!resolver.classes[name]) {
-            depSource = components.read(depPath);
-            if (depSource) {
-              depMod = await compileAndImport(depSource, compile2, components, depPath, resolver);
-              found = findAllComponents(depMod);
-              for (const k in found) {
-                const v = found[k];
-                resolver.classes[k] = v;
-              }
-            }
-          }
-          if (resolver.classes[name])
-            needed[name] = true;
-        }
-      }
-      names = Object.keys(needed);
-      if (names.length > 0) {
-        preamble = `const {${names.join(", ")}} = globalThis['${resolver.key}'];
-`;
-        js = preamble + js;
-      }
-    }
-    header = path ? `// ${path}
-` : "";
-    blob = new Blob([header + js], { type: "application/javascript" });
-    url = URL.createObjectURL(blob);
-    mod = await import(url);
-    if (resolver) {
-      found = findAllComponents(mod);
-      for (const k in found) {
-        const v = found[k];
-        resolver.classes[k] = v;
-      }
-    }
-    if (components && path)
-      components.setCompiled(path, mod);
-    return mod;
-  };
-  connectWatch = function(url) {
-    let connect, maxDelay, retryDelay;
-    retryDelay = 1000;
-    maxDelay = 30000;
-    connect = function() {
-      let es;
-      es = new EventSource(url);
-      es.addEventListener("connected", function() {
-        retryDelay = 1000;
-        return console.log("[Rip] Hot reload connected");
-      });
-      es.addEventListener("reload", function() {
-        console.log("[Rip] Reloading...");
-        return location.reload();
-      });
-      es.addEventListener("css", function() {
-        for (const link of document.querySelectorAll('link[rel="stylesheet"]')) {
-          url = new URL(link.href);
-          url.searchParams.set("_t", Date.now());
-          link.href = url.toString();
-        }
-      });
-      return es.onerror = function() {
-        es.close();
-        setTimeout(connect, retryDelay);
-        return retryDelay = Math.min(retryDelay * 2, maxDelay);
-      };
-    };
-    return connect();
-  };
   var stash = function(data = {}) {
     return makeProxy(data);
   };
@@ -9349,6 +9109,23 @@ ${indented}`);
     if (!opts.lazy)
       load();
     return resource;
+  };
+  _toFn = function(source) {
+    return typeof source === "function" ? source : function() {
+      return source.value;
+    };
+  };
+  _proxy = function(out, source) {
+    let obj;
+    obj = { read: function() {
+      return out.read();
+    } };
+    Object.defineProperty(obj, "value", { get: function() {
+      return out.value;
+    }, set: function(v) {
+      return source.value = v;
+    } });
+    return obj;
   };
   var delay = function(ms, source) {
     let fn, out;
@@ -9492,6 +9269,101 @@ ${indented}`);
     }, setCompiled: function(path, result) {
       return compiled.set(path, result);
     } };
+  };
+  fileToPattern = function(rel) {
+    let pattern;
+    pattern = rel.replace(/\.rip$/, "");
+    pattern = pattern.replace(/\[\.\.\.(\w+)\]/g, "*$1");
+    pattern = pattern.replace(/\[(\w+)\]/g, ":$1");
+    if (pattern === "index")
+      return "/";
+    pattern = pattern.replace(/\/index$/, "");
+    return "/" + pattern;
+  };
+  patternToRegex = function(pattern) {
+    let names, str2;
+    names = [];
+    str2 = pattern.replace(/\*(\w+)/g, function(_, name) {
+      names.push(name);
+      return "(.+)";
+    }).replace(/:(\w+)/g, function(_, name) {
+      names.push(name);
+      return "([^/]+)";
+    });
+    return { regex: new RegExp("^" + str2 + "$"), names };
+  };
+  matchRoute = function(path, routes) {
+    let match, params;
+    for (const route of routes) {
+      match = path.match(route.regex.regex);
+      if (match) {
+        params = {};
+        for (let i = 0;i < route.regex.names.length; i++) {
+          const name = route.regex.names[i];
+          params[name] = decodeURIComponent(match[i + 1]);
+        }
+        return { route, params };
+      }
+    }
+    return null;
+  };
+  buildRoutes = function(components, root = "components") {
+    let allFiles, dir, layouts, name, regex, rel, routes, segs, urlPattern;
+    routes = [];
+    layouts = new Map;
+    allFiles = components.listAll(root);
+    for (const filePath of allFiles) {
+      rel = filePath.slice(root.length + 1);
+      if (!rel.endsWith(".rip"))
+        continue;
+      name = rel.split("/").pop();
+      if (name === "_layout.rip") {
+        dir = rel === "_layout.rip" ? "" : rel.slice(0, -"/_layout.rip".length);
+        layouts.set(dir, filePath);
+        continue;
+      }
+      if (name.startsWith("_"))
+        continue;
+      segs = rel.split("/");
+      if (segs.length > 1 && segs.some(function(s, i) {
+        return i < segs.length - 1 && s.startsWith("_");
+      }))
+        continue;
+      urlPattern = fileToPattern(rel);
+      regex = patternToRegex(urlPattern);
+      routes.push({ pattern: urlPattern, regex, file: filePath, rel });
+    }
+    routes.sort(function(a, b) {
+      let aCatch, aDyn, bCatch, bDyn;
+      aDyn = (a.pattern.match(/:/g) || []).length;
+      bDyn = (b.pattern.match(/:/g) || []).length;
+      aCatch = a.pattern.includes("*") ? 1 : 0;
+      bCatch = b.pattern.includes("*") ? 1 : 0;
+      if (aCatch !== bCatch)
+        return aCatch - bCatch;
+      if (aDyn !== bDyn)
+        return aDyn - bDyn;
+      return a.pattern.localeCompare(b.pattern);
+    });
+    return { routes, layouts };
+  };
+  getLayoutChain = function(routeFile, root, layouts) {
+    let chain, dir, rel, segments;
+    chain = [];
+    rel = routeFile.slice(root.length + 1);
+    segments = rel.split("/");
+    dir = "";
+    if (layouts.has(""))
+      chain.push(layouts.get(""));
+    for (let i = 0;i < segments.length; i++) {
+      const seg = segments[i];
+      if (i === segments.length - 1)
+        break;
+      dir = dir ? dir + "/" + seg : seg;
+      if (layouts.has(dir))
+        chain.push(layouts.get(dir));
+    }
+    return chain;
   };
   var createRouter = function(components, opts = {}) {
     let _hash, _layouts, _navigating, _params, _path, _query, _route, addBase, base, hashMode, navCallbacks, onClick, onError, onPopState, readUrl, resolve, root, router, stripBase, tree, writeUrl;
@@ -9640,6 +9512,110 @@ ${indented}`);
       return tree.routes;
     } });
     return router;
+  };
+  arraysEqual = function(a, b) {
+    if (a.length !== b.length)
+      return false;
+    for (let i = 0;i < a.length; i++) {
+      const item = a[i];
+      if (item !== b[i])
+        return false;
+    }
+    return true;
+  };
+  findComponent = function(mod) {
+    for (const key in mod) {
+      const val = mod[key];
+      if (typeof val === "function" && (val.prototype?.mount || val.prototype?._create))
+        return val;
+    }
+    return typeof mod.default === "function" ? mod.default : undefined;
+  };
+  findAllComponents = function(mod) {
+    let result;
+    result = {};
+    for (const key in mod) {
+      const val = mod[key];
+      if (typeof val === "function" && (val.prototype?.mount || val.prototype?._create)) {
+        result[key] = val;
+      }
+    }
+    return result;
+  };
+  fileToComponentName = function(filePath) {
+    let name;
+    name = filePath.split("/").pop().replace(/\.rip$/, "");
+    return name.replace(/(^|[-_])([a-z])/g, function(_, sep, ch) {
+      return ch.toUpperCase();
+    });
+  };
+  buildComponentMap = function(components, root = "components") {
+    let fileName, map, name;
+    map = {};
+    for (const path of components.listAll(root)) {
+      if (!path.endsWith(".rip"))
+        continue;
+      fileName = path.split("/").pop();
+      if (fileName.startsWith("_"))
+        continue;
+      name = fileToComponentName(path);
+      if (map[name]) {
+        console.warn(`[Rip] Component name collision: ${name} (${map[name]} vs ${path})`);
+      }
+      map[name] = path;
+    }
+    return map;
+  };
+  compileAndImport = async function(source, compile2, components = null, path = null, resolver = null) {
+    let blob, cached, depMod, depSource, found, header, js, mod, names, needed, preamble, url;
+    if (components && path) {
+      cached = components.getCompiled(path);
+      if (cached)
+        return cached;
+    }
+    js = compile2(source);
+    if (resolver) {
+      needed = {};
+      for (const name in resolver.map) {
+        const depPath = resolver.map[name];
+        if (depPath !== path && js.includes(`new ${name}(`)) {
+          if (!resolver.classes[name]) {
+            depSource = components.read(depPath);
+            if (depSource) {
+              depMod = await compileAndImport(depSource, compile2, components, depPath, resolver);
+              found = findAllComponents(depMod);
+              for (const k in found) {
+                const v = found[k];
+                resolver.classes[k] = v;
+              }
+            }
+          }
+          if (resolver.classes[name])
+            needed[name] = true;
+        }
+      }
+      names = Object.keys(needed);
+      if (names.length > 0) {
+        preamble = `const {${names.join(", ")}} = globalThis['${resolver.key}'];
+`;
+        js = preamble + js;
+      }
+    }
+    header = path ? `// ${path}
+` : "";
+    blob = new Blob([header + js], { type: "application/javascript" });
+    url = URL.createObjectURL(blob);
+    mod = await import(url);
+    if (resolver) {
+      found = findAllComponents(mod);
+      for (const k in found) {
+        const v = found[k];
+        resolver.classes[k] = v;
+      }
+    }
+    if (components && path)
+      components.setCompiled(path, mod);
+    return mod;
   };
   var createRenderer = function(opts = {}) {
     let app, cacheComponent, compile2, componentCache, components, container, currentComponent, currentLayouts, currentParams, currentRoute, disposeEffect, generation, layoutInstances, maxCacheSize, mountPoint, mountRoute, onError, renderer, resolver, router, target, unmount;
@@ -9852,6 +9828,36 @@ ${indented}`);
       return current.route ? mountRoute(current) : undefined;
     }, cache: componentCache };
     return renderer;
+  };
+  connectWatch = function(url) {
+    let connect, maxDelay, retryDelay;
+    retryDelay = 1000;
+    maxDelay = 30000;
+    connect = function() {
+      let es;
+      es = new EventSource(url);
+      es.addEventListener("connected", function() {
+        retryDelay = 1000;
+        return console.log("[Rip] Hot reload connected");
+      });
+      es.addEventListener("reload", function() {
+        console.log("[Rip] Reloading...");
+        return location.reload();
+      });
+      es.addEventListener("css", function() {
+        for (const link of document.querySelectorAll('link[rel="stylesheet"]')) {
+          url = new URL(link.href);
+          url.searchParams.set("_t", Date.now());
+          link.href = url.toString();
+        }
+      });
+      return es.onerror = function() {
+        es.close();
+        setTimeout(connect, retryDelay);
+        return retryDelay = Math.min(retryDelay * 2, maxDelay);
+      };
+    };
+    return connect();
   };
   var launch = async function(appBase = "", opts = {}) {
     let _save, _storage, _storageKey, app, appComponents, bundle, cached, classesKey, compile2, el, etag, etagKey, hash, headers, persist, renderer, res, resolver, router, saved, savedData, target;

@@ -62,7 +62,7 @@ rip-lang/
 │       ├── lunar.rip    # Recursive descent parser generator (2,412 LOC)
 │       └── solar.rip    # SLR(1) parser generator (929 LOC) — Don't edit!
 ├── packages/            # Optional packages (see Packages section below)
-│   ├── widgets/         # Headless UI widgets — Select, Dialog, Grid, etc. (see below)
+│   ├── ui/              # Rip UI — headless components (Select, Dialog, Grid, etc.)
 │   ├── server/          # @rip-lang/server — Web framework + production server
 │   ├── db/              # @rip-lang/db — DuckDB server
 │   ├── schema/          # @rip-lang/schema — ORM + validation
@@ -774,7 +774,7 @@ start port: 3000
 - **@rip-lang/http** — Zero-dependency HTTP client (ky-inspired convenience over native fetch)
 - **@rip-lang/print** — Syntax-highlighted code printer using highlight.js (190+ languages). Serves once, caches via service worker for offline refresh.
 
-### Rip Widgets (`packages/widgets/`) — Headless UI Components
+### Rip UI (`packages/ui/`) — Headless UI Components
 
 Accessible, headless interactive components written in Rip. Zero dependencies,
 zero CSS. Every widget exposes `$` attributes (compiled to `data-*` in HTML) for styling and handles
@@ -814,13 +814,57 @@ keyboard interactions per WAI-ARIA Authoring Practices. Widgets are plain
   — no `addToast()` helpers, no manager objects, no import ceremony. This applies to every
   widget that manages a list (toasts, tabs, accordion items). React needs helper APIs because
   its state model forces it; Rip's reactive assignment eliminates the need.
+- Shared-scope naming: in the browser, all `.rip` files loaded via `data-src` share one
+  scope. Component names (capitalized) don't collide because they're unique. But lowercase
+  module-scope variables (`collator`, `nextId`, etc.) will collide if two files use the same
+  name. Prefix with the widget name: `acCollator` not `collator`. Or move the variable inside
+  the component body where it's scoped to `this`.
+- **Don't shadow prop names with local variables** — this is the #1 most
+  dangerous trap in Rip components. Inside component methods, the compiler
+  rewrites ANY identifier matching a prop/state name to `this.name.value`.
+  A local variable named `items` will be treated as `this.items.value` if
+  `@items` is a prop — meaning `items = getItems()` silently **overwrites
+  your reactive state**. The symptom is usually far from the cause (e.g.,
+  a list vanishing on keyboard navigation because a helper method corrupted
+  the data source). Always use distinct names for locals: `opts` not `items`,
+  `tick` not `step`, `fn` not `filter`. When debugging mysterious state
+  corruption, check compiled JS output (`rip -c file.rip`) and search for
+  unexpected `this.propName.value =` assignments.
+- **Use explicit index names in nested render loops** — when a `for` loop
+  in a render block has no explicit index, the compiler auto-generates `i`.
+  Nested loops both get `i`, producing a block factory with duplicate
+  parameters (`function create_block(ctx, inner, i, outer, i)`) which is a
+  syntax error in strict mode. Fix: always name both indices explicitly
+  (`for outer, oIdx in list` / `for inner, iIdx in sublist`). Single
+  (non-nested) loops are fine without an explicit index.
+- Don't use `value: @prop` on `<input>` elements: Rip's smart auto-binding writes the
+  input's string value back to the signal, corrupting numeric state. Use a `_ready`-guarded
+  `~>` effect to push values to the input, and `@blur`/`@input` handlers to parse back.
+- Computed values (`~=`) are read-only: you cannot assign to them. To invalidate a computed
+  from an event handler or observer, bump a reactive counter that the computed reads:
+  `_tick := 0` then `_tick = _tick + 1` in the handler.
+- Go imperative for continuous DOM tracking: for scroll position, drag offsets, resize
+  dimensions, and anything that updates at 60fps — don't use reactive computeds or
+  interpolated style strings. Instead, read the DOM, compute, and write the DOM directly
+  in a single method (`_updateThumb()`, `_renderRows()`). Reactive computeds cache values
+  and can go stale between the tick that triggered them and the DOM read that follows.
+  The Grid uses this pattern for virtual scrolling; the ScrollArea uses it for thumb
+  positioning. Rule of thumb: if the data source is a DOM property (`scrollTop`,
+  `clientHeight`, `getBoundingClientRect`), go imperative. If it's reactive state
+  (`:=`, `~=`), use the reactive system.
+- Put side effects in effect branches, not just methods: when a prop like `@open`
+  is controlled via `<=>`, the consumer can set it directly (`showDrawer = false`)
+  without calling `close()`. If scroll lock, focus restore, or cleanup only lives
+  in `close()`, it won't run. Use `~> if @open ... else ...` so the effect handles
+  all state transitions regardless of how the signal changed. Methods like `close()`
+  should just set state (`@open = false`) and emit events — the effect does the work.
 
 **Integration:** Add the widgets directory to your serve middleware:
 
 ```coffee
 use serve
   dir: dir
-  components: ['components', '../../../packages/widgets']
+  components: ['components', '../../../packages/ui']
 ```
 
 All widgets become available by name (`Select`, `Dialog`, `Grid`, etc.) in
@@ -838,7 +882,7 @@ the shared scope — no imports needed.
 - Stripe-aware selection fill with blue-tinted internal gridlines
 - No hover during drag (`$selecting` suppresses hover CSS)
 
-**Widget Gallery dev server (`packages/widgets/`):**
+**Widget Gallery dev server (`packages/ui/`):**
 
 The widget gallery uses `data-src` mode (not `data-launch`) for testing individual
 widgets. The dev server is `index.rip` (14 lines) and the gallery is `index.html`.
@@ -855,7 +899,7 @@ notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 start port: 3005
 ```
 
-Hot reload: `rip server` from `packages/widgets/` gives auto-HTTPS + mDNS
+Hot reload: `rip server` from `packages/ui/` gives auto-HTTPS + mDNS
 (`https://widgets.local`). The browser connects to the server's built-in
 `/watch` SSE endpoint. Two reload mechanisms work together:
 - **`.rip` file changes**: Manager detects the change, does a rolling restart.
@@ -958,7 +1002,7 @@ widgets are both the product and the test suite.
   `src/components.js`, run `bun run build` to regenerate `rip.min.js`.
   Then restart `rip server` to pick up the new bundle.
 
-**Documentation in `packages/widgets/`:**
+**Documentation in `packages/ui/`:**
 - `README.md` — Usage examples, API for every widget, styling guide (Open Props, CSS patterns, dark mode)
 - `NOTES.md` — Architecture rationale, behavioral primitives, per-widget implementation notes, known issues, roadmap
 

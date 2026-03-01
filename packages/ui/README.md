@@ -1,4 +1,4 @@
-# Rip Widgets
+# Rip UI
 
 Headless, accessible UI components written in Rip. Zero dependencies. Zero CSS.
 Every widget exposes `$` attributes (compiled to `data-*`) for styling and handles keyboard
@@ -11,7 +11,7 @@ widgets directory to your serve middleware:
 ```coffee
 use serve
   dir: dir
-  components: ['components', '../../../packages/widgets']
+  components: ['components', '../../../packages/ui']
 ```
 
 Every widget:
@@ -286,7 +286,22 @@ All widgets ship zero CSS. Write `$name` in Rip (compiles to `data-name` in HTML
 .toast[data-leaving] { animation: fade-out 200ms; }
 ```
 
-No JavaScript styling logic. No className toggling. Write `$open` in Rip, style `[data-open]` in CSS.
+No JavaScript styling logic. No className toggling. Write `$open` in Rip,
+style `[data-open]` in CSS. Any CSS methodology works — vanilla, Tailwind,
+Open Props, a custom design system. The widgets don't care.
+
+### Why Not CSS-in-JS?
+
+Libraries like Emotion and styled-components parse CSS strings at runtime,
+generate class names in JavaScript, and inject `<style>` tags into the
+document. This bundles styling into the component's JS, adds a runtime
+dependency, and locks consumers into the library's API. You can't restyle
+a component without modifying its source or fighting specificity.
+
+Our approach separates concerns: **behavior lives in Rip, styling lives in
+CSS, and `data-*` attributes are the interface between them.** The result
+is faster (no CSS parsing in JS), smaller (no styling runtime), and more
+flexible (swap your entire design system without touching widget code).
 
 ### Open Props — Design Tokens
 

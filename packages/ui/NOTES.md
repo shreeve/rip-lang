@@ -30,6 +30,38 @@ reactive primitives. Zero framework dependencies.
 | **Scoping** | CSS (scoped) | Component-scoped styles via CSS Modules or Rip UI's built-in scoping |
 | **Platform** | Native CSS | Nesting, `@layer`, `$` sigil / `data-*` selectors, `prefers-color-scheme` |
 
+This is the modern answer to component styling. No runtime CSS generation,
+no JavaScript-generated class names, no build step, no framework lock-in.
+
+**How it works:** Widgets emit semantic `data-*` attributes (`$open`,
+`$selected`, `$disabled`, `$highlighted`) via the `$` sigil. They never
+apply visual styles. The consumer writes plain CSS targeting those attributes:
+
+```css
+[data-selected] { background: var(--blue-6); color: white; }
+[data-in-range] { background: var(--blue-1); }
+[data-disabled] { opacity: 0.5; cursor: not-allowed; }
+```
+
+Design tokens (via Open Props or custom properties) provide consistent
+scales. `@layer` controls cascade precedence — widget defaults in a base
+layer, consumer overrides in a higher layer. Native CSS nesting keeps
+selectors scoped without tooling. `prefers-color-scheme` handles dark mode.
+
+**Why not CSS-in-JS (Emotion, styled-components, etc.)?**
+
+CSS-in-JS libraries parse CSS strings at runtime, hash them into generated
+class names, inject `<style>` tags into the document, and manage a style
+cache — all in JavaScript. This adds a runtime dependency (Emotion is ~11KB),
+makes styles inseparable from the component's JS bundle, and locks consumers
+into the library's API and theme system. You can't restyle a component
+without modifying its source code or fighting specificity wars.
+
+Our approach is the opposite: behavior lives in Rip, styling lives in CSS,
+and the `data-*` attribute contract is the interface between them. Any CSS
+methodology works — vanilla, Tailwind, Open Props, a custom design system.
+The widgets don't care.
+
 ### Why We Build Our Own
 
 Base UI is the industry's best headless component library. But it requires
@@ -450,6 +482,24 @@ still triggers reactively (when `startRow`, `endRow`, etc. change), but the
 DOM updates use `textContent`, `nodeValue`, and `replaceChildren` directly.
 This is the correct pattern when the framework's reconciler is too expensive.
 
+### Go Imperative for Continuous DOM Tracking
+
+Reactive computeds and interpolated style strings break down for continuous
+DOM-position tracking (scroll, drag, resize). The ScrollArea's scrollbar
+thumb was originally built with `thumbSizePx ~=` and `thumbPosPx ~=`
+computeds feeding into a reactive inline style. The thumb moved erratically
+because computed values cached stale DOM reads between reactive ticks.
+
+The fix: a single `_updateThumb()` method that reads the DOM (`scrollTop`,
+`clientHeight`, `scrollHeight`), computes in one pass, and writes directly
+to `th.style.height` and `th.style.transform`. No reactive intermediaries.
+
+Rule of thumb: if the data source is a DOM property (`scrollTop`,
+`clientHeight`, `getBoundingClientRect`), go imperative — read, compute,
+write in one call. If the data source is reactive state (`:=`, `~=`), use
+the reactive system. The Grid, ScrollArea, and any future drag/resize widget
+should follow this pattern.
+
 ### CSS Specificity: Check Computed Styles First
 
 When CSS looks right in the source but renders wrong in the browser, **copy
@@ -495,13 +545,21 @@ sets semantic state attributes. This keeps the headless contract clean.
 
 ### Combobox
 
+- **Prop-shadowing incident (critical lesson).** The original `_nextEnabled`
+  method used `items = @getItems()`. Because the component has an `@items`
+  prop, the compiler rewrote this to `this.items.value = this.getItems()`,
+  silently overwriting the reactive data source with DOM elements from
+  `querySelectorAll`. The symptom — list vanishing or showing
+  `[object HTMLDivElement]` on ArrowDown — was far removed from the cause.
+  Fix: rename to `opts = @getItems()`. **Always check `rip -c file.rip`
+  for unexpected `this.propName.value =` when locals share prop names.**
 - No debounce on the `@filter` event — the consumer is responsible for
   debouncing their filter/fetch logic. This is intentional (the widget
   shouldn't impose timing policy) but should be documented more clearly.
-- Items are discovered by querying `[data-value]` inside the listbox. This
-  means the consumer's `for` loop must render elements with `data-value`
-  attributes. Consider whether a more structured item definition (like
-  Select's `<option>` approach) would be cleaner.
+- No internal filtering — the Combobox iterates `@items` directly. The
+  consumer controls filtering via the `@filter` callback, which updates
+  the `items` prop. This keeps the widget simple and flexible (prefix
+  match, substring, fuzzy, async fetch — all just callback variations).
 - Highlighted index resets to -1 on each input change. Some combobox
   implementations keep the highlight on the first match. Worth A/B testing.
 - No "create new" option built in. The labs app's patient combobox needs
@@ -864,7 +922,7 @@ before it. The theme: stop building new things and start proving what exists.
     those custom property overrides.
 
 15. **Publish the widget suite.** Once tests pass and the demo works, make
-    `packages/widgets/` available. Since widgets are plain `.rip` source
+    `packages/ui/` available. Since widgets are plain `.rip` source
     files with no build step, "publishing" means making them discoverable
     — documenting the `components:` serve middleware option, adding the
     widgets path to the Rip project template, and linking from the main

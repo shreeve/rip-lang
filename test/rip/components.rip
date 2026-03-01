@@ -1094,7 +1094,7 @@ code "two-way binding valueAsNumber (number input)", '''
   }
   ''', opts
 
-code "smart auto-binding value: reactive", '''
+code "value: reactive is one-way push (use <=> for two-way)", '''
   export A = component
     name := ""
     render
@@ -1107,7 +1107,6 @@ code "smart auto-binding value: reactive", '''
     _create() {
       this._el0 = document.createElement('input');
       this._el0.setAttribute('type', "text");
-      this._el0.addEventListener('input', (e) => { this.name.value = e.target.value; });
       return this._el0;
     }
     _setup() {

@@ -8,6 +8,8 @@ dir = import.meta.dir
 use serve dir: dir, components: ['.'], watch: true
 
 get '/*.rip', -> @send "#{dir}/#{@req.path.slice(1)}"
+get '/*.css', -> @send "#{dir}/#{@req.path.slice(1)}", 'text/css; charset=UTF-8'
+
 notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 
 start port: 3005

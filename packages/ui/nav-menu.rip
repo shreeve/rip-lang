@@ -1,0 +1,132 @@
+# NavigationMenu — accessible headless site navigation
+#
+# Horizontal navigation with optional dropdown sub-menus. Triggers show
+# content on hover or click. Ships zero CSS.
+#
+# Usage:
+#   NavigationMenu
+#     a $link: true, href: "/", "Home"
+#     div $trigger: "products"
+#       div $panel: true
+#         a href: "/ui", "ui"
+#         a href: "/tools", "Tools"
+#     a $link: true, href: "/about", "About"
+
+export NavigationMenu = component
+  @orientation := 'horizontal'
+  @hoverDelay := 200
+  @hoverCloseDelay := 300
+
+  activePanel := null
+  _ready := false
+  _hoverTimer := null
+  _closeTimer := null
+
+  _navItems ~=
+    return [] unless @_slot
+    Array.from(@_slot.children).filter (el) ->
+      el.dataset?.link? or el.dataset?.trigger?
+
+  mounted: -> _ready = true
+
+  beforeUnmount: ->
+    clearTimeout _hoverTimer if _hoverTimer
+    clearTimeout _closeTimer if _closeTimer
+
+  _openPanel: (id) ->
+    clearTimeout _closeTimer if _closeTimer
+    activePanel = id
+    requestAnimationFrame => @_position(id)
+
+  _closePanel: ->
+    activePanel = null
+
+  _scheduleOpen: (id) ->
+    clearTimeout _closeTimer if _closeTimer
+    _hoverTimer = setTimeout (=> @_openPanel(id)), @hoverDelay
+
+  _scheduleClose: ->
+    clearTimeout _hoverTimer if _hoverTimer
+    _closeTimer = setTimeout (=> @_closePanel()), @hoverCloseDelay
+
+  _cancelClose: ->
+    clearTimeout _closeTimer if _closeTimer
+
+  _position: (id) ->
+    trigger = @_root?.querySelector("[data-nav-trigger=\"#{id}\"]")
+    panel = @_root?.querySelector("[data-nav-panel=\"#{id}\"]")
+    return unless trigger and panel
+    tr = trigger.getBoundingClientRect()
+    panel.style.position = 'fixed'
+    panel.style.left = "#{tr.left}px"
+    panel.style.top = "#{tr.bottom + 2}px"
+
+  _onKeydown: (e) ->
+    navBtns = @_root?.querySelectorAll('[data-nav-trigger], [data-nav-link]')
+    return unless navBtns?.length
+    focused = Array.from(navBtns).indexOf(document.activeElement)
+    return if focused < 0
+    len = navBtns.length
+    switch e.key
+      when 'ArrowRight'
+        e.preventDefault()
+        navBtns[(focused + 1) %% len]?.focus()
+      when 'ArrowLeft'
+        e.preventDefault()
+        navBtns[(focused - 1) %% len]?.focus()
+      when 'ArrowDown'
+        triggerId = document.activeElement?.dataset?.navTrigger
+        if triggerId
+          e.preventDefault()
+          @_openPanel(triggerId)
+          @_root?.querySelector("[data-nav-panel=\"#{triggerId}\"] a, [data-nav-panel=\"#{triggerId}\"] button")?.focus()
+      when 'Escape'
+        @_closePanel()
+
+  ~>
+    return unless _ready
+    if activePanel
+      onDown = (e) =>
+        unless @_root?.contains(e.target)
+          @_closePanel()
+      document.addEventListener 'mousedown', onDown
+      return -> document.removeEventListener 'mousedown', onDown
+
+  render
+    nav ref: "_root", role: "navigation", aria-orientation: @orientation
+      $orientation: @orientation
+
+      . ref: "_slot", style: "display:none"
+        slot
+
+      for navItem, nIdx in _navItems
+        if navItem.dataset.link?
+          a href: navItem.getAttribute('href') or '#'
+            "data-nav-link": true
+            tabindex: "0"
+            @keydown: @_onKeydown
+            navItem.textContent
+        else if navItem.dataset.trigger?
+          . style: "display:inline-block;position:relative"
+            button "data-nav-trigger": navItem.dataset.trigger
+              tabindex: "0"
+              aria-expanded: activePanel is navItem.dataset.trigger
+              $open: (activePanel is navItem.dataset.trigger)?!
+              @click: (=> if activePanel is navItem.dataset.trigger then @_closePanel() else @_openPanel(navItem.dataset.trigger))
+              @mouseenter: (=> @_scheduleOpen(navItem.dataset.trigger))
+              @mouseleave: (=> @_scheduleClose())
+              @keydown: @_onKeydown
+              navItem.dataset.trigger
+
+            if activePanel is navItem.dataset.trigger
+              div "data-nav-panel": navItem.dataset.trigger, $open: true
+                style: "position:fixed;z-index:50"
+                @mouseenter: (=> @_cancelClose())
+                @mouseleave: (=> @_scheduleClose())
+                for link, lIdx in Array.from(navItem.querySelectorAll('a, [data-link]'))
+                  a href: link.getAttribute('href') or '#', tabindex: "0"
+                    @keydown: (e) =>
+                      if e.key is 'Escape'
+                        @_closePanel()
+                        @_root?.querySelector("[data-nav-trigger=\"#{navItem.dataset.trigger}\"]")?.focus()
+                    link.textContent

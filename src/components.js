@@ -1399,21 +1399,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
         const valueCode = this.generateInComponent(value, 'value');
 
-        // Smart two-way binding for value/checked when bound to reactive state
+        // value/checked with reactive deps: one-way push (use <=> for two-way)
         if ((key === 'value' || key === 'checked') && this.hasReactiveDeps(value)) {
           this._pushEffect(`${elVar}.${key} = ${valueCode};`);
-          const rootMemberImplicit = !this.isSimpleAssignable(value) && this.findRootReactiveMember(value);
-          if (this.isSimpleAssignable(value) || rootMemberImplicit) {
-            const event = key === 'checked' ? 'change' : 'input';
-            const accessor = key === 'checked' ? 'e.target.checked'
-              : (inputType === 'number' || inputType === 'range') ? 'e.target.valueAsNumber'
-              : 'e.target.value';
-            let assignCode = `${valueCode} = ${accessor}`;
-            if (rootMemberImplicit) {
-              assignCode += `; ${this._self}.${rootMemberImplicit}.touch?.()`;
-            }
-            this._createLines.push(`${elVar}.addEventListener('${event}', (e) => { ${assignCode}; });`);
-          }
           continue;
         }
 
@@ -1655,7 +1643,15 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
     const varNames = Array.isArray(vars) ? vars : [vars];
     const itemVar = varNames[0];
-    const indexVar = varNames[1] || 'i';
+    let indexVar = varNames[1] || null;
+    if (!indexVar) {
+      const usedNames = new Set(this._loopVarStack.flatMap(v => [v.itemVar, v.indexVar]));
+      usedNames.add(itemVar);
+      for (const candidate of ['i', 'j', 'k', 'l', 'm', 'n']) {
+        if (!usedNames.has(candidate)) { indexVar = candidate; break; }
+      }
+      indexVar = indexVar || `_i${this._loopVarStack.length}`;
+    }
 
     const collectionCode = this.generateInComponent(collection, 'value');
 

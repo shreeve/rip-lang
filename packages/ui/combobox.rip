@@ -7,9 +7,7 @@
 # Ships zero CSS — style entirely via attribute selectors in your stylesheet.
 #
 # Usage:
-#   Combobox query <=> searchText, items <=> filteredItems, @select: handleSelect, @filter: filterFn
-
-collator = new Intl.Collator(undefined, { sensitivity: 'base' })
+#   Combobox query <=> searchText, items: fruits, @select: handleSelect, @filter: filterFn
 
 export Combobox = component
   @query := ''
@@ -20,22 +18,11 @@ export Combobox = component
 
   open := false
   highlightedIndex := -1
-
-  filteredItems ~=
-    q = @query.trim()
-    return @items unless q
-    @items.filter (item) ->
-      label = if typeof item is 'string' then item else (item.label or item.name or String(item))
-      collator.compare(label.slice(0, q.length), q) is 0
+  _listId =! "cb-#{Math.random().toString(36).slice(2, 8)}"
 
   getItems: ->
     return [] unless @_list
     Array.from(@_list.querySelectorAll('[role="option"]'))
-
-  _updateHighlight: ->
-    idx = highlightedIndex
-    @getItems().forEach (item, i) ->
-      item.toggleAttribute 'data-highlighted', i is idx
 
   _scrollToItem: ->
     @getItems()[highlightedIndex]?.scrollIntoView({ block: 'nearest' })
@@ -48,10 +35,14 @@ export Combobox = component
   onInput: (e) ->
     @query = e.target.value
     open = true
-    highlightedIndex = if @autoHighlight and filteredItems.length > 0 then 0 else -1
+    highlightedIndex = if @autoHighlight and @items.length > 0 then 0 else -1
     @emit 'filter', @query
 
   onFocusin: -> @openMenu()
+
+  onFocusout: (e) ->
+    unless @_content?.contains(e.relatedTarget)
+      @close()
 
   openMenu: ->
     open = true
@@ -65,7 +56,6 @@ export Combobox = component
   _position: ->
     return unless @_input and @_list
     tr = @_input.getBoundingClientRect()
-    @_list.style.position = 'fixed'
     @_list.style.left = "#{tr.left}px"
     @_list.style.top = "#{tr.bottom + 2}px"
     @_list.style.minWidth = "#{tr.width}px"
@@ -84,27 +74,25 @@ export Combobox = component
     @close()
 
   _nextEnabled: (from, dir) ->
-    items = @getItems()
-    len = items.length
+    opts = @getItems()
+    len = opts.length
     i = from
     loop len
       i = (i + dir) %% len
-      return i unless @isDisabled(items[i])
+      return i unless @isDisabled(opts[i])
     from
 
-  onKeydown: (e) ->
+  _onKeydown: (e) ->
     len = @getItems().length
     switch e.key
       when 'ArrowDown'
         e.preventDefault()
         @openMenu() unless open
         highlightedIndex = @_nextEnabled(highlightedIndex, 1)
-        @_updateHighlight()
         @_scrollToItem()
       when 'ArrowUp'
         e.preventDefault()
         highlightedIndex = @_nextEnabled(highlightedIndex, -1)
-        @_updateHighlight()
         @_scrollToItem()
       when 'Enter'
         e.preventDefault()
@@ -117,20 +105,6 @@ export Combobox = component
         if open then @close() else @query = ''
       when 'Tab'
         @close()
-
-  onListClick: (e) ->
-    item = e.target.closest('[role="option"]')
-    return unless item
-    idx = @getItems().indexOf(item)
-    @selectIndex(idx) if idx >= 0
-
-  onListMousemove: (e) ->
-    item = e.target.closest('[role="option"]')
-    return unless item
-    idx = @getItems().indexOf(item)
-    if idx >= 0 and idx isnt highlightedIndex
-      highlightedIndex = idx
-      @_updateHighlight()
 
   ~>
     if open
@@ -152,23 +126,28 @@ export Combobox = component
           aria-expanded: !!open
           aria-haspopup: "listbox"
           aria-autocomplete: "list"
+          aria-controls: if open then _listId else undefined
+          aria-activedescendant: if highlightedIndex >= 0 then "#{_listId}-#{highlightedIndex}" else undefined
           $disabled: @disabled?!
           disabled: @disabled
           placeholder: @placeholder
           value: @query
+          @keydown: @_onKeydown
         if @query
           button aria-label: "Clear", $clear: true, @click: @clear
             "✕"
 
-      # Listbox — always in DOM, items rendered reactively
-      div ref: "_list", role: "listbox"
-        $open: (open and filteredItems.length > 0)?!
-        @click: @onListClick
-        @mousemove: @onListMousemove
-        for item in filteredItems
-          div role: "option", tabindex: "-1", $value: item
-            "#{item}"
-      if open and filteredItems.length is 0 and @query
+      # Listbox — conditionally rendered (like Select)
+      if open and @items.length > 0
+        div ref: "_list", id: _listId, role: "listbox", $open: true
+          style: "position:fixed"
+          for item, idx in @items
+            div role: "option", tabindex: "-1", id: "#{_listId}-#{idx}"
+              $value: item
+              $highlighted: (idx is highlightedIndex)?!
+              @click: (=> @selectIndex(idx))
+              @mouseenter: (=> highlightedIndex = idx)
+              "#{item}"
+      if open and @items.length is 0 and @query
         div role: "status", aria-live: "polite", $empty: true
           "No results"
-
