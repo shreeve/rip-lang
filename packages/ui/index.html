@@ -235,10 +235,13 @@ export WidgetGallery = component
     lastNames = ['Chen', 'Park', 'Singh', 'Nakamura', 'Torres', 'Liu', 'Kim', 'Patel', 'Wang', 'Brown', 'Lee', 'Martin', 'Garcia', 'Davis', 'Lopez', 'Clark', 'Hall', 'Young', 'King', 'Wright']
     roles = ['Engineer', 'Designer', 'Manager', 'Director', 'Analyst', 'Lead', 'Intern']
     cityList = ['Seattle', 'Portland', 'Denver', 'Austin', 'Chicago', 'Boston', 'Miami', 'Phoenix', 'Dallas', 'Atlanta']
+    gc = document.querySelector('.grid-container')
+    gc?.scrollTop = 0
     gridData = Array.from { length: n }, (_, idx) ->
       fn = firstNames[idx %% firstNames.length]
       ln = lastNames[Math.floor(Math.random() * lastNames.length)]
       { _row: idx + 1, name: "#{fn} #{ln}", role: roles[idx %% roles.length], age: 22 + (idx %% 40), city: cityList[idx %% cityList.length] }
+    gridCellRef = ''
 
   gridColumns := [
     { key: '_row', title: '#', width: 60, align: 'right' },
@@ -1828,9 +1831,11 @@ export WidgetGallery = component
           Grid data: gridData, columns: gridColumns, striped: true
           . style: "margin-top:12px;display:flex;gap:8px;align-items:center"
             button.demo-btn @click: (=> @_loadGridRows(1000))
-              "Load 1K rows"
+              "1K rows"
+            button.demo-btn @click: (=> @_loadGridRows(10000))
+              "10K rows"
             button.demo-btn @click: (=> @_loadGridRows(100000))
-              "Load 100K rows"
+              "100K rows"
         .api
           dl
             dt "Props"
