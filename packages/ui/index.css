@@ -765,30 +765,41 @@ select.rip-grid-editor { cursor: pointer; padding-left: 4px; }
 
 /* ── NavigationMenu ── */
 
-.gallery [role="navigation"] {
+.gallery nav[role="navigation"] {
   display: inline-flex; align-items: center; gap: 2px;
+  padding: 4px; background: #f1f5f9; border-radius: 8px;
+}
 
-  [data-nav-link], [data-nav-trigger] {
-    padding: 8px 14px; border: none; background: transparent;
-    cursor: pointer; font-size: 14px; color: #475569; border-radius: 6px;
-    text-decoration: none; transition: all 0.15s;
+.gallery nav[role="navigation"] > a,
+.gallery nav[role="navigation"] > div > button {
+  appearance: none; padding: 6px 14px; border: none; background: transparent;
+  cursor: pointer; font: inherit; font-size: 13px; font-weight: 500;
+  color: #475569; border-radius: 5px; text-decoration: none;
+  user-select: none; transition: all 0.1s; outline: none;
+}
 
-    &:hover, &[data-open] { background: #f1f5f9; color: #1e293b; }
-    &:focus-visible { outline: 2px solid #3b82f6; outline-offset: 2px; }
-  }
+.gallery nav[role="navigation"] > a:hover,
+.gallery nav[role="navigation"] > div > button:hover,
+.gallery nav[role="navigation"] > div > button[data-open] {
+  background: white; color: #1e293b; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
 
-  [data-nav-panel] {
-    background: white; border: 1px solid #cbd5e1; border-radius: 8px;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.12); padding: 8px;
-    min-width: 160px; z-index: 50;
+.gallery nav[role="navigation"] > a:active,
+.gallery nav[role="navigation"] > div > button:active { transform: scale(0.96); }
 
-    a {
-      display: block; padding: 8px 12px; color: #475569; text-decoration: none;
-      border-radius: 4px; font-size: 14px;
+.gallery nav[role="navigation"] [data-nav-panel] {
+  background: white; border: 1px solid #e2e8f0; border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.1); padding: 6px;
+  min-width: 180px; z-index: 50;
+}
 
-      &:hover { background: #f1f5f9; color: #1e293b; }
-    }
-  }
+.gallery nav[role="navigation"] [data-nav-panel] a {
+  display: block; padding: 8px 12px; color: #475569; text-decoration: none;
+  border-radius: 6px; font-size: 13px; transition: background 0.1s;
+}
+
+.gallery nav[role="navigation"] [data-nav-panel] a:hover {
+  background: #f1f5f9; color: #1e293b;
 }
 
 /* ── ToggleGroup ── */
@@ -1184,11 +1195,12 @@ html.no-transition, html.no-transition * { transition: none !important; }
   .gallery [role="menubar"] [role="menu"] { background: #1e293b; border-color: #475569; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
 
   /* Navigation Menu */
-  .gallery [role="navigation"] [data-nav-link], .gallery [role="navigation"] [data-nav-trigger] { color: #94a3b8; }
-  .gallery [role="navigation"] [data-nav-link]:hover, .gallery [role="navigation"] [data-nav-trigger]:hover, .gallery [role="navigation"] [data-nav-trigger][data-open] { background: #334155; color: #e2e8f0; }
-  .gallery [role="navigation"] [data-nav-panel] { background: #1e293b; border-color: #475569; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
-  .gallery [role="navigation"] [data-nav-panel] a { color: #94a3b8; }
-  .gallery [role="navigation"] [data-nav-panel] a:hover { background: #334155; color: #e2e8f0; }
+  .gallery nav[role="navigation"] { background: #0f172a; }
+  .gallery nav[role="navigation"] > a, .gallery nav[role="navigation"] > div > button { color: #94a3b8; }
+  .gallery nav[role="navigation"] > a:hover, .gallery nav[role="navigation"] > div > button:hover, .gallery nav[role="navigation"] > div > button[data-open] { background: #1e293b; color: #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+  .gallery nav[role="navigation"] [data-nav-panel] { background: #1e293b; border-color: #475569; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+  .gallery nav[role="navigation"] [data-nav-panel] a { color: #94a3b8; }
+  .gallery nav[role="navigation"] [data-nav-panel] a:hover { background: #334155; color: #e2e8f0; }
 
   /* ToggleGroup / RadioGroup / CheckboxGroup */
   .gallery [role="group"][data-orientation] button[aria-pressed] { border-color: #475569; background: #1e293b; color: #94a3b8; }

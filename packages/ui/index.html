@@ -1248,19 +1248,20 @@ export WidgetGallery = component
         .section-desc "Site navigation with dropdown panels."
         .demo-row
           NavigationMenu
-            a $link: true, href: "#"
+            a $link: true, href: "javascript:void(0)"
               "Home"
             div $trigger: "Products"
               div $panel: true
-                a href: "#", "Widgets"
-                a href: "#", "Components"
-                a href: "#", "Templates"
-            div $trigger: "Resources"
+                a href: "javascript:void(0)", "Components"
+                a href: "javascript:void(0)", "Templates"
+                a href: "javascript:void(0)", "Playground"
+            div $trigger: "Learn"
               div $panel: true
-                a href: "#", "Documentation"
-                a href: "#", "Blog"
-            a $link: true, href: "#"
-              "About"
+                a href: "javascript:void(0)", "Documentation"
+                a href: "javascript:void(0)", "Blog"
+                a href: "javascript:void(0)", "Changelog"
+            a $link: true, href: "javascript:void(0)"
+              "GitHub"
         .api
           dl
             dt "Props"
