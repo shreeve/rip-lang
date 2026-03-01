@@ -298,12 +298,9 @@ export WidgetGallery = component
         e.preventDefault()
         @_navSection('', 'home')
         tocFilter = ''
-        setTimeout =>
+        document.addEventListener 'keyup', (=>
           @_root?.querySelector('.toc-search')?.focus()
-          setTimeout =>
-            @_root.querySelector('.toc-search').value = ''
-          , 10
-        , 100
+        ), { once: true }
     gc = document.querySelector('.grid-container')
     if gc
       gc.addEventListener 'mousedown', => setTimeout (=> @_updateGridRef()), 0
