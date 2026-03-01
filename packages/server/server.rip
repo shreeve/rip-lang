@@ -595,7 +595,7 @@ class Manager
         timer = null
         @server?.broadcastChange(prefix, pending)
         pending = null
-      , 100
+      , 300
     for dir in dirs
       try
         w = watch dir, { recursive: true }, (event, filename) ->

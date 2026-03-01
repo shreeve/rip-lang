@@ -54,16 +54,13 @@
     let ready = false;
     const es = new EventSource('/watch');
     es.addEventListener('connected', () => ready ? location.reload() : (ready = true));
-    let _lastStyles = 0;
     es.addEventListener('reload', (e) => {
       if (e.data === 'styles') {
-        const now = Date.now();
-        if (now - _lastStyles < 500) return;
-        _lastStyles = now;
+        const t = Date.now();
         document.querySelectorAll('link[rel="stylesheet"]').forEach(link => {
           if (new URL(link.href).origin !== location.origin) return;
           const url = new URL(link.href);
-          url.searchParams.set('_r', now);
+          url.searchParams.set('_r', t);
           link.href = url.toString();
         });
       } else {
