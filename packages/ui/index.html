@@ -224,10 +224,10 @@ export WidgetGallery = component
     document.addEventListener 'keydown', (e) =>
       if e.key is '/' and not (e.target.tagName in ['INPUT', 'TEXTAREA', 'SELECT']) and not e.target.isContentEditable
         e.preventDefault()
-        searchInput = @_root?.querySelector('.toc-search')
-        if searchInput
+        el = @_root?.querySelector('.toc-search')
+        if el
           window.scrollTo({ top: 0, behavior: 'smooth' })
-          searchInput.focus()
+          el.focus()
     gc = document.querySelector('.grid-container')
     if gc
       gc.addEventListener 'mousedown', => setTimeout (=> @_updateGridRef()), 0
