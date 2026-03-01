@@ -832,7 +832,7 @@ class Server
     if path.endsWith('/watch')
       watchPrefix = path.slice(0, -6)  # strip '/watch'
       if @watchGroups.has(watchPrefix)
-        return @handleWatch(watchPrefix, req)
+        return @handleWatch(watchPrefix)
       else
         return new Response('', { status: 503, headers: { 'Retry-After': '2' } })
 
@@ -883,11 +883,9 @@ class Server
     return if @watchGroups.has(prefix)
     @watchGroups.set prefix, { sseClients: new Set() }
 
-  handleWatch: (prefix, req) ->
+  handleWatch: (prefix) ->
     group = @watchGroups.get(prefix)
     return new Response('not-found', { status: 404 }) unless group
-    ua = req?.headers?.get('user-agent') or 'unknown'
-    console.log "rip-server: SSE connect from: #{ua}"
     encoder = new TextEncoder()
     client = null
     new Response new ReadableStream(
@@ -910,7 +908,6 @@ class Server
     group = @watchGroups.get(prefix)
     return unless group
     dead = []
-    console.log "rip-server: broadcast #{type} to #{group.sseClients.size} clients"
     for client as group.sseClients
       try client.send(type)
       catch then dead.push(client)

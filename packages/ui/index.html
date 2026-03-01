@@ -61,7 +61,6 @@
           if (new URL(link.href).origin !== location.origin) return;
           const url = new URL(link.href);
           url.searchParams.set('_r', t);
-          url.searchParams.set('_from', 'gallery');
           link.href = url.toString();
         });
       } else {
