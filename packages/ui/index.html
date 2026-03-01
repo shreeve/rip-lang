@@ -132,6 +132,10 @@ export WidgetGallery = component
   _onFilterKey: (e) ->
     if e.key is '/'
       e.preventDefault()
+      @_navSection('', 'home')
+      tocFilter = ''
+      e.target.value = ''
+      document.addEventListener 'keyup', (=> e.target.focus()), { once: true }
       return
     if e.key is 'Escape'
       tocFilter = ''
