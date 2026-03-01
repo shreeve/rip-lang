@@ -118,7 +118,7 @@ export Tabs = component
             $active: (tab.dataset.tab is @active)?!
             $disabled: @_isDisabled(tab)?!
             @click: (=> @select(tab.dataset.tab) unless @_isDisabled(tab))
-            tab.textContent
+            "#{tab.textContent}"
 
       . ref: "_content"
         slot

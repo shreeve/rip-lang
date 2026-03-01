@@ -159,4 +159,4 @@ export Menu = component
               $disabled: item.dataset.disabled?!
               @click: (=> @selectIndex(idx))
               @mouseenter: (=> highlightedIndex = idx)
-              item.textContent
+              "#{item.textContent}"

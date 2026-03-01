@@ -152,4 +152,4 @@ export Menubar = component
                 $value: item.dataset.item
                 @click: (=> @selectItem(menu.dataset.menu, item.dataset.item))
                 @mouseenter: (=> highlightedIndex = idx)
-                item.textContent
+                "#{item.textContent}"

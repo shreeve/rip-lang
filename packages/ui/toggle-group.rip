@@ -75,4 +75,4 @@ export ToggleGroup = component
           $disabled: @disabled?!
           $value: item.dataset.value
           @click: (=> @_toggle(item.dataset.value))
-          item.textContent
+          "#{item.textContent}"

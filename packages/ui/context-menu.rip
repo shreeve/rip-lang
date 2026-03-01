@@ -95,4 +95,4 @@ export ContextMenu = component
               $value: item.dataset.item
               @click: (=> @selectIndex(idx))
               @mouseenter: (=> highlightedIndex = idx)
-              item.textContent
+              "#{item.textContent}"
