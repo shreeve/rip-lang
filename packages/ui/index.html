@@ -221,27 +221,28 @@ export WidgetGallery = component
     gridData = Array.from { length: n }, (_, idx) ->
       fn = firstNames[idx %% firstNames.length]
       ln = lastNames[Math.floor(Math.random() * lastNames.length)]
-      { name: "#{fn} #{ln}", role: roles[idx %% roles.length], age: 22 + (idx %% 40), city: cityList[idx %% cityList.length] }
+      { _row: idx + 1, name: "#{fn} #{ln}", role: roles[idx %% roles.length], age: 22 + (idx %% 40), city: cityList[idx %% cityList.length] }
 
   gridColumns := [
+    { key: '_row', title: '#', width: 60, align: 'right' },
     { key: 'name', title: 'Name', width: 180 },
     { key: 'role', title: 'Role', width: 140 },
     { key: 'age', title: 'Age', width: 80, align: 'right' },
     { key: 'city', title: 'City', width: 140 },
   ]
   gridData := [
-    { name: 'Alice Chen', role: 'Engineer', age: 28, city: 'Seattle' },
-    { name: 'Bob Park', role: 'Designer', age: 34, city: 'Portland' },
-    { name: 'Carol Singh', role: 'Manager', age: 41, city: 'Denver' },
-    { name: 'Dan Nakamura', role: 'Engineer', age: 26, city: 'Austin' },
-    { name: 'Eve Torres', role: 'Director', age: 45, city: 'Chicago' },
-    { name: 'Frank Liu', role: 'Designer', age: 31, city: 'Boston' },
-    { name: 'Grace Kim', role: 'Engineer', age: 29, city: 'Seattle' },
-    { name: 'Hank Patel', role: 'Manager', age: 38, city: 'Denver' },
-    { name: 'Iris Wang', role: 'Engineer', age: 33, city: 'Austin' },
-    { name: 'Jack Brown', role: 'Designer', age: 27, city: 'Portland' },
-    { name: 'Karen Lee', role: 'Director', age: 52, city: 'Chicago' },
-    { name: 'Leo Martin', role: 'Engineer', age: 24, city: 'Boston' },
+    { _row: 1, name: 'Alice Chen', role: 'Engineer', age: 28, city: 'Seattle' },
+    { _row: 2, name: 'Bob Park', role: 'Designer', age: 34, city: 'Portland' },
+    { _row: 3, name: 'Carol Singh', role: 'Manager', age: 41, city: 'Denver' },
+    { _row: 4, name: 'Dan Nakamura', role: 'Engineer', age: 26, city: 'Austin' },
+    { _row: 5, name: 'Eve Torres', role: 'Director', age: 45, city: 'Chicago' },
+    { _row: 6, name: 'Frank Liu', role: 'Designer', age: 31, city: 'Boston' },
+    { _row: 7, name: 'Grace Kim', role: 'Engineer', age: 29, city: 'Seattle' },
+    { _row: 8, name: 'Hank Patel', role: 'Manager', age: 38, city: 'Denver' },
+    { _row: 9, name: 'Iris Wang', role: 'Engineer', age: 33, city: 'Austin' },
+    { _row: 10, name: 'Jack Brown', role: 'Designer', age: 27, city: 'Portland' },
+    { _row: 11, name: 'Karen Lee', role: 'Director', age: 52, city: 'Chicago' },
+    { _row: 12, name: 'Leo Martin', role: 'Engineer', age: 24, city: 'Boston' },
   ]
 
   sectionIds =! ['select', 'combobox', 'multi-select', 'autocomplete', 'checkbox', 'toggle', 'toggle-group', 'radio-group', 'checkbox-group', 'input', 'number-field', 'slider', 'otp-field', 'date-picker', 'editable-value', 'tabs', 'menu', 'context-menu', 'menubar', 'nav-menu', 'toolbar', 'dialog', 'drawer', 'popover', 'tooltip', 'preview-card', 'toast', 'button', 'separator', 'progress', 'meter', 'avatar', 'scroll-area', 'field', 'form', 'grid', 'accordion']
