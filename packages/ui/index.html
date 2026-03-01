@@ -226,8 +226,9 @@ export WidgetGallery = component
         e.preventDefault()
         @_navSection('', 'home')
         setTimeout =>
-          @_root?.querySelector('.toc-search')?.focus()
           tocFilter = ''
+          requestAnimationFrame =>
+            @_root?.querySelector('.toc-search')?.focus()
         , 100
     gc = document.querySelector('.grid-container')
     if gc
