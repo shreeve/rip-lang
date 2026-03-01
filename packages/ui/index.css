@@ -480,7 +480,7 @@ button { font: inherit; cursor: pointer; }
 /* ── Grid ── */
 
 .grid-container {
-  position: relative; overflow: auto; height: 300px;
+  position: relative; overflow: auto; height: 420px;
   background: white; border-radius: 6px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 

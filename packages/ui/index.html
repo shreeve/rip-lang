@@ -184,6 +184,16 @@ export WidgetGallery = component
     else
       document.body.classList.add('ready')
 
+  _loadGridRows: (n) ->
+    firstNames = ['Alice', 'Bob', 'Carol', 'Dan', 'Eve', 'Frank', 'Grace', 'Hank', 'Iris', 'Jack', 'Karen', 'Leo', 'Mia', 'Nora', 'Omar', 'Pia', 'Quinn', 'Rosa', 'Sam', 'Tina']
+    lastNames = ['Chen', 'Park', 'Singh', 'Nakamura', 'Torres', 'Liu', 'Kim', 'Patel', 'Wang', 'Brown', 'Lee', 'Martin', 'Garcia', 'Davis', 'Lopez', 'Clark', 'Hall', 'Young', 'King', 'Wright']
+    roles = ['Engineer', 'Designer', 'Manager', 'Director', 'Analyst', 'Lead', 'Intern']
+    cityList = ['Seattle', 'Portland', 'Denver', 'Austin', 'Chicago', 'Boston', 'Miami', 'Phoenix', 'Dallas', 'Atlanta']
+    gridData = Array.from { length: n }, (_, idx) ->
+      fn = firstNames[idx %% firstNames.length]
+      ln = lastNames[Math.floor(Math.random() * lastNames.length)]
+      { name: "#{fn} #{ln}", role: roles[idx %% roles.length], age: 22 + (idx %% 40), city: cityList[idx %% cityList.length] }
+
   gridColumns := [
     { key: 'name', title: 'Name', width: 180 },
     { key: 'role', title: 'Role', width: 140 },
@@ -1716,8 +1726,13 @@ export WidgetGallery = component
             a @click: (=> @_navSection('grid', 'next')), "›"
         .section-desc "Virtual-scrolling data grid. Click to select, arrows to navigate, double-click to edit."
         .demo-row
-          .demo-label "12 rows, 4 columns"
+          .demo-label "#{gridData.length} rows, #{gridColumns.length} columns"
           Grid data: gridData, columns: gridColumns, striped: true
+          . style: "margin-top:12px;display:flex;gap:8px;align-items:center"
+            button style: "padding:6px 16px;border:1px solid #cbd5e1;border-radius:6px;background:white;font-size:13px;cursor:pointer", @click: (=> @_loadGridRows(1000))
+              "Load 1K rows"
+            button style: "padding:6px 16px;border:1px solid #cbd5e1;border-radius:6px;background:white;font-size:13px;cursor:pointer", @click: (=> @_loadGridRows(100000))
+              "Load 100K rows"
         .api
           dl
             dt "Props"
