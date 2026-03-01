@@ -1175,9 +1175,20 @@ html { scroll-behavior: auto; }
   /* Toolbar */
   .gallery [role="toolbar"] { background: #0f172a; }
 
-  /* PreviewCard */
-  .gallery [data-content][data-open] { }
+  /* Accordion demo */
+  .accordion-trigger { border-color: #475569; background: #334155; color: #e2e8f0; }
+  .accordion-content { color: #94a3b8; }
 }
+
+/* ── Accordion demo ── */
+
+.accordion-trigger {
+  width: 100%; text-align: left; padding: 8px 12px;
+  border: 1px solid #e2e8f0; border-radius: 6px; background: white;
+  font-size: 14px; cursor: pointer; margin-bottom: 4px;
+}
+
+.accordion-content { padding: 8px 12px; color: #64748b; font-size: 13px; }
 
 /* ── Animations ── */
 
