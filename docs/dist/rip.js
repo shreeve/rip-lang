@@ -3511,6 +3511,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     return Array.isArray(target) && target[0] === "." && target[1] === "this";
   }
   function installComponentSupport(CodeGenerator, Lexer2) {
+    let meta = (node, key) => node instanceof String ? node[key] : undefined;
     const origClassify = Lexer2.prototype.classifyKeyword;
     Lexer2.prototype.classifyKeyword = function(id, fallback, data) {
       if (id === "offer" || id === "accept") {
@@ -3633,12 +3634,16 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         if (tag === "=" && i > 0) {
           let prev = tokens[i - 1][0];
           if (prev === "TERMINATOR" || prev === "INDENT" || prev === "RENDER") {
-            let end = i + 1;
-            while (end < tokens.length && tokens[end][0] !== "TERMINATOR" && tokens[end][0] !== "INDENT" && tokens[end][0] !== "OUTDENT")
-              end++;
-            tokens.splice(end, 0, gen2("INTERPOLATION_END", ")", token), gen2("STRING", '""', token), gen2("STRING_END", ")", token));
-            tokens.splice(i, 1, gen2("STRING_START", "(", token), gen2("STRING", '""', token), gen2("INTERPOLATION_START", "(", token));
-            return 3;
+            tokens.splice(i, 1);
+            if (tokens[i] && tokens[i][0] === "IDENTIFIER") {
+              let val = tokens[i][1];
+              if (typeof val === "string") {
+                val = new String(val);
+                tokens[i][1] = val;
+              }
+              val.text = true;
+            }
+            return 0;
           }
         }
         if (tag === "UNARY_MATH" && token[1] === "~" && nextToken && nextToken[0] === "IDENTIFIER") {
@@ -3845,11 +3850,11 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       }
       let raw = typeof current === "string" ? current : current instanceof String ? current.valueOf() : null;
       if (raw === null)
-        return { tag: null, classes, id: undefined };
+        return { tag: null, classes, id: undefined, base: current };
       let [tag, id] = raw.split("#");
       if (!tag)
         tag = "div";
-      return { tag, classes, id };
+      return { tag, classes, id, base: current };
     };
     const _str = (s) => typeof s === "string" ? s : s instanceof String ? s.valueOf() : null;
     const _transferMeta = (from, to) => {
@@ -4240,7 +4245,7 @@ ${blockFactoriesCode}return ${lines.join(`
         this._createLines.push(`${slotVar} = ${s}.children instanceof Node ? ${s}.children : (${s}.children != null ? document.createTextNode(String(${s}.children)) : document.createComment(''));`);
         return slotVar;
       }
-      if (headStr && this.isHtmlTag(headStr)) {
+      if (headStr && this.isHtmlTag(headStr) && !meta(head, "text")) {
         let [tagName, id] = headStr.split("#");
         return this.generateTag(tagName || "div", [], rest, id);
       }
@@ -4258,8 +4263,8 @@ ${blockFactoriesCode}return ${lines.join(`
           this._createLines.push(`${slotVar} = ${s}.${prop} instanceof Node ? ${s}.${prop} : (${s}.${prop} != null ? document.createTextNode(String(${s}.${prop})) : document.createComment(''));`);
           return slotVar;
         }
-        const { tag, classes, id } = this.collectTemplateClasses(sexpr);
-        if (tag && this.isHtmlTag(tag)) {
+        const { tag, classes, id, base } = this.collectTemplateClasses(sexpr);
+        if (!meta(base, "text") && tag && this.isHtmlTag(tag)) {
           return this.generateTag(tag, classes, [], id);
         }
         const textVar2 = this.newTextVar();
@@ -8714,8 +8719,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.62";
-  var BUILD_DATE = "2026-03-01@06:05:45GMT";
+  var VERSION = "3.13.63";
+  var BUILD_DATE = "2026-03-01@06:49:01GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
