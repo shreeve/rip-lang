@@ -1028,7 +1028,7 @@ html { scroll-behavior: auto; }
 
   /* Text inputs */
   .gallery .combobox-input, .gallery input[type="text"]:not(.rip-grid-editor) { border-color: #475569; color: #e2e8f0; background: #0f172a; }
-  .gallery input[type="email"], .gallery input[type="password"] { border-color: #475569; color: #e2e8f0; background: #0f172a; }
+  .gallery input[type="email"], .gallery input[type="password"], .gallery input[type="number"] { border-color: #475569 !important; color: #e2e8f0 !important; background: #0f172a !important; }
 
   /* Dialog / Drawer */
   .gallery .dialog-panel { background: #1e293b; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
