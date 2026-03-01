@@ -140,7 +140,24 @@ export WidgetGallery = component
     { id: 'grid', name: 'Grid', lines: 901, desc: 'Virtual-scrolling data grid — 100K+ rows at 60fps.', props: ['@data', '@columns', '@rowHeight', '@overscan', '@striped', '@beforeEdit', '@afterEdit'], events: [], keys: ['Arrows', 'Tab', 'Enter', 'F2', 'Esc', 'Home', 'End', 'PgUp', 'PgDn', 'Ctrl+A', 'Ctrl+C', 'Ctrl+V', 'Ctrl+X'], attrs: ['$editing', '$selecting', '$sorted'] }
     { id: 'accordion', name: 'Accordion', lines: 113, desc: 'Expand/collapse sections, single or multiple mode.', props: ['@multiple'], events: ['change'], keys: ['Enter', 'Space', '↕', 'Home', 'End'], attrs: ['$item', '$trigger', '$content', '$open', '$disabled'] }
   ]
-  activeInfo ~= tocData.find (c) -> c.id is tocActive
+  _infoName := ''
+  _infoDesc := ''
+  _infoLines := 0
+  _infoProps := []
+  _infoEvents := []
+  _infoKeys := []
+  _infoAttrs := []
+
+  ~>
+    info = tocData.find (c) -> c.id is tocActive
+    if info
+      _infoName = info.name
+      _infoDesc = info.desc
+      _infoLines = info.lines
+      _infoProps = info.props
+      _infoEvents = info.events
+      _infoKeys = info.keys
+      _infoAttrs = info.attrs
   gridColumns := [
     { key: 'name', title: 'Name', width: 180 },
     { key: 'role', title: 'Role', width: 140 },
@@ -259,31 +276,31 @@ export WidgetGallery = component
             a @mouseenter: (=> tocActive = 'grid'), @click: (=> tocActive = 'grid'), href: "#grid", $active: (tocActive is 'grid')?!, "Grid"
             a @mouseenter: (=> tocActive = 'accordion'), @click: (=> tocActive = 'accordion'), href: "#accordion", $active: (tocActive is 'accordion')?!, "Accordion"
         .toc-detail
-          if activeInfo
+          if tocActive
             .
               h3
-                activeInfo.name
-                span.badge "#{activeInfo.lines} lines"
-              p.toc-desc activeInfo.desc
+                _infoName
+                span.badge "#{_infoLines} lines"
+              p.toc-desc _infoDesc
               .api
                 dl
                   dt "Props"
                   dd
-                    for item in activeInfo.props
+                    for item in _infoProps
                       code item
-                  if activeInfo.events.length
+                  if _infoEvents.length
                     dt "Events"
                     dd
-                      for item in activeInfo.events
+                      for item in _infoEvents
                         code item
-                  if activeInfo.keys.length
+                  if _infoKeys.length
                     dt "Keyboard"
                     dd
-                      for item in activeInfo.keys
+                      for item in _infoKeys
                         kbd item
                   dt "Data"
                   dd
-                    for item in activeInfo.attrs
+                    for item in _infoAttrs
                       code item
               a.jump href: "##{tocActive}", @click: ((e) => @_jumpTo(e))
                 "Jump to demo ↓"
