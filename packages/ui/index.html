@@ -1290,7 +1290,7 @@ export WidgetGallery = component
         .section-desc "Modal with focus trap, scroll lock, escape/click-outside dismiss."
         .demo-row
           .demo-label "Click to open"
-          button style: "padding:6px 16px;border:1px solid #cbd5e1;border-radius:6px;background:white;font-size:14px;color:#1e293b;outline:none;cursor:pointer", @click: (=> showDialog = true)
+          button.demo-btn @click: (=> showDialog = true)
             "Open Dialog"
           .status "open: #{showDialog}"
         Dialog open <=> showDialog, @close: (=> showDialog = false)
@@ -1298,7 +1298,7 @@ export WidgetGallery = component
             h2 style: "font-size:18px;font-weight:600;margin-bottom:8px", "Confirm Action"
             p style: "color:#64748b;margin-bottom:20px", "Are you sure you want to proceed?"
             . style: "display:flex;gap:8px;justify-content:flex-end"
-              button style: "padding:6px 16px;border:1px solid #cbd5e1;border-radius:6px;background:white", @click: (=> showDialog = false)
+              button.demo-btn @click: (=> showDialog = false)
                 "Cancel"
               button style: "padding:6px 16px;border:none;border-radius:6px;background:#1d4ed8;color:white;font-weight:600", @click: (=> showDialog = false)
                 "Confirm"
@@ -1377,7 +1377,7 @@ export WidgetGallery = component
         .demo-row
           .demo-label "Click to toggle"
           Popover placement: "bottom-start"
-            button data-trigger: true, style: "padding:6px 16px;border:1px solid #cbd5e1;border-radius:6px;background:white"
+            button.demo-btn data-trigger: true
               "Open Popover"
             div data-content: true, style: "padding:12px 16px;background:white;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.12);min-width:200px"
               p style: "font-size:14px;color:#1e293b", "Popover content"
@@ -1418,10 +1418,10 @@ export WidgetGallery = component
           .demo-label "Hover the buttons"
           . style: "display:flex;gap:12px"
             Tooltip text: "Save your changes", placement: "top"
-              button style: "padding:6px 16px;border:1px solid #cbd5e1;border-radius:6px;background:white"
+              button.demo-btn
                 "Save (top)"
             Tooltip text: "Delete this item", placement: "bottom"
-              button style: "padding:6px 16px;border:1px solid #cbd5e1;border-radius:6px;background:white"
+              button.demo-btn
                 "Delete (bottom)"
         .api
           dl
@@ -1483,9 +1483,9 @@ export WidgetGallery = component
         .section-desc "Auto-dismiss notification with ARIA live region."
         .demo-row
           .demo-label "Click to show toasts"
-          button style: "padding:6px 16px;border:1px solid #cbd5e1;border-radius:6px;background:white", @click: (=> toasts = [...toasts, { message: 'Hello!', type: 'info' }])
+          button.demo-btn @click: (=> toasts = [...toasts, { message: 'Hello!', type: 'info' }])
             "Info Toast"
-          button style: "margin-left:8px;padding:6px 16px;border:1px solid #cbd5e1;border-radius:6px;background:white", @click: (=> toasts = [...toasts, { message: 'Saved!', type: 'success' }])
+          button.demo-btn style: "margin-left:8px", @click: (=> toasts = [...toasts, { message: 'Saved!', type: 'success' }])
             "Success Toast"
         .toast-wrap
           ToastViewport toasts <=> toasts
@@ -1799,9 +1799,9 @@ export WidgetGallery = component
           .demo-label "#{gridData.length} rows, #{gridColumns.length} columns"
           Grid data: gridData, columns: gridColumns, striped: true
           . style: "margin-top:12px;display:flex;gap:8px;align-items:center"
-            button style: "padding:6px 16px;border:1px solid #cbd5e1;border-radius:6px;background:white;font-size:13px;cursor:pointer", @click: (=> @_loadGridRows(1000))
+            button.demo-btn @click: (=> @_loadGridRows(1000))
               "Load 1K rows"
-            button style: "padding:6px 16px;border:1px solid #cbd5e1;border-radius:6px;background:white;font-size:13px;cursor:pointer", @click: (=> @_loadGridRows(100000))
+            button.demo-btn @click: (=> @_loadGridRows(100000))
               "Load 100K rows"
         .api
           dl

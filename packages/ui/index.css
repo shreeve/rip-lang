@@ -71,6 +71,11 @@ button { font: inherit; cursor: pointer; }
   text-transform: uppercase; color: #94a3b8; margin-bottom: 8px;
 }
 
+.demo-btn {
+  padding: 6px 16px; border: 1px solid #cbd5e1; border-radius: 6px;
+  background: white; font-size: 14px; color: #1e293b; outline: none; cursor: pointer;
+}
+
 .status {
   margin-top: 8px; padding: 8px 12px; border-radius: 6px;
   font-size: 12px; font-family: monospace;
@@ -987,6 +992,7 @@ html { scroll-behavior: auto; }
 
   .demo-row { background: #1e293b; border-color: #334155; }
   .demo-label { color: #64748b; }
+  .demo-btn { border-color: #475569; background: #1e293b; color: #e2e8f0; }
   .status { background: #0f172a; color: #94a3b8; }
 
   .toc { background: #1e293b; border-color: #334155; }
