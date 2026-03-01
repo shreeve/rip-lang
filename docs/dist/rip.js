@@ -6037,6 +6037,16 @@ function _setDataSection() {
     generateAssignment(head, rest, context, sexpr) {
       let [target, value] = rest;
       let op = head === "?=" ? "??=" : head;
+      let optInfo = this._findOptionalInTarget(target);
+      if (optInfo) {
+        let guardCode = this.generate(optInfo.guard, "value");
+        let targetCode2 = this.generate(optInfo.rewritten, "value");
+        let valueCode2 = this.generate(value, "value");
+        if (context === "value") {
+          return `(${guardCode} != null ? (${targetCode2} ${op} ${valueCode2}) : undefined)`;
+        }
+        return `if (${guardCode} != null) ${targetCode2} ${op} ${valueCode2}`;
+      }
       let isFnValue = this.is(value, "->") || this.is(value, "=>") || this.is(value, "def");
       if (target instanceof String && meta(target, "await") !== undefined && !isFnValue) {
         let sigil = meta(target, "await") === true ? "!" : "&";
@@ -8046,6 +8056,20 @@ ${this.indent()}}`;
       }
       return code;
     }
+    _findOptionalInTarget(node) {
+      if (!Array.isArray(node))
+        return null;
+      if (node[0] === "?.")
+        return { guard: node[1], rewritten: [".", node[1], node[2]] };
+      if (node[0] === "optindex")
+        return { guard: node[1], rewritten: ["[]", node[1], node[2]] };
+      if (node[0] === "." || node[0] === "[]") {
+        let inner = this._findOptionalInTarget(node[1]);
+        if (inner)
+          return { guard: inner.guard, rewritten: [node[0], inner.rewritten, node[2]] };
+      }
+      return null;
+    }
     unwrapLogical(code) {
       if (typeof code !== "string")
         return code;
@@ -8679,8 +8703,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.55";
-  var BUILD_DATE = "2026-02-28@19:43:03GMT";
+  var VERSION = "3.13.56";
+  var BUILD_DATE = "2026-03-01@02:18:54GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -9005,7 +9029,7 @@ ${indented}`);
       let sig;
       delete target2[prop];
       sig = target2[SIGNALS]?.get(prop);
-      if (sig)
+      if (sig != null)
         sig.value = undefined;
       keysSignal(target2).value = ++_keysVersion;
       return true;
