@@ -131,6 +131,14 @@ export WidgetGallery = component
     if e.key is 'Escape'
       tocFilter = ''
       e.target.value = ''
+    if e.key is 'Enter'
+      visible = Array.from(document.querySelectorAll('.toc-nav a:not([data-hidden])') or [])
+      if visible.length is 1
+        e.preventDefault()
+        tocActive = visible[0].getAttribute('href')?.slice(1)
+        @_fadeTo(document.getElementById(tocActive))
+        tocFilter = ''
+        e.target.value = ''
 
   ~>
     q = tocFilter.toLowerCase()
