@@ -1176,7 +1176,7 @@ html { scroll-behavior: auto; }
   .gallery [role="toolbar"] { background: #0f172a; }
 
   /* Accordion demo */
-  .accordion-trigger { border-color: #475569; background: #334155; color: #e2e8f0; }
+  .accordion-trigger, .gallery [data-trigger][data-trigger] button, .gallery button[data-trigger] { border-color: #475569 !important; background: #334155 !important; color: #e2e8f0 !important; }
   .accordion-content { color: #94a3b8; }
 }
 
