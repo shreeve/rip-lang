@@ -1184,10 +1184,34 @@ html.no-transition, html.no-transition * { transition: none !important; }
   .gallery [role="toolbar"] { background: #0f172a; }
   .gallery [role="toolbar"] button { border-color: #475569; background: #334155; color: #e2e8f0; }
 
+  /* Shared demo styles */
+  .context-zone { border-color: #475569; color: #94a3b8; }
+  .dialog-desc { color: #94a3b8; }
+  .floating-panel { background: #1e293b; border-color: #475569; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+  .floating-title { color: #e2e8f0; }
+  .floating-desc { color: #94a3b8; }
+
   /* Accordion demo */
   .accordion-trigger, .gallery [data-trigger][data-trigger] button, .gallery button[data-trigger] { border-color: #475569 !important; background: #334155 !important; color: #e2e8f0 !important; }
   .accordion-content { color: #94a3b8; }
 }
+
+/* ── Shared demo styles ── */
+
+.context-zone {
+  padding: 24px; border: 2px dashed #cbd5e1; border-radius: 8px;
+  text-align: center; color: #64748b; cursor: context-menu;
+}
+
+.dialog-desc { color: #64748b; margin-bottom: 20px; }
+
+.floating-panel {
+  padding: 12px 16px; background: white; border: 1px solid #cbd5e1;
+  border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); min-width: 200px;
+}
+
+.floating-title { font-size: 14px; font-weight: 600; color: #1e293b; margin-bottom: 4px; }
+.floating-desc { font-size: 13px; color: #64748b; margin-top: 4px; }
 
 /* ── Accordion demo ── */
 

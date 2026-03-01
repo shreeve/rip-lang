@@ -1153,7 +1153,7 @@ export WidgetGallery = component
         .section-desc "Right-click the dashed area to open a context menu."
         ContextMenu
           div $trigger: true
-            . style: "padding:24px;border:2px dashed #cbd5e1;border-radius:8px;text-align:center;color:#64748b;cursor:context-menu"
+            .context-zone
               "Right-click here"
           div $item: "cut", "Cut"
           div $item: "copy", "Copy"
@@ -1329,7 +1329,7 @@ export WidgetGallery = component
         Dialog open <=> showDialog, @close: (=> showDialog = false)
           .dialog-panel
             h2 style: "font-size:18px;font-weight:600;margin-bottom:8px", "Confirm Action"
-            p style: "color:#64748b;margin-bottom:20px", "Are you sure you want to proceed?"
+            p.dialog-desc "Are you sure you want to proceed?"
             . style: "display:flex;gap:8px;justify-content:flex-end"
               button.demo-btn @click: (=> showDialog = false)
                 "Cancel"
@@ -1412,9 +1412,9 @@ export WidgetGallery = component
           Popover placement: "bottom-start"
             button.demo-btn data-trigger: true
               "Open Popover"
-            div data-content: true, style: "padding:12px 16px;background:white;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.12);min-width:200px"
-              p style: "font-size:14px;color:#1e293b", "Popover content"
-              p style: "font-size:12px;color:#64748b;margin-top:4px", "Click outside or press Escape to close."
+            div.floating-panel data-content: true
+              p.floating-title "Popover content"
+              p.floating-desc "Click outside or press Escape to close."
         .api
           dl
             dt "Props"
@@ -1488,11 +1488,9 @@ export WidgetGallery = component
             a $trigger: true, href: "#"
               "Hover me for preview"
             div $content: true, hidden: true
-              . style: "padding:12px;background:white;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.12);width:240px"
-                p style: "font-weight:600;margin-bottom:4px"
-                  "Preview Card"
-                p style: "color:#64748b;font-size:13px"
-                  "This content appears on hover or focus. Useful for link previews."
+              .floating-panel style: "width:240px"
+                p.floating-title "Preview Card"
+                p.floating-desc "This content appears on hover or focus. Useful for link previews."
         .api
           dl
             dt "Props"
