@@ -1,0 +1,158 @@
+# MultiSelect — accessible headless multi-select with chips
+#
+# Filterable dropdown where multiple items can be selected. Selected items
+# appear as removable chips. Type to filter, click or arrow+Enter to toggle.
+# Ships zero CSS — style entirely via attribute selectors in your stylesheet.
+#
+# Usage:
+#   MultiSelect value <=> selectedColors, items: colors, placeholder: "Choose colors..."
+
+export MultiSelect = component
+  @value := []
+  @items := []
+  @placeholder := 'Select...'
+  @disabled := false
+
+  open := false
+  query := ''
+  highlightedIndex := -1
+  _listId =! "ms-#{Math.random().toString(36).slice(2, 8)}"
+
+  filtered ~=
+    q = query.trim().toLowerCase()
+    return @items unless q
+    @items.filter (item) ->
+      label = if typeof item is 'string' then item else (item.label or item.name or String(item))
+      label.toLowerCase().includes(q)
+
+  _label: (item) ->
+    if typeof item is 'string' then item else (item.label or item.name or String(item))
+
+  _val: (item) ->
+    if typeof item is 'string' then item else (item.value or item.id or String(item))
+
+  _isSelected: (item) ->
+    v = @_val(item)
+    Array.isArray(@value) and v in @value
+
+  _toggleItem: (item) ->
+    return if @disabled
+    v = @_val(item)
+    arr = if Array.isArray(@value) then [...@value] else []
+    if v in arr
+      arr = arr.filter (x) -> x isnt v
+    else
+      arr.push v
+    @value = arr
+    @emit 'change', @value
+
+  _removeChip: (v) ->
+    return if @disabled
+    @value = @value.filter (x) -> x isnt v
+    @emit 'change', @value
+
+  clearAll: ->
+    return if @disabled
+    @value = []
+    query = ''
+    @emit 'change', @value
+
+  _onInput: (e) ->
+    query = e.target.value
+    open = true
+    highlightedIndex = if filtered.length > 0 then 0 else -1
+
+  onFocusin: -> open = true
+
+  onFocusout: (e) ->
+    unless @_content?.contains(e.relatedTarget)
+      open = false
+      query = ''
+      highlightedIndex = -1
+
+  _position: ->
+    return unless @_input and @_list
+    tr = @_input.getBoundingClientRect()
+    @_list.style.left = "#{tr.left}px"
+    @_list.style.top = "#{tr.bottom + 2}px"
+    @_list.style.minWidth = "#{tr.width}px"
+    fl = @_list.getBoundingClientRect()
+    if fl.bottom > window.innerHeight
+      @_list.style.top = "#{tr.top - fl.height - 2}px"
+
+  _onKeydown: (e) ->
+    len = filtered.length
+    switch e.key
+      when 'ArrowDown'
+        e.preventDefault()
+        open = true
+        highlightedIndex = (highlightedIndex + 1) %% len if len
+        setTimeout (=> @_position()), 0
+      when 'ArrowUp'
+        e.preventDefault()
+        highlightedIndex = (highlightedIndex - 1) %% len if len
+      when 'Enter'
+        e.preventDefault()
+        if highlightedIndex >= 0 and highlightedIndex < len
+          @_toggleItem(filtered[highlightedIndex])
+      when 'Escape'
+        e.preventDefault()
+        open = false
+        query = ''
+      when 'Backspace'
+        if not query and @value.length > 0
+          @value = @value.slice(0, -1)
+          @emit 'change', @value
+      when 'Tab'
+        open = false
+        query = ''
+
+  ~>
+    if open
+      setTimeout (=> @_position()), 0
+      onDown = (e) =>
+        unless @_content?.contains(e.target)
+          open = false
+          query = ''
+          highlightedIndex = -1
+      document.addEventListener 'mousedown', onDown
+      return -> document.removeEventListener 'mousedown', onDown
+
+  render
+    . ref: "_content", $open: open?!, $disabled: @disabled?!
+
+      # Chip area + input
+      . $chips: true, @click: (=> @_input?.focus())
+        for chip in @value
+          span $chip: true
+            "#{chip}"
+            button $remove: true, aria-label: "Remove #{chip}", @click: (=> @_removeChip(chip))
+              "✕"
+        input ref: "_input", type: "text", autocomplete: "off"
+          role: "combobox"
+          aria-expanded: !!open
+          aria-haspopup: "listbox"
+          aria-controls: if open then _listId else undefined
+          $disabled: @disabled?!
+          disabled: @disabled
+          placeholder: if @value.length is 0 then @placeholder else ''
+          value: query
+          @input: @_onInput
+          @keydown: @_onKeydown
+        if @value.length > 0
+          button $clear: true, aria-label: "Clear all", @click: @clearAll
+            "✕"
+
+      # Dropdown
+      if open and filtered.length > 0
+        div ref: "_list", id: _listId, role: "listbox", $open: true, aria-multiselectable: "true"
+          style: "position:fixed"
+          for item, idx in filtered
+            div role: "option", tabindex: "-1", id: "#{_listId}-#{idx}"
+              $value: @_val(item)
+              $selected: @_isSelected(item)?!
+              $highlighted: (idx is highlightedIndex)?!
+              aria-selected: !!@_isSelected(item)
+              @click: (=> @_toggleItem(item))
+              @mouseenter: (=> highlightedIndex = idx)
+              @_label(item)

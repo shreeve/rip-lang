@@ -47,16 +47,16 @@ bun add -g rip-lang @rip-lang/server
 
 ```bash
 # From your app directory (uses ./index.rip, watches *.rip)
-rip serve
+rip server
 
 # Name your app (for mDNS: myapp.local)
-rip serve myapp
+rip server myapp
 
 # Explicit entry file
-rip serve ./app.rip
+rip server ./app.rip
 
 # HTTP only mode
-rip serve http
+rip server http
 ```
 
 ### Example App
@@ -82,7 +82,7 @@ start()
 Run it:
 
 ```bash
-rip serve
+rip server
 ```
 
 Test it:
@@ -760,18 +760,18 @@ start port: 3000
 
 ### Entry File Resolution
 
-When you run `rip serve`, it looks for your app's entry file:
+When you run `rip server`, it looks for your app's entry file:
 
 ```bash
 # No arguments: looks for index.rip (or index.ts) in current directory
-rip serve
+rip server
 
 # Directory path: looks for index.rip (or index.ts) in that directory
-rip serve ./myapp/
+rip server ./myapp/
 
 # Explicit file: uses that file directly
-rip serve ./app.rip
-rip serve ./src/server.ts
+rip server ./app.rip
+rip server ./src/server.ts
 ```
 
 ### App Naming
@@ -780,26 +780,26 @@ The **app name** is used for mDNS discovery (e.g., `myapp.local`) and logging. I
 
 ```bash
 # Default: current directory name becomes app name
-~/projects/api$ rip serve         # app name = "api"
+~/projects/api$ rip server         # app name = "api"
 
 # Explicit name: pass a name that's not a file path
-rip serve myapp                   # app name = "myapp"
+rip server myapp                   # app name = "myapp"
 
 # With aliases: name@alias1,alias2
-rip serve myapp@api,backend       # accessible at myapp.local, api.local, backend.local
+rip server myapp@api,backend       # accessible at myapp.local, api.local, backend.local
 
 # Path with alias
-rip serve ./app.rip@myapp         # explicit file + custom app name
+rip server ./app.rip@myapp         # explicit file + custom app name
 ```
 
 **Examples:**
 
 ```bash
 # In ~/projects/api/ with index.rip
-rip serve                         # app = "api", entry = ./index.rip
-rip serve myapp                   # app = "myapp", entry = ./index.rip
-rip serve ./server.rip            # app = "api", entry = ./server.rip
-rip serve ./server.rip@myapp      # app = "myapp", entry = ./server.rip
+rip server                         # app = "api", entry = ./index.rip
+rip server myapp                   # app = "myapp", entry = ./index.rip
+rip server ./server.rip            # app = "api", entry = ./server.rip
+rip server ./server.rip@myapp      # app = "myapp", entry = ./server.rip
 ```
 
 ## File Watching
@@ -807,9 +807,9 @@ rip serve ./server.rip@myapp      # app = "myapp", entry = ./server.rip
 Directory watching is **on by default** — any `.rip` file change in your app directory triggers an automatic rolling restart. Use `--watch=<glob>` to customize the pattern, or `--static` to disable watching entirely.
 
 ```bash
-rip serve                         # Watches *.rip (default)
-rip serve --watch=*.ts            # Watch TypeScript files instead
-rip serve --static                # No watching, no hot reload (production)
+rip server                         # Watches *.rip (default)
+rip server --watch=*.ts            # Watch TypeScript files instead
+rip server --static                # No watching, no hot reload (production)
 ```
 
 **How it works:**
@@ -826,8 +826,8 @@ This is a single kernel-level file descriptor in the main process — no polling
 ### Basic Syntax
 
 ```bash
-rip serve [flags] [app-path] [app-name]
-rip serve [flags] [app-path]@<alias1>,<alias2>,...
+rip server [flags] [app-path] [app-name]
+rip server [flags] [app-path]@<alias1>,<alias2>,...
 ```
 
 ### Flags
@@ -856,36 +856,36 @@ rip serve [flags] [app-path]@<alias1>,<alias2>,...
 ### Subcommands
 
 ```bash
-rip serve stop                    # Stop running server
-rip serve list                    # List registered hosts
+rip server stop                    # Stop running server
+rip server list                    # List registered hosts
 ```
 
 ### Examples
 
 ```bash
 # Development (default: watches *.rip, HTTPS, hot reload)
-rip serve
+rip server
 
 # HTTP only
-rip serve http
+rip server http
 
 # Production: 8 workers, no hot reload
-rip serve --static w:8
+rip server --static w:8
 
 # Custom port
-rip serve http:3000
+rip server http:3000
 
 # With mDNS aliases (accessible as myapp.local and api.local)
-rip serve myapp@api
+rip server myapp@api
 
 # Watch TypeScript files instead of Rip
-rip serve --watch=*.ts
+rip server --watch=*.ts
 
 # Debug mode
-rip serve --debug
+rip server --debug
 
 # Restart workers after 5000 requests or 1 hour
-rip serve r:5000,3600s
+rip server r:5000,3600s
 ```
 
 ## Architecture
@@ -967,9 +967,9 @@ The server provides these endpoints automatically:
 The server ships with a GlobalSign wildcard certificate for `*.ripdev.io`. Combined with DNS (`*.ripdev.io → 127.0.0.1`), every app gets trusted HTTPS automatically:
 
 ```bash
-rip serve streamline    # → https://streamline.ripdev.io (green lock)
-rip serve analytics     # → https://analytics.ripdev.io (green lock)
-rip serve myapp         # → https://myapp.ripdev.io (green lock)
+rip server streamline    # → https://streamline.ripdev.io (green lock)
+rip server analytics     # → https://analytics.ripdev.io (green lock)
+rip server myapp         # → https://myapp.ripdev.io (green lock)
 ```
 
 No setup, no flags, no certificate generation. The app name becomes the subdomain.
@@ -979,7 +979,7 @@ No setup, no flags, no certificate generation. The app name becomes the subdomai
 For production domains or custom setups, provide your own cert/key:
 
 ```bash
-rip serve --cert=/path/to/cert.pem --key=/path/to/key.pem
+rip server --cert=/path/to/cert.pem --key=/path/to/key.pem
 ```
 
 ## mDNS Service Discovery
@@ -988,10 +988,10 @@ The server automatically advertises itself via mDNS (Bonjour/Zeroconf):
 
 ```bash
 # App accessible at myapp.local
-rip serve myapp
+rip server myapp
 
 # Multiple aliases
-rip serve myapp@api,backend
+rip server myapp@api,backend
 ```
 
 Requires `dns-sd` (available on macOS by default).
@@ -1010,7 +1010,7 @@ get '/', -> 'Hello!'
 start()
 ```
 
-The `start()` function automatically detects when running under `rip serve` and registers the handler.
+The `start()` function automatically detects when running under `rip server` and registers the handler.
 
 ### Pattern 2: Export fetch function directly
 
@@ -1028,7 +1028,7 @@ export default
 
 ## One-Time Setup
 
-If a `setup.rip` file exists next to your entry file, `rip serve` runs it
+If a `setup.rip` file exists next to your entry file, `rip server` runs it
 automatically **once** before spawning any workers. This is ideal for database
 migrations, table creation, and seeding.
 
@@ -1037,12 +1037,26 @@ migrations, table creation, and seeding.
 export setup = ->
   await createTables()
   await seedData()
-  console.log 'Database ready'
+  p 'Database ready'
 ```
 
 The setup function can export as `setup` or `default`. If the file doesn't
 exist, the setup phase is skipped entirely (no overhead). If setup fails,
 the server exits immediately.
+
+When `setup.rip` is present, the `rip-server: https://...` URL lines are
+**suppressed at the top** of the output — they will appear later via `[setup]`
+instead, after migrations complete. The actual server URLs are passed to the
+setup process as `process.env.RIP_URLS` (comma-separated), so you can display
+them exactly as rip-server computed them:
+
+```coffee
+# setup.rip — print URLs at the bottom after setup completes
+export setup = ->
+  await runMigrations()
+  urls = process.env.RIP_URLS?.split(',') or []
+  p "[setup] #{urls.join(' | ')}"
+```
 
 ## Environment Variables
 
@@ -1078,7 +1092,7 @@ The server includes a built-in dashboard accessible at `http://rip.local/` (when
 - **Registered Hosts** — All mDNS aliases being advertised
 - **Server Ports** — HTTP/HTTPS port configuration
 
-The dashboard uses the same mDNS infrastructure as your app, so it's always available at `rip.local` when any `rip serve` instance is running.
+The dashboard uses the same mDNS infrastructure as your app, so it's always available at `rip.local` when any `rip server` instance is running.
 
 ## Troubleshooting
 
@@ -1094,7 +1108,7 @@ The dashboard uses the same mDNS infrastructure as your app, so it's always avai
 
 Rip Server works seamlessly with the `serve` middleware for serving
 reactive web applications with hot reload. The `serve` middleware handles
-framework files, page manifests, and SSE hot-reload — `rip serve` adds HTTPS,
+framework files, page manifests, and SSE hot-reload — `rip server` adds HTTPS,
 mDNS, multi-worker load balancing, and rolling restarts on top.
 
 ### Example: Rip UI App
@@ -1119,7 +1133,7 @@ start()
 Run it:
 
 ```bash
-rip serve
+rip server
 ```
 
 This gives you:
@@ -1136,7 +1150,7 @@ See [Hot Reloading](#hot-reloading) for details on how the two layers (API + UI)
 
 ## Comparison with Other Servers
 
-| Feature | rip serve | PM2 | Nginx |
+| Feature | rip server | PM2 | Nginx |
 |---------|-----------|-----|-------|
 | Pure Rip | ✅ | ❌ | ❌ |
 | Single File | ✅ (~1,200 lines) | ❌ | ❌ |

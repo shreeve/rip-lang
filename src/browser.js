@@ -72,14 +72,15 @@ async function processRipScripts() {
     for (const s of sources) {
       if (!s.code) continue;
       try {
-        compiled.push(compileToJS(s.code, opts));
+        const js = compileToJS(s.code, opts);
+        compiled.push({ js, url: s.url || 'inline' });
       } catch (e) {
-        console.error('Rip compile error:', e.message);
+        console.error(`Rip compile error in ${s.url || 'inline'}:`, e.message);
       }
     }
 
     if (compiled.length > 0) {
-      let js = compiled.join('\n');
+      let js = compiled.map(c => c.js).join('\n');
 
       // Step 4: Append data-mount call inside the shared IIFE
       const mount = runtimeTag?.getAttribute('data-mount');
@@ -91,7 +92,15 @@ async function processRipScripts() {
       try {
         await (0, eval)(`(async()=>{\n${js}\n})()`);
       } catch (e) {
-        console.error('Rip runtime error:', e);
+        if (e instanceof SyntaxError) {
+          console.error(`Rip syntax error in combined output: ${e.message}`);
+          for (const c of compiled) {
+            try { new Function(`(async()=>{\n${c.js}\n})()`); }
+            catch (e2) { console.error(`  → source: ${c.url}`, e2.message); }
+          }
+        } else {
+          console.error('Rip runtime error:', e);
+        }
       }
     }
   }

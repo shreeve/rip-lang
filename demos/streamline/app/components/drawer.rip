@@ -52,4 +52,4 @@ export Drawer = component
           # Scrollable content
           .('h-full overflow-y-auto')
             style: "max-height: calc(100dvh - 40px); scrollbar-width: none"
-            #content
+            slot

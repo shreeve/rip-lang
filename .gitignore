@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+package-lock.json
 
 # Build artifacts
 zig-out/
@@ -28,7 +29,6 @@ packages/vscode/dist/
 
 # Project-specific
 notes.txt
-.tool-versions
 /demos/candor
-/demos/streamline/ARCHIVE
+/demos/trustlabs
 /demos/websites/

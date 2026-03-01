@@ -2,7 +2,7 @@
 
 # Rip Language Reference
 
-Rip is a modern reactive language that compiles to ES2022 JavaScript. It combines CoffeeScript's elegant syntax with built-in reactivity primitives. Zero dependencies, self-hosting, ~13,500 LOC.
+Rip is a modern reactive language that compiles to ES2022 JavaScript. It combines CoffeeScript's elegant syntax with built-in reactivity primitives. Zero dependencies, self-hosting, ~11,890 LOC.
 
 ---
 
@@ -295,6 +295,7 @@ Multiple lines
 | `of` | `k of obj` | Object key existence |
 | `?` (postfix) | `a?` | Existence check (`a != null`) |
 | `!?` (postfix) | `a!?` | Defined check (`a !== undefined`) |
+| `?!` (postfix) | `a?!` | Presence check — true if truthy, else undefined |
 | `?` (ternary) | `a ? b : c` | Ternary conditional |
 | `if...else` (postfix) | `b if a else c` | Python-style ternary |
 | `?.` `?.[]` `?.()` | `a?.b` `a?.[0]` `a?.()` | Optional chaining (ES6) |
@@ -315,6 +316,7 @@ Multiple lines
 | `!` | Void | `def process!` | Suppresses implicit return |
 | `!?` | Otherwise | `val !? 5` | Default if undefined (infix) |
 | `!?` | Defined | `val!?` | True if not undefined (postfix) |
+| `?!` | Presence | `@checked?!` | `(this.checked ? true : undefined)` — Houdini operator |
 | `=~` | Match | `str =~ /pat/` | Ruby-style regex match, captures in `_` |
 | `::` | Prototype | `String::trim` | `String.prototype.trim` |
 | `[-n]` | Negative index | `arr[-1]` | `arr.at(-1)` |
@@ -357,6 +359,53 @@ fn?.(arg)
 arr?[0]       # Compiles to arr?.[0]
 fn?(arg)      # Compiles to fn?.(arg)
 ```
+
+### Optional Chain Assignment
+
+Rip extends optional chaining to the left side of assignments. If the
+target is null or undefined, the assignment is silently skipped. This
+eliminates the common `x.prop = val if x` guard pattern.
+
+```coffee
+# Simple property
+el?.scrollTop = 0                # if (el != null) el.scrollTop = 0
+
+# Deep chain
+el?.style.display = 'none'       # if (el != null) el.style.display = 'none'
+
+# Inner chain
+obj.inner?.value = 42            # if (obj.inner != null) obj.inner.value = 42
+
+# Bracket access
+arr?[0] = 99                     # if (arr != null) arr[0] = 99
+
+# Compound operators work too
+counter?.value += 1              # if (counter != null) counter.value += 1
+```
+
+JavaScript does not allow optional chaining on the left side of assignments
+(`x?.prop = val` is a SyntaxError). Rip compiles it to a guarded assignment
+automatically. This is particularly useful for DOM element references that
+may not exist yet (before mount, inside conditionals, etc.).
+
+### Render Expression Output (`= prefix`)
+
+In component render blocks, `x.y` on its own line is parsed as a tag
+with a CSS class (`<x class="y">`), not a property access. The `=`
+prefix forces the line to be an expression, outputting it as a text node:
+
+```coffee
+# In a render block:
+render
+  div
+    = item.textContent         # text node — not a tag
+    = nav.dataset.trigger      # works even when 'nav' is an HTML tag
+    = link.href                # works even when 'link' is an HTML tag
+    div.card                   # tag — <div class="card"> (no = prefix)
+```
+
+The `=` removes itself and stamps the expression so the codegen skips
+tag detection. Output is clean: `createTextNode(String(expr))`.
 
 ## Ternary Operator
 
@@ -404,6 +453,40 @@ The postfix form mirrors `?` (existence check) but with tighter semantics:
 |----------|--------|--------|-------------|-----|---------|------|
 | `v?` | not nullish | false | false | true | true | true |
 | `v!?` | not undefined | true | false | true | true | true |
+| `v?!` | truthy presence | `undefined` | `undefined` | `undefined` | `undefined` | `undefined` |
+
+Note: `v?!` returns `true` for truthy values, `undefined` for falsy values.
+
+## Presence Operator (`?!`) — The Houdini
+
+The `?!` operator (postfix, unspaced) returns `true` if the value is truthy,
+or `undefined` if it's falsy. Now you see it… now you don't.
+
+```coffee
+@checked?!           # (this.checked ? true : undefined)
+(idx is active)?!    # ((idx === active) ? true : undefined)
+```
+
+Designed for `$` attributes (data-* sigil) in headless UI components, where falsy values
+need to *remove* the attribute rather than set it to `"false"`:
+
+```coffee
+# Before — verbose and repetitive
+$checked: (@checked or undefined),
+$disabled: (@disabled or undefined),
+
+# After — clean and expressive
+$checked: @checked?!,
+$disabled: @disabled?!,
+```
+
+Works with any expression, not just identifiers:
+
+```coffee
+$highlighted: (idx is highlightedIndex)?!,
+$selected: (opt.value is String(@value))?!,
+$active: (tab is @active)?!,
+```
 
 ## Method Assignment (`.=`)
 
@@ -1233,16 +1316,16 @@ Rip includes optional packages for full-stack development. All are written in Ri
 
 ```bash
 bun add @rip-lang/server         # Web framework + production server
-bun add @rip-lang/grid           # Reactive data grid
 bun add @rip-lang/db             # DuckDB server + client
 bun add @rip-lang/schema         # ORM + validation
 bun add @rip-lang/swarm          # Parallel job runner
 bun add @rip-lang/csv            # CSV parser + writer
+# Widgets are included in packages/ui/ (not a separate npm package)
 ```
 
 ## @rip-lang/server — Web Framework & Production Server
 
-Sinatra-style routing with `@` context magic and built-in validators. Run with `rip serve` for multi-worker production deployment with hot reload, HTTPS, and mDNS.
+Sinatra-style routing with `@` context magic and built-in validators. Run with `rip server` for multi-worker production deployment with hot reload, HTTPS, and mDNS.
 
 ```coffee
 import { get, post, use, read, start, notFound } from '@rip-lang/server'
@@ -1279,10 +1362,10 @@ start port: 3000
 ### Serving
 
 ```bash
-rip serve                 # Start (uses ./index.rip)
-rip serve --static        # No watching, no hot reload (production)
-rip serve myapp           # Named (accessible at myapp.local)
-rip serve http:3000       # HTTP on specific port
+rip server                 # Start (uses ./index.rip)
+rip server --static        # No watching, no hot reload (production)
+rip server myapp           # Named (accessible at myapp.local)
+rip server http:3000       # HTTP on specific port
 ```
 
 ### read() Validators
@@ -1335,6 +1418,244 @@ Counter = component
       h1 "Count: #{@count}"
       p "Doubled: #{doubled}"
       button @click: @increment, "+"
+```
+
+### Component Features
+
+**State and Computed:**
+
+```coffee
+App = component
+  count := 0              # reactive state
+  doubled ~= count * 2    # computed (auto-updates)
+  label =! "Counter"      # readonly (const)
+```
+
+**Public Props (passed from parent):**
+
+```coffee
+Card = component
+  @title =! "Untitled"    # readonly prop with default
+  @count := 0             # reactive prop (two-way capable)
+```
+
+```coffee
+# Parent passes props
+Card title: "Hello", count: 42
+```
+
+**Methods:**
+
+```coffee
+App = component
+  count := 0
+  inc = -> @count += 1
+  add = (n) -> @count += n
+```
+
+**Lifecycle Hooks:**
+
+```coffee
+App = component
+  beforeMount = -> p "about to mount"
+  mounted     = -> p "mounted"
+  updated     = -> p "updated"
+  beforeUnmount = -> p "about to unmount"
+  unmounted   = -> p "unmounted"
+  onError     = (err, comp) -> p "caught: #{err.message}"
+```
+
+**Effects:**
+
+```coffee
+App = component
+  count := 0
+  ~> p "count is now #{count}"    # re-runs when count changes
+```
+
+**Render Blocks — Template Syntax:**
+
+```coffee
+App = component
+  name := "world"
+  render
+    div.card                       # element with class
+      h1#title "Hello"             # element with id
+      span name                    # reactive text
+      input value <=> name         # two-way binding
+      button @click: -> @name = "Rip"
+        "Click me"
+```
+
+**Auto-Wired Event Handlers:**
+
+Methods named `on` + capitalized event name are automatically bound to the component's root element:
+
+```coffee
+Checkbox = component
+  @checked := false
+  onClick: -> @checked = not @checked
+  onKeydown: (e) ->
+    if e.key in ['Enter', ' ']
+      e.preventDefault()
+      @onClick()
+  render
+    button role: 'checkbox', aria-checked: !!@checked
+      slot
+```
+
+The compiler wires `addEventListener('click', ...)` and `addEventListener('keydown', ...)` to the root `button`. To override for a specific event, write an explicit binding on the root: `button @click: someOtherHandler`. Lifecycle hooks (`onError`) are not auto-wired.
+
+**Conditional Rendering:**
+
+```coffee
+App = component
+  show := true
+  render
+    if show
+      div "Visible!"
+    else
+      div "Hidden"
+```
+
+**List Rendering:**
+
+```coffee
+App = component
+  items := ["Apple", "Banana", "Cherry"]
+  render
+    ul
+      for item, i in items
+        li item
+```
+
+Lists use keyed reconciliation with LIS (Longest Increasing Subsequence) diffing — only items that actually move get repositioned. Appending to a list is nearly zero-cost.
+
+**Child Components and Slots:**
+
+```coffee
+Card = component
+  @title =! "Card"
+  @children =! null
+  render
+    div.card
+      h2 @title
+      @children
+
+App = component
+  render
+    Card title: "Welcome"
+      p "This is the card body"
+```
+
+**CSS Transitions:**
+
+Add `~name` to any element inside a conditional block for enter/leave animations:
+
+```coffee
+App = component
+  show := true
+  render
+    button @click: -> @show = !show
+      "Toggle"
+    if show
+      div ~fade
+        p "I fade in and out"
+```
+
+Built-in presets:
+
+| Preset | Effect |
+|--------|--------|
+| `~fade` | Opacity fade |
+| `~slide` | Slide up/down with opacity |
+| `~scale` | Scale from 95% with opacity |
+| `~blur` | Blur with opacity |
+| `~fly` | Fly in/out from distance with opacity |
+
+Custom transitions work with any name — just provide your own CSS:
+
+```css
+.wobble-enter-active, .wobble-leave-active { transition: transform 0.3s ease; }
+.wobble-enter-from { transform: rotate(-5deg); }
+.wobble-leave-to { transform: rotate(5deg); }
+```
+
+```coffee
+div ~wobble
+  span "Custom animation"
+```
+
+**Error Boundaries:**
+
+The `onError` lifecycle hook catches errors from child components:
+
+```coffee
+App = component
+  onError = (err, source) ->
+    p "Error in #{source}: #{err.message}"
+  render
+    ChildThatMightFail
+```
+
+Errors walk up the component tree (`_parent` chain) to the nearest `onError` handler. Without a boundary, errors throw normally.
+
+**Context API:**
+
+Share data across the component tree without prop drilling:
+
+```coffee
+ThemeProvider = component
+  ~> setContext "theme", "dark"
+
+ThemedButton = component
+  theme =! getContext "theme"
+  render
+    button class: theme
+```
+
+**SVG Rendering:**
+
+SVG elements use `createElementNS` automatically:
+
+```coffee
+Icon = component
+  render
+    svg.icon
+      path d: "M10 10 L20 20"
+      circle cx: "50", cy: "50", r: "40"
+```
+
+**Dynamic Classes:**
+
+```coffee
+App = component
+  isActive := true
+  render
+    div.card class: (isActive && "active")
+    div.("card", isActive && "active")       # .() syntax
+```
+
+**Hyphenated Attributes:**
+
+```coffee
+div $testid: "main", aria-label: "content"
+```
+
+**DOM Properties:**
+
+```coffee
+div innerHTML: content     # reactive innerHTML
+div textContent: text      # reactive textContent
+```
+
+**Element Refs:**
+
+```coffee
+App = component
+  render
+    canvas ref: "canvas"
+  mounted = -> p @canvas   # access the DOM element
 ```
 
 ## @rip-lang/db — DuckDB Server + Client
@@ -1733,6 +2054,7 @@ X.new(a: 1)
 a!             # await a()
 a !? b         # a if defined, else b (infix otherwise)
 a!?            # true if a is defined (postfix defined check)
+a?!            # true if truthy, else undefined (Houdini)
 a // b         # floor divide
 a %% b         # true modulo
 a =~ /pat/     # regex match, captures in _
@@ -1824,9 +2146,8 @@ Each would need design discussion before building.
 |----------|---------|
 | **[RIP-LANG.md](RIP-LANG.md)** | Full language reference (this file) |
 | **[RIP-TYPES.md](RIP-TYPES.md)** | Type system specification |
-| **[RIP-INTERNALS.md](RIP-INTERNALS.md)** | Compiler architecture & design decisions |
-| **[AGENTS.md](../AGENTS.md)** | AI agent guide for working on the compiler |
+| **[AGENTS.md](../AGENTS.md)** | Compiler architecture, S-expressions, AI agent guide |
 
 ---
 
-*Rip 3.13 — 1,265 tests — Zero dependencies — Self-hosting — ~13,500 LOC*
+*Rip 3.13 — 1,436 tests — Zero dependencies — Self-hosting — ~11,890 LOC*

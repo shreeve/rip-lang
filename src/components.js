@@ -112,6 +112,27 @@ function isPublicProp(target) {
 
 export function installComponentSupport(CodeGenerator, Lexer) {
 
+  let meta = (node, key) => node instanceof String ? node[key] : undefined;
+
+  // ==========================================================================
+  // Lexer: Context-sensitive 'offer'/'accept' (only inside component bodies)
+  // ==========================================================================
+
+  const origClassify = Lexer.prototype.classifyKeyword;
+  Lexer.prototype.classifyKeyword = function(id, fallback, data) {
+    if (id === 'offer' || id === 'accept') {
+      let depth = 0;
+      for (let i = this.tokens.length - 1; i >= 0; i--) {
+        const tag = this.tokens[i][0];
+        if (tag === 'OUTDENT') depth++;
+        else if (tag === 'INDENT') depth--;
+        if (depth < 0 && this.tokens[i - 1]?.[0] === 'COMPONENT') return id.toUpperCase();
+      }
+      return fallback;
+    }
+    return origClassify.call(this, id, fallback, data);
+  };
+
   // ==========================================================================
   // Lexer: Render block rewriter
   // ==========================================================================
@@ -122,6 +143,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
   //   - Event modifiers: @click.prevent: → [@click.prevent]:
   //   - Dynamic classes: div.('card', x && 'active') → div.__clsx(...)
   //   - Implicit nesting: inject -> before INDENT for template elements
+  //   - Data attribute sigil: $open: true → "data-open": true
   //   - Hyphenated attributes: data-foo: "x" → "data-foo": "x"
   // ==========================================================================
 
@@ -241,6 +263,22 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       if (!inRender) return 1;
 
       // ─────────────────────────────────────────────────────────────────────
+      // Expression output: = expr → text node (stamp .text, skip tag detection)
+      // ─────────────────────────────────────────────────────────────────────
+      if (tag === '=' && i > 0) {
+        let prev = tokens[i - 1][0];
+        if (prev === 'TERMINATOR' || prev === 'INDENT' || prev === 'RENDER') {
+          tokens.splice(i, 1);
+          if (tokens[i] && tokens[i][0] === 'IDENTIFIER') {
+            let val = tokens[i][1];
+            if (typeof val === 'string') { val = new String(val); tokens[i][1] = val; }
+            val.text = true;
+          }
+          return 0;
+        }
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
       // Transition modifier
       // div ~fade → div __transition__: "fade"
       // ─────────────────────────────────────────────────────────────────────
@@ -254,8 +292,19 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       }
 
       // ─────────────────────────────────────────────────────────────────────
+      // Data attribute sigil
+      // $open: true → "data-open": true
+      // ─────────────────────────────────────────────────────────────────────
+      if (tag === 'PROPERTY' && token[1][0] === '$' && token[1].length > 1) {
+        token[0] = 'STRING';
+        token[1] = `"data-${token[1].slice(1)}"`;
+        return 1;
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
       // Hyphenated attributes
       // data-lucide: "search" → "data-lucide": "search"
+      // $my-thing: "x" → "data-my-thing": "x"
       // ─────────────────────────────────────────────────────────────────────
       if (tag === 'IDENTIFIER' && !token.spaced) {
         let parts = [token[1]];
@@ -273,8 +322,10 @@ export function installComponentSupport(CodeGenerator, Lexer) {
           }
         }
         if (parts.length > 1 && j > i + 1 && tokens[j - 1][0] === 'PROPERTY') {
+          let joined = parts.join('-');
+          if (joined[0] === '$') joined = 'data-' + joined.slice(1);
           token[0] = 'STRING';
-          token[1] = `"${parts.join('-')}"`;
+          token[1] = `"${joined}"`;
           tokens.splice(i + 1, j - i - 1);
           return 1;
         }
@@ -289,9 +340,14 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         let prevTag = prevToken ? prevToken[0] : null;
         if (prevTag === 'INDENT' || prevTag === 'TERMINATOR') {
           if (nextToken && nextToken[0] === 'PROPERTY') {
-            let divToken = gen('IDENTIFIER', 'div', token);
-            tokens.splice(i, 0, divToken);
-            return 2;
+            // Check if property is followed by : — if so, it's an attribute
+            // (. foo: bar → div foo: bar), not a class (. foo → div.foo)
+            let nextNext = i + 2 < tokens.length ? tokens[i + 2] : null;
+            if (!nextNext || nextNext[0] !== ':') {
+              let divToken = gen('IDENTIFIER', 'div', token);
+              tokens.splice(i, 0, divToken);
+              return 2;
+            }
           }
           // Skip .('classes') — handled by dynamic classes handler below
           if (!nextToken || nextToken[0] !== '(') {
@@ -428,12 +484,24 @@ export function installComponentSupport(CodeGenerator, Lexer) {
           isTemplateElement = true;
         } else if (tag === 'IDENTIFIER' && !isAfterControlFlow) {
           isTemplateElement = startsWithTag(tokens, i);
-        } else if (tag === 'PROPERTY' || tag === 'STRING' || tag === 'STRING_END' || tag === 'NUMBER' || tag === 'BOOL' || tag === 'CALL_END' || tag === ')') {
+        } else if (tag === 'PROPERTY' || tag === 'STRING' || tag === 'STRING_END' || tag === 'NUMBER' || tag === 'BOOL' || tag === 'CALL_END' || tag === ')' || tag === 'PRESENCE') {
           isTemplateElement = startsWithTag(tokens, i);
         }
 
         if (isTemplateElement) {
-          let isClassOrIdTail = tag === 'PROPERTY' && i > 0 && (tokens[i - 1][0] === '.' || tokens[i - 1][0] === '#');
+          let isClassOrIdTail = false;
+          if (tag === 'PROPERTY' && i > 0 && tokens[i - 1][0] === '.') {
+            // Trace backward through the .PROPERTY chain to find its root —
+            // only a CSS class tail if the chain starts from a line-starting template tag
+            let j = i;
+            while (j >= 2 && tokens[j - 1][0] === '.' && tokens[j - 2][0] === 'PROPERTY') j -= 2;
+            if (j >= 2 && tokens[j - 1][0] === '.' && tokens[j - 2][0] === 'IDENTIFIER' && isTemplateTag(tokens[j - 2][1])) {
+              let before = j >= 3 ? tokens[j - 3][0] : null;
+              if (!before || before === 'INDENT' || before === 'OUTDENT' || before === 'TERMINATOR' || before === 'RENDER') {
+                isClassOrIdTail = true;
+              }
+            }
+          }
           let isBareTag = isClsxCallEnd || (tag === 'IDENTIFIER' && isTemplateTag(token[1])) || isClassOrIdTail;
 
           if (isBareTag) {
@@ -508,11 +576,11 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       current = current[1];
     }
     let raw = typeof current === 'string' ? current : (current instanceof String ? current.valueOf() : null);
-    if (raw === null) return { tag: null, classes, id: undefined };
+    if (raw === null) return { tag: null, classes, id: undefined, base: current };
     // Split tag#id — e.g. "div#content" → tag: "div", id: "content"
     let [tag, id] = raw.split('#');
     if (!tag) tag = 'div';  // bare #id → div
-    return { tag, classes, id };
+    return { tag, classes, id, base: current };
   };
 
   // ==========================================================================
@@ -523,25 +591,36 @@ export function installComponentSupport(CodeGenerator, Lexer) {
    * Recursively transform s-expression to replace member identifiers with this.X.value.
    * For component context where state variables are signals.
    */
+  const _str = (s) => typeof s === 'string' ? s : s instanceof String ? s.valueOf() : null;
+  const _transferMeta = (from, to) => {
+    if (!(from instanceof String)) return to;
+    const s = new String(to);
+    if (from.predicate) s.predicate = true;
+    if (from.await) s.await = true;
+    return (s.predicate || s.await) ? s : to;
+  };
+
   proto.transformComponentMembers = function(sexpr) {
     const self = this._self;
     if (!Array.isArray(sexpr)) {
-      if (typeof sexpr === 'string' && this.reactiveMembers && this.reactiveMembers.has(sexpr)) {
-        return ['.', ['.', self, sexpr], 'value'];
+      const sv = _str(sexpr);
+      if (sv && this.reactiveMembers && this.reactiveMembers.has(sv)) {
+        return ['.', ['.', self, sv], _transferMeta(sexpr, 'value')];
       }
-      if (typeof sexpr === 'string' && this.componentMembers && this.componentMembers.has(sexpr)) {
-        return ['.', self, sexpr];
+      if (sv && this.componentMembers && this.componentMembers.has(sv)) {
+        return ['.', self, _transferMeta(sexpr, sv)];
       }
       return sexpr;
     }
 
     // Special case: (. this memberName) for @member syntax
-    if (sexpr[0] === '.' && sexpr[1] === 'this' && typeof sexpr[2] === 'string') {
-      const memberName = sexpr[2];
+    if (sexpr[0] === '.' && sexpr[1] === 'this' && _str(sexpr[2]) != null) {
+      const prop = sexpr[2];
+      const memberName = _str(prop);
       if (this.reactiveMembers && this.reactiveMembers.has(memberName)) {
-        return ['.', ['.', self, memberName], 'value'];
+        return ['.', ['.', self, memberName], _transferMeta(prop, 'value')];
       }
-      return this._factoryMode ? ['.', self, sexpr[2]] : sexpr;
+      return this._factoryMode ? ['.', self, prop] : sexpr;
     }
 
     // Dot access: transform the object but not the property name
@@ -594,16 +673,33 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     const methods = [];
     const lifecycleHooks = [];
     const effects = [];
+    const offeredVars = [];
+    const acceptedVars = [];
     let renderBlock = null;
 
     const memberNames = new Set();
     const reactiveMembers = new Set();
 
-    for (const stmt of statements) {
+    for (let stmt of statements) {
       if (!Array.isArray(stmt)) continue;
-      const [op] = stmt;
+      let [op] = stmt;
 
-      if (op === 'state') {
+      if (op === 'offer') {
+        stmt = stmt[1];
+        if (!Array.isArray(stmt)) continue;
+        op = stmt[0];
+        const varName = getMemberName(stmt[1]);
+        if (varName) offeredVars.push(varName);
+      }
+
+      if (op === 'accept') {
+        const varName = typeof stmt[1] === 'string' ? stmt[1] : getMemberName(stmt[1]);
+        if (varName) {
+          acceptedVars.push(varName);
+          memberNames.add(varName);
+          reactiveMembers.add(varName);
+        }
+      } else if (op === 'state') {
         const varName = getMemberName(stmt[1]);
         if (varName) {
           stateVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]) });
@@ -659,11 +755,21 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       }
     }
 
+    // Auto-event map: onClick → 'click', onKeydown → 'keydown', etc.
+    const autoEventHandlers = new Map();
+    for (const { name } of methods) {
+      if (/^on[A-Z]/.test(name) && !LIFECYCLE_HOOKS.has(name)) {
+        autoEventHandlers.set(name[2].toLowerCase() + name.slice(3), name);
+      }
+    }
+
     // Save and set component context
     const prevComponentMembers = this.componentMembers;
     const prevReactiveMembers = this.reactiveMembers;
+    const prevAutoEventHandlers = this._autoEventHandlers;
     this.componentMembers = memberNames;
     this.reactiveMembers = reactiveMembers;
+    this._autoEventHandlers = autoEventHandlers.size > 0 ? autoEventHandlers : null;
 
     const lines = [];
     let blockFactoriesCode = '';
@@ -681,17 +787,22 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         : `    this.${name} = ${val};`);
     }
 
+    // Accepted vars (from ancestor context via getContext)
+    for (const name of acceptedVars) {
+      lines.push(`    this.${name} = getContext('${name}');`);
+    }
+
     // State variables (__state handles signal passthrough)
     for (const { name, value, isPublic } of stateVars) {
       const val = this.generateInComponent(value, 'value');
       lines.push(isPublic
-        ? `    this.${name} = __state(props.${name} ?? ${val});`
+        ? `    this.${name} = __state(props.__bind_${name}__ ?? props.${name} ?? ${val});`
         : `    this.${name} = __state(${val});`);
     }
 
     // Computed (derived)
     for (const { name, expr } of derivedVars) {
-      if (this.is(expr, 'block') && expr.length > 2) {
+      if (this.is(expr, 'block')) {
         const transformed = this.transformComponentMembers(expr);
         const body = this.generateFunctionBody(transformed);
         lines.push(`    this.${name} = __computed(() => ${body});`);
@@ -701,11 +812,16 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       }
     }
 
+    // Offered vars (share with descendants via setContext — after all members are initialized)
+    for (const name of offeredVars) {
+      lines.push(`    setContext('${name}', this.${name});`);
+    }
+
     // Effects
     for (const effect of effects) {
       const effectBody = effect[2];
       const isAsync = this.containsAwait(effectBody) ? 'async ' : '';
-      if (this.is(effectBody, 'block') && effectBody.length > 2) {
+      if (this.is(effectBody, 'block')) {
         const transformed = this.transformComponentMembers(effectBody);
         const body = this.generateFunctionBody(transformed, [], true);
         lines.push(`    __effect(${isAsync}() => ${body});`);
@@ -771,6 +887,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     // Restore context
     this.componentMembers = prevComponentMembers;
     this.reactiveMembers = prevReactiveMembers;
+    this._autoEventHandlers = prevAutoEventHandlers;
 
     // If block factories exist, wrap in IIFE so they're in scope
     if (blockFactoriesCode) {
@@ -804,6 +921,14 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     throw new Error('render blocks can only be used inside a component');
   };
 
+  proto.generateOffer = function(head, rest, context, sexpr) {
+    throw new Error('offer can only be used inside a component');
+  };
+
+  proto.generateAccept = function(head, rest, context, sexpr) {
+    throw new Error('accept can only be used inside a component');
+  };
+
   // ==========================================================================
   // Render Tree Emission
   // ==========================================================================
@@ -823,6 +948,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     this._factoryMode = false;
     this._factoryVars = null;
     this._fragChildren = new Map();
+    this._pendingAutoWire = false;
+    this._autoWireEl = null;
+    this._autoWireExplicit = null;
 
     const statements = this.is(body, 'block') ? body.slice(1) : [body];
 
@@ -830,7 +958,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     if (statements.length === 0) {
       rootVar = 'null';
     } else if (statements.length === 1) {
+      this._pendingAutoWire = !!this._autoEventHandlers;
       rootVar = this.generateNode(statements[0]);
+      this._pendingAutoWire = false;
     } else {
       rootVar = this.newElementVar('frag');
       this._createLines.push(`${rootVar} = document.createDocumentFragment();`);
@@ -904,6 +1034,13 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         this._pushEffect(`${textVar}.data = ${this._self}.${str}.value;`);
         return textVar;
       }
+      // Slot projection — bare <slot> tag → project @children
+      if (str === 'slot' && this.componentMembers) {
+        const s = this._self;
+        const slotVar = this.newElementVar('slot');
+        this._createLines.push(`${slotVar} = ${s}.children instanceof Node ? ${s}.children : (${s}.children != null ? document.createTextNode(String(${s}.children)) : document.createComment(''));`);
+        return slotVar;
+      }
       // Static tag without content (possibly with #id)
       const [tagStr, idStr] = str.split('#');
       const elVar = this.newElementVar();
@@ -931,8 +1068,16 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       return this.generateChildComponent(headStr, rest);
     }
 
+    // Slot projection — replace <slot> with @children in component render
+    if (headStr === 'slot' && this.componentMembers) {
+      const s = this._self;
+      const slotVar = this.newElementVar('slot');
+      this._createLines.push(`${slotVar} = ${s}.children instanceof Node ? ${s}.children : (${s}.children != null ? document.createTextNode(String(${s}.children)) : document.createComment(''));`);
+      return slotVar;
+    }
+
     // HTML tag (possibly with #id, e.g. div#content)
-    if (headStr && this.isHtmlTag(headStr)) {
+    if (headStr && this.isHtmlTag(headStr) && !meta(head, 'text')) {
       let [tagName, id] = headStr.split('#');
       return this.generateTag(tagName || 'div', [], rest, id);
     }
@@ -955,9 +1100,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         return slotVar;
       }
 
-      // HTML tag with classes (div.class) and optional #id
-      const { tag, classes, id } = this.collectTemplateClasses(sexpr);
-      if (tag && this.isHtmlTag(tag)) {
+      // HTML tag with classes (div.class) — skip if base is marked .text by = prefix
+      const { tag, classes, id, base } = this.collectTemplateClasses(sexpr);
+      if (!meta(base, 'text') && tag && this.isHtmlTag(tag)) {
         return this.generateTag(tag, classes, [], id);
       }
 
@@ -1041,25 +1186,55 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         this.generateAttributes(elVar, arg);
       }
       else if (typeof arg === 'string' || arg instanceof String) {
-        const textVar = this.newTextVar();
         const val = arg.valueOf();
-        if (val.startsWith('"') || val.startsWith("'") || val.startsWith('`')) {
-          this._createLines.push(`${textVar} = document.createTextNode(${val});`);
-        } else if (this.reactiveMembers && this.reactiveMembers.has(val)) {
-          this._createLines.push(`${textVar} = document.createTextNode('');`);
-          this._pushEffect(`${textVar}.data = ${this._self}.${val}.value;`);
-        } else if (this.componentMembers && this.componentMembers.has(val)) {
-          this._createLines.push(`${textVar} = document.createTextNode(String(${this._self}.${val}));`);
+        // Template tag appearing as a string arg (e.g., slot after multi-line attrs)
+        const baseName = val.split(/[#.]/)[0];
+        if (this.isHtmlTag(baseName || 'div') || this.isComponent(baseName)) {
+          const childVar = this.generateNode(arg);
+          this._createLines.push(`${elVar}.appendChild(${childVar});`);
         } else {
-          this._createLines.push(`${textVar} = document.createTextNode(${this.generateInComponent(arg, 'value')});`);
+          const textVar = this.newTextVar();
+          if (val.startsWith('"') || val.startsWith("'") || val.startsWith('`')) {
+            this._createLines.push(`${textVar} = document.createTextNode(${val});`);
+          } else if (this.reactiveMembers && this.reactiveMembers.has(val)) {
+            this._createLines.push(`${textVar} = document.createTextNode('');`);
+            this._pushEffect(`${textVar}.data = ${this._self}.${val}.value;`);
+          } else if (this.componentMembers && this.componentMembers.has(val)) {
+            this._createLines.push(`${textVar} = document.createTextNode(String(${this._self}.${val}));`);
+          } else {
+            this._createLines.push(`${textVar} = document.createTextNode(${this.generateInComponent(arg, 'value')});`);
+          }
+          this._createLines.push(`${elVar}.appendChild(${textVar});`);
         }
-        this._createLines.push(`${elVar}.appendChild(${textVar});`);
       }
       else if (arg) {
         const childVar = this.generateNode(arg);
         this._createLines.push(`${elVar}.appendChild(${childVar});`);
       }
     }
+  };
+
+  // --------------------------------------------------------------------------
+  // Auto-wire event handlers — claim/emit helpers for on* convention
+  // --------------------------------------------------------------------------
+
+  proto._claimAutoWire = function(elVar) {
+    if (!this._pendingAutoWire || !this._autoEventHandlers?.size) return false;
+    this._pendingAutoWire = false;
+    this._autoWireEl = elVar;
+    this._autoWireExplicit = new Set();
+    return true;
+  };
+
+  proto._emitAutoWire = function(elVar, claimed) {
+    if (!claimed) return;
+    for (const [eventName, methodName] of this._autoEventHandlers) {
+      if (!this._autoWireExplicit.has(eventName)) {
+        this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => __batch(() => ${this._self}.${methodName}(e)));`);
+      }
+    }
+    this._autoWireEl = null;
+    this._autoWireExplicit = null;
   };
 
   // --------------------------------------------------------------------------
@@ -1078,6 +1253,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     if (id) {
       this._createLines.push(`${elVar}.id = '${id}';`);
     }
+
+    const autoWireClaimed = this._claimAutoWire(elVar);
 
     // Defer class emission when selector classes exist so class: attributes merge
     const prevClassArgs = this._pendingClassArgs;
@@ -1111,6 +1288,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       this._pendingClassEl = prevClassEl;
     }
 
+    this._emitAutoWire(elVar, autoWireClaimed);
+
     return elVar;
   };
 
@@ -1125,6 +1304,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     } else {
       this._createLines.push(`${elVar} = document.createElement('${tag}');`);
     }
+
+    const autoWireClaimed = this._claimAutoWire(elVar);
 
     // Defer className emission so class: attributes can merge with .() classes
     const classArgs = classExprs.map(e => this.generateInComponent(e, 'value'));
@@ -1149,6 +1330,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     this._pendingClassArgs = prevClassArgs;
     this._pendingClassEl = prevClassEl;
 
+    this._emitAutoWire(elVar, autoWireClaimed);
+
     return elVar;
   };
 
@@ -1165,6 +1348,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       // Event handler: @click or (. this eventName)
       if (this.is(key, '.') && key[1] === 'this') {
         const eventName = key[2];
+        if (this._autoWireExplicit && this._autoWireEl === elVar) {
+          this._autoWireExplicit.add(eventName);
+        }
         if (typeof value === 'string' && this.componentMembers?.has(value)) {
           this._createLines.push(`${elVar}.addEventListener('${eventName}', (e) => __batch(() => ${this._self}.${value}(e)));`);
         } else {
@@ -1243,21 +1429,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
         const valueCode = this.generateInComponent(value, 'value');
 
-        // Smart two-way binding for value/checked when bound to reactive state
+        // value/checked with reactive deps: one-way push (use <=> for two-way)
         if ((key === 'value' || key === 'checked') && this.hasReactiveDeps(value)) {
           this._pushEffect(`${elVar}.${key} = ${valueCode};`);
-          const rootMemberImplicit = !this.isSimpleAssignable(value) && this.findRootReactiveMember(value);
-          if (this.isSimpleAssignable(value) || rootMemberImplicit) {
-            const event = key === 'checked' ? 'change' : 'input';
-            const accessor = key === 'checked' ? 'e.target.checked'
-              : (inputType === 'number' || inputType === 'range') ? 'e.target.valueAsNumber'
-              : 'e.target.value';
-            let assignCode = `${valueCode} = ${accessor}`;
-            if (rootMemberImplicit) {
-              assignCode += `; ${this._self}.${rootMemberImplicit}.touch?.()`;
-            }
-            this._createLines.push(`${elVar}.addEventListener('${event}', (e) => { ${assignCode}; });`);
-          }
           continue;
         }
 
@@ -1274,7 +1448,11 @@ export function installComponentSupport(CodeGenerator, Lexer) {
             this._createLines.push(`if (${valueCode}) ${elVar}.setAttribute('${key}', '');`);
           }
         } else if (this.hasReactiveDeps(value)) {
-          this._pushEffect(`${elVar}.setAttribute('${key}', ${valueCode});`);
+          if (Array.isArray(value) && value[0] === 'presence') {
+            this._pushEffect(`{ const __v = ${valueCode}; __v == null ? ${elVar}.removeAttribute('${key}') : ${elVar}.setAttribute('${key}', __v); }`);
+          } else {
+            this._pushEffect(`${elVar}.setAttribute('${key}', ${valueCode});`);
+          }
         } else {
           this._createLines.push(`${elVar}.setAttribute('${key}', ${valueCode});`);
         }
@@ -1318,6 +1496,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
   // --------------------------------------------------------------------------
 
   proto.generateConditional = function(sexpr) {
+    this._pendingAutoWire = false;
     const [, condition, thenBlock, elseBlock] = sexpr;
 
     const anchorVar = this.newElementVar('anchor');
@@ -1484,6 +1663,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
   // --------------------------------------------------------------------------
 
   proto.generateTemplateLoop = function(sexpr) {
+    this._pendingAutoWire = false;
     const [head, vars, collection, guard, step, body] = sexpr;
 
     const blockName = this.newBlockVar();
@@ -1493,7 +1673,15 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
     const varNames = Array.isArray(vars) ? vars : [vars];
     const itemVar = varNames[0];
-    const indexVar = varNames[1] || 'i';
+    let indexVar = varNames[1] || null;
+    if (!indexVar) {
+      const usedNames = new Set(this._loopVarStack.flatMap(v => [v.itemVar, v.indexVar]));
+      usedNames.add(itemVar);
+      for (const candidate of ['i', 'j', 'k', 'l', 'm', 'n']) {
+        if (!usedNames.has(candidate)) { indexVar = candidate; break; }
+      }
+      indexVar = indexVar || `_i${this._loopVarStack.length}`;
+    }
 
     const collectionCode = this.generateInComponent(collection, 'value');
 
@@ -1569,14 +1757,20 @@ export function installComponentSupport(CodeGenerator, Lexer) {
   // --------------------------------------------------------------------------
 
   proto.generateChildComponent = function(componentName, args) {
+    this._pendingAutoWire = false;
     const instVar = this.newElementVar('inst');
     const elVar = this.newElementVar('el');
-    const { propsCode, reactiveProps, childrenSetupLines } = this.buildComponentProps(args);
+    const { propsCode, reactiveProps, eventBindings, childrenSetupLines } = this.buildComponentProps(args);
 
     const s = this._self;
     this._createLines.push(`${instVar} = new ${componentName}(${propsCode});`);
-    this._createLines.push(`${elVar} = ${instVar}._create();`);
+    this._createLines.push(`${elVar} = ${instVar}._root = ${instVar}._create();`);
     this._createLines.push(`(${s}._children || (${s}._children = [])).push(${instVar});`);
+
+    for (const { event, value } of eventBindings) {
+      const handlerCode = this.generateInComponent(value, 'value');
+      this._createLines.push(`${elVar}.addEventListener('${event}', (e) => __batch(() => (${handlerCode})(e)));`);
+    }
 
     this._setupLines.push(`try { if (${instVar}._setup) ${instVar}._setup(); if (${instVar}.mounted) ${instVar}.mounted(); } catch (__e) { __handleComponentError(__e, ${instVar}); }`);
 
@@ -1598,12 +1792,17 @@ export function installComponentSupport(CodeGenerator, Lexer) {
   proto.buildComponentProps = function(args) {
     const props = [];
     const reactiveProps = [];
+    const eventBindings = [];
     let childrenVar = null;
     const childrenSetupLines = [];
 
     // Simple reactive values pass the signal directly for shared reactivity;
     // complex expressions use normal .value unwrapping to compute the value.
     const addProp = (key, value) => {
+      if (key.startsWith('@')) {
+        eventBindings.push({ event: key.slice(1).split('.')[0], value });
+        return;
+      }
       const isDirectSignal = this.reactiveMembers && (
         (typeof value === 'string' && this.reactiveMembers.has(value)) ||
         (Array.isArray(value) && value[0] === '.' && value[1] === 'this' && typeof value[2] === 'string' && this.reactiveMembers.has(value[2]))
@@ -1623,7 +1822,11 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     const addObjectProps = (objExpr) => {
       for (let i = 1; i < objExpr.length; i++) {
         const [key, value] = objExpr[i];
-        if (typeof key === 'string') addProp(key, value);
+        if (typeof key === 'string') {
+          addProp(key, value);
+        } else if (Array.isArray(key) && key[0] === '.' && key[1] === 'this' && typeof key[2] === 'string') {
+          eventBindings.push({ event: key[2], value });
+        }
       }
     };
 
@@ -1670,7 +1873,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     }
 
     const propsCode = props.length > 0 ? `{ ${props.join(', ')} }` : '{}';
-    return { propsCode, reactiveProps, childrenSetupLines };
+    return { propsCode, reactiveProps, eventBindings, childrenSetupLines };
   };
 
   // --------------------------------------------------------------------------
@@ -2008,6 +2211,11 @@ class __Component {
     if (this.unmounted) this.unmounted();
     if (this._root && this._root.parentNode) {
       this._root.parentNode.removeChild(this._root);
+    }
+  }
+  emit(name, detail) {
+    if (this._root) {
+      this._root.dispatchEvent(new CustomEvent(name, { detail, bubbles: true }));
     }
   }
   static mount(target = 'body') {

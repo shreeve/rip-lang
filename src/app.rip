@@ -98,7 +98,7 @@ makeProxy = (target) ->
     deleteProperty: (target, prop) ->
       delete target[prop]
       sig = target[SIGNALS]?.get(prop)
-      sig.value = undefined if sig
+      sig?.value = undefined
       keysSignal(target).value = ++_keysVersion
       true
 
@@ -757,7 +757,7 @@ export createRenderer = (opts = {}) ->
           inst.mount wrapper
           layoutInstances.push inst
 
-          slot = wrapper.querySelector('#content') or wrapper
+          slot = wrapper.querySelector('slot') or wrapper
           mp = slot
 
         currentLayouts = [...layoutFiles]

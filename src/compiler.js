@@ -205,6 +205,7 @@ export class CodeGenerator {
     'continue': 'generateContinue',
     '?': 'generateExistential',
     'defined': 'generateDefined',
+    'presence': 'generatePresence',
     '?:': 'generateTernary',
     '|>': 'generatePipe',
     'loop': 'generateLoop',
@@ -236,6 +237,8 @@ export class CodeGenerator {
     // Components
     'component': 'generateComponent',
     'render': 'generateRender',
+    'offer': 'generateOffer',
+    'accept': 'generateAccept',
 
     // Types
     'enum': 'generateEnum',
@@ -585,26 +588,25 @@ export class CodeGenerator {
 
   generateProgram(head, statements, context, sexpr) {
     let code = '';
-    let imports = [], exports = [], other = [];
+    let imports = [], body = [];
 
     for (let stmt of statements) {
-      if (!Array.isArray(stmt)) { other.push(stmt); continue; }
+      if (!Array.isArray(stmt)) { body.push(stmt); continue; }
       let h = stmt[0];
       if (h === 'import') imports.push(stmt);
-      else if (h === 'export' || h === 'export-default' || h === 'export-all' || h === 'export-from') exports.push(stmt);
-      else other.push(stmt);
+      else body.push(stmt);
     }
 
     // Generate body first to detect needed helpers
     let blockStmts = ['def', 'class', 'if', 'for-in', 'for-of', 'for-as', 'while', 'loop', 'switch', 'try'];
-    let stmtEntries = other.map((stmt, index) => {
-      let isSingle = other.length === 1 && imports.length === 0 && exports.length === 0;
+    let stmtEntries = body.map((stmt, index) => {
+      let isSingle = body.length === 1 && imports.length === 0;
       let isObj = this.is(stmt, 'object');
       let isObjComp = isObj && stmt.length === 2 && Array.isArray(stmt[1]) && Array.isArray(stmt[1][1]) && stmt[1][1][0] === 'comprehension';
       let isAlreadyExpr = (this.is(stmt, 'comprehension') || this.is(stmt, 'object-comprehension') || this.is(stmt, 'do-iife'));
       let hasNoVars = this.programVars.size === 0;
       let needsParens = isSingle && isObj && hasNoVars && !isAlreadyExpr && !isObjComp;
-      let isLast = index === other.length - 1;
+      let isLast = index === body.length - 1;
       let isLastComp = isLast && isAlreadyExpr;
 
       let generated;
@@ -669,12 +671,6 @@ export class CodeGenerator {
       }
     }
 
-    // Generate exports code early so component/reactivity flags are set before runtime checks
-    let exportsCode = '';
-    if (exports.length > 0) {
-      exportsCode = '\n' + exports.map(s => this.addSemicolon(s, this.generate(s, 'statement'))).join('\n');
-    }
-
     if (this.usesReactivity && !skip) {
       if (skipRT) {
         code += 'var { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;\n';
@@ -706,7 +702,6 @@ export class CodeGenerator {
     this._stmtEntries = stmtEntries;
     this._preambleLines = code.length === 0 ? 0 : code.split('\n').length - 1;
     code += statementsCode;
-    code += exportsCode;
 
     if (this.dataSection !== null && this.dataSection !== undefined) {
       code += `\n\nfunction _setDataSection() {\n  DATA = ${JSON.stringify(this.dataSection)};\n}`;
@@ -782,6 +777,18 @@ export class CodeGenerator {
   generateAssignment(head, rest, context, sexpr) {
     let [target, value] = rest;
     let op = head === '?=' ? '??=' : head;
+
+    // Optional chain assignment: x?.prop = val → if (x != null) x.prop = val
+    let optInfo = this._findOptionalInTarget(target);
+    if (optInfo) {
+      let guardCode = this.generate(optInfo.guard, 'value');
+      let targetCode = this.generate(optInfo.rewritten, 'value');
+      let valueCode = this.generate(value, 'value');
+      if (context === 'value') {
+        return `(${guardCode} != null ? (${targetCode} ${op} ${valueCode}) : undefined)`;
+      }
+      return `if (${guardCode} != null) ${targetCode} ${op} ${valueCode}`;
+    }
 
     // Validate: no sigils in assignment targets (except void function syntax)
     let isFnValue = (this.is(value, '->') || this.is(value, '=>') || this.is(value, 'def'));
@@ -941,17 +948,38 @@ export class CodeGenerator {
       let isIncl = index[0] === '..';
       let arrCode = this.generate(arr, 'value');
       let [start, end] = index.slice(1);
+
+      // Detect compile-time numeric literals (positive, negative, String objects)
+      let numericLiteral = (node) => {
+        if (node === null) return null;
+        let v = str(node) ?? node;
+        if (typeof v === 'number') return v;
+        if ((typeof v === 'string') && /^\d+$/.test(v)) return +v;
+        if (Array.isArray(node) && node[0] === '-' && node.length === 2) {
+          let inner = str(node[1]) ?? node[1];
+          if (typeof inner === 'number') return -inner;
+          if ((typeof inner === 'string') && /^\d+$/.test(inner)) return -inner;
+        }
+        return null;
+      };
+
+      let inclEnd = (s, e, endNode) => {
+        let n = numericLiteral(endNode);
+        if (n !== null && n !== -1) return `${arrCode}.slice(${s}, ${n + 1})`;
+        return `${arrCode}.slice(${s}, +${e} + 1 || 9e9)`;
+      };
+
       if (start === null && end === null) return `${arrCode}.slice()`;
       if (start === null) {
         if (isIncl && this.is(end, '-', 1) && (str(end[1]) ?? end[1]) == 1) return `${arrCode}.slice(0)`;
         let e = this.generate(end, 'value');
-        return isIncl ? `${arrCode}.slice(0, +${e} + 1 || 9e9)` : `${arrCode}.slice(0, ${e})`;
+        return isIncl ? inclEnd('0', e, end) : `${arrCode}.slice(0, ${e})`;
       }
       if (end === null) return `${arrCode}.slice(${this.generate(start, 'value')})`;
       let s = this.generate(start, 'value');
       if (isIncl && this.is(end, '-', 1) && (str(end[1]) ?? end[1]) == 1) return `${arrCode}.slice(${s})`;
       let e = this.generate(end, 'value');
-      return isIncl ? `${arrCode}.slice(${s}, +${e} + 1 || 9e9)` : `${arrCode}.slice(${s}, ${e})`;
+      return isIncl ? inclEnd(s, e, end) : `${arrCode}.slice(${s}, ${e})`;
     }
     // Negative literal index: arr[-1] → arr.at(-1)
     if (this.is(index, '-', 1)) {
@@ -1122,6 +1150,10 @@ export class CodeGenerator {
 
   generateDefined(head, rest) {
     return `(${this.generate(rest[0], 'value')} !== undefined)`;
+  }
+
+  generatePresence(head, rest) {
+    return `(${this.generate(rest[0], 'value')} ? true : undefined)`;
   }
 
   generateTernary(head, rest, context) {
@@ -2724,6 +2756,17 @@ export class CodeGenerator {
       else break;
     }
     return code;
+  }
+
+  _findOptionalInTarget(node) {
+    if (!Array.isArray(node)) return null;
+    if (node[0] === '?.') return { guard: node[1], rewritten: ['.', node[1], node[2]] };
+    if (node[0] === 'optindex') return { guard: node[1], rewritten: ['[]', node[1], node[2]] };
+    if (node[0] === '.' || node[0] === '[]') {
+      let inner = this._findOptionalInTarget(node[1]);
+      if (inner) return { guard: inner.guard, rewritten: [node[0], inner.rewritten, node[2]] };
+    }
+    return null;
   }
 
   unwrapLogical(code) {

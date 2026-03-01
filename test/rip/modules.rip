@@ -99,3 +99,40 @@ code 'dynamic import property access', '''
   let x;
   x = (await import(url)).default;
 '''
+
+# ==============================================================================
+# Statement ordering — exports must not be reordered past non-exports
+# ==============================================================================
+
+code 'export then reference preserves source order', '''
+  export x = 42
+  y = x + 1
+  ''', '''
+  let y;
+  export const x = 42;
+  y = x + 1;
+'''
+
+code 'export class then static assignment preserves order', '''
+  export class Foo
+    bar: -> 42
+  Foo.DEFAULT = 'hello'
+  ''', '''
+  export class Foo {
+    bar() {
+      return 42;
+    }
+  }
+  Foo.DEFAULT = 'hello';
+'''
+
+code 'mixed exports and non-exports preserve source order', '''
+  export a = 1
+  b = a + 1
+  export c = b + 1
+  ''', '''
+  let b;
+  export const a = 1;
+  b = a + 1;
+  export const c = (b + 1);
+'''

@@ -292,6 +292,11 @@ post '/ddb/run' ->
     console.error "POST /ddb/run error:", msg
     binaryResponse serializeErrorResult msg
 
+# POST /shutdown — Gracefully close the database and exit
+post '/shutdown' ->
+  setImmediate -> db.close(); process.exit 0
+  { ok: true }
+
 # POST /ddb/interrupt — Cancel running query
 post '/ddb/interrupt' ->
   binaryResponse serializeEmptyResult()

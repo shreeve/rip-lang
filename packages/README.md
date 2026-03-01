@@ -62,8 +62,8 @@ rip-print file.rip file.js      # Specific files
 Multi-worker process manager with hot reloading, automatic HTTPS, mDNS service discovery, and request queueing. Includes the web framework (Sinatra-style routing, 37 validators, file serving, middleware). Serves Rip UI apps with SSE hot-reload out of the box. ~1,210 lines.
 
 ```bash
-rip serve                        # Start server (watches *.rip by default)
-rip serve myapp                  # Named (accessible at myapp.local)
+rip server                        # Start server (watches *.rip by default)
+rip server myapp                  # Named (accessible at myapp.local)
 ```
 
 ### [@rip-lang/swarm](swarm/) — Parallel Job Runner

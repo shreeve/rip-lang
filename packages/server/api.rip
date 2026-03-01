@@ -116,7 +116,7 @@ _mimeTypes =
   '.zip':   'application/zip'
   '.gz':    'application/gzip'
   '.wasm':  'application/wasm'
-  '.rip':   'text/plain; charset=UTF-8'
+  '.rip':   'text/x-rip; charset=UTF-8'
 
 export mimeType = (path) ->
   ext = path.substring(path.lastIndexOf('.'))

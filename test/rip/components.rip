@@ -1,9 +1,10 @@
-# Test: Component System (79 tests)
+# Test: Component System (86 tests)
 # Covers every code path in src/components.js — render blocks, conditional/loop
-# codegen, block factories, attributes, events, two-way binding (<=>), dynamic
-# classes (__clsx), child component prop passing, slot projection (@children),
-# lifecycle hooks, context API, SVG rendering, hyphenated attributes, DOM
-# properties, expression-as-text, computed/effect block bodies, and edge cases.
+# codegen, block factories, attributes, events, auto-wired event handlers (on*
+# convention), two-way binding (<=>), dynamic classes (__clsx), child component
+# prop passing, slot projection (@children), lifecycle hooks, context API, SVG
+# rendering, hyphenated attributes, DOM properties, expression-as-text,
+# computed/effect block bodies, and edge cases.
 
 opts = { skipPreamble: true, skipRuntimes: true }
 
@@ -774,6 +775,150 @@ code "event handler with method reference", '''
   ''', opts
 
 # ==============================================================================
+# Auto-wired Event Handlers (on* convention)
+# ==============================================================================
+
+code "auto-wire onClick to root element", '''
+  export A = component
+    onClick: -> p "clicked"
+    render
+      button "Click me"
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {}
+    onClick() { return p("clicked"); }
+    _create() {
+      this._el0 = document.createElement('button');
+      this._t0 = document.createTextNode("Click me");
+      this._el0.appendChild(this._t0);
+      this._el0.addEventListener('click', (e) => __batch(() => this.onClick(e)));
+      return this._el0;
+    }
+  }
+  ''', opts
+
+code "auto-wire multiple on* methods", '''
+  export A = component
+    onClick: -> p "click"
+    onKeydown: (e) -> p e.key
+    render
+      button "Press"
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {}
+    onClick() { return p("click"); }
+    onKeydown(e) { return p(e.key); }
+    _create() {
+      this._el0 = document.createElement('button');
+      this._t0 = document.createTextNode("Press");
+      this._el0.appendChild(this._t0);
+      this._el0.addEventListener('click', (e) => __batch(() => this.onClick(e)));
+      this._el0.addEventListener('keydown', (e) => __batch(() => this.onKeydown(e)));
+      return this._el0;
+    }
+  }
+  ''', opts
+
+code "explicit event on root overrides auto-wire", '''
+  export A = component
+    onClick: -> p "auto"
+    toggle: -> p "explicit"
+    render
+      button @click: toggle
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {}
+    onClick() { return p("auto"); }
+    toggle() { return p("explicit"); }
+    _create() {
+      this._el0 = document.createElement('button');
+      this._el0.addEventListener('click', (e) => __batch(() => this.toggle(e)));
+      return this._el0;
+    }
+  }
+  ''', opts
+
+code "partial override — one overridden, one auto-wired", '''
+  export A = component
+    onClick: -> p "auto-click"
+    onKeydown: -> p "auto-key"
+    ring: -> p "ring"
+    render
+      button @keydown: ring
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {}
+    onClick() { return p("auto-click"); }
+    onKeydown() { return p("auto-key"); }
+    ring() { return p("ring"); }
+    _create() {
+      this._el0 = document.createElement('button');
+      this._el0.addEventListener('keydown', (e) => __batch(() => this.ring(e)));
+      this._el0.addEventListener('click', (e) => __batch(() => this.onClick(e)));
+      return this._el0;
+    }
+  }
+  ''', opts
+
+code "onError is not auto-wired (lifecycle hook)", '''
+  export A = component
+    onError: (e) -> p e.message
+    render
+      div "safe"
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {}
+    onError(e) { return p(e.message); }
+    _create() {
+      this._el0 = document.createElement('div');
+      this._t0 = document.createTextNode("safe");
+      this._el0.appendChild(this._t0);
+      return this._el0;
+    }
+  }
+  ''', opts
+
+code "no auto-wire for non-on* methods", '''
+  export A = component
+    handleClick: -> p "hi"
+    render
+      button "Go"
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {}
+    handleClick() { return p("hi"); }
+    _create() {
+      this._el0 = document.createElement('button');
+      this._t0 = document.createTextNode("Go");
+      this._el0.appendChild(this._t0);
+      return this._el0;
+    }
+  }
+  ''', opts
+
+code "auto-wire with nested children", '''
+  export A = component
+    onClick: -> p "clicked"
+    render
+      div
+        span "inner"
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {}
+    onClick() { return p("clicked"); }
+    _create() {
+      this._el0 = document.createElement('div');
+      this._el1 = document.createElement('span');
+      this._t0 = document.createTextNode("inner");
+      this._el1.appendChild(this._t0);
+      this._el0.appendChild(this._el1);
+      this._el0.addEventListener('click', (e) => __batch(() => this.onClick(e)));
+      return this._el0;
+    }
+  }
+  ''', opts
+
+# ==============================================================================
 # Ref
 # ==============================================================================
 
@@ -949,7 +1094,7 @@ code "two-way binding valueAsNumber (number input)", '''
   }
   ''', opts
 
-code "smart auto-binding value: reactive", '''
+code "value: reactive is one-way push (use <=> for two-way)", '''
   export A = component
     name := ""
     render
@@ -962,7 +1107,6 @@ code "smart auto-binding value: reactive", '''
     _create() {
       this._el0 = document.createElement('input');
       this._el0.setAttribute('type', "text");
-      this._el0.addEventListener('input', (e) => { this.name.value = e.target.value; });
       return this._el0;
     }
     _setup() {
@@ -1030,7 +1174,7 @@ code "child component with static props", '''
     _create() {
       this._el0 = document.createElement('div');
       this._inst1 = new Child({ label: "hello" });
-      this._el2 = this._inst1._create();
+      this._el2 = this._inst1._root = this._inst1._create();
       (this._children || (this._children = [])).push(this._inst1);
       this._el0.appendChild(this._el2);
       return this._el0;
@@ -1055,7 +1199,7 @@ code "child component with reactive prop (signal pass-through)", '''
     _create() {
       this._el0 = document.createElement('div');
       this._inst1 = new Child({ count: this.count });
-      this._el2 = this._inst1._create();
+      this._el2 = this._inst1._root = this._inst1._create();
       (this._children || (this._children = [])).push(this._inst1);
       this._el0.appendChild(this._el2);
       return this._el0;
@@ -1079,7 +1223,7 @@ code "child component with children (slot)", '''
       this._t0 = document.createTextNode("slot content");
       this._el2.appendChild(this._t0);
       this._inst0 = new Child({ children: this._el2 });
-      this._el1 = this._inst0._create();
+      this._el1 = this._inst0._root = this._inst0._create();
       (this._children || (this._children = [])).push(this._inst0);
       return this._el1;
     }
@@ -1104,7 +1248,7 @@ code "child component with props and children", '''
       this._t0 = document.createTextNode("child content");
       this._el3.appendChild(this._t0);
       this._inst1 = new Child({ label: "hello", children: this._el3 });
-      this._el2 = this._inst1._create();
+      this._el2 = this._inst1._root = this._inst1._create();
       (this._children || (this._children = [])).push(this._inst1);
       this._el0.appendChild(this._el2);
       return this._el0;
@@ -1167,6 +1311,76 @@ test "getContext returns undefined when not set", '''
   a = A.new()
   a.val
   ''', undefined
+
+# ==============================================================================
+# offer / accept — context keywords
+# ==============================================================================
+
+code "offer compiles to state + setContext", '''
+  export A = component
+    offer active := "hello"
+    render
+      div
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {
+      this.active = __state("hello");
+      setContext('active', this.active);
+    }
+    _create() {
+      this._el0 = document.createElement('div');
+      return this._el0;
+    }
+  };
+  ''', opts
+
+code "accept compiles to getContext", '''
+  export A = component
+    accept active
+    render
+      div
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {
+      this.active = getContext('active');
+    }
+    _create() {
+      this._el0 = document.createElement('div');
+      return this._el0;
+    }
+  };
+  ''', opts
+
+code "offer public prop with @", '''
+  export A = component
+    offer @active := "hello"
+    render
+      div
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {
+      this.active = __state(props.__bind_active__ ?? props.active ?? "hello");
+      setContext('active', this.active);
+    }
+    _create() {
+      this._el0 = document.createElement('div');
+      return this._el0;
+    }
+  };
+  ''', opts
+
+test "offer and accept share the same signal", '''
+  result = null
+  Child = component
+    accept active
+    ~> result = active
+  Parent = component
+    offer active := "hello"
+  p = __pushComponent(Parent.new())
+  c = Child.new()
+  __popComponent(null)
+  result
+  ''', "hello"
 
 # ==============================================================================
 # SVG Rendering — createElementNS
@@ -1257,6 +1471,63 @@ code "hyphenated attributes (data-* and aria-*)", '''
       this._el0.setAttribute('data-testid', "main");
       this._el0.setAttribute('aria-label', "content");
       return this._el0;
+    }
+  }
+  ''', opts
+
+# ==============================================================================
+# Data Attribute Sigil — $name expands to data-name
+# ==============================================================================
+
+code "data attribute sigil ($open → data-open)", '''
+  export A = component
+    render
+      div $testid: "main", $open: true
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {
+    }
+    _create() {
+      this._el0 = document.createElement('div');
+      this._el0.setAttribute('data-testid', "main");
+      this._el0.setAttribute('data-open', true);
+      return this._el0;
+    }
+  }
+  ''', opts
+
+code "data attribute sigil hyphenated ($my-thing → data-my-thing)", '''
+  export A = component
+    render
+      div $my-thing: "test"
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {
+    }
+    _create() {
+      this._el0 = document.createElement('div');
+      this._el0.setAttribute('data-my-thing', "test");
+      return this._el0;
+    }
+  }
+  ''', opts
+
+code "data attribute sigil with presence operator ($open: val?!)", '''
+  export A = component
+    @active := false
+    render
+      div $open: @active?!
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {
+      this.active = __state(props.__bind_active__ ?? props.active ?? false);
+    }
+    _create() {
+      this._el0 = document.createElement('div');
+      return this._el0;
+    }
+    _setup() {
+      __effect(() => { { const __v = (this.active.value ? true : undefined); __v == null ? this._el0.removeAttribute('data-open') : this._el0.setAttribute('data-open', __v); } });
     }
   }
   ''', opts
@@ -1815,7 +2086,7 @@ code "bare component reference (no args)", '''
     _create() {
       this._el0 = document.createElement('div');
       this._inst1 = new Counter({});
-      this._el2 = this._inst1._create();
+      this._el2 = this._inst1._root = this._inst1._create();
       (this._children || (this._children = [])).push(this._inst1);
       this._el0.appendChild(this._el2);
       return this._el0;
@@ -2439,4 +2710,151 @@ code "no transition — no _t on block", '''
     }
   };
   })()
+  ''', opts
+
+# ==============================================================================
+# Expression output (= prefix)
+# ==============================================================================
+
+code 'render = prefix: property access', '''
+  export Test = component
+    render
+      div
+        = item.textContent
+  ''', '''
+  export const Test = class extends __Component {
+    _init(props) {
+    }
+    _create() {
+      this._el0 = document.createElement('div');
+      this._t0 = document.createTextNode(String(item.textContent));
+      this._el0.appendChild(this._t0);
+      return this._el0;
+    }
+  };
+  ''', opts
+
+code 'render = prefix: deep property (nav is HTML tag)', '''
+  export Test = component
+    render
+      div
+        = nav.dataset.trigger
+  ''', '''
+  export const Test = class extends __Component {
+    _init(props) {
+    }
+    _create() {
+      this._el0 = document.createElement('div');
+      this._t0 = document.createTextNode(String(nav.dataset.trigger));
+      this._el0.appendChild(this._t0);
+      return this._el0;
+    }
+  };
+  ''', opts
+
+code 'render = prefix: link.href (link is HTML tag)', '''
+  export Test = component
+    render
+      div
+        = link.href
+  ''', '''
+  export const Test = class extends __Component {
+    _init(props) {
+    }
+    _create() {
+      this._el0 = document.createElement('div');
+      this._t0 = document.createTextNode(String(link.href));
+      this._el0.appendChild(this._t0);
+      return this._el0;
+    }
+  };
+  ''', opts
+
+# ==============================================================================
+# Property access as last attribute value before children
+# ==============================================================================
+
+code 'render: property access attr value with children', '''
+  export Test = component
+    render
+      button data-trigger: navItem.dataset.trigger
+        span "child"
+  ''', '''
+  export const Test = class extends __Component {
+    _init(props) {
+    }
+    _create() {
+      this._el0 = document.createElement('button');
+      this._el0.setAttribute('data-trigger', navItem.dataset.trigger);
+      this._el1 = document.createElement('span');
+      this._t0 = document.createTextNode("child");
+      this._el1.appendChild(this._t0);
+      this._el0.appendChild(this._el1);
+      return this._el0;
+    }
+  };
+  ''', opts
+
+code 'render: deep property chain attr value with children', '''
+  export Test = component
+    render
+      button data-x: a.b.c.d
+        span "child"
+  ''', '''
+  export const Test = class extends __Component {
+    _init(props) {
+    }
+    _create() {
+      this._el0 = document.createElement('button');
+      this._el0.setAttribute('data-x', a.b.c.d);
+      this._el1 = document.createElement('span');
+      this._t0 = document.createTextNode("child");
+      this._el1.appendChild(this._t0);
+      this._el0.appendChild(this._el1);
+      return this._el0;
+    }
+  };
+  ''', opts
+
+code 'render: CSS class tail still works with children', '''
+  export Test = component
+    render
+      button.primary
+        span "child"
+  ''', '''
+  export const Test = class extends __Component {
+    _init(props) {
+    }
+    _create() {
+      this._el0 = document.createElement('button');
+      this._el1 = document.createElement('span');
+      this._t0 = document.createTextNode("child");
+      this._el1.appendChild(this._t0);
+      this._el0.appendChild(this._el1);
+      this._el0.className = 'primary';
+      return this._el0;
+    }
+  };
+  ''', opts
+
+code 'render: CSS class + property access attr coexist', '''
+  export Test = component
+    render
+      button.active data-trigger: obj.prop
+        span "child"
+  ''', '''
+  export const Test = class extends __Component {
+    _init(props) {
+    }
+    _create() {
+      this._el0 = document.createElement('button');
+      this._el0.setAttribute('data-trigger', obj.prop);
+      this._el1 = document.createElement('span');
+      this._t0 = document.createTextNode("child");
+      this._el1.appendChild(this._t0);
+      this._el0.appendChild(this._el1);
+      this._el0.className = 'active';
+      return this._el0;
+    }
+  };
   ''', opts

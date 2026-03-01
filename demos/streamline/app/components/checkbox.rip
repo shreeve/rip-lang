@@ -20,7 +20,7 @@ export Checkbox = component
             svg.('mx-auto text-white') viewBox: "0 0 12 12", fill: "currentColor", width: "12", height: "12"
               path d: "M10.28 2.28a.75.75 0 0 1 0 1.06l-5.5 5.5a.75.75 0 0 1-1.06 0l-2.5-2.5a.75.75 0 0 1 1.06-1.06L4.5 7.56l4.97-4.97a.75.75 0 0 1 1.06 0z"
         label.('cursor-pointer') @click: @toggle,
-          #content
+          slot
 
       if error
         .('mt-2 leading-none text-error',

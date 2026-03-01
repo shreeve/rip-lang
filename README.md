@@ -9,9 +9,9 @@
 </p>
 
 <p align="center">
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.13.26-blue.svg" alt="Version"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.13.64-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
-  <a href="#"><img src="https://img.shields.io/badge/tests-1%2C300%2F1%2C300-brightgreen.svg" alt="Tests"></a>
+  <a href="#"><img src="https://img.shields.io/badge/tests-1%2C436%2F1%2C436-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
 </p>
 
@@ -105,6 +105,7 @@ def loadUser(id)
   await response.json()
 
 user?.profile?.name            # Optional chaining
+el?.scrollTop = 0              # Optional chain assignment
 data = fetchData!              # Await shorthand
 ```
 
@@ -205,11 +206,14 @@ All use `globalThis` with `??=` — override any by redeclaring locally.
 | `!` (void) | `def process!` | Suppresses implicit return |
 | `!?` (otherwise) | `val !? 5` | Default only if `undefined` (infix) |
 | `!?` (defined) | `val!?` | True if not `undefined` (postfix) |
+| `?!` (presence) | `@checked?!` | True if truthy, else `undefined` (Houdini operator) |
 | `?` (existence) | `x?` | True if `x != null` |
 | `?:` (ternary) | `x > 0 ? 'yes' : 'no'` | JS-style ternary expression |
 | `if...else` (postfix) | `"yes" if cond else "no"` | Python-style ternary expression |
 | `?.` `?.[]` `?.()` | `a?.b` `a?.[0]` `a?.()` | Optional chaining (ES6) |
 | `?[]` `?()` | `a?[0]` `a?(x)` | Optional chaining shorthand |
+| `?.` `=` | `el?.scrollTop = 0` | Optional chain assignment — guarded write |
+| `=` (render) | `= item.textContent` | Expression output as text node in render blocks |
 | `??` | `a ?? b` | Nullish coalescing |
 | `...` (spread) | `[...items, last]` | Prefix spread (ES6) |
 | `//` | `7 // 2` | Floor division |
@@ -354,7 +358,7 @@ The UI framework is built into rip-lang: file-based router, reactive stash, comp
 | **Self-hosting** | No | Yes |
 | **Lexer** | 3,558 LOC | 2,024 LOC |
 | **Compiler** | 10,346 LOC | 3,293 LOC |
-| **Total** | 17,760 LOC | ~11,300 LOC |
+| **Total** | 17,760 LOC | ~11,890 LOC |
 
 Smaller codebase, modern output, built-in reactivity.
 
@@ -389,25 +393,25 @@ await rip("res = fetch! 'https://api.example.com/todos/1'; res.json!")  // → {
 
 ```
 Source  ->  Lexer  ->  emitTypes  ->  Parser  ->  S-Expressions  ->  Codegen  ->  JavaScript
-           (1,761)    (types.js)     (359)       ["=", "x", 42]     (3,293)      + source map
+           (1,778)    (types.js)     (359)       ["=", "x", 42]     (3,334)      + source map
 ```
 
 Simple arrays (with `.loc`) instead of AST node classes. The compiler is self-hosting — `bun run parser` rebuilds from source.
 
 | Component | File | Lines |
 |-----------|------|-------|
-| Lexer + Rewriter | `src/lexer.js` | 1,761 |
-| Compiler + Codegen | `src/compiler.js` | 3,303 |
-| Type System | `src/types.js` | 1,099 |
-| Component System | `src/components.js` | 1,877 |
+| Lexer + Rewriter | `src/lexer.js` | 1,778 |
+| Compiler + Codegen | `src/compiler.js` | 3,334 |
+| Type System | `src/types.js` | 1,091 |
+| Component System | `src/components.js` | 2,026 |
 | Source Maps | `src/sourcemaps.js` | 189 |
-| Parser (generated) | `src/parser.js` | 357 |
-| Grammar | `src/grammar/grammar.rip` | 944 |
+| Type Checking | `src/typecheck.js` | 442 |
+| Parser (generated) | `src/parser.js` | 359 |
+| Grammar | `src/grammar/grammar.rip` | 948 |
 | Parser Generator | `src/grammar/solar.rip` | 929 |
-| REPL | `src/repl.js` | 601 |
-| Browser Entry | `src/browser.js` | 167 |
-| Tags | `src/tags.js` | 62 |
-| **Total** | | **~11,289** |
+| REPL | `src/repl.js` | 600 |
+| Browser Entry | `src/browser.js` | 194 |
+| **Total** | | **~11,890** |
 
 ---
 
@@ -417,14 +421,14 @@ Rip includes optional packages for full-stack development:
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| [rip-lang](https://www.npmjs.com/package/rip-lang) | 3.13.13 | Core language compiler |
-| [@rip-lang/server](packages/server/) | 1.2.11 | Multi-worker app server (web framework, hot reload, HTTPS, mDNS) |
-| [@rip-lang/db](packages/db/) | 1.3.13 | DuckDB server with official UI + ActiveRecord-style client |
-| [@rip-lang/grid](packages/grid/) | 0.2.8 | Reactive data grid |
-| [@rip-lang/swarm](packages/swarm/) | 1.2.16 | Parallel job runner with worker pool |
-| [@rip-lang/csv](packages/csv/) | 1.3.4 | CSV parser + writer |
-| [@rip-lang/schema](packages/schema/) | 0.3.6 | Unified schema → TypeScript types, SQL DDL, validation, ORM |
-| [VS Code Extension](packages/vscode/) | 0.5.0 | Syntax highlighting, type intelligence, source maps |
+| [rip-lang](https://www.npmjs.com/package/rip-lang) | 3.13.62 | Core language compiler |
+| [@rip-lang/server](packages/server/) | 1.3.12 | Multi-worker app server (web framework, hot reload, HTTPS, mDNS) |
+| [@rip-lang/db](packages/db/) | 1.3.15 | DuckDB server with official UI + ActiveRecord-style client |
+| [ui](packages/ui/) | — | Rip UI — 38 headless components (Grid, Select, Dialog, Tabs, etc.) |
+| [@rip-lang/swarm](packages/swarm/) | 1.2.18 | Parallel job runner with worker pool |
+| [@rip-lang/csv](packages/csv/) | 1.3.6 | CSV parser + writer |
+| [@rip-lang/schema](packages/schema/) | 0.3.8 | Unified schema → TypeScript types, SQL DDL, validation, ORM |
+| [VS Code Extension](packages/vscode/) | 0.5.7 | Syntax highlighting, type intelligence, source maps |
 
 ```bash
 bun add -g @rip-lang/db    # Installs everything (rip-lang + server + db)
@@ -462,7 +466,7 @@ rip file.rip           # Run
 rip -c file.rip        # Compile
 rip -t file.rip        # Tokens
 rip -s file.rip        # S-expressions
-bun run test           # 1265 tests
+bun run test           # 1436 tests
 bun run parser         # Rebuild parser
 bun run build          # Build browser bundle
 ```
@@ -473,9 +477,9 @@ bun run build          # Build browser bundle
 
 | Guide | Description |
 |-------|-------------|
-| [docs/RIP-LANG.md](docs/RIP-LANG.md) | Full language reference (syntax, operators, reactivity, types, future ideas) |
-| [docs/RIP-INTERNALS.md](docs/RIP-INTERNALS.md) | Compiler architecture (lexer, parser, codegen, S-expressions) |
+| [docs/RIP-LANG.md](docs/RIP-LANG.md) | Full language reference (syntax, operators, reactivity, types, components) |
 | [docs/RIP-TYPES.md](docs/RIP-TYPES.md) | Type system specification |
+| [AGENTS.md](AGENTS.md) | Compiler architecture, S-expressions, component system internals |
 | [AGENTS.md](AGENTS.md) | AI agents — get up to speed for working on the compiler |
 
 ---

@@ -121,3 +121,83 @@ test 'assignment with explicit if instead of postfix unless', '''
     token = value
   token
   ''', 42
+
+# ==============================================================================
+# Optional Chain Assignment
+# ==============================================================================
+
+code 'optional chain assign: x?.prop = val', 'gc?.scrollTop = 0', 'if (gc != null) gc.scrollTop = 0'
+code 'optional chain assign: deep', 'a?.b.c = 0', 'if (a != null) a.b.c = 0'
+code 'optional chain assign: inner', 'a.b?.c = 0', 'if (a.b != null) a.b.c = 0'
+code 'optional chain assign: bracket', 'x?[0] = 1', 'if (x != null) x[0] = 1'
+code 'optional chain assign: compound', 'x?.prop += 5', 'if (x != null) x.prop += 5'
+
+test 'optional chain assign: sets when present', '''
+  obj = { x: 10 }
+  obj?.x = 42
+  obj.x
+  ''', 42
+
+test 'optional chain assign: skips when null', '''
+  obj = null
+  obj?.x = 42
+  obj
+  ''', null
+
+test 'optional chain assign: skips when undefined', '''
+  obj = undefined
+  obj?.x = 42
+  obj
+  ''', undefined
+
+test 'optional chain assign: deep sets when present', '''
+  obj = { inner: { x: 0 } }
+  obj?.inner.x = 99
+  obj.inner.x
+  ''', 99
+
+test 'optional chain assign: deep skips when null', '''
+  obj = null
+  obj?.inner.x = 99
+  obj
+  ''', null
+
+test 'optional chain assign: compound operator', '''
+  obj = { count: 10 }
+  obj?.count += 5
+  obj.count
+  ''', 15
+
+test 'optional chain assign: compound skips when null', '''
+  obj = null
+  obj?.count += 5
+  obj
+  ''', null
+
+test 'optional chain assign: bracket access', '''
+  arr = [10, 20, 30]
+  arr?[1] = 99
+  arr[1]
+  ''', 99
+
+test 'optional chain assign: bracket skips when null', '''
+  arr = null
+  arr?[0] = 99
+  arr
+  ''', null
+
+test 'optional chain assign: inner chain', '''
+  obj = { a: { b: 0 } }
+  obj.a?.b = 42
+  obj.a.b
+  ''', 42
+
+test 'optional chain assign: inner chain skips', '''
+  obj = { a: null }
+  obj.a?.b = 42
+  obj.a
+  ''', null
+
+code 'optional chain assign: style pattern', 'el?.style.display = "none"', 'if (el != null) el.style.display = "none"'
+code 'optional chain assign: value pattern', '@_input?.value = ""', 'if (this._input != null) this._input.value = ""'
+code 'optional chain assign: subtract', 'x?.y -= 1', 'if (x != null) x.y -= 1'

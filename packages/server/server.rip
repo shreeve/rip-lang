@@ -111,7 +111,7 @@ logAccessJson = (app, req, res, totalSeconds, workerSeconds) ->
 typeAbbrev =
   html: 'html', css: 'css', javascript: 'js', json: 'json', plain: 'text'
   png: 'png', jpeg: 'jpg', gif: 'gif', webp: 'webp', svg: 'svg'
-  'svg+xml': 'svg', 'x-icon': 'ico', 'octet-stream': 'bin'
+  'svg+xml': 'svg', 'x-icon': 'ico', 'octet-stream': 'bin', 'x-rip': 'rip'
 
 logAccessHuman = (app, req, res, totalSeconds, workerSeconds) ->
   { timestamp, timezone } = formatTimestamp()
@@ -124,8 +124,8 @@ logAccessHuman = (app, req, res, totalSeconds, workerSeconds) ->
   size = scale(bytes, 'B')
   contentType = (res.headers.get('content-type') or '').split(';')[0] or ''
   sub = if contentType.includes('/') then contentType.split('/')[1] else contentType
-  type = (typeAbbrev[sub] or sub or '-').padEnd(4)
-  console.log "[#{timestamp} #{timezone} #{dur}] #{status} #{type} #{size} - #{method} #{path}"
+  type = (typeAbbrev[sub] or sub or '').padEnd(4)
+  console.log "#{timestamp} #{timezone} #{dur} │ #{status} #{type} #{size} │ #{method} #{path}"
 
 INTERNAL_HEADERS = new Set(['rip-worker-busy', 'rip-worker-id', 'rip-no-log'])
 
@@ -339,6 +339,7 @@ parseFlags = (argv) ->
     hsts: has('--hsts')
     redirectHttp: not has('--no-redirect-http')
     reload
+    quiet: has('--quiet')
     socketPrefix
     maxQueue: coerceInt(getKV('--max-queue='), coerceInt(process.env.RIP_MAX_QUEUE, 512))
     queueTimeoutMs: coerceInt(getKV('--queue-timeout-ms='), coerceInt(process.env.RIP_QUEUE_TIMEOUT_MS, 30000))
@@ -499,10 +500,8 @@ class Manager
     @retiringIds = new Set()
     @currentVersion = 1
     @server = null
+    @dbUrl = null
     @appWatchers = new Map()
-
-    process.on 'SIGTERM', => @shutdown!
-    process.on 'SIGINT', => @shutdown!
 
   start: ->
     @stop!
@@ -510,6 +509,15 @@ class Manager
     # Run one-time setup if setup.rip exists next to the entry file
     setupFile = join(dirname(@flags.appEntry), 'setup.rip')
     if existsSync(setupFile)
+      # Check reachability before setup — determines if WE will start the DB
+      dbUrl = process.env.DB_URL or 'http://localhost:4213'
+      dbAlreadyRunning = try
+        fetch! dbUrl + '/health'
+        true
+      catch
+        false
+      @dbUrl = dbUrl unless dbAlreadyRunning
+
       setupEnv = Object.assign {}, process.env,
         RIP_SETUP_MODE: '1'
         RIP_SETUP_FILE: setupFile
@@ -519,6 +527,7 @@ class Manager
         stdin: 'ignore'
         cwd: process.cwd()
         env: setupEnv
+
       code = await proc.exited
       if code isnt 0
         console.error "rip-server: setup exited with code #{code}"
@@ -579,21 +588,21 @@ class Manager
     timer = null
     pending = null
     watchers = []
-    broadcast = (type = 'reload') =>
-      pending = if type is 'reload' or pending is 'reload' then 'reload' else type
+    broadcast = (type = 'page') =>
+      pending = if type is 'page' or pending is 'page' then 'page' else 'styles'
       clearTimeout(timer) if timer
       timer = setTimeout =>
         timer = null
         @server?.broadcastChange(prefix, pending)
         pending = null
-      , 100
+      , 300
     for dir in dirs
       try
         w = watch dir, { recursive: true }, (event, filename) ->
-          if filename?.endsWith('.rip')
-            broadcast('reload')
+          if filename?.endsWith('.rip') or filename?.endsWith('.html')
+            broadcast('page')
           else if filename?.endsWith('.css')
-            broadcast('css')
+            broadcast('styles')
         watchers.push(w)
       catch e
         rel = dir.replace(process.cwd() + '/', '')
@@ -728,6 +737,7 @@ class Server
     @availableWorkers = []
     @inflightTotal = 0
     @queue = []
+    @urls = []
     @startedAt = nowMs()
     @newestVersion = null
     @httpsActive = false
@@ -880,8 +890,8 @@ class Server
     client = null
     new Response new ReadableStream(
       start: (controller) ->
-        send = (event) ->
-          try controller.enqueue encoder.encode("event: #{event}\ndata:\n\n")
+        send = (type) ->
+          try controller.enqueue encoder.encode("event: #{if type is 'connected' then 'connected' else 'reload'}\ndata: #{type}\n\n")
           catch then null
         client = { send }
         group.sseClients.add(client)
@@ -894,7 +904,7 @@ class Server
         'Cache-Control': 'no-cache'
         'Connection': 'keep-alive'
 
-  broadcastChange: (prefix, type = 'reload') ->
+  broadcastChange: (prefix, type = 'page') ->
     group = @watchGroups.get(prefix)
     return unless group
     dead = []
@@ -986,6 +996,14 @@ class Server
         return new Response('Gateway timeout', { status: 504 })
       throw err
 
+  processJob: (job, worker) ->
+    @forwardToWorker(job.req, worker)
+      .then((r) -> job.resolve(r))
+      .catch((e) -> job.resolve(if e instanceof Response then e else new Response('Internal error', { status: 500 })))
+      .finally =>
+        @inflightTotal--
+        setImmediate => @drainQueue()
+
   drainQueue: ->
     while @inflightTotal < Math.max(1, @sockets.length) and @availableWorkers.length > 0
       job = @queue.shift()
@@ -998,12 +1016,7 @@ class Server
       unless worker
         @inflightTotal--
         break
-      @forwardToWorker(job.req, worker)
-        .then((r) -> job.resolve(r))
-        .catch((e) -> job.resolve(if e instanceof Response then e else new Response('Internal error', { status: 500 })))
-        .finally =>
-          @inflightTotal--
-          setImmediate => @drainQueue()
+      @processJob(job, worker)
 
   startControl: ->
     ctlPath = getControlSocketPath(@flags.socketPrefix)
@@ -1017,7 +1030,9 @@ class Server
 
     port = @flags.httpsPort or @flags.httpPort or 80
     protocol = if @flags.httpsPort then 'https' else 'http'
-    console.log "rip-server: #{protocol}://#{@flags.appName}.ripdev.io#{formatPort(protocol, port)}"
+    url = "#{protocol}://#{@flags.appName}.ripdev.io#{formatPort(protocol, port)}"
+    @urls.push(url)
+    p "rip-server: #{url}" unless @flags.quiet or @flags.hideUrls
 
   controlFetch: (req) ->
     url = new URL(req.url)
@@ -1139,7 +1154,9 @@ class Server
         stderr: 'ignore'
 
       @mdnsProcesses.set(host, proc)
-      console.log "rip-server: #{protocol}://#{host}#{formatPort(protocol, port)}"
+      url = "#{protocol}://#{host}#{formatPort(protocol, port)}"
+      @urls.push(url)
+      p "rip-server: #{url}" unless @flags.quiet or @flags.hideUrls
     catch e
       console.error "rip-server: failed to advertise #{host} via mDNS:", e.message
 
@@ -1174,6 +1191,7 @@ main = ->
         --static                Disable hot reload and file watching
         --env=<mode>            Set environment (dev, production)
         --debug                 Enable debug logging
+        --quiet                 Suppress URL lines (app prints its own)
 
       Network:
         http                    HTTP only (no TLS)
@@ -1271,6 +1289,7 @@ main = ->
     try unlinkSync(pidFile) catch then null
     svr.stop()
     mgr.stop!
+    try fetch!(mgr.dbUrl + '/shutdown', { method: 'POST' }) if mgr.dbUrl catch then null
     process.exit(0)
 
   process.on 'SIGTERM', cleanup
@@ -1282,7 +1301,12 @@ main = ->
     console.error 'rip-server: unhandled rejection:', err
     cleanup()
 
+  # Suppress top URL lines if setup.rip will print them at the bottom
+  setupFile = join(dirname(flags.appEntry), 'setup.rip')
+  flags.hideUrls = existsSync(setupFile)
+
   svr.start!
+  process.env.RIP_URLS = svr.urls.join(',')  # exact URLs the Server just built
   mgr.start!
 
   httpOnly = flags.httpsPort is null
