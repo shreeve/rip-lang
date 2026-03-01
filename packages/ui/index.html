@@ -54,7 +54,8 @@
     let ready = false;
     const es = new EventSource('/watch');
     es.addEventListener('connected', () => ready ? location.reload() : (ready = true));
-    es.addEventListener('reload', () => {
+    es.addEventListener('reload', () => location.reload());
+    es.addEventListener('css', () => {
       document.querySelectorAll('link[rel="stylesheet"]').forEach(link => {
         const url = new URL(link.href);
         url.searchParams.set('_r', Date.now());
