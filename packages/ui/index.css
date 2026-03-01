@@ -1175,6 +1175,7 @@ html.no-transition, html.no-transition * { transition: none !important; }
 
   /* Toolbar */
   .gallery [role="toolbar"] { background: #0f172a; }
+  .gallery [role="toolbar"] button { border-color: #475569; background: #334155; color: #e2e8f0; }
 
   /* Accordion demo */
   .accordion-trigger, .gallery [data-trigger][data-trigger] button, .gallery button[data-trigger] { border-color: #475569 !important; background: #334155 !important; color: #e2e8f0 !important; }
