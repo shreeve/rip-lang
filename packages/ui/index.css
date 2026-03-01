@@ -868,10 +868,9 @@ html { scroll-behavior: smooth; }
 .toc a {
   font-size: 12px; color: #475569; text-decoration: none;
   padding: 2px 8px; border-radius: 4px; background: #f1f5f9;
-  cursor: pointer; transition: all 0.12s;
+  cursor: pointer; transition: background 0.12s, color 0.12s, transform 0.12s;
 
-  &:hover, &[data-active] { background: #dbeafe; color: #1d4ed8; }
-  &[data-active] { font-weight: 500; }
+  &:hover, &[data-active] { background: #dbeafe; color: #1d4ed8; transform: scale(1.05); }
 }
 
 .toc-detail {
