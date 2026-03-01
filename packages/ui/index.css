@@ -787,6 +787,17 @@ select.rip-grid-editor { cursor: pointer; padding-left: 4px; }
 .gallery nav[role="navigation"] > a:active,
 .gallery nav[role="navigation"] > div > button:active { transform: scale(0.96); }
 
+.gallery nav[role="navigation"] > div > button {
+  display: flex; align-items: center; gap: 4px;
+}
+
+.gallery nav[role="navigation"] > div > button::after {
+  content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  display: inline-block; line-height: 0; transition: transform 0.2s ease;
+}
+
+.gallery nav[role="navigation"] > div > button[data-open]::after { transform: rotate(180deg); }
+
 .gallery nav[role="navigation"] [data-nav-panel] {
   background: white; border: 1px solid #e2e8f0; border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.1); padding: 6px;
@@ -900,6 +911,7 @@ select.rip-grid-editor { cursor: pointer; padding-left: 4px; }
 
     &:hover { background: white; color: #1e293b; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
     &:active { transform: scale(0.96); }
+    &[aria-pressed="true"] { background: white; color: #1d4ed8; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
     &:focus-visible { outline: 2px solid #3b82f6; outline-offset: -2px; }
   }
 }
@@ -1217,6 +1229,7 @@ html.no-transition, html.no-transition * { transition: none !important; }
   .gallery [role="toolbar"] { background: #0f172a; }
   .gallery [role="toolbar"] button { color: #94a3b8; }
   .gallery [role="toolbar"] button:hover { background: #1e293b; color: #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+  .gallery [role="toolbar"] button[aria-pressed="true"] { background: #1e293b; color: #60a5fa; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
 
   /* Shared demo styles */
   .context-zone { border-color: #64748b; color: #94a3b8; }

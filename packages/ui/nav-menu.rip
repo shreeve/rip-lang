@@ -101,15 +101,12 @@ export NavigationMenu = component
 
       for navItem, nIdx in _navItems
         if navItem.dataset.link?
-          a href: navItem.getAttribute('href') or '#'
-            "data-nav-link": true
-            tabindex: "0"
+          a $nav-link: true, href: navItem.getAttribute('href') or '#', tabindex: "0"
             @keydown: @_onKeydown
             = navItem.textContent
         else if navItem.dataset.trigger?
           . style: "display:inline-block;position:relative"
-            button tabindex: "0"
-              "data-nav-trigger": navItem.dataset.trigger
+            button $nav-trigger: navItem.dataset.trigger, tabindex: "0"
               aria-expanded: activePanel is navItem.dataset.trigger
               $open: (activePanel is navItem.dataset.trigger)?!
               @click: (=> if activePanel is navItem.dataset.trigger then @_closePanel() else @_openPanel(navItem.dataset.trigger))
@@ -119,7 +116,7 @@ export NavigationMenu = component
               = navItem.dataset.trigger
 
             if activePanel is navItem.dataset.trigger
-              div "data-nav-panel": navItem.dataset.trigger, $open: true
+              div $nav-panel: navItem.dataset.trigger, $open: true
                 style: "position:fixed;z-index:50"
                 @mouseenter: (=> @_cancelClose())
                 @mouseleave: (=> @_scheduleClose())
