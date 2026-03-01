@@ -74,6 +74,10 @@ button { font: inherit; cursor: pointer; }
 .demo-btn {
   padding: 6px 16px; border: 1px solid #cbd5e1; border-radius: 6px;
   background: white; font-size: 14px; color: #1e293b; outline: none; cursor: pointer;
+  user-select: none; transition: transform 0.1s, background 0.1s;
+
+  &:hover { background: #f8fafc; border-color: #94a3b8; }
+  &:active { background: #f1f5f9; transform: scale(0.97); }
 }
 
 .status {
@@ -446,7 +450,7 @@ button { font: inherit; cursor: pointer; }
 .gallery .btn-demo button {
   padding: 8px 16px; border: 1px solid #cbd5e1; border-radius: 6px;
   background: white; font-size: 14px; font-weight: 500; color: #1e293b;
-  cursor: pointer; transition: all 150ms ease;
+  cursor: pointer; user-select: none; transition: all 150ms ease;
 
   &:hover:not([data-disabled]) { background: #f8fafc; border-color: #94a3b8; }
   &:active:not([data-disabled]) { background: #f1f5f9; transform: scale(0.98); }
@@ -721,9 +725,10 @@ select.rip-grid-editor { cursor: pointer; padding-left: 4px; }
   button[type="submit"] {
     align-self: flex-start; padding: 8px 20px; background: #3b82f6;
     color: white; border: none; border-radius: 6px; font-size: 14px;
-    cursor: pointer; transition: background 0.15s;
+    cursor: pointer; user-select: none; transition: background 0.15s, transform 0.1s;
 
     &:hover { background: #2563eb; }
+    &:active { transform: scale(0.97); }
     &:focus-visible { outline: 2px solid #3b82f6; outline-offset: 2px; }
   }
 
@@ -872,10 +877,20 @@ select.rip-grid-editor { cursor: pointer; padding-left: 4px; }
 /* ── Toolbar ── */
 
 .gallery [role="toolbar"] {
-  display: inline-flex; align-items: center; gap: 4px;
+  display: inline-flex; align-items: center; gap: 2px;
   padding: 4px; background: #f1f5f9; border-radius: 8px;
 
   &[data-orientation="vertical"] { flex-direction: column; }
+
+  button {
+    padding: 6px 14px; border: none; border-radius: 5px; background: transparent;
+    font-size: 13px; font-weight: 500; color: #475569; cursor: pointer;
+    user-select: none; transition: all 0.1s;
+
+    &:hover { background: white; color: #1e293b; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    &:active { transform: scale(0.96); }
+    &:focus-visible { outline: 2px solid #3b82f6; outline-offset: -2px; }
+  }
 }
 
 /* ── Table of Contents ── */
@@ -1188,7 +1203,8 @@ html.no-transition, html.no-transition * { transition: none !important; }
 
   /* Toolbar */
   .gallery [role="toolbar"] { background: #0f172a; }
-  .gallery [role="toolbar"] button { border-color: #475569; background: #334155; color: #e2e8f0; }
+  .gallery [role="toolbar"] button { color: #94a3b8; }
+  .gallery [role="toolbar"] button:hover { background: #1e293b; color: #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
 
   /* Shared demo styles */
   .context-zone { border-color: #64748b; color: #94a3b8; }

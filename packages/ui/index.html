@@ -1290,6 +1290,7 @@ export WidgetGallery = component
             a @click: (=> @_navSection('toolbar', 'next')), "›"
         .section-desc "Groups controls with roving tabindex keyboard navigation."
         .demo-row
+          .demo-label "Text"
           Toolbar label: "Formatting"
             Button
               "Save"
@@ -1300,6 +1301,30 @@ export WidgetGallery = component
               "Bold"
             Toggle pressed <=> isItalic
               "Italic"
+        .demo-row
+          .demo-label "Icons + Text"
+          Toolbar label: "Formatting"
+            Button
+              "💾 Save"
+            Button
+              "↩ Undo"
+            Separator orientation: "vertical"
+            Toggle pressed <=> isBold
+              "𝐁 Bold"
+            Toggle pressed <=> isItalic
+              "𝐼 Italic"
+        .demo-row
+          .demo-label "Icons Only"
+          Toolbar label: "Formatting"
+            Button aria-label: "Save"
+              "💾"
+            Button aria-label: "Undo"
+              "↩"
+            Separator orientation: "vertical"
+            Toggle pressed <=> isBold, aria-label: "Bold"
+              "𝐁"
+            Toggle pressed <=> isItalic, aria-label: "Italic"
+              "𝐼"
         .api
           dl
             dt "Props"
