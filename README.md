@@ -105,6 +105,7 @@ def loadUser(id)
   await response.json()
 
 user?.profile?.name            # Optional chaining
+el?.scrollTop = 0              # Optional chain assignment
 data = fetchData!              # Await shorthand
 ```
 
@@ -211,6 +212,7 @@ All use `globalThis` with `??=` — override any by redeclaring locally.
 | `if...else` (postfix) | `"yes" if cond else "no"` | Python-style ternary expression |
 | `?.` `?.[]` `?.()` | `a?.b` `a?.[0]` `a?.()` | Optional chaining (ES6) |
 | `?[]` `?()` | `a?[0]` `a?(x)` | Optional chaining shorthand |
+| `?.` `=` | `el?.scrollTop = 0` | Optional chain assignment — guarded write |
 | `??` | `a ?? b` | Nullish coalescing |
 | `...` (spread) | `[...items, last]` | Prefix spread (ES6) |
 | `//` | `7 // 2` | Floor division |

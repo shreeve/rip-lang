@@ -1191,6 +1191,7 @@ Static files (`demo.html`, `charts.html`, `sierpinski.html`) work from `file://`
 | `as!` async shorthand | `for x as! iter` | Shorthand for `for await x as iter` |
 | Defined check | `x!?` | Postfix `!?` — true if not undefined |
 | Presence check | `x?!` | Postfix `?!` — true if truthy, else undefined (Houdini operator) |
+| Optional chain assign | `x?.prop = val` | Guarded assignment — skips if null/undefined |
 
 ### Kept
 
@@ -1199,6 +1200,7 @@ Static files (`demo.html`, `charts.html`, `sierpinski.html`) work from `file://`
 | Existence check | `x?` | `(x != null)` |
 | Optional chaining | `a?.b`, `a?.[0]`, `a?.()` | ES6 optional chaining |
 | Optional chaining shorthand | `a?[0]`, `a?(x)` | `a?.[0]`, `a?.(x)` |
+| Optional chain assign | `x?.prop = val` | `if (x != null) x.prop = val` |
 | Nullish coalescing | `a ?? b` | `a ?? b` |
 | Dammit operator | `fetchData!` | `await fetchData()` |
 
@@ -1262,6 +1264,7 @@ rip> .js      # Toggle JS display
 | `<` `<=` | Chained | `1 < x < 10` — chained comparisons |
 | `\|>` | Pipe | `x \|> fn` or `x \|> fn(y)` — first-arg pipe |
 | `.=` | Method assign | `x .= trim()` — `x = x.trim()` (Rip original) |
+| `?.` `=` | Optional assign | `el?.style.display = "none"` — guarded assign (Rip original) |
 | `*` | Merge assign | `*obj = {a: 1}` — `Object.assign(obj, ...)` (Rip original) |
 | `not in` | Not in | `x not in arr` — negated membership |
 | `loop n` | Repeat N | `loop 5 -> body` — repeat N times |

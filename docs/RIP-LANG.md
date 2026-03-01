@@ -360,6 +360,34 @@ arr?[0]       # Compiles to arr?.[0]
 fn?(arg)      # Compiles to fn?.(arg)
 ```
 
+### Optional Chain Assignment
+
+Rip extends optional chaining to the left side of assignments. If the
+target is null or undefined, the assignment is silently skipped. This
+eliminates the common `x.prop = val if x` guard pattern.
+
+```coffee
+# Simple property
+el?.scrollTop = 0                # if (el != null) el.scrollTop = 0
+
+# Deep chain
+el?.style.display = 'none'       # if (el != null) el.style.display = 'none'
+
+# Inner chain
+obj.inner?.value = 42            # if (obj.inner != null) obj.inner.value = 42
+
+# Bracket access
+arr?[0] = 99                     # if (arr != null) arr[0] = 99
+
+# Compound operators work too
+counter?.value += 1              # if (counter != null) counter.value += 1
+```
+
+JavaScript does not allow optional chaining on the left side of assignments
+(`x?.prop = val` is a SyntaxError). Rip compiles it to a guarded assignment
+automatically. This is particularly useful for DOM element references that
+may not exist yet (before mount, inside conditionals, etc.).
+
 ## Ternary Operator
 
 ```coffee
