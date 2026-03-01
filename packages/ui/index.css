@@ -816,7 +816,7 @@ select.rip-grid-editor { cursor: pointer; padding-left: 4px; }
 
 /* ── ToggleGroup ── */
 
-.gallery [role="group"][data-orientation] {
+.gallery [role="group"][data-orientation]:has(button[aria-pressed]) {
   display: inline-flex; gap: 0;
 
   &[data-orientation="horizontal"] { flex-direction: row; }

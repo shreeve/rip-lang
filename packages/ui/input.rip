@@ -17,6 +17,7 @@ export Input = component
   focused := false
   touched := false
 
+  onInput: (e) -> @value = e.target.value
   onFocus: -> focused = true
   onBlur: ->
     focused = false
