@@ -188,8 +188,10 @@ export WidgetGallery = component
 
   _toggleDark: ->
     darkMode = not darkMode
+    document.documentElement.classList.add('no-transition')
     document.documentElement.dataset.theme = if darkMode then 'dark' else ''
     localStorage.setItem('rip-ui-theme', if darkMode then 'dark' else 'light')
+    requestAnimationFrame -> requestAnimationFrame -> document.documentElement.classList.remove('no-transition')
 
   mounted: ->
     if localStorage.getItem('rip-ui-theme') is 'dark'

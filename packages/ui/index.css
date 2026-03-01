@@ -869,6 +869,7 @@ select.rip-grid-editor { cursor: pointer; padding-left: 4px; }
 /* ── Table of Contents ── */
 
 html { scroll-behavior: auto; }
+html.no-transition, html.no-transition * { transition: none !important; }
 
 .toc {
   display: grid; grid-template-columns: 1fr 1fr;
