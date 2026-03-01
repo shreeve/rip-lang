@@ -588,8 +588,8 @@ class Manager
     timer = null
     pending = null
     watchers = []
-    broadcast = (type = 'reload') =>
-      pending = if type is 'reload' or pending is 'reload' then 'reload' else type
+    broadcast = (type = 'page') =>
+      pending = if type is 'page' or pending is 'page' then 'page' else type
       clearTimeout(timer) if timer
       timer = setTimeout =>
         timer = null
@@ -600,7 +600,7 @@ class Manager
       try
         w = watch dir, { recursive: true }, (event, filename) ->
           if filename?.endsWith('.rip') or filename?.endsWith('.html')
-            broadcast('reload')
+            broadcast('page')
           else if filename?.endsWith('.css')
             broadcast('css')
         watchers.push(w)
@@ -890,8 +890,8 @@ class Server
     client = null
     new Response new ReadableStream(
       start: (controller) ->
-        send = (event) ->
-          try controller.enqueue encoder.encode("event: #{event}\ndata:\n\n")
+        send = (type) ->
+          try controller.enqueue encoder.encode("event: #{if type is 'connected' then 'connected' else 'reload'}\ndata: #{type}\n\n")
           catch then null
         client = { send }
         group.sseClients.add(client)
@@ -904,7 +904,7 @@ class Server
         'Cache-Control': 'no-cache'
         'Connection': 'keep-alive'
 
-  broadcastChange: (prefix, type = 'reload') ->
+  broadcastChange: (prefix, type = 'page') ->
     group = @watchGroups.get(prefix)
     return unless group
     dead = []
