@@ -876,6 +876,7 @@ html { scroll-behavior: smooth; }
 .toc-detail {
   border-left: 1px solid #e2e8f0; background: #fafbfc;
   padding: 16px 20px; display: flex; flex-direction: column;
+  position: relative;
 }
 
 .toc-detail h3 {
@@ -890,7 +891,7 @@ html { scroll-behavior: smooth; }
 .toc-detail .api { border: none; background: transparent; padding: 0; }
 
 .toc-detail .jump {
-  margin-top: auto; padding-top: 10px;
+  position: absolute; top: 16px; right: 20px;
   font-size: 12px; color: #3b82f6; text-decoration: none;
 
   &:hover { text-decoration: underline; }
