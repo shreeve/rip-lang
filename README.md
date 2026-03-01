@@ -11,7 +11,7 @@
 <p align="center">
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-3.13.62-blue.svg" alt="Version"></a>
   <a href="#zero-dependencies"><img src="https://img.shields.io/badge/dependencies-ZERO-brightgreen.svg" alt="Dependencies"></a>
-  <a href="#"><img src="https://img.shields.io/badge/tests-1%2C300%2F1%2C300-brightgreen.svg" alt="Tests"></a>
+  <a href="#"><img src="https://img.shields.io/badge/tests-1%2C436%2F1%2C436-brightgreen.svg" alt="Tests"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
 </p>
 
@@ -420,7 +420,7 @@ Rip includes optional packages for full-stack development:
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| [rip-lang](https://www.npmjs.com/package/rip-lang) | 3.13.27 | Core language compiler |
+| [rip-lang](https://www.npmjs.com/package/rip-lang) | 3.13.62 | Core language compiler |
 | [@rip-lang/server](packages/server/) | 1.3.12 | Multi-worker app server (web framework, hot reload, HTTPS, mDNS) |
 | [@rip-lang/db](packages/db/) | 1.3.15 | DuckDB server with official UI + ActiveRecord-style client |
 | [ui](packages/ui/) | — | Rip UI — 38 headless components (Grid, Select, Dialog, Tabs, etc.) |
@@ -465,7 +465,7 @@ rip file.rip           # Run
 rip -c file.rip        # Compile
 rip -t file.rip        # Tokens
 rip -s file.rip        # S-expressions
-bun run test           # 1369 tests
+bun run test           # 1436 tests
 bun run parser         # Rebuild parser
 bun run build          # Build browser bundle
 ```

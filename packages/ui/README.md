@@ -4,9 +4,11 @@ Headless, accessible UI components written in Rip. Zero dependencies. Zero CSS.
 Every widget exposes `$` attributes (compiled to `data-*`) for styling and handles keyboard
 interactions per WAI-ARIA Authoring Practices.
 
-Widgets are plain `.rip` source files — no build step. The browser compiles
+Available on npm as `@rip-lang/ui`. Live gallery at https://ui.ripdev.io/.
+
+Components are plain `.rip` source files — no build step. The browser compiles
 them on the fly via Rip UI's runtime. Include them in your app by adding the
-widgets directory to your serve middleware:
+components directory to your serve middleware:
 
 ```coffee
 use serve
@@ -25,19 +27,48 @@ Every widget:
 
 ## Overview
 
+38 headless components across 8 categories — 4,381 lines total.
+
 | Component | What It Handles |
 |-----------|----------------|
 | **Select** | Keyboard navigation, typeahead, ARIA listbox, positioning |
 | **Combobox** | Input filtering, keyboard nav, ARIA combobox, positioning |
+| **MultiSelect** | Multi-select with chips, filtering, keyboard nav |
+| **Autocomplete** | Suggestion input, type to filter, select to fill |
+| **Checkbox** | Toggle state, indeterminate, ARIA checked |
+| **Toggle** | Two-state toggle button with pressed state |
+| **ToggleGroup** | Single or multi-select toggle buttons, roving tabindex |
+| **RadioGroup** | Exactly one option selected with arrow key nav |
+| **CheckboxGroup** | Multiple options checked independently |
+| **Input** | Headless input tracking focus, touch, and validation |
+| **NumberField** | Number input with stepper buttons and hold-to-repeat |
+| **Slider** | Draggable range input with pointer capture and keyboard |
+| **OTPField** | Multi-digit code input with auto-advance and paste |
+| **DatePicker** | Calendar dropdown for single date or range selection |
+| **EditableValue** | Click-to-edit inline value with popover form |
+| **Tabs** | Arrow key navigation, ARIA tablist/tab/tabpanel |
+| **Menu** | Keyboard navigation, ARIA menu roles |
+| **ContextMenu** | Right-click context menu with keyboard navigation |
+| **Menubar** | Horizontal menu bar with dropdown menus |
+| **NavMenu** | Site navigation with hover/click dropdown panels |
+| **Toolbar** | Groups controls with roving tabindex keyboard nav |
 | **Dialog** | Focus trap, scroll lock, escape/click-outside dismiss, ARIA roles |
-| **Toast** | Auto-dismiss timer, stacking, ARIA live region |
+| **Drawer** | Slide-out panel with focus trap and scroll lock |
 | **Popover** | Anchor positioning, flip/shift, dismiss behavior, ARIA |
 | **Tooltip** | Show/hide with delay, anchor positioning, ARIA describedby |
-| **Tabs** | Arrow key navigation, ARIA tablist/tab/tabpanel |
-| **Accordion** | Expand/collapse, single or multiple, ARIA |
-| **Checkbox** | Toggle state, indeterminate, ARIA checked |
-| **Menu** | Keyboard navigation, ARIA menu roles |
+| **PreviewCard** | Hover/focus preview card with delay |
+| **Toast** | Auto-dismiss timer, stacking, ARIA live region |
+| **Button** | Accessible button with disabled-but-focusable pattern |
+| **Separator** | Decorative or semantic divider between sections |
+| **Progress** | Progress bar with CSS custom property for value |
+| **Meter** | Gauge for known-range measurements with thresholds |
+| **Avatar** | Image with fallback to initials or placeholder |
+| **ScrollArea** | Custom scrollbar with draggable thumb and auto-hide |
+| **Field** | Form field wrapper with label, description, and error |
+| **Fieldset** | Grouped fields with legend and cascading disable |
+| **Form** | Form wrapper with submit handling and validation state |
 | **Grid** | Virtual scrolling, DOM recycling, cell selection, inline editing, sorting, resizing, clipboard |
+| **Accordion** | Expand/collapse, single or multiple, ARIA |
 
 ---
 
@@ -642,17 +673,86 @@ standard; the implementation is ours.
 
 ## File Summary
 
+### Selection
+
 | File | Lines | Description |
 |------|-------|-------------|
-| `select.rip` | 182 | Dropdown select with typeahead |
-| `combobox.rip` | 152 | Filterable input + listbox |
-| `dialog.rip` | 93 | Modal with focus trap and scroll lock |
-| `toast.rip` | 44 | Auto-dismiss notification |
-| `popover.rip` | 116 | Anchored floating content |
-| `tooltip.rip` | 99 | Hover/focus tooltip |
-| `tabs.rip` | 92 | Tab panel with roving tabindex |
-| `accordion.rip` | 92 | Expand/collapse sections |
-| `checkbox.rip` | 33 | Checkbox and switch toggle |
-| `menu.rip` | 132 | Dropdown action menu |
-| `grid.rip` | 901 | Virtual-scrolling data grid with clipboard |
-| **Total** | **1,936** | |
+| `select.rip` | 184 | Dropdown with typeahead, keyboard nav, ARIA listbox |
+| `combobox.rip` | 153 | Filterable input + listbox for search-as-you-type |
+| `multi-select.rip` | 158 | Multi-select with chips, filtering, and keyboard nav |
+| `autocomplete.rip` | 141 | Suggestion input — type to filter, select to fill |
+
+### Toggle
+
+| File | Lines | Description |
+|------|-------|-------------|
+| `checkbox.rip` | 33 | Toggle with checkbox or switch semantics |
+| `toggle.rip` | 24 | Two-state toggle button with pressed state |
+| `toggle-group.rip` | 78 | Single or multi-select toggle buttons |
+| `radio-group.rip` | 67 | Exactly one option selected with arrow key nav |
+| `checkbox-group.rip` | 65 | Multiple options checked independently |
+
+### Input
+
+| File | Lines | Description |
+|------|-------|-------------|
+| `input.rip` | 35 | Headless input tracking focus, touch, and validation |
+| `number-field.rip` | 162 | Number input with stepper buttons and hold-to-repeat |
+| `slider.rip` | 165 | Draggable range input with pointer capture and keyboard |
+| `otp-field.rip` | 89 | Multi-digit code input with auto-advance and paste |
+| `date-picker.rip` | 214 | Calendar dropdown for single date or range selection |
+| `editable-value.rip` | 80 | Click-to-edit inline value with popover form |
+
+### Navigation
+
+| File | Lines | Description |
+|------|-------|-------------|
+| `tabs.rip` | 124 | Tab panel with roving tabindex and arrow key nav |
+| `menu.rip` | 162 | Dropdown action menu with keyboard navigation |
+| `context-menu.rip` | 98 | Right-click context menu with keyboard navigation |
+| `menubar.rip` | 155 | Horizontal menu bar with dropdown menus |
+| `nav-menu.rip` | 132 | Site navigation with hover/click dropdown panels |
+| `toolbar.rip` | 46 | Groups controls with roving tabindex keyboard nav |
+
+### Overlay
+
+| File | Lines | Description |
+|------|-------|-------------|
+| `dialog.rip` | 107 | Modal with focus trap, scroll lock, escape dismiss |
+| `drawer.rip` | 79 | Slide-out panel with focus trap and scroll lock |
+| `popover.rip` | 143 | Anchored floating content with flip/shift positioning |
+| `tooltip.rip` | 115 | Hover/focus tooltip with delay and positioning |
+| `preview-card.rip` | 73 | Hover/focus preview card with delay |
+| `toast.rip` | 88 | Auto-dismiss notification with ARIA live region |
+
+### Display
+
+| File | Lines | Description |
+|------|-------|-------------|
+| `button.rip` | 23 | Accessible button with disabled-but-focusable pattern |
+| `separator.rip` | 17 | Decorative or semantic divider between sections |
+| `progress.rip` | 25 | Progress bar with CSS custom property for value |
+| `meter.rip` | 36 | Gauge for known-range measurements with thresholds |
+| `avatar.rip` | 37 | Image with fallback to initials or placeholder |
+| `scroll-area.rip` | 145 | Custom scrollbar with draggable thumb and auto-hide |
+
+### Form
+
+| File | Lines | Description |
+|------|-------|-------------|
+| `field.rip` | 53 | Form field wrapper with label, description, and error |
+| `fieldset.rip` | 22 | Grouped fields with legend and cascading disable |
+| `form.rip` | 39 | Form wrapper with submit handling and validation state |
+
+### Data
+
+| File | Lines | Description |
+|------|-------|-------------|
+| `grid.rip` | 901 | Virtual-scrolling data grid — 100K+ rows at 60fps |
+| `accordion.rip` | 113 | Expand/collapse sections, single or multiple mode |
+
+---
+
+| | Files | Lines |
+|--|-------|-------|
+| **Total** | **38** | **4,381** |

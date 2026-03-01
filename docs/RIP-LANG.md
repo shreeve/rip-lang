@@ -2131,4 +2131,4 @@ Each would need design discussion before building.
 
 ---
 
-*Rip 3.13 — 1,369 tests — Zero dependencies — Self-hosting — ~11,890 LOC*
+*Rip 3.13 — 1,436 tests — Zero dependencies — Self-hosting — ~11,890 LOC*

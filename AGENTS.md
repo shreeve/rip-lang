@@ -19,7 +19,7 @@ echo 'your code' | ./bin/rip -s  # S-expressions (parser)
 echo 'your code' | ./bin/rip -c  # JavaScript (codegen)
 
 # Run tests
-bun run test                             # All tests (1407)
+bun run test                             # All tests (1436)
 bun test/runner.js test/rip/FILE.rip     # Specific file
 
 # Rebuild parser (after grammar changes)
@@ -37,7 +37,7 @@ rip server
 | Metric | Value |
 |--------|-------|
 | Version | 3.13.62 |
-| Tests | 1,407 |
+| Tests | 1,436 |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
 
@@ -74,7 +74,7 @@ rip-lang/
 ├── docs/
 │   ├── RIP-LANG.md      # Language reference (includes reactivity, future ideas)
 │   └── RIP-TYPES.md     # Type system specification
-├── test/rip/            # 26 test files (1,369 tests)
+├── test/rip/            # 26 test files (1,436 tests)
 └── scripts/             # Build utilities (all .js — run via `bun run <name>`)
 ```
 
@@ -662,7 +662,7 @@ code "name", "x + y", "(x + y)"
 fail "name", "invalid syntax"
 ```
 
-### Test Files (26 files, 1,407 tests)
+### Test Files (26 files, 1,436 tests)
 
 ```
 test/rip/
@@ -858,6 +858,11 @@ keyboard interactions per WAI-ARIA Authoring Practices. Widgets are plain
   in `close()`, it won't run. Use `~> if @open ... else ...` so the effect handles
   all state transitions regardless of how the signal changed. Methods like `close()`
   should just set state (`@open = false`) and emit events — the effect does the work.
+- **`x.y` in render blocks is tag syntax:** A bare `item.textContent` on its
+  own line in a render block is parsed as a tag named `item` with CSS class
+  `textContent`, not a property access. Use `"#{item.textContent}"` for
+  property access expressions. This applies to any `obj.prop` expression
+  used as text content in render blocks.
 
 **Integration:** Add the widgets directory to your serve middleware:
 
@@ -907,15 +912,24 @@ Hot reload: `rip server` from `packages/ui/` gives auto-HTTPS + mDNS
   script detects the reconnection and calls `location.reload()`.
 - **`.html`/`.css` changes**: The serve middleware's `watchDirs` (registered
   via `components: ['.']` and `watch: true`) detects the change and broadcasts
-  a `reload` SSE event directly — no rolling restart needed.
+  a `reload` SSE event directly — no rolling restart needed. The event's
+  `data` field distinguishes change types: `.css` changes send `data: styles`
+  (client refreshes stylesheets only, no full page reload) while `.html`/`.rip`
+  changes send `data: page` (full page reload).
 
-The browser reload script is 4 lines in `index.html`:
+The browser reload script is in `index.html`:
 ```html
 <script>
   let ready = false;
   const es = new EventSource('/watch');
   es.addEventListener('connected', () => ready ? location.reload() : (ready = true));
-  es.addEventListener('reload', () => location.reload());
+  es.addEventListener('reload', (e) => {
+    if (e.data === 'styles') {
+      document.querySelectorAll('link[rel="stylesheet"]').forEach(l => l.href = l.href.replace(/\?.*|$/, '?' + Date.now()));
+    } else {
+      location.reload();
+    }
+  });
 </script>
 ```
 
@@ -933,7 +947,7 @@ Rip's component system (`component`, `render`, `:=`, `~=`, `~>`, `<=>`,
 component library targets these primitives — Radix targets React, Headless UI
 targets React/Vue, Ark UI targets multiple frameworks but not Rip. Building
 widgets in Rip proves the component system works and exercises every feature.
-At ~2,000 lines total for 11 widgets (including a 901-line Google Sheets-grade
+At ~2,000 lines total for 38 headless UI components (including a 901-line Google Sheets-grade
 Grid), the investment is modest — the same functionality in React + Radix
 requires thousands of lines of glue code plus a build system. Rip widgets
 compile on the fly in the browser from plain `.rip` source files. No bundler,

@@ -520,6 +520,15 @@ In render blocks, use the `$` sigil (`$open`, `$selected`) which compiles to
 `[data-selected]` selectors. The widget never applies visual styles — it only
 sets semantic state attributes. This keeps the headless contract clean.
 
+### `x.y` in Render Blocks Is Tag Syntax
+
+Inside render blocks, `item.textContent` on its own line is parsed as tag
+`item` with class `textContent` — not a property access. This is because
+dot syntax in render context creates HTML elements with CSS classes
+(`div.foo` → `<div class="foo">`). To access a property, wrap it in an
+interpolation: `"#{item.textContent}"`. This bug affected 11 components
+before being caught during a review pass.
+
 ### Widget Conventions
 
 - Uses `ref:` for DOM element references — **never** `div._name` (dot syntax sets a CSS class, not a ref)
@@ -824,6 +833,15 @@ creates a coupling between the widget and the consumer's HTML structure.
 If Rip UI ever gets a structured slot/children API (like Svelte's
 `$$slots` or React's `children`), these widgets should adopt it.
 
+### CSS Hot Reload
+
+The server sends SSE `event: reload` messages with typed payloads. When
+`data: styles`, the client refreshes only stylesheets (re-fetching `<link>`
+tags by appending a cache-busting query parameter) — no full page reload.
+When `data: page` (HTML or `.rip` file changes), the client does a full
+`location.reload()`. This means CSS iteration is near-instant: save a `.css`
+file and the browser picks up changes without losing component state.
+
 ### Testing
 
 No widget has tests yet. Each should have:
@@ -932,8 +950,8 @@ before it. The theme: stop building new things and start proving what exists.
 
 ## Postmortem: Building the Widget Suite
 
-Reflections after designing, implementing, reviewing, and documenting 11
-headless widgets and a full-stack demo app in one session.
+Reflections after designing, implementing, reviewing, and documenting 38
+headless components and a full-stack demo app.
 
 ### What We Learned
 
