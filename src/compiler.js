@@ -1072,7 +1072,7 @@ export class CodeGenerator {
   generateReturn(head, rest, context, sexpr) {
     if (rest.length === 0) return 'return';
     let [expr] = rest;
-    if (this.sideEffectOnly) return 'return';
+    if (this.sideEffectOnly && !(this.is(expr, '->') || this.is(expr, '=>'))) return 'return';
 
     if (this.is(expr, 'if')) {
       let [, condition, body, ...elseParts] = expr;
