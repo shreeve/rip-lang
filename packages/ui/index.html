@@ -224,14 +224,13 @@ export WidgetGallery = component
     document.addEventListener 'keydown', (e) =>
       if e.key is '/' and not (e.target.tagName in ['INPUT', 'TEXTAREA', 'SELECT']) and not e.target.isContentEditable
         e.preventDefault()
-        gallery = document.querySelector('.gallery')
-        gallery.style.transition = 'opacity 80ms ease-out'
-        gallery.style.opacity = '0'
+        @_root.style.transition = 'opacity 80ms ease-out'
+        @_root.style.opacity = '0'
         setTimeout =>
           window.scrollTo(0, 0)
           history.replaceState(null, '', location.pathname)
-          gallery.style.transition = 'opacity 120ms ease-in'
-          gallery.style.opacity = '1'
+          @_root.style.transition = 'opacity 120ms ease-in'
+          @_root.style.opacity = '1'
           @_root?.querySelector('.toc-search')?.focus()
         , 80
     gc = document.querySelector('.grid-container')
