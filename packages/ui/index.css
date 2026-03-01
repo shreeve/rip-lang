@@ -992,7 +992,7 @@ html { scroll-behavior: auto; }
 
   .demo-row { background: #1e293b; border-color: #334155; }
   .demo-label { color: #64748b; }
-  .demo-btn { border-color: #475569; background: #1e293b; color: #e2e8f0; }
+  .demo-btn { border-color: #475569; background: #334155; color: #e2e8f0; }
   .status { background: #0f172a; color: #94a3b8; }
 
   .toc { background: #1e293b; border-color: #334155; }
