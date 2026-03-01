@@ -908,6 +908,7 @@ class Server
     group = @watchGroups.get(prefix)
     return unless group
     dead = []
+    console.log "rip-server: broadcast #{type} to #{group.sseClients.size} clients"
     for client as group.sseClients
       try client.send(type)
       catch then dead.push(client)
