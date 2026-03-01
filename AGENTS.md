@@ -860,9 +860,9 @@ keyboard interactions per WAI-ARIA Authoring Practices. Widgets are plain
   should just set state (`@open = false`) and emit events — the effect does the work.
 - **`x.y` in render blocks is tag syntax:** A bare `item.textContent` on its
   own line in a render block is parsed as a tag named `item` with CSS class
-  `textContent`, not a property access. Use `"#{item.textContent}"` for
-  property access expressions. This applies to any `obj.prop` expression
-  used as text content in render blocks.
+  `textContent`, not a property access. Use the `=` prefix to output
+  expressions as text: `= item.textContent`. This works for any case,
+  including HTML tag names like `= nav.dataset.trigger` or `= link.href`.
 
 **Integration:** Add the widgets directory to your serve middleware:
 
@@ -1279,6 +1279,7 @@ rip> .js      # Toggle JS display
 | `\|>` | Pipe | `x \|> fn` or `x \|> fn(y)` — first-arg pipe |
 | `.=` | Method assign | `x .= trim()` — `x = x.trim()` (Rip original) |
 | `?.` `=` | Optional assign | `el?.style.display = "none"` — guarded assign (Rip original) |
+| `=` | Render text | `= item.textContent` — output expression as text node in render blocks |
 | `*` | Merge assign | `*obj = {a: 1}` — `Object.assign(obj, ...)` (Rip original) |
 | `not in` | Not in | `x not in arr` — negated membership |
 | `loop n` | Repeat N | `loop 5 -> body` — repeat N times |

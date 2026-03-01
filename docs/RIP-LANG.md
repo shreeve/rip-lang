@@ -388,6 +388,25 @@ JavaScript does not allow optional chaining on the left side of assignments
 automatically. This is particularly useful for DOM element references that
 may not exist yet (before mount, inside conditionals, etc.).
 
+### Render Expression Output (`= prefix`)
+
+In component render blocks, `x.y` on its own line is parsed as a tag
+with a CSS class (`<x class="y">`), not a property access. The `=`
+prefix forces the line to be an expression, outputting it as a text node:
+
+```coffee
+# In a render block:
+render
+  div
+    = item.textContent         # text node — not a tag
+    = nav.dataset.trigger      # works even when 'nav' is an HTML tag
+    = link.href                # works even when 'link' is an HTML tag
+    div.card                   # tag — <div class="card"> (no = prefix)
+```
+
+The `=` removes itself and stamps the expression so the codegen skips
+tag detection. Output is clean: `createTextNode(String(expr))`.
+
 ## Ternary Operator
 
 ```coffee

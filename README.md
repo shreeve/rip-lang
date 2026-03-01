@@ -213,6 +213,7 @@ All use `globalThis` with `??=` — override any by redeclaring locally.
 | `?.` `?.[]` `?.()` | `a?.b` `a?.[0]` `a?.()` | Optional chaining (ES6) |
 | `?[]` `?()` | `a?[0]` `a?(x)` | Optional chaining shorthand |
 | `?.` `=` | `el?.scrollTop = 0` | Optional chain assignment — guarded write |
+| `=` (render) | `= item.textContent` | Expression output as text node in render blocks |
 | `??` | `a ?? b` | Nullish coalescing |
 | `...` (spread) | `[...items, last]` | Prefix spread (ES6) |
 | `//` | `7 // 2` | Floor division |

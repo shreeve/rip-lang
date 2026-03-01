@@ -525,9 +525,21 @@ sets semantic state attributes. This keeps the headless contract clean.
 Inside render blocks, `item.textContent` on its own line is parsed as tag
 `item` with class `textContent` — not a property access. This is because
 dot syntax in render context creates HTML elements with CSS classes
-(`div.foo` → `<div class="foo">`). To access a property, wrap it in an
-interpolation: `"#{item.textContent}"`. This bug affected 11 components
-before being caught during a review pass.
+(`div.foo` → `<div class="foo">`). Use the `=` prefix to output
+expressions as text:
+
+```coffee
+render
+  div
+    = item.textContent         # text node
+    = nav.dataset.trigger      # works even for HTML tag names
+    div.card                   # tag — no = prefix
+```
+
+The `=` stamps `.text` on the identifier so the codegen skips tag
+detection. Output is clean: `createTextNode(String(expr))`. All 12
+widget instances now use `= prefix` instead of the older `"#{...}"`
+workaround.
 
 ### Widget Conventions
 
