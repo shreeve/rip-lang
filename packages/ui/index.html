@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="index.css">
+  <style>body { opacity: 0; } body.ready { opacity: 1; transition: opacity 200ms ease-in; }</style>
   <script defer src="/rip/rip.min.js" data-src="
       /otp-field.rip
       /multi-select.rip
@@ -165,7 +166,10 @@ export WidgetGallery = component
       tocActive = hash
       setTimeout =>
         document.getElementById(hash)?.scrollIntoView({ behavior: 'instant', block: 'start' })
+        document.body.classList.add('ready')
       , 50
+    else
+      document.body.classList.add('ready')
 
   gridColumns := [
     { key: 'name', title: 'Name', width: 180 },
