@@ -100,6 +100,7 @@ export WidgetGallery = component
   editName := 'John Doe'
   pickedDate := null
   dateRange := null
+  darkMode := false
   tocActive := null
   tocFilter := ''
   tocGroups =! [
@@ -114,6 +115,11 @@ export WidgetGallery = component
   ]
   _nameFor: (id) -> (tocData.find((c) -> c.id is id))?.name or id
   _isHidden: (name) -> tocFilter and not name.toLowerCase().includes(tocFilter.toLowerCase())
+  _onFilter: (e) -> tocFilter = e.target.value
+  _onFilterKey: (e) ->
+    if e.key is 'Escape'
+      tocFilter = ''
+      e.target.value = ''
   tocData := [
     { id: 'select', name: 'Select', lines: 184, desc: 'Dropdown with typeahead, keyboard nav, ARIA listbox.', props: ['@value', '@placeholder', '@disabled'], events: ['change'], keys: ['↕', 'Enter', 'Space', 'Esc', 'Home', 'End', 'type-ahead'], attrs: ['$open', '$placeholder', '$disabled', '$value', '$highlighted', '$selected'] }
     { id: 'combobox', name: 'Combobox', lines: 153, desc: 'Filterable input + listbox for search-as-you-type.', props: ['@query', '@items', '@placeholder', '@disabled', '@autoHighlight'], events: ['filter', 'select'], keys: ['↕', 'Enter', 'Esc', 'Tab'], attrs: ['$open', '$disabled', '$clear', '$value', '$highlighted', '$empty'] }
@@ -173,7 +179,15 @@ export WidgetGallery = component
       _infoKeys = info.keys
       _infoAttrs = info.attrs
 
+  _toggleDark: ->
+    darkMode = not darkMode
+    document.documentElement.dataset.theme = if darkMode then 'dark' else ''
+    localStorage.setItem('rip-ui-theme', if darkMode then 'dark' else 'light')
+
   mounted: ->
+    if localStorage.getItem('rip-ui-theme') is 'dark'
+      darkMode = true
+      document.documentElement.dataset.theme = 'dark'
     hash = location.hash.slice(1)
     if hash and document.getElementById(hash)
       tocActive = hash
@@ -254,14 +268,15 @@ export WidgetGallery = component
     .gallery
 
       .gallery-header
-        h1 "Rip UI"
+        .
+          h1 "Rip UI"
+          button.theme-toggle @click: (=> @_toggleDark())
+            if darkMode then "☀" else "☾"
         p "38 headless, accessible components. Zero CSS, zero dependencies."
 
       .toc
         .toc-nav
-          input.toc-search type: "text", placeholder: "Filter components..."
-            @input: (e) => tocFilter = e.target.value
-            @keydown: (e) => (tocFilter = ''; e.target.value = '') if e.key is 'Escape'
+          input.toc-search type: "text", placeholder: "Filter components...", @input: @_onFilter, @keydown: @_onFilterKey
           for group, gIdx in tocGroups
             .toc-group
               .toc-label group.label
