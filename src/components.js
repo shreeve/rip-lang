@@ -1454,7 +1454,11 @@ export function installComponentSupport(CodeGenerator, Lexer) {
             this._pushEffect(`${elVar}.setAttribute('${key}', ${valueCode});`);
           }
         } else {
-          this._createLines.push(`${elVar}.setAttribute('${key}', ${valueCode});`);
+          if (Array.isArray(value) && value[0] === 'presence') {
+            this._createLines.push(`{ const __v = ${valueCode}; __v == null ? void 0 : ${elVar}.setAttribute('${key}', __v); }`);
+          } else {
+            this._createLines.push(`${elVar}.setAttribute('${key}', ${valueCode});`);
+          }
         }
       }
     }
@@ -1899,6 +1903,15 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     // chain in __effect just means it runs once with no overhead.
     if (sexpr[0] === '.' && this._rootsAtThis(sexpr[1])) {
       return true;
+    }
+
+    // Method call on component: [['.', 'this', method], ...args]
+    // Methods may read reactive state internally — treat as reactive so the
+    // call gets wrapped in __effect and re-runs when dependencies change.
+    if (Array.isArray(sexpr[0]) && sexpr[0][0] === '.' && sexpr[0][1] === 'this') {
+      const m = sexpr[0][2];
+      const name = typeof m === 'string' ? m : m instanceof String ? m.valueOf() : null;
+      if (name && this.componentMembers?.has(name)) return true;
     }
 
     for (const child of sexpr) {
