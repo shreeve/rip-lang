@@ -105,7 +105,7 @@ export NavigationMenu = component
             "data-nav-link": true
             tabindex: "0"
             @keydown: @_onKeydown
-            "#{navItem.textContent}"
+            = navItem.textContent
         else if navItem.dataset.trigger?
           . style: "display:inline-block;position:relative"
             button "data-nav-trigger": navItem.dataset.trigger
@@ -116,7 +116,7 @@ export NavigationMenu = component
               @mouseenter: (=> @_scheduleOpen(navItem.dataset.trigger))
               @mouseleave: (=> @_scheduleClose())
               @keydown: @_onKeydown
-              "#{navItem.dataset.trigger}"
+              = navItem.dataset.trigger
 
             if activePanel is navItem.dataset.trigger
               div "data-nav-panel": navItem.dataset.trigger, $open: true
@@ -129,4 +129,4 @@ export NavigationMenu = component
                       if e.key is 'Escape'
                         @_closePanel()
                         @_root?.querySelector("[data-nav-trigger=\"#{navItem.dataset.trigger}\"]")?.focus()
-                    "#{link.textContent}"
+                    = link.textContent

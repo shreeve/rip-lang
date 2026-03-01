@@ -181,4 +181,4 @@ export Select = component
               aria-disabled: @isDisabled(opt)?!
               @click: (=> @selectIndex(idx))
               @mouseenter: (=> highlightedIndex = idx)
-              "#{opt.textContent}"
+              = opt.textContent

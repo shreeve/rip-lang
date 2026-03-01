@@ -891,7 +891,7 @@ export Grid = component
             for c, ci in @columns
               th style: "text-align: #{c.align or 'left'}; cursor: pointer",
                 $sorted: (if sortInfo.arrows[ci] then (if sortInfo.arrows[ci].includes('↓') then 'asc' else 'desc') else undefined)
-                "#{c.title}"
+                = c.title
                 span.sort-arrow
                   sortInfo.arrows[ci]
                 if sortKeys.length > 1 and sortInfo.ranks[ci] > 0

@@ -261,6 +261,20 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       if (!inRender) return 1;
 
       // ─────────────────────────────────────────────────────────────────────
+      // Expression output: = expr → "#{expr}" (text node, never a tag)
+      // ─────────────────────────────────────────────────────────────────────
+      if (tag === '=' && i > 0) {
+        let prev = tokens[i - 1][0];
+        if (prev === 'TERMINATOR' || prev === 'INDENT' || prev === 'RENDER') {
+          let end = i + 1;
+          while (end < tokens.length && tokens[end][0] !== 'TERMINATOR' && tokens[end][0] !== 'INDENT' && tokens[end][0] !== 'OUTDENT') end++;
+          tokens.splice(end, 0, gen('INTERPOLATION_END', ')', token), gen('STRING', '""', token), gen('STRING_END', ')', token));
+          tokens.splice(i, 1, gen('STRING_START', '(', token), gen('STRING', '""', token), gen('INTERPOLATION_START', '(', token));
+          return 3;
+        }
+      }
+
+      // ─────────────────────────────────────────────────────────────────────
       // Transition modifier
       // div ~fade → div __transition__: "fade"
       // ─────────────────────────────────────────────────────────────────────

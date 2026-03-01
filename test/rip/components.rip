@@ -2711,3 +2711,61 @@ code "no transition — no _t on block", '''
   };
   })()
   ''', opts
+
+# ==============================================================================
+# Expression output (= prefix)
+# ==============================================================================
+
+code 'render = prefix: property access', '''
+  export Test = component
+    render
+      div
+        = item.textContent
+  ''', '''
+  export const Test = class extends __Component {
+    _init(props) {
+    }
+    _create() {
+      this._el0 = document.createElement('div');
+      this._t0 = document.createTextNode(String(`${item.textContent}`));
+      this._el0.appendChild(this._t0);
+      return this._el0;
+    }
+  };
+  ''', opts
+
+code 'render = prefix: deep property (nav is HTML tag)', '''
+  export Test = component
+    render
+      div
+        = nav.dataset.trigger
+  ''', '''
+  export const Test = class extends __Component {
+    _init(props) {
+    }
+    _create() {
+      this._el0 = document.createElement('div');
+      this._t0 = document.createTextNode(String(`${nav.dataset.trigger}`));
+      this._el0.appendChild(this._t0);
+      return this._el0;
+    }
+  };
+  ''', opts
+
+code 'render = prefix: link.href (link is HTML tag)', '''
+  export Test = component
+    render
+      div
+        = link.href
+  ''', '''
+  export const Test = class extends __Component {
+    _init(props) {
+    }
+    _create() {
+      this._el0 = document.createElement('div');
+      this._t0 = document.createTextNode(String(`${link.href}`));
+      this._el0.appendChild(this._t0);
+      return this._el0;
+    }
+  };
+  ''', opts

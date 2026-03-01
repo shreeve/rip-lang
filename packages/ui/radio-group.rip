@@ -64,4 +64,4 @@ export RadioGroup = component
           $disabled: @disabled?!
           $value: opt.dataset.value
           @click: (=> @_select(opt.dataset.value))
-          "#{opt.textContent}"
+          = opt.textContent
