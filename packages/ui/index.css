@@ -953,9 +953,10 @@ html.no-transition, html.no-transition * { transition: none !important; }
 .toc a {
   font-size: 12px; color: #475569; text-decoration: none;
   padding: 2px 8px; border-radius: 4px; background: #f1f5f9;
-  cursor: pointer; transition: transform 0.12s;
+  cursor: pointer; transition: transform 0.12s; outline: none;
 
   &:hover, &[data-active] { background: #dbeafe; color: #1d4ed8; transform: scale(1.05); }
+  &:focus-visible { background: #dbeafe; color: #1d4ed8; outline: 2px solid #3b82f6; outline-offset: 1px; }
   &[data-hidden] { display: none; }
 }
 

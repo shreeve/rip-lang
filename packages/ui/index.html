@@ -127,18 +127,57 @@ export WidgetGallery = component
   ]
   _nameFor: (id) -> (tocData.find((c) -> c.id is id))?.name or id
   _onFilter: (e) -> tocFilter = e.target.value
+  _getVisibleLinks: -> Array.from(document.querySelectorAll('.toc-nav .toc-group a:not([data-hidden])') or [])
+
   _onFilterKey: (e) ->
     if e.key is 'Escape'
       tocFilter = ''
       e.target.value = ''
-    if e.key is 'Enter'
-      visible = Array.from(document.querySelectorAll('.toc-nav a:not([data-hidden])') or [])
-      if visible.length is 1
+    else if e.key is 'Enter'
+      links = @_getVisibleLinks()
+      if links.length is 1
         e.preventDefault()
-        tocActive = visible[0].getAttribute('href')?.slice(1)
+        tocActive = links[0].getAttribute('href')?.slice(1)
         @_fadeTo(document.getElementById(tocActive))
         tocFilter = ''
         e.target.value = ''
+    else if e.key is 'Tab' and not e.shiftKey
+      links = @_getVisibleLinks()
+      if links.length
+        e.preventDefault()
+        tocActive = links[0].getAttribute('href')?.slice(1)
+        links[0].focus()
+
+  _onTocKeydown: (e) ->
+    links = @_getVisibleLinks()
+    return unless links.length
+    idx = links.indexOf(document.activeElement)
+    return if idx < 0
+    switch e.key
+      when 'ArrowRight', 'ArrowDown'
+        e.preventDefault()
+        next = (idx + 1) %% links.length
+        tocActive = links[next].getAttribute('href')?.slice(1)
+        links[next].focus()
+      when 'ArrowLeft', 'ArrowUp'
+        e.preventDefault()
+        prev = (idx - 1) %% links.length
+        tocActive = links[prev].getAttribute('href')?.slice(1)
+        links[prev].focus()
+      when 'Home'
+        e.preventDefault()
+        tocActive = links[0].getAttribute('href')?.slice(1)
+        links[0].focus()
+      when 'End'
+        e.preventDefault()
+        last = links[links.length - 1]
+        tocActive = last.getAttribute('href')?.slice(1)
+        last.focus()
+      when 'Enter', ' '
+        e.preventDefault()
+        @_fadeTo(document.getElementById(tocActive))
+      when 'Escape'
+        @_root?.querySelector('.toc-search')?.focus()
 
   ~>
     q = tocFilter.toLowerCase()
@@ -340,7 +379,7 @@ export WidgetGallery = component
         p "38 headless, accessible components. Zero CSS, zero dependencies."
 
       .toc
-        .toc-nav
+        .toc-nav @keydown: @_onTocKeydown
           input.toc-search type: "text", placeholder: "Filter components...", @input: @_onFilter, @keydown: @_onFilterKey
           .toc-group
             .toc-label "Selection"
