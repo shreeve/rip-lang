@@ -23,6 +23,10 @@ export ContextMenu = component
     return [] unless @_slot
     Array.from(@_slot.querySelectorAll('[data-item]') or [])
 
+  _triggerEl ~=
+    return null unless @_slot
+    @_slot.querySelector('[data-trigger]')
+
   _onContextMenu: (e) ->
     return if @disabled
     e.preventDefault()
@@ -84,6 +88,9 @@ export ContextMenu = component
 
       . ref: "_slot", style: "display:none"
         slot
+
+      if _triggerEl
+        . innerHTML: _triggerEl.innerHTML
 
       if open
         div ref: "_list", role: "menu", $open: true, @keydown: @_onKeydown
