@@ -162,6 +162,19 @@ export WidgetGallery = component
     { name: 'Leo Martin', role: 'Engineer', age: 24, city: 'Boston' },
   ]
 
+  _jumpTo: (e) ->
+    e.preventDefault()
+    target = document.getElementById(tocActive)
+    return unless target
+    gallery = document.querySelector('.gallery')
+    gallery.style.transition = 'opacity 80ms ease-out'
+    gallery.style.opacity = '0'
+    setTimeout =>
+      target.scrollIntoView({ behavior: 'instant', block: 'start' })
+      gallery.style.transition = 'opacity 120ms ease-in'
+      gallery.style.opacity = '1'
+    , 80
+
   render
     .gallery
 
@@ -252,7 +265,7 @@ export WidgetGallery = component
                   dd
                     for item in activeInfo.attrs
                       code item
-              a.jump href: "##{tocActive}"
+              a.jump href: "##{tocActive}", @click: ((e) => @_jumpTo(e))
                 "Jump to demo ↓"
           else
             .toc-empty "← Hover a component to see its API"

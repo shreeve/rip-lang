@@ -843,7 +843,7 @@ select.rip-grid-editor { cursor: pointer; padding-left: 4px; }
 
 /* ── Table of Contents ── */
 
-html { scroll-behavior: smooth; }
+html { scroll-behavior: auto; }
 
 .toc {
   display: grid; grid-template-columns: 1fr 1fr;
