@@ -188,24 +188,27 @@ button { font: inherit; cursor: pointer; }
 
 .gallery .toast-wrap {
   position: fixed; top: 16px; right: 16px; z-index: 200;
-  display: flex; flex-direction: column; gap: 10px;
 }
 
-.gallery [role="status"],
-.gallery [role="alert"] {
-  padding: 10px 14px; border-radius: 8px; background: white;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.12); display: flex; align-items: center; gap: 10px;
-  animation: slideIn 200ms ease; width: 220px; border-left: 3px solid #3b82f6; font-size: 13px;
+.gallery .toast-wrap [role="region"] {
+  display: flex; flex-direction: column; gap: 12px;
+}
+
+.gallery .toast-wrap [role="status"],
+.gallery .toast-wrap [role="alert"] {
+  padding: 12px 14px; border-radius: 8px; background: white;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12); display: flex; align-items: center; gap: 8px;
+  animation: slideIn 200ms ease; max-width: 220px; border-left: 3px solid #3b82f6; font-size: 13px; line-height: 1.4;
 
   &[data-type="success"] { border-left-color: #16a34a; }
   &[data-type="error"]   { border-left-color: #dc2626; }
   &[data-leaving]         { animation: fadeOut 200ms ease forwards; }
 
-  span { flex: 1; font-size: 14px; }
+  span { font-size: 13px; }
 
   button {
     background: none; border: none; color: #94a3b8; cursor: pointer;
-    font-size: 16px; padding: 2px 4px; border-radius: 4px; line-height: 1;
+    font-size: 14px; padding: 2px 4px; border-radius: 4px; line-height: 1; flex-shrink: 0;
 
     &:hover { color: #475569; background: #f1f5f9; }
   }
