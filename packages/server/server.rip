@@ -589,7 +589,7 @@ class Manager
     pending = null
     watchers = []
     broadcast = (type = 'page') =>
-      pending = if type is 'page' or pending is 'page' then 'page' else type
+      pending = if type is 'page' or pending is 'page' then 'page' else 'styles'
       clearTimeout(timer) if timer
       timer = setTimeout =>
         timer = null
@@ -602,7 +602,7 @@ class Manager
           if filename?.endsWith('.rip') or filename?.endsWith('.html')
             broadcast('page')
           else if filename?.endsWith('.css')
-            broadcast('css')
+            broadcast('styles')
         watchers.push(w)
       catch e
         rel = dir.replace(process.cwd() + '/', '')
