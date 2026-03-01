@@ -105,7 +105,7 @@ export Tooltip = component
         slot
 
       if open
-        div ref: "_tip", id: _id, role: "tooltip"
+        div ref: "_tip", id: _id, role: "tooltip", style: "position:fixed"
           $open: true
           $entering: entering?!
           $exiting: exiting?!
