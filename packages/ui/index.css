@@ -846,9 +846,15 @@ select.rip-grid-editor { cursor: pointer; padding-left: 4px; }
 html { scroll-behavior: smooth; }
 
 .toc {
-  display: flex; flex-wrap: wrap; gap: 16px;
-  margin-bottom: 36px; padding: 16px 20px;
+  display: grid; grid-template-columns: 1fr 1fr;
+  margin-bottom: 36px;
   background: white; border: 1px solid #e2e8f0; border-radius: 10px;
+  overflow: hidden;
+}
+
+.toc-nav {
+  display: flex; flex-wrap: wrap; align-content: flex-start;
+  gap: 14px; padding: 16px 20px;
 }
 
 .toc-group { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 6px; }
@@ -862,9 +868,38 @@ html { scroll-behavior: smooth; }
 .toc a {
   font-size: 12px; color: #475569; text-decoration: none;
   padding: 2px 8px; border-radius: 4px; background: #f1f5f9;
-  transition: all 0.12s;
+  cursor: pointer; transition: all 0.12s;
 
-  &:hover { background: #dbeafe; color: #1d4ed8; }
+  &:hover, &[data-active] { background: #dbeafe; color: #1d4ed8; }
+  &[data-active] { font-weight: 500; }
+}
+
+.toc-detail {
+  border-left: 1px solid #e2e8f0; background: #fafbfc;
+  padding: 16px 20px; display: flex; flex-direction: column;
+}
+
+.toc-detail h3 {
+  font-size: 16px; font-weight: 700; letter-spacing: -0.01em;
+  display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+}
+
+.toc-detail .toc-desc {
+  font-size: 13px; color: #64748b; margin-bottom: 12px;
+}
+
+.toc-detail .api { border: none; background: transparent; padding: 0; }
+
+.toc-detail .jump {
+  margin-top: auto; padding-top: 10px;
+  font-size: 12px; color: #3b82f6; text-decoration: none;
+
+  &:hover { text-decoration: underline; }
+}
+
+.toc-empty {
+  display: flex; align-items: center; justify-content: center;
+  height: 100%; color: #94a3b8; font-size: 13px;
 }
 
 /* ── API Reference ── */

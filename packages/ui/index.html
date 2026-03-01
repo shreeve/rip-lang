@@ -99,6 +99,48 @@ export WidgetGallery = component
   editName := 'John Doe'
   pickedDate := null
   dateRange := null
+  tocActive := null
+  tocData := [
+    { id: 'select', name: 'Select', lines: 184, desc: 'Dropdown with typeahead, keyboard nav, ARIA listbox.', props: ['@value', '@placeholder', '@disabled'], events: ['change'], keys: ['↕', 'Enter', 'Space', 'Esc', 'Home', 'End', 'type-ahead'], attrs: ['$open', '$placeholder', '$disabled', '$value', '$highlighted', '$selected'] }
+    { id: 'combobox', name: 'Combobox', lines: 153, desc: 'Filterable input + listbox for search-as-you-type.', props: ['@query', '@items', '@placeholder', '@disabled', '@autoHighlight'], events: ['filter', 'select'], keys: ['↕', 'Enter', 'Esc', 'Tab'], attrs: ['$open', '$disabled', '$clear', '$value', '$highlighted', '$empty'] }
+    { id: 'multi-select', name: 'MultiSelect', lines: 158, desc: 'Multi-select with chips, filtering, and keyboard nav.', props: ['@value', '@items', '@placeholder', '@disabled'], events: ['change'], keys: ['↕', 'Enter', 'Esc', 'Backspace', 'Tab'], attrs: ['$open', '$disabled', '$chips', '$chip', '$remove', '$clear', '$highlighted', '$selected'] }
+    { id: 'autocomplete', name: 'Autocomplete', lines: 141, desc: 'Suggestion input — type to filter, select to fill.', props: ['@value', '@items', '@placeholder', '@disabled'], events: ['select'], keys: ['↕', 'Enter', 'Esc', 'Tab'], attrs: ['$open', '$disabled', '$clear'] }
+    { id: 'checkbox', name: 'Checkbox', lines: 33, desc: 'Toggle with checkbox or switch semantics.', props: ['@checked', '@disabled', '@indeterminate', '@switch'], events: ['change'], keys: [], attrs: ['$checked', '$indeterminate', '$disabled'] }
+    { id: 'toggle', name: 'Toggle', lines: 24, desc: 'Two-state toggle button with pressed state.', props: ['@pressed', '@disabled'], events: ['change'], keys: [], attrs: ['$pressed', '$disabled'] }
+    { id: 'toggle-group', name: 'ToggleGroup', lines: 78, desc: 'Single or multi-select toggle buttons.', props: ['@value', '@disabled', '@multiple', '@orientation'], events: ['change'], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation', '$disabled', '$pressed', '$value'] }
+    { id: 'radio-group', name: 'RadioGroup', lines: 67, desc: 'Exactly one option selected with arrow key nav.', props: ['@value', '@disabled', '@orientation', '@name'], events: ['change'], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation', '$disabled', '$checked', '$value'] }
+    { id: 'checkbox-group', name: 'CheckboxGroup', lines: 65, desc: 'Multiple options checked independently.', props: ['@value', '@disabled', '@orientation', '@label'], events: ['change'], keys: ['← →', '↕'], attrs: ['$orientation', '$disabled', '$checked', '$value'] }
+    { id: 'input', name: 'Input', lines: 35, desc: 'Headless input tracking focus, touch, and validation.', props: ['@value', '@placeholder', '@type', '@disabled', '@required'], events: [], keys: [], attrs: ['$disabled', '$focused', '$touched'] }
+    { id: 'number-field', name: 'NumberField', lines: 162, desc: 'Number input with stepper buttons and hold-to-repeat.', props: ['@value', '@min', '@max', '@step', '@disabled', '@readOnly'], events: ['input', 'change'], keys: ['↕', 'PgUp', 'PgDn', 'Home', 'End'], attrs: ['$disabled', '$readonly', '$decrement', '$increment'] }
+    { id: 'slider', name: 'Slider', lines: 165, desc: 'Draggable range input with pointer capture and keyboard.', props: ['@value', '@min', '@max', '@step', '@orientation', '@disabled'], events: ['input', 'change'], keys: ['← →', '↕', 'PgUp', 'PgDn', 'Home', 'End'], attrs: ['$orientation', '$disabled', '$dragging', '$track', '$indicator', '$thumb', '$active'] }
+    { id: 'otp-field', name: 'OTPField', lines: 89, desc: 'Multi-digit code input with auto-advance and paste.', props: ['@length', '@value', '@disabled', '@mask'], events: ['input', 'complete'], keys: ['← →', 'Backspace', 'Home', 'End', 'paste'], attrs: ['$disabled', '$complete', '$filled'] }
+    { id: 'date-picker', name: 'DatePicker', lines: 214, desc: 'Calendar dropdown for single date or range selection.', props: ['@value', '@placeholder', '@disabled', '@range', '@firstDayOfWeek'], events: ['change'], keys: ['Esc', 'Enter', 'Space'], attrs: ['$open', '$disabled', '$range', '$calendar', '$selected', '$today', '$in-range'] }
+    { id: 'editable-value', name: 'EditableValue', lines: 80, desc: 'Click-to-edit inline value with popover form.', props: ['@disabled'], events: ['save'], keys: ['Esc', 'Enter'], attrs: ['$editing', '$disabled', '$saving', '$edit-trigger'] }
+    { id: 'tabs', name: 'Tabs', lines: 124, desc: 'Tab panel with roving tabindex and arrow key nav.', props: ['@active', '@orientation', '@activation'], events: ['change'], keys: ['← →', '↕', 'Home', 'End', 'Enter', 'Space'], attrs: ['$tab', '$panel', '$active', '$disabled'] }
+    { id: 'menu', name: 'Menu', lines: 162, desc: 'Dropdown action menu with keyboard navigation.', props: ['@disabled'], events: ['select'], keys: ['↕', 'Home', 'End', 'Enter', 'Space', 'Esc', 'Tab', 'type-ahead'], attrs: ['$open', '$disabled', '$highlighted', '$value'] }
+    { id: 'context-menu', name: 'ContextMenu', lines: 98, desc: 'Right-click context menu with keyboard navigation.', props: ['@disabled'], events: ['select'], keys: ['↕', 'Home', 'End', 'Enter', 'Space', 'Esc', 'Tab'], attrs: ['$open', '$highlighted', '$disabled', '$value'] }
+    { id: 'menubar', name: 'Menubar', lines: 155, desc: 'Horizontal menu bar with dropdown menus.', props: ['@disabled'], events: ['select'], keys: ['← →', '↕', 'Enter', 'Space', 'Esc', 'Tab'], attrs: ['$disabled', '$open', '$highlighted', '$value'] }
+    { id: 'nav-menu', name: 'NavMenu', lines: 132, desc: 'Site navigation with hover/click dropdown panels.', props: ['@orientation', '@hoverDelay', '@hoverCloseDelay'], events: [], keys: ['← →', '↓', 'Esc'], attrs: ['$orientation', '$open'] }
+    { id: 'toolbar', name: 'Toolbar', lines: 46, desc: 'Groups controls with roving tabindex keyboard nav.', props: ['@orientation', '@label'], events: [], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation'] }
+    { id: 'dialog', name: 'Dialog', lines: 107, desc: 'Modal with focus trap, scroll lock, escape dismiss.', props: ['@open', '@dismissable', '@initialFocus'], events: ['close'], keys: ['Esc', 'Tab'], attrs: ['$open'] }
+    { id: 'drawer', name: 'Drawer', lines: 79, desc: 'Slide-out panel with focus trap and scroll lock.', props: ['@open', '@side', '@dismissable'], events: ['close'], keys: ['Esc', 'Tab'], attrs: ['$open', '$side'] }
+    { id: 'popover', name: 'Popover', lines: 143, desc: 'Anchored floating content with flip/shift positioning.', props: ['@placement', '@offset', '@disabled', '@openOnHover', '@hoverDelay', '@hoverCloseDelay'], events: [], keys: ['Esc', 'Enter', 'Space', '↓'], attrs: ['$open', '$placement'] }
+    { id: 'tooltip', name: 'Tooltip', lines: 115, desc: 'Hover/focus tooltip with delay and positioning.', props: ['@text', '@placement', '@delay', '@offset', '@hoverable'], events: [], keys: [], attrs: ['$open', '$entering', '$exiting', '$placement'] }
+    { id: 'preview-card', name: 'PreviewCard', lines: 73, desc: 'Hover/focus preview card with delay.', props: ['@delay', '@closeDelay'], events: [], keys: [], attrs: ['$open'] }
+    { id: 'toast', name: 'Toast', lines: 88, desc: 'Auto-dismiss notification with ARIA live region.', props: ['@toasts', '@toast', '@placement'], events: ['dismiss'], keys: [], attrs: ['$placement', '$type', '$leaving'] }
+    { id: 'button', name: 'Button', lines: 23, desc: 'Accessible button with disabled-but-focusable pattern.', props: ['@disabled'], events: ['press'], keys: [], attrs: ['$disabled'] }
+    { id: 'separator', name: 'Separator', lines: 17, desc: 'Decorative or semantic divider between sections.', props: ['@orientation', '@decorative'], events: [], keys: [], attrs: ['$orientation'] }
+    { id: 'progress', name: 'Progress', lines: 25, desc: 'Progress bar with CSS custom property for value.', props: ['@value', '@max', '@label'], events: [], keys: [], attrs: ['$complete'] }
+    { id: 'meter', name: 'Meter', lines: 36, desc: 'Gauge for known-range measurements with thresholds.', props: ['@value', '@min', '@max', '@low', '@high', '@optimum', '@label'], events: [], keys: [], attrs: ['$level'] }
+    { id: 'avatar', name: 'Avatar', lines: 37, desc: 'Image with fallback to initials or placeholder.', props: ['@src', '@alt', '@fallback'], events: [], keys: [], attrs: ['$status', '$initials', '$placeholder'] }
+    { id: 'scroll-area', name: 'ScrollArea', lines: 145, desc: 'Custom scrollbar with draggable thumb and auto-hide.', props: ['@orientation'], events: [], keys: [], attrs: ['$orientation', '$hovering', '$scrolling', '$dragging', '$viewport', '$scrollbar', '$thumb'] }
+    { id: 'field', name: 'Field', lines: 53, desc: 'Form field wrapper with label, description, and error.', props: ['@label', '@description', '@error', '@disabled', '@required'], events: [], keys: [], attrs: ['$disabled', '$invalid', '$label', '$required', '$description', '$error'] }
+    { id: 'fieldset', name: 'Fieldset', lines: 22, desc: 'Grouped fields with legend and cascading disable.', props: ['@legend', '@disabled'], events: [], keys: [], attrs: ['$disabled', '$legend'] }
+    { id: 'form', name: 'Form', lines: 39, desc: 'Form wrapper with submit handling and validation state.', props: ['@disabled'], events: ['submit'], keys: [], attrs: ['$disabled', '$submitting', '$submitted'] }
+    { id: 'grid', name: 'Grid', lines: 901, desc: 'Virtual-scrolling data grid — 100K+ rows at 60fps.', props: ['@data', '@columns', '@rowHeight', '@overscan', '@striped', '@beforeEdit', '@afterEdit'], events: [], keys: ['Arrows', 'Tab', 'Enter', 'F2', 'Esc', 'Home', 'End', 'PgUp', 'PgDn', 'Ctrl+A', 'Ctrl+C', 'Ctrl+V', 'Ctrl+X'], attrs: ['$editing', '$selecting', '$sorted'] }
+    { id: 'accordion', name: 'Accordion', lines: 113, desc: 'Expand/collapse sections, single or multiple mode.', props: ['@multiple'], events: ['change'], keys: ['Enter', 'Space', '↕', 'Home', 'End'], attrs: ['$item', '$trigger', '$content', '$open', '$disabled'] }
+  ]
+  activeInfo ~= tocData.find (c) -> c.id is tocActive
   gridColumns := [
     { key: 'name', title: 'Name', width: 180 },
     { key: 'role', title: 'Role', width: 140 },
@@ -128,60 +170,92 @@ export WidgetGallery = component
         p "38 headless, accessible components. Zero CSS, zero dependencies."
 
       .toc
-        .toc-group
-          .toc-label "Selection"
-          a href: "#select", "Select"
-          a href: "#combobox", "Combobox"
-          a href: "#multi-select", "MultiSelect"
-          a href: "#autocomplete", "Autocomplete"
-        .toc-group
-          .toc-label "Toggle"
-          a href: "#checkbox", "Checkbox"
-          a href: "#toggle", "Toggle"
-          a href: "#toggle-group", "ToggleGroup"
-          a href: "#radio-group", "RadioGroup"
-          a href: "#checkbox-group", "CheckboxGroup"
-        .toc-group
-          .toc-label "Input"
-          a href: "#input", "Input"
-          a href: "#number-field", "NumberField"
-          a href: "#slider", "Slider"
-          a href: "#otp-field", "OTPField"
-          a href: "#date-picker", "DatePicker"
-          a href: "#editable-value", "EditableValue"
-        .toc-group
-          .toc-label "Navigation"
-          a href: "#tabs", "Tabs"
-          a href: "#menu", "Menu"
-          a href: "#context-menu", "ContextMenu"
-          a href: "#menubar", "Menubar"
-          a href: "#nav-menu", "NavMenu"
-          a href: "#toolbar", "Toolbar"
-        .toc-group
-          .toc-label "Overlay"
-          a href: "#dialog", "Dialog"
-          a href: "#drawer", "Drawer"
-          a href: "#popover", "Popover"
-          a href: "#tooltip", "Tooltip"
-          a href: "#preview-card", "PreviewCard"
-          a href: "#toast", "Toast"
-        .toc-group
-          .toc-label "Display"
-          a href: "#button", "Button"
-          a href: "#separator", "Separator"
-          a href: "#progress", "Progress"
-          a href: "#meter", "Meter"
-          a href: "#avatar", "Avatar"
-          a href: "#scroll-area", "ScrollArea"
-        .toc-group
-          .toc-label "Form"
-          a href: "#field", "Field"
-          a href: "#fieldset", "Fieldset"
-          a href: "#form", "Form"
-        .toc-group
-          .toc-label "Data"
-          a href: "#grid", "Grid"
-          a href: "#accordion", "Accordion"
+        .toc-nav
+          .toc-group
+            .toc-label "Selection"
+            a @mouseenter: (=> tocActive = 'select'), @click: (=> tocActive = 'select'), href: "#select", $active: (tocActive is 'select')?!, "Select"
+            a @mouseenter: (=> tocActive = 'combobox'), @click: (=> tocActive = 'combobox'), href: "#combobox", $active: (tocActive is 'combobox')?!, "Combobox"
+            a @mouseenter: (=> tocActive = 'multi-select'), @click: (=> tocActive = 'multi-select'), href: "#multi-select", $active: (tocActive is 'multi-select')?!, "MultiSelect"
+            a @mouseenter: (=> tocActive = 'autocomplete'), @click: (=> tocActive = 'autocomplete'), href: "#autocomplete", $active: (tocActive is 'autocomplete')?!, "Autocomplete"
+          .toc-group
+            .toc-label "Toggle"
+            a @mouseenter: (=> tocActive = 'checkbox'), @click: (=> tocActive = 'checkbox'), href: "#checkbox", $active: (tocActive is 'checkbox')?!, "Checkbox"
+            a @mouseenter: (=> tocActive = 'toggle'), @click: (=> tocActive = 'toggle'), href: "#toggle", $active: (tocActive is 'toggle')?!, "Toggle"
+            a @mouseenter: (=> tocActive = 'toggle-group'), @click: (=> tocActive = 'toggle-group'), href: "#toggle-group", $active: (tocActive is 'toggle-group')?!, "ToggleGroup"
+            a @mouseenter: (=> tocActive = 'radio-group'), @click: (=> tocActive = 'radio-group'), href: "#radio-group", $active: (tocActive is 'radio-group')?!, "RadioGroup"
+            a @mouseenter: (=> tocActive = 'checkbox-group'), @click: (=> tocActive = 'checkbox-group'), href: "#checkbox-group", $active: (tocActive is 'checkbox-group')?!, "CheckboxGroup"
+          .toc-group
+            .toc-label "Input"
+            a @mouseenter: (=> tocActive = 'input'), @click: (=> tocActive = 'input'), href: "#input", $active: (tocActive is 'input')?!, "Input"
+            a @mouseenter: (=> tocActive = 'number-field'), @click: (=> tocActive = 'number-field'), href: "#number-field", $active: (tocActive is 'number-field')?!, "NumberField"
+            a @mouseenter: (=> tocActive = 'slider'), @click: (=> tocActive = 'slider'), href: "#slider", $active: (tocActive is 'slider')?!, "Slider"
+            a @mouseenter: (=> tocActive = 'otp-field'), @click: (=> tocActive = 'otp-field'), href: "#otp-field", $active: (tocActive is 'otp-field')?!, "OTPField"
+            a @mouseenter: (=> tocActive = 'date-picker'), @click: (=> tocActive = 'date-picker'), href: "#date-picker", $active: (tocActive is 'date-picker')?!, "DatePicker"
+            a @mouseenter: (=> tocActive = 'editable-value'), @click: (=> tocActive = 'editable-value'), href: "#editable-value", $active: (tocActive is 'editable-value')?!, "EditableValue"
+          .toc-group
+            .toc-label "Navigation"
+            a @mouseenter: (=> tocActive = 'tabs'), @click: (=> tocActive = 'tabs'), href: "#tabs", $active: (tocActive is 'tabs')?!, "Tabs"
+            a @mouseenter: (=> tocActive = 'menu'), @click: (=> tocActive = 'menu'), href: "#menu", $active: (tocActive is 'menu')?!, "Menu"
+            a @mouseenter: (=> tocActive = 'context-menu'), @click: (=> tocActive = 'context-menu'), href: "#context-menu", $active: (tocActive is 'context-menu')?!, "ContextMenu"
+            a @mouseenter: (=> tocActive = 'menubar'), @click: (=> tocActive = 'menubar'), href: "#menubar", $active: (tocActive is 'menubar')?!, "Menubar"
+            a @mouseenter: (=> tocActive = 'nav-menu'), @click: (=> tocActive = 'nav-menu'), href: "#nav-menu", $active: (tocActive is 'nav-menu')?!, "NavMenu"
+            a @mouseenter: (=> tocActive = 'toolbar'), @click: (=> tocActive = 'toolbar'), href: "#toolbar", $active: (tocActive is 'toolbar')?!, "Toolbar"
+          .toc-group
+            .toc-label "Overlay"
+            a @mouseenter: (=> tocActive = 'dialog'), @click: (=> tocActive = 'dialog'), href: "#dialog", $active: (tocActive is 'dialog')?!, "Dialog"
+            a @mouseenter: (=> tocActive = 'drawer'), @click: (=> tocActive = 'drawer'), href: "#drawer", $active: (tocActive is 'drawer')?!, "Drawer"
+            a @mouseenter: (=> tocActive = 'popover'), @click: (=> tocActive = 'popover'), href: "#popover", $active: (tocActive is 'popover')?!, "Popover"
+            a @mouseenter: (=> tocActive = 'tooltip'), @click: (=> tocActive = 'tooltip'), href: "#tooltip", $active: (tocActive is 'tooltip')?!, "Tooltip"
+            a @mouseenter: (=> tocActive = 'preview-card'), @click: (=> tocActive = 'preview-card'), href: "#preview-card", $active: (tocActive is 'preview-card')?!, "PreviewCard"
+            a @mouseenter: (=> tocActive = 'toast'), @click: (=> tocActive = 'toast'), href: "#toast", $active: (tocActive is 'toast')?!, "Toast"
+          .toc-group
+            .toc-label "Display"
+            a @mouseenter: (=> tocActive = 'button'), @click: (=> tocActive = 'button'), href: "#button", $active: (tocActive is 'button')?!, "Button"
+            a @mouseenter: (=> tocActive = 'separator'), @click: (=> tocActive = 'separator'), href: "#separator", $active: (tocActive is 'separator')?!, "Separator"
+            a @mouseenter: (=> tocActive = 'progress'), @click: (=> tocActive = 'progress'), href: "#progress", $active: (tocActive is 'progress')?!, "Progress"
+            a @mouseenter: (=> tocActive = 'meter'), @click: (=> tocActive = 'meter'), href: "#meter", $active: (tocActive is 'meter')?!, "Meter"
+            a @mouseenter: (=> tocActive = 'avatar'), @click: (=> tocActive = 'avatar'), href: "#avatar", $active: (tocActive is 'avatar')?!, "Avatar"
+            a @mouseenter: (=> tocActive = 'scroll-area'), @click: (=> tocActive = 'scroll-area'), href: "#scroll-area", $active: (tocActive is 'scroll-area')?!, "ScrollArea"
+          .toc-group
+            .toc-label "Form"
+            a @mouseenter: (=> tocActive = 'field'), @click: (=> tocActive = 'field'), href: "#field", $active: (tocActive is 'field')?!, "Field"
+            a @mouseenter: (=> tocActive = 'fieldset'), @click: (=> tocActive = 'fieldset'), href: "#fieldset", $active: (tocActive is 'fieldset')?!, "Fieldset"
+            a @mouseenter: (=> tocActive = 'form'), @click: (=> tocActive = 'form'), href: "#form", $active: (tocActive is 'form')?!, "Form"
+          .toc-group
+            .toc-label "Data"
+            a @mouseenter: (=> tocActive = 'grid'), @click: (=> tocActive = 'grid'), href: "#grid", $active: (tocActive is 'grid')?!, "Grid"
+            a @mouseenter: (=> tocActive = 'accordion'), @click: (=> tocActive = 'accordion'), href: "#accordion", $active: (tocActive is 'accordion')?!, "Accordion"
+        .toc-detail
+          if activeInfo
+            .
+              h3
+                activeInfo.name
+                span.badge "#{activeInfo.lines} lines"
+              p.toc-desc activeInfo.desc
+              .api
+                dl
+                  dt "Props"
+                  dd
+                    for item in activeInfo.props
+                      code item
+                  if activeInfo.events.length
+                    dt "Events"
+                    dd
+                      for item in activeInfo.events
+                        code item
+                  if activeInfo.keys.length
+                    dt "Keyboard"
+                    dd
+                      for item in activeInfo.keys
+                        kbd item
+                  dt "Data"
+                  dd
+                    for item in activeInfo.attrs
+                      code item
+              a.jump href: "##{tocActive}"
+                "Jump to demo ↓"
+          else
+            .toc-empty "← Hover a component to see its API"
 
       # ================================================================
       # SELECT
