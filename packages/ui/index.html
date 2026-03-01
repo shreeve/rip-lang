@@ -130,6 +130,9 @@ export WidgetGallery = component
   _getVisibleLinks: -> Array.from(document.querySelectorAll('.toc-nav .toc-group a:not([data-hidden])') or [])
 
   _onFilterKey: (e) ->
+    if e.key is '/'
+      e.preventDefault()
+      return
     if e.key is 'Escape'
       tocFilter = ''
       e.target.value = ''
