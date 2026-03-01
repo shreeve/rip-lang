@@ -225,10 +225,12 @@ export WidgetGallery = component
       if e.key is '/' and not (e.target.tagName in ['INPUT', 'TEXTAREA', 'SELECT']) and not e.target.isContentEditable
         e.preventDefault()
         @_navSection('', 'home')
+        tocFilter = ''
         setTimeout =>
-          tocFilter = ''
-          requestAnimationFrame =>
-            @_root?.querySelector('.toc-search')?.focus()
+          @_root?.querySelector('.toc-search')?.focus()
+          setTimeout =>
+            @_root.querySelector('.toc-search').value = ''
+          , 10
         , 100
     gc = document.querySelector('.grid-container')
     if gc
