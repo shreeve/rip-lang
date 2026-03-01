@@ -121,3 +121,25 @@ test 'assignment with explicit if instead of postfix unless', '''
     token = value
   token
   ''', 42
+
+# ==============================================================================
+# Optional Chain Assignment
+# ==============================================================================
+
+code 'optional chain assign: x?.prop = val', 'gc?.scrollTop = 0', 'if (gc != null) gc.scrollTop = 0'
+code 'optional chain assign: deep', 'a?.b.c = 0', 'if (a != null) a.b.c = 0'
+code 'optional chain assign: inner', 'a.b?.c = 0', 'if (a.b != null) a.b.c = 0'
+code 'optional chain assign: bracket', 'x?[0] = 1', 'if (x != null) x[0] = 1'
+code 'optional chain assign: compound', 'x?.prop += 5', 'if (x != null) x.prop += 5'
+
+test 'optional chain assign: sets when present', '''
+  obj = { x: 10 }
+  obj?.x = 42
+  obj.x
+  ''', 42
+
+test 'optional chain assign: skips when null', '''
+  obj = null
+  obj?.x = 42
+  obj
+  ''', null

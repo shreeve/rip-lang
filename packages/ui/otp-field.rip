@@ -43,7 +43,7 @@ export OTPField = component
         if not e.target.value and idx > 0
           @_focusAt(idx - 1)
           inputs = @_getInputs()
-          inputs[idx - 1].value = '' if inputs[idx - 1]
+          inputs[idx - 1]?.value = ''
           @_updateValue()
       when 'ArrowLeft'
         e.preventDefault()
@@ -64,7 +64,7 @@ export OTPField = component
     return unless text
     inputs = @_getInputs()
     for ch, idx in text.split('')
-      inputs[idx].value = ch if inputs[idx]
+      inputs[idx]?.value = ch
     @_updateValue()
     @_focusAt(Math.min(text.length, @length - 1))
 

@@ -67,7 +67,7 @@ export Autocomplete = component
     return unless item
     label = if typeof item is 'string' then item else (item.label or item.name or String(item))
     @value = label
-    @_input.value = label if @_input
+    @_input?.value = label
     @emit 'select', item
     @close()
 

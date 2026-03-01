@@ -130,7 +130,7 @@ export NumberField = component
 
   ~>
     return unless _ready
-    @_input.value = String(@value) if @_input
+    @_input?.value = String(@value)
 
   beforeUnmount: -> @_stopRepeat()
 

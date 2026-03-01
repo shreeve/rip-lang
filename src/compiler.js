@@ -778,6 +778,18 @@ export class CodeGenerator {
     let [target, value] = rest;
     let op = head === '?=' ? '??=' : head;
 
+    // Optional chain assignment: x?.prop = val → if (x != null) x.prop = val
+    let optInfo = this._findOptionalInTarget(target);
+    if (optInfo) {
+      let guardCode = this.generate(optInfo.guard, 'value');
+      let targetCode = this.generate(optInfo.rewritten, 'value');
+      let valueCode = this.generate(value, 'value');
+      if (context === 'value') {
+        return `(${guardCode} != null ? (${targetCode} ${op} ${valueCode}) : undefined)`;
+      }
+      return `if (${guardCode} != null) ${targetCode} ${op} ${valueCode}`;
+    }
+
     // Validate: no sigils in assignment targets (except void function syntax)
     let isFnValue = (this.is(value, '->') || this.is(value, '=>') || this.is(value, 'def'));
     if (target instanceof String && meta(target, 'await') !== undefined && !isFnValue) {
@@ -2744,6 +2756,17 @@ export class CodeGenerator {
       else break;
     }
     return code;
+  }
+
+  _findOptionalInTarget(node) {
+    if (!Array.isArray(node)) return null;
+    if (node[0] === '?.') return { guard: node[1], rewritten: ['.', node[1], node[2]] };
+    if (node[0] === 'optindex') return { guard: node[1], rewritten: ['[]', node[1], node[2]] };
+    if (node[0] === '.' || node[0] === '[]') {
+      let inner = this._findOptionalInTarget(node[1]);
+      if (inner) return { guard: inner.guard, rewritten: [node[0], inner.rewritten, node[2]] };
+    }
+    return null;
   }
 
   unwrapLogical(code) {

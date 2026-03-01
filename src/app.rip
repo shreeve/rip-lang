@@ -98,7 +98,7 @@ makeProxy = (target) ->
     deleteProperty: (target, prop) ->
       delete target[prop]
       sig = target[SIGNALS]?.get(prop)
-      sig.value = undefined if sig
+      sig?.value = undefined
       keysSignal(target).value = ++_keysVersion
       true
 
