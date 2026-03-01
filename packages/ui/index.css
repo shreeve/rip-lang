@@ -27,10 +27,7 @@ button { font: inherit; cursor: pointer; }
 .theme-toggle {
   width: 36px; height: 36px; border: 1px solid #e2e8f0; border-radius: 8px;
   background: white; font-size: 18px; display: grid; place-items: center;
-  cursor: pointer; color: #64748b; transition: all 0.15s;
-  line-height: 1;
-
-  &:hover { background: #f1f5f9; color: #1e293b; }
+  cursor: pointer; color: #64748b; line-height: 1;
 }
 
 .section {
