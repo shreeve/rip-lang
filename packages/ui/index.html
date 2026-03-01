@@ -128,11 +128,15 @@ export WidgetGallery = component
 
   ~>
     q = tocFilter.toLowerCase()
+    visible = []
     for el in Array.from(document.querySelectorAll('.toc-nav a') or [])
       if q and not el.textContent.toLowerCase().includes(q)
         el.setAttribute('data-hidden', '')
       else
         el.removeAttribute('data-hidden')
+        visible.push(el) if q
+    if visible.length is 1
+      tocActive = visible[0].getAttribute('href')?.slice(1)
   tocData := [
     { id: 'select', name: 'Select', lines: 184, desc: 'Dropdown with typeahead, keyboard nav, ARIA listbox.', props: ['@value', '@placeholder', '@disabled'], events: ['change'], keys: ['↕', 'Enter', 'Space', 'Esc', 'Home', 'End', 'type-ahead'], attrs: ['$open', '$placeholder', '$disabled', '$value', '$highlighted', '$selected'] }
     { id: 'combobox', name: 'Combobox', lines: 153, desc: 'Filterable input + listbox for search-as-you-type.', props: ['@query', '@items', '@placeholder', '@disabled', '@autoHighlight'], events: ['filter', 'select'], keys: ['↕', 'Enter', 'Esc', 'Tab'], attrs: ['$open', '$disabled', '$clear', '$value', '$highlighted', '$empty'] }
