@@ -1187,7 +1187,7 @@ html.no-transition, html.no-transition * { transition: none !important; }
   .gallery [role="toolbar"] button { border-color: #475569; background: #334155; color: #e2e8f0; }
 
   /* Shared demo styles */
-  .context-zone { border-color: #475569; color: #94a3b8; }
+  .context-zone { border-color: #64748b; color: #94a3b8; }
   .dialog-desc { color: #94a3b8; }
   .floating-panel { background: #1e293b; border-color: #475569; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
   .floating-title { color: #e2e8f0; }
