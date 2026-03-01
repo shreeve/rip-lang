@@ -886,7 +886,7 @@ html.no-transition, html.no-transition * { transition: none !important; }
 }
 
 .toc-nav {
-  display: flex; flex-wrap: wrap;
+  display: flex; flex-wrap: wrap; align-content: flex-start;
   gap: 12px 20px; padding: 16px 20px;
 }
 
