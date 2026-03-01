@@ -203,6 +203,10 @@ export WidgetGallery = component
     if localStorage.getItem('rip-ui-theme') is 'dark'
       darkMode = true
       document.documentElement.dataset.theme = 'dark'
+    gc = document.querySelector('.grid-container')
+    if gc
+      gc.addEventListener 'mousedown', => setTimeout (=> @_updateGridRef()), 0
+      gc.addEventListener 'keyup', => setTimeout (=> @_updateGridRef()), 0
     hash = location.hash.slice(1)
     if hash and document.getElementById(hash)
       tocActive = hash
@@ -212,6 +216,19 @@ export WidgetGallery = component
       , 50
     else
       document.body.classList.add('ready')
+
+  gridCellRef := ''
+
+  _updateGridRef: ->
+    cell = document.querySelector('.grid-container [data-active]')
+    if cell
+      row = cell.parentElement
+      rows = Array.from(row.parentElement.children).filter (r) -> r.tagName is 'TR' and not r.classList.contains('spacer')
+      ri = rows.indexOf(row)
+      ci = Array.from(row.children).indexOf(cell)
+      gridCellRef = "R#{ri + 1}:C#{ci + 1}" if ri >= 0 and ci >= 0
+    else
+      gridCellRef = ''
 
   _loadGridRows: (n) ->
     firstNames = ['Alice', 'Bob', 'Carol', 'Dan', 'Eve', 'Frank', 'Grace', 'Hank', 'Iris', 'Jack', 'Karen', 'Leo', 'Mia', 'Nora', 'Omar', 'Pia', 'Quinn', 'Rosa', 'Sam', 'Tina']
@@ -1805,7 +1822,9 @@ export WidgetGallery = component
             a @click: (=> @_navSection('grid', 'next')), "›"
         .section-desc "Virtual-scrolling data grid. Click to select, arrows to navigate, double-click to edit."
         .demo-row
-          .demo-label "#{gridData.length} rows, #{gridColumns.length} columns"
+          . style: "display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px"
+            .demo-label style: "margin-bottom:0", "#{gridData.length} rows, #{gridColumns.length} columns"
+            span.grid-cell-ref gridCellRef
           Grid data: gridData, columns: gridColumns, striped: true
           . style: "margin-top:12px;display:flex;gap:8px;align-items:center"
             button.demo-btn @click: (=> @_loadGridRows(1000))

@@ -527,6 +527,11 @@ button { font: inherit; cursor: pointer; }
   tbody tr.spacer td { padding: 0; border: none; line-height: 0; font-size: 0; }
 }
 
+.grid-cell-ref {
+  font-size: 11px; font-family: 'SF Mono', ui-monospace, monospace;
+  color: #64748b; font-weight: 500;
+}
+
 .sort-arrow { color: #94a3b8; font-size: 11px; margin-left: 3px; }
 
 .sort-badge {
