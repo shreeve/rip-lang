@@ -625,12 +625,7 @@ export WidgetGallery = component
       # SELECT
       # ========================================================================
       .section id: "select"
-        .section-title "Select"
-          span.badge @click: (=> @_viewSource('select')), "147 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('select', 'prev')), "‹"
-            a @click: (=> @_navSection('select', 'home')), "⌂"
-            a @click: (=> @_navSection('select', 'next')), "›"
+        SectionHead wid: "select", name: "Select", lines: 147
         .section-desc "Dropdown with typeahead, keyboard nav, ARIA listbox."
         .demo-row
           .demo-label "Basic select"
@@ -678,12 +673,7 @@ export WidgetGallery = component
       # COMBOBOX
       # ========================================================================
       .section id: "combobox"
-        .section-title "Combobox"
-          span.badge @click: (=> @_viewSource('combobox')), "124 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('combobox', 'prev')), "‹"
-            a @click: (=> @_navSection('combobox', 'home')), "⌂"
-            a @click: (=> @_navSection('combobox', 'next')), "›"
+        SectionHead wid: "combobox", name: "Combobox", lines: 124
         .section-desc "Filterable input + listbox for search-as-you-type."
         .demo-row
           .demo-label "Search fruits"
@@ -723,12 +713,7 @@ export WidgetGallery = component
       # MULTI-SELECT
       # ========================================================================
       .section id: "multi-select"
-        .section-title "MultiSelect"
-          span.badge @click: (=> @_viewSource('multi-select')), "130 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('multi-select', 'prev')), "‹"
-            a @click: (=> @_navSection('multi-select', 'home')), "⌂"
-            a @click: (=> @_navSection('multi-select', 'next')), "›"
+        SectionHead wid: "multi-select", name: "MultiSelect", lines: 130
         .section-desc "Multi-select with chips, filtering, and keyboard navigation."
         .demo-row
           .demo-label "Pick colors"
@@ -767,12 +752,7 @@ export WidgetGallery = component
       # AUTOCOMPLETE
       # ========================================================================
       .section id: "autocomplete"
-        .section-title "Autocomplete"
-          span.badge @click: (=> @_viewSource('autocomplete')), "115 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('autocomplete', 'prev')), "‹"
-            a @click: (=> @_navSection('autocomplete', 'home')), "⌂"
-            a @click: (=> @_navSection('autocomplete', 'next')), "›"
+        SectionHead wid: "autocomplete", name: "Autocomplete", lines: 115
         .section-desc "Suggestion input — type to filter, select to fill."
         .demo-row
           .demo-label "Search cities"
@@ -805,12 +785,7 @@ export WidgetGallery = component
       # CHECKBOX
       # ========================================================================
       .section id: "checkbox"
-        .section-title "Checkbox"
-          span.badge @click: (=> @_viewSource('checkbox')), "18 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('checkbox', 'prev')), "‹"
-            a @click: (=> @_navSection('checkbox', 'home')), "⌂"
-            a @click: (=> @_navSection('checkbox', 'next')), "›"
+        SectionHead wid: "checkbox", name: "Checkbox", lines: 18
         .section-desc "Toggle with checkbox or switch semantics. Supports indeterminate."
         .demo-row
           .demo-label "Checkbox (unchecked)"
@@ -848,12 +823,7 @@ export WidgetGallery = component
       # TOGGLE
       # ========================================================================
       .section id: "toggle"
-        .section-title "Toggle"
-          span.badge @click: (=> @_viewSource('toggle')), "13 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('toggle', 'prev')), "‹"
-            a @click: (=> @_navSection('toggle', 'home')), "⌂"
-            a @click: (=> @_navSection('toggle', 'next')), "›"
+        SectionHead wid: "toggle", name: "Toggle", lines: 13
         .section-desc "Stateful toggle button with pressed state."
         .demo-row
           .demo-label "Tap to toggle"
@@ -878,12 +848,7 @@ export WidgetGallery = component
       # TOGGLE GROUP
       # ========================================================================
       .section id: "toggle-group"
-        .section-title "ToggleGroup"
-          span.badge @click: (=> @_viewSource('toggle-group')), "59 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('toggle-group', 'prev')), "‹"
-            a @click: (=> @_navSection('toggle-group', 'home')), "⌂"
-            a @click: (=> @_navSection('toggle-group', 'next')), "›"
+        SectionHead wid: "toggle-group", name: "ToggleGroup", lines: 59
         .section-desc "Single or multi-select toggle buttons."
         .demo-row
           .demo-label "Text alignment"
@@ -927,12 +892,7 @@ export WidgetGallery = component
       # RADIO GROUP
       # ========================================================================
       .section id: "radio-group"
-        .section-title "RadioGroup"
-          span.badge @click: (=> @_viewSource('radio-group')), "50 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('radio-group', 'prev')), "‹"
-            a @click: (=> @_navSection('radio-group', 'home')), "⌂"
-            a @click: (=> @_navSection('radio-group', 'next')), "›"
+        SectionHead wid: "radio-group", name: "RadioGroup", lines: 50
         .section-desc "Exactly one option selected. Arrow keys move focus and selection."
         .demo-row
           .demo-label "Font size"
@@ -969,12 +929,7 @@ export WidgetGallery = component
       # CHECKBOX GROUP
       # ========================================================================
       .section id: "checkbox-group"
-        .section-title "CheckboxGroup"
-          span.badge @click: (=> @_viewSource('checkbox-group')), "46 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('checkbox-group', 'prev')), "‹"
-            a @click: (=> @_navSection('checkbox-group', 'home')), "⌂"
-            a @click: (=> @_navSection('checkbox-group', 'next')), "›"
+        SectionHead wid: "checkbox-group", name: "CheckboxGroup", lines: 46
         .section-desc "Multiple options checked independently."
         .demo-row
           .demo-label "Toppings"
@@ -1010,12 +965,7 @@ export WidgetGallery = component
       # INPUT
       # ========================================================================
       .section id: "input"
-        .section-title "Input"
-          span.badge @click: (=> @_viewSource('input')), "24 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('input', 'prev')), "‹"
-            a @click: (=> @_navSection('input', 'home')), "⌂"
-            a @click: (=> @_navSection('input', 'next')), "›"
+        SectionHead wid: "input", name: "Input", lines: 24
         .section-desc "Headless input tracking focus, touch, and validation state."
         .demo-row
           .demo-label "Text input"
@@ -1040,12 +990,7 @@ export WidgetGallery = component
       # NUMBER FIELD
       # ========================================================================
       .section id: "number-field"
-        .section-title "NumberField"
-          span.badge @click: (=> @_viewSource('number-field')), "132 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('number-field', 'prev')), "‹"
-            a @click: (=> @_navSection('number-field', 'home')), "⌂"
-            a @click: (=> @_navSection('number-field', 'next')), "›"
+        SectionHead wid: "number-field", name: "NumberField", lines: 132
         .section-desc "Number input with increment/decrement buttons, hold-to-repeat, and keyboard stepping."
         .demo-row
           .demo-label "Quantity (1-99)"
@@ -1089,12 +1034,7 @@ export WidgetGallery = component
       # SLIDER
       # ========================================================================
       .section id: "slider"
-        .section-title "Slider"
-          span.badge @click: (=> @_viewSource('slider')), "130 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('slider', 'prev')), "‹"
-            a @click: (=> @_navSection('slider', 'home')), "⌂"
-            a @click: (=> @_navSection('slider', 'next')), "›"
+        SectionHead wid: "slider", name: "Slider", lines: 130
         .section-desc "Draggable range input with pointer capture and keyboard stepping."
         .demo-row
           .demo-label "Single thumb"
@@ -1142,12 +1082,7 @@ export WidgetGallery = component
       # OTP FIELD
       # ========================================================================
       .section id: "otp-field"
-        .section-title "OTPField"
-          span.badge @click: (=> @_viewSource('otp-field')), "72 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('otp-field', 'prev')), "‹"
-            a @click: (=> @_navSection('otp-field', 'home')), "⌂"
-            a @click: (=> @_navSection('otp-field', 'next')), "›"
+        SectionHead wid: "otp-field", name: "OTPField", lines: 72
         .section-desc "Multi-digit code input with auto-advance, backspace nav, and paste."
         .demo-row
           .demo-label "6-digit code"
@@ -1185,12 +1120,7 @@ export WidgetGallery = component
       # DATE PICKER
       # ========================================================================
       .section id: "date-picker"
-        .section-title "DatePicker"
-          span.badge @click: (=> @_viewSource('date-picker')), "172 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('date-picker', 'prev')), "‹"
-            a @click: (=> @_navSection('date-picker', 'home')), "⌂"
-            a @click: (=> @_navSection('date-picker', 'next')), "›"
+        SectionHead wid: "date-picker", name: "DatePicker", lines: 172
         .section-desc "Calendar dropdown for single date or range selection."
         .demo-row
           .demo-label "Single date"
@@ -1231,12 +1161,7 @@ export WidgetGallery = component
       # EDITABLE VALUE
       # ========================================================================
       .section id: "editable-value"
-        .section-title "EditableValue"
-          span.badge @click: (=> @_viewSource('editable-value')), "58 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('editable-value', 'prev')), "‹"
-            a @click: (=> @_navSection('editable-value', 'home')), "⌂"
-            a @click: (=> @_navSection('editable-value', 'next')), "›"
+        SectionHead wid: "editable-value", name: "EditableValue", lines: 58
         .section-desc "Click the edit icon to modify the value inline."
         .demo-row
           EditableValue @save: (=> editName = editName)
@@ -1268,12 +1193,7 @@ export WidgetGallery = component
       # TEXTAREA
       # ========================================================================
       .section id: "textarea"
-        .section-title "Textarea"
-          span.badge @click: (=> @_viewSource('textarea')), "33 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('textarea', 'prev')), "‹"
-            a @click: (=> @_navSection('textarea', 'home')), "⌂"
-            a @click: (=> @_navSection('textarea', 'next')), "›"
+        SectionHead wid: "textarea", name: "Textarea", lines: 33
         .section-desc "Auto-resizing text area with focus and validation tracking."
         .demo-row
           .demo-label "Auto-resize textarea"
@@ -1299,12 +1219,7 @@ export WidgetGallery = component
       # NATIVE SELECT
       # ========================================================================
       .section id: "native-select"
-        .section-title "NativeSelect"
-          span.badge @click: (=> @_viewSource('native-select')), "18 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('native-select', 'prev')), "‹"
-            a @click: (=> @_navSection('native-select', 'home')), "⌂"
-            a @click: (=> @_navSection('native-select', 'next')), "›"
+        SectionHead wid: "native-select", name: "NativeSelect", lines: 18
         .section-desc "Native browser select element with state tracking."
         .demo-row.native-select-demo
           .demo-label "Choose a color"
@@ -1333,12 +1248,7 @@ export WidgetGallery = component
       # INPUT GROUP
       # ========================================================================
       .section id: "input-group"
-        .section-title "InputGroup"
-          span.badge @click: (=> @_viewSource('input-group')), "11 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('input-group', 'prev')), "‹"
-            a @click: (=> @_navSection('input-group', 'home')), "⌂"
-            a @click: (=> @_navSection('input-group', 'next')), "›"
+        SectionHead wid: "input-group", name: "InputGroup", lines: 11
         .section-desc "Input with prefix/suffix addon elements."
         .demo-row.input-group-demo
           .demo-label "With prefix"
@@ -1364,12 +1274,7 @@ export WidgetGallery = component
       # TABS
       # ========================================================================
       .section id: "tabs"
-        .section-title "Tabs"
-          span.badge @click: (=> @_viewSource('tabs')), "91 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('tabs', 'prev')), "‹"
-            a @click: (=> @_navSection('tabs', 'home')), "⌂"
-            a @click: (=> @_navSection('tabs', 'next')), "›"
+        SectionHead wid: "tabs", name: "Tabs", lines: 91
         .section-desc "Tab panel with roving tabindex and arrow key navigation."
         .demo-row
           .demo-label "Basic tabs"
@@ -1413,12 +1318,7 @@ export WidgetGallery = component
       # MENU
       # ========================================================================
       .section id: "menu"
-        .section-title "Menu"
-          span.badge @click: (=> @_viewSource('menu')), "133 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('menu', 'prev')), "‹"
-            a @click: (=> @_navSection('menu', 'home')), "⌂"
-            a @click: (=> @_navSection('menu', 'next')), "›"
+        SectionHead wid: "menu", name: "Menu", lines: 133
         .section-desc "Dropdown action menu with keyboard navigation."
         .demo-row
           .demo-label "Click to open menu"
@@ -1458,12 +1358,7 @@ export WidgetGallery = component
       # CONTEXT MENU
       # ========================================================================
       .section id: "context-menu"
-        .section-title "ContextMenu"
-          span.badge @click: (=> @_viewSource('context-menu')), "80 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('context-menu', 'prev')), "‹"
-            a @click: (=> @_navSection('context-menu', 'home')), "⌂"
-            a @click: (=> @_navSection('context-menu', 'next')), "›"
+        SectionHead wid: "context-menu", name: "ContextMenu", lines: 80
         .section-desc "Right-click the dashed area to open a context menu."
         ContextMenu
           div $trigger: true
@@ -1500,12 +1395,7 @@ export WidgetGallery = component
       # MENUBAR
       # ========================================================================
       .section id: "menubar"
-        .section-title "Menubar"
-          span.badge @click: (=> @_viewSource('menubar')), "125 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('menubar', 'prev')), "‹"
-            a @click: (=> @_navSection('menubar', 'home')), "⌂"
-            a @click: (=> @_navSection('menubar', 'next')), "›"
+        SectionHead wid: "menubar", name: "Menubar", lines: 125
         .section-desc "Horizontal menu bar with dropdown menus."
         .demo-row
           Menubar
@@ -1547,12 +1437,7 @@ export WidgetGallery = component
       # NAVIGATION MENU
       # ========================================================================
       .section id: "nav-menu"
-        .section-title "NavigationMenu"
-          span.badge @click: (=> @_viewSource('nav-menu')), "99 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('nav-menu', 'prev')), "‹"
-            a @click: (=> @_navSection('nav-menu', 'home')), "⌂"
-            a @click: (=> @_navSection('nav-menu', 'next')), "›"
+        SectionHead wid: "nav-menu", name: "NavigationMenu", lines: 99
         .section-desc "Site navigation with dropdown panels."
         .demo-row
           NavigationMenu
@@ -1591,12 +1476,7 @@ export WidgetGallery = component
       # TOOLBAR
       # ========================================================================
       .section id: "toolbar"
-        .section-title "Toolbar"
-          span.badge @click: (=> @_viewSource('toolbar')), "31 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('toolbar', 'prev')), "‹"
-            a @click: (=> @_navSection('toolbar', 'home')), "⌂"
-            a @click: (=> @_navSection('toolbar', 'next')), "›"
+        SectionHead wid: "toolbar", name: "Toolbar", lines: 31
         .section-desc "Groups controls with roving tabindex keyboard navigation."
         .demo-row
           .demo-label "Text"
@@ -1654,12 +1534,7 @@ export WidgetGallery = component
       # BREADCRUMB
       # ========================================================================
       .section id: "breadcrumb"
-        .section-title "Breadcrumb"
-          span.badge @click: (=> @_viewSource('breadcrumb')), "25 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('breadcrumb', 'prev')), "‹"
-            a @click: (=> @_navSection('breadcrumb', 'home')), "⌂"
-            a @click: (=> @_navSection('breadcrumb', 'next')), "›"
+        SectionHead wid: "breadcrumb", name: "Breadcrumb", lines: 25
         .section-desc "Navigation trail with separator and current page."
         .demo-row
           .demo-label "Basic breadcrumb"
@@ -1682,12 +1557,7 @@ export WidgetGallery = component
       # DIALOG
       # ========================================================================
       .section id: "dialog"
-        .section-title "Dialog"
-          span.badge @click: (=> @_viewSource('dialog')), "83 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('dialog', 'prev')), "‹"
-            a @click: (=> @_navSection('dialog', 'home')), "⌂"
-            a @click: (=> @_navSection('dialog', 'next')), "›"
+        SectionHead wid: "dialog", name: "Dialog", lines: 83
         .section-desc "Modal with focus trap and scroll lock. Press Escape or click outside to dismiss."
         .demo-row
           .demo-label "Click to open"
@@ -1725,12 +1595,7 @@ export WidgetGallery = component
       # ALERT DIALOG
       # ========================================================================
       .section id: "alert-dialog"
-        .section-title "AlertDialog"
-          span.badge @click: (=> @_viewSource('alert-dialog')), "74 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('alert-dialog', 'prev')), "‹"
-            a @click: (=> @_navSection('alert-dialog', 'home')), "⌂"
-            a @click: (=> @_navSection('alert-dialog', 'next')), "›"
+        SectionHead wid: "alert-dialog", name: "AlertDialog", lines: 74
         .section-desc "Non-dismissable modal — Escape and click-outside are blocked. User must choose an action."
         .demo-row
           .demo-label "Requires explicit action"
@@ -1766,12 +1631,7 @@ export WidgetGallery = component
       # DRAWER
       # ========================================================================
       .section id: "drawer"
-        .section-title "Drawer"
-          span.badge @click: (=> @_viewSource('drawer')), "60 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('drawer', 'prev')), "‹"
-            a @click: (=> @_navSection('drawer', 'home')), "⌂"
-            a @click: (=> @_navSection('drawer', 'next')), "›"
+        SectionHead wid: "drawer", name: "Drawer", lines: 60
         .section-desc "Slide-out panel from edge of screen with focus trap and scroll lock."
         .demo-row
           .demo-label "Open from right"
@@ -1809,12 +1669,7 @@ export WidgetGallery = component
       # POPOVER
       # ========================================================================
       .section id: "popover"
-        .section-title "Popover"
-          span.badge @click: (=> @_viewSource('popover')), "117 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('popover', 'prev')), "‹"
-            a @click: (=> @_navSection('popover', 'home')), "⌂"
-            a @click: (=> @_navSection('popover', 'next')), "›"
+        SectionHead wid: "popover", name: "Popover", lines: 117
         .section-desc "Anchored floating content with flip/shift positioning."
         .demo-row
           .demo-label "Click to toggle"
@@ -1849,12 +1704,7 @@ export WidgetGallery = component
       # TOOLTIP
       # ========================================================================
       .section id: "tooltip"
-        .section-title "Tooltip"
-          span.badge @click: (=> @_viewSource('tooltip')), "92 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('tooltip', 'prev')), "‹"
-            a @click: (=> @_navSection('tooltip', 'home')), "⌂"
-            a @click: (=> @_navSection('tooltip', 'next')), "›"
+        SectionHead wid: "tooltip", name: "Tooltip", lines: 92
         .section-desc "Hover/focus tooltip with delay and positioning."
         .demo-row
           .demo-label "Hover the buttons"
@@ -1885,12 +1735,7 @@ export WidgetGallery = component
       # PREVIEW CARD
       # ========================================================================
       .section id: "preview-card"
-        .section-title "PreviewCard"
-          span.badge @click: (=> @_viewSource('preview-card')), "56 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('preview-card', 'prev')), "‹"
-            a @click: (=> @_navSection('preview-card', 'home')), "⌂"
-            a @click: (=> @_navSection('preview-card', 'next')), "›"
+        SectionHead wid: "preview-card", name: "PreviewCard", lines: 56
         .section-desc "Hover or focus the link to see a preview card."
         .demo-row
           PreviewCard delay: 300
@@ -1914,12 +1759,7 @@ export WidgetGallery = component
       # TOAST
       # ========================================================================
       .section id: "toast"
-        .section-title "Toast"
-          span.badge @click: (=> @_viewSource('toast')), "56 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('toast', 'prev')), "‹"
-            a @click: (=> @_navSection('toast', 'home')), "⌂"
-            a @click: (=> @_navSection('toast', 'next')), "›"
+        SectionHead wid: "toast", name: "Toast", lines: 56
         .section-desc "Auto-dismiss notification with ARIA live region."
         .demo-row
           .demo-label "Click to show toasts"
@@ -1949,12 +1789,7 @@ export WidgetGallery = component
       # BUTTON
       # ========================================================================
       .section id: "button"
-        .section-title "Button"
-          span.badge @click: (=> @_viewSource('button')), "10 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('button', 'prev')), "‹"
-            a @click: (=> @_navSection('button', 'home')), "⌂"
-            a @click: (=> @_navSection('button', 'next')), "›"
+        SectionHead wid: "button", name: "Button", lines: 10
         .section-desc "Headless button with disabled-but-focusable pattern."
         .demo-row.btn-demo
           .demo-label "Normal, primary, and disabled"
@@ -1981,12 +1816,7 @@ export WidgetGallery = component
       # BADGE
       # ========================================================================
       .section id: "badge"
-        .section-title "Badge"
-          span.badge @click: (=> @_viewSource('badge')), "5 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('badge', 'prev')), "‹"
-            a @click: (=> @_navSection('badge', 'home')), "⌂"
-            a @click: (=> @_navSection('badge', 'next')), "›"
+        SectionHead wid: "badge", name: "Badge", lines: 5
         .section-desc "Inline label with variant styles."
         .demo-row
           .demo-label "Variants"
@@ -2007,12 +1837,7 @@ export WidgetGallery = component
       # CARD
       # ========================================================================
       .section id: "card"
-        .section-title "Card"
-          span.badge @click: (=> @_viewSource('card')), "6 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('card', 'prev')), "‹"
-            a @click: (=> @_navSection('card', 'home')), "⌂"
-            a @click: (=> @_navSection('card', 'next')), "›"
+        SectionHead wid: "card", name: "Card", lines: 6
         .section-desc "Structured container with header, content, and footer."
         .demo-row.card-demo
           Card
@@ -2035,12 +1860,7 @@ export WidgetGallery = component
       # SEPARATOR
       # ========================================================================
       .section id: "separator"
-        .section-title "Separator"
-          span.badge @click: (=> @_viewSource('separator')), "7 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('separator', 'prev')), "‹"
-            a @click: (=> @_navSection('separator', 'home')), "⌂"
-            a @click: (=> @_navSection('separator', 'next')), "›"
+        SectionHead wid: "separator", name: "Separator", lines: 7
         .section-desc "Decorative or semantic divider between sections."
         .demo-row
           .demo-label "Horizontal (default)"
@@ -2068,12 +1888,7 @@ export WidgetGallery = component
       # PROGRESS
       # ========================================================================
       .section id: "progress"
-        .section-title "Progress"
-          span.badge @click: (=> @_viewSource('progress')), "14 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('progress', 'prev')), "‹"
-            a @click: (=> @_navSection('progress', 'home')), "⌂"
-            a @click: (=> @_navSection('progress', 'next')), "›"
+        SectionHead wid: "progress", name: "Progress", lines: 14
         .section-desc "Progress bar with value exposed as CSS custom property."
         .demo-row
           .demo-label "65% complete"
@@ -2095,12 +1910,7 @@ export WidgetGallery = component
       # METER
       # ========================================================================
       .section id: "meter"
-        .section-title "Meter"
-          span.badge @click: (=> @_viewSource('meter')), "23 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('meter', 'prev')), "‹"
-            a @click: (=> @_navSection('meter', 'home')), "⌂"
-            a @click: (=> @_navSection('meter', 'next')), "›"
+        SectionHead wid: "meter", name: "Meter", lines: 23
         .section-desc "Gauge for known-range measurements with low/high/optimum thresholds."
         .demo-row
           .demo-label "Score: 72/100"
@@ -2124,12 +1934,7 @@ export WidgetGallery = component
       # SPINNER
       # ========================================================================
       .section id: "spinner"
-        .section-title "Spinner"
-          span.badge @click: (=> @_viewSource('spinner')), "6 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('spinner', 'prev')), "‹"
-            a @click: (=> @_navSection('spinner', 'home')), "⌂"
-            a @click: (=> @_navSection('spinner', 'next')), "›"
+        SectionHead wid: "spinner", name: "Spinner", lines: 6
         .section-desc "Loading indicator with accessible status."
         .demo-row.spinner-demo
           .demo-label "Default"
@@ -2148,12 +1953,7 @@ export WidgetGallery = component
       # SKELETON
       # ========================================================================
       .section id: "skeleton"
-        .section-title "Skeleton"
-          span.badge @click: (=> @_viewSource('skeleton')), "10 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('skeleton', 'prev')), "‹"
-            a @click: (=> @_navSection('skeleton', 'home')), "⌂"
-            a @click: (=> @_navSection('skeleton', 'next')), "›"
+        SectionHead wid: "skeleton", name: "Skeleton", lines: 10
         .section-desc "Loading placeholder with shimmer animation."
         .demo-row
           .demo-label "Shapes"
@@ -2178,12 +1978,7 @@ export WidgetGallery = component
       # AVATAR
       # ========================================================================
       .section id: "avatar"
-        .section-title "Avatar"
-          span.badge @click: (=> @_viewSource('avatar')), "23 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('avatar', 'prev')), "‹"
-            a @click: (=> @_navSection('avatar', 'home')), "⌂"
-            a @click: (=> @_navSection('avatar', 'next')), "›"
+        SectionHead wid: "avatar", name: "Avatar", lines: 23
         .section-desc "Image with fallback to initials or placeholder."
         .demo-row
           .demo-label "With image"
@@ -2211,12 +2006,7 @@ export WidgetGallery = component
       # LABEL
       # ========================================================================
       .section id: "label"
-        .section-title "Label"
-          span.badge @click: (=> @_viewSource('label')), "6 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('label', 'prev')), "‹"
-            a @click: (=> @_navSection('label', 'home')), "⌂"
-            a @click: (=> @_navSection('label', 'next')), "›"
+        SectionHead wid: "label", name: "Label", lines: 6
         .section-desc "Standalone accessible form label."
         .demo-row
           .demo-label "With required indicator"
@@ -2236,12 +2026,7 @@ export WidgetGallery = component
       # SCROLL AREA
       # ========================================================================
       .section id: "scroll-area"
-        .section-title "ScrollArea"
-          span.badge @click: (=> @_viewSource('scroll-area')), "115 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('scroll-area', 'prev')), "‹"
-            a @click: (=> @_navSection('scroll-area', 'home')), "⌂"
-            a @click: (=> @_navSection('scroll-area', 'next')), "›"
+        SectionHead wid: "scroll-area", name: "ScrollArea", lines: 115
         .section-desc "Custom scrollbar with draggable thumb and auto-hide."
         .demo-row
           .demo-label "Scrollable content"
@@ -2282,12 +2067,7 @@ export WidgetGallery = component
       # FIELD + FIELDSET
       # ========================================================================
       .section id: "field"
-        .section-title "Field + Fieldset"
-          span.badge @click: (=> @_viewSource('field')), "48 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('field', 'prev')), "‹"
-            a @click: (=> @_navSection('field', 'home')), "⌂"
-            a @click: (=> @_navSection('field', 'next')), "›"
+        SectionHead wid: "field", name: "Field + Fieldset", lines: 48
         .section-desc "Form field wrapper with label, description, and error."
         .demo-row
           Field label: "Email", description: "We'll never share your email.", required: true, error: fieldError
@@ -2328,12 +2108,7 @@ export WidgetGallery = component
       # FORM
       # ========================================================================
       .section id: "form"
-        .section-title "Form"
-          span.badge @click: (=> @_viewSource('form')), "21 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('form', 'prev')), "‹"
-            a @click: (=> @_navSection('form', 'home')), "⌂"
-            a @click: (=> @_navSection('form', 'next')), "›"
+        SectionHead wid: "form", name: "Form", lines: 21
         .section-desc "Form wrapper with submit handling and validation state."
         .demo-row
           Form
@@ -2361,12 +2136,7 @@ export WidgetGallery = component
       # BUTTON GROUP
       # ========================================================================
       .section id: "button-group"
-        .section-title "ButtonGroup"
-          span.badge @click: (=> @_viewSource('button-group')), "11 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('button-group', 'prev')), "‹"
-            a @click: (=> @_navSection('button-group', 'home')), "⌂"
-            a @click: (=> @_navSection('button-group', 'next')), "›"
+        SectionHead wid: "button-group", name: "ButtonGroup", lines: 11
         .section-desc "Groups related buttons with ARIA group semantics."
         .demo-row
           .demo-label "Horizontal"
@@ -2390,12 +2160,7 @@ export WidgetGallery = component
       # GRID
       # ========================================================================
       .section id: "grid"
-        .section-title "Grid"
-          span.badge @click: (=> @_viewSource('grid')), "799 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('grid', 'prev')), "‹"
-            a @click: (=> @_navSection('grid', 'home')), "⌂"
-            a @click: (=> @_navSection('grid', 'next')), "›"
+        SectionHead wid: "grid", name: "Grid", lines: 799
         .section-desc "Virtual-scrolling data grid. Click to select, arrows to navigate, double-click to edit."
         .demo-row
           . style: "display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px"
@@ -2445,12 +2210,7 @@ export WidgetGallery = component
       # ACCORDION
       # ========================================================================
       .section id: "accordion"
-        .section-title "Accordion"
-          span.badge @click: (=> @_viewSource('accordion')), "86 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('accordion', 'prev')), "‹"
-            a @click: (=> @_navSection('accordion', 'home')), "⌂"
-            a @click: (=> @_navSection('accordion', 'next')), "›"
+        SectionHead wid: "accordion", name: "Accordion", lines: 86
         .section-desc "Expand/collapse sections, single or multiple mode."
         .demo-row
           .demo-label "Single mode"
@@ -2497,12 +2257,7 @@ export WidgetGallery = component
       # TABLE
       # ========================================================================
       .section id: "table"
-        .section-title "Table"
-          span.badge @click: (=> @_viewSource('table')), "9 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('table', 'prev')), "‹"
-            a @click: (=> @_navSection('table', 'home')), "⌂"
-            a @click: (=> @_navSection('table', 'next')), "›"
+        SectionHead wid: "table", name: "Table", lines: 9
         .section-desc "Semantic table wrapper. For data-heavy tables, use Grid."
         .demo-row.table-demo
           Table caption: "Team", striped: true
@@ -2538,12 +2293,7 @@ export WidgetGallery = component
       # COLLAPSIBLE
       # ========================================================================
       .section id: "collapsible"
-        .section-title "Collapsible"
-          span.badge @click: (=> @_viewSource('collapsible')), "33 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('collapsible', 'prev')), "‹"
-            a @click: (=> @_navSection('collapsible', 'home')), "⌂"
-            a @click: (=> @_navSection('collapsible', 'next')), "›"
+        SectionHead wid: "collapsible", name: "Collapsible", lines: 33
         .section-desc "Single open/close section. Simpler than Accordion."
         .demo-row.collapsible-demo
           Collapsible open <=> collapsibleOpen
@@ -2576,12 +2326,7 @@ export WidgetGallery = component
       # PAGINATION
       # ========================================================================
       .section id: "pagination"
-        .section-title "Pagination"
-          span.badge @click: (=> @_viewSource('pagination')), "96 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('pagination', 'prev')), "‹"
-            a @click: (=> @_navSection('pagination', 'home')), "⌂"
-            a @click: (=> @_navSection('pagination', 'next')), "›"
+        SectionHead wid: "pagination", name: "Pagination", lines: 96
         .section-desc "Page navigation with prev/next buttons and ellipsis gaps."
         .demo-row
           .demo-label "10 pages"
@@ -2613,12 +2358,7 @@ export WidgetGallery = component
       # CAROUSEL
       # ========================================================================
       .section id: "carousel"
-        .section-title "Carousel"
-          span.badge @click: (=> @_viewSource('carousel')), "78 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('carousel', 'prev')), "‹"
-            a @click: (=> @_navSection('carousel', 'home')), "⌂"
-            a @click: (=> @_navSection('carousel', 'next')), "›"
+        SectionHead wid: "carousel", name: "Carousel", lines: 78
         .section-desc "Slide carousel with loop and keyboard navigation."
         .demo-row
           Carousel loop: true
@@ -2657,12 +2397,7 @@ export WidgetGallery = component
       # RESIZABLE
       # ========================================================================
       .section id: "resizable"
-        .section-title "Resizable"
-          span.badge @click: (=> @_viewSource('resizable')), "89 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('resizable', 'prev')), "‹"
-            a @click: (=> @_navSection('resizable', 'home')), "⌂"
-            a @click: (=> @_navSection('resizable', 'next')), "›"
+        SectionHead wid: "resizable", name: "Resizable", lines: 89
         .section-desc "Draggable resize handles between panels."
         .demo-row.resizable-demo
           Resizable
