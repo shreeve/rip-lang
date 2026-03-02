@@ -220,9 +220,29 @@
       }
     },
 
+    {"comment": "=== COMPONENT DEFINITIONS (export Name = component) ==="},
+    {
+      "match": "\\b(export\\s+)?([A-Z]\\w*)\\s*(=)\\s*(component)\\b",
+      "captures": {
+        "1": { "name": "keyword.control.rip" },
+        "2": { "name": "entity.name.type.class.rip" },
+        "3": { "name": "keyword.operator.assignment.rip" },
+        "4": { "name": "keyword.control.rip" }
+      }
+    },
+
+    {"comment": "=== $ SIGIL DATA ATTRIBUTES ==="},
+    {
+      "match": "(\\$)([a-zA-Z_]\\w*)",
+      "captures": {
+        "1": { "name": "punctuation.definition.variable.rip" },
+        "2": { "name": "entity.other.attribute-name.data.rip" }
+      }
+    },
+
     {"comment": "=== KEYWORDS ==="},
     {
-      "match": "\\b(return|throw|break|continue|switch|when|then|if|else|unless|for|in|of|by|as|while|until|loop|do|try|catch|finally|yield|await|import|export|from|default|delete|typeof|instanceof|new|super|debugger|use|own|extends|component|render|offer|accept)\\b",
+      "match": "\\b(return|throw|break|continue|switch|when|then|if|else|unless|for|in|of|by|as|while|until|loop|do|try|catch|finally|yield|await|import|export|from|default|delete|typeof|instanceof|new|super|debugger|use|own|extends|component|render|offer|accept|slot|it)\\b",
       "name": "keyword.control.rip"
     },
     {
@@ -257,6 +277,7 @@
 
     {"comment": "=== SPECIAL OPERATORS (before general operators) ==="},
     { "match": "!\\?",            "name": "keyword.operator.otherwise.rip" },
+    { "match": "\\?!",            "name": "keyword.operator.presence.rip" },
     { "match": "\\?\\?",          "name": "keyword.operator.nullish.rip" },
     { "match": "\\?\\.(?![0-9])", "name": "keyword.operator.optional-chaining.rip" },
     { "match": "(?<=[a-zA-Z0-9_$)])!(?![=?])", "name": "keyword.operator.dammit.rip" },
@@ -268,7 +289,7 @@
     { "match": "===|!==|==|!=|<=|>=", "name": "keyword.operator.comparison.rip" },
 
     {"comment": "=== COMPOUND ASSIGNMENT (before simple assignment) ==="},
-    { "match": "&&=|\\|\\|=|\\?\\?=|\\+=|-=|\\*\\*=|\\*=|//=|%%=|/=|%=|<<=|>>>=|>>=|&=|\\|=|\\^=",
+    { "match": "\\.=|&&=|\\|\\|=|\\?\\?=|\\+=|-=|\\*\\*=|\\*=|//=|%%=|/=|%=|<<=|>>>=|>>=|&=|\\|=|\\^=",
       "name": "keyword.operator.assignment.compound.rip" },
 
     {"comment": "=== ASSIGNMENT (with variable name capture) ==="},
