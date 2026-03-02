@@ -21,6 +21,10 @@ console.log(`  ${ripFiles.length} .rip files copied`);
 cpSync(join(src, 'index.css'), join(dst, 'index.css'));
 console.log('  index.css copied');
 
+// Copy hljs-rip.js (syntax highlighting grammar)
+cpSync('./packages/print/hljs-rip.js', join(dst, 'hljs-rip.js'));
+console.log('  hljs-rip.js copied');
+
 // Transform index.html for static hosting
 let html = readFileSync(join(src, 'index.html'), 'utf-8');
 
@@ -35,6 +39,9 @@ html = html.replace(/  <script>\n    let ready = false;\n    const es[\s\S]*?<\/
 
 // Rewrite source viewer fetch: /{id}.rip → {id}.rip (relative)
 html = html.replace('fetch! "/#{id}.rip"', 'fetch! "#{id}.rip"');
+
+// Rewrite hljs-rip.js fetch: /hljs-rip.js → hljs-rip.js (relative)
+html = html.replace("'/hljs-rip.js'", "'hljs-rip.js'");
 
 writeFileSync(join(dst, 'index.html'), html);
 console.log('  index.html copied (paths adjusted for static hosting)');
