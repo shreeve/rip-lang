@@ -2016,26 +2016,18 @@ export WidgetGallery = component
       # ================================================================
       .section id: "badge"
         .section-title "Badge"
-          span.badge "native"
+          span.badge "pattern"
           .section-nav
             a @click: (=> @_navSection('badge', 'prev')), "‹"
             a @click: (=> @_navSection('badge', 'home')), "⌂"
             a @click: (=> @_navSection('badge', 'next')), "›"
-        .section-desc "Inline label with variant styles."
+        .section-desc "Inline label with variant styles. Use a native span with data-variant."
         .demo-row
           .demo-label "Variants"
           . style: "display:flex;gap:8px;align-items:center"
             span data-variant: "solid", "Solid"
             span data-variant: "outline", "Outline"
             span data-variant: "subtle", "Subtle"
-        .api
-          dl
-            dt "Props"
-            dd
-              code "@variant"
-            dt "Data"
-            dd
-              code "$variant"
 
       # ================================================================
       # CARD
@@ -2245,30 +2237,6 @@ export WidgetGallery = component
               code "$status"
               code "$initials"
               code "$placeholder"
-
-      # ================================================================
-      # KBD
-      # ================================================================
-      .section id: "kbd"
-        .section-title "Kbd"
-          span.badge "native"
-          .section-nav
-            a @click: (=> @_navSection('kbd', 'prev')), "‹"
-            a @click: (=> @_navSection('kbd', 'home')), "⌂"
-            a @click: (=> @_navSection('kbd', 'next')), "›"
-        .section-desc "Semantic keyboard shortcut display."
-        .demo-row
-          .demo-label "Shortcuts"
-          . style: "display:flex;gap:8px;align-items:center"
-            kbd "⌘K"
-            kbd "Ctrl+C"
-            kbd "Shift+Enter"
-            kbd "Esc"
-        .api
-          dl
-            dt "Props"
-            dd
-              span.api-none "none"
 
       # ================================================================
       # LABEL
