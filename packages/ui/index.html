@@ -2613,9 +2613,9 @@ export WidgetGallery = component
         .demo-row.collapsible-demo
           Collapsible open <=> collapsibleOpen
             button $trigger: true
-              span style: "display:inline-block;font-size:18px;width:16px;transition:transform 0.15s;transform:rotate(#{if collapsibleOpen then '90' else '0'}deg)"
-                "›"
-              " Show details"
+              span style: "font-size:10px;margin-right:6px"
+                if collapsibleOpen then "▼" else "▶"
+              "Show details"
             div $content: true
               p "These are the collapsible details. Click the trigger or press Enter/Space to toggle."
           .status "open: #{collapsibleOpen}"
