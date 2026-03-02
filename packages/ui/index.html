@@ -188,7 +188,7 @@ export WidgetGallery = component
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js'
     script.onload = =>
       fetch('/hljs-rip.js').then((r) -> r.text()).then (src) =>
-        fn = new Function('return ' + src.replace('export default ', ''))()
+        fn = new Function('return ' + src.replace(/[\s\S]*export default /, ''))()
         hljs.registerLanguage 'rip', fn
         cb()
     document.head.appendChild(script)
