@@ -675,6 +675,7 @@ select.rip-grid-editor { cursor: pointer; padding-left: 4px; }
     min-width: 32px; min-height: 32px;
 
     &:hover { background: #f1f5f9; }
+    &:active:not([data-selected]) { background: #dbeafe; color: #1d4ed8; }
     &[data-outside] { color: #cbd5e1; }
     &[data-today] { font-weight: 700; outline: 2px solid #3b82f6; outline-offset: -2px; }
     &[data-selected] { background: #3b82f6; color: white; }
@@ -1555,6 +1556,7 @@ html.no-transition, html.no-transition * { transition: none !important; }
   .gallery [data-weekdays] [data-weekday] { color: #64748b; }
   .gallery [data-days] button { color: #e2e8f0; }
   .gallery [data-days] button:hover { background: #334155; }
+  .gallery [data-days] button:active:not([data-selected]) { background: #1e3a5f; color: #93c5fd; }
   .gallery [data-days] button[data-outside] { color: #475569; }
   .gallery [data-days] button[data-in-range] { background: #172554; }
   .gallery [data-trigger]:has(+ [data-calendar]) { border-color: #475569; background: #334155; color: #e2e8f0; }
