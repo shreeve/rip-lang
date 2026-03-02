@@ -106,6 +106,16 @@ export default function(hljs) {
     ],
   };
 
+  const METHOD_DEF = {
+    className: 'function',
+    begin: /[a-zA-Z_$][\w$]*[!?]?\s*:/,
+    end: /[-=]>/,
+    excludeEnd: true,
+    contains: [
+      { className: 'title.function', begin: /[a-zA-Z_$][\w$]*[!?]?/, end: /:/, excludeEnd: true },
+    ],
+  };
+
   const CLASS_DEF = {
     className: 'class',
     beginKeywords: 'class',
@@ -145,6 +155,7 @@ export default function(hljs) {
       HEREGEX,
       REGEX,
       FUNCTION_DEF,
+      METHOD_DEF,
       CLASS_DEF,
       NUMBER,
       INSTANCE_VAR,
