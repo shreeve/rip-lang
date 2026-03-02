@@ -1713,6 +1713,7 @@ html.no-transition, html.no-transition * { transition: none !important; }
   .source-code .hljs-attribute { color: #67e8f9; }
   .source-code .hljs-variable,
   .source-code .hljs-property { color: #e2e8f0; }
+  .source-code .hljs-operator { color: #e2e8f0; }
   .source-code .hljs-subst { color: #fca5a5; }
   .source-code .hljs-symbol { color: #fbbf24; }
 }
