@@ -750,12 +750,12 @@ select.rip-grid-editor { cursor: pointer; padding-left: 4px; }
 /* ── Menubar ── */
 
 .gallery [role="menubar"] {
-  display: inline-flex; gap: 0; background: #f8fafc;
-  border: 1px solid #e2e8f0; border-radius: 6px; padding: 2px;
+  display: inline-flex; gap: 2px; background: #f8fafc;
+  border: 1px solid #e2e8f0; border-radius: 8px; padding: 4px;
 
   [data-menu-trigger] {
-    padding: 6px 14px; border: none; background: transparent;
-    cursor: pointer; font-size: 13px; color: #475569; border-radius: 4px;
+    padding: 8px 16px; border: none; background: transparent;
+    cursor: pointer; font-size: 14px; color: #475569; border-radius: 6px;
     transition: all 0.15s;
 
     &:hover, &[data-open] { background: white; color: #1e293b; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
