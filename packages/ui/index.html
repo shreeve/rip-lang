@@ -58,7 +58,6 @@
       /input-group.rip
       /button-group.rip
       /alert-dialog.rip
-      /sheet.rip
       /breadcrumb.rip
       /table.rip
       /collapsible.rip
@@ -132,7 +131,6 @@ export WidgetGallery = component
   dateRange := null
   darkMode := false
   showAlertDialog := false
-  showSheet := false
   textareaVal := ''
   nativeSelectVal := ''
   collapsibleOpen := false
@@ -147,7 +145,7 @@ export WidgetGallery = component
     { label: 'Toggle', ids: ['checkbox', 'toggle', 'toggle-group', 'radio-group', 'checkbox-group'] }
     { label: 'Input', ids: ['input', 'textarea', 'native-select', 'number-field', 'slider', 'otp-field', 'date-picker', 'editable-value', 'input-group'] }
     { label: 'Navigation', ids: ['tabs', 'menu', 'context-menu', 'menubar', 'nav-menu', 'toolbar', 'breadcrumb'] }
-    { label: 'Overlay', ids: ['dialog', 'alert-dialog', 'drawer', 'sheet', 'popover', 'tooltip', 'preview-card', 'toast'] }
+    { label: 'Overlay', ids: ['dialog', 'alert-dialog', 'drawer', 'popover', 'tooltip', 'preview-card', 'toast'] }
     { label: 'Display', ids: ['button', 'badge', 'card', 'separator', 'progress', 'meter', 'spinner', 'skeleton', 'avatar', 'label', 'scroll-area'] }
     { label: 'Form', ids: ['field', 'fieldset', 'form', 'button-group'] }
     { label: 'Data', ids: ['grid', 'accordion', 'table', 'collapsible'] }
@@ -325,7 +323,6 @@ export WidgetGallery = component
     { id: 'input-group', name: 'InputGroup', lines: 11, desc: 'Input with prefix/suffix addon elements.', props: ['@disabled'], events: [], keys: [], attrs: ['$disabled', '$focused'] }
     { id: 'button-group', name: 'ButtonGroup', lines: 11, desc: 'Grouped buttons with ARIA group semantics.', props: ['@orientation', '@disabled', '@label'], events: [], keys: [], attrs: ['$orientation', '$disabled'] }
     { id: 'alert-dialog', name: 'AlertDialog', lines: 74, desc: 'Non-dismissable modal requiring explicit user action.', props: ['@open', '@initialFocus'], events: ['close'], keys: ['Tab'], attrs: ['$open'] }
-    { id: 'sheet', name: 'Sheet', lines: 49, desc: 'Full-width/height side panel with focus trap.', props: ['@open', '@side', '@dismissable'], events: ['close'], keys: ['Esc', 'Tab'], attrs: ['$open', '$side', '$sheet'] }
     { id: 'breadcrumb', name: 'Breadcrumb', lines: 25, desc: 'Navigation trail with separator and current page.', props: ['@separator', '@label'], events: [], keys: [], attrs: ['$current'] }
     { id: 'table', name: 'Table', lines: 9, desc: 'Semantic table wrapper with optional caption and striped rows.', props: ['@caption', '@striped'], events: [], keys: [], attrs: ['$striped'] }
     { id: 'collapsible', name: 'Collapsible', lines: 33, desc: 'Single open/close section with animated expand.', props: ['@open', '@disabled'], events: ['change'], keys: ['Enter', 'Space'], attrs: ['$open', '$disabled'] }
@@ -453,7 +450,7 @@ export WidgetGallery = component
     { _row: 12, name: 'Leo Martin', role: 'Engineer', age: 24, city: 'Boston' },
   ]
 
-  sectionIds =! ['select', 'combobox', 'multi-select', 'autocomplete', 'checkbox', 'toggle', 'toggle-group', 'radio-group', 'checkbox-group', 'input', 'textarea', 'native-select', 'number-field', 'slider', 'otp-field', 'date-picker', 'editable-value', 'input-group', 'tabs', 'menu', 'context-menu', 'menubar', 'nav-menu', 'toolbar', 'breadcrumb', 'dialog', 'alert-dialog', 'drawer', 'sheet', 'popover', 'tooltip', 'preview-card', 'toast', 'button', 'badge', 'card', 'separator', 'progress', 'meter', 'spinner', 'skeleton', 'avatar', 'label', 'scroll-area', 'field', 'form', 'button-group', 'grid', 'accordion', 'table', 'collapsible', 'pagination', 'carousel', 'resizable']
+  sectionIds =! ['select', 'combobox', 'multi-select', 'autocomplete', 'checkbox', 'toggle', 'toggle-group', 'radio-group', 'checkbox-group', 'input', 'textarea', 'native-select', 'number-field', 'slider', 'otp-field', 'date-picker', 'editable-value', 'input-group', 'tabs', 'menu', 'context-menu', 'menubar', 'nav-menu', 'toolbar', 'breadcrumb', 'dialog', 'alert-dialog', 'drawer', 'popover', 'tooltip', 'preview-card', 'toast', 'button', 'badge', 'card', 'separator', 'progress', 'meter', 'spinner', 'skeleton', 'avatar', 'label', 'scroll-area', 'field', 'form', 'button-group', 'grid', 'accordion', 'table', 'collapsible', 'pagination', 'carousel', 'resizable']
 
   _fadeTo: (el) ->
     return unless el
@@ -496,7 +493,7 @@ export WidgetGallery = component
           h1 "Rip UI"
           button.theme-toggle @click: (=> @_toggleDark())
             if darkMode then "☀" else "☾"
-        p "55 headless, accessible components. Zero CSS, zero dependencies."
+        p "54 headless, accessible components. Zero CSS, zero dependencies."
 
       .toc
         .toc-nav @keydown: @_onTocKeydown
@@ -539,7 +536,6 @@ export WidgetGallery = component
             a @mouseenter: (=> tocActive = 'dialog'), @click: (=> tocActive = 'dialog'), href: "#dialog", $active: (tocActive is 'dialog')?!, "Dialog"
             a @mouseenter: (=> tocActive = 'alert-dialog'), @click: (=> tocActive = 'alert-dialog'), href: "#alert-dialog", $active: (tocActive is 'alert-dialog')?!, "AlertDialog"
             a @mouseenter: (=> tocActive = 'drawer'), @click: (=> tocActive = 'drawer'), href: "#drawer", $active: (tocActive is 'drawer')?!, "Drawer"
-            a @mouseenter: (=> tocActive = 'sheet'), @click: (=> tocActive = 'sheet'), href: "#sheet", $active: (tocActive is 'sheet')?!, "Sheet"
             a @mouseenter: (=> tocActive = 'popover'), @click: (=> tocActive = 'popover'), href: "#popover", $active: (tocActive is 'popover')?!, "Popover"
             a @mouseenter: (=> tocActive = 'tooltip'), @click: (=> tocActive = 'tooltip'), href: "#tooltip", $active: (tocActive is 'tooltip')?!, "Tooltip"
             a @mouseenter: (=> tocActive = 'preview-card'), @click: (=> tocActive = 'preview-card'), href: "#preview-card", $active: (tocActive is 'preview-card')?!, "PreviewCard"
@@ -1789,47 +1785,6 @@ export WidgetGallery = component
             dd
               code "$open"
               code "$side"
-
-      # ================================================================
-      # SHEET
-      # ================================================================
-      .section id: "sheet"
-        .section-title "Sheet"
-          span.badge @click: (=> @_viewSource('sheet')), "49 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('sheet', 'prev')), "‹"
-            a @click: (=> @_navSection('sheet', 'home')), "⌂"
-            a @click: (=> @_navSection('sheet', 'next')), "›"
-        .section-desc "Full-width/height slide-out side panel."
-        .demo-row
-          .demo-label "Open from right"
-          button.demo-btn @click: (=> showSheet = true)
-            "Open Sheet"
-        Sheet open <=> showSheet, side: "right"
-          h2 "Notifications"
-          p "You have 3 unread messages."
-          p "Press Escape or click outside to close."
-          button.demo-btn @click: (=> showSheet = false)
-            "Close"
-        .api
-          dl
-            dt "Props"
-            dd
-              code "@open"
-              code "@side"
-              code "@dismissable"
-            dt "Events"
-            dd
-              code "close"
-            dt "Keyboard"
-            dd
-              kbd "Esc"
-              kbd "Tab"
-            dt "Data"
-            dd
-              code "$open"
-              code "$side"
-              code "$sheet"
 
       # ================================================================
       # POPOVER
