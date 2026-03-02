@@ -1094,10 +1094,29 @@ html.no-transition, html.no-transition * { transition: none !important; }
 .source-code {
   padding: 0 16px; flex: 1; min-width: 0;
   white-space: pre; background: transparent !important;
-  margin: 0;
+  margin: 0; color: #1e293b;
 }
 
 .source-code.hljs { padding: 0 16px; }
+
+/* Light mode syntax theme */
+.source-code .hljs-comment { color: #6b7280; font-style: italic; }
+.source-code .hljs-keyword { color: #7c3aed; }
+.source-code .hljs-built_in { color: #6d28d9; }
+.source-code .hljs-string,
+.source-code .hljs-regexp { color: #16a34a; }
+.source-code .hljs-number,
+.source-code .hljs-literal { color: #d97706; }
+.source-code .hljs-title,
+.source-code .hljs-title\.function,
+.source-code .hljs-title\.class { color: #2563eb; }
+.source-code .hljs-function { color: #2563eb; }
+.source-code .hljs-params { color: #9333ea; }
+.source-code .hljs-variable { color: #0891b2; }
+.source-code .hljs-attribute { color: #0d9488; }
+.source-code .hljs-operator { color: #64748b; }
+.source-code .hljs-subst { color: #dc2626; }
+.source-code .hljs-type { color: #0891b2; }
 
 /* ── Badge ── */
 
@@ -1699,9 +1718,9 @@ html.no-transition, html.no-transition * { transition: none !important; }
   .source-close:hover { background: #334155; color: #e2e8f0; }
   .source-gutter { color: #475569; border-right-color: #334155; }
   .source-code { color: #e2e8f0; }
-  .source-code .hljs-comment { color: #64748b; }
-  .source-code .hljs-keyword,
-  .source-code .hljs-built_in { color: #c084fc; }
+  .source-code .hljs-comment { color: #64748b; font-style: italic; }
+  .source-code .hljs-keyword { color: #c084fc; }
+  .source-code .hljs-built_in { color: #a78bfa; }
   .source-code .hljs-string,
   .source-code .hljs-regexp { color: #86efac; }
   .source-code .hljs-number,
@@ -1709,13 +1728,12 @@ html.no-transition, html.no-transition * { transition: none !important; }
   .source-code .hljs-title,
   .source-code .hljs-function { color: #93c5fd; }
   .source-code .hljs-params { color: #f0abfc; }
-  .source-code .hljs-attr,
-  .source-code .hljs-attribute { color: #67e8f9; }
-  .source-code .hljs-variable,
+  .source-code .hljs-variable { color: #67e8f9; }
+  .source-code .hljs-attribute { color: #5eead4; }
   .source-code .hljs-property { color: #e2e8f0; }
-  .source-code .hljs-operator { color: #e2e8f0; }
+  .source-code .hljs-operator { color: #94a3b8; }
   .source-code .hljs-subst { color: #fca5a5; }
-  .source-code .hljs-symbol { color: #fbbf24; }
+  .source-code .hljs-type { color: #67e8f9; }
 }
 
 /* ── Shared demo styles ── */
