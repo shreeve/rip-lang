@@ -1329,6 +1329,8 @@ html.no-transition, html.no-transition * { transition: none !important; }
     &:disabled { opacity: 0.4; cursor: not-allowed; }
   }
 
+  [data-prev]::before { content: '‹'; }
+  [data-next]::before { content: '›'; }
   [data-ellipsis] { min-width: 32px; text-align: center; color: #94a3b8; font-size: 13px; user-select: none; }
 }
 
