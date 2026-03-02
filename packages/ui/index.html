@@ -49,7 +49,6 @@
       /accordion.rip
       /grid.rip
       /badge.rip
-      /kbd.rip
       /skeleton.rip
       /spinner.rip
       /card.rip
@@ -317,7 +316,7 @@ export WidgetGallery = component
     { id: 'grid', name: 'Grid', lines: 901, desc: 'Virtual-scrolling data grid — 100K+ rows at 60fps.', props: ['@data', '@columns', '@rowHeight', '@overscan', '@striped', '@beforeEdit', '@afterEdit'], events: [], keys: ['Arrows', 'Tab', 'Enter', 'F2', 'Esc', 'Home', 'End', 'PgUp', 'PgDn', 'Ctrl+A', 'Ctrl+C', 'Ctrl+V', 'Ctrl+X'], attrs: ['$editing', '$selecting', '$sorted'] }
     { id: 'accordion', name: 'Accordion', lines: 113, desc: 'Expand/collapse sections, single or multiple mode.', props: ['@multiple'], events: ['change'], keys: ['Enter', 'Space', '↕', 'Home', 'End'], attrs: ['$item', '$trigger', '$content', '$open', '$disabled'] }
     { id: 'badge', name: 'Badge', lines: 15, desc: 'Inline label with variant (solid/outline/subtle).', props: ['@variant'], events: [], keys: [], attrs: ['$variant'] }
-    { id: 'kbd', name: 'Kbd', lines: 13, desc: 'Semantic keyboard shortcut display.', props: [], events: [], keys: [], attrs: [] }
+    { id: 'kbd', name: 'Kbd', lines: 0, desc: 'Semantic keyboard shortcut display. Uses native <kbd> element.', props: [], events: [], keys: [], attrs: [] }
     { id: 'skeleton', name: 'Skeleton', lines: 22, desc: 'Loading placeholder with shimmer animation.', props: ['@width', '@height', '@circle', '@label'], events: [], keys: [], attrs: ['$circle'] }
     { id: 'spinner', name: 'Spinner', lines: 17, desc: 'Loading indicator with accessible status.', props: ['@label', '@size'], events: [], keys: [], attrs: [] }
     { id: 'card', name: 'Card', lines: 25, desc: 'Structured container with header/content/footer.', props: ['@interactive'], events: [], keys: [], attrs: ['$interactive'] }
@@ -499,7 +498,7 @@ export WidgetGallery = component
           h1 "Rip UI"
           button.theme-toggle @click: (=> @_toggleDark())
             if darkMode then "☀" else "☾"
-        p "56 headless, accessible components. Zero CSS, zero dependencies."
+        p "55 headless, accessible components. Zero CSS, zero dependencies."
 
       .toc
         .toc-nav @keydown: @_onTocKeydown
@@ -2253,7 +2252,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "kbd"
         .section-title "Kbd"
-          span.badge @click: (=> @_viewSource('kbd')), "13 lines ❐"
+          span.badge "native"
           .section-nav
             a @click: (=> @_navSection('kbd', 'prev')), "‹"
             a @click: (=> @_navSection('kbd', 'home')), "⌂"
@@ -2262,10 +2261,10 @@ export WidgetGallery = component
         .demo-row
           .demo-label "Shortcuts"
           . style: "display:flex;gap:8px;align-items:center"
-            Kbd "⌘K"
-            Kbd "Ctrl+C"
-            Kbd "Shift+Enter"
-            Kbd "Esc"
+            kbd "⌘K"
+            kbd "Ctrl+C"
+            kbd "Shift+Enter"
+            kbd "Esc"
         .api
           dl
             dt "Props"
