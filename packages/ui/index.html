@@ -94,7 +94,7 @@ do ->
 
 export SectionHead = component
   accept _gallery
-  @wid := ''
+  @tag := ''
   @name := ''
   @lines := 0
 
@@ -102,13 +102,13 @@ export SectionHead = component
     .section-title
       = @name
       if @lines > 0
-        span.badge @click: (=> _gallery._viewSource(@wid)), "#{@lines} lines ❐"
+        span.badge @click: (=> _gallery._viewSource(@tag)), "#{@lines} lines ❐"
       else
         span.badge "pattern"
       .section-nav
-        a @click: (=> _gallery._navSection(@wid, 'prev')), "‹"
-        a @click: (=> _gallery._navSection(@wid, 'home')), "⌂"
-        a @click: (=> _gallery._navSection(@wid, 'next')), "›"
+        a @click: (=> _gallery._navSection(@tag, 'prev')), "‹"
+        a @click: (=> _gallery._navSection(@tag, 'home')), "⌂"
+        a @click: (=> _gallery._navSection(@tag, 'next')), "›"
 
 export WidgetGallery = component
   offer _gallery := this
@@ -625,7 +625,7 @@ export WidgetGallery = component
       # SELECT
       # ========================================================================
       .section id: "select"
-        SectionHead wid: "select", name: "Select", lines: 147
+        SectionHead tag: "select", name: "Select", lines: 147
         .section-desc "Dropdown with typeahead, keyboard nav, ARIA listbox."
         .demo-row
           .demo-label "Basic select"
@@ -673,7 +673,7 @@ export WidgetGallery = component
       # COMBOBOX
       # ========================================================================
       .section id: "combobox"
-        SectionHead wid: "combobox", name: "Combobox", lines: 124
+        SectionHead tag: "combobox", name: "Combobox", lines: 124
         .section-desc "Filterable input + listbox for search-as-you-type."
         .demo-row
           .demo-label "Search fruits"
@@ -713,7 +713,7 @@ export WidgetGallery = component
       # MULTI-SELECT
       # ========================================================================
       .section id: "multi-select"
-        SectionHead wid: "multi-select", name: "MultiSelect", lines: 130
+        SectionHead tag: "multi-select", name: "MultiSelect", lines: 130
         .section-desc "Multi-select with chips, filtering, and keyboard navigation."
         .demo-row
           .demo-label "Pick colors"
@@ -752,7 +752,7 @@ export WidgetGallery = component
       # AUTOCOMPLETE
       # ========================================================================
       .section id: "autocomplete"
-        SectionHead wid: "autocomplete", name: "Autocomplete", lines: 115
+        SectionHead tag: "autocomplete", name: "Autocomplete", lines: 115
         .section-desc "Suggestion input — type to filter, select to fill."
         .demo-row
           .demo-label "Search cities"
@@ -785,7 +785,7 @@ export WidgetGallery = component
       # CHECKBOX
       # ========================================================================
       .section id: "checkbox"
-        SectionHead wid: "checkbox", name: "Checkbox", lines: 18
+        SectionHead tag: "checkbox", name: "Checkbox", lines: 18
         .section-desc "Toggle with checkbox or switch semantics. Supports indeterminate."
         .demo-row
           .demo-label "Checkbox (unchecked)"
@@ -823,7 +823,7 @@ export WidgetGallery = component
       # TOGGLE
       # ========================================================================
       .section id: "toggle"
-        SectionHead wid: "toggle", name: "Toggle", lines: 13
+        SectionHead tag: "toggle", name: "Toggle", lines: 13
         .section-desc "Stateful toggle button with pressed state."
         .demo-row
           .demo-label "Tap to toggle"
@@ -848,7 +848,7 @@ export WidgetGallery = component
       # TOGGLE GROUP
       # ========================================================================
       .section id: "toggle-group"
-        SectionHead wid: "toggle-group", name: "ToggleGroup", lines: 59
+        SectionHead tag: "toggle-group", name: "ToggleGroup", lines: 59
         .section-desc "Single or multi-select toggle buttons."
         .demo-row
           .demo-label "Text alignment"
@@ -892,7 +892,7 @@ export WidgetGallery = component
       # RADIO GROUP
       # ========================================================================
       .section id: "radio-group"
-        SectionHead wid: "radio-group", name: "RadioGroup", lines: 50
+        SectionHead tag: "radio-group", name: "RadioGroup", lines: 50
         .section-desc "Exactly one option selected. Arrow keys move focus and selection."
         .demo-row
           .demo-label "Font size"
@@ -929,7 +929,7 @@ export WidgetGallery = component
       # CHECKBOX GROUP
       # ========================================================================
       .section id: "checkbox-group"
-        SectionHead wid: "checkbox-group", name: "CheckboxGroup", lines: 46
+        SectionHead tag: "checkbox-group", name: "CheckboxGroup", lines: 46
         .section-desc "Multiple options checked independently."
         .demo-row
           .demo-label "Toppings"
@@ -965,7 +965,7 @@ export WidgetGallery = component
       # INPUT
       # ========================================================================
       .section id: "input"
-        SectionHead wid: "input", name: "Input", lines: 24
+        SectionHead tag: "input", name: "Input", lines: 24
         .section-desc "Headless input tracking focus, touch, and validation state."
         .demo-row
           .demo-label "Text input"
@@ -990,7 +990,7 @@ export WidgetGallery = component
       # NUMBER FIELD
       # ========================================================================
       .section id: "number-field"
-        SectionHead wid: "number-field", name: "NumberField", lines: 132
+        SectionHead tag: "number-field", name: "NumberField", lines: 132
         .section-desc "Number input with increment/decrement buttons, hold-to-repeat, and keyboard stepping."
         .demo-row
           .demo-label "Quantity (1-99)"
@@ -1034,7 +1034,7 @@ export WidgetGallery = component
       # SLIDER
       # ========================================================================
       .section id: "slider"
-        SectionHead wid: "slider", name: "Slider", lines: 130
+        SectionHead tag: "slider", name: "Slider", lines: 130
         .section-desc "Draggable range input with pointer capture and keyboard stepping."
         .demo-row
           .demo-label "Single thumb"
@@ -1082,7 +1082,7 @@ export WidgetGallery = component
       # OTP FIELD
       # ========================================================================
       .section id: "otp-field"
-        SectionHead wid: "otp-field", name: "OTPField", lines: 72
+        SectionHead tag: "otp-field", name: "OTPField", lines: 72
         .section-desc "Multi-digit code input with auto-advance, backspace nav, and paste."
         .demo-row
           .demo-label "6-digit code"
@@ -1120,7 +1120,7 @@ export WidgetGallery = component
       # DATE PICKER
       # ========================================================================
       .section id: "date-picker"
-        SectionHead wid: "date-picker", name: "DatePicker", lines: 172
+        SectionHead tag: "date-picker", name: "DatePicker", lines: 172
         .section-desc "Calendar dropdown for single date or range selection."
         .demo-row
           .demo-label "Single date"
@@ -1161,7 +1161,7 @@ export WidgetGallery = component
       # EDITABLE VALUE
       # ========================================================================
       .section id: "editable-value"
-        SectionHead wid: "editable-value", name: "EditableValue", lines: 58
+        SectionHead tag: "editable-value", name: "EditableValue", lines: 58
         .section-desc "Click the edit icon to modify the value inline."
         .demo-row
           EditableValue @save: (=> editName = editName)
@@ -1193,7 +1193,7 @@ export WidgetGallery = component
       # TEXTAREA
       # ========================================================================
       .section id: "textarea"
-        SectionHead wid: "textarea", name: "Textarea", lines: 33
+        SectionHead tag: "textarea", name: "Textarea", lines: 33
         .section-desc "Auto-resizing text area with focus and validation tracking."
         .demo-row
           .demo-label "Auto-resize textarea"
@@ -1219,7 +1219,7 @@ export WidgetGallery = component
       # NATIVE SELECT
       # ========================================================================
       .section id: "native-select"
-        SectionHead wid: "native-select", name: "NativeSelect", lines: 18
+        SectionHead tag: "native-select", name: "NativeSelect", lines: 18
         .section-desc "Native browser select element with state tracking."
         .demo-row.native-select-demo
           .demo-label "Choose a color"
@@ -1248,7 +1248,7 @@ export WidgetGallery = component
       # INPUT GROUP
       # ========================================================================
       .section id: "input-group"
-        SectionHead wid: "input-group", name: "InputGroup", lines: 11
+        SectionHead tag: "input-group", name: "InputGroup", lines: 11
         .section-desc "Input with prefix/suffix addon elements."
         .demo-row.input-group-demo
           .demo-label "With prefix"
@@ -1274,7 +1274,7 @@ export WidgetGallery = component
       # TABS
       # ========================================================================
       .section id: "tabs"
-        SectionHead wid: "tabs", name: "Tabs", lines: 91
+        SectionHead tag: "tabs", name: "Tabs", lines: 91
         .section-desc "Tab panel with roving tabindex and arrow key navigation."
         .demo-row
           .demo-label "Basic tabs"
@@ -1318,7 +1318,7 @@ export WidgetGallery = component
       # MENU
       # ========================================================================
       .section id: "menu"
-        SectionHead wid: "menu", name: "Menu", lines: 133
+        SectionHead tag: "menu", name: "Menu", lines: 133
         .section-desc "Dropdown action menu with keyboard navigation."
         .demo-row
           .demo-label "Click to open menu"
@@ -1358,7 +1358,7 @@ export WidgetGallery = component
       # CONTEXT MENU
       # ========================================================================
       .section id: "context-menu"
-        SectionHead wid: "context-menu", name: "ContextMenu", lines: 80
+        SectionHead tag: "context-menu", name: "ContextMenu", lines: 80
         .section-desc "Right-click the dashed area to open a context menu."
         ContextMenu
           div $trigger: true
@@ -1395,7 +1395,7 @@ export WidgetGallery = component
       # MENUBAR
       # ========================================================================
       .section id: "menubar"
-        SectionHead wid: "menubar", name: "Menubar", lines: 125
+        SectionHead tag: "menubar", name: "Menubar", lines: 125
         .section-desc "Horizontal menu bar with dropdown menus."
         .demo-row
           Menubar
@@ -1437,7 +1437,7 @@ export WidgetGallery = component
       # NAVIGATION MENU
       # ========================================================================
       .section id: "nav-menu"
-        SectionHead wid: "nav-menu", name: "NavigationMenu", lines: 99
+        SectionHead tag: "nav-menu", name: "NavigationMenu", lines: 99
         .section-desc "Site navigation with dropdown panels."
         .demo-row
           NavigationMenu
@@ -1476,7 +1476,7 @@ export WidgetGallery = component
       # TOOLBAR
       # ========================================================================
       .section id: "toolbar"
-        SectionHead wid: "toolbar", name: "Toolbar", lines: 31
+        SectionHead tag: "toolbar", name: "Toolbar", lines: 31
         .section-desc "Groups controls with roving tabindex keyboard navigation."
         .demo-row
           .demo-label "Text"
@@ -1534,7 +1534,7 @@ export WidgetGallery = component
       # BREADCRUMB
       # ========================================================================
       .section id: "breadcrumb"
-        SectionHead wid: "breadcrumb", name: "Breadcrumb", lines: 25
+        SectionHead tag: "breadcrumb", name: "Breadcrumb", lines: 25
         .section-desc "Navigation trail with separator and current page."
         .demo-row
           .demo-label "Basic breadcrumb"
@@ -1557,7 +1557,7 @@ export WidgetGallery = component
       # DIALOG
       # ========================================================================
       .section id: "dialog"
-        SectionHead wid: "dialog", name: "Dialog", lines: 83
+        SectionHead tag: "dialog", name: "Dialog", lines: 83
         .section-desc "Modal with focus trap and scroll lock. Press Escape or click outside to dismiss."
         .demo-row
           .demo-label "Click to open"
@@ -1595,7 +1595,7 @@ export WidgetGallery = component
       # ALERT DIALOG
       # ========================================================================
       .section id: "alert-dialog"
-        SectionHead wid: "alert-dialog", name: "AlertDialog", lines: 74
+        SectionHead tag: "alert-dialog", name: "AlertDialog", lines: 74
         .section-desc "Non-dismissable modal — Escape and click-outside are blocked. User must choose an action."
         .demo-row
           .demo-label "Requires explicit action"
@@ -1631,7 +1631,7 @@ export WidgetGallery = component
       # DRAWER
       # ========================================================================
       .section id: "drawer"
-        SectionHead wid: "drawer", name: "Drawer", lines: 60
+        SectionHead tag: "drawer", name: "Drawer", lines: 60
         .section-desc "Slide-out panel from edge of screen with focus trap and scroll lock."
         .demo-row
           .demo-label "Open from right"
@@ -1669,7 +1669,7 @@ export WidgetGallery = component
       # POPOVER
       # ========================================================================
       .section id: "popover"
-        SectionHead wid: "popover", name: "Popover", lines: 117
+        SectionHead tag: "popover", name: "Popover", lines: 117
         .section-desc "Anchored floating content with flip/shift positioning."
         .demo-row
           .demo-label "Click to toggle"
@@ -1704,7 +1704,7 @@ export WidgetGallery = component
       # TOOLTIP
       # ========================================================================
       .section id: "tooltip"
-        SectionHead wid: "tooltip", name: "Tooltip", lines: 92
+        SectionHead tag: "tooltip", name: "Tooltip", lines: 92
         .section-desc "Hover/focus tooltip with delay and positioning."
         .demo-row
           .demo-label "Hover the buttons"
@@ -1735,7 +1735,7 @@ export WidgetGallery = component
       # PREVIEW CARD
       # ========================================================================
       .section id: "preview-card"
-        SectionHead wid: "preview-card", name: "PreviewCard", lines: 56
+        SectionHead tag: "preview-card", name: "PreviewCard", lines: 56
         .section-desc "Hover or focus the link to see a preview card."
         .demo-row
           PreviewCard delay: 300
@@ -1759,7 +1759,7 @@ export WidgetGallery = component
       # TOAST
       # ========================================================================
       .section id: "toast"
-        SectionHead wid: "toast", name: "Toast", lines: 56
+        SectionHead tag: "toast", name: "Toast", lines: 56
         .section-desc "Auto-dismiss notification with ARIA live region."
         .demo-row
           .demo-label "Click to show toasts"
@@ -1789,7 +1789,7 @@ export WidgetGallery = component
       # BUTTON
       # ========================================================================
       .section id: "button"
-        SectionHead wid: "button", name: "Button", lines: 10
+        SectionHead tag: "button", name: "Button", lines: 10
         .section-desc "Headless button with disabled-but-focusable pattern."
         .demo-row.btn-demo
           .demo-label "Normal, primary, and disabled"
@@ -1816,7 +1816,7 @@ export WidgetGallery = component
       # BADGE
       # ========================================================================
       .section id: "badge"
-        SectionHead wid: "badge", name: "Badge", lines: 5
+        SectionHead tag: "badge", name: "Badge", lines: 5
         .section-desc "Inline label with variant styles."
         .demo-row
           .demo-label "Variants"
@@ -1837,7 +1837,7 @@ export WidgetGallery = component
       # CARD
       # ========================================================================
       .section id: "card"
-        SectionHead wid: "card", name: "Card", lines: 6
+        SectionHead tag: "card", name: "Card", lines: 6
         .section-desc "Structured container with header, content, and footer."
         .demo-row.card-demo
           Card
@@ -1860,7 +1860,7 @@ export WidgetGallery = component
       # SEPARATOR
       # ========================================================================
       .section id: "separator"
-        SectionHead wid: "separator", name: "Separator", lines: 7
+        SectionHead tag: "separator", name: "Separator", lines: 7
         .section-desc "Decorative or semantic divider between sections."
         .demo-row
           .demo-label "Horizontal (default)"
@@ -1888,7 +1888,7 @@ export WidgetGallery = component
       # PROGRESS
       # ========================================================================
       .section id: "progress"
-        SectionHead wid: "progress", name: "Progress", lines: 14
+        SectionHead tag: "progress", name: "Progress", lines: 14
         .section-desc "Progress bar with value exposed as CSS custom property."
         .demo-row
           .demo-label "65% complete"
@@ -1910,7 +1910,7 @@ export WidgetGallery = component
       # METER
       # ========================================================================
       .section id: "meter"
-        SectionHead wid: "meter", name: "Meter", lines: 23
+        SectionHead tag: "meter", name: "Meter", lines: 23
         .section-desc "Gauge for known-range measurements with low/high/optimum thresholds."
         .demo-row
           .demo-label "Score: 72/100"
@@ -1934,7 +1934,7 @@ export WidgetGallery = component
       # SPINNER
       # ========================================================================
       .section id: "spinner"
-        SectionHead wid: "spinner", name: "Spinner", lines: 6
+        SectionHead tag: "spinner", name: "Spinner", lines: 6
         .section-desc "Loading indicator with accessible status."
         .demo-row.spinner-demo
           .demo-label "Default"
@@ -1953,7 +1953,7 @@ export WidgetGallery = component
       # SKELETON
       # ========================================================================
       .section id: "skeleton"
-        SectionHead wid: "skeleton", name: "Skeleton", lines: 10
+        SectionHead tag: "skeleton", name: "Skeleton", lines: 10
         .section-desc "Loading placeholder with shimmer animation."
         .demo-row
           .demo-label "Shapes"
@@ -1978,7 +1978,7 @@ export WidgetGallery = component
       # AVATAR
       # ========================================================================
       .section id: "avatar"
-        SectionHead wid: "avatar", name: "Avatar", lines: 23
+        SectionHead tag: "avatar", name: "Avatar", lines: 23
         .section-desc "Image with fallback to initials or placeholder."
         .demo-row
           .demo-label "With image"
@@ -2006,7 +2006,7 @@ export WidgetGallery = component
       # LABEL
       # ========================================================================
       .section id: "label"
-        SectionHead wid: "label", name: "Label", lines: 6
+        SectionHead tag: "label", name: "Label", lines: 6
         .section-desc "Standalone accessible form label."
         .demo-row
           .demo-label "With required indicator"
@@ -2026,7 +2026,7 @@ export WidgetGallery = component
       # SCROLL AREA
       # ========================================================================
       .section id: "scroll-area"
-        SectionHead wid: "scroll-area", name: "ScrollArea", lines: 115
+        SectionHead tag: "scroll-area", name: "ScrollArea", lines: 115
         .section-desc "Custom scrollbar with draggable thumb and auto-hide."
         .demo-row
           .demo-label "Scrollable content"
@@ -2067,7 +2067,7 @@ export WidgetGallery = component
       # FIELD + FIELDSET
       # ========================================================================
       .section id: "field"
-        SectionHead wid: "field", name: "Field + Fieldset", lines: 48
+        SectionHead tag: "field", name: "Field + Fieldset", lines: 48
         .section-desc "Form field wrapper with label, description, and error."
         .demo-row
           Field label: "Email", description: "We'll never share your email.", required: true, error: fieldError
@@ -2108,7 +2108,7 @@ export WidgetGallery = component
       # FORM
       # ========================================================================
       .section id: "form"
-        SectionHead wid: "form", name: "Form", lines: 21
+        SectionHead tag: "form", name: "Form", lines: 21
         .section-desc "Form wrapper with submit handling and validation state."
         .demo-row
           Form
@@ -2136,7 +2136,7 @@ export WidgetGallery = component
       # BUTTON GROUP
       # ========================================================================
       .section id: "button-group"
-        SectionHead wid: "button-group", name: "ButtonGroup", lines: 11
+        SectionHead tag: "button-group", name: "ButtonGroup", lines: 11
         .section-desc "Groups related buttons with ARIA group semantics."
         .demo-row
           .demo-label "Horizontal"
@@ -2160,7 +2160,7 @@ export WidgetGallery = component
       # GRID
       # ========================================================================
       .section id: "grid"
-        SectionHead wid: "grid", name: "Grid", lines: 799
+        SectionHead tag: "grid", name: "Grid", lines: 799
         .section-desc "Virtual-scrolling data grid. Click to select, arrows to navigate, double-click to edit."
         .demo-row
           . style: "display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px"
@@ -2210,7 +2210,7 @@ export WidgetGallery = component
       # ACCORDION
       # ========================================================================
       .section id: "accordion"
-        SectionHead wid: "accordion", name: "Accordion", lines: 86
+        SectionHead tag: "accordion", name: "Accordion", lines: 86
         .section-desc "Expand/collapse sections, single or multiple mode."
         .demo-row
           .demo-label "Single mode"
@@ -2257,7 +2257,7 @@ export WidgetGallery = component
       # TABLE
       # ========================================================================
       .section id: "table"
-        SectionHead wid: "table", name: "Table", lines: 9
+        SectionHead tag: "table", name: "Table", lines: 9
         .section-desc "Semantic table wrapper. For data-heavy tables, use Grid."
         .demo-row.table-demo
           Table caption: "Team", striped: true
@@ -2293,7 +2293,7 @@ export WidgetGallery = component
       # COLLAPSIBLE
       # ========================================================================
       .section id: "collapsible"
-        SectionHead wid: "collapsible", name: "Collapsible", lines: 33
+        SectionHead tag: "collapsible", name: "Collapsible", lines: 33
         .section-desc "Single open/close section. Simpler than Accordion."
         .demo-row.collapsible-demo
           Collapsible open <=> collapsibleOpen
@@ -2326,7 +2326,7 @@ export WidgetGallery = component
       # PAGINATION
       # ========================================================================
       .section id: "pagination"
-        SectionHead wid: "pagination", name: "Pagination", lines: 96
+        SectionHead tag: "pagination", name: "Pagination", lines: 96
         .section-desc "Page navigation with prev/next buttons and ellipsis gaps."
         .demo-row
           .demo-label "10 pages"
@@ -2358,7 +2358,7 @@ export WidgetGallery = component
       # CAROUSEL
       # ========================================================================
       .section id: "carousel"
-        SectionHead wid: "carousel", name: "Carousel", lines: 78
+        SectionHead tag: "carousel", name: "Carousel", lines: 78
         .section-desc "Slide carousel with loop and keyboard navigation."
         .demo-row
           Carousel loop: true
@@ -2397,7 +2397,7 @@ export WidgetGallery = component
       # RESIZABLE
       # ========================================================================
       .section id: "resizable"
-        SectionHead wid: "resizable", name: "Resizable", lines: 89
+        SectionHead tag: "resizable", name: "Resizable", lines: 89
         .section-desc "Draggable resize handles between panels."
         .demo-row.resizable-demo
           Resizable
