@@ -71,14 +71,9 @@ export Pagination = component
   mounted: ->
     _ready = true
 
-  ~>
-    return unless _ready
-    nav = @_nav
-    return unless nav
+  _prevPages = null
 
-    inner = nav.querySelector('[data-pages]')
-    return unless inner
-
+  _rebuild: (inner) ->
     frag = document.createDocumentFragment()
     for pg in visiblePages
       if pg < 0
@@ -89,13 +84,31 @@ export Pagination = component
         el = document.createElement 'button'
         el.setAttribute 'aria-label', "Page #{pg}"
         el.setAttribute 'data-page', ''
-        if pg is @page
-          el.setAttribute 'aria-current', 'page'
-          el.setAttribute 'data-active', ''
         el.textContent = "#{pg}"
         el.addEventListener 'click', => @goto(pg)
       frag.appendChild el
     inner.replaceChildren frag
+    _prevPages = visiblePages.join ','
+
+  _syncActive: (inner) ->
+    for btn in inner.querySelectorAll('[data-page]')
+      pg = parseInt btn.textContent
+      if pg is @page
+        btn.setAttribute 'aria-current', 'page'
+        btn.setAttribute 'data-active', ''
+      else
+        btn.removeAttribute 'aria-current'
+        btn.removeAttribute 'data-active'
+
+  ~>
+    return unless _ready
+    inner = @_nav?.querySelector('[data-pages]')
+    return unless inner
+
+    key = visiblePages.join ','
+    if key isnt _prevPages
+      @_rebuild inner
+    @_syncActive inner
 
   render
     nav ref: "_nav", aria-label: "Pagination", @keydown: @onKeydown
