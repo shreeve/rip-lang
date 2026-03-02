@@ -48,6 +48,22 @@
       popover.rip
       accordion.rip
       grid.rip
+      badge.rip
+      skeleton.rip
+      spinner.rip
+      card.rip
+      label.rip
+      textarea.rip
+      native-select.rip
+      input-group.rip
+      button-group.rip
+      alert-dialog.rip
+      breadcrumb.rip
+      table.rip
+      collapsible.rip
+      pagination.rip
+      carousel.rip
+      resizable.rip
     " data-mount="WidgetGallery">
   </script>
 </head>
@@ -58,7 +74,26 @@ do ->
   orig = HTMLElement::focus
   HTMLElement::focus = (o) -> orig.call this, { preventScroll: true, ...o }
 
+export SectionHead = component
+  accept _gallery
+  @tag := ''
+  @name := ''
+  @lines := 0
+
+  render
+    .section-title
+      = @name
+      if @lines > 0
+        span.badge @click: (=> _gallery._viewSource(@tag)), "#{@lines} lines ❐"
+      else
+        span.badge "pattern"
+      .section-nav
+        a @click: (=> _gallery._navSection(@tag, 'prev')), "‹"
+        a @click: (=> _gallery._navSection(@tag, 'home')), "⌂"
+        a @click: (=> _gallery._navSection(@tag, 'next')), "›"
+
 export WidgetGallery = component
+  offer _gallery := this
 
   # ---- State ----
   check1 := false
@@ -96,6 +131,11 @@ export WidgetGallery = component
   pickedDate := null
   dateRange := null
   darkMode := false
+  showAlertDialog := false
+  textareaVal := ''
+  nativeSelectVal := ''
+  collapsibleOpen := false
+  currentPage := 1
   sourceCode := null
   sourceName := ''
   sourceLines := 0
@@ -104,12 +144,13 @@ export WidgetGallery = component
   tocGroups := [
     { label: 'Selection', ids: ['select', 'combobox', 'multi-select', 'autocomplete'] }
     { label: 'Toggle', ids: ['checkbox', 'toggle', 'toggle-group', 'radio-group', 'checkbox-group'] }
-    { label: 'Input', ids: ['input', 'number-field', 'slider', 'otp-field', 'date-picker', 'editable-value'] }
-    { label: 'Navigation', ids: ['tabs', 'menu', 'context-menu', 'menubar', 'nav-menu', 'toolbar'] }
-    { label: 'Overlay', ids: ['dialog', 'drawer', 'popover', 'tooltip', 'preview-card', 'toast'] }
-    { label: 'Display', ids: ['button', 'separator', 'progress', 'meter', 'avatar', 'scroll-area'] }
-    { label: 'Form', ids: ['field', 'fieldset', 'form'] }
-    { label: 'Data', ids: ['grid', 'accordion'] }
+    { label: 'Input', ids: ['input', 'textarea', 'native-select', 'number-field', 'slider', 'otp-field', 'date-picker', 'editable-value', 'input-group'] }
+    { label: 'Navigation', ids: ['tabs', 'menu', 'context-menu', 'menubar', 'nav-menu', 'toolbar', 'breadcrumb'] }
+    { label: 'Overlay', ids: ['dialog', 'alert-dialog', 'drawer', 'popover', 'tooltip', 'preview-card', 'toast'] }
+    { label: 'Display', ids: ['button', 'badge', 'card', 'separator', 'progress', 'meter', 'spinner', 'skeleton', 'avatar', 'label', 'scroll-area'] }
+    { label: 'Form', ids: ['field', 'fieldset', 'form', 'button-group'] }
+    { label: 'Data', ids: ['grid', 'accordion', 'table', 'collapsible'] }
+    { label: 'Interactive', ids: ['pagination', 'carousel', 'resizable'] }
   ]
   _nameFor: (id) -> (tocData.find((c) -> c.id is id))?.name or id
   _viewSource: (id) ->
@@ -128,7 +169,11 @@ export WidgetGallery = component
     document.head.appendChild(link)
     script = document.createElement('script')
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js'
-    script.onload = cb
+    script.onload = =>
+      fetch('hljs-rip.js').then((r) -> r.text()).then (src) =>
+        fn = new Function('return ' + src.replace(/[\s\S]*export default /, ''))()
+        hljs.registerLanguage 'rip', fn
+        cb()
     document.head.appendChild(script)
   _onFilter: (e) -> tocFilter = e.target.value
   _getVisibleLinks: -> Array.from(document.querySelectorAll('.toc-nav .toc-group a:not([data-hidden])') or [])
@@ -235,44 +280,60 @@ export WidgetGallery = component
     if visible.length is 1
       tocActive = visible[0].getAttribute('href')?.slice(1)
   tocData := [
-    { id: 'select', name: 'Select', lines: 184, desc: 'Dropdown with typeahead, keyboard nav, ARIA listbox.', props: ['@value', '@placeholder', '@disabled'], events: ['change'], keys: ['↕', 'Enter', 'Space', 'Esc', 'Home', 'End', 'type-ahead'], attrs: ['$open', '$placeholder', '$disabled', '$value', '$highlighted', '$selected'] }
-    { id: 'combobox', name: 'Combobox', lines: 153, desc: 'Filterable input + listbox for search-as-you-type.', props: ['@query', '@items', '@placeholder', '@disabled', '@autoHighlight'], events: ['filter', 'select'], keys: ['↕', 'Enter', 'Esc', 'Tab'], attrs: ['$open', '$disabled', '$clear', '$value', '$highlighted', '$empty'] }
-    { id: 'multi-select', name: 'MultiSelect', lines: 158, desc: 'Multi-select with chips, filtering, and keyboard nav.', props: ['@value', '@items', '@placeholder', '@disabled'], events: ['change'], keys: ['↕', 'Enter', 'Esc', 'Backspace', 'Tab'], attrs: ['$open', '$disabled', '$chips', '$chip', '$remove', '$clear', '$highlighted', '$selected'] }
-    { id: 'autocomplete', name: 'Autocomplete', lines: 141, desc: 'Suggestion input — type to filter, select to fill.', props: ['@value', '@items', '@placeholder', '@disabled'], events: ['select'], keys: ['↕', 'Enter', 'Esc', 'Tab'], attrs: ['$open', '$disabled', '$clear'] }
-    { id: 'checkbox', name: 'Checkbox', lines: 33, desc: 'Toggle with checkbox or switch semantics.', props: ['@checked', '@disabled', '@indeterminate', '@switch'], events: ['change'], keys: [], attrs: ['$checked', '$indeterminate', '$disabled'] }
-    { id: 'toggle', name: 'Toggle', lines: 24, desc: 'Two-state toggle button with pressed state.', props: ['@pressed', '@disabled'], events: ['change'], keys: [], attrs: ['$pressed', '$disabled'] }
-    { id: 'toggle-group', name: 'ToggleGroup', lines: 78, desc: 'Single or multi-select toggle buttons.', props: ['@value', '@disabled', '@multiple', '@orientation'], events: ['change'], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation', '$disabled', '$pressed', '$value'] }
-    { id: 'radio-group', name: 'RadioGroup', lines: 67, desc: 'Exactly one option selected with arrow key nav.', props: ['@value', '@disabled', '@orientation', '@name'], events: ['change'], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation', '$disabled', '$checked', '$value'] }
-    { id: 'checkbox-group', name: 'CheckboxGroup', lines: 65, desc: 'Multiple options checked independently.', props: ['@value', '@disabled', '@orientation', '@label'], events: ['change'], keys: ['← →', '↕'], attrs: ['$orientation', '$disabled', '$checked', '$value'] }
-    { id: 'input', name: 'Input', lines: 35, desc: 'Headless input tracking focus, touch, and validation.', props: ['@value', '@placeholder', '@type', '@disabled', '@required'], events: [], keys: [], attrs: ['$disabled', '$focused', '$touched'] }
-    { id: 'number-field', name: 'NumberField', lines: 162, desc: 'Number input with stepper buttons and hold-to-repeat.', props: ['@value', '@min', '@max', '@step', '@disabled', '@readOnly'], events: ['input', 'change'], keys: ['↕', 'PgUp', 'PgDn', 'Home', 'End'], attrs: ['$disabled', '$readonly', '$decrement', '$increment'] }
-    { id: 'slider', name: 'Slider', lines: 165, desc: 'Draggable range input with pointer capture and keyboard.', props: ['@value', '@min', '@max', '@step', '@orientation', '@disabled'], events: ['input', 'change'], keys: ['← →', '↕', 'PgUp', 'PgDn', 'Home', 'End'], attrs: ['$orientation', '$disabled', '$dragging', '$track', '$indicator', '$thumb', '$active'] }
-    { id: 'otp-field', name: 'OTPField', lines: 89, desc: 'Multi-digit code input with auto-advance and paste.', props: ['@length', '@value', '@disabled', '@mask'], events: ['input', 'complete'], keys: ['← →', 'Backspace', 'Home', 'End', 'paste'], attrs: ['$disabled', '$complete', '$filled'] }
-    { id: 'date-picker', name: 'DatePicker', lines: 214, desc: 'Calendar dropdown for single date or range selection.', props: ['@value', '@placeholder', '@disabled', '@range', '@firstDayOfWeek'], events: ['change'], keys: ['Esc', 'Enter', 'Space'], attrs: ['$open', '$disabled', '$range', '$calendar', '$selected', '$today', '$in-range'] }
-    { id: 'editable-value', name: 'EditableValue', lines: 80, desc: 'Click-to-edit inline value with popover form.', props: ['@disabled'], events: ['save'], keys: ['Esc', 'Enter'], attrs: ['$editing', '$disabled', '$saving', '$edit-trigger'] }
-    { id: 'tabs', name: 'Tabs', lines: 124, desc: 'Tab panel with roving tabindex and arrow key nav.', props: ['@active', '@orientation', '@activation'], events: ['change'], keys: ['← →', '↕', 'Home', 'End', 'Enter', 'Space'], attrs: ['$tab', '$panel', '$active', '$disabled'] }
-    { id: 'menu', name: 'Menu', lines: 162, desc: 'Dropdown action menu with keyboard navigation.', props: ['@disabled'], events: ['select'], keys: ['↕', 'Home', 'End', 'Enter', 'Space', 'Esc', 'Tab', 'type-ahead'], attrs: ['$open', '$disabled', '$highlighted', '$value'] }
-    { id: 'context-menu', name: 'ContextMenu', lines: 98, desc: 'Right-click context menu with keyboard navigation.', props: ['@disabled'], events: ['select'], keys: ['↕', 'Home', 'End', 'Enter', 'Space', 'Esc', 'Tab'], attrs: ['$open', '$highlighted', '$disabled', '$value'] }
-    { id: 'menubar', name: 'Menubar', lines: 155, desc: 'Horizontal menu bar with dropdown menus.', props: ['@disabled'], events: ['select'], keys: ['← →', '↕', 'Enter', 'Space', 'Esc', 'Tab'], attrs: ['$disabled', '$open', '$highlighted', '$value'] }
-    { id: 'nav-menu', name: 'NavMenu', lines: 132, desc: 'Site navigation with hover/click dropdown panels.', props: ['@orientation', '@hoverDelay', '@hoverCloseDelay'], events: [], keys: ['← →', '↓', 'Esc'], attrs: ['$orientation', '$open'] }
-    { id: 'toolbar', name: 'Toolbar', lines: 46, desc: 'Groups controls with roving tabindex keyboard nav.', props: ['@orientation', '@label'], events: [], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation'] }
-    { id: 'dialog', name: 'Dialog', lines: 107, desc: 'Modal with focus trap, scroll lock, escape dismiss.', props: ['@open', '@dismissable', '@initialFocus'], events: ['close'], keys: ['Esc', 'Tab'], attrs: ['$open'] }
-    { id: 'drawer', name: 'Drawer', lines: 79, desc: 'Slide-out panel with focus trap and scroll lock.', props: ['@open', '@side', '@dismissable'], events: ['close'], keys: ['Esc', 'Tab'], attrs: ['$open', '$side'] }
-    { id: 'popover', name: 'Popover', lines: 143, desc: 'Anchored floating content with flip/shift positioning.', props: ['@placement', '@offset', '@disabled', '@openOnHover', '@hoverDelay', '@hoverCloseDelay'], events: [], keys: ['Esc', 'Enter', 'Space', '↓'], attrs: ['$open', '$placement'] }
-    { id: 'tooltip', name: 'Tooltip', lines: 115, desc: 'Hover/focus tooltip with delay and positioning.', props: ['@text', '@placement', '@delay', '@offset', '@hoverable'], events: [], keys: [], attrs: ['$open', '$entering', '$exiting', '$placement'] }
-    { id: 'preview-card', name: 'PreviewCard', lines: 73, desc: 'Hover/focus preview card with delay.', props: ['@delay', '@closeDelay'], events: [], keys: [], attrs: ['$open'] }
-    { id: 'toast', name: 'Toast', lines: 88, desc: 'Auto-dismiss notification with ARIA live region.', props: ['@toasts', '@toast', '@placement'], events: ['dismiss'], keys: [], attrs: ['$placement', '$type', '$leaving'] }
-    { id: 'button', name: 'Button', lines: 23, desc: 'Accessible button with disabled-but-focusable pattern.', props: ['@disabled'], events: ['press'], keys: [], attrs: ['$disabled'] }
-    { id: 'separator', name: 'Separator', lines: 17, desc: 'Decorative or semantic divider between sections.', props: ['@orientation', '@decorative'], events: [], keys: [], attrs: ['$orientation'] }
-    { id: 'progress', name: 'Progress', lines: 25, desc: 'Progress bar with CSS custom property for value.', props: ['@value', '@max', '@label'], events: [], keys: [], attrs: ['$complete'] }
-    { id: 'meter', name: 'Meter', lines: 36, desc: 'Gauge for known-range measurements with thresholds.', props: ['@value', '@min', '@max', '@low', '@high', '@optimum', '@label'], events: [], keys: [], attrs: ['$level'] }
-    { id: 'avatar', name: 'Avatar', lines: 37, desc: 'Image with fallback to initials or placeholder.', props: ['@src', '@alt', '@fallback'], events: [], keys: [], attrs: ['$status', '$initials', '$placeholder'] }
-    { id: 'scroll-area', name: 'ScrollArea', lines: 145, desc: 'Custom scrollbar with draggable thumb and auto-hide.', props: ['@orientation'], events: [], keys: [], attrs: ['$orientation', '$hovering', '$scrolling', '$dragging', '$viewport', '$scrollbar', '$thumb'] }
-    { id: 'field', name: 'Field', lines: 53, desc: 'Form field wrapper with label, description, and error.', props: ['@label', '@description', '@error', '@disabled', '@required'], events: [], keys: [], attrs: ['$disabled', '$invalid', '$label', '$required', '$description', '$error'] }
-    { id: 'fieldset', name: 'Fieldset', lines: 22, desc: 'Grouped fields with legend and cascading disable.', props: ['@legend', '@disabled'], events: [], keys: [], attrs: ['$disabled', '$legend'] }
-    { id: 'form', name: 'Form', lines: 39, desc: 'Form wrapper with submit handling and validation state.', props: ['@disabled'], events: ['submit'], keys: [], attrs: ['$disabled', '$submitting', '$submitted'] }
-    { id: 'grid', name: 'Grid', lines: 901, desc: 'Virtual-scrolling data grid — 100K+ rows at 60fps.', props: ['@data', '@columns', '@rowHeight', '@overscan', '@striped', '@beforeEdit', '@afterEdit'], events: [], keys: ['Arrows', 'Tab', 'Enter', 'F2', 'Esc', 'Home', 'End', 'PgUp', 'PgDn', 'Ctrl+A', 'Ctrl+C', 'Ctrl+V', 'Ctrl+X'], attrs: ['$editing', '$selecting', '$sorted'] }
-    { id: 'accordion', name: 'Accordion', lines: 113, desc: 'Expand/collapse sections, single or multiple mode.', props: ['@multiple'], events: ['change'], keys: ['Enter', 'Space', '↕', 'Home', 'End'], attrs: ['$item', '$trigger', '$content', '$open', '$disabled'] }
+    { id: 'select', name: 'Select', lines: 147, desc: 'Dropdown with typeahead, keyboard nav, ARIA listbox.', props: ['@value', '@placeholder', '@disabled'], events: ['change'], keys: ['↕', 'Enter', 'Space', 'Esc', 'Home', 'End', 'type-ahead'], attrs: ['$open', '$placeholder', '$disabled', '$value', '$highlighted', '$selected'] }
+    { id: 'combobox', name: 'Combobox', lines: 124, desc: 'Filterable input + listbox for search-as-you-type.', props: ['@query', '@items', '@placeholder', '@disabled', '@autoHighlight'], events: ['filter', 'select'], keys: ['↕', 'Enter', 'Esc', 'Tab'], attrs: ['$open', '$disabled', '$clear', '$value', '$highlighted', '$empty'] }
+    { id: 'multi-select', name: 'MultiSelect', lines: 130, desc: 'Multi-select with chips, filtering, and keyboard nav.', props: ['@value', '@items', '@placeholder', '@disabled'], events: ['change'], keys: ['↕', 'Enter', 'Esc', 'Backspace', 'Tab'], attrs: ['$open', '$disabled', '$chips', '$chip', '$remove', '$clear', '$highlighted', '$selected'] }
+    { id: 'autocomplete', name: 'Autocomplete', lines: 115, desc: 'Suggestion input — type to filter, select to fill.', props: ['@value', '@items', '@placeholder', '@disabled'], events: ['select'], keys: ['↕', 'Enter', 'Esc', 'Tab'], attrs: ['$open', '$disabled', '$clear'] }
+    { id: 'checkbox', name: 'Checkbox', lines: 18, desc: 'Toggle with checkbox or switch semantics.', props: ['@checked', '@disabled', '@indeterminate', '@switch'], events: ['change'], keys: [], attrs: ['$checked', '$indeterminate', '$disabled'] }
+    { id: 'toggle', name: 'Toggle', lines: 13, desc: 'Two-state toggle button with pressed state.', props: ['@pressed', '@disabled'], events: ['change'], keys: [], attrs: ['$pressed', '$disabled'] }
+    { id: 'toggle-group', name: 'ToggleGroup', lines: 59, desc: 'Single or multi-select toggle buttons.', props: ['@value', '@disabled', '@multiple', '@orientation'], events: ['change'], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation', '$disabled', '$pressed', '$value'] }
+    { id: 'radio-group', name: 'RadioGroup', lines: 50, desc: 'Exactly one option selected with arrow key nav.', props: ['@value', '@disabled', '@orientation', '@name'], events: ['change'], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation', '$disabled', '$checked', '$value'] }
+    { id: 'checkbox-group', name: 'CheckboxGroup', lines: 46, desc: 'Multiple options checked independently.', props: ['@value', '@disabled', '@orientation', '@label'], events: ['change'], keys: ['← →', '↕'], attrs: ['$orientation', '$disabled', '$checked', '$value'] }
+    { id: 'input', name: 'Input', lines: 24, desc: 'Headless input tracking focus, touch, and validation.', props: ['@value', '@placeholder', '@type', '@disabled', '@required'], events: [], keys: [], attrs: ['$disabled', '$focused', '$touched'] }
+    { id: 'number-field', name: 'NumberField', lines: 132, desc: 'Number input with stepper buttons and hold-to-repeat.', props: ['@value', '@min', '@max', '@step', '@disabled', '@readOnly'], events: ['input', 'change'], keys: ['↕', 'PgUp', 'PgDn', 'Home', 'End'], attrs: ['$disabled', '$readonly', '$decrement', '$increment'] }
+    { id: 'slider', name: 'Slider', lines: 130, desc: 'Draggable range input with pointer capture and keyboard.', props: ['@value', '@min', '@max', '@step', '@orientation', '@disabled'], events: ['input', 'change'], keys: ['← →', '↕', 'PgUp', 'PgDn', 'Home', 'End'], attrs: ['$orientation', '$disabled', '$dragging', '$track', '$indicator', '$thumb', '$active'] }
+    { id: 'otp-field', name: 'OTPField', lines: 72, desc: 'Multi-digit code input with auto-advance and paste.', props: ['@length', '@value', '@disabled', '@mask'], events: ['input', 'complete'], keys: ['← →', 'Backspace', 'Home', 'End', 'paste'], attrs: ['$disabled', '$complete', '$filled'] }
+    { id: 'date-picker', name: 'DatePicker', lines: 172, desc: 'Calendar dropdown for single date or range selection.', props: ['@value', '@placeholder', '@disabled', '@range', '@firstDayOfWeek'], events: ['change'], keys: ['Esc', 'Enter', 'Space'], attrs: ['$open', '$disabled', '$range', '$calendar', '$selected', '$today', '$in-range'] }
+    { id: 'editable-value', name: 'EditableValue', lines: 58, desc: 'Click-to-edit inline value with popover form.', props: ['@disabled'], events: ['save'], keys: ['Esc', 'Enter'], attrs: ['$editing', '$disabled', '$saving', '$edit-trigger'] }
+    { id: 'tabs', name: 'Tabs', lines: 91, desc: 'Tab panel with roving tabindex and arrow key nav.', props: ['@active', '@orientation', '@activation'], events: ['change'], keys: ['← →', '↕', 'Home', 'End', 'Enter', 'Space'], attrs: ['$tab', '$panel', '$active', '$disabled'] }
+    { id: 'menu', name: 'Menu', lines: 133, desc: 'Dropdown action menu with keyboard navigation.', props: ['@disabled'], events: ['select'], keys: ['↕', 'Home', 'End', 'Enter', 'Space', 'Esc', 'Tab', 'type-ahead'], attrs: ['$open', '$disabled', '$highlighted', '$value'] }
+    { id: 'context-menu', name: 'ContextMenu', lines: 80, desc: 'Right-click context menu with keyboard navigation.', props: ['@disabled'], events: ['select'], keys: ['↕', 'Home', 'End', 'Enter', 'Space', 'Esc', 'Tab'], attrs: ['$open', '$highlighted', '$disabled', '$value'] }
+    { id: 'menubar', name: 'Menubar', lines: 125, desc: 'Horizontal menu bar with dropdown menus.', props: ['@disabled'], events: ['select'], keys: ['← →', '↕', 'Enter', 'Space', 'Esc', 'Tab'], attrs: ['$disabled', '$open', '$highlighted', '$value'] }
+    { id: 'nav-menu', name: 'NavMenu', lines: 99, desc: 'Site navigation with hover/click dropdown panels.', props: ['@orientation', '@hoverDelay', '@hoverCloseDelay'], events: [], keys: ['← →', '↓', 'Esc'], attrs: ['$orientation', '$open'] }
+    { id: 'toolbar', name: 'Toolbar', lines: 31, desc: 'Groups controls with roving tabindex keyboard nav.', props: ['@orientation', '@label'], events: [], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation'] }
+    { id: 'dialog', name: 'Dialog', lines: 83, desc: 'Modal with focus trap, scroll lock, escape dismiss.', props: ['@open', '@dismissable', '@initialFocus'], events: ['close'], keys: ['Esc', 'Tab'], attrs: ['$open'] }
+    { id: 'drawer', name: 'Drawer', lines: 60, desc: 'Slide-out panel with focus trap and scroll lock.', props: ['@open', '@side', '@dismissable'], events: ['close'], keys: ['Esc', 'Tab'], attrs: ['$open', '$side'] }
+    { id: 'popover', name: 'Popover', lines: 117, desc: 'Anchored floating content with flip/shift positioning.', props: ['@placement', '@offset', '@disabled', '@openOnHover', '@hoverDelay', '@hoverCloseDelay'], events: [], keys: ['Esc', 'Enter', 'Space', '↓'], attrs: ['$open', '$placement'] }
+    { id: 'tooltip', name: 'Tooltip', lines: 92, desc: 'Hover/focus tooltip with delay and positioning.', props: ['@text', '@placement', '@delay', '@offset', '@hoverable'], events: [], keys: [], attrs: ['$open', '$entering', '$exiting', '$placement'] }
+    { id: 'preview-card', name: 'PreviewCard', lines: 56, desc: 'Hover/focus preview card with delay.', props: ['@delay', '@closeDelay'], events: [], keys: [], attrs: ['$open'] }
+    { id: 'toast', name: 'Toast', lines: 56, desc: 'Auto-dismiss notification with ARIA live region.', props: ['@toasts', '@toast', '@placement'], events: ['dismiss'], keys: [], attrs: ['$placement', '$type', '$leaving'] }
+    { id: 'button', name: 'Button', lines: 10, desc: 'Accessible button with disabled-but-focusable pattern.', props: ['@disabled'], events: ['press'], keys: [], attrs: ['$disabled'] }
+    { id: 'separator', name: 'Separator', lines: 7, desc: 'Decorative or semantic divider between sections.', props: ['@orientation', '@decorative'], events: [], keys: [], attrs: ['$orientation'] }
+    { id: 'progress', name: 'Progress', lines: 14, desc: 'Progress bar with CSS custom property for value.', props: ['@value', '@max', '@label'], events: [], keys: [], attrs: ['$complete'] }
+    { id: 'meter', name: 'Meter', lines: 23, desc: 'Gauge for known-range measurements with thresholds.', props: ['@value', '@min', '@max', '@low', '@high', '@optimum', '@label'], events: [], keys: [], attrs: ['$level'] }
+    { id: 'avatar', name: 'Avatar', lines: 23, desc: 'Image with fallback to initials or placeholder.', props: ['@src', '@alt', '@fallback'], events: [], keys: [], attrs: ['$status', '$initials', '$placeholder'] }
+    { id: 'scroll-area', name: 'ScrollArea', lines: 115, desc: 'Custom scrollbar with draggable thumb and auto-hide.', props: ['@orientation'], events: [], keys: [], attrs: ['$orientation', '$hovering', '$scrolling', '$dragging', '$viewport', '$scrollbar', '$thumb'] }
+    { id: 'field', name: 'Field', lines: 39, desc: 'Form field wrapper with label, description, and error.', props: ['@label', '@description', '@error', '@disabled', '@required'], events: [], keys: [], attrs: ['$disabled', '$invalid', '$label', '$required', '$description', '$error'] }
+    { id: 'fieldset', name: 'Fieldset', lines: 9, desc: 'Grouped fields with legend and cascading disable.', props: ['@legend', '@disabled'], events: [], keys: [], attrs: ['$disabled', '$legend'] }
+    { id: 'form', name: 'Form', lines: 21, desc: 'Form wrapper with submit handling and validation state.', props: ['@disabled'], events: ['submit'], keys: [], attrs: ['$disabled', '$submitting', '$submitted'] }
+    { id: 'grid', name: 'Grid', lines: 799, desc: 'Virtual-scrolling data grid — 100K+ rows at 60fps.', props: ['@data', '@columns', '@rowHeight', '@overscan', '@striped', '@beforeEdit', '@afterEdit'], events: [], keys: ['Arrows', 'Tab', 'Enter', 'F2', 'Esc', 'Home', 'End', 'PgUp', 'PgDn', 'Ctrl+A', 'Ctrl+C', 'Ctrl+V', 'Ctrl+X'], attrs: ['$editing', '$selecting', '$sorted'] }
+    { id: 'accordion', name: 'Accordion', lines: 86, desc: 'Expand/collapse sections, single or multiple mode.', props: ['@multiple'], events: ['change'], keys: ['Enter', 'Space', '↕', 'Home', 'End'], attrs: ['$item', '$trigger', '$content', '$open', '$disabled'] }
+    { id: 'badge', name: 'Badge', lines: 5, desc: 'Inline label with variant (solid/outline/subtle).', props: ['@variant'], events: [], keys: [], attrs: ['$variant'] }
+    { id: 'skeleton', name: 'Skeleton', lines: 10, desc: 'Loading placeholder with shimmer animation.', props: ['@width', '@height', '@circle', '@label'], events: [], keys: [], attrs: ['$circle'] }
+    { id: 'spinner', name: 'Spinner', lines: 6, desc: 'Loading indicator with accessible status.', props: ['@label', '@size'], events: [], keys: [], attrs: [] }
+    { id: 'card', name: 'Card', lines: 6, desc: 'Structured container with header/content/footer.', props: ['@interactive'], events: [], keys: [], attrs: ['$interactive'] }
+    { id: 'label', name: 'Label', lines: 6, desc: 'Standalone accessible form label.', props: ['@for', '@required'], events: [], keys: [], attrs: ['$required'] }
+    { id: 'textarea', name: 'Textarea', lines: 33, desc: 'Auto-resizing text area with focus and validation tracking.', props: ['@value', '@placeholder', '@disabled', '@required', '@rows', '@autoResize'], events: [], keys: [], attrs: ['$disabled', '$focused', '$touched'] }
+    { id: 'native-select', name: 'NativeSelect', lines: 18, desc: 'Styled native select element with state tracking.', props: ['@value', '@disabled', '@required'], events: ['change'], keys: [], attrs: ['$disabled', '$focused'] }
+    { id: 'input-group', name: 'InputGroup', lines: 11, desc: 'Input with prefix/suffix addon elements.', props: ['@disabled'], events: [], keys: [], attrs: ['$disabled', '$focused'] }
+    { id: 'button-group', name: 'ButtonGroup', lines: 11, desc: 'Grouped buttons with ARIA group semantics.', props: ['@orientation', '@disabled', '@label'], events: [], keys: [], attrs: ['$orientation', '$disabled'] }
+    { id: 'alert-dialog', name: 'AlertDialog', lines: 74, desc: 'Non-dismissable modal requiring explicit user action.', props: ['@open', '@initialFocus'], events: ['close'], keys: ['Tab'], attrs: ['$open'] }
+    { id: 'breadcrumb', name: 'Breadcrumb', lines: 25, desc: 'Navigation trail with separator and current page.', props: ['@separator', '@label'], events: [], keys: [], attrs: ['$current'] }
+    { id: 'table', name: 'Table', lines: 9, desc: 'Semantic table wrapper with optional caption and striped rows.', props: ['@caption', '@striped'], events: [], keys: [], attrs: ['$striped'] }
+    { id: 'collapsible', name: 'Collapsible', lines: 33, desc: 'Single open/close section with animated expand.', props: ['@open', '@disabled'], events: ['change'], keys: ['Enter', 'Space'], attrs: ['$open', '$disabled'] }
+    { id: 'pagination', name: 'Pagination', lines: 96, desc: 'Page navigation with prev/next and ellipsis gaps.', props: ['@page', '@total', '@perPage', '@siblingCount'], events: ['change'], keys: ['← →', 'Home', 'End'], attrs: ['$active', '$disabled', '$ellipsis'] }
+    { id: 'carousel', name: 'Carousel', lines: 78, desc: 'Slide carousel with autoplay, loop, and keyboard nav.', props: ['@orientation', '@loop', '@autoplay', '@interval', '@label'], events: ['change'], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation', '$active', '$prev', '$next'] }
+    { id: 'resizable', name: 'Resizable', lines: 89, desc: 'Draggable resize handles between panels.', props: ['@orientation', '@minSize', '@maxSize'], events: ['resize'], keys: ['← →', '↕'], attrs: ['$orientation', '$dragging'] }
   ]
   _infoName := ''
   _infoDesc := ''
@@ -304,6 +365,7 @@ export WidgetGallery = component
       lines = text.split('\n')
       gutterEl.textContent = lines.map((_, i) -> String(i + 1)).join('\n') if gutterEl
       codeEl.textContent = text
+      codeEl.className = 'source-code language-rip'
       @_ensureHljs =>
         hljs.highlightElement(codeEl) if window.hljs
     , 0
@@ -350,13 +412,12 @@ export WidgetGallery = component
   gridCellRef := ''
 
   _updateGridRef: ->
-    cell = document.querySelector('.grid-container [data-active]')
+    cell = document.querySelector('.grid-container td[data-active]')
     if cell
-      row = cell.parentElement
-      rows = Array.from(row.parentElement.children).filter (r) -> r.tagName is 'TR' and not r.classList.contains('spacer')
-      ri = rows.indexOf(row)
-      ci = Array.from(row.children).indexOf(cell)
-      gridCellRef = "R#{ri + 1}:C#{ci + 1}" if ri >= 0 and ci >= 0
+      tr = cell.parentElement
+      rowNum = tr?.firstElementChild?.textContent?.trim()
+      ci = Array.from(tr.children).indexOf(cell)
+      gridCellRef = if rowNum then "R#{rowNum}:C#{ci + 1}" else ''
     else
       gridCellRef = ''
 
@@ -395,7 +456,7 @@ export WidgetGallery = component
     { _row: 12, name: 'Leo Martin', role: 'Engineer', age: 24, city: 'Boston' },
   ]
 
-  sectionIds =! ['select', 'combobox', 'multi-select', 'autocomplete', 'checkbox', 'toggle', 'toggle-group', 'radio-group', 'checkbox-group', 'input', 'number-field', 'slider', 'otp-field', 'date-picker', 'editable-value', 'tabs', 'menu', 'context-menu', 'menubar', 'nav-menu', 'toolbar', 'dialog', 'drawer', 'popover', 'tooltip', 'preview-card', 'toast', 'button', 'separator', 'progress', 'meter', 'avatar', 'scroll-area', 'field', 'form', 'grid', 'accordion']
+  sectionIds =! ['select', 'combobox', 'multi-select', 'autocomplete', 'checkbox', 'toggle', 'toggle-group', 'radio-group', 'checkbox-group', 'input', 'textarea', 'native-select', 'number-field', 'slider', 'otp-field', 'date-picker', 'editable-value', 'input-group', 'tabs', 'menu', 'context-menu', 'menubar', 'nav-menu', 'toolbar', 'breadcrumb', 'dialog', 'alert-dialog', 'drawer', 'popover', 'tooltip', 'preview-card', 'toast', 'button', 'badge', 'card', 'separator', 'progress', 'meter', 'spinner', 'skeleton', 'avatar', 'label', 'scroll-area', 'field', 'form', 'button-group', 'grid', 'accordion', 'table', 'collapsible', 'pagination', 'carousel', 'resizable']
 
   _fadeTo: (el) ->
     return unless el
@@ -438,7 +499,7 @@ export WidgetGallery = component
           h1 "Rip UI"
           button.theme-toggle @click: (=> @_toggleDark())
             if darkMode then "☀" else "☾"
-        p "38 headless, accessible components. Zero CSS, zero dependencies."
+        p "54 headless, accessible components. Zero CSS, zero dependencies."
 
       .toc
         .toc-nav @keydown: @_onTocKeydown
@@ -459,11 +520,14 @@ export WidgetGallery = component
           .toc-group
             .toc-label "Input"
             a @mouseenter: (=> tocActive = 'input'), @click: (=> tocActive = 'input'), href: "#input", $active: (tocActive is 'input')?!, "Input"
+            a @mouseenter: (=> tocActive = 'textarea'), @click: (=> tocActive = 'textarea'), href: "#textarea", $active: (tocActive is 'textarea')?!, "Textarea"
+            a @mouseenter: (=> tocActive = 'native-select'), @click: (=> tocActive = 'native-select'), href: "#native-select", $active: (tocActive is 'native-select')?!, "NativeSelect"
             a @mouseenter: (=> tocActive = 'number-field'), @click: (=> tocActive = 'number-field'), href: "#number-field", $active: (tocActive is 'number-field')?!, "NumberField"
             a @mouseenter: (=> tocActive = 'slider'), @click: (=> tocActive = 'slider'), href: "#slider", $active: (tocActive is 'slider')?!, "Slider"
             a @mouseenter: (=> tocActive = 'otp-field'), @click: (=> tocActive = 'otp-field'), href: "#otp-field", $active: (tocActive is 'otp-field')?!, "OTPField"
             a @mouseenter: (=> tocActive = 'date-picker'), @click: (=> tocActive = 'date-picker'), href: "#date-picker", $active: (tocActive is 'date-picker')?!, "DatePicker"
             a @mouseenter: (=> tocActive = 'editable-value'), @click: (=> tocActive = 'editable-value'), href: "#editable-value", $active: (tocActive is 'editable-value')?!, "EditableValue"
+            a @mouseenter: (=> tocActive = 'input-group'), @click: (=> tocActive = 'input-group'), href: "#input-group", $active: (tocActive is 'input-group')?!, "InputGroup"
           .toc-group
             .toc-label "Navigation"
             a @mouseenter: (=> tocActive = 'tabs'), @click: (=> tocActive = 'tabs'), href: "#tabs", $active: (tocActive is 'tabs')?!, "Tabs"
@@ -472,9 +536,11 @@ export WidgetGallery = component
             a @mouseenter: (=> tocActive = 'menubar'), @click: (=> tocActive = 'menubar'), href: "#menubar", $active: (tocActive is 'menubar')?!, "Menubar"
             a @mouseenter: (=> tocActive = 'nav-menu'), @click: (=> tocActive = 'nav-menu'), href: "#nav-menu", $active: (tocActive is 'nav-menu')?!, "NavMenu"
             a @mouseenter: (=> tocActive = 'toolbar'), @click: (=> tocActive = 'toolbar'), href: "#toolbar", $active: (tocActive is 'toolbar')?!, "Toolbar"
+            a @mouseenter: (=> tocActive = 'breadcrumb'), @click: (=> tocActive = 'breadcrumb'), href: "#breadcrumb", $active: (tocActive is 'breadcrumb')?!, "Breadcrumb"
           .toc-group
             .toc-label "Overlay"
             a @mouseenter: (=> tocActive = 'dialog'), @click: (=> tocActive = 'dialog'), href: "#dialog", $active: (tocActive is 'dialog')?!, "Dialog"
+            a @mouseenter: (=> tocActive = 'alert-dialog'), @click: (=> tocActive = 'alert-dialog'), href: "#alert-dialog", $active: (tocActive is 'alert-dialog')?!, "AlertDialog"
             a @mouseenter: (=> tocActive = 'drawer'), @click: (=> tocActive = 'drawer'), href: "#drawer", $active: (tocActive is 'drawer')?!, "Drawer"
             a @mouseenter: (=> tocActive = 'popover'), @click: (=> tocActive = 'popover'), href: "#popover", $active: (tocActive is 'popover')?!, "Popover"
             a @mouseenter: (=> tocActive = 'tooltip'), @click: (=> tocActive = 'tooltip'), href: "#tooltip", $active: (tocActive is 'tooltip')?!, "Tooltip"
@@ -483,20 +549,33 @@ export WidgetGallery = component
           .toc-group
             .toc-label "Display"
             a @mouseenter: (=> tocActive = 'button'), @click: (=> tocActive = 'button'), href: "#button", $active: (tocActive is 'button')?!, "Button"
+            a @mouseenter: (=> tocActive = 'badge'), @click: (=> tocActive = 'badge'), href: "#badge", $active: (tocActive is 'badge')?!, "Badge"
+            a @mouseenter: (=> tocActive = 'card'), @click: (=> tocActive = 'card'), href: "#card", $active: (tocActive is 'card')?!, "Card"
             a @mouseenter: (=> tocActive = 'separator'), @click: (=> tocActive = 'separator'), href: "#separator", $active: (tocActive is 'separator')?!, "Separator"
             a @mouseenter: (=> tocActive = 'progress'), @click: (=> tocActive = 'progress'), href: "#progress", $active: (tocActive is 'progress')?!, "Progress"
             a @mouseenter: (=> tocActive = 'meter'), @click: (=> tocActive = 'meter'), href: "#meter", $active: (tocActive is 'meter')?!, "Meter"
+            a @mouseenter: (=> tocActive = 'spinner'), @click: (=> tocActive = 'spinner'), href: "#spinner", $active: (tocActive is 'spinner')?!, "Spinner"
+            a @mouseenter: (=> tocActive = 'skeleton'), @click: (=> tocActive = 'skeleton'), href: "#skeleton", $active: (tocActive is 'skeleton')?!, "Skeleton"
             a @mouseenter: (=> tocActive = 'avatar'), @click: (=> tocActive = 'avatar'), href: "#avatar", $active: (tocActive is 'avatar')?!, "Avatar"
+            a @mouseenter: (=> tocActive = 'label'), @click: (=> tocActive = 'label'), href: "#label", $active: (tocActive is 'label')?!, "Label"
             a @mouseenter: (=> tocActive = 'scroll-area'), @click: (=> tocActive = 'scroll-area'), href: "#scroll-area", $active: (tocActive is 'scroll-area')?!, "ScrollArea"
           .toc-group
             .toc-label "Form"
             a @mouseenter: (=> tocActive = 'field'), @click: (=> tocActive = 'field'), href: "#field", $active: (tocActive is 'field')?!, "Field"
             a @mouseenter: (=> tocActive = 'fieldset'), @click: (=> tocActive = 'fieldset'), href: "#fieldset", $active: (tocActive is 'fieldset')?!, "Fieldset"
             a @mouseenter: (=> tocActive = 'form'), @click: (=> tocActive = 'form'), href: "#form", $active: (tocActive is 'form')?!, "Form"
+            a @mouseenter: (=> tocActive = 'button-group'), @click: (=> tocActive = 'button-group'), href: "#button-group", $active: (tocActive is 'button-group')?!, "ButtonGroup"
           .toc-group
             .toc-label "Data"
             a @mouseenter: (=> tocActive = 'grid'), @click: (=> tocActive = 'grid'), href: "#grid", $active: (tocActive is 'grid')?!, "Grid"
             a @mouseenter: (=> tocActive = 'accordion'), @click: (=> tocActive = 'accordion'), href: "#accordion", $active: (tocActive is 'accordion')?!, "Accordion"
+            a @mouseenter: (=> tocActive = 'table'), @click: (=> tocActive = 'table'), href: "#table", $active: (tocActive is 'table')?!, "Table"
+            a @mouseenter: (=> tocActive = 'collapsible'), @click: (=> tocActive = 'collapsible'), href: "#collapsible", $active: (tocActive is 'collapsible')?!, "Collapsible"
+          .toc-group
+            .toc-label "Interactive"
+            a @mouseenter: (=> tocActive = 'pagination'), @click: (=> tocActive = 'pagination'), href: "#pagination", $active: (tocActive is 'pagination')?!, "Pagination"
+            a @mouseenter: (=> tocActive = 'carousel'), @click: (=> tocActive = 'carousel'), href: "#carousel", $active: (tocActive is 'carousel')?!, "Carousel"
+            a @mouseenter: (=> tocActive = 'resizable'), @click: (=> tocActive = 'resizable'), href: "#resizable", $active: (tocActive is 'resizable')?!, "Resizable"
         .toc-detail
           if tocActive
             .
@@ -529,16 +608,11 @@ export WidgetGallery = component
           else
             .toc-empty "← Hover a component to see its API"
 
-      # ================================================================
+      # ========================================================================
       # SELECT
-      # ================================================================
+      # ========================================================================
       .section id: "select"
-        .section-title "Select"
-          span.badge @click: (=> @_viewSource('select')), "184 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('select', 'prev')), "‹"
-            a @click: (=> @_navSection('select', 'home')), "⌂"
-            a @click: (=> @_navSection('select', 'next')), "›"
+        SectionHead tag: "select", name: "Select", lines: 147
         .section-desc "Dropdown with typeahead, keyboard nav, ARIA listbox."
         .demo-row
           .demo-label "Basic select"
@@ -582,16 +656,11 @@ export WidgetGallery = component
               code "$highlighted"
               code "$selected"
 
-      # ================================================================
+      # ========================================================================
       # COMBOBOX
-      # ================================================================
+      # ========================================================================
       .section id: "combobox"
-        .section-title "Combobox"
-          span.badge @click: (=> @_viewSource('combobox')), "153 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('combobox', 'prev')), "‹"
-            a @click: (=> @_navSection('combobox', 'home')), "⌂"
-            a @click: (=> @_navSection('combobox', 'next')), "›"
+        SectionHead tag: "combobox", name: "Combobox", lines: 124
         .section-desc "Filterable input + listbox for search-as-you-type."
         .demo-row
           .demo-label "Search fruits"
@@ -627,16 +696,11 @@ export WidgetGallery = component
               code "$highlighted"
               code "$empty"
 
-      # ================================================================
+      # ========================================================================
       # MULTI-SELECT
-      # ================================================================
+      # ========================================================================
       .section id: "multi-select"
-        .section-title "MultiSelect"
-          span.badge @click: (=> @_viewSource('multi-select')), "158 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('multi-select', 'prev')), "‹"
-            a @click: (=> @_navSection('multi-select', 'home')), "⌂"
-            a @click: (=> @_navSection('multi-select', 'next')), "›"
+        SectionHead tag: "multi-select", name: "MultiSelect", lines: 130
         .section-desc "Multi-select with chips, filtering, and keyboard navigation."
         .demo-row
           .demo-label "Pick colors"
@@ -671,16 +735,11 @@ export WidgetGallery = component
               code "$highlighted"
               code "$selected"
 
-      # ================================================================
+      # ========================================================================
       # AUTOCOMPLETE
-      # ================================================================
+      # ========================================================================
       .section id: "autocomplete"
-        .section-title "Autocomplete"
-          span.badge @click: (=> @_viewSource('autocomplete')), "141 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('autocomplete', 'prev')), "‹"
-            a @click: (=> @_navSection('autocomplete', 'home')), "⌂"
-            a @click: (=> @_navSection('autocomplete', 'next')), "›"
+        SectionHead tag: "autocomplete", name: "Autocomplete", lines: 115
         .section-desc "Suggestion input — type to filter, select to fill."
         .demo-row
           .demo-label "Search cities"
@@ -709,16 +768,11 @@ export WidgetGallery = component
               code "$disabled"
               code "$clear"
 
-      # ================================================================
+      # ========================================================================
       # CHECKBOX
-      # ================================================================
+      # ========================================================================
       .section id: "checkbox"
-        .section-title "Checkbox"
-          span.badge @click: (=> @_viewSource('checkbox')), "33 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('checkbox', 'prev')), "‹"
-            a @click: (=> @_navSection('checkbox', 'home')), "⌂"
-            a @click: (=> @_navSection('checkbox', 'next')), "›"
+        SectionHead tag: "checkbox", name: "Checkbox", lines: 18
         .section-desc "Toggle with checkbox or switch semantics. Supports indeterminate."
         .demo-row
           .demo-label "Checkbox (unchecked)"
@@ -752,16 +806,11 @@ export WidgetGallery = component
               code "$indeterminate"
               code "$disabled"
 
-      # ================================================================
+      # ========================================================================
       # TOGGLE
-      # ================================================================
+      # ========================================================================
       .section id: "toggle"
-        .section-title "Toggle"
-          span.badge @click: (=> @_viewSource('toggle')), "24 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('toggle', 'prev')), "‹"
-            a @click: (=> @_navSection('toggle', 'home')), "⌂"
-            a @click: (=> @_navSection('toggle', 'next')), "›"
+        SectionHead tag: "toggle", name: "Toggle", lines: 13
         .section-desc "Stateful toggle button with pressed state."
         .demo-row
           .demo-label "Tap to toggle"
@@ -782,16 +831,11 @@ export WidgetGallery = component
               code "$pressed"
               code "$disabled"
 
-      # ================================================================
+      # ========================================================================
       # TOGGLE GROUP
-      # ================================================================
+      # ========================================================================
       .section id: "toggle-group"
-        .section-title "ToggleGroup"
-          span.badge @click: (=> @_viewSource('toggle-group')), "78 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('toggle-group', 'prev')), "‹"
-            a @click: (=> @_navSection('toggle-group', 'home')), "⌂"
-            a @click: (=> @_navSection('toggle-group', 'next')), "›"
+        SectionHead tag: "toggle-group", name: "ToggleGroup", lines: 59
         .section-desc "Single or multi-select toggle buttons."
         .demo-row
           .demo-label "Text alignment"
@@ -831,16 +875,11 @@ export WidgetGallery = component
               code "$pressed"
               code "$value"
 
-      # ================================================================
+      # ========================================================================
       # RADIO GROUP
-      # ================================================================
+      # ========================================================================
       .section id: "radio-group"
-        .section-title "RadioGroup"
-          span.badge @click: (=> @_viewSource('radio-group')), "67 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('radio-group', 'prev')), "‹"
-            a @click: (=> @_navSection('radio-group', 'home')), "⌂"
-            a @click: (=> @_navSection('radio-group', 'next')), "›"
+        SectionHead tag: "radio-group", name: "RadioGroup", lines: 50
         .section-desc "Exactly one option selected. Arrow keys move focus and selection."
         .demo-row
           .demo-label "Font size"
@@ -873,16 +912,11 @@ export WidgetGallery = component
               code "$checked"
               code "$value"
 
-      # ================================================================
+      # ========================================================================
       # CHECKBOX GROUP
-      # ================================================================
+      # ========================================================================
       .section id: "checkbox-group"
-        .section-title "CheckboxGroup"
-          span.badge @click: (=> @_viewSource('checkbox-group')), "65 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('checkbox-group', 'prev')), "‹"
-            a @click: (=> @_navSection('checkbox-group', 'home')), "⌂"
-            a @click: (=> @_navSection('checkbox-group', 'next')), "›"
+        SectionHead tag: "checkbox-group", name: "CheckboxGroup", lines: 46
         .section-desc "Multiple options checked independently."
         .demo-row
           .demo-label "Toppings"
@@ -914,16 +948,11 @@ export WidgetGallery = component
               code "$checked"
               code "$value"
 
-      # ================================================================
+      # ========================================================================
       # INPUT
-      # ================================================================
+      # ========================================================================
       .section id: "input"
-        .section-title "Input"
-          span.badge @click: (=> @_viewSource('input')), "35 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('input', 'prev')), "‹"
-            a @click: (=> @_navSection('input', 'home')), "⌂"
-            a @click: (=> @_navSection('input', 'next')), "›"
+        SectionHead tag: "input", name: "Input", lines: 24
         .section-desc "Headless input tracking focus, touch, and validation state."
         .demo-row
           .demo-label "Text input"
@@ -944,16 +973,11 @@ export WidgetGallery = component
               code "$focused"
               code "$touched"
 
-      # ================================================================
+      # ========================================================================
       # NUMBER FIELD
-      # ================================================================
+      # ========================================================================
       .section id: "number-field"
-        .section-title "NumberField"
-          span.badge @click: (=> @_viewSource('number-field')), "162 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('number-field', 'prev')), "‹"
-            a @click: (=> @_navSection('number-field', 'home')), "⌂"
-            a @click: (=> @_navSection('number-field', 'next')), "›"
+        SectionHead tag: "number-field", name: "NumberField", lines: 132
         .section-desc "Number input with increment/decrement buttons, hold-to-repeat, and keyboard stepping."
         .demo-row
           .demo-label "Quantity (1-99)"
@@ -993,16 +1017,11 @@ export WidgetGallery = component
               code "$decrement"
               code "$increment"
 
-      # ================================================================
+      # ========================================================================
       # SLIDER
-      # ================================================================
+      # ========================================================================
       .section id: "slider"
-        .section-title "Slider"
-          span.badge @click: (=> @_viewSource('slider')), "165 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('slider', 'prev')), "‹"
-            a @click: (=> @_navSection('slider', 'home')), "⌂"
-            a @click: (=> @_navSection('slider', 'next')), "›"
+        SectionHead tag: "slider", name: "Slider", lines: 130
         .section-desc "Draggable range input with pointer capture and keyboard stepping."
         .demo-row
           .demo-label "Single thumb"
@@ -1046,16 +1065,11 @@ export WidgetGallery = component
               code "$thumb"
               code "$active"
 
-      # ================================================================
+      # ========================================================================
       # OTP FIELD
-      # ================================================================
+      # ========================================================================
       .section id: "otp-field"
-        .section-title "OTPField"
-          span.badge @click: (=> @_viewSource('otp-field')), "89 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('otp-field', 'prev')), "‹"
-            a @click: (=> @_navSection('otp-field', 'home')), "⌂"
-            a @click: (=> @_navSection('otp-field', 'next')), "›"
+        SectionHead tag: "otp-field", name: "OTPField", lines: 72
         .section-desc "Multi-digit code input with auto-advance, backspace nav, and paste."
         .demo-row
           .demo-label "6-digit code"
@@ -1089,16 +1103,11 @@ export WidgetGallery = component
               code "$complete"
               code "$filled"
 
-      # ================================================================
+      # ========================================================================
       # DATE PICKER
-      # ================================================================
+      # ========================================================================
       .section id: "date-picker"
-        .section-title "DatePicker"
-          span.badge @click: (=> @_viewSource('date-picker')), "214 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('date-picker', 'prev')), "‹"
-            a @click: (=> @_navSection('date-picker', 'home')), "⌂"
-            a @click: (=> @_navSection('date-picker', 'next')), "›"
+        SectionHead tag: "date-picker", name: "DatePicker", lines: 172
         .section-desc "Calendar dropdown for single date or range selection."
         .demo-row
           .demo-label "Single date"
@@ -1135,16 +1144,11 @@ export WidgetGallery = component
               code "$today"
               code "$in-range"
 
-      # ================================================================
+      # ========================================================================
       # EDITABLE VALUE
-      # ================================================================
+      # ========================================================================
       .section id: "editable-value"
-        .section-title "EditableValue"
-          span.badge @click: (=> @_viewSource('editable-value')), "80 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('editable-value', 'prev')), "‹"
-            a @click: (=> @_navSection('editable-value', 'home')), "⌂"
-            a @click: (=> @_navSection('editable-value', 'next')), "›"
+        SectionHead tag: "editable-value", name: "EditableValue", lines: 58
         .section-desc "Click the edit icon to modify the value inline."
         .demo-row
           EditableValue @save: (=> editName = editName)
@@ -1172,16 +1176,92 @@ export WidgetGallery = component
               code "$saving"
               code "$edit-trigger"
 
-      # ================================================================
+      # ========================================================================
+      # TEXTAREA
+      # ========================================================================
+      .section id: "textarea"
+        SectionHead tag: "textarea", name: "Textarea", lines: 33
+        .section-desc "Auto-resizing text area with focus and validation tracking."
+        .demo-row
+          .demo-label "Auto-resize textarea"
+          Textarea value <=> textareaVal, placeholder: "Type something...", autoResize: true
+          .status "length: #{textareaVal.length}"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@value"
+              code "@placeholder"
+              code "@disabled"
+              code "@required"
+              code "@rows"
+              code "@autoResize"
+            dt "Data"
+            dd
+              code "$disabled"
+              code "$focused"
+              code "$touched"
+
+      # ========================================================================
+      # NATIVE SELECT
+      # ========================================================================
+      .section id: "native-select"
+        SectionHead tag: "native-select", name: "NativeSelect", lines: 18
+        .section-desc "Native browser select element with state tracking."
+        .demo-row.native-select-demo
+          .demo-label "Choose a color"
+          NativeSelect value <=> nativeSelectVal
+            option value: "", "Pick one..."
+            option value: "red", "Red"
+            option value: "green", "Green"
+            option value: "blue", "Blue"
+          .status "value: '#{nativeSelectVal}'"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@value"
+              code "@disabled"
+              code "@required"
+            dt "Events"
+            dd
+              code "change"
+            dt "Data"
+            dd
+              code "$disabled"
+              code "$focused"
+
+      # ========================================================================
+      # INPUT GROUP
+      # ========================================================================
+      .section id: "input-group"
+        SectionHead tag: "input-group", name: "InputGroup", lines: 11
+        .section-desc "Input with prefix/suffix addon elements."
+        .demo-row.input-group-demo
+          .demo-label "With prefix"
+          InputGroup
+            span $prefix: true, "$"
+            input type: "text", placeholder: "Amount"
+        .demo-row.input-group-demo
+          .demo-label "With suffix"
+          InputGroup
+            input type: "text", placeholder: "Search..."
+            button $suffix: true, "Go"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@disabled"
+            dt "Data"
+            dd
+              code "$disabled"
+              code "$focused"
+
+      # ========================================================================
       # TABS
-      # ================================================================
+      # ========================================================================
       .section id: "tabs"
-        .section-title "Tabs"
-          span.badge @click: (=> @_viewSource('tabs')), "124 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('tabs', 'prev')), "‹"
-            a @click: (=> @_navSection('tabs', 'home')), "⌂"
-            a @click: (=> @_navSection('tabs', 'next')), "›"
+        SectionHead tag: "tabs", name: "Tabs", lines: 91
         .section-desc "Tab panel with roving tabindex and arrow key navigation."
         .demo-row
           .demo-label "Basic tabs"
@@ -1221,16 +1301,11 @@ export WidgetGallery = component
               code "$active"
               code "$disabled"
 
-      # ================================================================
+      # ========================================================================
       # MENU
-      # ================================================================
+      # ========================================================================
       .section id: "menu"
-        .section-title "Menu"
-          span.badge @click: (=> @_viewSource('menu')), "162 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('menu', 'prev')), "‹"
-            a @click: (=> @_navSection('menu', 'home')), "⌂"
-            a @click: (=> @_navSection('menu', 'next')), "›"
+        SectionHead tag: "menu", name: "Menu", lines: 133
         .section-desc "Dropdown action menu with keyboard navigation."
         .demo-row
           .demo-label "Click to open menu"
@@ -1266,16 +1341,11 @@ export WidgetGallery = component
               code "$highlighted"
               code "$value"
 
-      # ================================================================
+      # ========================================================================
       # CONTEXT MENU
-      # ================================================================
+      # ========================================================================
       .section id: "context-menu"
-        .section-title "ContextMenu"
-          span.badge @click: (=> @_viewSource('context-menu')), "98 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('context-menu', 'prev')), "‹"
-            a @click: (=> @_navSection('context-menu', 'home')), "⌂"
-            a @click: (=> @_navSection('context-menu', 'next')), "›"
+        SectionHead tag: "context-menu", name: "ContextMenu", lines: 80
         .section-desc "Right-click the dashed area to open a context menu."
         ContextMenu
           div $trigger: true
@@ -1308,16 +1378,11 @@ export WidgetGallery = component
               code "$disabled"
               code "$value"
 
-      # ================================================================
+      # ========================================================================
       # MENUBAR
-      # ================================================================
+      # ========================================================================
       .section id: "menubar"
-        .section-title "Menubar"
-          span.badge @click: (=> @_viewSource('menubar')), "155 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('menubar', 'prev')), "‹"
-            a @click: (=> @_navSection('menubar', 'home')), "⌂"
-            a @click: (=> @_navSection('menubar', 'next')), "›"
+        SectionHead tag: "menubar", name: "Menubar", lines: 125
         .section-desc "Horizontal menu bar with dropdown menus."
         .demo-row
           Menubar
@@ -1355,16 +1420,11 @@ export WidgetGallery = component
               code "$highlighted"
               code "$value"
 
-      # ================================================================
+      # ========================================================================
       # NAVIGATION MENU
-      # ================================================================
+      # ========================================================================
       .section id: "nav-menu"
-        .section-title "NavigationMenu"
-          span.badge @click: (=> @_viewSource('nav-menu')), "132 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('nav-menu', 'prev')), "‹"
-            a @click: (=> @_navSection('nav-menu', 'home')), "⌂"
-            a @click: (=> @_navSection('nav-menu', 'next')), "›"
+        SectionHead tag: "nav-menu", name: "NavigationMenu", lines: 99
         .section-desc "Site navigation with dropdown panels."
         .demo-row
           NavigationMenu
@@ -1399,16 +1459,11 @@ export WidgetGallery = component
               code "$orientation"
               code "$open"
 
-      # ================================================================
+      # ========================================================================
       # TOOLBAR
-      # ================================================================
+      # ========================================================================
       .section id: "toolbar"
-        .section-title "Toolbar"
-          span.badge @click: (=> @_viewSource('toolbar')), "46 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('toolbar', 'prev')), "‹"
-            a @click: (=> @_navSection('toolbar', 'home')), "⌂"
-            a @click: (=> @_navSection('toolbar', 'next')), "›"
+        SectionHead tag: "toolbar", name: "Toolbar", lines: 31
         .section-desc "Groups controls with roving tabindex keyboard navigation."
         .demo-row
           .demo-label "Text"
@@ -1462,17 +1517,35 @@ export WidgetGallery = component
             dd
               code "$orientation"
 
-      # ================================================================
+      # ========================================================================
+      # BREADCRUMB
+      # ========================================================================
+      .section id: "breadcrumb"
+        SectionHead tag: "breadcrumb", name: "Breadcrumb", lines: 25
+        .section-desc "Navigation trail with separator and current page."
+        .demo-row
+          .demo-label "Basic breadcrumb"
+          Breadcrumb
+            a $item: true, href: "#breadcrumb", "Home"
+            a $item: true, href: "#breadcrumb", "Products"
+            a $item: true, href: "#breadcrumb", "Widgets"
+            span $item: true, "Widget Pro"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@separator"
+              code "@label"
+            dt "Data"
+            dd
+              code "$current"
+
+      # ========================================================================
       # DIALOG
-      # ================================================================
+      # ========================================================================
       .section id: "dialog"
-        .section-title "Dialog"
-          span.badge @click: (=> @_viewSource('dialog')), "107 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('dialog', 'prev')), "‹"
-            a @click: (=> @_navSection('dialog', 'home')), "⌂"
-            a @click: (=> @_navSection('dialog', 'next')), "›"
-        .section-desc "Modal with focus trap, scroll lock, escape/click-outside dismiss."
+        SectionHead tag: "dialog", name: "Dialog", lines: 83
+        .section-desc "Modal with focus trap and scroll lock. Press Escape or click outside to dismiss."
         .demo-row
           .demo-label "Click to open"
           button.demo-btn @click: (=> showDialog = true)
@@ -1505,16 +1578,47 @@ export WidgetGallery = component
             dd
               code "$open"
 
-      # ================================================================
+      # ========================================================================
+      # ALERT DIALOG
+      # ========================================================================
+      .section id: "alert-dialog"
+        SectionHead tag: "alert-dialog", name: "AlertDialog", lines: 74
+        .section-desc "Non-dismissable modal — Escape and click-outside are blocked. User must choose an action."
+        .demo-row
+          .demo-label "Requires explicit action"
+          button.demo-btn @click: (=> showAlertDialog = true)
+            "Delete Account"
+          .status "open: #{showAlertDialog}"
+        AlertDialog open <=> showAlertDialog
+          .dialog-panel
+            h2 style: "font-size:18px;font-weight:600;margin-bottom:8px", "Delete Account?"
+            p.dialog-desc "This action is permanent and cannot be undone."
+            . style: "display:flex;gap:8px;justify-content:flex-end"
+              button.demo-btn @click: (=> showAlertDialog = false)
+                "Cancel"
+              button style: "padding:6px 16px;border:none;border-radius:6px;background:#dc2626;color:white;font-weight:600", @click: (=> showAlertDialog = false)
+                "Delete"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@open"
+              code "@initialFocus"
+            dt "Events"
+            dd
+              code "close"
+            dt "Keyboard"
+            dd
+              kbd "Tab"
+            dt "Data"
+            dd
+              code "$open"
+
+      # ========================================================================
       # DRAWER
-      # ================================================================
+      # ========================================================================
       .section id: "drawer"
-        .section-title "Drawer"
-          span.badge @click: (=> @_viewSource('drawer')), "79 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('drawer', 'prev')), "‹"
-            a @click: (=> @_navSection('drawer', 'home')), "⌂"
-            a @click: (=> @_navSection('drawer', 'next')), "›"
+        SectionHead tag: "drawer", name: "Drawer", lines: 60
         .section-desc "Slide-out panel from edge of screen with focus trap and scroll lock."
         .demo-row
           .demo-label "Open from right"
@@ -1548,16 +1652,11 @@ export WidgetGallery = component
               code "$open"
               code "$side"
 
-      # ================================================================
+      # ========================================================================
       # POPOVER
-      # ================================================================
+      # ========================================================================
       .section id: "popover"
-        .section-title "Popover"
-          span.badge @click: (=> @_viewSource('popover')), "143 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('popover', 'prev')), "‹"
-            a @click: (=> @_navSection('popover', 'home')), "⌂"
-            a @click: (=> @_navSection('popover', 'next')), "›"
+        SectionHead tag: "popover", name: "Popover", lines: 117
         .section-desc "Anchored floating content with flip/shift positioning."
         .demo-row
           .demo-label "Click to toggle"
@@ -1588,16 +1687,11 @@ export WidgetGallery = component
               code "$open"
               code "$placement"
 
-      # ================================================================
+      # ========================================================================
       # TOOLTIP
-      # ================================================================
+      # ========================================================================
       .section id: "tooltip"
-        .section-title "Tooltip"
-          span.badge @click: (=> @_viewSource('tooltip')), "115 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('tooltip', 'prev')), "‹"
-            a @click: (=> @_navSection('tooltip', 'home')), "⌂"
-            a @click: (=> @_navSection('tooltip', 'next')), "›"
+        SectionHead tag: "tooltip", name: "Tooltip", lines: 92
         .section-desc "Hover/focus tooltip with delay and positioning."
         .demo-row
           .demo-label "Hover the buttons"
@@ -1624,16 +1718,11 @@ export WidgetGallery = component
               code "$exiting"
               code "$placement"
 
-      # ================================================================
+      # ========================================================================
       # PREVIEW CARD
-      # ================================================================
+      # ========================================================================
       .section id: "preview-card"
-        .section-title "PreviewCard"
-          span.badge @click: (=> @_viewSource('preview-card')), "73 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('preview-card', 'prev')), "‹"
-            a @click: (=> @_navSection('preview-card', 'home')), "⌂"
-            a @click: (=> @_navSection('preview-card', 'next')), "›"
+        SectionHead tag: "preview-card", name: "PreviewCard", lines: 56
         .section-desc "Hover or focus the link to see a preview card."
         .demo-row
           PreviewCard delay: 300
@@ -1653,16 +1742,11 @@ export WidgetGallery = component
             dd
               code "$open"
 
-      # ================================================================
+      # ========================================================================
       # TOAST
-      # ================================================================
+      # ========================================================================
       .section id: "toast"
-        .section-title "Toast"
-          span.badge @click: (=> @_viewSource('toast')), "88 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('toast', 'prev')), "‹"
-            a @click: (=> @_navSection('toast', 'home')), "⌂"
-            a @click: (=> @_navSection('toast', 'next')), "›"
+        SectionHead tag: "toast", name: "Toast", lines: 56
         .section-desc "Auto-dismiss notification with ARIA live region."
         .demo-row
           .demo-label "Click to show toasts"
@@ -1688,16 +1772,11 @@ export WidgetGallery = component
               code "$type"
               code "$leaving"
 
-      # ================================================================
+      # ========================================================================
       # BUTTON
-      # ================================================================
+      # ========================================================================
       .section id: "button"
-        .section-title "Button"
-          span.badge @click: (=> @_viewSource('button')), "23 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('button', 'prev')), "‹"
-            a @click: (=> @_navSection('button', 'home')), "⌂"
-            a @click: (=> @_navSection('button', 'next')), "›"
+        SectionHead tag: "button", name: "Button", lines: 10
         .section-desc "Headless button with disabled-but-focusable pattern."
         .demo-row.btn-demo
           .demo-label "Normal, primary, and disabled"
@@ -1720,16 +1799,55 @@ export WidgetGallery = component
             dd
               code "$disabled"
 
-      # ================================================================
+      # ========================================================================
+      # BADGE
+      # ========================================================================
+      .section id: "badge"
+        SectionHead tag: "badge", name: "Badge", lines: 5
+        .section-desc "Inline label with variant styles."
+        .demo-row
+          .demo-label "Variants"
+          . style: "display:flex;gap:8px;align-items:center"
+            Badge "Solid"
+            Badge variant: "outline", "Outline"
+            Badge variant: "subtle", "Subtle"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@variant"
+            dt "Data"
+            dd
+              code "$variant"
+
+      # ========================================================================
+      # CARD
+      # ========================================================================
+      .section id: "card"
+        SectionHead tag: "card", name: "Card", lines: 6
+        .section-desc "Structured container with header, content, and footer."
+        .demo-row.card-demo
+          Card
+            div $header: true
+              h3 "Card Title"
+            div $content: true
+              "This is the card body. Cards can contain any content."
+            div $footer: true
+              button.demo-btn @click: (=> toasts = [...toasts, { message: 'Card action clicked!', type: 'success' }]), "Action"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@interactive"
+            dt "Data"
+            dd
+              code "$interactive"
+
+      # ========================================================================
       # SEPARATOR
-      # ================================================================
+      # ========================================================================
       .section id: "separator"
-        .section-title "Separator"
-          span.badge @click: (=> @_viewSource('separator')), "17 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('separator', 'prev')), "‹"
-            a @click: (=> @_navSection('separator', 'home')), "⌂"
-            a @click: (=> @_navSection('separator', 'next')), "›"
+        SectionHead tag: "separator", name: "Separator", lines: 7
         .section-desc "Decorative or semantic divider between sections."
         .demo-row
           .demo-label "Horizontal (default)"
@@ -1753,16 +1871,11 @@ export WidgetGallery = component
             dd
               code "$orientation"
 
-      # ================================================================
+      # ========================================================================
       # PROGRESS
-      # ================================================================
+      # ========================================================================
       .section id: "progress"
-        .section-title "Progress"
-          span.badge @click: (=> @_viewSource('progress')), "25 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('progress', 'prev')), "‹"
-            a @click: (=> @_navSection('progress', 'home')), "⌂"
-            a @click: (=> @_navSection('progress', 'next')), "›"
+        SectionHead tag: "progress", name: "Progress", lines: 14
         .section-desc "Progress bar with value exposed as CSS custom property."
         .demo-row
           .demo-label "65% complete"
@@ -1780,16 +1893,11 @@ export WidgetGallery = component
             dd
               code "$complete"
 
-      # ================================================================
+      # ========================================================================
       # METER
-      # ================================================================
+      # ========================================================================
       .section id: "meter"
-        .section-title "Meter"
-          span.badge @click: (=> @_viewSource('meter')), "36 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('meter', 'prev')), "‹"
-            a @click: (=> @_navSection('meter', 'home')), "⌂"
-            a @click: (=> @_navSection('meter', 'next')), "›"
+        SectionHead tag: "meter", name: "Meter", lines: 23
         .section-desc "Gauge for known-range measurements with low/high/optimum thresholds."
         .demo-row
           .demo-label "Score: 72/100"
@@ -1809,16 +1917,55 @@ export WidgetGallery = component
             dd
               code "$level"
 
-      # ================================================================
+      # ========================================================================
+      # SPINNER
+      # ========================================================================
+      .section id: "spinner"
+        SectionHead tag: "spinner", name: "Spinner", lines: 6
+        .section-desc "Loading indicator with accessible status."
+        .demo-row.spinner-demo
+          .demo-label "Default"
+          . style: "display:flex;gap:16px;align-items:center"
+            Spinner
+            Spinner size: "32px"
+            Spinner label: "Saving...", size: "20px"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@label"
+              code "@size"
+
+      # ========================================================================
+      # SKELETON
+      # ========================================================================
+      .section id: "skeleton"
+        SectionHead tag: "skeleton", name: "Skeleton", lines: 10
+        .section-desc "Loading placeholder with shimmer animation."
+        .demo-row
+          .demo-label "Shapes"
+          . style: "display:flex;gap:12px;align-items:center"
+            Skeleton circle: true, width: "40px", height: "40px"
+            . style: "display:flex;flex-direction:column;gap:6px"
+              Skeleton width: "200px", height: "14px"
+              Skeleton width: "150px", height: "14px"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@width"
+              code "@height"
+              code "@circle"
+              code "@label"
+            dt "Data"
+            dd
+              code "$circle"
+
+      # ========================================================================
       # AVATAR
-      # ================================================================
+      # ========================================================================
       .section id: "avatar"
-        .section-title "Avatar"
-          span.badge @click: (=> @_viewSource('avatar')), "37 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('avatar', 'prev')), "‹"
-            a @click: (=> @_navSection('avatar', 'home')), "⌂"
-            a @click: (=> @_navSection('avatar', 'next')), "›"
+        SectionHead tag: "avatar", name: "Avatar", lines: 23
         .section-desc "Image with fallback to initials or placeholder."
         .demo-row
           .demo-label "With image"
@@ -1842,16 +1989,31 @@ export WidgetGallery = component
               code "$initials"
               code "$placeholder"
 
-      # ================================================================
+      # ========================================================================
+      # LABEL
+      # ========================================================================
+      .section id: "label"
+        SectionHead tag: "label", name: "Label", lines: 6
+        .section-desc "Standalone accessible form label."
+        .demo-row
+          .demo-label "With required indicator"
+          Label required: true
+            "Email address"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@for"
+              code "@required"
+            dt "Data"
+            dd
+              code "$required"
+
+      # ========================================================================
       # SCROLL AREA
-      # ================================================================
+      # ========================================================================
       .section id: "scroll-area"
-        .section-title "ScrollArea"
-          span.badge @click: (=> @_viewSource('scroll-area')), "145 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('scroll-area', 'prev')), "‹"
-            a @click: (=> @_navSection('scroll-area', 'home')), "⌂"
-            a @click: (=> @_navSection('scroll-area', 'next')), "›"
+        SectionHead tag: "scroll-area", name: "ScrollArea", lines: 115
         .section-desc "Custom scrollbar with draggable thumb and auto-hide."
         .demo-row
           .demo-label "Scrollable content"
@@ -1888,16 +2050,11 @@ export WidgetGallery = component
               code "$scrollbar"
               code "$thumb"
 
-      # ================================================================
+      # ========================================================================
       # FIELD + FIELDSET
-      # ================================================================
+      # ========================================================================
       .section id: "field"
-        .section-title "Field + Fieldset"
-          span.badge @click: (=> @_viewSource('field')), "75 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('field', 'prev')), "‹"
-            a @click: (=> @_navSection('field', 'home')), "⌂"
-            a @click: (=> @_navSection('field', 'next')), "›"
+        SectionHead tag: "field", name: "Field + Fieldset", lines: 48
         .section-desc "Form field wrapper with label, description, and error."
         .demo-row
           Field label: "Email", description: "We'll never share your email.", required: true, error: fieldError
@@ -1934,16 +2091,11 @@ export WidgetGallery = component
               code "$error"
               code "$legend"
 
-      # ================================================================
+      # ========================================================================
       # FORM
-      # ================================================================
+      # ========================================================================
       .section id: "form"
-        .section-title "Form"
-          span.badge @click: (=> @_viewSource('form')), "39 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('form', 'prev')), "‹"
-            a @click: (=> @_navSection('form', 'home')), "⌂"
-            a @click: (=> @_navSection('form', 'next')), "›"
+        SectionHead tag: "form", name: "Form", lines: 21
         .section-desc "Form wrapper with submit handling and validation state."
         .demo-row
           Form
@@ -1967,16 +2119,35 @@ export WidgetGallery = component
               code "$submitting"
               code "$submitted"
 
-      # ================================================================
+      # ========================================================================
+      # BUTTON GROUP
+      # ========================================================================
+      .section id: "button-group"
+        SectionHead tag: "button-group", name: "ButtonGroup", lines: 11
+        .section-desc "Groups related buttons with ARIA group semantics."
+        .demo-row
+          .demo-label "Horizontal"
+          ButtonGroup label: "Actions"
+            button "Cut"
+            button "Copy"
+            button "Paste"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@orientation"
+              code "@disabled"
+              code "@label"
+            dt "Data"
+            dd
+              code "$orientation"
+              code "$disabled"
+
+      # ========================================================================
       # GRID
-      # ================================================================
+      # ========================================================================
       .section id: "grid"
-        .section-title "Grid"
-          span.badge @click: (=> @_viewSource('grid')), "901 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('grid', 'prev')), "‹"
-            a @click: (=> @_navSection('grid', 'home')), "⌂"
-            a @click: (=> @_navSection('grid', 'next')), "›"
+        SectionHead tag: "grid", name: "Grid", lines: 799
         .section-desc "Virtual-scrolling data grid. Click to select, arrows to navigate, double-click to edit."
         .demo-row
           . style: "display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px"
@@ -2022,16 +2193,11 @@ export WidgetGallery = component
               code "$selecting"
               code "$sorted"
 
-      # ================================================================
+      # ========================================================================
       # ACCORDION
-      # ================================================================
+      # ========================================================================
       .section id: "accordion"
-        .section-title "Accordion"
-          span.badge @click: (=> @_viewSource('accordion')), "113 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('accordion', 'prev')), "‹"
-            a @click: (=> @_navSection('accordion', 'home')), "⌂"
-            a @click: (=> @_navSection('accordion', 'next')), "›"
+        SectionHead tag: "accordion", name: "Accordion", lines: 86
         .section-desc "Expand/collapse sections, single or multiple mode."
         .demo-row
           .demo-label "Single mode"
@@ -2074,17 +2240,187 @@ export WidgetGallery = component
               code "$open"
               code "$disabled"
 
-      # ================================================================
+      # ========================================================================
+      # TABLE
+      # ========================================================================
+      .section id: "table"
+        SectionHead tag: "table", name: "Table", lines: 9
+        .section-desc "Semantic table wrapper. For data-heavy tables, use Grid."
+        .demo-row.table-demo
+          Table caption: "Team", striped: true
+            thead
+              tr
+                th "Name"
+                th "Role"
+                th "City"
+            tbody
+              tr
+                td "Alice"
+                td "Engineer"
+                td "Seattle"
+              tr
+                td "Bob"
+                td "Designer"
+                td "Portland"
+              tr
+                td "Carol"
+                td "Manager"
+                td "Denver"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@caption"
+              code "@striped"
+            dt "Data"
+            dd
+              code "$striped"
+
+      # ========================================================================
+      # COLLAPSIBLE
+      # ========================================================================
+      .section id: "collapsible"
+        SectionHead tag: "collapsible", name: "Collapsible", lines: 33
+        .section-desc "Single open/close section. Simpler than Accordion."
+        .demo-row.collapsible-demo
+          Collapsible open <=> collapsibleOpen
+            button $trigger: true
+              span style: "font-size:10px;margin-right:6px"
+                if collapsibleOpen then "▼" else "▶"
+              "Show details"
+            div $content: true
+              p "These are the collapsible details. Click the trigger or press Enter/Space to toggle."
+          .status "open: #{collapsibleOpen}"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@open"
+              code "@disabled"
+            dt "Events"
+            dd
+              code "change"
+            dt "Keyboard"
+            dd
+              kbd "Enter"
+              kbd "Space"
+            dt "Data"
+            dd
+              code "$open"
+              code "$disabled"
+
+      # ========================================================================
+      # PAGINATION
+      # ========================================================================
+      .section id: "pagination"
+        SectionHead tag: "pagination", name: "Pagination", lines: 96
+        .section-desc "Page navigation with prev/next buttons and ellipsis gaps."
+        .demo-row
+          .demo-label "10 pages"
+          Pagination page <=> currentPage, total: 100, perPage: 10
+          .status "page: #{currentPage}"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@page"
+              code "@total"
+              code "@perPage"
+              code "@siblingCount"
+            dt "Events"
+            dd
+              code "change"
+            dt "Keyboard"
+            dd
+              kbd "← →"
+              kbd "Home"
+              kbd "End"
+            dt "Data"
+            dd
+              code "$active"
+              code "$disabled"
+              code "$ellipsis"
+
+      # ========================================================================
+      # CAROUSEL
+      # ========================================================================
+      .section id: "carousel"
+        SectionHead tag: "carousel", name: "Carousel", lines: 78
+        .section-desc "Slide carousel with loop and keyboard navigation."
+        .demo-row
+          Carousel loop: true
+            div $slide: true
+              "🍎 Slide 1 — Apples"
+            div $slide: true
+              "🍌 Slide 2 — Bananas"
+            div $slide: true
+              "🍒 Slide 3 — Cherries"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@orientation"
+              code "@loop"
+              code "@autoplay"
+              code "@interval"
+              code "@label"
+            dt "Events"
+            dd
+              code "change"
+            dt "Keyboard"
+            dd
+              kbd "← →"
+              kbd "↕"
+              kbd "Home"
+              kbd "End"
+            dt "Data"
+            dd
+              code "$orientation"
+              code "$active"
+              code "$prev"
+              code "$next"
+
+      # ========================================================================
+      # RESIZABLE
+      # ========================================================================
+      .section id: "resizable"
+        SectionHead tag: "resizable", name: "Resizable", lines: 89
+        .section-desc "Draggable resize handles between panels."
+        .demo-row.resizable-demo
+          Resizable
+            div $panel: true, "Left"
+            div $handle: true
+            div $panel: true, "Right"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@orientation"
+              code "@minSize"
+              code "@maxSize"
+            dt "Events"
+            dd
+              code "resize"
+            dt "Keyboard"
+            dd
+              kbd "← →"
+              kbd "↕"
+            dt "Data"
+            dd
+              code "$orientation"
+              code "$dragging"
+
+      # ========================================================================
       # SOURCE CODE VIEWER
-      # ================================================================
+      # ========================================================================
       if sourceCode
-        .source-overlay @click: @_closeSource
+        .source-overlay @click: (=> @_closeSource())
           .source-modal @click: (e => e.stopPropagation())
             .source-header
               .source-title
                 span.source-name sourceName
                 span.source-badge "#{sourceLines} lines"
-              button.source-close @click: @_closeSource
+              button.source-close @click: (=> @_closeSource())
                 "×"
             .source-body
               pre.source-pre

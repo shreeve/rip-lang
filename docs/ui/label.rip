@@ -1,0 +1,16 @@
+# Label — accessible headless form label
+#
+# Standalone label element that associates with a form control via @for.
+# Companions Field but works independently. Ships zero CSS.
+#
+# Usage:
+#   Label for: "email-input", "Email address"
+#   Label required: true, "Username"
+
+export Label = component
+  @for := null
+  @required := false
+
+  render
+    label for: @for?!, $required: @required?!
+      slot
