@@ -2056,7 +2056,7 @@ export WidgetGallery = component
             div $content: true
               "This is the card body. Cards can contain any content."
             div $footer: true
-              button.demo-btn "Action"
+              button.demo-btn @click: (=> toasts = [...toasts, { message: 'Card action clicked!', type: 'success' }]), "Action"
         .demo-row.card-demo
           .demo-label "Interactive card"
           Card interactive: true
