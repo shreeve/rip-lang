@@ -409,13 +409,12 @@ export WidgetGallery = component
   gridCellRef := ''
 
   _updateGridRef: ->
-    cell = document.querySelector('.grid-container [data-active]')
+    cell = document.querySelector('.grid-container td[data-active]')
     if cell
-      row = cell.parentElement
-      rows = Array.from(row.parentElement.children).filter (r) -> r.tagName is 'TR' and not r.classList.contains('spacer')
-      ri = rows.indexOf(row)
-      ci = Array.from(row.children).indexOf(cell)
-      gridCellRef = "R#{ri + 1}:C#{ci + 1}" if ri >= 0 and ci >= 0
+      tr = cell.parentElement
+      rowNum = tr?.firstElementChild?.textContent?.trim()
+      ci = Array.from(tr.children).indexOf(cell)
+      gridCellRef = if rowNum then "R#{rowNum}:C#{ci + 1}" else ''
     else
       gridCellRef = ''
 
