@@ -1,0 +1,22 @@
+# Skeleton — accessible headless loading placeholder
+#
+# Placeholder element shown while content is loading.
+# Exposes dimensions as CSS custom properties for styling.
+# Ships zero CSS.
+#
+# Usage:
+#   Skeleton
+#   Skeleton width: "200px", height: "1em"
+#   Skeleton circle: true, width: "48px"
+
+export Skeleton = component
+  @width := null
+  @height := null
+  @circle := false
+  @label := 'Loading'
+
+  render
+    div role: "status", aria-busy: "true", aria-label: @label
+      style: "--skeleton-width: #{@width or 'auto'}; --skeleton-height: #{@height or 'auto'}"
+      $circle: @circle?!
+      slot

@@ -1,0 +1,67 @@
+# Sheet — accessible headless slide-out side panel
+#
+# A full-width/height overlay panel that slides from an edge.
+# Similar to Drawer but semantically distinct for styling hooks.
+# Supports dismiss on escape and click-outside. Ships zero CSS.
+#
+# Usage:
+#   Sheet open <=> showSheet, side: "right"
+#     h2 "Notifications"
+#     p "You have 3 new messages."
+
+export Sheet = component
+  @open := false
+  @side := 'right'
+  @dismissable := true
+
+  _prevFocus = null
+  _scrollY = 0
+
+  ~>
+    if @open
+      _prevFocus = document.activeElement
+      _scrollY = window.scrollY
+      document.body.style.overflow = 'hidden'
+
+      setTimeout =>
+        panel = @_panel
+        if panel
+          focusable = panel.querySelectorAll 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+          focusable[0]?.focus()
+          @_trapHandler = (e) ->
+            return unless e.key is 'Tab'
+            list = Array.from(panel.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')).filter (f) -> f.offsetParent isnt null
+            return unless list.length
+            first = list[0]
+            last = list[list.length - 1]
+            if e.shiftKey
+              if document.activeElement is first then (e.preventDefault(); last.focus())
+            else
+              if document.activeElement is last then (e.preventDefault(); first.focus())
+          panel.addEventListener 'keydown', @_trapHandler
+      , 0
+    else
+      document.body.style.overflow = ''
+      _prevFocus?.focus()
+
+  close: ->
+    @open = false
+    @emit 'close'
+
+  onKeydown: (e) ->
+    if e.key is 'Escape' and @dismissable
+      e.preventDefault()
+      @close()
+
+  onBackdropClick: (e) ->
+    @close() if e.target is e.currentTarget and @dismissable
+
+  render
+    if @open
+      div ref: "_backdrop", $open: true, $side: @side
+        @click: @onBackdropClick
+        @keydown: @onKeydown
+        div ref: "_panel", role: "dialog", aria-modal: "true", tabindex: "-1"
+          $sheet: true
+          $side: @side
+          slot

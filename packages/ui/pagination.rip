@@ -1,0 +1,89 @@
+# Pagination — accessible headless page navigation
+#
+# Renders page buttons with prev/next and ellipsis gaps.
+# Ships zero CSS.
+#
+# Usage:
+#   Pagination page <=> currentPage, total: 100, perPage: 10
+#   Pagination page <=> currentPage, total: 500, perPage: 20, siblingCount: 2
+
+export Pagination = component
+  @page := 1
+  @total := 0
+  @perPage := 10
+  @siblingCount := 1
+
+  totalPages ~= Math.max(1, Math.ceil(@total / @perPage))
+
+  _range: (start, fin) ->
+    len = fin - start + 1
+    Array.from {length: len}, (_, i) -> start + i
+
+  visiblePages ~=
+    tp = totalPages
+    sibs = @siblingCount
+    current = @page
+
+    totalNumbers = sibs * 2 + 5
+    return @_range(1, tp) if tp <= totalNumbers
+
+    leftSib  = Math.max(current - sibs, 1)
+    rightSib = Math.min(current + sibs, tp)
+
+    showLeftDots  = leftSib > 2
+    showRightDots = rightSib < tp - 1
+
+    if not showLeftDots and showRightDots
+      leftCount = 3 + 2 * sibs
+      leftRange = @_range(1, leftCount)
+      return [...leftRange, '...', tp]
+
+    if showLeftDots and not showRightDots
+      rightCount = 3 + 2 * sibs
+      rightRange = @_range(tp - rightCount + 1, tp)
+      return [1, '...', ...rightRange]
+
+    midRange = @_range(leftSib, rightSib)
+    [1, '...', ...midRange, '...', tp]
+
+  goto: (pg) ->
+    pg = Math.max(1, Math.min(pg, totalPages))
+    return if pg is @page
+    @page = pg
+    @emit 'change', @page
+
+  onKeydown: (e) ->
+    switch e.key
+      when 'ArrowLeft'
+        e.preventDefault()
+        @goto(@page - 1)
+      when 'ArrowRight'
+        e.preventDefault()
+        @goto(@page + 1)
+      when 'Home'
+        e.preventDefault()
+        @goto(1)
+      when 'End'
+        e.preventDefault()
+        @goto(totalPages)
+
+  render
+    nav aria-label: "Pagination", @keydown: @onKeydown
+      button $prev: true, aria-label: "Previous page"
+        disabled: @page <= 1
+        $disabled: (@page <= 1)?!
+        @click: (=> @goto(@page - 1))
+      for pg in visiblePages
+        if pg is '...'
+          span $ellipsis: true
+            "..."
+        else
+          button aria-label: "Page #{pg}", aria-current: (if pg is @page then 'page' else undefined)
+            $active: (pg is @page)?!
+            $page: true
+            @click: (=> @goto(pg))
+            "#{pg}"
+      button $next: true, aria-label: "Next page"
+        disabled: @page >= totalPages
+        $disabled: (@page >= totalPages)?!
+        @click: (=> @goto(@page + 1))

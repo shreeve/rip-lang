@@ -1,0 +1,13 @@
+# Kbd — accessible headless keyboard shortcut display
+#
+# Renders a semantic <kbd> element for keyboard shortcuts.
+# Ships zero CSS.
+#
+# Usage:
+#   Kbd "⌘K"
+#   Kbd "Ctrl+C"
+
+export Kbd = component
+  render
+    kbd
+      slot

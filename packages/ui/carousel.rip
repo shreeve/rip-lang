@@ -1,0 +1,110 @@
+# Carousel — accessible headless slide carousel
+#
+# Displays one slide at a time with arrow key navigation, optional
+# autoplay, and loop mode. Discovers slides from [data-slide] children.
+# Ships zero CSS.
+#
+# Usage:
+#   Carousel loop: true
+#     div $slide: true
+#       img src: "slide1.jpg"
+#     div $slide: true
+#       img src: "slide2.jpg"
+#     div $slide: true
+#       img src: "slide3.jpg"
+#
+#   Carousel autoplay: true, interval: 5000, @change: handleSlide
+#     div $slide: true, "Slide A"
+#     div $slide: true, "Slide B"
+
+export Carousel = component
+  @orientation := 'horizontal'
+  @loop := false
+  @autoplay := false
+  @interval := 4000
+  @label := 'Carousel'
+
+  activeIndex := 0
+  _ready := false
+  _timer = null
+
+  _slides ~=
+    return [] unless _ready
+    return [] unless @_content
+    Array.from(@_content.querySelectorAll('[data-slide]') or [])
+
+  totalSlides ~= _slides.length
+
+  mounted: ->
+    _ready = true
+    @_startAutoplay() if @autoplay
+
+  beforeUnmount: ->
+    @_stopAutoplay()
+
+  _startAutoplay: ->
+    @_stopAutoplay()
+    _timer = setInterval (=> @next()), @interval
+
+  _stopAutoplay: ->
+    clearInterval _timer if _timer
+    _timer = null
+
+  goto: (idx) ->
+    count = totalSlides
+    return unless count
+    if @loop
+      idx = idx %% count
+    else
+      idx = Math.max(0, Math.min(idx, count - 1))
+    activeIndex = idx
+    @emit 'change', activeIndex
+
+  next: -> @goto(activeIndex + 1)
+  prev: -> @goto(activeIndex - 1)
+
+  onKeydown: (e) ->
+    horiz = @orientation is 'horizontal'
+    switch e.key
+      when (if horiz then 'ArrowRight' else 'ArrowDown')
+        e.preventDefault()
+        @next()
+      when (if horiz then 'ArrowLeft' else 'ArrowUp')
+        e.preventDefault()
+        @prev()
+      when 'Home'
+        e.preventDefault()
+        @goto(0)
+      when 'End'
+        e.preventDefault()
+        @goto(totalSlides - 1)
+
+  ~>
+    return unless _ready
+    _slides.forEach (el, idx) =>
+      isActive = idx is activeIndex
+      el.hidden = not isActive
+      el.toggleAttribute 'data-active', isActive
+      el.setAttribute 'role', 'tabpanel'
+      el.setAttribute 'aria-roledescription', 'slide'
+      el.setAttribute 'aria-label', "Slide #{idx + 1} of #{totalSlides}"
+
+  onMouseenter: -> @_stopAutoplay() if @autoplay
+  onMouseleave: -> @_startAutoplay() if @autoplay
+
+  render
+    div role: "region", aria-roledescription: "carousel", aria-label: @label, tabindex: "0"
+      $orientation: @orientation
+      @keydown: @onKeydown
+      @mouseenter: @onMouseenter
+      @mouseleave: @onMouseleave
+      button $prev: true, aria-label: "Previous slide"
+        disabled: not @loop and activeIndex <= 0
+        $disabled: (not @loop and activeIndex <= 0)?!
+        @click: (=> @prev())
+      div ref: "_content"
+        slot
+      button $next: true, aria-label: "Next slide"
+        disabled: not @loop and activeIndex >= totalSlides - 1
+        $disabled: (not @loop and activeIndex >= totalSlides - 1)?!
+        @click: (=> @next())

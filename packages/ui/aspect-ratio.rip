@@ -1,0 +1,17 @@
+# AspectRatio — accessible headless aspect ratio container
+#
+# Constrains children to a fixed aspect ratio via CSS custom property.
+# Ships zero CSS.
+#
+# Usage:
+#   AspectRatio ratio: 16/9
+#     img src: photo, alt: "Hero image"
+#   AspectRatio ratio: 1
+#     div "Square content"
+
+export AspectRatio = component
+  @ratio := 1
+
+  render
+    div style: "aspect-ratio: #{@ratio}; --aspect-ratio: #{@ratio}"
+      slot
