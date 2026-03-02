@@ -313,7 +313,7 @@ export WidgetGallery = component
     { id: 'form', name: 'Form', lines: 21, desc: 'Form wrapper with submit handling and validation state.', props: ['@disabled'], events: ['submit'], keys: [], attrs: ['$disabled', '$submitting', '$submitted'] }
     { id: 'grid', name: 'Grid', lines: 799, desc: 'Virtual-scrolling data grid — 100K+ rows at 60fps.', props: ['@data', '@columns', '@rowHeight', '@overscan', '@striped', '@beforeEdit', '@afterEdit'], events: [], keys: ['Arrows', 'Tab', 'Enter', 'F2', 'Esc', 'Home', 'End', 'PgUp', 'PgDn', 'Ctrl+A', 'Ctrl+C', 'Ctrl+V', 'Ctrl+X'], attrs: ['$editing', '$selecting', '$sorted'] }
     { id: 'accordion', name: 'Accordion', lines: 86, desc: 'Expand/collapse sections, single or multiple mode.', props: ['@multiple'], events: ['change'], keys: ['Enter', 'Space', '↕', 'Home', 'End'], attrs: ['$item', '$trigger', '$content', '$open', '$disabled'] }
-    { id: 'badge', name: 'Badge', lines: 10, desc: 'Inline label with variant (solid/outline/subtle).', props: ['@variant'], events: [], keys: [], attrs: ['$variant'] }
+    { id: 'badge', name: 'Badge', lines: 5, desc: 'Inline label with variant (solid/outline/subtle).', props: ['@variant'], events: [], keys: [], attrs: ['$variant'] }
     { id: 'skeleton', name: 'Skeleton', lines: 10, desc: 'Loading placeholder with shimmer animation.', props: ['@width', '@height', '@circle', '@label'], events: [], keys: [], attrs: ['$circle'] }
     { id: 'spinner', name: 'Spinner', lines: 6, desc: 'Loading indicator with accessible status.', props: ['@label', '@size'], events: [], keys: [], attrs: [] }
     { id: 'card', name: 'Card', lines: 6, desc: 'Structured container with header/content/footer.', props: ['@interactive'], events: [], keys: [], attrs: ['$interactive'] }
@@ -1963,7 +1963,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "badge"
         .section-title "Badge"
-          span.badge @click: (=> @_viewSource('badge')), "10 lines ❐"
+          span.badge @click: (=> @_viewSource('badge')), "5 lines ❐"
           .section-nav
             a @click: (=> @_navSection('badge', 'prev')), "‹"
             a @click: (=> @_navSection('badge', 'home')), "⌂"
