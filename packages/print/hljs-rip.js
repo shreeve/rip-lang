@@ -1,5 +1,4 @@
 // highlight.js language definition for Rip
-// https://github.com/nicholasgasior/ghljs
 
 export default function(hljs) {
   const KEYWORDS = [
@@ -167,18 +166,6 @@ export default function(hljs) {
   const OPERATORS = {
     className: 'operator',
     begin: /\|>|::=|::|:=|~=|~>|<=>|\.=|=!|!\?|\?!|=~|\?\?=|\?\?|\?\.|\.\.\.|\.\.|=>|->|\*\*|\/\/|%%|===|!==|==|!=|<=|>=|&&|\|\||[+\-*\/%&|^~<>=!?]/,
-    relevance: 0,
-  };
-
-  const TYPE_ANNOTATION = {
-    className: 'type',
-    begin: /::=?\s*/,
-    end: /$/,
-    excludeBegin: true,
-    contains: [
-      { className: 'type', begin: /\b(?:number|string|boolean|void|any|never|unknown|object|symbol|bigint)\b/ },
-      { className: 'title.class', begin: /[A-Z][\w]*/ },
-    ],
     relevance: 0,
   };
 
