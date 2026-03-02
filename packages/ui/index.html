@@ -276,62 +276,62 @@ export WidgetGallery = component
     if visible.length is 1
       tocActive = visible[0].getAttribute('href')?.slice(1)
   tocData := [
-    { id: 'select', name: 'Select', lines: 184, desc: 'Dropdown with typeahead, keyboard nav, ARIA listbox.', props: ['@value', '@placeholder', '@disabled'], events: ['change'], keys: ['↕', 'Enter', 'Space', 'Esc', 'Home', 'End', 'type-ahead'], attrs: ['$open', '$placeholder', '$disabled', '$value', '$highlighted', '$selected'] }
-    { id: 'combobox', name: 'Combobox', lines: 153, desc: 'Filterable input + listbox for search-as-you-type.', props: ['@query', '@items', '@placeholder', '@disabled', '@autoHighlight'], events: ['filter', 'select'], keys: ['↕', 'Enter', 'Esc', 'Tab'], attrs: ['$open', '$disabled', '$clear', '$value', '$highlighted', '$empty'] }
-    { id: 'multi-select', name: 'MultiSelect', lines: 158, desc: 'Multi-select with chips, filtering, and keyboard nav.', props: ['@value', '@items', '@placeholder', '@disabled'], events: ['change'], keys: ['↕', 'Enter', 'Esc', 'Backspace', 'Tab'], attrs: ['$open', '$disabled', '$chips', '$chip', '$remove', '$clear', '$highlighted', '$selected'] }
-    { id: 'autocomplete', name: 'Autocomplete', lines: 141, desc: 'Suggestion input — type to filter, select to fill.', props: ['@value', '@items', '@placeholder', '@disabled'], events: ['select'], keys: ['↕', 'Enter', 'Esc', 'Tab'], attrs: ['$open', '$disabled', '$clear'] }
-    { id: 'checkbox', name: 'Checkbox', lines: 33, desc: 'Toggle with checkbox or switch semantics.', props: ['@checked', '@disabled', '@indeterminate', '@switch'], events: ['change'], keys: [], attrs: ['$checked', '$indeterminate', '$disabled'] }
-    { id: 'toggle', name: 'Toggle', lines: 24, desc: 'Two-state toggle button with pressed state.', props: ['@pressed', '@disabled'], events: ['change'], keys: [], attrs: ['$pressed', '$disabled'] }
-    { id: 'toggle-group', name: 'ToggleGroup', lines: 78, desc: 'Single or multi-select toggle buttons.', props: ['@value', '@disabled', '@multiple', '@orientation'], events: ['change'], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation', '$disabled', '$pressed', '$value'] }
-    { id: 'radio-group', name: 'RadioGroup', lines: 67, desc: 'Exactly one option selected with arrow key nav.', props: ['@value', '@disabled', '@orientation', '@name'], events: ['change'], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation', '$disabled', '$checked', '$value'] }
-    { id: 'checkbox-group', name: 'CheckboxGroup', lines: 65, desc: 'Multiple options checked independently.', props: ['@value', '@disabled', '@orientation', '@label'], events: ['change'], keys: ['← →', '↕'], attrs: ['$orientation', '$disabled', '$checked', '$value'] }
-    { id: 'input', name: 'Input', lines: 35, desc: 'Headless input tracking focus, touch, and validation.', props: ['@value', '@placeholder', '@type', '@disabled', '@required'], events: [], keys: [], attrs: ['$disabled', '$focused', '$touched'] }
-    { id: 'number-field', name: 'NumberField', lines: 162, desc: 'Number input with stepper buttons and hold-to-repeat.', props: ['@value', '@min', '@max', '@step', '@disabled', '@readOnly'], events: ['input', 'change'], keys: ['↕', 'PgUp', 'PgDn', 'Home', 'End'], attrs: ['$disabled', '$readonly', '$decrement', '$increment'] }
-    { id: 'slider', name: 'Slider', lines: 165, desc: 'Draggable range input with pointer capture and keyboard.', props: ['@value', '@min', '@max', '@step', '@orientation', '@disabled'], events: ['input', 'change'], keys: ['← →', '↕', 'PgUp', 'PgDn', 'Home', 'End'], attrs: ['$orientation', '$disabled', '$dragging', '$track', '$indicator', '$thumb', '$active'] }
-    { id: 'otp-field', name: 'OTPField', lines: 89, desc: 'Multi-digit code input with auto-advance and paste.', props: ['@length', '@value', '@disabled', '@mask'], events: ['input', 'complete'], keys: ['← →', 'Backspace', 'Home', 'End', 'paste'], attrs: ['$disabled', '$complete', '$filled'] }
-    { id: 'date-picker', name: 'DatePicker', lines: 214, desc: 'Calendar dropdown for single date or range selection.', props: ['@value', '@placeholder', '@disabled', '@range', '@firstDayOfWeek'], events: ['change'], keys: ['Esc', 'Enter', 'Space'], attrs: ['$open', '$disabled', '$range', '$calendar', '$selected', '$today', '$in-range'] }
-    { id: 'editable-value', name: 'EditableValue', lines: 80, desc: 'Click-to-edit inline value with popover form.', props: ['@disabled'], events: ['save'], keys: ['Esc', 'Enter'], attrs: ['$editing', '$disabled', '$saving', '$edit-trigger'] }
-    { id: 'tabs', name: 'Tabs', lines: 124, desc: 'Tab panel with roving tabindex and arrow key nav.', props: ['@active', '@orientation', '@activation'], events: ['change'], keys: ['← →', '↕', 'Home', 'End', 'Enter', 'Space'], attrs: ['$tab', '$panel', '$active', '$disabled'] }
-    { id: 'menu', name: 'Menu', lines: 162, desc: 'Dropdown action menu with keyboard navigation.', props: ['@disabled'], events: ['select'], keys: ['↕', 'Home', 'End', 'Enter', 'Space', 'Esc', 'Tab', 'type-ahead'], attrs: ['$open', '$disabled', '$highlighted', '$value'] }
-    { id: 'context-menu', name: 'ContextMenu', lines: 98, desc: 'Right-click context menu with keyboard navigation.', props: ['@disabled'], events: ['select'], keys: ['↕', 'Home', 'End', 'Enter', 'Space', 'Esc', 'Tab'], attrs: ['$open', '$highlighted', '$disabled', '$value'] }
-    { id: 'menubar', name: 'Menubar', lines: 155, desc: 'Horizontal menu bar with dropdown menus.', props: ['@disabled'], events: ['select'], keys: ['← →', '↕', 'Enter', 'Space', 'Esc', 'Tab'], attrs: ['$disabled', '$open', '$highlighted', '$value'] }
-    { id: 'nav-menu', name: 'NavMenu', lines: 132, desc: 'Site navigation with hover/click dropdown panels.', props: ['@orientation', '@hoverDelay', '@hoverCloseDelay'], events: [], keys: ['← →', '↓', 'Esc'], attrs: ['$orientation', '$open'] }
-    { id: 'toolbar', name: 'Toolbar', lines: 46, desc: 'Groups controls with roving tabindex keyboard nav.', props: ['@orientation', '@label'], events: [], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation'] }
-    { id: 'dialog', name: 'Dialog', lines: 107, desc: 'Modal with focus trap, scroll lock, escape dismiss.', props: ['@open', '@dismissable', '@initialFocus'], events: ['close'], keys: ['Esc', 'Tab'], attrs: ['$open'] }
-    { id: 'drawer', name: 'Drawer', lines: 79, desc: 'Slide-out panel with focus trap and scroll lock.', props: ['@open', '@side', '@dismissable'], events: ['close'], keys: ['Esc', 'Tab'], attrs: ['$open', '$side'] }
-    { id: 'popover', name: 'Popover', lines: 143, desc: 'Anchored floating content with flip/shift positioning.', props: ['@placement', '@offset', '@disabled', '@openOnHover', '@hoverDelay', '@hoverCloseDelay'], events: [], keys: ['Esc', 'Enter', 'Space', '↓'], attrs: ['$open', '$placement'] }
-    { id: 'tooltip', name: 'Tooltip', lines: 115, desc: 'Hover/focus tooltip with delay and positioning.', props: ['@text', '@placement', '@delay', '@offset', '@hoverable'], events: [], keys: [], attrs: ['$open', '$entering', '$exiting', '$placement'] }
-    { id: 'preview-card', name: 'PreviewCard', lines: 73, desc: 'Hover/focus preview card with delay.', props: ['@delay', '@closeDelay'], events: [], keys: [], attrs: ['$open'] }
-    { id: 'toast', name: 'Toast', lines: 88, desc: 'Auto-dismiss notification with ARIA live region.', props: ['@toasts', '@toast', '@placement'], events: ['dismiss'], keys: [], attrs: ['$placement', '$type', '$leaving'] }
-    { id: 'button', name: 'Button', lines: 23, desc: 'Accessible button with disabled-but-focusable pattern.', props: ['@disabled'], events: ['press'], keys: [], attrs: ['$disabled'] }
-    { id: 'separator', name: 'Separator', lines: 17, desc: 'Decorative or semantic divider between sections.', props: ['@orientation', '@decorative'], events: [], keys: [], attrs: ['$orientation'] }
-    { id: 'progress', name: 'Progress', lines: 25, desc: 'Progress bar with CSS custom property for value.', props: ['@value', '@max', '@label'], events: [], keys: [], attrs: ['$complete'] }
-    { id: 'meter', name: 'Meter', lines: 36, desc: 'Gauge for known-range measurements with thresholds.', props: ['@value', '@min', '@max', '@low', '@high', '@optimum', '@label'], events: [], keys: [], attrs: ['$level'] }
-    { id: 'avatar', name: 'Avatar', lines: 37, desc: 'Image with fallback to initials or placeholder.', props: ['@src', '@alt', '@fallback'], events: [], keys: [], attrs: ['$status', '$initials', '$placeholder'] }
-    { id: 'scroll-area', name: 'ScrollArea', lines: 145, desc: 'Custom scrollbar with draggable thumb and auto-hide.', props: ['@orientation'], events: [], keys: [], attrs: ['$orientation', '$hovering', '$scrolling', '$dragging', '$viewport', '$scrollbar', '$thumb'] }
-    { id: 'field', name: 'Field', lines: 53, desc: 'Form field wrapper with label, description, and error.', props: ['@label', '@description', '@error', '@disabled', '@required'], events: [], keys: [], attrs: ['$disabled', '$invalid', '$label', '$required', '$description', '$error'] }
-    { id: 'fieldset', name: 'Fieldset', lines: 22, desc: 'Grouped fields with legend and cascading disable.', props: ['@legend', '@disabled'], events: [], keys: [], attrs: ['$disabled', '$legend'] }
-    { id: 'form', name: 'Form', lines: 39, desc: 'Form wrapper with submit handling and validation state.', props: ['@disabled'], events: ['submit'], keys: [], attrs: ['$disabled', '$submitting', '$submitted'] }
-    { id: 'grid', name: 'Grid', lines: 901, desc: 'Virtual-scrolling data grid — 100K+ rows at 60fps.', props: ['@data', '@columns', '@rowHeight', '@overscan', '@striped', '@beforeEdit', '@afterEdit'], events: [], keys: ['Arrows', 'Tab', 'Enter', 'F2', 'Esc', 'Home', 'End', 'PgUp', 'PgDn', 'Ctrl+A', 'Ctrl+C', 'Ctrl+V', 'Ctrl+X'], attrs: ['$editing', '$selecting', '$sorted'] }
-    { id: 'accordion', name: 'Accordion', lines: 113, desc: 'Expand/collapse sections, single or multiple mode.', props: ['@multiple'], events: ['change'], keys: ['Enter', 'Space', '↕', 'Home', 'End'], attrs: ['$item', '$trigger', '$content', '$open', '$disabled'] }
+    { id: 'select', name: 'Select', lines: 147, desc: 'Dropdown with typeahead, keyboard nav, ARIA listbox.', props: ['@value', '@placeholder', '@disabled'], events: ['change'], keys: ['↕', 'Enter', 'Space', 'Esc', 'Home', 'End', 'type-ahead'], attrs: ['$open', '$placeholder', '$disabled', '$value', '$highlighted', '$selected'] }
+    { id: 'combobox', name: 'Combobox', lines: 124, desc: 'Filterable input + listbox for search-as-you-type.', props: ['@query', '@items', '@placeholder', '@disabled', '@autoHighlight'], events: ['filter', 'select'], keys: ['↕', 'Enter', 'Esc', 'Tab'], attrs: ['$open', '$disabled', '$clear', '$value', '$highlighted', '$empty'] }
+    { id: 'multi-select', name: 'MultiSelect', lines: 130, desc: 'Multi-select with chips, filtering, and keyboard nav.', props: ['@value', '@items', '@placeholder', '@disabled'], events: ['change'], keys: ['↕', 'Enter', 'Esc', 'Backspace', 'Tab'], attrs: ['$open', '$disabled', '$chips', '$chip', '$remove', '$clear', '$highlighted', '$selected'] }
+    { id: 'autocomplete', name: 'Autocomplete', lines: 115, desc: 'Suggestion input — type to filter, select to fill.', props: ['@value', '@items', '@placeholder', '@disabled'], events: ['select'], keys: ['↕', 'Enter', 'Esc', 'Tab'], attrs: ['$open', '$disabled', '$clear'] }
+    { id: 'checkbox', name: 'Checkbox', lines: 18, desc: 'Toggle with checkbox or switch semantics.', props: ['@checked', '@disabled', '@indeterminate', '@switch'], events: ['change'], keys: [], attrs: ['$checked', '$indeterminate', '$disabled'] }
+    { id: 'toggle', name: 'Toggle', lines: 13, desc: 'Two-state toggle button with pressed state.', props: ['@pressed', '@disabled'], events: ['change'], keys: [], attrs: ['$pressed', '$disabled'] }
+    { id: 'toggle-group', name: 'ToggleGroup', lines: 59, desc: 'Single or multi-select toggle buttons.', props: ['@value', '@disabled', '@multiple', '@orientation'], events: ['change'], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation', '$disabled', '$pressed', '$value'] }
+    { id: 'radio-group', name: 'RadioGroup', lines: 50, desc: 'Exactly one option selected with arrow key nav.', props: ['@value', '@disabled', '@orientation', '@name'], events: ['change'], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation', '$disabled', '$checked', '$value'] }
+    { id: 'checkbox-group', name: 'CheckboxGroup', lines: 46, desc: 'Multiple options checked independently.', props: ['@value', '@disabled', '@orientation', '@label'], events: ['change'], keys: ['← →', '↕'], attrs: ['$orientation', '$disabled', '$checked', '$value'] }
+    { id: 'input', name: 'Input', lines: 24, desc: 'Headless input tracking focus, touch, and validation.', props: ['@value', '@placeholder', '@type', '@disabled', '@required'], events: [], keys: [], attrs: ['$disabled', '$focused', '$touched'] }
+    { id: 'number-field', name: 'NumberField', lines: 132, desc: 'Number input with stepper buttons and hold-to-repeat.', props: ['@value', '@min', '@max', '@step', '@disabled', '@readOnly'], events: ['input', 'change'], keys: ['↕', 'PgUp', 'PgDn', 'Home', 'End'], attrs: ['$disabled', '$readonly', '$decrement', '$increment'] }
+    { id: 'slider', name: 'Slider', lines: 130, desc: 'Draggable range input with pointer capture and keyboard.', props: ['@value', '@min', '@max', '@step', '@orientation', '@disabled'], events: ['input', 'change'], keys: ['← →', '↕', 'PgUp', 'PgDn', 'Home', 'End'], attrs: ['$orientation', '$disabled', '$dragging', '$track', '$indicator', '$thumb', '$active'] }
+    { id: 'otp-field', name: 'OTPField', lines: 72, desc: 'Multi-digit code input with auto-advance and paste.', props: ['@length', '@value', '@disabled', '@mask'], events: ['input', 'complete'], keys: ['← →', 'Backspace', 'Home', 'End', 'paste'], attrs: ['$disabled', '$complete', '$filled'] }
+    { id: 'date-picker', name: 'DatePicker', lines: 172, desc: 'Calendar dropdown for single date or range selection.', props: ['@value', '@placeholder', '@disabled', '@range', '@firstDayOfWeek'], events: ['change'], keys: ['Esc', 'Enter', 'Space'], attrs: ['$open', '$disabled', '$range', '$calendar', '$selected', '$today', '$in-range'] }
+    { id: 'editable-value', name: 'EditableValue', lines: 58, desc: 'Click-to-edit inline value with popover form.', props: ['@disabled'], events: ['save'], keys: ['Esc', 'Enter'], attrs: ['$editing', '$disabled', '$saving', '$edit-trigger'] }
+    { id: 'tabs', name: 'Tabs', lines: 91, desc: 'Tab panel with roving tabindex and arrow key nav.', props: ['@active', '@orientation', '@activation'], events: ['change'], keys: ['← →', '↕', 'Home', 'End', 'Enter', 'Space'], attrs: ['$tab', '$panel', '$active', '$disabled'] }
+    { id: 'menu', name: 'Menu', lines: 133, desc: 'Dropdown action menu with keyboard navigation.', props: ['@disabled'], events: ['select'], keys: ['↕', 'Home', 'End', 'Enter', 'Space', 'Esc', 'Tab', 'type-ahead'], attrs: ['$open', '$disabled', '$highlighted', '$value'] }
+    { id: 'context-menu', name: 'ContextMenu', lines: 80, desc: 'Right-click context menu with keyboard navigation.', props: ['@disabled'], events: ['select'], keys: ['↕', 'Home', 'End', 'Enter', 'Space', 'Esc', 'Tab'], attrs: ['$open', '$highlighted', '$disabled', '$value'] }
+    { id: 'menubar', name: 'Menubar', lines: 125, desc: 'Horizontal menu bar with dropdown menus.', props: ['@disabled'], events: ['select'], keys: ['← →', '↕', 'Enter', 'Space', 'Esc', 'Tab'], attrs: ['$disabled', '$open', '$highlighted', '$value'] }
+    { id: 'nav-menu', name: 'NavMenu', lines: 99, desc: 'Site navigation with hover/click dropdown panels.', props: ['@orientation', '@hoverDelay', '@hoverCloseDelay'], events: [], keys: ['← →', '↓', 'Esc'], attrs: ['$orientation', '$open'] }
+    { id: 'toolbar', name: 'Toolbar', lines: 31, desc: 'Groups controls with roving tabindex keyboard nav.', props: ['@orientation', '@label'], events: [], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation'] }
+    { id: 'dialog', name: 'Dialog', lines: 83, desc: 'Modal with focus trap, scroll lock, escape dismiss.', props: ['@open', '@dismissable', '@initialFocus'], events: ['close'], keys: ['Esc', 'Tab'], attrs: ['$open'] }
+    { id: 'drawer', name: 'Drawer', lines: 60, desc: 'Slide-out panel with focus trap and scroll lock.', props: ['@open', '@side', '@dismissable'], events: ['close'], keys: ['Esc', 'Tab'], attrs: ['$open', '$side'] }
+    { id: 'popover', name: 'Popover', lines: 117, desc: 'Anchored floating content with flip/shift positioning.', props: ['@placement', '@offset', '@disabled', '@openOnHover', '@hoverDelay', '@hoverCloseDelay'], events: [], keys: ['Esc', 'Enter', 'Space', '↓'], attrs: ['$open', '$placement'] }
+    { id: 'tooltip', name: 'Tooltip', lines: 92, desc: 'Hover/focus tooltip with delay and positioning.', props: ['@text', '@placement', '@delay', '@offset', '@hoverable'], events: [], keys: [], attrs: ['$open', '$entering', '$exiting', '$placement'] }
+    { id: 'preview-card', name: 'PreviewCard', lines: 56, desc: 'Hover/focus preview card with delay.', props: ['@delay', '@closeDelay'], events: [], keys: [], attrs: ['$open'] }
+    { id: 'toast', name: 'Toast', lines: 56, desc: 'Auto-dismiss notification with ARIA live region.', props: ['@toasts', '@toast', '@placement'], events: ['dismiss'], keys: [], attrs: ['$placement', '$type', '$leaving'] }
+    { id: 'button', name: 'Button', lines: 10, desc: 'Accessible button with disabled-but-focusable pattern.', props: ['@disabled'], events: ['press'], keys: [], attrs: ['$disabled'] }
+    { id: 'separator', name: 'Separator', lines: 7, desc: 'Decorative or semantic divider between sections.', props: ['@orientation', '@decorative'], events: [], keys: [], attrs: ['$orientation'] }
+    { id: 'progress', name: 'Progress', lines: 14, desc: 'Progress bar with CSS custom property for value.', props: ['@value', '@max', '@label'], events: [], keys: [], attrs: ['$complete'] }
+    { id: 'meter', name: 'Meter', lines: 23, desc: 'Gauge for known-range measurements with thresholds.', props: ['@value', '@min', '@max', '@low', '@high', '@optimum', '@label'], events: [], keys: [], attrs: ['$level'] }
+    { id: 'avatar', name: 'Avatar', lines: 23, desc: 'Image with fallback to initials or placeholder.', props: ['@src', '@alt', '@fallback'], events: [], keys: [], attrs: ['$status', '$initials', '$placeholder'] }
+    { id: 'scroll-area', name: 'ScrollArea', lines: 115, desc: 'Custom scrollbar with draggable thumb and auto-hide.', props: ['@orientation'], events: [], keys: [], attrs: ['$orientation', '$hovering', '$scrolling', '$dragging', '$viewport', '$scrollbar', '$thumb'] }
+    { id: 'field', name: 'Field', lines: 39, desc: 'Form field wrapper with label, description, and error.', props: ['@label', '@description', '@error', '@disabled', '@required'], events: [], keys: [], attrs: ['$disabled', '$invalid', '$label', '$required', '$description', '$error'] }
+    { id: 'fieldset', name: 'Fieldset', lines: 9, desc: 'Grouped fields with legend and cascading disable.', props: ['@legend', '@disabled'], events: [], keys: [], attrs: ['$disabled', '$legend'] }
+    { id: 'form', name: 'Form', lines: 21, desc: 'Form wrapper with submit handling and validation state.', props: ['@disabled'], events: ['submit'], keys: [], attrs: ['$disabled', '$submitting', '$submitted'] }
+    { id: 'grid', name: 'Grid', lines: 799, desc: 'Virtual-scrolling data grid — 100K+ rows at 60fps.', props: ['@data', '@columns', '@rowHeight', '@overscan', '@striped', '@beforeEdit', '@afterEdit'], events: [], keys: ['Arrows', 'Tab', 'Enter', 'F2', 'Esc', 'Home', 'End', 'PgUp', 'PgDn', 'Ctrl+A', 'Ctrl+C', 'Ctrl+V', 'Ctrl+X'], attrs: ['$editing', '$selecting', '$sorted'] }
+    { id: 'accordion', name: 'Accordion', lines: 86, desc: 'Expand/collapse sections, single or multiple mode.', props: ['@multiple'], events: ['change'], keys: ['Enter', 'Space', '↕', 'Home', 'End'], attrs: ['$item', '$trigger', '$content', '$open', '$disabled'] }
     { id: 'badge', name: 'Badge', lines: 0, desc: 'Inline label with variant. Uses native <span> + data-variant.', props: [], events: [], keys: [], attrs: ['$variant'] }
     { id: 'kbd', name: 'Kbd', lines: 0, desc: 'Semantic keyboard shortcut display. Uses native <kbd> element.', props: [], events: [], keys: [], attrs: [] }
-    { id: 'skeleton', name: 'Skeleton', lines: 22, desc: 'Loading placeholder with shimmer animation.', props: ['@width', '@height', '@circle', '@label'], events: [], keys: [], attrs: ['$circle'] }
-    { id: 'spinner', name: 'Spinner', lines: 17, desc: 'Loading indicator with accessible status.', props: ['@label', '@size'], events: [], keys: [], attrs: [] }
-    { id: 'card', name: 'Card', lines: 25, desc: 'Structured container with header/content/footer.', props: ['@interactive'], events: [], keys: [], attrs: ['$interactive'] }
-    { id: 'label', name: 'Label', lines: 16, desc: 'Standalone accessible form label.', props: ['@for', '@required'], events: [], keys: [], attrs: ['$required'] }
-    { id: 'textarea', name: 'Textarea', lines: 48, desc: 'Auto-resizing text area with focus and validation tracking.', props: ['@value', '@placeholder', '@disabled', '@required', '@rows', '@autoResize'], events: [], keys: [], attrs: ['$disabled', '$focused', '$touched'] }
-    { id: 'native-select', name: 'NativeSelect', lines: 32, desc: 'Styled native select element with state tracking.', props: ['@value', '@disabled', '@required'], events: ['change'], keys: [], attrs: ['$disabled', '$focused'] }
-    { id: 'input-group', name: 'InputGroup', lines: 28, desc: 'Input with prefix/suffix addon elements.', props: ['@disabled'], events: [], keys: [], attrs: ['$disabled', '$focused'] }
-    { id: 'button-group', name: 'ButtonGroup', lines: 26, desc: 'Grouped buttons with ARIA group semantics.', props: ['@orientation', '@disabled', '@label'], events: [], keys: [], attrs: ['$orientation', '$disabled'] }
-    { id: 'alert-dialog', name: 'AlertDialog', lines: 96, desc: 'Non-dismissable modal requiring explicit user action.', props: ['@open', '@initialFocus'], events: ['close'], keys: ['Tab'], attrs: ['$open'] }
-    { id: 'sheet', name: 'Sheet', lines: 67, desc: 'Full-width/height side panel with focus trap.', props: ['@open', '@side', '@dismissable'], events: ['close'], keys: ['Esc', 'Tab'], attrs: ['$open', '$side', '$sheet'] }
-    { id: 'breadcrumb', name: 'Breadcrumb', lines: 46, desc: 'Navigation trail with separator and current page.', props: ['@separator', '@label'], events: [], keys: [], attrs: ['$current'] }
-    { id: 'table', name: 'Table', lines: 27, desc: 'Semantic table wrapper with optional caption and striped rows.', props: ['@caption', '@striped'], events: [], keys: [], attrs: ['$striped'] }
-    { id: 'collapsible', name: 'Collapsible', lines: 50, desc: 'Single open/close section with animated expand.', props: ['@open', '@disabled'], events: ['change'], keys: ['Enter', 'Space'], attrs: ['$open', '$disabled'] }
-    { id: 'pagination', name: 'Pagination', lines: 110, desc: 'Page navigation with prev/next and ellipsis gaps.', props: ['@page', '@total', '@perPage', '@siblingCount'], events: ['change'], keys: ['← →', 'Home', 'End'], attrs: ['$active', '$disabled', '$ellipsis'] }
-    { id: 'carousel', name: 'Carousel', lines: 110, desc: 'Slide carousel with autoplay, loop, and keyboard nav.', props: ['@orientation', '@loop', '@autoplay', '@interval', '@label'], events: ['change'], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation', '$active', '$prev', '$next'] }
-    { id: 'resizable', name: 'Resizable', lines: 123, desc: 'Draggable resize handles between panels.', props: ['@orientation', '@minSize', '@maxSize'], events: ['resize'], keys: ['← →', '↕'], attrs: ['$orientation', '$dragging'] }
+    { id: 'skeleton', name: 'Skeleton', lines: 10, desc: 'Loading placeholder with shimmer animation.', props: ['@width', '@height', '@circle', '@label'], events: [], keys: [], attrs: ['$circle'] }
+    { id: 'spinner', name: 'Spinner', lines: 6, desc: 'Loading indicator with accessible status.', props: ['@label', '@size'], events: [], keys: [], attrs: [] }
+    { id: 'card', name: 'Card', lines: 6, desc: 'Structured container with header/content/footer.', props: ['@interactive'], events: [], keys: [], attrs: ['$interactive'] }
+    { id: 'label', name: 'Label', lines: 6, desc: 'Standalone accessible form label.', props: ['@for', '@required'], events: [], keys: [], attrs: ['$required'] }
+    { id: 'textarea', name: 'Textarea', lines: 33, desc: 'Auto-resizing text area with focus and validation tracking.', props: ['@value', '@placeholder', '@disabled', '@required', '@rows', '@autoResize'], events: [], keys: [], attrs: ['$disabled', '$focused', '$touched'] }
+    { id: 'native-select', name: 'NativeSelect', lines: 18, desc: 'Styled native select element with state tracking.', props: ['@value', '@disabled', '@required'], events: ['change'], keys: [], attrs: ['$disabled', '$focused'] }
+    { id: 'input-group', name: 'InputGroup', lines: 11, desc: 'Input with prefix/suffix addon elements.', props: ['@disabled'], events: [], keys: [], attrs: ['$disabled', '$focused'] }
+    { id: 'button-group', name: 'ButtonGroup', lines: 11, desc: 'Grouped buttons with ARIA group semantics.', props: ['@orientation', '@disabled', '@label'], events: [], keys: [], attrs: ['$orientation', '$disabled'] }
+    { id: 'alert-dialog', name: 'AlertDialog', lines: 74, desc: 'Non-dismissable modal requiring explicit user action.', props: ['@open', '@initialFocus'], events: ['close'], keys: ['Tab'], attrs: ['$open'] }
+    { id: 'sheet', name: 'Sheet', lines: 49, desc: 'Full-width/height side panel with focus trap.', props: ['@open', '@side', '@dismissable'], events: ['close'], keys: ['Esc', 'Tab'], attrs: ['$open', '$side', '$sheet'] }
+    { id: 'breadcrumb', name: 'Breadcrumb', lines: 25, desc: 'Navigation trail with separator and current page.', props: ['@separator', '@label'], events: [], keys: [], attrs: ['$current'] }
+    { id: 'table', name: 'Table', lines: 9, desc: 'Semantic table wrapper with optional caption and striped rows.', props: ['@caption', '@striped'], events: [], keys: [], attrs: ['$striped'] }
+    { id: 'collapsible', name: 'Collapsible', lines: 33, desc: 'Single open/close section with animated expand.', props: ['@open', '@disabled'], events: ['change'], keys: ['Enter', 'Space'], attrs: ['$open', '$disabled'] }
+    { id: 'pagination', name: 'Pagination', lines: 96, desc: 'Page navigation with prev/next and ellipsis gaps.', props: ['@page', '@total', '@perPage', '@siblingCount'], events: ['change'], keys: ['← →', 'Home', 'End'], attrs: ['$active', '$disabled', '$ellipsis'] }
+    { id: 'carousel', name: 'Carousel', lines: 78, desc: 'Slide carousel with autoplay, loop, and keyboard nav.', props: ['@orientation', '@loop', '@autoplay', '@interval', '@label'], events: ['change'], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation', '$active', '$prev', '$next'] }
+    { id: 'resizable', name: 'Resizable', lines: 89, desc: 'Draggable resize handles between panels.', props: ['@orientation', '@minSize', '@maxSize'], events: ['resize'], keys: ['← →', '↕'], attrs: ['$orientation', '$dragging'] }
   ]
   _infoName := ''
   _infoDesc := ''
@@ -613,7 +613,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "select"
         .section-title "Select"
-          span.badge @click: (=> @_viewSource('select')), "184 lines ❐"
+          span.badge @click: (=> @_viewSource('select')), "147 lines ❐"
           .section-nav
             a @click: (=> @_navSection('select', 'prev')), "‹"
             a @click: (=> @_navSection('select', 'home')), "⌂"
@@ -666,7 +666,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "combobox"
         .section-title "Combobox"
-          span.badge @click: (=> @_viewSource('combobox')), "153 lines ❐"
+          span.badge @click: (=> @_viewSource('combobox')), "124 lines ❐"
           .section-nav
             a @click: (=> @_navSection('combobox', 'prev')), "‹"
             a @click: (=> @_navSection('combobox', 'home')), "⌂"
@@ -711,7 +711,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "multi-select"
         .section-title "MultiSelect"
-          span.badge @click: (=> @_viewSource('multi-select')), "158 lines ❐"
+          span.badge @click: (=> @_viewSource('multi-select')), "130 lines ❐"
           .section-nav
             a @click: (=> @_navSection('multi-select', 'prev')), "‹"
             a @click: (=> @_navSection('multi-select', 'home')), "⌂"
@@ -755,7 +755,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "autocomplete"
         .section-title "Autocomplete"
-          span.badge @click: (=> @_viewSource('autocomplete')), "141 lines ❐"
+          span.badge @click: (=> @_viewSource('autocomplete')), "115 lines ❐"
           .section-nav
             a @click: (=> @_navSection('autocomplete', 'prev')), "‹"
             a @click: (=> @_navSection('autocomplete', 'home')), "⌂"
@@ -793,7 +793,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "checkbox"
         .section-title "Checkbox"
-          span.badge @click: (=> @_viewSource('checkbox')), "33 lines ❐"
+          span.badge @click: (=> @_viewSource('checkbox')), "18 lines ❐"
           .section-nav
             a @click: (=> @_navSection('checkbox', 'prev')), "‹"
             a @click: (=> @_navSection('checkbox', 'home')), "⌂"
@@ -836,7 +836,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "toggle"
         .section-title "Toggle"
-          span.badge @click: (=> @_viewSource('toggle')), "24 lines ❐"
+          span.badge @click: (=> @_viewSource('toggle')), "13 lines ❐"
           .section-nav
             a @click: (=> @_navSection('toggle', 'prev')), "‹"
             a @click: (=> @_navSection('toggle', 'home')), "⌂"
@@ -866,7 +866,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "toggle-group"
         .section-title "ToggleGroup"
-          span.badge @click: (=> @_viewSource('toggle-group')), "78 lines ❐"
+          span.badge @click: (=> @_viewSource('toggle-group')), "59 lines ❐"
           .section-nav
             a @click: (=> @_navSection('toggle-group', 'prev')), "‹"
             a @click: (=> @_navSection('toggle-group', 'home')), "⌂"
@@ -915,7 +915,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "radio-group"
         .section-title "RadioGroup"
-          span.badge @click: (=> @_viewSource('radio-group')), "67 lines ❐"
+          span.badge @click: (=> @_viewSource('radio-group')), "50 lines ❐"
           .section-nav
             a @click: (=> @_navSection('radio-group', 'prev')), "‹"
             a @click: (=> @_navSection('radio-group', 'home')), "⌂"
@@ -957,7 +957,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "checkbox-group"
         .section-title "CheckboxGroup"
-          span.badge @click: (=> @_viewSource('checkbox-group')), "65 lines ❐"
+          span.badge @click: (=> @_viewSource('checkbox-group')), "46 lines ❐"
           .section-nav
             a @click: (=> @_navSection('checkbox-group', 'prev')), "‹"
             a @click: (=> @_navSection('checkbox-group', 'home')), "⌂"
@@ -998,7 +998,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "input"
         .section-title "Input"
-          span.badge @click: (=> @_viewSource('input')), "35 lines ❐"
+          span.badge @click: (=> @_viewSource('input')), "24 lines ❐"
           .section-nav
             a @click: (=> @_navSection('input', 'prev')), "‹"
             a @click: (=> @_navSection('input', 'home')), "⌂"
@@ -1028,7 +1028,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "number-field"
         .section-title "NumberField"
-          span.badge @click: (=> @_viewSource('number-field')), "162 lines ❐"
+          span.badge @click: (=> @_viewSource('number-field')), "132 lines ❐"
           .section-nav
             a @click: (=> @_navSection('number-field', 'prev')), "‹"
             a @click: (=> @_navSection('number-field', 'home')), "⌂"
@@ -1077,7 +1077,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "slider"
         .section-title "Slider"
-          span.badge @click: (=> @_viewSource('slider')), "165 lines ❐"
+          span.badge @click: (=> @_viewSource('slider')), "130 lines ❐"
           .section-nav
             a @click: (=> @_navSection('slider', 'prev')), "‹"
             a @click: (=> @_navSection('slider', 'home')), "⌂"
@@ -1130,7 +1130,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "otp-field"
         .section-title "OTPField"
-          span.badge @click: (=> @_viewSource('otp-field')), "89 lines ❐"
+          span.badge @click: (=> @_viewSource('otp-field')), "72 lines ❐"
           .section-nav
             a @click: (=> @_navSection('otp-field', 'prev')), "‹"
             a @click: (=> @_navSection('otp-field', 'home')), "⌂"
@@ -1173,7 +1173,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "date-picker"
         .section-title "DatePicker"
-          span.badge @click: (=> @_viewSource('date-picker')), "214 lines ❐"
+          span.badge @click: (=> @_viewSource('date-picker')), "172 lines ❐"
           .section-nav
             a @click: (=> @_navSection('date-picker', 'prev')), "‹"
             a @click: (=> @_navSection('date-picker', 'home')), "⌂"
@@ -1219,7 +1219,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "editable-value"
         .section-title "EditableValue"
-          span.badge @click: (=> @_viewSource('editable-value')), "80 lines ❐"
+          span.badge @click: (=> @_viewSource('editable-value')), "58 lines ❐"
           .section-nav
             a @click: (=> @_navSection('editable-value', 'prev')), "‹"
             a @click: (=> @_navSection('editable-value', 'home')), "⌂"
@@ -1256,7 +1256,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "textarea"
         .section-title "Textarea"
-          span.badge @click: (=> @_viewSource('textarea')), "48 lines ❐"
+          span.badge @click: (=> @_viewSource('textarea')), "33 lines ❐"
           .section-nav
             a @click: (=> @_navSection('textarea', 'prev')), "‹"
             a @click: (=> @_navSection('textarea', 'home')), "⌂"
@@ -1287,7 +1287,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "native-select"
         .section-title "NativeSelect"
-          span.badge @click: (=> @_viewSource('native-select')), "32 lines ❐"
+          span.badge @click: (=> @_viewSource('native-select')), "18 lines ❐"
           .section-nav
             a @click: (=> @_navSection('native-select', 'prev')), "‹"
             a @click: (=> @_navSection('native-select', 'home')), "⌂"
@@ -1321,7 +1321,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "input-group"
         .section-title "InputGroup"
-          span.badge @click: (=> @_viewSource('input-group')), "28 lines ❐"
+          span.badge @click: (=> @_viewSource('input-group')), "11 lines ❐"
           .section-nav
             a @click: (=> @_navSection('input-group', 'prev')), "‹"
             a @click: (=> @_navSection('input-group', 'home')), "⌂"
@@ -1352,7 +1352,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "tabs"
         .section-title "Tabs"
-          span.badge @click: (=> @_viewSource('tabs')), "124 lines ❐"
+          span.badge @click: (=> @_viewSource('tabs')), "91 lines ❐"
           .section-nav
             a @click: (=> @_navSection('tabs', 'prev')), "‹"
             a @click: (=> @_navSection('tabs', 'home')), "⌂"
@@ -1401,7 +1401,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "menu"
         .section-title "Menu"
-          span.badge @click: (=> @_viewSource('menu')), "162 lines ❐"
+          span.badge @click: (=> @_viewSource('menu')), "133 lines ❐"
           .section-nav
             a @click: (=> @_navSection('menu', 'prev')), "‹"
             a @click: (=> @_navSection('menu', 'home')), "⌂"
@@ -1446,7 +1446,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "context-menu"
         .section-title "ContextMenu"
-          span.badge @click: (=> @_viewSource('context-menu')), "98 lines ❐"
+          span.badge @click: (=> @_viewSource('context-menu')), "80 lines ❐"
           .section-nav
             a @click: (=> @_navSection('context-menu', 'prev')), "‹"
             a @click: (=> @_navSection('context-menu', 'home')), "⌂"
@@ -1488,7 +1488,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "menubar"
         .section-title "Menubar"
-          span.badge @click: (=> @_viewSource('menubar')), "155 lines ❐"
+          span.badge @click: (=> @_viewSource('menubar')), "125 lines ❐"
           .section-nav
             a @click: (=> @_navSection('menubar', 'prev')), "‹"
             a @click: (=> @_navSection('menubar', 'home')), "⌂"
@@ -1535,7 +1535,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "nav-menu"
         .section-title "NavigationMenu"
-          span.badge @click: (=> @_viewSource('nav-menu')), "132 lines ❐"
+          span.badge @click: (=> @_viewSource('nav-menu')), "99 lines ❐"
           .section-nav
             a @click: (=> @_navSection('nav-menu', 'prev')), "‹"
             a @click: (=> @_navSection('nav-menu', 'home')), "⌂"
@@ -1579,7 +1579,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "toolbar"
         .section-title "Toolbar"
-          span.badge @click: (=> @_viewSource('toolbar')), "46 lines ❐"
+          span.badge @click: (=> @_viewSource('toolbar')), "31 lines ❐"
           .section-nav
             a @click: (=> @_navSection('toolbar', 'prev')), "‹"
             a @click: (=> @_navSection('toolbar', 'home')), "⌂"
@@ -1642,7 +1642,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "breadcrumb"
         .section-title "Breadcrumb"
-          span.badge @click: (=> @_viewSource('breadcrumb')), "46 lines ❐"
+          span.badge @click: (=> @_viewSource('breadcrumb')), "25 lines ❐"
           .section-nav
             a @click: (=> @_navSection('breadcrumb', 'prev')), "‹"
             a @click: (=> @_navSection('breadcrumb', 'home')), "⌂"
@@ -1676,7 +1676,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "dialog"
         .section-title "Dialog"
-          span.badge @click: (=> @_viewSource('dialog')), "107 lines ❐"
+          span.badge @click: (=> @_viewSource('dialog')), "83 lines ❐"
           .section-nav
             a @click: (=> @_navSection('dialog', 'prev')), "‹"
             a @click: (=> @_navSection('dialog', 'home')), "⌂"
@@ -1719,7 +1719,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "alert-dialog"
         .section-title "AlertDialog"
-          span.badge @click: (=> @_viewSource('alert-dialog')), "96 lines ❐"
+          span.badge @click: (=> @_viewSource('alert-dialog')), "74 lines ❐"
           .section-nav
             a @click: (=> @_navSection('alert-dialog', 'prev')), "‹"
             a @click: (=> @_navSection('alert-dialog', 'home')), "⌂"
@@ -1760,7 +1760,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "drawer"
         .section-title "Drawer"
-          span.badge @click: (=> @_viewSource('drawer')), "79 lines ❐"
+          span.badge @click: (=> @_viewSource('drawer')), "60 lines ❐"
           .section-nav
             a @click: (=> @_navSection('drawer', 'prev')), "‹"
             a @click: (=> @_navSection('drawer', 'home')), "⌂"
@@ -1803,7 +1803,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "sheet"
         .section-title "Sheet"
-          span.badge @click: (=> @_viewSource('sheet')), "67 lines ❐"
+          span.badge @click: (=> @_viewSource('sheet')), "49 lines ❐"
           .section-nav
             a @click: (=> @_navSection('sheet', 'prev')), "‹"
             a @click: (=> @_navSection('sheet', 'home')), "⌂"
@@ -1844,7 +1844,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "popover"
         .section-title "Popover"
-          span.badge @click: (=> @_viewSource('popover')), "143 lines ❐"
+          span.badge @click: (=> @_viewSource('popover')), "117 lines ❐"
           .section-nav
             a @click: (=> @_navSection('popover', 'prev')), "‹"
             a @click: (=> @_navSection('popover', 'home')), "⌂"
@@ -1884,7 +1884,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "tooltip"
         .section-title "Tooltip"
-          span.badge @click: (=> @_viewSource('tooltip')), "115 lines ❐"
+          span.badge @click: (=> @_viewSource('tooltip')), "92 lines ❐"
           .section-nav
             a @click: (=> @_navSection('tooltip', 'prev')), "‹"
             a @click: (=> @_navSection('tooltip', 'home')), "⌂"
@@ -1920,7 +1920,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "preview-card"
         .section-title "PreviewCard"
-          span.badge @click: (=> @_viewSource('preview-card')), "73 lines ❐"
+          span.badge @click: (=> @_viewSource('preview-card')), "56 lines ❐"
           .section-nav
             a @click: (=> @_navSection('preview-card', 'prev')), "‹"
             a @click: (=> @_navSection('preview-card', 'home')), "⌂"
@@ -1949,7 +1949,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "toast"
         .section-title "Toast"
-          span.badge @click: (=> @_viewSource('toast')), "88 lines ❐"
+          span.badge @click: (=> @_viewSource('toast')), "56 lines ❐"
           .section-nav
             a @click: (=> @_navSection('toast', 'prev')), "‹"
             a @click: (=> @_navSection('toast', 'home')), "⌂"
@@ -1984,7 +1984,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "button"
         .section-title "Button"
-          span.badge @click: (=> @_viewSource('button')), "23 lines ❐"
+          span.badge @click: (=> @_viewSource('button')), "10 lines ❐"
           .section-nav
             a @click: (=> @_navSection('button', 'prev')), "‹"
             a @click: (=> @_navSection('button', 'home')), "⌂"
@@ -2034,7 +2034,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "card"
         .section-title "Card"
-          span.badge @click: (=> @_viewSource('card')), "25 lines ❐"
+          span.badge @click: (=> @_viewSource('card')), "6 lines ❐"
           .section-nav
             a @click: (=> @_navSection('card', 'prev')), "‹"
             a @click: (=> @_navSection('card', 'home')), "⌂"
@@ -2067,7 +2067,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "separator"
         .section-title "Separator"
-          span.badge @click: (=> @_viewSource('separator')), "17 lines ❐"
+          span.badge @click: (=> @_viewSource('separator')), "7 lines ❐"
           .section-nav
             a @click: (=> @_navSection('separator', 'prev')), "‹"
             a @click: (=> @_navSection('separator', 'home')), "⌂"
@@ -2100,7 +2100,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "progress"
         .section-title "Progress"
-          span.badge @click: (=> @_viewSource('progress')), "25 lines ❐"
+          span.badge @click: (=> @_viewSource('progress')), "14 lines ❐"
           .section-nav
             a @click: (=> @_navSection('progress', 'prev')), "‹"
             a @click: (=> @_navSection('progress', 'home')), "⌂"
@@ -2127,7 +2127,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "meter"
         .section-title "Meter"
-          span.badge @click: (=> @_viewSource('meter')), "36 lines ❐"
+          span.badge @click: (=> @_viewSource('meter')), "23 lines ❐"
           .section-nav
             a @click: (=> @_navSection('meter', 'prev')), "‹"
             a @click: (=> @_navSection('meter', 'home')), "⌂"
@@ -2156,7 +2156,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "spinner"
         .section-title "Spinner"
-          span.badge @click: (=> @_viewSource('spinner')), "17 lines ❐"
+          span.badge @click: (=> @_viewSource('spinner')), "6 lines ❐"
           .section-nav
             a @click: (=> @_navSection('spinner', 'prev')), "‹"
             a @click: (=> @_navSection('spinner', 'home')), "⌂"
@@ -2180,7 +2180,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "skeleton"
         .section-title "Skeleton"
-          span.badge @click: (=> @_viewSource('skeleton')), "22 lines ❐"
+          span.badge @click: (=> @_viewSource('skeleton')), "10 lines ❐"
           .section-nav
             a @click: (=> @_navSection('skeleton', 'prev')), "‹"
             a @click: (=> @_navSection('skeleton', 'home')), "⌂"
@@ -2210,7 +2210,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "avatar"
         .section-title "Avatar"
-          span.badge @click: (=> @_viewSource('avatar')), "37 lines ❐"
+          span.badge @click: (=> @_viewSource('avatar')), "23 lines ❐"
           .section-nav
             a @click: (=> @_navSection('avatar', 'prev')), "‹"
             a @click: (=> @_navSection('avatar', 'home')), "⌂"
@@ -2243,7 +2243,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "label"
         .section-title "Label"
-          span.badge @click: (=> @_viewSource('label')), "16 lines ❐"
+          span.badge @click: (=> @_viewSource('label')), "6 lines ❐"
           .section-nav
             a @click: (=> @_navSection('label', 'prev')), "‹"
             a @click: (=> @_navSection('label', 'home')), "⌂"
@@ -2268,7 +2268,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "scroll-area"
         .section-title "ScrollArea"
-          span.badge @click: (=> @_viewSource('scroll-area')), "145 lines ❐"
+          span.badge @click: (=> @_viewSource('scroll-area')), "115 lines ❐"
           .section-nav
             a @click: (=> @_navSection('scroll-area', 'prev')), "‹"
             a @click: (=> @_navSection('scroll-area', 'home')), "⌂"
@@ -2314,7 +2314,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "field"
         .section-title "Field + Fieldset"
-          span.badge @click: (=> @_viewSource('field')), "75 lines ❐"
+          span.badge @click: (=> @_viewSource('field')), "48 lines ❐"
           .section-nav
             a @click: (=> @_navSection('field', 'prev')), "‹"
             a @click: (=> @_navSection('field', 'home')), "⌂"
@@ -2360,7 +2360,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "form"
         .section-title "Form"
-          span.badge @click: (=> @_viewSource('form')), "39 lines ❐"
+          span.badge @click: (=> @_viewSource('form')), "21 lines ❐"
           .section-nav
             a @click: (=> @_navSection('form', 'prev')), "‹"
             a @click: (=> @_navSection('form', 'home')), "⌂"
@@ -2393,7 +2393,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "button-group"
         .section-title "ButtonGroup"
-          span.badge @click: (=> @_viewSource('button-group')), "26 lines ❐"
+          span.badge @click: (=> @_viewSource('button-group')), "11 lines ❐"
           .section-nav
             a @click: (=> @_navSection('button-group', 'prev')), "‹"
             a @click: (=> @_navSection('button-group', 'home')), "⌂"
@@ -2422,7 +2422,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "grid"
         .section-title "Grid"
-          span.badge @click: (=> @_viewSource('grid')), "901 lines ❐"
+          span.badge @click: (=> @_viewSource('grid')), "799 lines ❐"
           .section-nav
             a @click: (=> @_navSection('grid', 'prev')), "‹"
             a @click: (=> @_navSection('grid', 'home')), "⌂"
@@ -2477,7 +2477,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "accordion"
         .section-title "Accordion"
-          span.badge @click: (=> @_viewSource('accordion')), "113 lines ❐"
+          span.badge @click: (=> @_viewSource('accordion')), "86 lines ❐"
           .section-nav
             a @click: (=> @_navSection('accordion', 'prev')), "‹"
             a @click: (=> @_navSection('accordion', 'home')), "⌂"
@@ -2529,7 +2529,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "table"
         .section-title "Table"
-          span.badge @click: (=> @_viewSource('table')), "27 lines ❐"
+          span.badge @click: (=> @_viewSource('table')), "9 lines ❐"
           .section-nav
             a @click: (=> @_navSection('table', 'prev')), "‹"
             a @click: (=> @_navSection('table', 'home')), "⌂"
@@ -2570,7 +2570,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "collapsible"
         .section-title "Collapsible"
-          span.badge @click: (=> @_viewSource('collapsible')), "50 lines ❐"
+          span.badge @click: (=> @_viewSource('collapsible')), "33 lines ❐"
           .section-nav
             a @click: (=> @_navSection('collapsible', 'prev')), "‹"
             a @click: (=> @_navSection('collapsible', 'home')), "⌂"
@@ -2608,7 +2608,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "pagination"
         .section-title "Pagination"
-          span.badge @click: (=> @_viewSource('pagination')), "110 lines ❐"
+          span.badge @click: (=> @_viewSource('pagination')), "96 lines ❐"
           .section-nav
             a @click: (=> @_navSection('pagination', 'prev')), "‹"
             a @click: (=> @_navSection('pagination', 'home')), "⌂"
@@ -2645,7 +2645,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "carousel"
         .section-title "Carousel"
-          span.badge @click: (=> @_viewSource('carousel')), "110 lines ❐"
+          span.badge @click: (=> @_viewSource('carousel')), "78 lines ❐"
           .section-nav
             a @click: (=> @_navSection('carousel', 'prev')), "‹"
             a @click: (=> @_navSection('carousel', 'home')), "⌂"
@@ -2689,7 +2689,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "resizable"
         .section-title "Resizable"
-          span.badge @click: (=> @_viewSource('resizable')), "123 lines ❐"
+          span.badge @click: (=> @_viewSource('resizable')), "89 lines ❐"
           .section-nav
             a @click: (=> @_navSection('resizable', 'prev')), "‹"
             a @click: (=> @_navSection('resizable', 'home')), "⌂"
