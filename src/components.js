@@ -1361,7 +1361,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       }
 
       // Regular attribute
-      if (typeof key === 'string') {
+      if (typeof key === 'string' || key instanceof String) {
         // Strip quotes from string keys (e.g., "data-slot" → data-slot)
         if (key.startsWith('"') && key.endsWith('"')) {
           key = key.slice(1, -1);

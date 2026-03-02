@@ -4473,7 +4473,7 @@ ${blockFactoriesCode}return ${lines.join(`
           }
           continue;
         }
-        if (typeof key === "string") {
+        if (typeof key === "string" || key instanceof String) {
           if (key.startsWith('"') && key.endsWith('"')) {
             key = key.slice(1, -1);
           }
@@ -8740,7 +8740,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.65";
-  var BUILD_DATE = "2026-03-01@20:19:11GMT";
+  var BUILD_DATE = "2026-03-01@21:59:29GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

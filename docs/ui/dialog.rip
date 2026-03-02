@@ -1,0 +1,107 @@
+# Dialog — accessible headless modal dialog
+#
+# Traps focus, locks scroll, dismisses on Escape or click outside.
+# Restores focus to the previously focused element on close.
+# Auto-wires aria-labelledby (first h1-h6) and aria-describedby (first p).
+#
+# Exposes $open on the backdrop. Ships zero CSS.
+#
+# Usage:
+#   Dialog open <=> showDialog, @close: handleClose
+#     h2 "Title"
+#     p "Content"
+#     button @click: (=> showDialog = false), "Close"
+
+dialogStack = []
+
+export Dialog = component
+  @open := false
+  @dismissable := true
+  @initialFocus := null
+
+  _prevFocus = null
+  _cleanupTrap = null
+  _scrollY = 0
+  _id =! "dlg-#{Math.random().toString(36).slice(2, 8)}"
+
+  _wireAria: ->
+    panel = @_panel
+    return unless panel
+    heading = panel.querySelector('h1,h2,h3,h4,h5,h6')
+    if heading
+      heading.id ?= "#{_id}-title"
+      panel.setAttribute 'aria-labelledby', heading.id
+    desc = panel.querySelector('p')
+    if desc
+      desc.id ?= "#{_id}-desc"
+      panel.setAttribute 'aria-describedby', desc.id
+
+  ~>
+    if @open
+      _prevFocus = document.activeElement
+      _scrollY = window.scrollY
+      dialogStack.push this
+      document.body.style.position = 'fixed'
+      document.body.style.top = "-#{_scrollY}px"
+      document.body.style.width = '100%'
+
+      setTimeout =>
+        panel = @_panel
+        if panel
+          @_wireAria()
+          if @initialFocus
+            target = if typeof @initialFocus is 'string' then panel.querySelector(@initialFocus) else @initialFocus
+            target?.focus()
+          else
+            focusable = panel.querySelectorAll 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+            focusable[0]?.focus()
+          _cleanupTrap = (e) ->
+            return unless e.key is 'Tab'
+            list = Array.from(panel.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')).filter (f) -> f.offsetParent isnt null
+            return unless list.length
+            first = list[0]
+            last = list[list.length - 1]
+            if e.shiftKey
+              if document.activeElement is first then (e.preventDefault(); last.focus())
+            else
+              if document.activeElement is last then (e.preventDefault(); first.focus())
+          panel.addEventListener 'keydown', _cleanupTrap
+      , 0
+
+      return ->
+        idx = dialogStack.indexOf this
+        dialogStack.splice(idx, 1) if idx >= 0
+        document.body.style.position = '' unless dialogStack.length
+        document.body.style.top = '' unless dialogStack.length
+        document.body.style.width = '' unless dialogStack.length
+        window.scrollTo 0, _scrollY unless dialogStack.length
+        _prevFocus?.focus()
+    else
+      idx = dialogStack.indexOf this
+      dialogStack.splice(idx, 1) if idx >= 0
+      unless dialogStack.length
+        document.body.style.position = ''
+        document.body.style.top = ''
+        document.body.style.width = ''
+        window.scrollTo 0, _scrollY
+      _prevFocus?.focus()
+
+  close: ->
+    @open = false
+    @emit 'close'
+
+  onKeydown: (e) ->
+    if e.key is 'Escape' and dialogStack[dialogStack.length - 1] is this
+      e.preventDefault()
+      @close() if @dismissable
+
+  onBackdropClick: (e) ->
+    @close() if e.target is e.currentTarget and @dismissable
+
+  render
+    if @open
+      div ref: "_backdrop", $open: true,
+        @click: @onBackdropClick,
+        @keydown: @onKeydown
+        div ref: "_panel", role: "dialog", aria-modal: "true", tabindex: "-1"
+          slot
