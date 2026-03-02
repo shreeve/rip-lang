@@ -1,14 +1,17 @@
 # Rip UI
 
 Headless, accessible UI components written in Rip. Zero dependencies. Zero CSS.
-Every widget exposes `$` attributes (compiled to `data-*`) for styling and handles keyboard
-interactions per WAI-ARIA Authoring Practices.
-
-Available on npm as `@rip-lang/ui`. Live gallery at https://ui.ripdev.io/.
+Every widget exposes `$` attributes (compiled to `data-*`) for styling and handles
+keyboard interactions per WAI-ARIA Authoring Practices.
 
 Components are plain `.rip` source files — no build step. The browser compiles
-them on the fly via Rip UI's runtime. Include them in your app by adding the
-components directory to your serve middleware:
+them on the fly via Rip's runtime.
+
+---
+
+## Quick Start
+
+Add the components directory to your serve middleware:
 
 ```coffee
 use serve
@@ -16,16 +19,317 @@ use serve
   components: ['components', '../../../packages/ui']
 ```
 
-Every widget:
-- Handles all keyboard interactions per WAI-ARIA Authoring Practices
-- Sets correct ARIA attributes automatically
-- Exposes state via `$` sigil (`$open`, `$selected`) — compiles to `data-*` attributes for CSS
-- Ships zero CSS — styling is entirely in the user's stylesheets
-- Uses Rip's reactive primitives for all state management
+All widgets become available by name (`Select`, `Dialog`, `Grid`, etc.) in the
+shared scope — no imports needed.
+
+```bash
+cd packages/ui
+rip server
+# Open the gallery at https://localhost:3005
+```
 
 ---
 
-## Overview
+## Why Rip UI
+
+ShadCN is the best component experience possible within React's constraints.
+Rip UI removes those constraints entirely.
+
+| | ShadCN / Radix | Rip UI |
+|--|---------------|--------|
+| Runtime dependency | React (~42KB gz) + ReactDOM | None |
+| Component count | ~40 | 57 |
+| Total source | ShadCN wrappers (~3K LOC) atop Radix Primitives (~20K+ LOC) | 5,254 SLOC — everything included |
+| Build step | Required (Next.js, Vite, etc.) | None — browser compiles `.rip` source directly |
+| Styling approach | Pre-wired Tailwind (ShadCN) or unstyled (Radix) | Zero CSS — `data-*` attribute contract, any CSS methodology |
+| Controlled components | `value` + `onChange` callback pair | `<=>` two-way binding operator |
+| Shared state | React Context + Provider wrappers | `offer` / `accept` keywords |
+| Reactivity | `useState` + `useEffect` + dependency arrays | `:=` / `~=` / `~>` — language-level operators |
+| Virtual DOM | Yes (diffing overhead on every render) | No — fine-grained DOM updates to exactly the nodes that changed |
+| Data grid | Not available | 901 SLOC — virtual scroll, 100K+ rows at 60fps, Sheets-grade UX |
+| Other dependencies | class-variance-authority, clsx, tailwind-merge, lucide-react | Zero |
+
+### What React Forces, and What Rip Doesn't
+
+**The Sub-Component Tax.** Radix components require `Tabs.Root`, `Tabs.List`,
+`Tabs.Trigger`, `Tabs.Content` — four separate sub-components wired through
+React Context. This isn't a design choice. It's a constraint. React components
+cannot inspect or control their children's rendering. The only way to share
+state with descendants is through Context Provider wrappers.
+
+Rip doesn't have this limitation:
+
+```coffee
+Tabs active <=> currentTab
+  div $tab: "one", "Tab One"
+  div $tab: "two", "Tab Two"
+  div $panel: "one"
+    p "Content for tab one"
+  div $panel: "two"
+    p "Content for tab two"
+```
+
+Same ARIA roles. Same keyboard navigation. Same roving tabindex. No wrappers,
+no context, no ceremony. The widget discovers its children via `data-*`
+attributes, manages focus internally, and exposes state through `$active`
+for styling.
+
+**The Controlled Component Tax.** Every React interactive component requires
+a value prop and an onChange callback — two declarations per binding. Rip has
+a two-way binding operator:
+
+```coffee
+Dialog open <=> showDialog
+input value <=> @name
+Select value <=> selectedRole
+```
+
+One operator. The parent's signal is passed directly to the child — they
+share the same reactive object. Mutations in either direction are instantly
+visible to both. This is what Vue has with `v-model` and Svelte has with
+`bind:`, but Rip's `<=>` works uniformly across HTML elements and custom
+components. React cannot do this at all.
+
+**The Hook Tax.** React's reactivity is bolted on through hooks with manual
+dependency tracking. Rip's reactivity is in the language:
+
+```coffee
+count := 0                          # reactive state
+doubled ~= count * 2               # computed (auto-tracked)
+~> document.title = "Count: #{count}"  # effect (auto-tracked, auto-cleanup)
+```
+
+No dependency arrays. No stale closures. No rules-of-hooks. An effect that
+returns a function automatically cleans up when its dependencies change.
+
+| Need | React | Rip |
+|------|-------|-----|
+| Mutable state | `useState` hook | `:=` operator |
+| Derived value | `useMemo` + dependency array | `~=` (auto-tracked) |
+| Side effect | `useEffect` + dependency array + cleanup return | `~>` (auto-tracked, auto-cleanup) |
+| DOM reference | `useRef` + `ref` prop | `ref:` attribute |
+| Context sharing | `createContext` + Provider + `useContext` | `offer` / `accept` keywords |
+| Two-way binding | Impossible — value + onChange pair | `<=>` operator |
+| Batched updates | `unstable_batchedUpdates` | `__batch` |
+| Events | Synthetic event system | Native DOM events |
+
+---
+
+## Architecture
+
+### Fine-Grained Reactivity, Not Virtual DOM Diffing
+
+React re-renders entire component subtrees when state changes, then diffs
+the virtual DOM against the real DOM to figure out what actually needs to
+change. This is why React needs `useMemo`, `useCallback`, `React.memo`, and
+extensive memoization strategies.
+
+Rip's reactive system tracks which DOM nodes depend on which state values.
+When `count` changes, only the text node displaying `count` updates. No tree
+diffing. No wasted renders. No memoization needed. This is the same model as
+SolidJS and Svelte 5's runes, but built into the language rather than bolted
+on as a library or compiler transform.
+
+### Components Compile to Standard JavaScript
+
+Rip components compile to plain ES2022 JavaScript classes. There's no
+framework runtime interpreting component definitions at execution time. The
+`component` keyword, `render` block, and reactive operators are all resolved
+at compile time into efficient DOM operations. The output is readable,
+debuggable JavaScript — inspect it in DevTools, set breakpoints, trace
+through the logic. Source maps point back to `.rip` source.
+
+### No Build Pipeline
+
+Rip UI components are plain `.rip` source files. The browser loads the Rip
+compiler (~50KB) once and compiles components on the fly. No webpack, no
+Vite, no Next.js, no `npm run build`, no `node_modules` tree with 500
+transitive dependencies. For production, components can be pre-compiled.
+For development, save the file and see the change — the dev server provides
+SSE-based hot reload.
+
+### Source as Distribution
+
+ShadCN popularized "copy the source into your project." Rip UI takes this
+further: the source *is* the distribution. Components are served as `.rip`
+files and compiled in the browser. You can read every widget's implementation,
+understand it completely, and modify it if needed.
+
+### Why We Build Our Own (Not Radix, Base UI, etc.)
+
+Base UI is the industry's best headless component library. But it requires
+React — hooks, context, synthetic events, a virtual DOM reconciler. Shipping
+React contradicts Rip's zero-dependency philosophy, and React's rendering
+model is fundamentally different from Rip UI's fine-grained DOM updates.
+
+We reimplement the same proven behavioral patterns directly in Rip. The
+patterns come from the WAI-ARIA Authoring Practices spec. The code is ours.
+
+Rip has capabilities React lacks:
+
+| Capability | React | Rip |
+|-----------|-------|-----|
+| Child projection | No equivalent | `slot` |
+| DOM ownership | Virtual DOM abstraction | Direct DOM access + `ref:` |
+| State sharing | Context Provider wrappers | `offer` / `accept` keywords |
+| Two-way binding | `value` + `onChange` pair | `<=>` operator |
+| Reactivity | `useState` + `useEffect` + dependency arrays | `:=` / `~=` / `~>` |
+
+These capabilities let Rip choose the **right pattern for each situation**:
+
+- **Single-component** for data-driven widgets where children are pure metadata
+  (Select, Combobox, Menu, Toast, Checkbox). The widget reads child data from
+  a hidden slot and renders its own optimized DOM.
+
+- **Compositional** (via `offer`/`accept`) when children contain complex
+  renderable content the parent shouldn't own — form field groups, layout
+  containers, or any compound component where descendants need shared state.
+
+### Context Sharing: `offer` / `accept`
+
+Rip provides language-level keywords for sharing reactive state between
+ancestor and descendant components:
+
+```coffee
+# Parent — creates state and shares it with all descendants
+export Tabs = component
+  offer active := 'overview'
+
+# Child — receives the signal from nearest ancestor
+export TabContent = component
+  accept active
+  render
+    div hidden: active isnt @value
+      slot
+```
+
+The signal passes through directly. Parent and child share the same reactive
+object — mutations in either direction are instantly visible. No Provider
+wrappers, no string keys, no import ceremony.
+
+```coffee
+# React — 8 lines, two APIs, manual wiring
+const ActiveCtx = createContext(null)
+function Parent() {
+  const [active, setActive] = useState('overview')
+  return <ActiveCtx.Provider value={{ active, setActive }}>...
+}
+function Child() {
+  const { active } = useContext(ActiveCtx)
+}
+
+# Svelte — 4 lines, string keys, function calls
+setContext('active', writable('overview'))
+const active = getContext('active')
+
+# Rip — 2 lines
+offer active := 'overview'
+accept active
+```
+
+---
+
+## Styling
+
+All widgets ship zero CSS. The contract between behavior and styling is
+`data-*` attributes exposed via the `$` sigil:
+
+```coffee
+# Widget source — semantic state only
+button $open: open?!, $disabled: @disabled?!
+div $highlighted: (idx is highlightedIndex)?!
+```
+
+```css
+/* Your stylesheet */
+[data-open]        { border-color: var(--color-primary); }
+[data-highlighted] { background: var(--surface-2); }
+[data-selected]    { font-weight: 600; color: var(--color-primary); }
+[data-disabled]    { opacity: 0.5; cursor: not-allowed; }
+```
+
+Any CSS methodology works — vanilla CSS, Open Props, or a custom design
+system. The widgets don't care.
+
+For our recommended styling approach — including design tokens, CSS
+architecture, dark mode patterns, and common component styles — see
+**[STYLING.md](STYLING.md)**.
+
+| Layer | Tool | Role |
+|-------|------|------|
+| **Behavior** | Rip Widgets | Accessible headless components — keyboard nav, ARIA, focus management |
+| **Design Tokens** | Open Props | Consistent scales for spacing, color, shadow, radius, easing, typography |
+| **Scoping** | Native CSS | Nesting, `@layer`, `$` sigil / `data-*` selectors, `prefers-color-scheme` |
+| **Platform** | Modern CSS | `color-mix()`, container queries, `:has()`, `oklch()` |
+
+---
+
+## Code Density
+
+### Checkbox — 18 Lines
+
+```coffee
+export Checkbox = component
+  @checked := false
+  @disabled := false
+  @indeterminate := false
+  @switch := false
+
+  onClick: ->
+    return if @disabled
+    @indeterminate = false
+    @checked = not @checked
+    @emit 'change', @checked
+
+  render
+    button role: @switch ? 'switch' : 'checkbox'
+      aria-checked: @indeterminate ? 'mixed' : !!@checked
+      aria-disabled: @disabled?!
+      $checked: @checked?!
+      $indeterminate: @indeterminate?!
+      $disabled: @disabled?!
+      slot
+```
+
+Full ARIA. Checkbox and switch mode. Indeterminate state. Custom events.
+Data attributes for styling. The ShadCN equivalent is ~40 lines of wrapper
+atop hundreds of lines in `@radix-ui/react-checkbox`.
+
+### Dialog — 83 Lines
+
+Focus trap. Scroll lock. Escape dismiss. Click-outside dismiss. Focus
+restore. Auto-wired `aria-labelledby` and `aria-describedby`. All in one
+reactive effect with automatic cleanup:
+
+```coffee
+~>
+  if @open
+    _prevFocus = document.activeElement
+    # ... lock scroll, trap focus, wire ARIA ...
+    return ->
+      # ... runs automatically when @open becomes false
+```
+
+No `useEffect`. No dependency array. No cleanup that might capture stale
+state. Radix Dialog is seven sub-components plus internal hooks.
+
+### Grid — 901 Lines
+
+This has no equivalent in ShadCN, Radix, Base UI, or Headless UI.
+
+901 lines for virtual scrolling, DOM recycling, Google Sheets-style cell
+selection, full keyboard navigation, inline editing, multi-column sorting,
+column resizing, and full clipboard (Ctrl+C/V/X with TSV format — interop
+with Excel, Google Sheets, Numbers).
+
+The equivalent in the React world is AG Grid (enterprise license, massive
+bundle) or Handsontable (50,000+ lines plus plugins). The Grid demonstrates
+something React fundamentally cannot do cleanly: mixing reactive rendering
+with imperative DOM manipulation in one component.
+
+---
+
+## Component Overview
 
 57 headless components across 10 categories — 5,254 lines total.
 
@@ -91,12 +395,11 @@ Every widget:
 
 ---
 
-## Widgets
+## Widget Reference
 
 ### Select
 
-Keyboard-navigable dropdown with typeahead. For provider selects, account
-pickers, or any single-value choice from a list.
+Keyboard-navigable dropdown with typeahead.
 
 ```coffee
 Select value <=> selectedRole, @change: handleChange
@@ -107,14 +410,12 @@ Select value <=> selectedRole, @change: handleChange
 
 **Props:** `@value`, `@placeholder`, `@disabled`
 **Events:** `@change` (detail: selected value)
-**Keyboard:** ArrowDown/Up navigate, Enter/Space select, Escape close, Home/End
-jump, type-ahead character matching
-**Data attributes:** `$open` / `[data-open]` on trigger, `$highlighted` / `[data-highlighted]` and `$selected` / `[data-selected]` on options, `$disabled` / `[data-disabled]` on trigger
+**Keyboard:** ArrowDown/Up navigate, Enter/Space select, Escape close, Home/End jump, type-ahead character matching
+**Data attributes:** `$open` on trigger, `$highlighted` and `$selected` on options, `$disabled` on trigger
 
 ### Combobox
 
-Filterable input + dropdown for search-as-you-type scenarios. For patient
-search, autocomplete, or any large list that needs filtering.
+Filterable input + dropdown for search-as-you-type.
 
 ```coffee
 Combobox query <=> searchText, @select: handleSelect, @filter: handleFilter
@@ -125,14 +426,12 @@ Combobox query <=> searchText, @select: handleSelect, @filter: handleFilter
 
 **Props:** `@query`, `@placeholder`, `@disabled`
 **Events:** `@select` (detail: selected data-value), `@filter` (detail: query string)
-**Keyboard:** ArrowDown/Up navigate, Enter select (or first if only one match),
-Escape close/clear, Tab close
-**Data attributes:** `$open` / `[data-open]` on wrapper, `$highlighted` / `[data-highlighted]` on items
+**Keyboard:** ArrowDown/Up navigate, Enter select, Escape close/clear, Tab close
+**Data attributes:** `$open` on wrapper, `$highlighted` on items
 
 ### Dialog
 
-Modal dialog with focus trap, scroll lock, and escape/click-outside dismiss.
-Restores focus to the previously focused element on close.
+Modal dialog with focus trap, scroll lock, and escape/click-outside dismiss. Restores focus on close.
 
 ```coffee
 Dialog open <=> showDialog, @close: handleClose
@@ -145,25 +444,32 @@ Dialog open <=> showDialog, @close: handleClose
 **Props:** `@open`
 **Events:** `@close`
 **Keyboard:** Escape to close, Tab trapped within dialog
-**Data attributes:** `$open` / `[data-open]` on backdrop
-**Behavior:** Focus trap confines Tab to dialog content. Body scroll is locked
-while open. Previous focus is restored on close.
+**Data attributes:** `$open` on backdrop
+
+### AlertDialog
+
+Non-dismissable modal requiring explicit user action. Cannot be closed by Escape or click outside.
+
+```coffee
+AlertDialog open <=> showConfirm
+  h2 "Delete account?"
+  p "This action cannot be undone."
+  button @click: (=> showConfirm = false), "Cancel"
+  button @click: handleDelete, "Delete"
+```
+
+**Props:** `@open`, `@initialFocus`
+**Events:** `@close`
+**ARIA:** `role="alertdialog"`, `aria-modal="true"`, auto-wired `aria-labelledby`/`aria-describedby`
 
 ### Toast
 
-Managed toast system with stacking and timer pause on hover. The state is
-the array, the operation is assignment — no helpers needed.
+Managed toast system with stacking and timer pause on hover.
 
 ```coffee
 toasts := []
-
-# Add — reactive assignment is the API
 toasts = [...toasts, { message: "Saved!", type: "success" }]
-
-# Dismiss — filter it out
 toasts = toasts.filter (t) -> t isnt target
-
-# Render
 ToastViewport toasts <=> toasts
 ```
 
@@ -171,38 +477,7 @@ ToastViewport toasts <=> toasts
 **Toast props:** `@toast` (object with `message`, `type`, `duration`, `title`, `action`)
 **Toast defaults:** `duration` = 4000ms, `type` = 'info'
 **Events:** `@dismiss` (detail: toast object)
-**Data attributes:** `$type` / `[data-type]`, `$leaving` / `[data-leaving]` (during exit animation)
-**Behavior:** Timer pauses on hover and keyboard focus, resumes on leave.
-
-### Popover
-
-Floating content anchored to a trigger element. Positions itself with
-flip/shift to stay in viewport.
-
-```coffee
-Popover placement: "bottom-start"
-  button "Options"
-  div
-    p "Popover content here"
-```
-
-**Props:** `@placement`, `@offset`, `@disabled`
-**Keyboard:** Enter/Space/ArrowDown toggle, Escape close
-**Data attributes:** `$open` / `[data-open]`, `$placement` / `[data-placement]` on floating element
-
-### Tooltip
-
-Hover/focus tooltip with configurable delay and positioning.
-
-```coffee
-Tooltip text: "Save your changes", placement: "top"
-  button "Save"
-```
-
-**Props:** `@text`, `@placement`, `@delay` (ms), `@offset`
-**Data attributes:** `$open` / `[data-open]`, `$entering` / `[data-entering]`, `$exiting` / `[data-exiting]`, `$placement` / `[data-placement]`
-**Behavior:** Shows on mouseenter/focusin after delay, hides on
-mouseleave/focusout. Uses `aria-describedby` for accessibility.
+**Data attributes:** `$type`, `$leaving` (during exit animation)
 
 ### Tabs
 
@@ -221,7 +496,7 @@ Tabs active <=> currentTab
 **Props:** `@active`
 **Events:** `@change` (detail: tab id)
 **Keyboard:** ArrowLeft/Right navigate tabs, Home/End jump
-**Data attributes:** `$active` / `[data-active]` on active tab and panel
+**Data attributes:** `$active` on active tab and panel
 
 ### Accordion
 
@@ -255,12 +530,40 @@ Checkbox checked <=> isDark, switch: true
 **Props:** `@checked`, `@disabled`, `@indeterminate`, `@switch`
 **Events:** `@change` (detail: boolean)
 **Keyboard:** Enter/Space toggle
-**Data attributes:** `$checked` / `[data-checked]`, `$indeterminate` / `[data-indeterminate]`, `$disabled` / `[data-disabled]`
+**Data attributes:** `$checked`, `$indeterminate`, `$disabled`
 **ARIA:** `role="checkbox"` or `role="switch"`, `aria-checked` (true/false/mixed)
+
+### Popover
+
+Floating content anchored to a trigger element with flip/shift positioning.
+
+```coffee
+Popover placement: "bottom-start"
+  button "Options"
+  div
+    p "Popover content here"
+```
+
+**Props:** `@placement`, `@offset`, `@disabled`
+**Keyboard:** Enter/Space/ArrowDown toggle, Escape close
+**Data attributes:** `$open`, `$placement` on floating element
+
+### Tooltip
+
+Hover/focus tooltip with configurable delay and positioning.
+
+```coffee
+Tooltip text: "Save your changes", placement: "top"
+  button "Save"
+```
+
+**Props:** `@text`, `@placement`, `@delay` (ms), `@offset`
+**Data attributes:** `$open`, `$entering`, `$exiting`, `$placement`
+**Behavior:** Shows on mouseenter/focusin after delay, hides on mouseleave/focusout. Uses `aria-describedby`.
 
 ### Menu
 
-Dropdown menu with keyboard navigation. For action menus, context menus.
+Dropdown menu with keyboard navigation.
 
 ```coffee
 Menu @select: handleAction
@@ -273,13 +576,11 @@ Menu @select: handleAction
 **Props:** `@disabled`
 **Events:** `@select` (detail: item id)
 **Keyboard:** ArrowDown/Up navigate, Enter/Space select, Escape close, Home/End
-**Data attributes:** `$open` / `[data-open]` on trigger, `$highlighted` / `[data-highlighted]` on items
+**Data attributes:** `$open` on trigger, `$highlighted` on items
 
 ### Grid
 
-High-performance data grid with virtual scrolling, DOM recycling, cell
-selection, inline editing, column sorting, and column resizing. Renders 100K+
-rows at 60fps.
+High-performance data grid with virtual scrolling, DOM recycling, cell selection, inline editing, sorting, and resizing. 100K+ rows at 60fps.
 
 ```coffee
 Grid
@@ -297,197 +598,13 @@ Grid
   @afterEdit: saveHandler
 ```
 
-**Props:** `@data`, `@columns`, `@rowHeight`, `@headerHeight`, `@overscan`,
-`@striped`, `@beforeEdit`, `@afterEdit`
-**Column properties:** `key`, `title`, `width`, `align`, `type` (text/number/
-checkbox/select), `source` (for select type)
-**Methods:** `getCell(row, col)`, `setCell(row, col, value)`, `getData()`,
-`setData(data)`, `sort(col, direction)`, `scrollToRow(index)`,
-`copySelection()`, `cutSelection()`, `pasteAtActive()`
-**Keyboard:** Arrows navigate, Tab/Shift+Tab move cells, Enter/F2 edit,
-Escape cancel, Home/End, Ctrl+arrows jump to edge, PageUp/Down, Ctrl+A
-select all, Ctrl+C copy, Ctrl+V paste, Ctrl+X cut, Delete/Backspace clear,
-Space toggle checkboxes, type-to-edit
-**Data attributes:** `$active` / `[data-active]` and `$selected` / `[data-selected]` on cells, `$sorted` / `[data-sorted]` on headers, `$editing` / `[data-editing]` and `$selecting` / `[data-selecting]` on container
-**Sorting:** Click header to sort (asc/desc/none cycle), Shift+click for
-multi-column sort
-**Editing:** Double-click, Enter, F2, or start typing to edit. Enter/Tab
-commit, Escape cancel. Checkbox cells toggle on click/Space.
-**Clipboard:** Ctrl+C copies the selection as TSV (tab-separated values) —
-the universal spreadsheet interchange format. Ctrl+V pastes TSV from
-clipboard starting at the active cell, respecting column types and format
-parsers. Ctrl+X copies then clears the selection. Full interop with Excel,
-Google Sheets, and Numbers.
-**CSS theming:** Uses `--grid-*` custom properties (see `GRID.md` in
-`packages/grid/` for the full property list and dark mode example)
-
-### Badge
-
-Inline label for status, counts, or categories.
-
-```coffee
-Badge "New"
-Badge variant: "outline", "Beta"
-Badge variant: "subtle", "Draft"
-```
-
-**Props:** `@variant` (solid/outline/subtle, default: solid)
-
-### Kbd
-
-Semantic keyboard shortcut display.
-
-```coffee
-Kbd "⌘K"
-Kbd "Ctrl+C"
-```
-
-### Skeleton
-
-Loading placeholder shown while content loads.
-
-```coffee
-Skeleton
-Skeleton width: "200px", height: "1em"
-Skeleton circle: true, width: "48px"
-```
-
-**Props:** `@width`, `@height`, `@circle`, `@label`
-**ARIA:** `role="status"`, `aria-busy="true"`, `aria-label`
-**Data attributes:** `$circle` / `[data-circle]`
-
-### Spinner
-
-Loading indicator with accessible status.
-
-```coffee
-Spinner
-Spinner label: "Saving...", size: "24px"
-```
-
-**Props:** `@label` (default "Loading"), `@size`
-**ARIA:** `role="status"`, `aria-label`
-**CSS custom property:** `--spinner-size`
-
-### AspectRatio
-
-Constrains children to a fixed aspect ratio.
-
-```coffee
-AspectRatio ratio: 16/9
-  img src: photo, alt: "Hero image"
-```
-
-**Props:** `@ratio` (default 1)
-**CSS custom property:** `--aspect-ratio`
-
-### Card
-
-Structured content container with optional header, content, and footer.
-
-```coffee
-Card
-  div $header: true
-    h3 "Title"
-  div $content: true
-    p "Body text"
-  div $footer: true
-    Button "Action"
-```
-
-**Props:** `@interactive`
-**Data attributes:** `$interactive` / `[data-interactive]`
-**Behavior:** When interactive, receives `tabindex="0"` for keyboard focus.
-
-### Label
-
-Standalone accessible form label.
-
-```coffee
-Label for: "email-input", "Email address"
-Label required: true, "Username"
-```
-
-**Props:** `@for`, `@required`
-**Data attributes:** `$required` / `[data-required]`
-
-### Textarea
-
-Auto-resizing text area with focus and validation tracking.
-
-```coffee
-Textarea value <=> bio, placeholder: "Tell us about yourself"
-Textarea value <=> notes, autoResize: true, rows: 3
-```
-
-**Props:** `@value`, `@placeholder`, `@disabled`, `@required`, `@rows`, `@autoResize`
-**Data attributes:** `$disabled`, `$focused`, `$touched`
-**Behavior:** When `@autoResize` is true, height adjusts to fit content on input.
-
-### NativeSelect
-
-Styled wrapper for the native `<select>` element.
-
-```coffee
-NativeSelect value <=> role, @change: handleChange
-  option value: "", "Choose a role..."
-  option value: "admin", "Admin"
-  option value: "user", "User"
-```
-
-**Props:** `@value`, `@disabled`, `@required`
-**Events:** `@change` (detail: selected value)
-**Data attributes:** `$disabled`, `$focused`
-
-### InputGroup
-
-Input wrapper with prefix and suffix addon elements.
-
-```coffee
-InputGroup
-  span $prefix: true, "$"
-  Input value <=> amount, type: "number"
-
-InputGroup
-  Input value <=> search, placeholder: "Search..."
-  button $suffix: true, @click: doSearch, "Go"
-```
-
-**Props:** `@disabled`
-**Data attributes:** `$disabled`, `$focused` (tracks child input focus)
-
-### ButtonGroup
-
-Groups related buttons with ARIA group semantics.
-
-```coffee
-ButtonGroup
-  Button "Cut"
-  Button "Copy"
-  Button "Paste"
-```
-
-**Props:** `@orientation` (horizontal/vertical), `@disabled`, `@label`
-**Data attributes:** `$orientation`, `$disabled`
-
-### AlertDialog
-
-Non-dismissable modal requiring explicit user action. Cannot be closed
-by pressing Escape or clicking outside.
-
-```coffee
-AlertDialog open <=> showConfirm
-  h2 "Delete account?"
-  p "This action cannot be undone."
-  button @click: (=> showConfirm = false), "Cancel"
-  button @click: handleDelete, "Delete"
-```
-
-**Props:** `@open`, `@initialFocus`
-**Events:** `@close`
-**ARIA:** `role="alertdialog"`, `aria-modal="true"`, auto-wired `aria-labelledby`/`aria-describedby`
-**Behavior:** Focus trap, scroll lock, focus restore — same as Dialog but
-no click-outside or Escape dismiss.
+**Props:** `@data`, `@columns`, `@rowHeight`, `@headerHeight`, `@overscan`, `@striped`, `@beforeEdit`, `@afterEdit`
+**Column properties:** `key`, `title`, `width`, `align`, `type` (text/number/checkbox/select), `source` (for select type)
+**Methods:** `getCell(row, col)`, `setCell(row, col, value)`, `getData()`, `setData(data)`, `sort(col, direction)`, `scrollToRow(index)`, `copySelection()`, `cutSelection()`, `pasteAtActive()`
+**Keyboard:** Arrows navigate, Tab/Shift+Tab move cells, Enter/F2 edit, Escape cancel, Home/End, Ctrl+arrows jump to edge, PageUp/Down, Ctrl+A select all, Ctrl+C copy, Ctrl+V paste, Ctrl+X cut, Delete/Backspace clear, Space toggle checkboxes, type-to-edit
+**Data attributes:** `$active` and `$selected` on cells, `$sorted` on headers, `$editing` and `$selecting` on container
+**Sorting:** Click header (asc/desc/none cycle), Shift+click for multi-column
+**Clipboard:** Ctrl+C copies as TSV — interop with Excel, Sheets, Numbers. Ctrl+V pastes TSV respecting column types.
 
 ### Sheet
 
@@ -501,7 +618,6 @@ Sheet open <=> showSheet, side: "right"
 
 **Props:** `@open`, `@side` (top/right/bottom/left), `@dismissable`
 **Events:** `@close`
-**Keyboard:** Escape to close (when dismissable)
 **Data attributes:** `$open`, `$side`, `$sheet`
 
 ### Breadcrumb
@@ -516,28 +632,8 @@ Breadcrumb
 ```
 
 **Props:** `@separator` (default "/"), `@label`
-**Data attributes:** `$current` / `[data-current]` on last item
-**ARIA:** `aria-current="page"` on last item, `aria-label="Breadcrumb"` on nav
-
-### Table
-
-Semantic table wrapper for simple HTML tables.
-
-```coffee
-Table caption: "Team members", striped: true
-  thead
-    tr
-      th "Name"
-      th "Role"
-  tbody
-    tr
-      td "Alice"
-      td "Engineer"
-```
-
-**Props:** `@caption`, `@striped`
-**Data attributes:** `$striped` / `[data-striped]`
-**Note:** For data-heavy tables with virtual scrolling, use Grid.
+**Data attributes:** `$current` on last item
+**ARIA:** `aria-current="page"` on last item
 
 ### Collapsible
 
@@ -552,7 +648,6 @@ Collapsible open <=> isOpen
 
 **Props:** `@open`, `@disabled`
 **Events:** `@change` (detail: boolean)
-**Keyboard:** Enter/Space toggle
 **Methods:** `toggle()`
 **Data attributes:** `$open`, `$disabled`
 **CSS custom properties:** `--collapsible-height`, `--collapsible-width`
@@ -568,9 +663,7 @@ Pagination page <=> currentPage, total: 100, perPage: 10
 **Props:** `@page`, `@total`, `@perPage` (default 10), `@siblingCount` (default 1)
 **Events:** `@change` (detail: page number)
 **Keyboard:** ArrowLeft/Right, Home/End
-**Methods:** `goto(page)`
-**Data attributes:** `$active` on current page, `$disabled` on prev/next at boundary,
-`$ellipsis` on gap indicators, `$prev`, `$next`, `$page`
+**Data attributes:** `$active` on current, `$disabled` on boundary buttons, `$ellipsis` on gaps
 
 ### Carousel
 
@@ -583,12 +676,11 @@ Carousel loop: true
   div $slide: true, "Slide 3"
 ```
 
-**Props:** `@orientation` (horizontal/vertical), `@loop`, `@autoplay`, `@interval` (ms), `@label`
+**Props:** `@orientation`, `@loop`, `@autoplay`, `@interval` (ms), `@label`
 **Events:** `@change` (detail: slide index)
-**Keyboard:** ArrowLeft/Right (horizontal), ArrowUp/Down (vertical), Home/End
 **Methods:** `goto(index)`, `next()`, `prev()`
-**Data attributes:** `$active` on current slide, `$orientation`, `$prev`, `$next`
-**Behavior:** Autoplay pauses on hover, resumes on leave.
+**Data attributes:** `$active` on current slide, `$orientation`
+**Behavior:** Autoplay pauses on hover.
 
 ### Resizable
 
@@ -600,379 +692,380 @@ Resizable
   div $panel: true, "Right"
 ```
 
-**Props:** `@orientation` (horizontal/vertical), `@minSize` (percent, default 10), `@maxSize` (percent, default 90)
+**Props:** `@orientation`, `@minSize` (%, default 10), `@maxSize` (%, default 90)
 **Events:** `@resize` (detail: array of panel size percentages)
-**Keyboard:** ArrowLeft/Right (horizontal) or ArrowUp/Down (vertical) in 10% increments
-**ARIA:** `role="separator"` on handles, `aria-valuenow`
+**ARIA:** `role="separator"` on handles
 **Data attributes:** `$orientation`, `$dragging` on active handle
 **CSS custom properties:** `--panel-size` on each panel
 
+### Remaining Widgets
+
+| Widget | Props | Key Features |
+|--------|-------|-------------|
+| **Badge** | `@variant` (solid/outline/subtle) | Inline label for status/counts |
+| **Kbd** | — | Semantic keyboard shortcut display |
+| **Skeleton** | `@width`, `@height`, `@circle`, `@label` | Loading placeholder with shimmer |
+| **Spinner** | `@label`, `@size` | Loading indicator with `--spinner-size` |
+| **AspectRatio** | `@ratio` (default 1) | Fixed ratio container via `--aspect-ratio` |
+| **Card** | `@interactive` | Container with header/content/footer, `tabindex` when interactive |
+| **Label** | `@for`, `@required` | Accessible form label |
+| **Textarea** | `@value`, `@placeholder`, `@autoResize`, `@rows` | Auto-resize on input |
+| **NativeSelect** | `@value`, `@disabled`, `@required` | Styled native `<select>` wrapper |
+| **InputGroup** | `@disabled` | Input with `$prefix`/`$suffix` addon elements |
+| **ButtonGroup** | `@orientation`, `@disabled`, `@label` | ARIA group semantics |
+| **Table** | `@caption`, `@striped` | Semantic table wrapper |
+| **Drawer** | `@open`, `@side`, `@dismissable` | Slide-out panel with focus trap |
+| **PreviewCard** | `@delay`, `@placement` | Hover/focus preview card |
+| **Button** | `@disabled` | Disabled-but-focusable pattern |
+| **Separator** | `@orientation`, `@decorative` | Decorative or semantic divider |
+| **Progress** | `@value`, `@max`, `@label` | Progress bar with `--progress-value` |
+| **Meter** | `@value`, `@min`, `@max`, `@low`, `@high`, `@optimum` | Gauge with thresholds |
+| **Avatar** | `@src`, `@alt`, `@fallback` | Image with fallback to initials |
+| **ScrollArea** | `@orientation` | Custom scrollbar with draggable thumb |
+| **Field** | `@label`, `@description`, `@error`, `@required` | Form field wrapper |
+| **Fieldset** | `@legend`, `@disabled` | Grouped fields with cascading disable |
+| **Form** | `@onSubmit` | Form wrapper with submit handling |
+| **Input** | `@value`, `@type`, `@placeholder`, `@disabled` | Focus/touch/validation tracking |
+| **NumberField** | `@value`, `@min`, `@max`, `@step` | Stepper buttons, hold-to-repeat |
+| **Slider** | `@value`, `@min`, `@max`, `@step` | Drag + pointer capture + keyboard |
+| **OTPField** | `@value`, `@length` | Multi-digit code with auto-advance + paste |
+| **DatePicker** | `@value`, `@min`, `@max`, `@range` | Calendar dropdown |
+| **EditableValue** | `@value`, `@placeholder` | Click-to-edit inline value |
+| **ContextMenu** | `@disabled` | Right-click menu with keyboard nav |
+| **Menubar** | — | Horizontal menu bar with dropdowns |
+| **NavMenu** | — | Site nav with hover/click dropdown panels |
+| **Toolbar** | `@orientation`, `@label` | Groups controls with roving tabindex |
+| **Toggle** | `@pressed`, `@disabled` | Two-state toggle button |
+| **ToggleGroup** | `@value`, `@multiple` | Single/multi-select toggle buttons |
+| **RadioGroup** | `@value`, `@disabled`, `@orientation` | Arrow key nav, exactly one selected |
+| **CheckboxGroup** | `@value`, `@disabled` | Multiple checked independently |
+| **MultiSelect** | `@value`, `@query`, `@placeholder` | Multi-select with chips and filtering |
+| **Autocomplete** | `@value`, `@query`, `@placeholder` | Type to filter, select to fill |
+
 ---
 
-## Styling
+## Behavioral Primitives
 
-All widgets ship zero CSS. Write `$name` in Rip (compiles to `data-name` in HTML), then style with `[data-name]` selectors in CSS:
+The widgets are built from shared behavioral patterns:
 
-```css
-.select-trigger[data-open] { border-color: var(--color-primary); }
-.option[data-highlighted] { background: var(--surface-2); }
-.option[data-selected] { font-weight: 600; color: var(--color-primary); }
-.dialog-backdrop[data-open] { animation: fade-in 150ms; }
-.toast[data-type="success"] { border-left: 3px solid green; }
-.toast[data-leaving] { animation: fade-out 200ms; }
+**Focus Trap** — confines tab focus within a container (dialogs, modals):
+
+```coffee
+trapFocus = (el) ->
+  focusable = el.querySelectorAll 'a[href],button:not([disabled]),input,...'
+  first = focusable[0]
+  last = focusable[focusable.length - 1]
+  first?.focus()
+  handler = (e) ->
+    return unless e.key is 'Tab'
+    if e.shiftKey
+      if document.activeElement is first then e.preventDefault(); last?.focus()
+    else
+      if document.activeElement is last then e.preventDefault(); first?.focus()
+  el.addEventListener 'keydown', handler
+  -> el.removeEventListener 'keydown', handler
 ```
 
-No JavaScript styling logic. No className toggling. Write `$open` in Rip,
-style `[data-open]` in CSS. Any CSS methodology works — vanilla, Tailwind,
-Open Props, a custom design system. The widgets don't care.
+**Scroll Lock** — prevents body scroll while a modal is open:
 
-### Why Not CSS-in-JS?
-
-Libraries like Emotion and styled-components parse CSS strings at runtime,
-generate class names in JavaScript, and inject `<style>` tags into the
-document. This bundles styling into the component's JS, adds a runtime
-dependency, and locks consumers into the library's API. You can't restyle
-a component without modifying its source or fighting specificity.
-
-Our approach separates concerns: **behavior lives in Rip, styling lives in
-CSS, and `data-*` attributes are the interface between them.** The result
-is faster (no CSS parsing in JS), smaller (no styling runtime), and more
-flexible (swap your entire design system without touching widget code).
-
-### Open Props — Design Tokens
-
-[Open Props](https://open-props.style/) provides consistent scales for spacing,
-color, shadow, radius, easing, and typography as CSS custom properties. Pure CSS
-(4KB), no runtime, no build step.
-
-```bash
-bun add open-props
+```coffee
+lockScroll = ->
+  scrollY = window.scrollY
+  document.body.style.position = 'fixed'
+  document.body.style.top = "-#{scrollY}px"
+  document.body.style.width = '100%'
+  ->
+    document.body.style.position = ''
+    document.body.style.top = ''
+    document.body.style.width = ''
+    window.scrollTo 0, scrollY
 ```
 
-Import what you need:
+**Dismiss** — close on Escape key or click outside:
 
-```css
-@import "open-props/sizes";
-@import "open-props/colors";
-@import "open-props/shadows";
-@import "open-props/radii";
-@import "open-props/easings";
-@import "open-props/fonts";
+```coffee
+onDismiss = (el, close) ->
+  onKey = (e) -> close() if e.key is 'Escape'
+  onClick = (e) -> close() unless el.contains(e.target)
+  document.addEventListener 'keydown', onKey
+  document.addEventListener 'pointerdown', onClick
+  ->
+    document.removeEventListener 'keydown', onKey
+    document.removeEventListener 'pointerdown', onClick
 ```
 
-Or import everything:
+**Keyboard Navigation** — arrow key movement through a list:
 
-```css
-@import "open-props/style";
+```coffee
+navigateList = (el, opts = {}) ->
+  vertical = opts.vertical ? true
+  wrap = opts.wrap ? true
+  items = -> el.querySelectorAll('[role="option"]:not([aria-disabled="true"])')
+  handler = (e) ->
+    list = Array.from items()
+    idx = list.indexOf document.activeElement
+    return if idx is -1
+    next = switch e.key
+      when (if vertical then 'ArrowDown' else 'ArrowRight')
+        if wrap then (idx + 1) %% list.length else Math.min(idx + 1, list.length - 1)
+      when (if vertical then 'ArrowUp' else 'ArrowLeft')
+        if wrap then (idx - 1) %% list.length else Math.max(idx - 1, 0)
+      when 'Home' then 0
+      when 'End' then list.length - 1
+      else null
+    if next? then e.preventDefault(); list[next].focus()
+  el.addEventListener 'keydown', handler
+  -> el.removeEventListener 'keydown', handler
 ```
 
-Override or extend any token:
+**Anchor Positioning** — position a floating element relative to a trigger:
 
-```css
-:root {
-  --color-primary: oklch(55% 0.25 260);
-  --radius-card: var(--radius-3);
-}
+```coffee
+anchorPosition = (anchor, floating, opts = {}) ->
+  placement = opts.placement or 'bottom'
+  offset = opts.offset or 4
+  update = ->
+    ar = anchor.getBoundingClientRect()
+    fr = floating.getBoundingClientRect()
+    [side, align] = placement.split('-')
+    # ... position calculation with flip + shift ...
+  update()
 ```
 
-**Token categories:**
+**Reference Material:**
+- **WAI-ARIA Authoring Practices** — https://www.w3.org/WAI/ARIA/apg/patterns/
+- **Base UI source** (MIT) — https://github.com/mui/base-ui
+- **MDN ARIA documentation** — https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA
 
-- **Spacing** — `--size-1` through `--size-15` (0.25rem to 7.5rem)
-- **Colors** — Full palettes (`--blue-0` through `--blue-12`, etc.) plus semantic surface tokens
-- **Shadows** — `--shadow-1` through `--shadow-6`, progressively stronger
-- **Radii** — `--radius-1` through `--radius-6` plus `--radius-round`
-- **Easing** — `--ease-1` through `--ease-5` (standard) and `--ease-spring-1` through `--ease-spring-5`
-- **Typography** — `--font-size-0` through `--font-size-8`, `--font-weight-1` through `--font-weight-9`, `--font-lineheight-0` through `--font-lineheight-5`
+---
 
-Define project-level aliases:
+## Widget Authoring Guide
 
-```css
-:root {
-  --color-primary: var(--indigo-7);
-  --color-danger: var(--red-7);
-  --color-success: var(--green-7);
-  --color-text: var(--gray-9);
-  --color-text-muted: var(--gray-6);
-  --surface-1: var(--gray-0);
-  --surface-2: var(--gray-1);
-  --surface-3: var(--gray-2);
-}
-```
+Hard-won rules learned building these widgets.
 
-### CSS Architecture
+### Lifecycle Hooks
 
-Modern CSS eliminates the need for preprocessors. Use these features directly:
+The recognized hooks are: `beforeMount`, `mounted`, `updated`, `beforeUnmount`,
+`unmounted`, `onError`. That's it. `onMount` is **not** a hook — it compiles as
+a regular method and never gets called.
 
-**Nesting** — group related rules:
+### `->` vs `=>` Inside Components
 
-```css
-.card {
-  padding: var(--size-4);
+The compiler auto-converts all `->` to `=>` inside component contexts. Use
+`->` everywhere — it's cleaner and the compiler handles `this` binding.
 
-  & .title {
-    font-size: var(--font-size-4);
-    font-weight: var(--font-weight-7);
-  }
+**Caveat:** If you need `this` to refer to a DOM element (e.g., patching
+`HTMLElement.prototype.focus`), put the code OUTSIDE the component body at
+module scope where `->` stays as `->`.
 
-  &:hover {
-    box-shadow: var(--shadow-3);
-  }
-}
-```
+### `:=` vs `=` for Internal Storage
 
-**Cascade Layers** — control specificity:
+Use `:=` only for values that trigger DOM updates. For internal bookkeeping
+(pools, caches, timer IDs, saved references), use `=`. Reactive state has
+overhead and can cause unwanted effect re-runs.
 
-```css
-@layer base, components, overrides;
+### The `_ready` Flag Pattern
 
-@layer base {
-  button { font: inherit; }
-}
+Effects run during `_init` (before `_create`), so `ref:` DOM elements don't
+exist yet. Add `_ready := false`, set `_ready = true` in `mounted`, and guard
+effects with `return unless _ready`. Used by Tabs, Accordion, and Grid.
 
-@layer components {
-  .dialog { border-radius: var(--radius-3); }
-}
-```
+### Don't Shadow Prop Names
 
-**Container Queries** — style based on the container, not the viewport:
+Inside component methods, the compiler rewrites ANY identifier matching a
+prop/state name to `this.name.value`. A local variable named `items` will be
+treated as `this.items.value` if `@items` is a prop. Always use distinct names
+for locals: `opts` not `items`, `tick` not `step`.
 
-```css
-.sidebar {
-  container-type: inline-size;
-}
+### `$` Sigil and `data-*` Attributes
 
-@container (min-width: 400px) {
-  .sidebar .nav { flex-direction: row; }
-}
-```
+Use `$open`, `$selected` in render blocks — compiles to `data-open`,
+`data-selected`. The widget never applies visual styles. Consumers style with
+CSS `[data-*]` selectors.
 
-**`color-mix()`** — derive colors without Sass:
+### `x.y` in Render Blocks Is Tag Syntax
 
-```css
-.muted {
-  color: color-mix(in oklch, var(--color-text), transparent 40%);
-}
-```
+`item.textContent` on its own line in a render block is parsed as tag `item`
+with CSS class `textContent`. Use `= item.textContent` to output as text.
 
-### Dark Mode
+### Widget Conventions
 
-Use `prefers-color-scheme` with CSS variable swapping:
+- `ref: "_name"` for DOM references — never `div._name` (dot sets CSS class)
+- `_trigger` for trigger elements, `_list` for dropdown lists, `_content` for content areas
+- `=!` for constant values (IDs), `:=` only for reactive state
+- Auto-wired events: methods named `onClick`, `onKeydown`, etc. bind to root element automatically
+- `@emit 'eventName', detail` dispatches a CustomEvent on the root element
 
-```css
-:root {
-  color-scheme: light dark;
+### Imperative DOM for Performance
 
-  --surface-1: var(--gray-0);
-  --surface-2: var(--gray-1);
-  --color-text: var(--gray-9);
-}
+For 60fps paths (Grid scroll, ScrollArea thumb), bypass reactive rendering and
+do imperative DOM inside `~>` effects. Read DOM, compute, write DOM in one pass.
+Rule: if the data source is a DOM property (`scrollTop`, `clientHeight`), go
+imperative. If it's reactive state, use the reactive system.
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --surface-1: var(--gray-11);
-    --surface-2: var(--gray-10);
-    --color-text: var(--gray-1);
-  }
-}
-```
+### Side Effects in Effect Branches
 
-For a manual toggle, use a `[data-theme]` attribute on the root element:
+When a prop like `@open` is controlled via `<=>`, the consumer can set it
+directly without calling `close()`. Put side effects (scroll lock, focus
+restore) in `~> if @open ... else ...` so the effect handles all transitions
+regardless of how the signal changed. Methods like `close()` should just set
+state — the effect does the work.
 
-```css
-[data-theme="dark"] {
-  --surface-1: var(--gray-11);
-  --surface-2: var(--gray-10);
-  --color-text: var(--gray-1);
-}
-```
+---
 
-```js
-document.documentElement.dataset.theme = 'dark'
-```
+## Per-Widget Implementation Notes
 
-### Common Patterns
+### Select
+- Typeahead buffer clears after 500ms (matches native `<select>`)
+- Hidden slot pattern for declarative option reading
+- No multi-select mode yet
 
-**Button:**
+### Combobox
+- No internal filtering — consumer controls via `@filter` callback
+- No debounce on `@filter` (consumer's responsibility)
+- Highlighted index resets to -1 on each input change
 
-```css
-.button {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--size-2);
-  padding: var(--size-2) var(--size-4);
-  border: 1px solid var(--color-primary);
-  border-radius: var(--radius-2);
-  background: var(--color-primary);
-  color: white;
-  font-weight: var(--font-weight-6);
-  cursor: pointer;
-  transition: background 150ms var(--ease-2);
+### Dialog
+- Focus trap set up in `setTimeout` (after dialog renders)
+- Internal storage (`_prevFocus`, `_cleanupTrap`) uses plain `=` not `:=`
+- No `closeOnOverlayClick` or `closeOnEscape` toggle props yet
 
-  &:hover { background: color-mix(in oklch, var(--color-primary), black 15%); }
-  &:active { scale: 0.98; }
-  &[data-disabled] { opacity: 0.5; cursor: not-allowed; }
-}
+### Toast
+- No stacking/queue system — each Toast is independent
+- 200ms leave animation duration is hardcoded
 
-.ghost {
-  background: transparent;
-  color: var(--color-primary);
+### Popover
+- No arrow/caret element
+- Trigger/content distinguished by slot children ordering
 
-  &:hover { background: color-mix(in oklch, var(--color-primary), transparent 90%); }
-}
-```
+### Tooltip
+- Show delay 300ms, instant hide + 150ms animation
+- No interactive mode (hovering tooltip keeps it open)
 
-**Form Input:**
+### Tabs
+- Tab content discovered by querying `[data-tab]`/`[data-panel]`
+- No lazy loading of panel content
 
-```css
-.input {
-  padding: var(--size-2) var(--size-3);
-  border: 1px solid var(--gray-4);
-  border-radius: var(--radius-2);
-  font-size: var(--font-size-1);
-  background: var(--surface-1);
-  color: var(--color-text);
-  transition: border-color 150ms var(--ease-2);
+### Grid
+- Hybrid: reactive rendering for structure, imperative DOM for scroll hot path
+- DOM recycling pool never shrinks (avoids create/destroy cycles)
+- Clipboard: TSV format per RFC 4180 (no multi-line quoted fields)
+- `requestAnimationFrame` throttle coalesces scroll events
+- Missing: frozen columns, CellRange model, variable row height, column reorder, undo/redo
 
-  &:focus {
-    outline: 2px solid var(--color-primary);
-    outline-offset: 1px;
-    border-color: var(--color-primary);
-  }
+### Accordion
+- Missing ARIA (`aria-expanded`, `aria-controls`, `role="region"`)
+- `openItems` Set replaced on each toggle to trigger reactivity
 
-  &[data-invalid] { border-color: var(--color-danger); }
-  &[data-disabled] { opacity: 0.5; }
-  &::placeholder { color: var(--color-text-muted); }
-}
-```
+### Menu
+- Structural slot issue — needs hidden-slot pattern like Select
+- No submenu, divider, or typeahead support
 
-**Card:**
+---
 
-```css
-.card {
-  background: var(--surface-1);
-  border-radius: var(--radius-3);
-  padding: var(--size-5);
-  box-shadow: var(--shadow-2);
-  transition: box-shadow 200ms var(--ease-2);
+## Known Structural Issues
 
-  &:hover { box-shadow: var(--shadow-3); }
+**Accordion — incomplete wiring.** The render block passes `slot` through
+without wiring events or setting `data-open` attributes. Needs ARIA attributes
+and event wiring in the render block.
 
-  & .title {
-    font-size: var(--font-size-3);
-    font-weight: var(--font-weight-7);
-    margin-block-end: var(--size-2);
-  }
+**Menu — `slot` in wrong container.** Slot children render inside the trigger
+button. Items should use the hidden-slot pattern that Select uses.
 
-  & .body {
-    color: var(--color-text-muted);
-    line-height: var(--font-lineheight-3);
-  }
-}
-```
+**Popover — dual `slot`.** Both trigger and floating panel contain `slot`.
+No mechanism to split children between two slots. Needs named slots or a
+different structural approach.
 
-**Dialog:**
+**Grid — hardcoded selection color.** `#3b82f6` should be
+`var(--grid-selection-color, #3b82f6)`.
 
-```css
-.backdrop {
-  position: fixed;
-  inset: 0;
-  background: oklch(0% 0 0 / 40%);
-  display: grid;
-  place-items: center;
+---
 
-  &[data-open] { animation: fade-in 150ms var(--ease-2); }
-}
+## Bugs Found and Fixed
 
-.panel {
-  background: var(--surface-1);
-  border-radius: var(--radius-3);
-  padding: var(--size-6);
-  box-shadow: var(--shadow-4);
-  max-width: min(90vw, 32rem);
-  width: 100%;
-  animation: slide-in-up 200ms var(--ease-spring-3);
-}
+| Widget | Bug | Fix |
+|--------|-----|-----|
+| tabs.rip | `panel.dataset.tab` instead of `panel.dataset.panel` | Changed to `panel.dataset.panel` |
+| tabs.rip | `onMount:` lifecycle hook — not recognized | Changed to `mounted:` |
+| toast.rip | `onMount:` lifecycle hook — timer never started | Changed to `mounted:` |
+| grid.rip | `handleMousemove` updated `anchorRow/Col` instead of `activeRow/Col` | Fixed to update `activeRow/Col` |
+| grid.rip | `_parseTSV` used `lines.indexOf(line)` to detect last line | Changed to loop index `li` |
+| dialog.rip | `_unlockScroll := null` defined but never used | Removed |
+| dialog.rip | `_prevFocus` and `_cleanupTrap` used `:=` unnecessarily | Changed to `=` |
+| grid.rip | `_prevStart` and `_prevEnd` defined but never read | Removed |
+| popover.rip | No `aria-expanded` or `aria-haspopup` on trigger | Added both |
 
-.panel .title {
-  font-size: var(--font-size-4);
-  font-weight: var(--font-weight-7);
-  margin-block-end: var(--size-2);
-}
-```
+---
 
-**Select:**
+## Cross-Widget Notes
 
-```css
-.trigger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--size-2);
-  padding: var(--size-2) var(--size-3);
-  border: 1px solid var(--gray-4);
-  border-radius: var(--radius-2);
-  background: var(--surface-1);
-  cursor: pointer;
-  min-width: 10rem;
+### Positioning
+Select, Combobox, Menu, and Popover each do their own `getBoundingClientRect`
+math. If this becomes a maintenance issue, extract a shared function. For now,
+inlined code is simple enough that duplication is preferable to indirection.
 
-  &[data-open] { border-color: var(--color-primary); }
-}
+### Slot Discovery
+Tabs, Accordion, Select, and Combobox discover children by querying `data-*`
+attributes. If Rip UI gets a structured slot/children API, these should adopt it.
 
-.popup {
-  background: var(--surface-1);
-  border: 1px solid var(--gray-3);
-  border-radius: var(--radius-2);
-  box-shadow: var(--shadow-3);
-  padding: var(--size-1);
-}
+### CSS Hot Reload
+Save a `.css` file and the browser picks up changes without losing component
+state. `.rip` changes trigger a full page reload.
 
-.option {
-  padding: var(--size-2) var(--size-3);
-  border-radius: var(--radius-1);
-  cursor: pointer;
+### Testing
+No widget has tests yet. Priority: Dialog (focus trap), Select (keyboard +
+typeahead), Grid (virtual scroll, DOM recycling, clipboard TSV round-trip).
 
-  &[data-highlighted] { background: var(--surface-2); }
-  &[data-selected] { font-weight: var(--font-weight-6); color: var(--color-primary); }
-}
-```
+---
 
-**Tooltip:**
+## Roadmap
 
-```css
-.tooltip {
-  background: var(--gray-10);
-  color: var(--gray-0);
-  font-size: var(--font-size-0);
-  padding: var(--size-1) var(--size-2);
-  border-radius: var(--radius-2);
-  max-width: 20rem;
+1. **Run the widgets** — compile, execute, find bugs
+2. **Fix whatever breaks** — syntax errors, runtime errors, timing issues
+3. **Write Grid tests** — viewport engine, DOM recycling, clipboard, sort
+4. **Write Dialog tests** — focus trap, scroll lock, escape, click-outside
+5. **Write Select tests** — keyboard nav, typeahead, Home/End, ARIA
+6. **Fix Menu structural issue** — adopt hidden-slot pattern
+7. **Fix Accordion wiring** — add ARIA, wire events in render block
+8. **Grid: frozen columns** — `position: sticky` with cumulative left offset
+9. **Grid: replace hardcoded selection color** — use CSS custom property
+10. **Build standalone Grid demo** — 100K rows, prove 60fps
+11. **Grid: CellRange model** — unlocks multi-range selection
+12. **Grid: undo/redo** — ~40 lines on top of existing `commitEditor`
+13. **Resolve Popover dual-slot** — document pattern or restructure
+14. **Add dark mode tokens to gallery** — `prefers-color-scheme` blocks
+15. **Publish the widget suite** — document integration, link from main README
 
-  &[data-entering] { animation: fade-in 100ms var(--ease-2); }
-  &[data-exiting]  { animation: fade-out 75ms var(--ease-2); }
-}
-```
+---
 
-### What We Don't Use
+## Honest Assessment
 
-**React or any framework runtime** — Rip widgets are written in Rip, compiled
-to JavaScript, with zero runtime dependencies.
+### What's Strong
 
-**Tailwind CSS** — utility classes in markup are write-only and semantically
-empty. We write real CSS with real selectors.
+- **The reactive model works.** `:=`, `~=`, `~>`, and `<=>` are genuinely
+  better primitives than hooks. No dependency arrays, no stale closures.
+- **The code density is real.** 57 components in 5,254 lines. A Checkbox is
+  18 lines because that's how many a checkbox needs.
+- **The headless contract is clean.** Behavior in Rip, styling in CSS,
+  `data-*` attributes as the interface.
+- **The Grid proves the performance model.** Mixing reactive + imperative DOM
+  at 60fps validates the architecture for serious applications.
+- **ARIA coverage is thorough.** Every interactive widget follows WAI-ARIA
+  Authoring Practices.
 
-**CSS-in-JS runtimes** (styled-components, Emotion) — runtime style injection
-adds bundle size and creates hydration complexity.
+### What's Developing
 
-**Sass / Less** — native CSS nesting, `color-mix()`, and custom properties
-eliminate the need for preprocessors.
+- **Testing is early.** The compiler has 1,436 tests; the widgets need the
+  same rigor.
+- **No server-side rendering.** Rip UI runs in the browser. For SPAs,
+  dashboards, admin panels, and internal tools, this isn't a factor.
+- **Rip is a new language.** The ecosystem is young. The trade-off is a
+  cleaner foundation with no legacy baggage.
+- **Structural issues** in Accordion, Menu, and Popover need resolution.
 
-**Inline styles for layout** — the `style` prop is for truly dynamic values
-(e.g., positioning from a calculation). Layout, spacing, color, and typography
-go in CSS.
-
-**Third-party headless libraries** (Base UI, Radix, Headless UI, Zag.js) —
-we implement the same WAI-ARIA patterns natively in Rip. The patterns are
-standard; the implementation is ours.
+The architecture is right. The performance model is right. The distribution
+model (serve `.rip` source, compile in browser) is right. What's needed now
+is running the code, hitting the bugs, and hardening what exists.
 
 ---
 
