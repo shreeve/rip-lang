@@ -1359,6 +1359,8 @@ html.no-transition, html.no-transition * { transition: none !important; }
 
   [data-prev] { left: 8px; }
   [data-next] { right: 8px; }
+  [data-prev]::before { content: '‹'; }
+  [data-next]::before { content: '›'; }
 }
 
 /* ── Resizable ── */
