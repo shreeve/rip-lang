@@ -17,15 +17,15 @@ Rip UI removes those constraints entirely.
 | | ShadCN / Radix | Rip UI |
 |--|---------------|--------|
 | Runtime dependency | React (~42KB gz) + ReactDOM | None |
-| Component count | ~40 | 57 |
-| Total source | ShadCN wrappers (~3K LOC) atop Radix Primitives (~20K+ LOC) | 5,254 LOC — everything included |
+| Component count | ~40 | 54 |
+| Total source | ShadCN wrappers (~3K LOC) atop Radix Primitives (~20K+ LOC) | 4,013 SLOC — everything included |
 | Build step | Required (Next.js, Vite, etc.) | None — browser compiles `.rip` source directly |
 | Styling approach | Pre-wired Tailwind (ShadCN) or unstyled (Radix) | Zero CSS — `data-*` attribute contract, any CSS methodology |
 | Controlled components | `value` + `onChange` callback pair | `<=>` two-way binding operator |
 | Shared state | React Context + Provider wrappers | `offer` / `accept` keywords |
 | Reactivity | `useState` + `useEffect` + dependency arrays | `:=` / `~=` / `~>` — language-level operators |
 | Virtual DOM | Yes (diffing overhead on every render) | No — fine-grained DOM updates to exactly the nodes that changed |
-| Data grid | Not available | 901 lines — virtual scroll, 100K+ rows at 60fps, Sheets-grade UX |
+| Data grid | Not available | 799 SLOC — virtual scroll, 100K+ rows at 60fps, Sheets-grade UX |
 | Other dependencies | class-variance-authority, clsx, tailwind-merge, lucide-react | Zero |
 
 ---
@@ -190,9 +190,9 @@ between them.
 
 ---
 
-## Code Density: What 5,254 Lines Buys You
+## Code Density: What 4,013 Lines Buys You
 
-### Checkbox — 33 Lines
+### Checkbox — 18 Lines
 
 ```coffee
 export Checkbox = component
@@ -218,14 +218,14 @@ export Checkbox = component
 ```
 
 Full ARIA. Checkbox and switch mode. Indeterminate state. Custom events.
-Data attributes for styling. 33 lines, complete.
+Data attributes for styling. 18 lines of code, complete.
 
 The ShadCN Checkbox wrapper is ~40 lines. Underneath it,
 `@radix-ui/react-checkbox` adds hundreds more. The Rip version has the
 same behavior — correct ARIA roles, keyboard handling, indeterminate
 state — in a single file with no dependencies underneath.
 
-### Dialog — 107 Lines
+### Dialog — 83 Lines
 
 Focus trap. Scroll lock. Escape dismiss. Click-outside dismiss. Focus
 restore. Stacked dialog support. Auto-wired `aria-labelledby` and
@@ -251,7 +251,7 @@ Radix Dialog is spread across `DialogRoot`, `DialogTrigger`, `DialogOverlay`,
 sub-components — plus internal hooks for focus scope, dismissal layers,
 and portal management. Thousands of lines across multiple files.
 
-### Select — 184 Lines
+### Select — 147 Lines
 
 Keyboard navigation. Typeahead (type "eng" to jump to "Engineer"). ARIA
 listbox roles. Anchor positioning with flip. Click-outside dismiss.
@@ -266,12 +266,12 @@ Radix Select uses `SelectRoot`, `SelectTrigger`, `SelectValue`,
 ShadCN wraps this into a simpler API, but the Radix primitives still run
 underneath.
 
-### Grid — 901 Lines
+### Grid — 799 Lines
 
 This is the one that has no equivalent in ShadCN, Radix, Base UI, or
 Headless UI.
 
-901 lines for:
+799 lines of code for:
 - Virtual scrolling — renders only visible rows, handles 100K+ rows at 60fps
 - DOM recycling — pooled `<tr>` elements, zero allocation per scroll frame
 - Google Sheets-style cell selection with anchor/active model
@@ -294,7 +294,7 @@ In React, breaking out of the virtual DOM requires `useRef` gymnastics,
 
 ---
 
-## 57 Components, 10 Categories
+## 54 Components, 10 Categories
 
 | Category | Components |
 |----------|-----------|
@@ -303,7 +303,7 @@ In React, breaking out of the virtual DOM requires `useRef` gymnastics,
 | **Input** | Input, Textarea, NumberField, Slider, OTPField, DatePicker, EditableValue, NativeSelect, InputGroup |
 | **Navigation** | Tabs, Menu, ContextMenu, Menubar, NavMenu, Toolbar, Breadcrumb |
 | **Overlay** | Dialog, AlertDialog, Drawer, Sheet, Popover, Tooltip, PreviewCard, Toast |
-| **Display** | Button, Badge, Card, Separator, Progress, Meter, Spinner, Skeleton, Avatar, AspectRatio, Kbd, Label, ScrollArea |
+| **Display** | Button, Card, Separator, Progress, Meter, Spinner, Skeleton, Avatar, Label, ScrollArea |
 | **Form** | Field, Fieldset, Form, ButtonGroup |
 | **Data** | Grid, Accordion, Table |
 | **Interactive** | Collapsible, Pagination, Carousel, Resizable |
@@ -385,9 +385,9 @@ application's shared scope. No imports, no registration, no boilerplate.
   are genuinely better primitives than hooks. No dependency arrays, no stale
   closures, no rules-of-hooks violations.
 
-- **The code density is real.** 57 components in 5,254 lines is not a
-  toy — it's the result of the language having the right primitives. A
-  Checkbox is 33 lines because that's how many lines a checkbox needs, not
+- **The code density is real.** 54 components in 4,013 lines of code is not
+  a toy — it's the result of the language having the right primitives. A
+  Checkbox is 18 lines because that's how many lines a checkbox needs, not
   because corners were cut.
 
 - **The headless contract is clean.** Behavior in Rip, styling in CSS,
@@ -461,8 +461,7 @@ rip server
 
 Every widget has a live demo. Read the source — one file per component, no
 dependencies to trace, no hooks to unwind, no context providers to follow.
-The entire suite is 5,254 lines of `.rip` source that you can read in an
-afternoon.
+The entire suite is 4,013 lines of code that you can read in an afternoon.
 
 If you've built with ShadCN and Radix, you already understand the patterns.
 The only new thing is the language — and it takes about 30 minutes to read
