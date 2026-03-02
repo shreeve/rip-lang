@@ -1,10 +1,11 @@
 import { get, use, start, notFound } from '@rip-lang/server'
 import { serve } from '@rip-lang/server/middleware'
 
+# Api routes
 import './api/routes/index.rip'
 
+# App routes
 dir = import.meta.dir
-
 use serve
   dir: "#{dir}/app"
   components: ['routes', 'components']
