@@ -1558,7 +1558,7 @@ html.no-transition, html.no-transition * { transition: none !important; }
   .gallery [data-days] button:hover { background: #334155; }
   .gallery [data-days] button:active:not([data-selected]) { background: #1e3a5f; color: #93c5fd; }
   .gallery [data-days] button[data-outside] { color: #475569; }
-  .gallery [data-days] button[data-in-range] { background: #172554; }
+  .gallery [data-days] button[data-in-range] { background: #1e3a5f; color: #93c5fd; }
   .gallery [data-trigger]:has(+ [data-calendar]) { border-color: #475569; background: #334155; color: #e2e8f0; }
   .gallery [data-trigger][aria-haspopup] { border-color: #475569; background: #334155; color: #e2e8f0; }
 
