@@ -52,7 +52,6 @@
       /kbd.rip
       /skeleton.rip
       /spinner.rip
-      /aspect-ratio.rip
       /card.rip
       /label.rip
       /textarea.rip
@@ -150,7 +149,7 @@ export WidgetGallery = component
     { label: 'Input', ids: ['input', 'textarea', 'native-select', 'number-field', 'slider', 'otp-field', 'date-picker', 'editable-value', 'input-group'] }
     { label: 'Navigation', ids: ['tabs', 'menu', 'context-menu', 'menubar', 'nav-menu', 'toolbar', 'breadcrumb'] }
     { label: 'Overlay', ids: ['dialog', 'alert-dialog', 'drawer', 'sheet', 'popover', 'tooltip', 'preview-card', 'toast'] }
-    { label: 'Display', ids: ['button', 'badge', 'card', 'separator', 'progress', 'meter', 'spinner', 'skeleton', 'avatar', 'aspect-ratio', 'kbd', 'label', 'scroll-area'] }
+    { label: 'Display', ids: ['button', 'badge', 'card', 'separator', 'progress', 'meter', 'spinner', 'skeleton', 'avatar', 'kbd', 'label', 'scroll-area'] }
     { label: 'Form', ids: ['field', 'fieldset', 'form', 'button-group'] }
     { label: 'Data', ids: ['grid', 'accordion', 'table', 'collapsible'] }
     { label: 'Interactive', ids: ['pagination', 'carousel', 'resizable'] }
@@ -321,7 +320,6 @@ export WidgetGallery = component
     { id: 'kbd', name: 'Kbd', lines: 13, desc: 'Semantic keyboard shortcut display.', props: [], events: [], keys: [], attrs: [] }
     { id: 'skeleton', name: 'Skeleton', lines: 22, desc: 'Loading placeholder with shimmer animation.', props: ['@width', '@height', '@circle', '@label'], events: [], keys: [], attrs: ['$circle'] }
     { id: 'spinner', name: 'Spinner', lines: 17, desc: 'Loading indicator with accessible status.', props: ['@label', '@size'], events: [], keys: [], attrs: [] }
-    { id: 'aspect-ratio', name: 'AspectRatio', lines: 17, desc: 'Fixed aspect ratio container via CSS custom property.', props: ['@ratio'], events: [], keys: [], attrs: [] }
     { id: 'card', name: 'Card', lines: 25, desc: 'Structured container with header/content/footer.', props: ['@interactive'], events: [], keys: [], attrs: ['$interactive'] }
     { id: 'label', name: 'Label', lines: 16, desc: 'Standalone accessible form label.', props: ['@for', '@required'], events: [], keys: [], attrs: ['$required'] }
     { id: 'textarea', name: 'Textarea', lines: 48, desc: 'Auto-resizing text area with focus and validation tracking.', props: ['@value', '@placeholder', '@disabled', '@required', '@rows', '@autoResize'], events: [], keys: [], attrs: ['$disabled', '$focused', '$touched'] }
@@ -458,7 +456,7 @@ export WidgetGallery = component
     { _row: 12, name: 'Leo Martin', role: 'Engineer', age: 24, city: 'Boston' },
   ]
 
-  sectionIds =! ['select', 'combobox', 'multi-select', 'autocomplete', 'checkbox', 'toggle', 'toggle-group', 'radio-group', 'checkbox-group', 'input', 'textarea', 'native-select', 'number-field', 'slider', 'otp-field', 'date-picker', 'editable-value', 'input-group', 'tabs', 'menu', 'context-menu', 'menubar', 'nav-menu', 'toolbar', 'breadcrumb', 'dialog', 'alert-dialog', 'drawer', 'sheet', 'popover', 'tooltip', 'preview-card', 'toast', 'button', 'badge', 'card', 'separator', 'progress', 'meter', 'spinner', 'skeleton', 'avatar', 'aspect-ratio', 'kbd', 'label', 'scroll-area', 'field', 'form', 'button-group', 'grid', 'accordion', 'table', 'collapsible', 'pagination', 'carousel', 'resizable']
+  sectionIds =! ['select', 'combobox', 'multi-select', 'autocomplete', 'checkbox', 'toggle', 'toggle-group', 'radio-group', 'checkbox-group', 'input', 'textarea', 'native-select', 'number-field', 'slider', 'otp-field', 'date-picker', 'editable-value', 'input-group', 'tabs', 'menu', 'context-menu', 'menubar', 'nav-menu', 'toolbar', 'breadcrumb', 'dialog', 'alert-dialog', 'drawer', 'sheet', 'popover', 'tooltip', 'preview-card', 'toast', 'button', 'badge', 'card', 'separator', 'progress', 'meter', 'spinner', 'skeleton', 'avatar', 'kbd', 'label', 'scroll-area', 'field', 'form', 'button-group', 'grid', 'accordion', 'table', 'collapsible', 'pagination', 'carousel', 'resizable']
 
   _fadeTo: (el) ->
     return unless el
@@ -501,7 +499,7 @@ export WidgetGallery = component
           h1 "Rip UI"
           button.theme-toggle @click: (=> @_toggleDark())
             if darkMode then "☀" else "☾"
-        p "57 headless, accessible components. Zero CSS, zero dependencies."
+        p "56 headless, accessible components. Zero CSS, zero dependencies."
 
       .toc
         .toc-nav @keydown: @_onTocKeydown
@@ -560,7 +558,6 @@ export WidgetGallery = component
             a @mouseenter: (=> tocActive = 'spinner'), @click: (=> tocActive = 'spinner'), href: "#spinner", $active: (tocActive is 'spinner')?!, "Spinner"
             a @mouseenter: (=> tocActive = 'skeleton'), @click: (=> tocActive = 'skeleton'), href: "#skeleton", $active: (tocActive is 'skeleton')?!, "Skeleton"
             a @mouseenter: (=> tocActive = 'avatar'), @click: (=> tocActive = 'avatar'), href: "#avatar", $active: (tocActive is 'avatar')?!, "Avatar"
-            a @mouseenter: (=> tocActive = 'aspect-ratio'), @click: (=> tocActive = 'aspect-ratio'), href: "#aspect-ratio", $active: (tocActive is 'aspect-ratio')?!, "AspectRatio"
             a @mouseenter: (=> tocActive = 'kbd'), @click: (=> tocActive = 'kbd'), href: "#kbd", $active: (tocActive is 'kbd')?!, "Kbd"
             a @mouseenter: (=> tocActive = 'label'), @click: (=> tocActive = 'label'), href: "#label", $active: (tocActive is 'label')?!, "Label"
             a @mouseenter: (=> tocActive = 'scroll-area'), @click: (=> tocActive = 'scroll-area'), href: "#scroll-area", $active: (tocActive is 'scroll-area')?!, "ScrollArea"
@@ -2250,29 +2247,6 @@ export WidgetGallery = component
               code "$status"
               code "$initials"
               code "$placeholder"
-
-      # ================================================================
-      # ASPECT RATIO
-      # ================================================================
-      .section id: "aspect-ratio"
-        .section-title "AspectRatio"
-          span.badge @click: (=> @_viewSource('aspect-ratio')), "17 lines ❐"
-          .section-nav
-            a @click: (=> @_navSection('aspect-ratio', 'prev')), "‹"
-            a @click: (=> @_navSection('aspect-ratio', 'home')), "⌂"
-            a @click: (=> @_navSection('aspect-ratio', 'next')), "›"
-        .section-desc "Fixed aspect ratio container via CSS custom property."
-        .demo-row.aspect-demo
-          .demo-label "16:9"
-          div style: "width:240px"
-            AspectRatio ratio: 16/9
-              div style: "background:#e2e8f0;width:100%;height:100%;display:grid;place-items:center;color:#64748b;border-radius:6px"
-                "16 : 9"
-        .api
-          dl
-            dt "Props"
-            dd
-              code "@ratio"
 
       # ================================================================
       # KBD
