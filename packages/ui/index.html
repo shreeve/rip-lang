@@ -148,7 +148,7 @@ export WidgetGallery = component
     { label: 'Input', ids: ['input', 'textarea', 'native-select', 'number-field', 'slider', 'otp-field', 'date-picker', 'editable-value', 'input-group'] }
     { label: 'Navigation', ids: ['tabs', 'menu', 'context-menu', 'menubar', 'nav-menu', 'toolbar', 'breadcrumb'] }
     { label: 'Overlay', ids: ['dialog', 'alert-dialog', 'drawer', 'sheet', 'popover', 'tooltip', 'preview-card', 'toast'] }
-    { label: 'Display', ids: ['button', 'badge', 'card', 'separator', 'progress', 'meter', 'spinner', 'skeleton', 'avatar', 'kbd', 'label', 'scroll-area'] }
+    { label: 'Display', ids: ['button', 'badge', 'card', 'separator', 'progress', 'meter', 'spinner', 'skeleton', 'avatar', 'label', 'scroll-area'] }
     { label: 'Form', ids: ['field', 'fieldset', 'form', 'button-group'] }
     { label: 'Data', ids: ['grid', 'accordion', 'table', 'collapsible'] }
     { label: 'Interactive', ids: ['pagination', 'carousel', 'resizable'] }
@@ -316,7 +316,6 @@ export WidgetGallery = component
     { id: 'grid', name: 'Grid', lines: 799, desc: 'Virtual-scrolling data grid — 100K+ rows at 60fps.', props: ['@data', '@columns', '@rowHeight', '@overscan', '@striped', '@beforeEdit', '@afterEdit'], events: [], keys: ['Arrows', 'Tab', 'Enter', 'F2', 'Esc', 'Home', 'End', 'PgUp', 'PgDn', 'Ctrl+A', 'Ctrl+C', 'Ctrl+V', 'Ctrl+X'], attrs: ['$editing', '$selecting', '$sorted'] }
     { id: 'accordion', name: 'Accordion', lines: 86, desc: 'Expand/collapse sections, single or multiple mode.', props: ['@multiple'], events: ['change'], keys: ['Enter', 'Space', '↕', 'Home', 'End'], attrs: ['$item', '$trigger', '$content', '$open', '$disabled'] }
     { id: 'badge', name: 'Badge', lines: 10, desc: 'Inline label with variant (solid/outline/subtle).', props: ['@variant'], events: [], keys: [], attrs: ['$variant'] }
-    { id: 'kbd', name: 'Kbd', lines: 0, desc: 'Semantic keyboard shortcut display. Uses native <kbd> element.', props: [], events: [], keys: [], attrs: [] }
     { id: 'skeleton', name: 'Skeleton', lines: 10, desc: 'Loading placeholder with shimmer animation.', props: ['@width', '@height', '@circle', '@label'], events: [], keys: [], attrs: ['$circle'] }
     { id: 'spinner', name: 'Spinner', lines: 6, desc: 'Loading indicator with accessible status.', props: ['@label', '@size'], events: [], keys: [], attrs: [] }
     { id: 'card', name: 'Card', lines: 6, desc: 'Structured container with header/content/footer.', props: ['@interactive'], events: [], keys: [], attrs: ['$interactive'] }
@@ -455,7 +454,7 @@ export WidgetGallery = component
     { _row: 12, name: 'Leo Martin', role: 'Engineer', age: 24, city: 'Boston' },
   ]
 
-  sectionIds =! ['select', 'combobox', 'multi-select', 'autocomplete', 'checkbox', 'toggle', 'toggle-group', 'radio-group', 'checkbox-group', 'input', 'textarea', 'native-select', 'number-field', 'slider', 'otp-field', 'date-picker', 'editable-value', 'input-group', 'tabs', 'menu', 'context-menu', 'menubar', 'nav-menu', 'toolbar', 'breadcrumb', 'dialog', 'alert-dialog', 'drawer', 'sheet', 'popover', 'tooltip', 'preview-card', 'toast', 'button', 'badge', 'card', 'separator', 'progress', 'meter', 'spinner', 'skeleton', 'avatar', 'kbd', 'label', 'scroll-area', 'field', 'form', 'button-group', 'grid', 'accordion', 'table', 'collapsible', 'pagination', 'carousel', 'resizable']
+  sectionIds =! ['select', 'combobox', 'multi-select', 'autocomplete', 'checkbox', 'toggle', 'toggle-group', 'radio-group', 'checkbox-group', 'input', 'textarea', 'native-select', 'number-field', 'slider', 'otp-field', 'date-picker', 'editable-value', 'input-group', 'tabs', 'menu', 'context-menu', 'menubar', 'nav-menu', 'toolbar', 'breadcrumb', 'dialog', 'alert-dialog', 'drawer', 'sheet', 'popover', 'tooltip', 'preview-card', 'toast', 'button', 'badge', 'card', 'separator', 'progress', 'meter', 'spinner', 'skeleton', 'avatar', 'label', 'scroll-area', 'field', 'form', 'button-group', 'grid', 'accordion', 'table', 'collapsible', 'pagination', 'carousel', 'resizable']
 
   _fadeTo: (el) ->
     return unless el
@@ -557,7 +556,6 @@ export WidgetGallery = component
             a @mouseenter: (=> tocActive = 'spinner'), @click: (=> tocActive = 'spinner'), href: "#spinner", $active: (tocActive is 'spinner')?!, "Spinner"
             a @mouseenter: (=> tocActive = 'skeleton'), @click: (=> tocActive = 'skeleton'), href: "#skeleton", $active: (tocActive is 'skeleton')?!, "Skeleton"
             a @mouseenter: (=> tocActive = 'avatar'), @click: (=> tocActive = 'avatar'), href: "#avatar", $active: (tocActive is 'avatar')?!, "Avatar"
-            a @mouseenter: (=> tocActive = 'kbd'), @click: (=> tocActive = 'kbd'), href: "#kbd", $active: (tocActive is 'kbd')?!, "Kbd"
             a @mouseenter: (=> tocActive = 'label'), @click: (=> tocActive = 'label'), href: "#label", $active: (tocActive is 'label')?!, "Label"
             a @mouseenter: (=> tocActive = 'scroll-area'), @click: (=> tocActive = 'scroll-area'), href: "#scroll-area", $active: (tocActive is 'scroll-area')?!, "ScrollArea"
           .toc-group
