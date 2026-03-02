@@ -48,6 +48,25 @@
       /popover.rip
       /accordion.rip
       /grid.rip
+      /badge.rip
+      /kbd.rip
+      /skeleton.rip
+      /spinner.rip
+      /aspect-ratio.rip
+      /card.rip
+      /label.rip
+      /textarea.rip
+      /native-select.rip
+      /input-group.rip
+      /button-group.rip
+      /alert-dialog.rip
+      /sheet.rip
+      /breadcrumb.rip
+      /table.rip
+      /collapsible.rip
+      /pagination.rip
+      /carousel.rip
+      /resizable.rip
     " data-mount="WidgetGallery">
   </script>
   <script>
@@ -114,6 +133,13 @@ export WidgetGallery = component
   pickedDate := null
   dateRange := null
   darkMode := false
+  showAlertDialog := false
+  showSheet := false
+  textareaVal := ''
+  nativeSelectVal := ''
+  collapsibleOpen := false
+  currentPage := 1
+  carouselIdx := 0
   sourceCode := null
   sourceName := ''
   sourceLines := 0
@@ -122,12 +148,13 @@ export WidgetGallery = component
   tocGroups := [
     { label: 'Selection', ids: ['select', 'combobox', 'multi-select', 'autocomplete'] }
     { label: 'Toggle', ids: ['checkbox', 'toggle', 'toggle-group', 'radio-group', 'checkbox-group'] }
-    { label: 'Input', ids: ['input', 'number-field', 'slider', 'otp-field', 'date-picker', 'editable-value'] }
-    { label: 'Navigation', ids: ['tabs', 'menu', 'context-menu', 'menubar', 'nav-menu', 'toolbar'] }
-    { label: 'Overlay', ids: ['dialog', 'drawer', 'popover', 'tooltip', 'preview-card', 'toast'] }
-    { label: 'Display', ids: ['button', 'separator', 'progress', 'meter', 'avatar', 'scroll-area'] }
-    { label: 'Form', ids: ['field', 'fieldset', 'form'] }
-    { label: 'Data', ids: ['grid', 'accordion'] }
+    { label: 'Input', ids: ['input', 'textarea', 'native-select', 'number-field', 'slider', 'otp-field', 'date-picker', 'editable-value', 'input-group'] }
+    { label: 'Navigation', ids: ['tabs', 'menu', 'context-menu', 'menubar', 'nav-menu', 'toolbar', 'breadcrumb'] }
+    { label: 'Overlay', ids: ['dialog', 'alert-dialog', 'drawer', 'sheet', 'popover', 'tooltip', 'preview-card', 'toast'] }
+    { label: 'Display', ids: ['button', 'badge', 'card', 'separator', 'progress', 'meter', 'spinner', 'skeleton', 'avatar', 'aspect-ratio', 'kbd', 'label', 'scroll-area'] }
+    { label: 'Form', ids: ['field', 'fieldset', 'form', 'button-group'] }
+    { label: 'Data', ids: ['grid', 'accordion', 'table', 'collapsible'] }
+    { label: 'Interactive', ids: ['pagination', 'carousel', 'resizable'] }
   ]
   _nameFor: (id) -> (tocData.find((c) -> c.id is id))?.name or id
   _viewSource: (id) ->
@@ -291,6 +318,25 @@ export WidgetGallery = component
     { id: 'form', name: 'Form', lines: 39, desc: 'Form wrapper with submit handling and validation state.', props: ['@disabled'], events: ['submit'], keys: [], attrs: ['$disabled', '$submitting', '$submitted'] }
     { id: 'grid', name: 'Grid', lines: 901, desc: 'Virtual-scrolling data grid — 100K+ rows at 60fps.', props: ['@data', '@columns', '@rowHeight', '@overscan', '@striped', '@beforeEdit', '@afterEdit'], events: [], keys: ['Arrows', 'Tab', 'Enter', 'F2', 'Esc', 'Home', 'End', 'PgUp', 'PgDn', 'Ctrl+A', 'Ctrl+C', 'Ctrl+V', 'Ctrl+X'], attrs: ['$editing', '$selecting', '$sorted'] }
     { id: 'accordion', name: 'Accordion', lines: 113, desc: 'Expand/collapse sections, single or multiple mode.', props: ['@multiple'], events: ['change'], keys: ['Enter', 'Space', '↕', 'Home', 'End'], attrs: ['$item', '$trigger', '$content', '$open', '$disabled'] }
+    { id: 'badge', name: 'Badge', lines: 15, desc: 'Inline label with variant (solid/outline/subtle).', props: ['@variant'], events: [], keys: [], attrs: ['$variant'] }
+    { id: 'kbd', name: 'Kbd', lines: 13, desc: 'Semantic keyboard shortcut display.', props: [], events: [], keys: [], attrs: [] }
+    { id: 'skeleton', name: 'Skeleton', lines: 22, desc: 'Loading placeholder with shimmer animation.', props: ['@width', '@height', '@circle', '@label'], events: [], keys: [], attrs: ['$circle'] }
+    { id: 'spinner', name: 'Spinner', lines: 17, desc: 'Loading indicator with accessible status.', props: ['@label', '@size'], events: [], keys: [], attrs: [] }
+    { id: 'aspect-ratio', name: 'AspectRatio', lines: 17, desc: 'Fixed aspect ratio container via CSS custom property.', props: ['@ratio'], events: [], keys: [], attrs: [] }
+    { id: 'card', name: 'Card', lines: 25, desc: 'Structured container with header/content/footer.', props: ['@interactive'], events: [], keys: [], attrs: ['$interactive'] }
+    { id: 'label', name: 'Label', lines: 16, desc: 'Standalone accessible form label.', props: ['@for', '@required'], events: [], keys: [], attrs: ['$required'] }
+    { id: 'textarea', name: 'Textarea', lines: 48, desc: 'Auto-resizing text area with focus and validation tracking.', props: ['@value', '@placeholder', '@disabled', '@required', '@rows', '@autoResize'], events: [], keys: [], attrs: ['$disabled', '$focused', '$touched'] }
+    { id: 'native-select', name: 'NativeSelect', lines: 32, desc: 'Styled native select element with state tracking.', props: ['@value', '@disabled', '@required'], events: ['change'], keys: [], attrs: ['$disabled', '$focused'] }
+    { id: 'input-group', name: 'InputGroup', lines: 28, desc: 'Input with prefix/suffix addon elements.', props: ['@disabled'], events: [], keys: [], attrs: ['$disabled', '$focused'] }
+    { id: 'button-group', name: 'ButtonGroup', lines: 26, desc: 'Grouped buttons with ARIA group semantics.', props: ['@orientation', '@disabled', '@label'], events: [], keys: [], attrs: ['$orientation', '$disabled'] }
+    { id: 'alert-dialog', name: 'AlertDialog', lines: 96, desc: 'Non-dismissable modal requiring explicit user action.', props: ['@open', '@initialFocus'], events: ['close'], keys: ['Tab'], attrs: ['$open'] }
+    { id: 'sheet', name: 'Sheet', lines: 67, desc: 'Full-width/height side panel with focus trap.', props: ['@open', '@side', '@dismissable'], events: ['close'], keys: ['Esc', 'Tab'], attrs: ['$open', '$side', '$sheet'] }
+    { id: 'breadcrumb', name: 'Breadcrumb', lines: 46, desc: 'Navigation trail with separator and current page.', props: ['@separator', '@label'], events: [], keys: [], attrs: ['$current'] }
+    { id: 'table', name: 'Table', lines: 27, desc: 'Semantic table wrapper with optional caption and striped rows.', props: ['@caption', '@striped'], events: [], keys: [], attrs: ['$striped'] }
+    { id: 'collapsible', name: 'Collapsible', lines: 50, desc: 'Single open/close section with animated expand.', props: ['@open', '@disabled'], events: ['change'], keys: ['Enter', 'Space'], attrs: ['$open', '$disabled'] }
+    { id: 'pagination', name: 'Pagination', lines: 89, desc: 'Page navigation with prev/next and ellipsis gaps.', props: ['@page', '@total', '@perPage', '@siblingCount'], events: ['change'], keys: ['← →', 'Home', 'End'], attrs: ['$active', '$disabled', '$ellipsis'] }
+    { id: 'carousel', name: 'Carousel', lines: 110, desc: 'Slide carousel with autoplay, loop, and keyboard nav.', props: ['@orientation', '@loop', '@autoplay', '@interval', '@label'], events: ['change'], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation', '$active', '$prev', '$next'] }
+    { id: 'resizable', name: 'Resizable', lines: 123, desc: 'Draggable resize handles between panels.', props: ['@orientation', '@minSize', '@maxSize'], events: ['resize'], keys: ['← →', '↕'], attrs: ['$orientation', '$dragging'] }
   ]
   _infoName := ''
   _infoDesc := ''
@@ -413,7 +459,7 @@ export WidgetGallery = component
     { _row: 12, name: 'Leo Martin', role: 'Engineer', age: 24, city: 'Boston' },
   ]
 
-  sectionIds =! ['select', 'combobox', 'multi-select', 'autocomplete', 'checkbox', 'toggle', 'toggle-group', 'radio-group', 'checkbox-group', 'input', 'number-field', 'slider', 'otp-field', 'date-picker', 'editable-value', 'tabs', 'menu', 'context-menu', 'menubar', 'nav-menu', 'toolbar', 'dialog', 'drawer', 'popover', 'tooltip', 'preview-card', 'toast', 'button', 'separator', 'progress', 'meter', 'avatar', 'scroll-area', 'field', 'form', 'grid', 'accordion']
+  sectionIds =! ['select', 'combobox', 'multi-select', 'autocomplete', 'checkbox', 'toggle', 'toggle-group', 'radio-group', 'checkbox-group', 'input', 'textarea', 'native-select', 'number-field', 'slider', 'otp-field', 'date-picker', 'editable-value', 'input-group', 'tabs', 'menu', 'context-menu', 'menubar', 'nav-menu', 'toolbar', 'breadcrumb', 'dialog', 'alert-dialog', 'drawer', 'sheet', 'popover', 'tooltip', 'preview-card', 'toast', 'button', 'badge', 'card', 'separator', 'progress', 'meter', 'spinner', 'skeleton', 'avatar', 'aspect-ratio', 'kbd', 'label', 'scroll-area', 'field', 'form', 'button-group', 'grid', 'accordion', 'table', 'collapsible', 'pagination', 'carousel', 'resizable']
 
   _fadeTo: (el) ->
     return unless el
@@ -456,7 +502,7 @@ export WidgetGallery = component
           h1 "Rip UI"
           button.theme-toggle @click: (=> @_toggleDark())
             if darkMode then "☀" else "☾"
-        p "38 headless, accessible components. Zero CSS, zero dependencies."
+        p "57 headless, accessible components. Zero CSS, zero dependencies."
 
       .toc
         .toc-nav @keydown: @_onTocKeydown
@@ -477,11 +523,14 @@ export WidgetGallery = component
           .toc-group
             .toc-label "Input"
             a @mouseenter: (=> tocActive = 'input'), @click: (=> tocActive = 'input'), href: "#input", $active: (tocActive is 'input')?!, "Input"
+            a @mouseenter: (=> tocActive = 'textarea'), @click: (=> tocActive = 'textarea'), href: "#textarea", $active: (tocActive is 'textarea')?!, "Textarea"
+            a @mouseenter: (=> tocActive = 'native-select'), @click: (=> tocActive = 'native-select'), href: "#native-select", $active: (tocActive is 'native-select')?!, "NativeSelect"
             a @mouseenter: (=> tocActive = 'number-field'), @click: (=> tocActive = 'number-field'), href: "#number-field", $active: (tocActive is 'number-field')?!, "NumberField"
             a @mouseenter: (=> tocActive = 'slider'), @click: (=> tocActive = 'slider'), href: "#slider", $active: (tocActive is 'slider')?!, "Slider"
             a @mouseenter: (=> tocActive = 'otp-field'), @click: (=> tocActive = 'otp-field'), href: "#otp-field", $active: (tocActive is 'otp-field')?!, "OTPField"
             a @mouseenter: (=> tocActive = 'date-picker'), @click: (=> tocActive = 'date-picker'), href: "#date-picker", $active: (tocActive is 'date-picker')?!, "DatePicker"
             a @mouseenter: (=> tocActive = 'editable-value'), @click: (=> tocActive = 'editable-value'), href: "#editable-value", $active: (tocActive is 'editable-value')?!, "EditableValue"
+            a @mouseenter: (=> tocActive = 'input-group'), @click: (=> tocActive = 'input-group'), href: "#input-group", $active: (tocActive is 'input-group')?!, "InputGroup"
           .toc-group
             .toc-label "Navigation"
             a @mouseenter: (=> tocActive = 'tabs'), @click: (=> tocActive = 'tabs'), href: "#tabs", $active: (tocActive is 'tabs')?!, "Tabs"
@@ -490,10 +539,13 @@ export WidgetGallery = component
             a @mouseenter: (=> tocActive = 'menubar'), @click: (=> tocActive = 'menubar'), href: "#menubar", $active: (tocActive is 'menubar')?!, "Menubar"
             a @mouseenter: (=> tocActive = 'nav-menu'), @click: (=> tocActive = 'nav-menu'), href: "#nav-menu", $active: (tocActive is 'nav-menu')?!, "NavMenu"
             a @mouseenter: (=> tocActive = 'toolbar'), @click: (=> tocActive = 'toolbar'), href: "#toolbar", $active: (tocActive is 'toolbar')?!, "Toolbar"
+            a @mouseenter: (=> tocActive = 'breadcrumb'), @click: (=> tocActive = 'breadcrumb'), href: "#breadcrumb", $active: (tocActive is 'breadcrumb')?!, "Breadcrumb"
           .toc-group
             .toc-label "Overlay"
             a @mouseenter: (=> tocActive = 'dialog'), @click: (=> tocActive = 'dialog'), href: "#dialog", $active: (tocActive is 'dialog')?!, "Dialog"
+            a @mouseenter: (=> tocActive = 'alert-dialog'), @click: (=> tocActive = 'alert-dialog'), href: "#alert-dialog", $active: (tocActive is 'alert-dialog')?!, "AlertDialog"
             a @mouseenter: (=> tocActive = 'drawer'), @click: (=> tocActive = 'drawer'), href: "#drawer", $active: (tocActive is 'drawer')?!, "Drawer"
+            a @mouseenter: (=> tocActive = 'sheet'), @click: (=> tocActive = 'sheet'), href: "#sheet", $active: (tocActive is 'sheet')?!, "Sheet"
             a @mouseenter: (=> tocActive = 'popover'), @click: (=> tocActive = 'popover'), href: "#popover", $active: (tocActive is 'popover')?!, "Popover"
             a @mouseenter: (=> tocActive = 'tooltip'), @click: (=> tocActive = 'tooltip'), href: "#tooltip", $active: (tocActive is 'tooltip')?!, "Tooltip"
             a @mouseenter: (=> tocActive = 'preview-card'), @click: (=> tocActive = 'preview-card'), href: "#preview-card", $active: (tocActive is 'preview-card')?!, "PreviewCard"
@@ -501,20 +553,35 @@ export WidgetGallery = component
           .toc-group
             .toc-label "Display"
             a @mouseenter: (=> tocActive = 'button'), @click: (=> tocActive = 'button'), href: "#button", $active: (tocActive is 'button')?!, "Button"
+            a @mouseenter: (=> tocActive = 'badge'), @click: (=> tocActive = 'badge'), href: "#badge", $active: (tocActive is 'badge')?!, "Badge"
+            a @mouseenter: (=> tocActive = 'card'), @click: (=> tocActive = 'card'), href: "#card", $active: (tocActive is 'card')?!, "Card"
             a @mouseenter: (=> tocActive = 'separator'), @click: (=> tocActive = 'separator'), href: "#separator", $active: (tocActive is 'separator')?!, "Separator"
             a @mouseenter: (=> tocActive = 'progress'), @click: (=> tocActive = 'progress'), href: "#progress", $active: (tocActive is 'progress')?!, "Progress"
             a @mouseenter: (=> tocActive = 'meter'), @click: (=> tocActive = 'meter'), href: "#meter", $active: (tocActive is 'meter')?!, "Meter"
+            a @mouseenter: (=> tocActive = 'spinner'), @click: (=> tocActive = 'spinner'), href: "#spinner", $active: (tocActive is 'spinner')?!, "Spinner"
+            a @mouseenter: (=> tocActive = 'skeleton'), @click: (=> tocActive = 'skeleton'), href: "#skeleton", $active: (tocActive is 'skeleton')?!, "Skeleton"
             a @mouseenter: (=> tocActive = 'avatar'), @click: (=> tocActive = 'avatar'), href: "#avatar", $active: (tocActive is 'avatar')?!, "Avatar"
+            a @mouseenter: (=> tocActive = 'aspect-ratio'), @click: (=> tocActive = 'aspect-ratio'), href: "#aspect-ratio", $active: (tocActive is 'aspect-ratio')?!, "AspectRatio"
+            a @mouseenter: (=> tocActive = 'kbd'), @click: (=> tocActive = 'kbd'), href: "#kbd", $active: (tocActive is 'kbd')?!, "Kbd"
+            a @mouseenter: (=> tocActive = 'label'), @click: (=> tocActive = 'label'), href: "#label", $active: (tocActive is 'label')?!, "Label"
             a @mouseenter: (=> tocActive = 'scroll-area'), @click: (=> tocActive = 'scroll-area'), href: "#scroll-area", $active: (tocActive is 'scroll-area')?!, "ScrollArea"
           .toc-group
             .toc-label "Form"
             a @mouseenter: (=> tocActive = 'field'), @click: (=> tocActive = 'field'), href: "#field", $active: (tocActive is 'field')?!, "Field"
             a @mouseenter: (=> tocActive = 'fieldset'), @click: (=> tocActive = 'fieldset'), href: "#fieldset", $active: (tocActive is 'fieldset')?!, "Fieldset"
             a @mouseenter: (=> tocActive = 'form'), @click: (=> tocActive = 'form'), href: "#form", $active: (tocActive is 'form')?!, "Form"
+            a @mouseenter: (=> tocActive = 'button-group'), @click: (=> tocActive = 'button-group'), href: "#button-group", $active: (tocActive is 'button-group')?!, "ButtonGroup"
           .toc-group
             .toc-label "Data"
             a @mouseenter: (=> tocActive = 'grid'), @click: (=> tocActive = 'grid'), href: "#grid", $active: (tocActive is 'grid')?!, "Grid"
             a @mouseenter: (=> tocActive = 'accordion'), @click: (=> tocActive = 'accordion'), href: "#accordion", $active: (tocActive is 'accordion')?!, "Accordion"
+            a @mouseenter: (=> tocActive = 'table'), @click: (=> tocActive = 'table'), href: "#table", $active: (tocActive is 'table')?!, "Table"
+            a @mouseenter: (=> tocActive = 'collapsible'), @click: (=> tocActive = 'collapsible'), href: "#collapsible", $active: (tocActive is 'collapsible')?!, "Collapsible"
+          .toc-group
+            .toc-label "Interactive"
+            a @mouseenter: (=> tocActive = 'pagination'), @click: (=> tocActive = 'pagination'), href: "#pagination", $active: (tocActive is 'pagination')?!, "Pagination"
+            a @mouseenter: (=> tocActive = 'carousel'), @click: (=> tocActive = 'carousel'), href: "#carousel", $active: (tocActive is 'carousel')?!, "Carousel"
+            a @mouseenter: (=> tocActive = 'resizable'), @click: (=> tocActive = 'resizable'), href: "#resizable", $active: (tocActive is 'resizable')?!, "Resizable"
         .toc-detail
           if tocActive
             .
@@ -1191,6 +1258,102 @@ export WidgetGallery = component
               code "$edit-trigger"
 
       # ================================================================
+      # TEXTAREA
+      # ================================================================
+      .section id: "textarea"
+        .section-title "Textarea"
+          span.badge @click: (=> @_viewSource('textarea')), "48 lines ❐"
+          .section-nav
+            a @click: (=> @_navSection('textarea', 'prev')), "‹"
+            a @click: (=> @_navSection('textarea', 'home')), "⌂"
+            a @click: (=> @_navSection('textarea', 'next')), "›"
+        .section-desc "Auto-resizing text area with focus and validation tracking."
+        .demo-row
+          .demo-label "Auto-resize textarea"
+          Textarea value <=> textareaVal, placeholder: "Type something...", autoResize: true
+          .status "length: #{textareaVal.length}"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@value"
+              code "@placeholder"
+              code "@disabled"
+              code "@required"
+              code "@rows"
+              code "@autoResize"
+            dt "Data"
+            dd
+              code "$disabled"
+              code "$focused"
+              code "$touched"
+
+      # ================================================================
+      # NATIVE SELECT
+      # ================================================================
+      .section id: "native-select"
+        .section-title "NativeSelect"
+          span.badge @click: (=> @_viewSource('native-select')), "32 lines ❐"
+          .section-nav
+            a @click: (=> @_navSection('native-select', 'prev')), "‹"
+            a @click: (=> @_navSection('native-select', 'home')), "⌂"
+            a @click: (=> @_navSection('native-select', 'next')), "›"
+        .section-desc "Native browser select element with state tracking."
+        .demo-row.native-select-demo
+          .demo-label "Choose a color"
+          NativeSelect value <=> nativeSelectVal
+            option value: "", "Pick one..."
+            option value: "red", "Red"
+            option value: "green", "Green"
+            option value: "blue", "Blue"
+          .status "value: '#{nativeSelectVal}'"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@value"
+              code "@disabled"
+              code "@required"
+            dt "Events"
+            dd
+              code "change"
+            dt "Data"
+            dd
+              code "$disabled"
+              code "$focused"
+
+      # ================================================================
+      # INPUT GROUP
+      # ================================================================
+      .section id: "input-group"
+        .section-title "InputGroup"
+          span.badge @click: (=> @_viewSource('input-group')), "28 lines ❐"
+          .section-nav
+            a @click: (=> @_navSection('input-group', 'prev')), "‹"
+            a @click: (=> @_navSection('input-group', 'home')), "⌂"
+            a @click: (=> @_navSection('input-group', 'next')), "›"
+        .section-desc "Input with prefix/suffix addon elements."
+        .demo-row.input-group-demo
+          .demo-label "With prefix"
+          InputGroup
+            span $prefix: true, "$"
+            input type: "text", placeholder: "Amount"
+        .demo-row.input-group-demo
+          .demo-label "With suffix"
+          InputGroup
+            input type: "text", placeholder: "Search..."
+            button $suffix: true, "Go"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@disabled"
+            dt "Data"
+            dd
+              code "$disabled"
+              code "$focused"
+
+      # ================================================================
       # TABS
       # ================================================================
       .section id: "tabs"
@@ -1481,6 +1644,40 @@ export WidgetGallery = component
               code "$orientation"
 
       # ================================================================
+      # BREADCRUMB
+      # ================================================================
+      .section id: "breadcrumb"
+        .section-title "Breadcrumb"
+          span.badge @click: (=> @_viewSource('breadcrumb')), "46 lines ❐"
+          .section-nav
+            a @click: (=> @_navSection('breadcrumb', 'prev')), "‹"
+            a @click: (=> @_navSection('breadcrumb', 'home')), "⌂"
+            a @click: (=> @_navSection('breadcrumb', 'next')), "›"
+        .section-desc "Navigation trail with separator and current page."
+        .demo-row
+          .demo-label "Basic breadcrumb"
+          Breadcrumb
+            a $item: true, href: "#breadcrumb", "Home"
+            a $item: true, href: "#breadcrumb", "Products"
+            a $item: true, href: "#breadcrumb", "Widgets"
+            span $item: true, "Widget Pro"
+        .demo-row
+          .demo-label "Custom separator"
+          Breadcrumb separator: "›"
+            a $item: true, href: "#breadcrumb", "Dashboard"
+            a $item: true, href: "#breadcrumb", "Settings"
+            span $item: true, "Profile"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@separator"
+              code "@label"
+            dt "Data"
+            dd
+              code "$current"
+
+      # ================================================================
       # DIALOG
       # ================================================================
       .section id: "dialog"
@@ -1518,6 +1715,47 @@ export WidgetGallery = component
             dt "Keyboard"
             dd
               kbd "Esc"
+              kbd "Tab"
+            dt "Data"
+            dd
+              code "$open"
+
+      # ================================================================
+      # ALERT DIALOG
+      # ================================================================
+      .section id: "alert-dialog"
+        .section-title "AlertDialog"
+          span.badge @click: (=> @_viewSource('alert-dialog')), "96 lines ❐"
+          .section-nav
+            a @click: (=> @_navSection('alert-dialog', 'prev')), "‹"
+            a @click: (=> @_navSection('alert-dialog', 'home')), "⌂"
+            a @click: (=> @_navSection('alert-dialog', 'next')), "›"
+        .section-desc "Non-dismissable modal. Cannot close with Escape or click-outside."
+        .demo-row
+          .demo-label "Requires explicit action"
+          button.demo-btn @click: (=> showAlertDialog = true)
+            "Delete Account"
+          .status "open: #{showAlertDialog}"
+        AlertDialog open <=> showAlertDialog
+          .dialog-panel
+            h2 style: "font-size:18px;font-weight:600;margin-bottom:8px", "Delete Account?"
+            p.dialog-desc "This action is permanent and cannot be undone."
+            . style: "display:flex;gap:8px;justify-content:flex-end"
+              button.demo-btn @click: (=> showAlertDialog = false)
+                "Cancel"
+              button style: "padding:6px 16px;border:none;border-radius:6px;background:#dc2626;color:white;font-weight:600", @click: (=> showAlertDialog = false)
+                "Delete"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@open"
+              code "@initialFocus"
+            dt "Events"
+            dd
+              code "close"
+            dt "Keyboard"
+            dd
               kbd "Tab"
             dt "Data"
             dd
@@ -1565,6 +1803,47 @@ export WidgetGallery = component
             dd
               code "$open"
               code "$side"
+
+      # ================================================================
+      # SHEET
+      # ================================================================
+      .section id: "sheet"
+        .section-title "Sheet"
+          span.badge @click: (=> @_viewSource('sheet')), "67 lines ❐"
+          .section-nav
+            a @click: (=> @_navSection('sheet', 'prev')), "‹"
+            a @click: (=> @_navSection('sheet', 'home')), "⌂"
+            a @click: (=> @_navSection('sheet', 'next')), "›"
+        .section-desc "Full-width/height slide-out side panel."
+        .demo-row
+          .demo-label "Open from right"
+          button.demo-btn @click: (=> showSheet = true)
+            "Open Sheet"
+        Sheet open <=> showSheet, side: "right"
+          h2 "Notifications"
+          p "You have 3 unread messages."
+          p "Press Escape or click outside to close."
+          button.demo-btn @click: (=> showSheet = false)
+            "Close"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@open"
+              code "@side"
+              code "@dismissable"
+            dt "Events"
+            dd
+              code "close"
+            dt "Keyboard"
+            dd
+              kbd "Esc"
+              kbd "Tab"
+            dt "Data"
+            dd
+              code "$open"
+              code "$side"
+              code "$sheet"
 
       # ================================================================
       # POPOVER
@@ -1739,6 +2018,65 @@ export WidgetGallery = component
               code "$disabled"
 
       # ================================================================
+      # BADGE
+      # ================================================================
+      .section id: "badge"
+        .section-title "Badge"
+          span.badge @click: (=> @_viewSource('badge')), "15 lines ❐"
+          .section-nav
+            a @click: (=> @_navSection('badge', 'prev')), "‹"
+            a @click: (=> @_navSection('badge', 'home')), "⌂"
+            a @click: (=> @_navSection('badge', 'next')), "›"
+        .section-desc "Inline label with variant styles."
+        .demo-row
+          .demo-label "Variants"
+          . style: "display:flex;gap:8px;align-items:center"
+            Badge "Solid"
+            Badge variant: "outline", "Outline"
+            Badge variant: "subtle", "Subtle"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@variant"
+            dt "Data"
+            dd
+              code "$variant"
+
+      # ================================================================
+      # CARD
+      # ================================================================
+      .section id: "card"
+        .section-title "Card"
+          span.badge @click: (=> @_viewSource('card')), "25 lines ❐"
+          .section-nav
+            a @click: (=> @_navSection('card', 'prev')), "‹"
+            a @click: (=> @_navSection('card', 'home')), "⌂"
+            a @click: (=> @_navSection('card', 'next')), "›"
+        .section-desc "Structured container with header, content, and footer."
+        .demo-row.card-demo
+          Card
+            div $header: true
+              h3 "Card Title"
+            div $content: true
+              "This is the card body. Cards can contain any content."
+            div $footer: true
+              button.demo-btn "Action"
+        .demo-row.card-demo
+          .demo-label "Interactive card"
+          Card interactive: true
+            div $content: true
+              "Click or focus this card."
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@interactive"
+            dt "Data"
+            dd
+              code "$interactive"
+
+      # ================================================================
       # SEPARATOR
       # ================================================================
       .section id: "separator"
@@ -1828,6 +2166,60 @@ export WidgetGallery = component
               code "$level"
 
       # ================================================================
+      # SPINNER
+      # ================================================================
+      .section id: "spinner"
+        .section-title "Spinner"
+          span.badge @click: (=> @_viewSource('spinner')), "17 lines ❐"
+          .section-nav
+            a @click: (=> @_navSection('spinner', 'prev')), "‹"
+            a @click: (=> @_navSection('spinner', 'home')), "⌂"
+            a @click: (=> @_navSection('spinner', 'next')), "›"
+        .section-desc "Loading indicator with accessible status."
+        .demo-row.spinner-demo
+          .demo-label "Default"
+          . style: "display:flex;gap:16px;align-items:center"
+            Spinner
+            Spinner size: "32px"
+            Spinner label: "Saving...", size: "20px"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@label"
+              code "@size"
+
+      # ================================================================
+      # SKELETON
+      # ================================================================
+      .section id: "skeleton"
+        .section-title "Skeleton"
+          span.badge @click: (=> @_viewSource('skeleton')), "22 lines ❐"
+          .section-nav
+            a @click: (=> @_navSection('skeleton', 'prev')), "‹"
+            a @click: (=> @_navSection('skeleton', 'home')), "⌂"
+            a @click: (=> @_navSection('skeleton', 'next')), "›"
+        .section-desc "Loading placeholder with shimmer animation."
+        .demo-row
+          .demo-label "Shapes"
+          . style: "display:flex;gap:12px;align-items:center"
+            Skeleton circle: true, width: "40px", height: "40px"
+            . style: "display:flex;flex-direction:column;gap:6px"
+              Skeleton width: "200px", height: "14px"
+              Skeleton width: "150px", height: "14px"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@width"
+              code "@height"
+              code "@circle"
+              code "@label"
+            dt "Data"
+            dd
+              code "$circle"
+
+      # ================================================================
       # AVATAR
       # ================================================================
       .section id: "avatar"
@@ -1859,6 +2251,78 @@ export WidgetGallery = component
               code "$status"
               code "$initials"
               code "$placeholder"
+
+      # ================================================================
+      # ASPECT RATIO
+      # ================================================================
+      .section id: "aspect-ratio"
+        .section-title "AspectRatio"
+          span.badge @click: (=> @_viewSource('aspect-ratio')), "17 lines ❐"
+          .section-nav
+            a @click: (=> @_navSection('aspect-ratio', 'prev')), "‹"
+            a @click: (=> @_navSection('aspect-ratio', 'home')), "⌂"
+            a @click: (=> @_navSection('aspect-ratio', 'next')), "›"
+        .section-desc "Fixed aspect ratio container via CSS custom property."
+        .demo-row.aspect-demo
+          .demo-label "16:9"
+          div style: "width:240px"
+            AspectRatio ratio: 16/9
+              div style: "background:#e2e8f0;width:100%;height:100%;display:grid;place-items:center;color:#64748b;border-radius:6px"
+                "16 : 9"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@ratio"
+
+      # ================================================================
+      # KBD
+      # ================================================================
+      .section id: "kbd"
+        .section-title "Kbd"
+          span.badge @click: (=> @_viewSource('kbd')), "13 lines ❐"
+          .section-nav
+            a @click: (=> @_navSection('kbd', 'prev')), "‹"
+            a @click: (=> @_navSection('kbd', 'home')), "⌂"
+            a @click: (=> @_navSection('kbd', 'next')), "›"
+        .section-desc "Semantic keyboard shortcut display."
+        .demo-row
+          .demo-label "Shortcuts"
+          . style: "display:flex;gap:8px;align-items:center"
+            Kbd "⌘K"
+            Kbd "Ctrl+C"
+            Kbd "Shift+Enter"
+            Kbd "Esc"
+        .api
+          dl
+            dt "Props"
+            dd
+              span.api-none "none"
+
+      # ================================================================
+      # LABEL
+      # ================================================================
+      .section id: "label"
+        .section-title "Label"
+          span.badge @click: (=> @_viewSource('label')), "16 lines ❐"
+          .section-nav
+            a @click: (=> @_navSection('label', 'prev')), "‹"
+            a @click: (=> @_navSection('label', 'home')), "⌂"
+            a @click: (=> @_navSection('label', 'next')), "›"
+        .section-desc "Standalone accessible form label."
+        .demo-row
+          .demo-label "With required indicator"
+          Label required: true
+            "Email address"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@for"
+              code "@required"
+            dt "Data"
+            dd
+              code "$required"
 
       # ================================================================
       # SCROLL AREA
@@ -1986,6 +2450,35 @@ export WidgetGallery = component
               code "$submitted"
 
       # ================================================================
+      # BUTTON GROUP
+      # ================================================================
+      .section id: "button-group"
+        .section-title "ButtonGroup"
+          span.badge @click: (=> @_viewSource('button-group')), "26 lines ❐"
+          .section-nav
+            a @click: (=> @_navSection('button-group', 'prev')), "‹"
+            a @click: (=> @_navSection('button-group', 'home')), "⌂"
+            a @click: (=> @_navSection('button-group', 'next')), "›"
+        .section-desc "Groups related buttons with ARIA group semantics."
+        .demo-row
+          .demo-label "Horizontal"
+          ButtonGroup label: "Actions"
+            button "Cut"
+            button "Copy"
+            button "Paste"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@orientation"
+              code "@disabled"
+              code "@label"
+            dt "Data"
+            dd
+              code "$orientation"
+              code "$disabled"
+
+      # ================================================================
       # GRID
       # ================================================================
       .section id: "grid"
@@ -2091,6 +2584,199 @@ export WidgetGallery = component
               code "$content"
               code "$open"
               code "$disabled"
+
+      # ================================================================
+      # TABLE
+      # ================================================================
+      .section id: "table"
+        .section-title "Table"
+          span.badge @click: (=> @_viewSource('table')), "27 lines ❐"
+          .section-nav
+            a @click: (=> @_navSection('table', 'prev')), "‹"
+            a @click: (=> @_navSection('table', 'home')), "⌂"
+            a @click: (=> @_navSection('table', 'next')), "›"
+        .section-desc "Semantic table wrapper. For data-heavy tables, use Grid."
+        .demo-row.table-demo
+          Table caption: "Team", striped: true
+            thead
+              tr
+                th "Name"
+                th "Role"
+                th "City"
+            tbody
+              tr
+                td "Alice"
+                td "Engineer"
+                td "Seattle"
+              tr
+                td "Bob"
+                td "Designer"
+                td "Portland"
+              tr
+                td "Carol"
+                td "Manager"
+                td "Denver"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@caption"
+              code "@striped"
+            dt "Data"
+            dd
+              code "$striped"
+
+      # ================================================================
+      # COLLAPSIBLE
+      # ================================================================
+      .section id: "collapsible"
+        .section-title "Collapsible"
+          span.badge @click: (=> @_viewSource('collapsible')), "50 lines ❐"
+          .section-nav
+            a @click: (=> @_navSection('collapsible', 'prev')), "‹"
+            a @click: (=> @_navSection('collapsible', 'home')), "⌂"
+            a @click: (=> @_navSection('collapsible', 'next')), "›"
+        .section-desc "Single open/close section. Simpler than Accordion."
+        .demo-row.collapsible-demo
+          Collapsible open <=> collapsibleOpen
+            button $trigger: true
+              "#{if collapsibleOpen then '▾' else '▸'} Show details"
+            div $content: true
+              p "These are the collapsible details. Click the trigger or press Enter/Space to toggle."
+          .status "open: #{collapsibleOpen}"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@open"
+              code "@disabled"
+            dt "Events"
+            dd
+              code "change"
+            dt "Keyboard"
+            dd
+              kbd "Enter"
+              kbd "Space"
+            dt "Data"
+            dd
+              code "$open"
+              code "$disabled"
+
+      # ================================================================
+      # PAGINATION
+      # ================================================================
+      .section id: "pagination"
+        .section-title "Pagination"
+          span.badge @click: (=> @_viewSource('pagination')), "89 lines ❐"
+          .section-nav
+            a @click: (=> @_navSection('pagination', 'prev')), "‹"
+            a @click: (=> @_navSection('pagination', 'home')), "⌂"
+            a @click: (=> @_navSection('pagination', 'next')), "›"
+        .section-desc "Page navigation with prev/next buttons and ellipsis gaps."
+        .demo-row
+          .demo-label "10 pages"
+          Pagination page <=> currentPage, total: 100, perPage: 10
+          .status "page: #{currentPage}"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@page"
+              code "@total"
+              code "@perPage"
+              code "@siblingCount"
+            dt "Events"
+            dd
+              code "change"
+            dt "Keyboard"
+            dd
+              kbd "← →"
+              kbd "Home"
+              kbd "End"
+            dt "Data"
+            dd
+              code "$active"
+              code "$disabled"
+              code "$ellipsis"
+
+      # ================================================================
+      # CAROUSEL
+      # ================================================================
+      .section id: "carousel"
+        .section-title "Carousel"
+          span.badge @click: (=> @_viewSource('carousel')), "110 lines ❐"
+          .section-nav
+            a @click: (=> @_navSection('carousel', 'prev')), "‹"
+            a @click: (=> @_navSection('carousel', 'home')), "⌂"
+            a @click: (=> @_navSection('carousel', 'next')), "›"
+        .section-desc "Slide carousel with loop and keyboard navigation."
+        .demo-row
+          Carousel loop: true
+            div $slide: true
+              "🍎 Slide 1 — Apples"
+            div $slide: true
+              "🍌 Slide 2 — Bananas"
+            div $slide: true
+              "🍒 Slide 3 — Cherries"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@orientation"
+              code "@loop"
+              code "@autoplay"
+              code "@interval"
+              code "@label"
+            dt "Events"
+            dd
+              code "change"
+            dt "Keyboard"
+            dd
+              kbd "← →"
+              kbd "↕"
+              kbd "Home"
+              kbd "End"
+            dt "Data"
+            dd
+              code "$orientation"
+              code "$active"
+              code "$prev"
+              code "$next"
+
+      # ================================================================
+      # RESIZABLE
+      # ================================================================
+      .section id: "resizable"
+        .section-title "Resizable"
+          span.badge @click: (=> @_viewSource('resizable')), "123 lines ❐"
+          .section-nav
+            a @click: (=> @_navSection('resizable', 'prev')), "‹"
+            a @click: (=> @_navSection('resizable', 'home')), "⌂"
+            a @click: (=> @_navSection('resizable', 'next')), "›"
+        .section-desc "Draggable resize handles between panels."
+        .demo-row.resizable-demo
+          Resizable
+            div $panel: true, "Left"
+            div $handle: true
+            div $panel: true, "Right"
+        .api
+          dl
+            dt "Props"
+            dd
+              code "@orientation"
+              code "@minSize"
+              code "@maxSize"
+            dt "Events"
+            dd
+              code "resize"
+            dt "Keyboard"
+            dd
+              kbd "← →"
+              kbd "↕"
+            dt "Data"
+            dd
+              code "$orientation"
+              code "$dragging"
 
       # ================================================================
       # SOURCE CODE VIEWER

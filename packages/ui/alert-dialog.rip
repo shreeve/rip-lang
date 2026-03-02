@@ -12,7 +12,7 @@
 #     button @click: (=> showConfirm = false), "Cancel"
 #     button @click: handleDelete, "Delete"
 
-dialogStack = []
+alertDialogStack = []
 
 export AlertDialog = component
   @open := false
@@ -39,7 +39,7 @@ export AlertDialog = component
     if @open
       _prevFocus = document.activeElement
       _scrollY = window.scrollY
-      dialogStack.push this
+      alertDialogStack.push this
       document.body.style.position = 'fixed'
       document.body.style.top = "-#{_scrollY}px"
       document.body.style.width = '100%'
@@ -68,17 +68,17 @@ export AlertDialog = component
       , 0
 
       return ->
-        idx = dialogStack.indexOf this
-        dialogStack.splice(idx, 1) if idx >= 0
-        document.body.style.position = '' unless dialogStack.length
-        document.body.style.top = '' unless dialogStack.length
-        document.body.style.width = '' unless dialogStack.length
-        window.scrollTo 0, _scrollY unless dialogStack.length
+        idx = alertDialogStack.indexOf this
+        alertDialogStack.splice(idx, 1) if idx >= 0
+        document.body.style.position = '' unless alertDialogStack.length
+        document.body.style.top = '' unless alertDialogStack.length
+        document.body.style.width = '' unless alertDialogStack.length
+        window.scrollTo 0, _scrollY unless alertDialogStack.length
         _prevFocus?.focus()
     else
-      idx = dialogStack.indexOf this
-      dialogStack.splice(idx, 1) if idx >= 0
-      unless dialogStack.length
+      idx = alertDialogStack.indexOf this
+      alertDialogStack.splice(idx, 1) if idx >= 0
+      unless alertDialogStack.length
         document.body.style.position = ''
         document.body.style.top = ''
         document.body.style.width = ''
