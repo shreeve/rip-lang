@@ -1301,8 +1301,8 @@ html.no-transition, html.no-transition * { transition: none !important; }
 /* ── Collapsible ── */
 
 .gallery [data-trigger]:has(+ [data-content]) {
-  padding: 8px 14px; border: 1px solid #cbd5e1; border-radius: 6px;
-  background: white; cursor: pointer; font-size: 14px; width: 100%; text-align: left;
+  padding: 10px 16px; border: 1px solid #cbd5e1; border-radius: 6px;
+  background: white; cursor: pointer; font-size: 15px; font-weight: 500; width: 100%; text-align: left;
 
   &[aria-expanded="true"] { border-color: #94a3b8; }
   &:hover { background: #f8fafc; }
