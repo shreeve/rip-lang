@@ -1,0 +1,26 @@
+# ButtonGroup — accessible headless button group
+#
+# Groups related buttons with proper ARIA semantics.
+# Ships zero CSS.
+#
+# Usage:
+#   ButtonGroup
+#     Button "Cut"
+#     Button "Copy"
+#     Button "Paste"
+#   ButtonGroup orientation: "vertical", label: "Text formatting"
+#     Toggle pressed <=> isBold, "Bold"
+#     Toggle pressed <=> isItalic, "Italic"
+
+export ButtonGroup = component
+  @orientation := 'horizontal'
+  @disabled := false
+  @label := ''
+
+  render
+    div role: "group"
+      aria-label: @label?!
+      aria-orientation: @orientation
+      $orientation: @orientation
+      $disabled: @disabled?!
+      slot
