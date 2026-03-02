@@ -1256,12 +1256,9 @@ export WidgetGallery = component
         SectionHead tag: "input-group", name: "InputGroup", lines: 11
         .section-desc "Input with prefix/suffix addon elements."
         .demo-row.input-group-demo
-          .demo-label "With prefix"
           InputGroup
             span $prefix: true, "$"
             input type: "text", placeholder: "Amount"
-        .demo-row.input-group-demo
-          .demo-label "With suffix"
           InputGroup
             input type: "text", placeholder: "Search..."
             button $suffix: true, "Go"
