@@ -679,7 +679,7 @@ select.rip-grid-editor { cursor: pointer; padding-left: 4px; }
     &[data-outside] { color: #cbd5e1; }
     &[data-today] { font-weight: 700; outline: 2px solid #3b82f6; outline-offset: -2px; }
     &[data-selected] { background: #3b82f6; color: white; }
-    &[data-in-range] { background: #eff6ff; border-radius: 0; }
+    &[data-in-range] { background: #dbeafe; color: #1e40af; border-radius: 0; }
     &[data-range-start] { border-radius: 4px 0 0 4px; }
   }
 }
