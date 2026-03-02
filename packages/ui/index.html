@@ -2056,10 +2056,9 @@ export WidgetGallery = component
             div $footer: true
               button.demo-btn @click: (=> toasts = [...toasts, { message: 'Card action clicked!', type: 'success' }]), "Action"
         .demo-row.card-demo
-          .demo-label "Interactive card"
           Card interactive: true
             div $content: true
-              "Click or focus this card."
+              "Click or focus this interactive card."
         .api
           dl
             dt "Props"
