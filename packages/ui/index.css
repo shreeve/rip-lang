@@ -1168,7 +1168,7 @@ html.no-transition, html.no-transition * { transition: none !important; }
 /* ── Label ── */
 
 .gallery label[data-required] { font-size: 13px; font-weight: 600; color: #334155; }
-.gallery label [data-required]::after { content: " *"; color: #ef4444; }
+.gallery label[data-required]::after { content: " *"; color: #ef4444; }
 
 /* ── Textarea ── */
 
