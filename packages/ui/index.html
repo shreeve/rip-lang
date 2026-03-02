@@ -2431,13 +2431,13 @@ export WidgetGallery = component
       # SOURCE CODE VIEWER
       # ========================================================================
       if sourceCode
-        .source-overlay @click: @_closeSource
+        .source-overlay @click: (=> @_closeSource())
           .source-modal @click: (e => e.stopPropagation())
             .source-header
               .source-title
                 span.source-name sourceName
                 span.source-badge "#{sourceLines} lines"
-              button.source-close @click: @_closeSource
+              button.source-close @click: (=> @_closeSource())
                 "×"
             .source-body
               pre.source-pre
