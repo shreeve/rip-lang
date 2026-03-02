@@ -378,6 +378,7 @@ export WidgetGallery = component
       lines = text.split('\n')
       gutterEl.textContent = lines.map((_, i) -> String(i + 1)).join('\n') if gutterEl
       codeEl.textContent = text
+      codeEl.className = 'source-code language-coffeescript'
       @_ensureHljs =>
         hljs.highlightElement(codeEl) if window.hljs
     , 0
