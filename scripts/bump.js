@@ -220,18 +220,22 @@ console.log('\nPublishing...');
 
 function publish(dir, name, version) {
   const cwd = dir === '.' ? ROOT : join(ROOT, 'packages', dir);
-  try {
-    run('bun publish --access public', { cwd });
-    console.log(`  ✓ ${name}@${version}`);
-    return true;
-  } catch (e) {
-    const msg = e.stderr || e.message || '';
-    if (msg.includes('already exists')) {
-      console.log(`  - ${name}@${version} (already published)`);
-    } else {
-      console.error(`  ✗ ${name}@${version}: ${msg.split('\n')[0]}`);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      run('bun publish --access public', { cwd });
+      console.log(`  ✓ ${name}@${version}`);
+      return true;
+    } catch (e) {
+      const msg = (e.stderr || '') + '\n' + (e.stdout || '') + '\n' + (e.message || '');
+      if (msg.includes('previously published') || msg.includes('already exists')) {
+        console.log(`  ${attempt ? '✓' : '-'} ${name}@${version} (already published)`);
+        return true;
+      }
+      if (attempt === 0) continue;
+      const error = msg.split('\n').find(l => l.trim() && !/^\[[\d.]+ms\]/.test(l.trim()) && !l.startsWith('bun publish')) || msg.split('\n')[0];
+      console.error(`  ✗ ${name}@${version}: ${error.trim()}`);
+      return false;
     }
-    return false;
   }
 }
 
