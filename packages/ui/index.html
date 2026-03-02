@@ -178,13 +178,6 @@ export WidgetGallery = component
     resp = fetch! "/#{id}.rip"
     sourceCode = resp.text!
   _closeSource: -> sourceCode = null
-  _registerRipLang: ->
-    hljs.registerLanguage 'rip', (h) ->
-      KEYWORDS = ['if', 'else', 'unless', 'then', 'switch', 'when', 'for', 'while', 'until', 'loop', 'do', 'return', 'break', 'continue', 'throw', 'try', 'catch', 'finally', 'yield', 'await', 'import', 'export', 'from', 'default', 'delete', 'typeof', 'instanceof', 'new', 'super', 'debugger', 'use', 'own', 'extends', 'in', 'of', 'by', 'as', 'class', 'def', 'enum', 'interface', 'component', 'render', 'and', 'or', 'not', 'is', 'isnt', 'offer', 'accept', 'slot']
-      LITERALS = ['true', 'false', 'yes', 'no', 'on', 'off', 'null', 'undefined', 'NaN', 'Infinity']
-      BUILT_INS = ['console', 'process', 'require', 'module', 'exports', 'setTimeout', 'setInterval', 'clearTimeout', 'clearInterval', 'Promise', 'Array', 'Object', 'String', 'Number', 'Boolean', 'Math', 'Date', 'RegExp', 'Error', 'JSON', 'Map', 'Set', 'Symbol', 'document', 'window']
-      INTERP = { className: 'subst', begin: /#\{/, end: /\}/, keywords: { keyword: KEYWORDS, literal: LITERALS } }
-      { name: 'Rip', aliases: ['rip'], keywords: { keyword: KEYWORDS, literal: LITERALS, built_in: BUILT_INS }, contains: [{ className: 'comment', begin: '###', end: '###' }, h.COMMENT('#', '$'), { className: 'string', begin: '"""', end: '"""', contains: [h.BACKSLASH_ESCAPE, INTERP] }, { className: 'string', begin: "'''", end: "'''" }, { className: 'string', begin: '"', end: '"', contains: [h.BACKSLASH_ESCAPE, INTERP] }, { className: 'string', begin: "'", end: "'" }, { className: 'regexp', begin: /\/(?![/*])(?:[^\/\\]|\\.)*\/[gimsuy]*/, relevance: 0 }, { className: 'function', begin: /\bdef\s+/, end: /[(\s]/, excludeEnd: true, keywords: { keyword: 'def' }, contains: [{ className: 'title.function', begin: /[a-zA-Z_$][\w$]*[!?]?/ }] }, { className: 'number', variants: [{ begin: /0x[0-9a-fA-F][\d_a-fA-F]*/ }, { begin: /0b[01][\d_]*/ }, { begin: /\d[\d_]*(?:\.[\d][\d_]*)?(?:[eE][+-]?\d+)?/ }], relevance: 0 }, { className: 'variable', begin: /@[a-zA-Z_$][\w$]*/ }, { className: 'operator', begin: /\|>|::=|::|:=|~=|~>|<=>|=!|!\?|=~|\?\?|=>|->|\.\.\.|\.\.|[+\-*\/%<>=!&|^~?]/, relevance: 0 }] }
   _ensureHljs: (cb) ->
     if window.hljs then return cb()
     link = document.createElement('link')
@@ -194,8 +187,10 @@ export WidgetGallery = component
     script = document.createElement('script')
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js'
     script.onload = =>
-      @_registerRipLang()
-      cb()
+      fetch('/hljs-rip.js').then((r) -> r.text()).then (src) =>
+        fn = new Function('return ' + src.replace('export default ', ''))()
+        hljs.registerLanguage 'rip', fn
+        cb()
     document.head.appendChild(script)
   _onFilter: (e) -> tocFilter = e.target.value
   _getVisibleLinks: -> Array.from(document.querySelectorAll('.toc-nav .toc-group a:not([data-hidden])') or [])
