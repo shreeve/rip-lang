@@ -1673,7 +1673,7 @@ export WidgetGallery = component
             a @click: (=> @_navSection('dialog', 'prev')), "‹"
             a @click: (=> @_navSection('dialog', 'home')), "⌂"
             a @click: (=> @_navSection('dialog', 'next')), "›"
-        .section-desc "Modal with focus trap, scroll lock, escape/click-outside dismiss."
+        .section-desc "Modal with focus trap and scroll lock. Press Escape or click outside to dismiss."
         .demo-row
           .demo-label "Click to open"
           button.demo-btn @click: (=> showDialog = true)
@@ -1716,7 +1716,7 @@ export WidgetGallery = component
             a @click: (=> @_navSection('alert-dialog', 'prev')), "‹"
             a @click: (=> @_navSection('alert-dialog', 'home')), "⌂"
             a @click: (=> @_navSection('alert-dialog', 'next')), "›"
-        .section-desc "Non-dismissable modal. Cannot close with Escape or click-outside."
+        .section-desc "Non-dismissable modal — Escape and click-outside are blocked. User must choose an action."
         .demo-row
           .demo-label "Requires explicit action"
           button.demo-btn @click: (=> showAlertDialog = true)
