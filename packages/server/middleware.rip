@@ -35,7 +35,7 @@
 
 import { get, enableCorsPreflight } from '@rip-lang/server'
 import { fileURLToPath } from 'node:url'
-import { dirname } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { existsSync } from 'node:fs'
 
 export cors = (opts = {}) ->
@@ -516,10 +516,13 @@ export serve = (opts = {}) ->
       new Response (if useBr then Bun.file(bundlePathBr) else Bun.file(bundlePath)), { headers }
     serve._registered = true
 
-  # Route: {prefix}/components/* — individual .rip component files
-  get "#{prefix}/components/*", (c) ->
-    name = c.req.path.slice("#{prefix}/components/".length)
-    c.send "#{routesDir}/#{name}", 'text/x-rip; charset=UTF-8'
+  # Route: {prefix}/*.rip — serve .rip files from the app directory tree
+  appDirResolved = resolve(appDir)
+  get "#{prefix}/*.rip" (c) ->
+    name = c.req.path.slice("#{prefix}/".length)
+    path = resolve(appDir, name)
+    return unless path.startsWith(appDirResolved)
+    c.send path, 'text/x-rip; charset=UTF-8' if existsSync(path)
 
   # Route: {prefix}/bundle — all components + app data as JSON (cached + Brotli)
   bundleCache = { json: null, br: null, etag: null }
