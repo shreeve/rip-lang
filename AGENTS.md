@@ -34,12 +34,14 @@ rip server
 
 ### Current Status
 
-| Metric | Value |
-|--------|-------|
-| Version | 3.13.71 |
-| Tests | 1,436 |
-| Dependencies | Zero |
+
+| Metric       | Value                     |
+| ------------ | ------------------------- |
+| Version      | 3.13.71                   |
+| Tests        | 1,436                     |
+| Dependencies | Zero                      |
 | Self-hosting | Yes (Rip compiles itself) |
+
 
 ---
 
@@ -80,19 +82,21 @@ rip-lang/
 
 ### File Editing Rules
 
-| File | Can Edit? | Notes |
-|------|-----------|-------|
-| `src/compiler.js` | Yes | Code generator — main work here |
-| `src/lexer.js` | Yes | Lexer and rewriter |
-| `src/types.js` | Yes | Type system (lexer sidecar) |
-| `src/components.js` | Yes | Component system (compiler sidecar) |
-| `src/grammar/grammar.rip` | Carefully | Run `bun run parser` after changes |
-| `src/parser.js` | Never | Generated file |
-| `src/sourcemaps.js` | Yes | Source map generator |
-| `src/browser.js` | Yes | Browser entry point (shared-scope loader) |
-| `rip-loader.js` | Yes | Bun plugin — compiles .rip files + rewrites @rip-lang/* imports |
-| `src/grammar/solar.rip` | Never | Parser generator (given) |
-| `test/rip/*.rip` | Yes | Test files |
+
+| File                      | Can Edit? | Notes                                                           |
+| ------------------------- | --------- | --------------------------------------------------------------- |
+| `src/compiler.js`         | Yes       | Code generator — main work here                                 |
+| `src/lexer.js`            | Yes       | Lexer and rewriter                                              |
+| `src/types.js`            | Yes       | Type system (lexer sidecar)                                     |
+| `src/components.js`       | Yes       | Component system (compiler sidecar)                             |
+| `src/grammar/grammar.rip` | Carefully | Run `bun run parser` after changes                              |
+| `src/parser.js`           | Never     | Generated file                                                  |
+| `src/sourcemaps.js`       | Yes       | Source map generator                                            |
+| `src/browser.js`          | Yes       | Browser entry point (shared-scope loader)                       |
+| `rip-loader.js`           | Yes       | Bun plugin — compiles .rip files + rewrites @rip-lang/* imports |
+| `src/grammar/solar.rip`   | Never     | Parser generator (given)                                        |
+| `test/rip/*.rip`          | Yes       | Test files                                                      |
+
 
 ---
 
@@ -227,13 +231,15 @@ Complete node type reference:
 
 Token: `[tag, val]` array with properties:
 
-| Property | Type | Purpose |
-|----------|------|---------|
-| `.pre` | number | Whitespace count before this token |
-| `.data` | object/null | Metadata: `{await, predicate, quote, invert, parsedValue, ...}` |
-| `.loc` | `{r, c, n}` | Row, column, length |
-| `.spaced` | boolean | Sugar for `.pre > 0` |
-| `.newLine` | boolean | Preceded by a newline |
+
+| Property   | Type        | Purpose                                                         |
+| ---------- | ----------- | --------------------------------------------------------------- |
+| `.pre`     | number      | Whitespace count before this token                              |
+| `.data`    | object/null | Metadata: `{await, predicate, quote, invert, parsedValue, ...}` |
+| `.loc`     | `{r, c, n}` | Row, column, length                                             |
+| `.spaced`  | boolean     | Sugar for `.pre > 0`                                            |
+| `.newLine` | boolean     | Preceded by a newline                                           |
+
 
 Identifier suffixes: `!` sets `.data.await = true` (dammit operator), `?` sets `.data.predicate = true` (existence check). `as!` in for-loops emits `FORASAWAIT` for `for await`.
 
@@ -245,6 +251,7 @@ generate(sexpr, context = 'statement')
 ```
 
 **Example - Comprehensions:**
+
 - **Value context** (result used) -> IIFE with array building
 - **Statement context** (result discarded) -> Plain loop
 
@@ -263,6 +270,7 @@ static GENERATORS = {
 ```
 
 To modify a feature:
+
 1. Find the operator in `GENERATORS` table
 2. Locate the generator method
 3. Modify the method
@@ -326,15 +334,17 @@ if (Array.isArray(body) && body[0] === 'block') {
 
 Rip provides reactivity as **language-level operators**, not library imports:
 
-| Operator | Name | Mnemonic | Output |
-|----------|------|----------|--------|
-| `=` | Assign | "gets value" | `let x; x = value` |
-| `:=` | State | "gets state" | `const x = __state(value)` |
-| `~=` | Computed | "always equals" | `const x = __computed(() => expr)` |
-| `~>` | Effect | "always calls" | `__effect(() => { ... })` or `const x = __effect(...)` |
-| `=!` | Readonly | "equals, dammit!" | `const x = value` (just const) |
-| `offer` | Context provide | "share with descendants" | `__state(value)` + `setContext('name', this.name)` |
-| `accept` | Context consume | "receive from ancestor" | `this.name = getContext('name')` |
+
+| Operator | Name            | Mnemonic                 | Output                                                 |
+| -------- | --------------- | ------------------------ | ------------------------------------------------------ |
+| `=`      | Assign          | "gets value"             | `let x; x = value`                                     |
+| `:=`     | State           | "gets state"             | `const x = __state(value)`                             |
+| `~=`     | Computed        | "always equals"          | `const x = __computed(() => expr)`                     |
+| `~>`     | Effect          | "always calls"           | `__effect(() => { ... })` or `const x = __effect(...)` |
+| `=!`     | Readonly        | "equals, dammit!"        | `const x = value` (just const)                         |
+| `offer`  | Context provide | "share with descendants" | `__state(value)` + `setContext('name', this.name)`     |
+| `accept` | Context consume | "receive from ancestor"  | `this.name = getContext('name')`                       |
+
 
 The reactive runtime is embedded in compiler.js and only included when needed.
 
@@ -356,11 +366,13 @@ export TabContent = component
 
 **Three-tier state model:**
 
-| Tier | Scope | Mechanism | Example |
-|------|-------|-----------|---------|
-| **Props** | Parent → child | `value <=> x`, `placeholder: "..."` | Configuring a Select |
-| **Offer/Accept** | Ancestor → subtree | `offer`/`accept` keywords | Tabs sharing `active` with panels |
-| **Stash** | Application-wide | Shared reactive proxy | User email, auth state, theme |
+
+| Tier             | Scope              | Mechanism                           | Example                           |
+| ---------------- | ------------------ | ----------------------------------- | --------------------------------- |
+| **Props**        | Parent → child     | `value <=> x`, `placeholder: "..."` | Configuring a Select              |
+| **Offer/Accept** | Ancestor → subtree | `offer`/`accept` keywords           | Tabs sharing `active` with panels |
+| **Stash**        | Application-wide   | Shared reactive proxy               | User email, auth state, theme     |
+
 
 Implementation: `offer`/`accept` are handled as context-sensitive keywords via `classifyKeyword` override in `src/components.js`. They only tokenize as `OFFER`/`ACCEPT` inside component bodies; elsewhere they're plain identifiers. The grammar rules live in `ComponentLine`. The runtime uses the existing `setContext`/`getContext`/`_parent` chain — zero new runtime code.
 
@@ -382,6 +394,7 @@ Combobox query <=> @search, value <=> @selected
 ```
 
 `value <=> username` compiles to two things:
+
 1. **State → DOM**: `__effect(() => { el.value = username; })`
 2. **DOM → State**: `el.addEventListener('input', (e) => { username = e.target.value; })`
 
@@ -422,30 +435,32 @@ div                       div(->
 ```
 
 Key mechanisms:
-- **`startsWithTag`** — backward scan to determine if current line starts with a template tag
-- **`pendingCallEnds`** — indent-level stack for matching injected CALL_START/CALL_END pairs
-- **`fromThen` skip** — `normalizeLines` creates `fromThen` INDENTs for `if x then y else z`; these are always inline values, never template nesting
+
+- `**startsWithTag**` — backward scan to determine if current line starts with a template tag
+- `**pendingCallEnds**` — indent-level stack for matching injected CALL_START/CALL_END pairs
+- `**fromThen` skip** — `normalizeLines` creates `fromThen` INDENTs for `if x then y else z`; these are always inline values, never template nesting
 - **Data attribute sigil** — `$open: true` → `"data-open": true`
 
 ### Component Codegen (CodeGenerator side)
 
 Generates fine-grained DOM operations at compile time (no virtual DOM):
-- **`buildRender`** — entry point, initializes counters, create/setup line arrays, and tracking state
-- **`generateNode`** — main dispatch for all render-tree nodes (elements, text, conditionals, loops, components)
-- **`generateConditional`** — produces block factories for if/else with transition-aware enter/leave
-- **`generateTemplateLoop`** — emits a `__reconcile` call with LIS-based keyed diffing
-- **`emitBlockFactory`** — shared factory emitter (c/m/p/d + `_first` + `_s` + `_t`) used by both conditionals and loops
+
+- `**buildRender`** — entry point, initializes counters, create/setup line arrays, and tracking state
+- `**generateNode**` — main dispatch for all render-tree nodes (elements, text, conditionals, loops, components)
+- `**generateConditional**` — produces block factories for if/else with transition-aware enter/leave
+- `**generateTemplateLoop**` — emits a `__reconcile` call with LIS-based keyed diffing
+- `**emitBlockFactory**` — shared factory emitter (c/m/p/d + `_first` + `_s` + `_t`) used by both conditionals and loops
 
 ### Factory Mode (`_factoryMode`)
 
 Block factories need local variables and `ctx` references instead of `this._elN` and `this.member`. Rather than generating with `this.` and regex-replacing after, the codegen uses a **factory mode** flag:
 
-- **`_factoryMode`** (bool) — when true, generation emits `_el0` (local) and `ctx.member` instead of `this._el0` and `this.member`
-- **`_self`** (getter) — returns `'this'` or `'ctx'` based on mode
-- **`_factoryVars`** (Set) — tracks variables created during factory generation (for `let` declarations)
-- **`_fragChildren`** (Map) — tracks fragment-to-children mappings (for proper removal after insertBefore)
-- **`_pushEffect(body)`** — emits `__effect(...)` normally or `disposers.push(__effect(...))` in factory mode
-- **`_loopVarStack`** — accumulates loop variables for threading through nested factories
+- `**_factoryMode`** (bool) — when true, generation emits `_el0` (local) and `ctx.member` instead of `this._el0` and `this.member`
+- `**_self**` (getter) — returns `'this'` or `'ctx'` based on mode
+- `**_factoryVars**` (Set) — tracks variables created during factory generation (for `let` declarations)
+- `**_fragChildren**` (Map) — tracks fragment-to-children mappings (for proper removal after insertBefore)
+- `**_pushEffect(body)**` — emits `__effect(...)` normally or `disposers.push(__effect(...))` in factory mode
+- `**_loopVarStack**` — accumulates loop variables for threading through nested factories
 
 Factory mode is entered in `generateConditionBranch` and `generateTemplateLoop` via save/restore of `[_createLines, _setupLines, _factoryMode, _factoryVars]`.
 
@@ -481,6 +496,7 @@ Loop rendering uses a runtime `__reconcile` function instead of inlined reconcil
 5. **Phase 4 — LIS**: Longest Increasing Subsequence for minimal DOM moves on genuine reorders
 
 Compile-time optimizations:
+
 - **Static blocks** (`_s: true`) — when `p()` has no effects, skip patch calls entirely
 - **Array-based storage** — `state.blocks[]` for O(1) index lookup (no persistent Map)
 - **Direct items-as-keys** — `state.keys = items.slice()` for default case (no keyFn allocation)
@@ -488,14 +504,16 @@ Compile-time optimizations:
 ### Error Boundaries
 
 `onError` lifecycle hook catches errors and walks the `_parent` chain:
+
 - **Constructor**: wraps `_init` in try-catch, calls `__handleComponentError(e, this)`
 - **Mount**: wraps `_create`/`_setup`/`mounted` in try-catch
 - **Child components**: codegen wraps child `_setup`/`mounted` calls in try-catch at compile time
-- **`__handleComponentError(error, component)`**: walks `_parent` to find nearest `onError` handler; rethrows if none found
+- `**__handleComponentError(error, component)`**: walks `_parent` to find nearest `onError` handler; rethrows if none found
 
 ### Transitions (`~tilde` syntax)
 
 CSS enter/leave transitions on conditional blocks:
+
 - **Syntax**: `div ~fade` — tilde modifier on elements in render blocks
 - **Rewriter**: converts `UNARY_MATH ~ + IDENTIFIER fade` to `PROPERTY __transition__: STRING "fade"`
 - **Codegen**: `generateAttributes` intercepts `__transition__` → emits `this._t = "fade"` on the block
@@ -541,6 +559,7 @@ enum Status
 ### Architecture
 
 All type logic lives in `src/types.js` (lexer sidecar):
+
 - `installTypeSupport(Lexer)` — adds `rewriteTypes()` to the lexer
 - `emitTypes(tokens)` — generates `.d.ts` from annotated tokens
 - `generateEnum()` — generates runtime JS for enums
@@ -598,11 +617,13 @@ The Rip extension (`packages/vscode/`) provides IDE support for VS Code and Curs
 
 ### Settings
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `rip.types.generateOnSave` | `true` | Auto-generate `.d.ts` on save |
-| `rip.types.intellisense` | `true` | Enable autocomplete/hover/go-to-definition |
-| `rip.compiler.path` | (auto) | Path to the `rip` compiler binary |
+
+| Setting                    | Default | Description                                |
+| -------------------------- | ------- | ------------------------------------------ |
+| `rip.types.generateOnSave` | `true`  | Auto-generate `.d.ts` on save              |
+| `rip.types.intellisense`   | `true`  | Enable autocomplete/hover/go-to-definition |
+| `rip.compiler.path`        | (auto)  | Path to the `rip` compiler binary          |
+
 
 ### Publishing
 
@@ -685,11 +706,13 @@ test/rip/
 
 ## Documentation Map
 
-| File | Purpose |
-|------|---------|
-| **README.md** | User guide, features, installation |
-| **docs/RIP-LANG.md** | Full language reference (syntax, operators, reactivity, packages, future ideas) |
-| **docs/RIP-TYPES.md** | Type system specification |
+
+| File                  | Purpose                                                                         |
+| --------------------- | ------------------------------------------------------------------------------- |
+| **README.md**         | User guide, features, installation                                              |
+| **docs/RIP-LANG.md**  | Full language reference (syntax, operators, reactivity, packages, future ideas) |
+| **docs/RIP-TYPES.md** | Type system specification                                                       |
+
 
 ---
 
@@ -706,18 +729,21 @@ built-in validators, file serving (`@send`), middleware composition,
 multi-worker process manager, hot reloading, automatic HTTPS, mDNS service
 discovery, and request queueing.
 
-| File | Lines | Role |
-|------|-------|------|
-| `api.rip` | ~662 | Core framework: routing, validation, `read()`, `session`, `@send`, server |
-| `middleware.rip` | ~559 | Built-in middleware: cors, logger, sessions, compression, security |
-| `server.rip` | ~1,323 | CLI, workers, load balancing, TLS, mDNS |
-| `server.html` | ~420 | Built-in dashboard UI |
+
+| File             | Lines  | Role                                                                      |
+| ---------------- | ------ | ------------------------------------------------------------------------- |
+| `api.rip`        | ~662   | Core framework: routing, validation, `read()`, `session`, `@send`, server |
+| `middleware.rip` | ~559   | Built-in middleware: cors, logger, sessions, compression, security        |
+| `server.rip`     | ~1,323 | CLI, workers, load balancing, TLS, mDNS                                   |
+| `server.html`    | ~420   | Built-in dashboard UI                                                     |
+
 
 Key concepts:
-- **`@` magic** — Handlers use `@req`, `@json()`, `@send()`, `@session` (bound via `this`)
-- **`read()`** — Validates params/body with 37 built-in validators
-- **`@send(path, type?)`** — Serve files with auto-detected MIME types via `Bun.file()`
-- **`use()`** — Koa-style middleware composition with `next()`
+
+- `**@` magic** — Handlers use `@req`, `@json()`, `@send()`, `@session` (bound via `this`)
+- `**read()`** — Validates params/body with 37 built-in validators
+- `**@send(path, type?)**` — Serve files with auto-detected MIME types via `Bun.file()`
+- `**use()**` — Koa-style middleware composition with `next()`
 
 ```coffee
 import { get, use, start, notFound } from '@rip-lang/server'
@@ -739,16 +765,19 @@ Zero-build reactive web framework. The browser loads `rip.min.js`
 and renders with fine-grained DOM updates. Uses Rip's built-in reactive
 primitives directly — one signal graph shared between framework and components.
 
-| File | Lines | Role |
-|------|-------|------|
-| `ui.rip` | ~965 | Unified framework: stash, router (path + hash), renderer, launch |
-| `serve.rip` | ~93 | Server middleware: framework bundle, app bundle, SSE hot-reload |
+
+| File        | Lines | Role                                                             |
+| ----------- | ----- | ---------------------------------------------------------------- |
+| `ui.rip`    | ~965  | Unified framework: stash, router (path + hash), renderer, launch |
+| `serve.rip` | ~93   | Server middleware: framework bundle, app bundle, SSE hot-reload  |
+
 
 Key concepts:
+
 - **Shared scope** — Inline `<script type="text/rip">` tags are compiled and executed in one shared IIFE. Components use `export` to make themselves visible to other tags; exports are stripped to `const` declarations in the shared scope.
 - **Server mode** — When `data-launch` is present on a script tag, the `serve` middleware provides the bundle. `use serve dir: dir` registers routes for the framework bundle (`/rip/rip.min.js`), app bundle (`/{app}/bundle`), and SSE hot-reload (`/{app}/watch`).
-- **`launch(appBase)`** — Client-side: fetches the app bundle, hydrates the stash, starts the router and renderer
-- **`component` / `render`** — Two keywords added to Rip for defining components with reactive state (`:=`), computed (`~=`), effects (`~>`)
+- `**launch(appBase)`** — Client-side: fetches the app bundle, hydrates the stash, starts the router and renderer
+- `**component` / `render**` — Two keywords added to Rip for defining components with reactive state (`:=`), computed (`~=`), effects (`~>`)
 - **File-based routing** — `pages/users/[id].rip` → `/users/:id` (Next.js-style). Shared components go in `components/`.
 - **Unified stash** — Deep reactive proxy with path navigation, uses `__state` from Rip's built-in reactive runtime
 - **Hot reload** — Server sends notify-only SSE events, browser invalidates + refetches + remounts
@@ -777,25 +806,28 @@ start port: 3000
 ### Rip UI (`packages/ui/`) — Headless UI Components
 
 Accessible, headless interactive components written in Rip. Zero dependencies,
-zero CSS. Every widget exposes `$` attributes (compiled to `data-*` in HTML) for styling and handles
+zero CSS. Every widget exposes `$` attributes (compiled to `data-`* in HTML) for styling and handles
 keyboard interactions per WAI-ARIA Authoring Practices. Widgets are plain
 `.rip` source files — no build step. The browser compiles them on the fly.
 
-| File | Lines | What It Does |
-|------|-------|-------------|
-| `checkbox.rip` | 33 | Checkbox and switch toggle |
-| `toast.rip` | 44 | Auto-dismiss notification, ARIA live region |
-| `accordion.rip` | 92 | Expand/collapse, single or multiple |
-| `dialog.rip` | 93 | Modal: focus trap, scroll lock, escape/click-outside dismiss |
-| `tabs.rip` | 92 | Tab panel with roving tabindex, orientation, activation modes |
-| `popover.rip` | 116 | Anchored floating content with data-trigger/data-content |
-| `tooltip.rip` | 99 | Hover/focus tooltip with delay and positioning |
-| `menu.rip` | 132 | Dropdown action menu with hidden-slot pattern |
-| `combobox.rip` | 152 | Filterable input + listbox |
-| `select.rip` | 182 | Dropdown with typeahead, ARIA listbox |
-| `grid.rip` | 901 | Virtual-scrolling data grid (100K+ rows at 60fps) |
+
+| File            | Lines | What It Does                                                  |
+| --------------- | ----- | ------------------------------------------------------------- |
+| `checkbox.rip`  | 33    | Checkbox and switch toggle                                    |
+| `toast.rip`     | 44    | Auto-dismiss notification, ARIA live region                   |
+| `accordion.rip` | 92    | Expand/collapse, single or multiple                           |
+| `dialog.rip`    | 93    | Modal: focus trap, scroll lock, escape/click-outside dismiss  |
+| `tabs.rip`      | 92    | Tab panel with roving tabindex, orientation, activation modes |
+| `popover.rip`   | 116   | Anchored floating content with data-trigger/data-content      |
+| `tooltip.rip`   | 99    | Hover/focus tooltip with delay and positioning                |
+| `menu.rip`      | 132   | Dropdown action menu with hidden-slot pattern                 |
+| `combobox.rip`  | 152   | Filterable input + listbox                                    |
+| `select.rip`    | 182   | Dropdown with typeahead, ARIA listbox                         |
+| `grid.rip`      | 901   | Virtual-scrolling data grid (100K+ rows at 60fps)             |
+
 
 **Widget conventions:**
+
 - All DOM refs use `ref: "_name"` — never `div._name` (dot syntax sets CSS classes)
 - Trigger elements: `_trigger` (select, menu, popover, tooltip)
 - Dropdown lists: `_list` (select, combobox, menu)
@@ -810,59 +842,59 @@ keyboard interactions per WAI-ARIA Authoring Practices. Widgets are plain
 - Dropdown positioning: `position:fixed;visibility:hidden` inline, then `_position()` via rAF
 - Focus override: `preventScroll: true` globally at module scope (outside component body)
 - Reactive arrays over helper functions: the state *is* the array, the operation
-  *is* assignment, there's nothing to abstract. `toasts = [...toasts, { message: "Saved!" }]`
-  — no `addToast()` helpers, no manager objects, no import ceremony. This applies to every
-  widget that manages a list (toasts, tabs, accordion items). React needs helper APIs because
-  its state model forces it; Rip's reactive assignment eliminates the need.
+*is* assignment, there's nothing to abstract. `toasts = [...toasts, { message: "Saved!" }]`
+— no `addToast()` helpers, no manager objects, no import ceremony. This applies to every
+widget that manages a list (toasts, tabs, accordion items). React needs helper APIs because
+its state model forces it; Rip's reactive assignment eliminates the need.
 - Shared-scope naming: in the browser, all `.rip` files loaded via `data-src` share one
-  scope. Component names (capitalized) don't collide because they're unique. But lowercase
-  module-scope variables (`collator`, `nextId`, etc.) will collide if two files use the same
-  name. Prefix with the widget name: `acCollator` not `collator`. Or move the variable inside
-  the component body where it's scoped to `this`.
+scope. Component names (capitalized) don't collide because they're unique. But lowercase
+module-scope variables (`collator`, `nextId`, etc.) will collide if two files use the same
+name. Prefix with the widget name: `acCollator` not `collator`. Or move the variable inside
+the component body where it's scoped to `this`.
 - **Don't shadow prop names with local variables** — this is the #1 most
-  dangerous trap in Rip components. Inside component methods, the compiler
-  rewrites ANY identifier matching a prop/state name to `this.name.value`.
-  A local variable named `items` will be treated as `this.items.value` if
-  `@items` is a prop — meaning `items = getItems()` silently **overwrites
-  your reactive state**. The symptom is usually far from the cause (e.g.,
-  a list vanishing on keyboard navigation because a helper method corrupted
-  the data source). Always use distinct names for locals: `opts` not `items`,
-  `tick` not `step`, `fn` not `filter`. When debugging mysterious state
-  corruption, check compiled JS output (`rip -c file.rip`) and search for
-  unexpected `this.propName.value =` assignments.
+dangerous trap in Rip components. Inside component methods, the compiler
+rewrites ANY identifier matching a prop/state name to `this.name.value`.
+A local variable named `items` will be treated as `this.items.value` if
+`@items` is a prop — meaning `items = getItems()` silently **overwrites
+your reactive state**. The symptom is usually far from the cause (e.g.,
+a list vanishing on keyboard navigation because a helper method corrupted
+the data source). Always use distinct names for locals: `opts` not `items`,
+`tick` not `step`, `fn` not `filter`. When debugging mysterious state
+corruption, check compiled JS output (`rip -c file.rip`) and search for
+unexpected `this.propName.value =` assignments.
 - **Use explicit index names in nested render loops** — when a `for` loop
-  in a render block has no explicit index, the compiler auto-generates `i`.
-  Nested loops both get `i`, producing a block factory with duplicate
-  parameters (`function create_block(ctx, inner, i, outer, i)`) which is a
-  syntax error in strict mode. Fix: always name both indices explicitly
-  (`for outer, oIdx in list` / `for inner, iIdx in sublist`). Single
-  (non-nested) loops are fine without an explicit index.
+in a render block has no explicit index, the compiler auto-generates `i`.
+Nested loops both get `i`, producing a block factory with duplicate
+parameters (`function create_block(ctx, inner, i, outer, i)`) which is a
+syntax error in strict mode. Fix: always name both indices explicitly
+(`for outer, oIdx in list` / `for inner, iIdx in sublist`). Single
+(non-nested) loops are fine without an explicit index.
 - Don't use `value: @prop` on `<input>` elements: Rip's smart auto-binding writes the
-  input's string value back to the signal, corrupting numeric state. Use a `_ready`-guarded
-  `~>` effect to push values to the input, and `@blur`/`@input` handlers to parse back.
+input's string value back to the signal, corrupting numeric state. Use a `_ready`-guarded
+`~>` effect to push values to the input, and `@blur`/`@input` handlers to parse back.
 - Computed values (`~=`) are read-only: you cannot assign to them. To invalidate a computed
-  from an event handler or observer, bump a reactive counter that the computed reads:
-  `_tick := 0` then `_tick = _tick + 1` in the handler.
+from an event handler or observer, bump a reactive counter that the computed reads:
+`_tick := 0` then `_tick = _tick + 1` in the handler.
 - Go imperative for continuous DOM tracking: for scroll position, drag offsets, resize
-  dimensions, and anything that updates at 60fps — don't use reactive computeds or
-  interpolated style strings. Instead, read the DOM, compute, and write the DOM directly
-  in a single method (`_updateThumb()`, `_renderRows()`). Reactive computeds cache values
-  and can go stale between the tick that triggered them and the DOM read that follows.
-  The Grid uses this pattern for virtual scrolling; the ScrollArea uses it for thumb
-  positioning. Rule of thumb: if the data source is a DOM property (`scrollTop`,
-  `clientHeight`, `getBoundingClientRect`), go imperative. If it's reactive state
-  (`:=`, `~=`), use the reactive system.
+dimensions, and anything that updates at 60fps — don't use reactive computeds or
+interpolated style strings. Instead, read the DOM, compute, and write the DOM directly
+in a single method (`_updateThumb()`, `_renderRows()`). Reactive computeds cache values
+and can go stale between the tick that triggered them and the DOM read that follows.
+The Grid uses this pattern for virtual scrolling; the ScrollArea uses it for thumb
+positioning. Rule of thumb: if the data source is a DOM property (`scrollTop`,
+`clientHeight`, `getBoundingClientRect`), go imperative. If it's reactive state
+(`:=`, `~=`), use the reactive system.
 - Put side effects in effect branches, not just methods: when a prop like `@open`
-  is controlled via `<=>`, the consumer can set it directly (`showDrawer = false`)
-  without calling `close()`. If scroll lock, focus restore, or cleanup only lives
-  in `close()`, it won't run. Use `~> if @open ... else ...` so the effect handles
-  all state transitions regardless of how the signal changed. Methods like `close()`
-  should just set state (`@open = false`) and emit events — the effect does the work.
-- **`x.y` in render blocks is tag syntax:** A bare `item.textContent` on its
-  own line in a render block is parsed as a tag named `item` with CSS class
-  `textContent`, not a property access. Use the `=` prefix to output
-  expressions as text: `= item.textContent`. This works for any case,
-  including HTML tag names like `= nav.dataset.trigger` or `= link.href`.
+is controlled via `<=>`, the consumer can set it directly (`showDrawer = false`)
+without calling `close()`. If scroll lock, focus restore, or cleanup only lives
+in `close()`, it won't run. Use `~> if @open ... else ...` so the effect handles
+all state transitions regardless of how the signal changed. Methods like `close()`
+should just set state (`@open = false`) and emit events — the effect does the work.
+- `**x.y` in render blocks is tag syntax:** A bare `item.textContent` on its
+own line in a render block is parsed as a tag named `item` with CSS class
+`textContent`, not a property access. Use the `=` prefix to output
+expressions as text: `= item.textContent`. This works for any case,
+including HTML tag names like `= nav.dataset.trigger` or `= link.href`.
 
 **Integration:** Add the widgets directory to your serve middleware:
 
@@ -876,6 +908,7 @@ All widgets become available by name (`Select`, `Dialog`, `Grid`, etc.) in
 the shared scope — no imports needed.
 
 **Grid highlights (Google Sheets-grade UX):**
+
 - DOM recycling: pooled `<tr>` elements, `textContent` updates, zero allocation per scroll frame
 - Sheets-style selection: anchor stays at mousedown, swap on mouseup, selection overlay div
 - Full keyboard: arrows, Tab, Enter/F2 edit, Ctrl+Arrow data-boundary jump, PageUp/Down, Ctrl+A, type-to-edit
@@ -907,17 +940,19 @@ start port: 3005
 Hot reload: `rip server` from `packages/ui/` gives auto-HTTPS + mDNS
 (`https://widgets.local`). The browser connects to the server's built-in
 `/watch` SSE endpoint. Two reload mechanisms work together:
-- **`.rip` file changes**: Manager detects the change, does a rolling restart.
-  The SSE connection drops and EventSource auto-reconnects. The browser
-  script detects the reconnection and calls `location.reload()`.
-- **`.html`/`.css` changes**: The serve middleware's `watchDirs` (registered
-  via `components: ['.']` and `watch: true`) detects the change and broadcasts
-  a `reload` SSE event directly — no rolling restart needed. The event's
-  `data` field distinguishes change types: `.css` changes send `data: styles`
-  (client refreshes stylesheets only, no full page reload) while `.html`/`.rip`
-  changes send `data: page` (full page reload).
+
+- `**.rip` file changes**: Manager detects the change, does a rolling restart.
+The SSE connection drops and EventSource auto-reconnects. The browser
+script detects the reconnection and calls `location.reload()`.
+- `**.html`/`.css` changes**: The serve middleware's `watchDirs` (registered
+via `components: ['.']` and `watch: true`) detects the change and broadcasts
+a `reload` SSE event directly — no rolling restart needed. The event's
+`data` field distinguishes change types: `.css` changes send `data: styles`
+(client refreshes stylesheets only, no full page reload) while `.html`/`.rip`
+changes send `data: page` (full page reload).
 
 The browser reload script is in `index.html`:
+
 ```html
 <script>
   let ready = false;
@@ -956,84 +991,86 @@ Building these widgets also discovered and fixed real compiler bugs — the
 widgets are both the product and the test suite.
 
 **Rip-specific gotchas learned building widgets:**
+
 - **Lifecycle hooks:** The recognized hooks are `beforeMount`, `mounted`,
-  `updated`, `beforeUnmount`, `unmounted`, `onError`. Nothing else.
-  `onMount` compiles as a regular method and never fires. This is the #1
-  trap for widget authors.
-- **`->` inside components:** The compiler auto-converts all thin arrows
-  (`->`) to fat arrows (`=>`) inside component contexts. `this` binding is
-  always preserved. Use `->` everywhere — it's cleaner and the compiler
-  handles it. **Caveat:** If you need `this` to refer to a DOM element (e.g.,
-  patching `HTMLElement.prototype.focus`), put the code OUTSIDE the component
-  body at module scope — `->` stays as `->` there and `this` refers to the
-  caller.
+`updated`, `beforeUnmount`, `unmounted`, `onError`. Nothing else.
+`onMount` compiles as a regular method and never fires. This is the #1
+trap for widget authors.
+- `**->` inside components:** The compiler auto-converts all thin arrows
+(`->`) to fat arrows (`=>`) inside component contexts. `this` binding is
+always preserved. Use `->` everywhere — it's cleaner and the compiler
+handles it. **Caveat:** If you need `this` to refer to a DOM element (e.g.,
+patching `HTMLElement.prototype.focus`), put the code OUTSIDE the component
+body at module scope — `->` stays as `->` there and `this` refers to the
+caller.
 - **Auto-wired event handlers:** Methods named `onClick`, `onKeydown`,
-  etc. are automatically bound to the root element — no `@click: @onClick`
-  boilerplate needed. Use an explicit binding only when the handler differs
-  from the `on*` method. Child element bindings coexist via normal DOM
-  propagation; use `e.stopPropagation()` to suppress the root handler.
-- **`:=` vs `=` for internal storage:** Use `:=` (reactive state) only for
-  values that should trigger DOM updates. For internal bookkeeping (pools,
-  caches, timer IDs, saved DOM references), use `=` (plain assignment).
-  Reactive state has overhead and can cause unwanted effect re-runs.
-- **`_ready` flag pattern:** Effects run during `_init` (before `_create`),
-  so `ref:` DOM elements don't exist yet. Add `_ready := false` to state,
-  set `_ready = true` in `mounted`, and guard effects with
-  `return unless _ready`. The reactive `_ready` flag triggers the effect
-  to re-run after mount when DOM refs are available. Used by Tabs,
-  Accordion, and Grid.
-- **`ref:` is not reactive:** `ref: "_foo"` sets `this._foo` as a plain
-  property during `_create`, not a reactive signal. Effects cannot track
-  when refs are set. Use the `_ready` pattern above to bridge the gap.
-- **`offer`/`accept` are context-sensitive:** They are only keywords inside
-  `component` bodies. Outside components, `offer` and `accept` are plain
-  identifiers (safe to use as variable names in server code, etc.).
+etc. are automatically bound to the root element — no `@click: @onClick`
+boilerplate needed. Use an explicit binding only when the handler differs
+from the `on`* method. Child element bindings coexist via normal DOM
+propagation; use `e.stopPropagation()` to suppress the root handler.
+- `**:=` vs `=` for internal storage:** Use `:=` (reactive state) only for
+values that should trigger DOM updates. For internal bookkeeping (pools,
+caches, timer IDs, saved DOM references), use `=` (plain assignment).
+Reactive state has overhead and can cause unwanted effect re-runs.
+- `**_ready` flag pattern:** Effects run during `_init` (before `_create`),
+so `ref:` DOM elements don't exist yet. Add `_ready := false` to state,
+set `_ready = true` in `mounted`, and guard effects with
+`return unless _ready`. The reactive `_ready` flag triggers the effect
+to re-run after mount when DOM refs are available. Used by Tabs,
+Accordion, and Grid.
+- `**ref:` is not reactive:** `ref: "_foo"` sets `this._foo` as a plain
+property during `_create`, not a reactive signal. Effects cannot track
+when refs are set. Use the `_ready` pattern above to bridge the gap.
+- `**offer`/`accept` are context-sensitive:** They are only keywords inside
+`component` bodies. Outside components, `offer` and `accept` are plain
+identifiers (safe to use as variable names in server code, etc.).
 - **Imperative DOM in effects:** For performance-critical paths (Grid's
-  60fps scroll), bypass the reactive render loop and do imperative DOM
-  manipulation inside `~>` effects. The effect still triggers reactively
-  but the DOM updates use `textContent`/`nodeValue`/`replaceChildren`.
-- **`$` sigil for data attributes:** In render blocks, use `$open`, `$selected`,
-  etc. — the compiler expands `$` to `data-` in the generated HTML. Consumers
-  style with CSS attribute selectors (`[data-open]`, `[data-selected]`). Widgets
-  never apply visual styles — they only set semantic state. The `data-` form
-  still works but `$` is preferred for brevity.
-- **`slot` in render blocks:** The bare `slot` tag in a component render
-  block projects `this.children` (the DOM content passed by the parent).
-  It does NOT create an HTML `<slot>` element — Shadow DOM is not used.
-- **`@event:` handlers on child components:** `@change: handler` on a
-  child component compiles to `addEventListener('change', handler)` on
-  the child's root DOM element. The child dispatches events via
-  `@emit 'eventName', detail` which creates a `CustomEvent` on `this._root`.
-- **`emit()` method:** Every component has an `emit(name, detail)` method
-  that dispatches a `CustomEvent` with `{ detail, bubbles: true }` on the
-  component's root element. Use it for non-binding event communication.
-- **`_root` on child components:** When a parent instantiates a child
-  component, `_root` is set during `_create()` (via
-  `el = inst._root = inst._create()`). This is necessary for `emit()` to
-  work — without `_root`, `emit` silently does nothing.
-- **`rip.min.js` must be rebuilt after `components.js` changes:** The
-  browser bundle includes the component runtime. After modifying
-  `src/components.js`, run `bun run build` to regenerate `rip.min.js`.
-  Then restart `rip server` to pick up the new bundle.
+60fps scroll), bypass the reactive render loop and do imperative DOM
+manipulation inside `~>` effects. The effect still triggers reactively
+but the DOM updates use `textContent`/`nodeValue`/`replaceChildren`.
+- `**$` sigil for data attributes:** In render blocks, use `$open`, `$selected`,
+etc. — the compiler expands `$` to `data-` in the generated HTML. Consumers
+style with CSS attribute selectors (`[data-open]`, `[data-selected]`). Widgets
+never apply visual styles — they only set semantic state. The `data-` form
+still works but `$` is preferred for brevity.
+- `**slot` in render blocks:** The bare `slot` tag in a component render
+block projects `this.children` (the DOM content passed by the parent).
+It does NOT create an HTML `<slot>` element — Shadow DOM is not used.
+- `**@event:` handlers on child components:** `@change: handler` on a
+child component compiles to `addEventListener('change', handler)` on
+the child's root DOM element. The child dispatches events via
+`@emit 'eventName', detail` which creates a `CustomEvent` on `this._root`.
+- `**emit()` method:** Every component has an `emit(name, detail)` method
+that dispatches a `CustomEvent` with `{ detail, bubbles: true }` on the
+component's root element. Use it for non-binding event communication.
+- `**_root` on child components:** When a parent instantiates a child
+component, `_root` is set during `_create()` (via
+`el = inst._root = inst._create()`). This is necessary for `emit()` to
+work — without `_root`, `emit` silently does nothing.
+- `**rip.min.js` must be rebuilt after `components.js` changes:** The
+browser bundle includes the component runtime. After modifying
+`src/components.js`, run `bun run build` to regenerate `rip.min.js`.
+Then restart `rip server` to pick up the new bundle.
 
 **Documentation in `packages/ui/`:**
+
 - `README.md` — Usage examples, API for every widget, styling guide (Open Props, CSS patterns, dark mode)
 - `NOTES.md` — Architecture rationale, behavioral primitives, per-widget implementation notes, known issues, roadmap
 
 ### Package Development
 
-Packages use `workspace:*` linking in the root `package.json`. After modifying
+Packages use `workspace:`* linking in the root `package.json`. After modifying
 a package locally, run `bun install` from the project root to ensure symlinks
 are correct. Key patterns:
 
 - Packages written in Rip (`.rip` files) need the Rip loader — run from the
-  project root where `bunfig.toml` is located, or use `rip server`
+project root where `bunfig.toml` is located, or use `rip server`
 - `import.meta.dir` resolves to the package's actual filesystem path (important
-  for serving files)
+for serving files)
 - `@rip-lang/server` handlers bind `this` to the context object — use `@send`,
-  `@json`, `@req`, etc.
+`@json`, `@req`, etc.
 
-**`rip server` uses the global install:** The `rip server` command runs
+`**rip server` uses the global install:** The `rip server` command runs
 `@rip-lang/server/server.rip` from the **globally installed** package
 (`~/.bun/install/global/node_modules/@rip-lang/server/`), not the workspace.
 Changes to `packages/server/` won't take effect until published. For
@@ -1073,14 +1110,16 @@ in the shared scope).
 
 ### HTML Attributes
 
-| Attribute | On | Purpose |
-|-----------|-----|---------|
-| `data-src` | runtime script | Whitespace-separated URLs of `.rip` files to fetch and compile |
-| `data-mount` | runtime script | Component name to instantiate and mount after compilation |
-| `data-target` | runtime script | Mount target selector (default: `'body'`), pairs with `data-mount` |
-| `data-launch` | runtime script | Bundle URL for server mode — triggers `launch()` with full app lifecycle |
-| `data-hash` | runtime script | Enable hash-based routing (for `data-launch` apps) |
+
+| Attribute      | On             | Purpose                                                                                               |
+| -------------- | -------------- | ----------------------------------------------------------------------------------------------------- |
+| `data-src`     | runtime script | Whitespace-separated URLs of `.rip` files to fetch and compile                                        |
+| `data-mount`   | runtime script | Component name to instantiate and mount after compilation                                             |
+| `data-target`  | runtime script | Mount target selector (default: `'body'`), pairs with `data-mount`                                    |
+| `data-launch`  | runtime script | Bundle URL for server mode — triggers `launch()` with full app lifecycle                              |
+| `data-hash`    | runtime script | Enable hash-based routing (for `data-launch` apps)                                                    |
 | `data-persist` | runtime script | Enable stash persistence — `data-persist` for sessionStorage, `data-persist="local"` for localStorage |
+
 
 ### Component Mounting
 
@@ -1097,30 +1136,34 @@ is code-based (more flexible — conditional mounting, multiple mounts, etc.).
 
 ### Key Features
 
-- **`rip()` console REPL** — Wraps code in a Rip `do ->` block before
-  compiling, so the compiler handles implicit return and auto-async natively.
-  Sync code returns values directly; async code returns a Promise.
-- **`importRip(url)`** — Fetches a `.rip` file, compiles it, imports as an
-  ES module via blob URL.
+- `**rip()` console REPL** — Wraps code in a Rip `do ->` block before
+compiling, so the compiler handles implicit return and auto-async natively.
+Sync code returns values directly; async code returns a Promise.
+- `**importRip(url)`** — Fetches a `.rip` file, compiles it, imports as an
+ES module via blob URL.
 - **Eager runtime registration** — Both reactive (`__rip`) and component
-  (`__ripComponent`) runtimes are registered on `globalThis` at load time.
+(`__ripComponent`) runtimes are registered on `globalThis` at load time.
 
 ### globalThis Registrations
 
-| Function | Purpose |
-|----------|---------|
-| `rip(code)` | Console REPL — compile and execute Rip code |
-| `importRip(url)` | Fetch, compile, and import a `.rip` file |
-| `compileToJS(code)` | Compile Rip source to JavaScript |
-| `__rip` | Reactive primitives (`__state`, `__computed`, `__effect`, `__batch`) |
-| `__ripComponent` | Component runtime (`__component`, `__render`, etc.) |
+
+| Function            | Purpose                                                              |
+| ------------------- | -------------------------------------------------------------------- |
+| `rip(code)`         | Console REPL — compile and execute Rip code                          |
+| `importRip(url)`    | Fetch, compile, and import a `.rip` file                             |
+| `compileToJS(code)` | Compile Rip source to JavaScript                                     |
+| `__rip`             | Reactive primitives (`__state`, `__computed`, `__effect`, `__batch`) |
+| `__ripComponent`    | Component runtime (`__component`, `__render`, etc.)                  |
+
 
 ### Compiler Options for Browser
 
-| Option | Purpose |
-|--------|---------|
-| `skipExports` | Suppresses `export` keywords in codegen — `export const X` becomes `const X` |
+
+| Option         | Purpose                                                                                                                                       |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `skipExports`  | Suppresses `export` keywords in codegen — `export const X` becomes `const X`                                                                  |
 | `skipRuntimes` | Skips reactive/component runtime blocks (already on `globalThis`), uses `var` for helpers to allow safe re-emission across concatenated files |
+
 
 ### Variable Persistence in `rip()`
 
@@ -1137,11 +1180,10 @@ preloaded via `--preload rip-loader.js` (by `bin/rip`) or via `bunfig.toml`
 (in the dev workspace). It does two things:
 
 1. **Compiles `.rip` files** — Registers a Bun plugin with `onLoad` for
-   `/\.rip$/` that reads the source, compiles to JS via `compileToJS()`,
+  `/\.rip$/` that reads the source, compiles to JS via `compileToJS()`,
    and returns the compiled code.
-
 2. **Rewrites `@rip-lang/*` imports to absolute paths** — After compilation,
-   a regex replaces `@rip-lang/*` import specifiers with absolute filesystem
+  a regex replaces `@rip-lang/*` import specifiers with absolute filesystem
    paths resolved via `import.meta.resolve()`. This is necessary because
    Bun's worker threads don't respect `NODE_PATH`, and `onResolve` doesn't
    fire for imports in compiled source. Since the rip-loader lives inside
@@ -1157,12 +1199,14 @@ are not inherited by child processes unless `env` is passed explicitly.
 
 ### Known Bun Bugs/Limitations (as of Bun v1.3.9)
 
-| Bug | Workaround |
-|-----|-----------|
-| `process.env` changes not inherited by `spawn`/`spawnSync` | Pass `env: process.env` explicitly |
-| `NODE_PATH` ignored by worker threads | Rewrite imports to absolute paths in `onLoad` |
-| Plugin `onResolve` doesn't fire for imports in `onLoad`-compiled source | Do import rewriting inside `onLoad` instead |
-| `require.resolve({ paths })` ignores `paths` inside plugin handlers | Use `import.meta.resolve` instead |
+
+| Bug                                                                     | Workaround                                    |
+| ----------------------------------------------------------------------- | --------------------------------------------- |
+| `process.env` changes not inherited by `spawn`/`spawnSync`              | Pass `env: process.env` explicitly            |
+| `NODE_PATH` ignored by worker threads                                   | Rewrite imports to absolute paths in `onLoad` |
+| Plugin `onResolve` doesn't fire for imports in `onLoad`-compiled source | Do import rewriting inside `onLoad` instead   |
+| `require.resolve({ paths })` ignores `paths` inside plugin handlers     | Use `import.meta.resolve` instead             |
+
 
 ---
 
@@ -1170,14 +1214,16 @@ are not inherited by child processes unless `env` is passed explicitly.
 
 HTML files in `docs/`, all using the shared-scope model with `<script defer>`:
 
-| File | Purpose |
-|------|---------|
-| `index.html` | Interactive playground — compiler, REPL, examples, theme select, resizable panes |
-| `demo.html` | ACME Corp Dashboard — full ECharts app using `data-mount="Dashboard"` |
-| `charts.html` | Same dashboard, standalone copy |
-| `sierpinski.html` | Sierpinski triangle demo (loads `rip.min.js` from CDN) |
-| `example/index.html` | Generic app launcher — fetches JSON bundle (requires server) |
-| `results/index.html` | Lab Results app — 7 components in shared scope with `data-mount="Home"` |
+
+| File                 | Purpose                                                                          |
+| -------------------- | -------------------------------------------------------------------------------- |
+| `index.html`         | Interactive playground — compiler, REPL, examples, theme select, resizable panes |
+| `demo.html`          | ACME Corp Dashboard — full ECharts app using `data-mount="Dashboard"`            |
+| `charts.html`        | Same dashboard, standalone copy                                                  |
+| `sierpinski.html`    | Sierpinski triangle demo (loads `rip.min.js` from CDN)                           |
+| `example/index.html` | Generic app launcher — fetches JSON bundle (requires server)                     |
+| `results/index.html` | Lab Results app — 7 components in shared scope with `data-mount="Home"`          |
+
 
 Static files (`demo.html`, `charts.html`, `sierpinski.html`) work from `file://` — just double-click to open. The playground and example app require `bun run serve` → `http://localhost:3000/`.
 
@@ -1187,36 +1233,42 @@ Static files (`demo.html`, `charts.html`, `sierpinski.html`) work from `file://`
 
 ### Removed (from CoffeeScript / Rip 2.x)
 
-| Feature | Replacement |
-|---------|-------------|
-| Postfix spread/rest (`x...`) | Prefix only: `...x` (ES6) |
-| Prototype access (`x::y`, `x?::y`) | `.prototype` or class syntax |
-| Binary existential (`x ? y`) | `x ?? y` (nullish coalescing) |
-| `is not` contraction | `isnt` |
-| `for x from iterable` | `for x as iterable` |
+
+| Feature                            | Replacement                   |
+| ---------------------------------- | ----------------------------- |
+| Postfix spread/rest (`x...`)       | Prefix only: `...x` (ES6)     |
+| Prototype access (`x::y`, `x?::y`) | `.prototype` or class syntax  |
+| Binary existential (`x ? y`)       | `x ?? y` (nullish coalescing) |
+| `is not` contraction               | `isnt`                        |
+| `for x from iterable`              | `for x as iterable`           |
+
 
 ### Added
 
-| Feature | Syntax | Purpose |
-|---------|--------|---------|
-| Ternary operator | `x ? a : b` | JS-style ternary expressions |
-| Postfix ternary | `a if x else b` | Python-style ternary expressions |
-| `for...as` iteration | `for x as iter` | ES6 `for...of` on iterables |
-| `as!` async shorthand | `for x as! iter` | Shorthand for `for await x as iter` |
-| Defined check | `x!?` | Postfix `!?` — true if not undefined |
-| Presence check | `x?!` | Postfix `?!` — true if truthy, else undefined (Houdini operator) |
-| Optional chain assign | `x?.prop = val` | Guarded assignment — skips if null/undefined |
+
+| Feature               | Syntax           | Purpose                                                          |
+| --------------------- | ---------------- | ---------------------------------------------------------------- |
+| Ternary operator      | `x ? a : b`      | JS-style ternary expressions                                     |
+| Postfix ternary       | `a if x else b`  | Python-style ternary expressions                                 |
+| `for...as` iteration  | `for x as iter`  | ES6 `for...of` on iterables                                      |
+| `as!` async shorthand | `for x as! iter` | Shorthand for `for await x as iter`                              |
+| Defined check         | `x!?`            | Postfix `!?` — true if not undefined                             |
+| Presence check        | `x?!`            | Postfix `?!` — true if truthy, else undefined (Houdini operator) |
+| Optional chain assign | `x?.prop = val`  | Guarded assignment — skips if null/undefined                     |
+
 
 ### Kept
 
-| Feature | Syntax | Compiles to |
-|---------|--------|-------------|
-| Existence check | `x?` | `(x != null)` |
-| Optional chaining | `a?.b`, `a?.[0]`, `a?.()` | ES6 optional chaining |
-| Optional chaining shorthand | `a?[0]`, `a?(x)` | `a?.[0]`, `a?.(x)` |
-| Optional chain assign | `x?.prop = val` | `if (x != null) x.prop = val` |
-| Nullish coalescing | `a ?? b` | `a ?? b` |
-| Dammit operator | `fetchData!` | `await fetchData()` |
+
+| Feature                     | Syntax                    | Compiles to                   |
+| --------------------------- | ------------------------- | ----------------------------- |
+| Existence check             | `x?`                      | `(x != null)`                 |
+| Optional chaining           | `a?.b`, `a?.[0]`, `a?.()` | ES6 optional chaining         |
+| Optional chaining shorthand | `a?[0]`, `a?(x)`          | `a?.[0]`, `a?.(x)`            |
+| Optional chain assign       | `x?.prop = val`           | `if (x != null) x.prop = val` |
+| Nullish coalescing          | `a ?? b`                  | `a ?? b`                      |
+| Dammit operator             | `fetchData!`              | `await fetchData()`           |
+
 
 ---
 
@@ -1255,57 +1307,61 @@ rip> .js      # Toggle JS display
 
 ### Unique Operators
 
-| Operator | Name | Example |
-|----------|------|---------|
-| `!` | Dammit | `fetchData!` — calls AND awaits |
-| `!` | Void | `def process!` — suppresses return |
-| `=!` | Readonly | `MAX =! 100` — const ("equals, dammit!") |
-| `!?` | Otherwise | `val !? 5` — default if undefined (infix) |
-| `!?` | Defined | `val!?` — true if not undefined (postfix) |
-| `?!` | Presence | `@checked?!` — true if truthy, else undefined (Houdini) |
-| `?` | Existence | `x?` — true if not null/undefined |
-| `//` | Floor div | `7 // 2` — 3 |
-| `%%` | True mod | `-1 %% 3` — 2 |
-| `:=` | State | `count := 0` — reactive state |
-| `~=` | Computed | `doubled ~= count * 2` — computed |
-| `<=>` | Two-way bind | `value <=> name` — bidirectional reactive binding (Rip original) |
-| `=~` | Match | `str =~ /pat/` — Ruby-style regex |
-| `.new()` | Constructor | `User.new()` — Ruby-style new |
-| `::` | Prototype | `String::trim` — `String.prototype.trim` |
-| `if...else` | Postfix ternary | `"a" if cond else "b"` — Python-style |
-| `[-n]` | Negative index | `arr[-1]` — last element via `.at()` |
-| `*` | String repeat | `"-" * 40` — string repetition |
-| `<` `<=` | Chained | `1 < x < 10` — chained comparisons |
-| `\|>` | Pipe | `x \|> fn` or `x \|> fn(y)` — first-arg pipe |
-| `.=` | Method assign | `x .= trim()` — `x = x.trim()` (Rip original) |
-| `?.` `=` | Optional assign | `el?.style.display = "none"` — guarded assign (Rip original) |
-| `=` | Render text | `= item.textContent` — output expression as text node in render blocks |
-| `*` | Merge assign | `*obj = {a: 1}` — `Object.assign(obj, ...)` (Rip original) |
-| `not in` | Not in | `x not in arr` — negated membership |
-| `loop n` | Repeat N | `loop 5 -> body` — repeat N times |
-| `it` | Implicit param | `-> it > 5` — auto-injected parameter |
-| `or return` | Guard | `x = get() or return err` — early return |
-| `?? throw` | Nullish guard | `x = get() ?? throw err` — throw if null |
+
+| Operator    | Name            | Example                                                                |
+| ----------- | --------------- | ---------------------------------------------------------------------- |
+| `!`         | Dammit          | `fetchData!` — calls AND awaits                                        |
+| `!`         | Void            | `def process!` — suppresses return                                     |
+| `=!`        | Readonly        | `MAX =! 100` — const ("equals, dammit!")                               |
+| `!?`        | Otherwise       | `val !? 5` — default if undefined (infix)                              |
+| `!?`        | Defined         | `val!?` — true if not undefined (postfix)                              |
+| `?!`        | Presence        | `@checked?!` — true if truthy, else undefined (Houdini)                |
+| `?`         | Existence       | `x?` — true if not null/undefined                                      |
+| `//`        | Floor div       | `7 // 2` — 3                                                           |
+| `%%`        | True mod        | `-1 %% 3` — 2                                                          |
+| `:=`        | State           | `count := 0` — reactive state                                          |
+| `~=`        | Computed        | `doubled ~= count * 2` — computed                                      |
+| `<=>`       | Two-way bind    | `value <=> name` — bidirectional reactive binding (Rip original)       |
+| `=~`        | Match           | `str =~ /pat/` — Ruby-style regex                                      |
+| `.new()`    | Constructor     | `User.new()` — Ruby-style new                                          |
+| `::`        | Prototype       | `String::trim` — `String.prototype.trim`                               |
+| `if...else` | Postfix ternary | `"a" if cond else "b"` — Python-style                                  |
+| `[-n]`      | Negative index  | `arr[-1]` — last element via `.at()`                                   |
+| `*`         | String repeat   | `"-" * 40` — string repetition                                         |
+| `<` `<=`    | Chained         | `1 < x < 10` — chained comparisons                                     |
+| `|>`        | Pipe            | `x |> fn` or `x |> fn(y)` — first-arg pipe                             |
+| `.=`        | Method assign   | `x .= trim()` — `x = x.trim()` (Rip original)                          |
+| `?.` `=`    | Optional assign | `el?.style.display = "none"` — guarded assign (Rip original)           |
+| `=`         | Render text     | `= item.textContent` — output expression as text node in render blocks |
+| `*`         | Merge assign    | `*obj = {a: 1}` — `Object.assign(obj, ...)` (Rip original)             |
+| `not in`    | Not in          | `x not in arr` — negated membership                                    |
+| `loop n`    | Repeat N        | `loop 5 -> body` — repeat N times                                      |
+| `it`        | Implicit param  | `-> it > 5` — auto-injected parameter                                  |
+| `or return` | Guard           | `x = get() or return err` — early return                               |
+| `?? throw`  | Nullish guard   | `x = get() ?? throw err` — throw if null                               |
+
 
 ### Standard Library
 
 Rip injects 13 global helpers via `globalThis` into every compiled program. Defined in `getStdlibCode()` in `src/compiler.js`, also injected into the CLI REPL (`src/repl.js`) and browser REPL (`docs/index.html`).
 
-| Function | Description | Example |
-|----------|-------------|---------|
-| `abort(msg?)` | Log to stderr, exit with code 1 | `abort "fatal error"` |
-| `assert(v, msg?)` | Throw if falsy | `assert x > 0, "must be positive"` |
-| `exit(code?)` | Exit process | `exit 1` |
-| `kind(v)` | Lowercase type name (fixes `typeof`) | `kind [] # "array"` |
-| `noop()` | No-op function | `onClick ?= noop` |
-| `p(...args)` | `console.log` shorthand | `p "hello"` |
-| `pp(v)` | Pretty-print JSON, returns value | `pp user # logs and returns` |
-| `raise(a, b?)` | Throw error | `raise TypeError, "bad"` |
-| `rand(a?, b?)` | Random number | `rand 10 # 0-9` |
-| `sleep(ms)` | Promise-based delay | `sleep! 1000` |
-| `todo(msg?)` | Throw "Not implemented" | `todo "finish later"` |
-| `warn(...args)` | `console.warn` shorthand | `warn "deprecated"` |
-| `zip(...arrays)` | Zip arrays pairwise | `zip names, ages` |
+
+| Function          | Description                          | Example                            |
+| ----------------- | ------------------------------------ | ---------------------------------- |
+| `abort(msg?)`     | Log to stderr, exit with code 1      | `abort "fatal error"`              |
+| `assert(v, msg?)` | Throw if falsy                       | `assert x > 0, "must be positive"` |
+| `exit(code?)`     | Exit process                         | `exit 1`                           |
+| `kind(v)`         | Lowercase type name (fixes `typeof`) | `kind [] # "array"`                |
+| `noop()`          | No-op function                       | `onClick ?= noop`                  |
+| `p(...args)`      | `console.log` shorthand              | `p "hello"`                        |
+| `pp(v)`           | Pretty-print JSON, returns value     | `pp user # logs and returns`       |
+| `raise(a, b?)`    | Throw error                          | `raise TypeError, "bad"`           |
+| `rand(a?, b?)`    | Random number                        | `rand 10 # 0-9`                    |
+| `sleep(ms)`       | Promise-based delay                  | `sleep! 1000`                      |
+| `todo(msg?)`      | Throw "Not implemented"              | `todo "finish later"`              |
+| `warn(...args)`   | `console.warn` shorthand             | `warn "deprecated"`                |
+| `zip(...arrays)`  | Zip arrays pairwise                  | `zip names, ages`                  |
+
 
 All use `??=` (overridable by redeclaring). The REPL uses `skipPreamble: true` and injects separately via `getStdlibCode()`.
 
@@ -1322,7 +1378,7 @@ bun run serve     # Start dev server (localhost:3000)
 bun publish       # Publish to npm (use bun, not npm)
 ```
 
-**`bun run bump`** is the standard release workflow. It handles everything: increments the patch version, runs the test suite, rebuilds the browser bundle, commits, pushes, and publishes to npm. Use this instead of manually running build + commit + push separately.
+`**bun run bump**` is the standard release workflow. It handles everything: increments the patch version, runs the test suite, rebuilds the browser bundle, commits, pushes, and publishes to npm. Use this instead of manually running build + commit + push separately.
 
 ---
 
