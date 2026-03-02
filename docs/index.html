@@ -520,6 +520,7 @@
     <button class="tab" data-tab="sierpinski">Sierpinski</button>
     <button class="tab" data-tab="charts" title="Opens in new tab">Charts ⧉</button>
     <button class="tab" data-tab="demo" title="Opens in new tab">Demo ⧉</button>
+    <button class="tab" data-tab="ui" title="Opens in new tab">Rip UI ⧉</button>
   </div>
 
   <!-- Content -->
@@ -1135,6 +1136,9 @@
         return
       if tabName is 'demo'
         window.open 'https://shreeve.github.io/rip-lang/results/', '_blank'
+        return
+      if tabName is 'ui'
+        window.open 'ui/', '_blank'
         return
       window.location.hash = tabName
       document.querySelectorAll('.tab').forEach (t) -> t.classList.remove 'active'
