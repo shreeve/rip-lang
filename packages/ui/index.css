@@ -585,7 +585,7 @@ select.rip-grid-editor { cursor: pointer; padding-left: 4px; }
     &[data-filled] { border-color: #3b82f6; }
   }
 
-  &[data-complete] input { border-color: #22c55e; }
+  &[data-complete] input { border-color: #22c55e; background: #f0fdf4; }
   &[data-disabled] input { opacity: 0.5; cursor: not-allowed; }
 }
 
@@ -1531,6 +1531,8 @@ html.no-transition, html.no-transition * { transition: none !important; }
 
   /* OTP Field */
   .gallery [role="group"][aria-label="One-time password"] input { border-color: #475569; background: #0f172a; color: #e2e8f0; }
+  .gallery [role="group"][aria-label="One-time password"] input[data-filled] { border-color: #3b82f6; }
+  .gallery [role="group"][aria-label="One-time password"][data-complete] input { border-color: #22c55e; background: #052e16; }
 
   /* MultiSelect */
   .gallery [data-chips] { border-color: #475569; background: #1e293b; }
