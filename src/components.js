@@ -1361,7 +1361,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       }
 
       // Regular attribute
-      if (typeof key === 'string') {
+      if (typeof key === 'string' || key instanceof String) {
         // Strip quotes from string keys (e.g., "data-slot" → data-slot)
         if (key.startsWith('"') && key.endsWith('"')) {
           key = key.slice(1, -1);
@@ -1454,7 +1454,11 @@ export function installComponentSupport(CodeGenerator, Lexer) {
             this._pushEffect(`${elVar}.setAttribute('${key}', ${valueCode});`);
           }
         } else {
-          this._createLines.push(`${elVar}.setAttribute('${key}', ${valueCode});`);
+          if (Array.isArray(value) && value[0] === 'presence') {
+            this._createLines.push(`{ const __v = ${valueCode}; if (__v != null) ${elVar}.setAttribute('${key}', __v); }`);
+          } else {
+            this._createLines.push(`${elVar}.setAttribute('${key}', ${valueCode});`);
+          }
         }
       }
     }
@@ -1869,6 +1873,16 @@ export function installComponentSupport(CodeGenerator, Lexer) {
             props.push(`children: ${childrenVar}`);
           }
         }
+      } else if (arg && !childrenVar) {
+        const textVar = this.newTextVar();
+        const val = typeof arg === 'string' ? arg.valueOf() : null;
+        if (val && (val.startsWith('"') || val.startsWith("'") || val.startsWith('`'))) {
+          this._createLines.push(`${textVar} = document.createTextNode(${val});`);
+        } else {
+          this._createLines.push(`${textVar} = document.createTextNode(${this.generateInComponent(arg, 'value')});`);
+        }
+        childrenVar = textVar;
+        props.push(`children: ${childrenVar}`);
       }
     }
 
@@ -1899,6 +1913,14 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     // chain in __effect just means it runs once with no overhead.
     if (sexpr[0] === '.' && this._rootsAtThis(sexpr[1])) {
       return true;
+    }
+
+    // Method call on component: [['.', 'this', method], ...args]
+    // Methods may read reactive state internally — treat as reactive so the
+    // call gets wrapped in __effect and re-runs when dependencies change.
+    if (Array.isArray(sexpr[0]) && sexpr[0][0] === '.' && sexpr[0][1] === 'this') {
+      const name = _str(sexpr[0][2]);
+      if (name && this.componentMembers?.has(name)) return true;
     }
 
     for (const child of sexpr) {

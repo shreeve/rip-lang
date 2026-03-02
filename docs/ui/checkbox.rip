@@ -1,0 +1,33 @@
+# Checkbox — accessible headless checkbox/switch widget
+#
+# Toggles on click, Enter, or Space. Supports indeterminate state.
+# Exposes $checked, $indeterminate, $disabled. Ships zero CSS.
+# Set @switch to true for switch semantics (role="switch").
+#
+# Usage:
+#   Checkbox checked <=> isActive, @change: handleChange
+#     span "Enable notifications"
+#
+#   Checkbox checked <=> isDark, switch: true
+#     span "Dark mode"
+
+export Checkbox = component
+  @checked := false
+  @disabled := false
+  @indeterminate := false
+  @switch := false
+
+  onClick: ->
+    return if @disabled
+    @indeterminate = false
+    @checked = not @checked
+    @emit 'change', @checked
+
+  render
+    button role: @switch ? 'switch' : 'checkbox'
+      aria-checked: @indeterminate ? 'mixed' : !!@checked
+      aria-disabled: @disabled?!
+      $checked: @checked?!
+      $indeterminate: @indeterminate?!
+      $disabled: @disabled?!
+      slot

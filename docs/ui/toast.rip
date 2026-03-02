@@ -1,0 +1,87 @@
+# Toast — accessible headless toast notification system
+#
+# Managed toast system with stacking, timer pause on hover, and promise support.
+# Uses ARIA live region for screen reader announcements. Ships zero CSS.
+#
+# Usage:
+#   toasts := []
+#
+#   # Add a toast — reactive assignment is the API
+#   toasts = [...toasts, { message: "Saved!", type: "success" }]
+#
+#   # Dismiss — filter it out
+#   toasts = toasts.filter (t) -> t isnt target
+#
+#   # Clear all
+#   toasts = []
+#
+#   # In render block
+#   ToastViewport toasts <=> toasts
+
+export ToastViewport = component
+  @toasts := []
+  @placement := 'bottom-right'
+
+  _onDismiss: (toast) ->
+    @toasts = @toasts.filter (t) -> t isnt toast
+
+  render
+    div role: "region", aria-label: "Notifications", $placement: @placement
+      for toast in @toasts
+        Toast toast: toast, @dismiss: (e) => @_onDismiss(e.detail)
+
+export Toast = component
+  @toast := {}
+
+  leaving := false
+  _timer := null
+  _remaining = 0
+  _started = 0
+
+  _startTimer: ->
+    dur = @toast.duration ?? 4000
+    return unless dur > 0
+    _remaining = dur
+    _started = Date.now()
+    _timer = setTimeout => @dismiss(), dur
+
+  _pauseTimer: ->
+    return unless _timer
+    clearTimeout _timer
+    _remaining -= Date.now() - _started
+    _timer = null
+
+  _resumeTimer: ->
+    return if _timer or _remaining <= 0
+    _started = Date.now()
+    _timer = setTimeout => @dismiss(), _remaining
+
+  mounted: -> @_startTimer()
+
+  beforeUnmount: ->
+    clearTimeout _timer if _timer
+
+  dismiss: ->
+    leaving = true
+    setTimeout =>
+      @emit 'dismiss', @toast
+    , 200
+
+  render
+    div role: (if @toast.type is 'error' then 'alert' else 'status'),
+      aria-live: (if @toast.type is 'error' then 'assertive' else 'polite'),
+      $type: @toast.type ?? 'info',
+      $leaving: leaving?!,
+      @mouseenter: @_pauseTimer,
+      @mouseleave: @_resumeTimer,
+      @focusin: @_pauseTimer,
+      @focusout: @_resumeTimer
+      .
+        if @toast.title
+          strong @toast.title
+        span @toast.message
+        if @toast.action
+          button @click: @toast.action.onClick
+            @toast.action.label or 'Action'
+        button aria-label: "Dismiss", @click: @dismiss
+          "✕"

@@ -1,0 +1,65 @@
+# CheckboxGroup — accessible headless checkbox group
+#
+# Multiple options can be checked independently. Wraps individual checkboxes
+# with group semantics. Value is an array of checked option values.
+# Ships zero CSS.
+#
+# Usage:
+#   CheckboxGroup value <=> selectedToppings
+#     div $value: "cheese", "Cheese"
+#     div $value: "bacon", "Bacon"
+#     div $value: "lettuce", "Lettuce"
+
+export CheckboxGroup = component
+  @value := []
+  @disabled := false
+  @orientation := 'vertical'
+  @label := ''
+
+  _options ~=
+    return [] unless @_slot
+    Array.from(@_slot.querySelectorAll('[data-value]') or [])
+
+  _isChecked: (val) ->
+    Array.isArray(@value) and val in @value
+
+  _toggle: (val) ->
+    return if @disabled
+    arr = if Array.isArray(@value) then [...@value] else []
+    if val in arr
+      arr = arr.filter (v) -> v isnt val
+    else
+      arr.push val
+    @value = arr
+    @emit 'change', @value
+
+  onKeydown: (e) ->
+    boxes = @_root?.querySelectorAll('[role="checkbox"]')
+    return unless boxes?.length
+    focused = Array.from(boxes).indexOf(document.activeElement)
+    return if focused < 0
+    len = boxes.length
+    switch e.key
+      when 'ArrowDown', 'ArrowRight'
+        e.preventDefault()
+        boxes[(focused + 1) %% len]?.focus()
+      when 'ArrowUp', 'ArrowLeft'
+        e.preventDefault()
+        boxes[(focused - 1) %% len]?.focus()
+
+  render
+    div ref: "_root", role: "group", aria-label: @label or undefined, aria-orientation: @orientation
+      $orientation: @orientation
+      $disabled: @disabled?!
+
+      . ref: "_slot", style: "display:none"
+        slot
+
+      for opt, idx in _options
+        button role: "checkbox", tabindex: (if idx is 0 then "0" else "-1")
+          aria-checked: !!@_isChecked(opt.dataset.value)
+          $checked: @_isChecked(opt.dataset.value)?!
+          $disabled: @disabled?!
+          $value: opt.dataset.value
+          @click: (=> @_toggle(opt.dataset.value))
+          = opt.textContent

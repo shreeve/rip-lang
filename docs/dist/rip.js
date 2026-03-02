@@ -1532,7 +1532,7 @@
             return 0;
           let m = /^#([a-zA-Z_][\w-]*)/.exec(this.chunk);
           if (m) {
-            this.emit("IDENTIFIER", m[1] === "content" ? "slot" : "div#" + m[1]);
+            this.emit("IDENTIFIER", "div#" + m[1]);
             return m[0].length;
           }
         }
@@ -3803,7 +3803,18 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
             isTemplateElement = startsWithTag(tokens, i);
           }
           if (isTemplateElement) {
-            let isClassOrIdTail = tag === "PROPERTY" && i > 0 && (tokens[i - 1][0] === "." || tokens[i - 1][0] === "#");
+            let isClassOrIdTail = false;
+            if (tag === "PROPERTY" && i > 0 && tokens[i - 1][0] === ".") {
+              let j = i;
+              while (j >= 2 && tokens[j - 1][0] === "." && tokens[j - 2][0] === "PROPERTY")
+                j -= 2;
+              if (j >= 2 && tokens[j - 1][0] === "." && tokens[j - 2][0] === "IDENTIFIER" && isTemplateTag(tokens[j - 2][1])) {
+                let before = j >= 3 ? tokens[j - 3][0] : null;
+                if (!before || before === "INDENT" || before === "OUTDENT" || before === "TERMINATOR" || before === "RENDER") {
+                  isClassOrIdTail = true;
+                }
+              }
+            }
             let isBareTag = isClsxCallEnd || tag === "IDENTIFIER" && isTemplateTag(token[1]) || isClassOrIdTail;
             if (isBareTag) {
               let callStartToken = gen2("CALL_START", "(", token);
@@ -4462,7 +4473,7 @@ ${blockFactoriesCode}return ${lines.join(`
           }
           continue;
         }
-        if (typeof key === "string") {
+        if (typeof key === "string" || key instanceof String) {
           if (key.startsWith('"') && key.endsWith('"')) {
             key = key.slice(1, -1);
           }
@@ -4539,7 +4550,11 @@ ${blockFactoriesCode}return ${lines.join(`
               this._pushEffect(`${elVar}.setAttribute('${key}', ${valueCode});`);
             }
           } else {
-            this._createLines.push(`${elVar}.setAttribute('${key}', ${valueCode});`);
+            if (Array.isArray(value) && value[0] === "presence") {
+              this._createLines.push(`{ const __v = ${valueCode}; if (__v != null) ${elVar}.setAttribute('${key}', __v); }`);
+            } else {
+              this._createLines.push(`${elVar}.setAttribute('${key}', ${valueCode});`);
+            }
           }
         }
       }
@@ -4861,6 +4876,16 @@ ${blockFactoriesCode}return ${lines.join(`
               props.push(`children: ${childrenVar}`);
             }
           }
+        } else if (arg && !childrenVar) {
+          const textVar = this.newTextVar();
+          const val = typeof arg === "string" ? arg.valueOf() : null;
+          if (val && (val.startsWith('"') || val.startsWith("'") || val.startsWith("`"))) {
+            this._createLines.push(`${textVar} = document.createTextNode(${val});`);
+          } else {
+            this._createLines.push(`${textVar} = document.createTextNode(${this.generateInComponent(arg, "value")});`);
+          }
+          childrenVar = textVar;
+          props.push(`children: ${childrenVar}`);
         }
       }
       const propsCode = props.length > 0 ? `{ ${props.join(", ")} }` : "{}";
@@ -4877,6 +4902,11 @@ ${blockFactoriesCode}return ${lines.join(`
       }
       if (sexpr[0] === "." && this._rootsAtThis(sexpr[1])) {
         return true;
+      }
+      if (Array.isArray(sexpr[0]) && sexpr[0][0] === "." && sexpr[0][1] === "this") {
+        const name = _str(sexpr[0][2]);
+        if (name && this.componentMembers?.has(name))
+          return true;
       }
       for (const child of sexpr) {
         if (this.hasReactiveDeps(child))
@@ -6323,7 +6353,7 @@ function _setDataSection() {
       if (rest.length === 0)
         return "return";
       let [expr] = rest;
-      if (this.sideEffectOnly)
+      if (this.sideEffectOnly && !(this.is(expr, "->") || this.is(expr, "=>")))
         return "return";
       if (this.is(expr, "if")) {
         let [, condition, body, ...elseParts] = expr;
@@ -8719,8 +8749,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.63";
-  var BUILD_DATE = "2026-03-01@06:49:01GMT";
+  var VERSION = "3.13.68";
+  var BUILD_DATE = "2026-03-02@06:03:38GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -8811,7 +8841,7 @@ ${c.js}
     }
     const cfg = document.querySelector("script[data-launch]");
     if (cfg && !globalThis.__ripLaunched) {
-      const ui = importRip.modules?.["app.rip"];
+      const ui = importRip.modules?.["ui.rip"];
       if (ui?.launch) {
         const url = cfg.getAttribute("data-launch") || "";
         const hash = cfg.getAttribute("data-hash");
@@ -8882,9 +8912,9 @@ ${indented}`);
       }
     });
   }
-  // docs/dist/_app.js
-  var exports__app = {};
-  __export(exports__app, {
+  // docs/dist/_ui.js
+  var exports__ui = {};
+  __export(exports__ui, {
     throttle: () => throttle,
     stash: () => stash,
     setContext: () => setContext,
@@ -9779,7 +9809,7 @@ ${indented}`);
               mp.appendChild(wrapper);
               inst.mount(wrapper);
               layoutInstances.push(inst);
-              slot = wrapper.querySelector("slot") || wrapper;
+              slot = wrapper.querySelector("#content") || wrapper;
               mp = slot;
             }
             currentLayouts = [...layoutFiles];
@@ -10008,8 +10038,8 @@ ${indented}`);
   };
 
   // docs/dist/_entry.js
-  importRip.modules["app.rip"] = exports__app;
-  for (const [k, v] of Object.entries(exports__app))
+  importRip.modules["ui.rip"] = exports__ui;
+  for (const [k, v] of Object.entries(exports__ui))
     if (typeof v === "function")
       globalThis[k] = v;
 })();

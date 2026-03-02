@@ -635,7 +635,7 @@ export class Lexer {
           return 0;  // after a tag (div#main) → let # become a token for rewriter
         let m = /^#([a-zA-Z_][\w-]*)/.exec(this.chunk);
         if (m) {
-          this.emit('IDENTIFIER', m[1] === 'content' ? 'slot' : 'div#' + m[1]);
+          this.emit('IDENTIFIER', 'div#' + m[1]);
           return m[0].length;
         }
       }

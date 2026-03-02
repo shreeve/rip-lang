@@ -36,7 +36,7 @@ rip server
 
 | Metric | Value |
 |--------|-------|
-| Version | 3.13.64 |
+| Version | 3.13.70 |
 | Tests | 1,436 |
 | Dependencies | Zero |
 | Self-hosting | Yes (Rip compiles itself) |
@@ -741,7 +741,7 @@ primitives directly — one signal graph shared between framework and components
 
 | File | Lines | Role |
 |------|-------|------|
-| `app.rip` | ~965 | Unified framework: stash, router (path + hash), renderer, launch |
+| `ui.rip` | ~965 | Unified framework: stash, router (path + hash), renderer, launch |
 | `serve.rip` | ~93 | Server middleware: framework bundle, app bundle, SSE hot-reload |
 
 Key concepts:

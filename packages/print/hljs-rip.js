@@ -1,27 +1,52 @@
 // highlight.js language definition for Rip
-// Derived from the Monarch grammar in docs/index.html
+// https://github.com/nicholasgasior/ghljs
 
 export default function(hljs) {
   const KEYWORDS = [
-    'if', 'else', 'unless', 'then', 'switch', 'when', 'for', 'while', 'until',
-    'loop', 'do', 'return', 'break', 'continue', 'throw', 'try', 'catch', 'finally',
-    'yield', 'await', 'import', 'export', 'from', 'default', 'delete', 'typeof',
-    'instanceof', 'new', 'super', 'debugger', 'use', 'own', 'extends', 'in', 'of',
-    'by', 'as', 'class', 'def', 'enum', 'interface', 'component', 'render',
+    // Control flow
+    'if', 'else', 'unless', 'then', 'switch', 'when',
+    'for', 'while', 'until', 'loop', 'do',
+    'return', 'break', 'continue', 'throw',
+    'try', 'catch', 'finally',
+    'yield', 'await',
+    // Modules
+    'import', 'export', 'from', 'default',
+    // Operators as keywords
+    'delete', 'typeof', 'instanceof', 'new', 'super',
     'and', 'or', 'not', 'is', 'isnt',
+    // Declarations
+    'class', 'def', 'enum', 'interface', 'extends', 'own',
+    // Iteration
+    'in', 'of', 'by', 'as',
+    // Component system
+    'component', 'render', 'slot', 'offer', 'accept',
+    // Other
+    'use', 'debugger', 'it',
   ];
 
   const LITERALS = [
     'true', 'false', 'yes', 'no', 'on', 'off',
-    'null', 'undefined', 'NaN', 'Infinity',
+    'null', 'undefined', 'NaN', 'Infinity', 'this',
   ];
 
   const BUILT_INS = [
     'console', 'process', 'require', 'module', 'exports',
     'setTimeout', 'setInterval', 'clearTimeout', 'clearInterval',
+    'requestAnimationFrame', 'cancelAnimationFrame',
     'Promise', 'Array', 'Object', 'String', 'Number', 'Boolean',
-    'Math', 'Date', 'RegExp', 'Error', 'JSON', 'Map', 'Set',
-    'Symbol', 'Buffer', 'Bun',
+    'Math', 'Date', 'RegExp', 'Error', 'TypeError', 'RangeError',
+    'JSON', 'Map', 'Set', 'WeakMap', 'WeakSet',
+    'Symbol', 'Proxy', 'Reflect',
+    'Buffer', 'Bun',
+    'document', 'window', 'globalThis', 'navigator',
+    'fetch', 'URL', 'URLSearchParams', 'FormData',
+    'Event', 'CustomEvent', 'EventSource',
+    'HTMLElement', 'Node', 'NodeList', 'Element',
+    'DocumentFragment', 'MutationObserver', 'ResizeObserver',
+    'IntersectionObserver',
+    // Rip stdlib
+    'p', 'pp', 'abort', 'assert', 'exit', 'kind', 'noop',
+    'raise', 'rand', 'sleep', 'todo', 'warn', 'zip',
   ];
 
   const INTERPOLATION = {
@@ -90,6 +115,11 @@ export default function(hljs) {
     begin: /@[a-zA-Z_$][\w$]*/,
   };
 
+  const SIGIL_ATTR = {
+    className: 'attribute',
+    begin: /\$[a-zA-Z_][\w]*/,
+  };
+
   const CLASS_NAME = {
     className: 'title.class',
     begin: /[A-Z][\w]*/,
@@ -106,6 +136,24 @@ export default function(hljs) {
     ],
   };
 
+  const METHOD_DEF = {
+    className: 'function',
+    match: /[a-zA-Z_$][\w$]*[!?]?(?=\s*:\s*(?:\([^)]*\)\s*)?[-=]>)/,
+    contains: [
+      { className: 'title.function', begin: /[a-zA-Z_$][\w$]*[!?]?/ },
+    ],
+  };
+
+  const COMPONENT_DEF = {
+    className: 'class',
+    begin: /\b(?:export\s+)?[A-Z][\w]*\s*=\s*component\b/,
+    returnBegin: true,
+    keywords: { keyword: ['export', 'component'] },
+    contains: [
+      { className: 'title.class', begin: /[A-Z][\w]*/ },
+    ],
+  };
+
   const CLASS_DEF = {
     className: 'class',
     beginKeywords: 'class',
@@ -118,7 +166,19 @@ export default function(hljs) {
 
   const OPERATORS = {
     className: 'operator',
-    begin: /\|>|::=|::|:=|~=|~>|<=>|=!|!\?|=~|\?\?|\?\.|\.\.\.|\.\.|=>|->|\*\*|\/\/|%%|===|!==|==|!=|<=|>=|&&|\|\||[+\-*\/%&|^~<>=!?]/,
+    begin: /\|>|::=|::|:=|~=|~>|<=>|\.=|=!|!\?|\?!|=~|\?\?=|\?\?|\?\.|\.\.\.|\.\.|=>|->|\*\*|\/\/|%%|===|!==|==|!=|<=|>=|&&|\|\||[+\-*\/%&|^~<>=!?]/,
+    relevance: 0,
+  };
+
+  const TYPE_ANNOTATION = {
+    className: 'type',
+    begin: /::=?\s*/,
+    end: /$/,
+    excludeBegin: true,
+    contains: [
+      { className: 'type', begin: /\b(?:number|string|boolean|void|any|never|unknown|object|symbol|bigint)\b/ },
+      { className: 'title.class', begin: /[A-Z][\w]*/ },
+    ],
     relevance: 0,
   };
 
@@ -144,13 +204,16 @@ export default function(hljs) {
       STRING_SINGLE,
       HEREGEX,
       REGEX,
+      COMPONENT_DEF,
       FUNCTION_DEF,
+      METHOD_DEF,
       CLASS_DEF,
       NUMBER,
       INSTANCE_VAR,
+      SIGIL_ATTR,
       TYPE_KEYWORDS,
       OPERATORS,
-      { // inline JS
+      { // inline JS (backtick)
         className: 'string',
         begin: /`[^`]*`/,
       },

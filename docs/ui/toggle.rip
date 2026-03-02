@@ -1,0 +1,24 @@
+# Toggle — accessible headless toggle button
+#
+# Stateful button that toggles pressed state on click.
+# Ships zero CSS.
+#
+# Usage:
+#   Toggle pressed <=> isBold
+#     "Bold"
+
+export Toggle = component
+  @pressed := false
+  @disabled := false
+
+  onClick: ->
+    return if @disabled
+    @pressed = not @pressed
+    @emit 'change', @pressed
+
+  render
+    button aria-pressed: !!@pressed
+      aria-disabled: @disabled?!
+      $pressed: @pressed?!
+      $disabled: @disabled?!
+      slot

@@ -1,6 +1,6 @@
 {
   "name": "rip-lang",
-  "version": "3.13.64",
+  "version": "3.13.70",
   "description": "A modern language that compiles to JavaScript",
   "type": "module",
   "main": "src/compiler.js",
@@ -33,6 +33,7 @@
   "scripts": {
     "build": "bun scripts/build.js",
     "bump": "bun scripts/bump.js",
+    "gallery": "bun scripts/gallery.js",
     "parser": "bun src/grammar/solar.rip -o src/parser.js src/grammar/grammar.rip",
     "serve": "bun scripts/serve.js",
     "test": "bun test/runner.js",

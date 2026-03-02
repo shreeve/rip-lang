@@ -27,7 +27,7 @@ Every widget:
 
 ## Overview
 
-38 headless components across 8 categories — 4,381 lines total.
+57 headless components across 10 categories — 5,254 lines total.
 
 | Component | What It Handles |
 |-----------|----------------|
@@ -41,34 +41,53 @@ Every widget:
 | **RadioGroup** | Exactly one option selected with arrow key nav |
 | **CheckboxGroup** | Multiple options checked independently |
 | **Input** | Headless input tracking focus, touch, and validation |
+| **Textarea** | Auto-resizing text area with focus and validation tracking |
 | **NumberField** | Number input with stepper buttons and hold-to-repeat |
 | **Slider** | Draggable range input with pointer capture and keyboard |
 | **OTPField** | Multi-digit code input with auto-advance and paste |
 | **DatePicker** | Calendar dropdown for single date or range selection |
 | **EditableValue** | Click-to-edit inline value with popover form |
+| **NativeSelect** | Styled native select element with state tracking |
 | **Tabs** | Arrow key navigation, ARIA tablist/tab/tabpanel |
 | **Menu** | Keyboard navigation, ARIA menu roles |
 | **ContextMenu** | Right-click context menu with keyboard navigation |
 | **Menubar** | Horizontal menu bar with dropdown menus |
 | **NavMenu** | Site navigation with hover/click dropdown panels |
 | **Toolbar** | Groups controls with roving tabindex keyboard nav |
+| **Breadcrumb** | Navigation trail with separator and current page |
 | **Dialog** | Focus trap, scroll lock, escape/click-outside dismiss, ARIA roles |
+| **AlertDialog** | Non-dismissable modal requiring explicit user action |
 | **Drawer** | Slide-out panel with focus trap and scroll lock |
+| **Sheet** | Full-width/height side panel with focus trap |
 | **Popover** | Anchor positioning, flip/shift, dismiss behavior, ARIA |
 | **Tooltip** | Show/hide with delay, anchor positioning, ARIA describedby |
 | **PreviewCard** | Hover/focus preview card with delay |
 | **Toast** | Auto-dismiss timer, stacking, ARIA live region |
 | **Button** | Accessible button with disabled-but-focusable pattern |
+| **Badge** | Inline label with variant (solid/outline/subtle) |
+| **Card** | Structured container with header/content/footer |
 | **Separator** | Decorative or semantic divider between sections |
 | **Progress** | Progress bar with CSS custom property for value |
 | **Meter** | Gauge for known-range measurements with thresholds |
+| **Spinner** | Loading indicator with ARIA status |
+| **Skeleton** | Loading placeholder with shimmer animation |
 | **Avatar** | Image with fallback to initials or placeholder |
+| **AspectRatio** | Fixed aspect ratio container via CSS custom property |
+| **Kbd** | Semantic keyboard shortcut display |
+| **Label** | Standalone accessible form label |
 | **ScrollArea** | Custom scrollbar with draggable thumb and auto-hide |
+| **InputGroup** | Input with prefix/suffix addon elements |
+| **ButtonGroup** | Grouped buttons with ARIA group semantics |
 | **Field** | Form field wrapper with label, description, and error |
 | **Fieldset** | Grouped fields with legend and cascading disable |
 | **Form** | Form wrapper with submit handling and validation state |
+| **Collapsible** | Single open/close section with animated expand |
+| **Pagination** | Page navigation with prev/next and ellipsis gaps |
+| **Carousel** | Slide carousel with autoplay, loop, and keyboard nav |
+| **Resizable** | Draggable resize handles between panels |
 | **Grid** | Virtual scrolling, DOM recycling, cell selection, inline editing, sorting, resizing, clipboard |
 | **Accordion** | Expand/collapse, single or multiple, ARIA |
+| **Table** | Semantic table wrapper with optional caption and striped rows |
 
 ---
 
@@ -301,6 +320,292 @@ parsers. Ctrl+X copies then clears the selection. Full interop with Excel,
 Google Sheets, and Numbers.
 **CSS theming:** Uses `--grid-*` custom properties (see `GRID.md` in
 `packages/grid/` for the full property list and dark mode example)
+
+### Badge
+
+Inline label for status, counts, or categories.
+
+```coffee
+Badge "New"
+Badge variant: "outline", "Beta"
+Badge variant: "subtle", "Draft"
+```
+
+**Props:** `@variant` (solid/outline/subtle, default: solid)
+
+### Kbd
+
+Semantic keyboard shortcut display.
+
+```coffee
+Kbd "⌘K"
+Kbd "Ctrl+C"
+```
+
+### Skeleton
+
+Loading placeholder shown while content loads.
+
+```coffee
+Skeleton
+Skeleton width: "200px", height: "1em"
+Skeleton circle: true, width: "48px"
+```
+
+**Props:** `@width`, `@height`, `@circle`, `@label`
+**ARIA:** `role="status"`, `aria-busy="true"`, `aria-label`
+**Data attributes:** `$circle` / `[data-circle]`
+
+### Spinner
+
+Loading indicator with accessible status.
+
+```coffee
+Spinner
+Spinner label: "Saving...", size: "24px"
+```
+
+**Props:** `@label` (default "Loading"), `@size`
+**ARIA:** `role="status"`, `aria-label`
+**CSS custom property:** `--spinner-size`
+
+### AspectRatio
+
+Constrains children to a fixed aspect ratio.
+
+```coffee
+AspectRatio ratio: 16/9
+  img src: photo, alt: "Hero image"
+```
+
+**Props:** `@ratio` (default 1)
+**CSS custom property:** `--aspect-ratio`
+
+### Card
+
+Structured content container with optional header, content, and footer.
+
+```coffee
+Card
+  div $header: true
+    h3 "Title"
+  div $content: true
+    p "Body text"
+  div $footer: true
+    Button "Action"
+```
+
+**Props:** `@interactive`
+**Data attributes:** `$interactive` / `[data-interactive]`
+**Behavior:** When interactive, receives `tabindex="0"` for keyboard focus.
+
+### Label
+
+Standalone accessible form label.
+
+```coffee
+Label for: "email-input", "Email address"
+Label required: true, "Username"
+```
+
+**Props:** `@for`, `@required`
+**Data attributes:** `$required` / `[data-required]`
+
+### Textarea
+
+Auto-resizing text area with focus and validation tracking.
+
+```coffee
+Textarea value <=> bio, placeholder: "Tell us about yourself"
+Textarea value <=> notes, autoResize: true, rows: 3
+```
+
+**Props:** `@value`, `@placeholder`, `@disabled`, `@required`, `@rows`, `@autoResize`
+**Data attributes:** `$disabled`, `$focused`, `$touched`
+**Behavior:** When `@autoResize` is true, height adjusts to fit content on input.
+
+### NativeSelect
+
+Styled wrapper for the native `<select>` element.
+
+```coffee
+NativeSelect value <=> role, @change: handleChange
+  option value: "", "Choose a role..."
+  option value: "admin", "Admin"
+  option value: "user", "User"
+```
+
+**Props:** `@value`, `@disabled`, `@required`
+**Events:** `@change` (detail: selected value)
+**Data attributes:** `$disabled`, `$focused`
+
+### InputGroup
+
+Input wrapper with prefix and suffix addon elements.
+
+```coffee
+InputGroup
+  span $prefix: true, "$"
+  Input value <=> amount, type: "number"
+
+InputGroup
+  Input value <=> search, placeholder: "Search..."
+  button $suffix: true, @click: doSearch, "Go"
+```
+
+**Props:** `@disabled`
+**Data attributes:** `$disabled`, `$focused` (tracks child input focus)
+
+### ButtonGroup
+
+Groups related buttons with ARIA group semantics.
+
+```coffee
+ButtonGroup
+  Button "Cut"
+  Button "Copy"
+  Button "Paste"
+```
+
+**Props:** `@orientation` (horizontal/vertical), `@disabled`, `@label`
+**Data attributes:** `$orientation`, `$disabled`
+
+### AlertDialog
+
+Non-dismissable modal requiring explicit user action. Cannot be closed
+by pressing Escape or clicking outside.
+
+```coffee
+AlertDialog open <=> showConfirm
+  h2 "Delete account?"
+  p "This action cannot be undone."
+  button @click: (=> showConfirm = false), "Cancel"
+  button @click: handleDelete, "Delete"
+```
+
+**Props:** `@open`, `@initialFocus`
+**Events:** `@close`
+**ARIA:** `role="alertdialog"`, `aria-modal="true"`, auto-wired `aria-labelledby`/`aria-describedby`
+**Behavior:** Focus trap, scroll lock, focus restore — same as Dialog but
+no click-outside or Escape dismiss.
+
+### Sheet
+
+Full-width/height slide-out side panel.
+
+```coffee
+Sheet open <=> showSheet, side: "right"
+  h2 "Notifications"
+  p "You have 3 new messages."
+```
+
+**Props:** `@open`, `@side` (top/right/bottom/left), `@dismissable`
+**Events:** `@close`
+**Keyboard:** Escape to close (when dismissable)
+**Data attributes:** `$open`, `$side`, `$sheet`
+
+### Breadcrumb
+
+Navigation trail with separator between items.
+
+```coffee
+Breadcrumb
+  a $item: true, href: "/", "Home"
+  a $item: true, href: "/products", "Products"
+  span $item: true, "Widget Pro"
+```
+
+**Props:** `@separator` (default "/"), `@label`
+**Data attributes:** `$current` / `[data-current]` on last item
+**ARIA:** `aria-current="page"` on last item, `aria-label="Breadcrumb"` on nav
+
+### Table
+
+Semantic table wrapper for simple HTML tables.
+
+```coffee
+Table caption: "Team members", striped: true
+  thead
+    tr
+      th "Name"
+      th "Role"
+  tbody
+    tr
+      td "Alice"
+      td "Engineer"
+```
+
+**Props:** `@caption`, `@striped`
+**Data attributes:** `$striped` / `[data-striped]`
+**Note:** For data-heavy tables with virtual scrolling, use Grid.
+
+### Collapsible
+
+Single open/close section with animated expand/collapse.
+
+```coffee
+Collapsible open <=> isOpen
+  button $trigger: true, "Show details"
+  div $content: true
+    p "Hidden content here"
+```
+
+**Props:** `@open`, `@disabled`
+**Events:** `@change` (detail: boolean)
+**Keyboard:** Enter/Space toggle
+**Methods:** `toggle()`
+**Data attributes:** `$open`, `$disabled`
+**CSS custom properties:** `--collapsible-height`, `--collapsible-width`
+
+### Pagination
+
+Page navigation with prev/next buttons and ellipsis gaps.
+
+```coffee
+Pagination page <=> currentPage, total: 100, perPage: 10
+```
+
+**Props:** `@page`, `@total`, `@perPage` (default 10), `@siblingCount` (default 1)
+**Events:** `@change` (detail: page number)
+**Keyboard:** ArrowLeft/Right, Home/End
+**Methods:** `goto(page)`
+**Data attributes:** `$active` on current page, `$disabled` on prev/next at boundary,
+`$ellipsis` on gap indicators, `$prev`, `$next`, `$page`
+
+### Carousel
+
+Slide carousel with autoplay, loop, and keyboard navigation.
+
+```coffee
+Carousel loop: true
+  div $slide: true, "Slide 1"
+  div $slide: true, "Slide 2"
+  div $slide: true, "Slide 3"
+```
+
+**Props:** `@orientation` (horizontal/vertical), `@loop`, `@autoplay`, `@interval` (ms), `@label`
+**Events:** `@change` (detail: slide index)
+**Keyboard:** ArrowLeft/Right (horizontal), ArrowUp/Down (vertical), Home/End
+**Methods:** `goto(index)`, `next()`, `prev()`
+**Data attributes:** `$active` on current slide, `$orientation`, `$prev`, `$next`
+**Behavior:** Autoplay pauses on hover, resumes on leave.
+
+### Resizable
+
+Draggable resize handles between panels.
+
+```coffee
+Resizable
+  div $panel: true, "Left"
+  div $panel: true, "Right"
+```
+
+**Props:** `@orientation` (horizontal/vertical), `@minSize` (percent, default 10), `@maxSize` (percent, default 90)
+**Events:** `@resize` (detail: array of panel size percentages)
+**Keyboard:** ArrowLeft/Right (horizontal) or ArrowUp/Down (vertical) in 10% increments
+**ARIA:** `role="separator"` on handles, `aria-valuenow`
+**Data attributes:** `$orientation`, `$dragging` on active handle
+**CSS custom properties:** `--panel-size` on each panel
 
 ---
 
@@ -678,7 +983,7 @@ standard; the implementation is ours.
 | File | Lines | Description |
 |------|-------|-------------|
 | `select.rip` | 184 | Dropdown with typeahead, keyboard nav, ARIA listbox |
-| `combobox.rip` | 153 | Filterable input + listbox for search-as-you-type |
+| `combobox.rip` | 155 | Filterable input + listbox for search-as-you-type |
 | `multi-select.rip` | 158 | Multi-select with chips, filtering, and keyboard nav |
 | `autocomplete.rip` | 141 | Suggestion input — type to filter, select to fill |
 
@@ -696,12 +1001,15 @@ standard; the implementation is ours.
 
 | File | Lines | Description |
 |------|-------|-------------|
-| `input.rip` | 35 | Headless input tracking focus, touch, and validation |
+| `input.rip` | 36 | Headless input tracking focus, touch, and validation |
+| `textarea.rip` | 48 | Auto-resizing text area with focus and validation tracking |
 | `number-field.rip` | 162 | Number input with stepper buttons and hold-to-repeat |
 | `slider.rip` | 165 | Draggable range input with pointer capture and keyboard |
 | `otp-field.rip` | 89 | Multi-digit code input with auto-advance and paste |
 | `date-picker.rip` | 214 | Calendar dropdown for single date or range selection |
 | `editable-value.rip` | 80 | Click-to-edit inline value with popover form |
+| `native-select.rip` | 32 | Styled native select element with state tracking |
+| `input-group.rip` | 28 | Input with prefix/suffix addon elements |
 
 ### Navigation
 
@@ -709,31 +1017,41 @@ standard; the implementation is ours.
 |------|-------|-------------|
 | `tabs.rip` | 124 | Tab panel with roving tabindex and arrow key nav |
 | `menu.rip` | 162 | Dropdown action menu with keyboard navigation |
-| `context-menu.rip` | 98 | Right-click context menu with keyboard navigation |
+| `context-menu.rip` | 105 | Right-click context menu with keyboard navigation |
 | `menubar.rip` | 155 | Horizontal menu bar with dropdown menus |
-| `nav-menu.rip` | 132 | Site navigation with hover/click dropdown panels |
+| `nav-menu.rip` | 129 | Site navigation with hover/click dropdown panels |
 | `toolbar.rip` | 46 | Groups controls with roving tabindex keyboard nav |
+| `breadcrumb.rip` | 46 | Navigation trail with separator and current page |
 
 ### Overlay
 
 | File | Lines | Description |
 |------|-------|-------------|
 | `dialog.rip` | 107 | Modal with focus trap, scroll lock, escape dismiss |
+| `alert-dialog.rip` | 96 | Non-dismissable modal requiring explicit user action |
 | `drawer.rip` | 79 | Slide-out panel with focus trap and scroll lock |
+| `sheet.rip` | 67 | Full-width/height side panel with focus trap |
 | `popover.rip` | 143 | Anchored floating content with flip/shift positioning |
 | `tooltip.rip` | 115 | Hover/focus tooltip with delay and positioning |
 | `preview-card.rip` | 73 | Hover/focus preview card with delay |
-| `toast.rip` | 88 | Auto-dismiss notification with ARIA live region |
+| `toast.rip` | 87 | Auto-dismiss notification with ARIA live region |
 
 ### Display
 
 | File | Lines | Description |
 |------|-------|-------------|
 | `button.rip` | 23 | Accessible button with disabled-but-focusable pattern |
+| `badge.rip` | 15 | Inline label with variant (solid/outline/subtle) |
+| `card.rip` | 25 | Structured container with header/content/footer |
 | `separator.rip` | 17 | Decorative or semantic divider between sections |
 | `progress.rip` | 25 | Progress bar with CSS custom property for value |
 | `meter.rip` | 36 | Gauge for known-range measurements with thresholds |
+| `spinner.rip` | 17 | Loading indicator with ARIA status |
+| `skeleton.rip` | 22 | Loading placeholder with shimmer animation |
 | `avatar.rip` | 37 | Image with fallback to initials or placeholder |
+| `aspect-ratio.rip` | 17 | Fixed aspect ratio container via CSS custom property |
+| `kbd.rip` | 13 | Semantic keyboard shortcut display |
+| `label.rip` | 16 | Standalone accessible form label |
 | `scroll-area.rip` | 145 | Custom scrollbar with draggable thumb and auto-hide |
 
 ### Form
@@ -743,6 +1061,7 @@ standard; the implementation is ours.
 | `field.rip` | 53 | Form field wrapper with label, description, and error |
 | `fieldset.rip` | 22 | Grouped fields with legend and cascading disable |
 | `form.rip` | 39 | Form wrapper with submit handling and validation state |
+| `button-group.rip` | 26 | Grouped buttons with ARIA group semantics |
 
 ### Data
 
@@ -750,9 +1069,19 @@ standard; the implementation is ours.
 |------|-------|-------------|
 | `grid.rip` | 901 | Virtual-scrolling data grid — 100K+ rows at 60fps |
 | `accordion.rip` | 113 | Expand/collapse sections, single or multiple mode |
+| `table.rip` | 27 | Semantic table wrapper with optional caption and striped rows |
+
+### Interactive
+
+| File | Lines | Description |
+|------|-------|-------------|
+| `collapsible.rip` | 50 | Single open/close section with animated expand |
+| `pagination.rip` | 91 | Page navigation with prev/next and ellipsis gaps |
+| `carousel.rip` | 110 | Slide carousel with autoplay, loop, and keyboard nav |
+| `resizable.rip` | 123 | Draggable resize handles between panels |
 
 ---
 
 | | Files | Lines |
 |--|-------|-------|
-| **Total** | **38** | **4,381** |
+| **Total** | **57** | **5,254** |
