@@ -8751,8 +8751,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.70";
-  var BUILD_DATE = "2026-03-02@08:04:50GMT";
+  var VERSION = "3.13.72";
+  var BUILD_DATE = "2026-03-02@17:47:10GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -8855,6 +8855,29 @@ ${c.js}
           opts.persist = persist === "local" ? "local" : true;
         await ui.launch("", opts);
       }
+    }
+    if (runtimeTag?.hasAttribute("data-reload")) {
+      let ready = false;
+      const es = new EventSource("/watch");
+      es.addEventListener("connected", () => {
+        if (ready)
+          location.reload();
+        ready = true;
+      });
+      es.addEventListener("reload", (e) => {
+        if (e.data === "styles") {
+          const t = Date.now();
+          document.querySelectorAll('link[rel="stylesheet"]').forEach((l) => {
+            if (new URL(l.href).origin !== location.origin)
+              return;
+            const url = new URL(l.href);
+            url.searchParams.set("_r", t);
+            l.href = url.toString();
+          });
+        } else {
+          location.reload();
+        }
+      });
     }
   }
   async function importRip(url) {

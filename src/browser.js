@@ -119,6 +119,29 @@ async function processRipScripts() {
       await ui.launch('', opts);
     }
   }
+
+  // Step 6: data-reload enables SSE hot-reload from dev server
+  if (runtimeTag?.hasAttribute('data-reload')) {
+    let ready = false;
+    const es = new EventSource('/watch');
+    es.addEventListener('connected', () => {
+      if (ready) location.reload();
+      ready = true;
+    });
+    es.addEventListener('reload', (e) => {
+      if (e.data === 'styles') {
+        const t = Date.now();
+        document.querySelectorAll('link[rel="stylesheet"]').forEach(l => {
+          if (new URL(l.href).origin !== location.origin) return;
+          const url = new URL(l.href);
+          url.searchParams.set('_r', t);
+          l.href = url.toString();
+        });
+      } else {
+        location.reload();
+      }
+    });
+  }
 }
 
 export { processRipScripts };

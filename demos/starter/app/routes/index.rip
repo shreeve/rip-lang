@@ -1,0 +1,9 @@
+export App = component
+  render
+    div
+      h1 "Hello, world!"
+      p "Welcome to Rip UI."
+      div style: "display:flex;gap:8px;margin-top:1rem"
+        Badge "New"
+        Badge variant: "outline", "Beta"
+        Badge variant: "subtle", "Draft"
