@@ -333,7 +333,7 @@ export WidgetGallery = component
     { id: 'breadcrumb', name: 'Breadcrumb', lines: 46, desc: 'Navigation trail with separator and current page.', props: ['@separator', '@label'], events: [], keys: [], attrs: ['$current'] }
     { id: 'table', name: 'Table', lines: 27, desc: 'Semantic table wrapper with optional caption and striped rows.', props: ['@caption', '@striped'], events: [], keys: [], attrs: ['$striped'] }
     { id: 'collapsible', name: 'Collapsible', lines: 50, desc: 'Single open/close section with animated expand.', props: ['@open', '@disabled'], events: ['change'], keys: ['Enter', 'Space'], attrs: ['$open', '$disabled'] }
-    { id: 'pagination', name: 'Pagination', lines: 113, desc: 'Page navigation with prev/next and ellipsis gaps.', props: ['@page', '@total', '@perPage', '@siblingCount'], events: ['change'], keys: ['← →', 'Home', 'End'], attrs: ['$active', '$disabled', '$ellipsis'] }
+    { id: 'pagination', name: 'Pagination', lines: 110, desc: 'Page navigation with prev/next and ellipsis gaps.', props: ['@page', '@total', '@perPage', '@siblingCount'], events: ['change'], keys: ['← →', 'Home', 'End'], attrs: ['$active', '$disabled', '$ellipsis'] }
     { id: 'carousel', name: 'Carousel', lines: 110, desc: 'Slide carousel with autoplay, loop, and keyboard nav.', props: ['@orientation', '@loop', '@autoplay', '@interval', '@label'], events: ['change'], keys: ['← →', '↕', 'Home', 'End'], attrs: ['$orientation', '$active', '$prev', '$next'] }
     { id: 'resizable', name: 'Resizable', lines: 123, desc: 'Draggable resize handles between panels.', props: ['@orientation', '@minSize', '@maxSize'], events: ['resize'], keys: ['← →', '↕'], attrs: ['$orientation', '$dragging'] }
   ]
@@ -2666,7 +2666,7 @@ export WidgetGallery = component
       # ================================================================
       .section id: "pagination"
         .section-title "Pagination"
-          span.badge @click: (=> @_viewSource('pagination')), "113 lines ❐"
+          span.badge @click: (=> @_viewSource('pagination')), "110 lines ❐"
           .section-nav
             a @click: (=> @_navSection('pagination', 'prev')), "‹"
             a @click: (=> @_navSection('pagination', 'home')), "⌂"

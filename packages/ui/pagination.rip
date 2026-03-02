@@ -15,7 +15,6 @@ export Pagination = component
 
   totalPages ~= Math.max(1, Math.ceil(@total / @perPage))
   _ready := false
-  _id =! "pag-#{Math.random().toString(36).slice(2, 8)}"
 
   _range: (start, fin) ->
     len = fin - start + 1
@@ -80,15 +79,12 @@ export Pagination = component
     inner = nav.querySelector('[data-pages]')
     return unless inner
 
-    while inner.firstChild
-      inner.removeChild(inner.firstChild)
-
+    frag = document.createDocumentFragment()
     for pg in visiblePages
       if pg < 0
         el = document.createElement 'span'
         el.setAttribute 'data-ellipsis', ''
         el.textContent = '...'
-        inner.appendChild el
       else
         el = document.createElement 'button'
         el.setAttribute 'aria-label', "Page #{pg}"
@@ -98,7 +94,8 @@ export Pagination = component
           el.setAttribute 'data-active', ''
         el.textContent = "#{pg}"
         el.addEventListener 'click', => @goto(pg)
-        inner.appendChild el
+      frag.appendChild el
+    inner.replaceChildren frag
 
   render
     nav ref: "_nav", aria-label: "Pagination", @keydown: @onKeydown
