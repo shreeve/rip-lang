@@ -4793,9 +4793,11 @@ ${blockFactoriesCode}return ${lines.join(`
       const elVar = this.newElementVar("el");
       const { propsCode, reactiveProps, eventBindings, childrenSetupLines } = this.buildComponentProps(args);
       const s = this._self;
+      this._createLines.push(`{ const __prev = __pushComponent(${s}); try {`);
       this._createLines.push(`${instVar} = new ${componentName}(${propsCode});`);
       this._createLines.push(`${elVar} = ${instVar}._root = ${instVar}._create();`);
       this._createLines.push(`(${s}._children || (${s}._children = [])).push(${instVar});`);
+      this._createLines.push(`} finally { __popComponent(__prev); } }`);
       for (const { event, value } of eventBindings) {
         const handlerCode = this.generateInComponent(value, "value");
         this._createLines.push(`${elVar}.addEventListener('${event}', (e) => __batch(() => (${handlerCode})(e)));`);
@@ -8749,8 +8751,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.68";
-  var BUILD_DATE = "2026-03-02@06:03:38GMT";
+  var VERSION = "3.13.70";
+  var BUILD_DATE = "2026-03-02@08:04:50GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

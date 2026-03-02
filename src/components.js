@@ -1767,9 +1767,11 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     const { propsCode, reactiveProps, eventBindings, childrenSetupLines } = this.buildComponentProps(args);
 
     const s = this._self;
+    this._createLines.push(`{ const __prev = __pushComponent(${s}); try {`);
     this._createLines.push(`${instVar} = new ${componentName}(${propsCode});`);
     this._createLines.push(`${elVar} = ${instVar}._root = ${instVar}._create();`);
     this._createLines.push(`(${s}._children || (${s}._children = [])).push(${instVar});`);
+    this._createLines.push(`} finally { __popComponent(__prev); } }`);
 
     for (const { event, value } of eventBindings) {
       const handlerCode = this.generateInComponent(value, 'value');
