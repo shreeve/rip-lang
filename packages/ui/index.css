@@ -1707,7 +1707,7 @@ html.no-transition, html.no-transition * { transition: none !important; }
   .source-code .hljs-number,
   .source-code .hljs-literal { color: #fbbf24; }
   .source-code .hljs-title,
-  .source-code .hljs-function { color: #60a5fa; }
+  .source-code .hljs-function { color: #93c5fd; }
   .source-code .hljs-params { color: #f0abfc; }
   .source-code .hljs-attr,
   .source-code .hljs-attribute { color: #67e8f9; }
