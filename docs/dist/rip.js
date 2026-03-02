@@ -1532,7 +1532,7 @@
             return 0;
           let m = /^#([a-zA-Z_][\w-]*)/.exec(this.chunk);
           if (m) {
-            this.emit("IDENTIFIER", m[1] === "content" ? "slot" : "div#" + m[1]);
+            this.emit("IDENTIFIER", "div#" + m[1]);
             return m[0].length;
           }
         }
@@ -8739,8 +8739,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.65";
-  var BUILD_DATE = "2026-03-01@21:59:29GMT";
+  var VERSION = "3.13.66";
+  var BUILD_DATE = "2026-03-02@02:51:17GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -9799,7 +9799,7 @@ ${indented}`);
               mp.appendChild(wrapper);
               inst.mount(wrapper);
               layoutInstances.push(inst);
-              slot = wrapper.querySelector("slot") || wrapper;
+              slot = wrapper.querySelector("#content") || wrapper;
               mp = slot;
             }
             currentLayouts = [...layoutFiles];

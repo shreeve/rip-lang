@@ -757,7 +757,7 @@ export createRenderer = (opts = {}) ->
           inst.mount wrapper
           layoutInstances.push inst
 
-          slot = wrapper.querySelector('slot') or wrapper
+          slot = wrapper.querySelector('#content') or wrapper
           mp = slot
 
         currentLayouts = [...layoutFiles]
