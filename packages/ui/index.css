@@ -1216,7 +1216,7 @@ html.no-transition, html.no-transition * { transition: none !important; }
 
 /* ── ButtonGroup ── */
 
-.gallery [role="group"][data-orientation]:not(:has(button[aria-pressed])):not([role="radiogroup"]) {
+.gallery [role="group"][data-orientation]:not(:has(button[aria-pressed])):not([role="radiogroup"]):not(:has([data-track])) {
   display: inline-flex;
 
   &[data-orientation="horizontal"] { flex-direction: row; }
