@@ -1232,8 +1232,8 @@ body:has(.source-overlay) { overflow: hidden; }
       font-size: 13px; display: flex; align-items: center; user-select: none;
     }
     [data-prefix] { border-right: 1px solid #e2e8f0; }
-    [data-suffix] { border-left: 1px solid #e2e8f0; cursor: pointer; }
-    [data-suffix]:hover { background: #e2e8f0; }
+    [data-suffix] { border-left: 1px solid #e2e8f0; border-top: none; border-bottom: none; border-right: none; cursor: pointer; }
+    [data-suffix]:hover { background: #e2e8f0; color: #1e293b; }
 
     input {
       border: none; outline: none; padding: 0 10px; height: 36px;
