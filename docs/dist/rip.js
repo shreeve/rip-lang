@@ -4876,6 +4876,16 @@ ${blockFactoriesCode}return ${lines.join(`
               props.push(`children: ${childrenVar}`);
             }
           }
+        } else if (arg && !childrenVar) {
+          const textVar = this.newTextVar();
+          const val = typeof arg === "string" ? arg.valueOf() : null;
+          if (val && (val.startsWith('"') || val.startsWith("'") || val.startsWith("`"))) {
+            this._createLines.push(`${textVar} = document.createTextNode(${val});`);
+          } else {
+            this._createLines.push(`${textVar} = document.createTextNode(${this.generateInComponent(arg, "value")});`);
+          }
+          childrenVar = textVar;
+          props.push(`children: ${childrenVar}`);
         }
       }
       const propsCode = props.length > 0 ? `{ ${props.join(", ")} }` : "{}";
@@ -8740,7 +8750,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.68";
-  var BUILD_DATE = "2026-03-02@03:09:09GMT";
+  var BUILD_DATE = "2026-03-02@06:03:38GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

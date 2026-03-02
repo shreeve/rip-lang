@@ -1873,6 +1873,16 @@ export function installComponentSupport(CodeGenerator, Lexer) {
             props.push(`children: ${childrenVar}`);
           }
         }
+      } else if (arg && !childrenVar) {
+        const textVar = this.newTextVar();
+        const val = typeof arg === 'string' ? arg.valueOf() : null;
+        if (val && (val.startsWith('"') || val.startsWith("'") || val.startsWith('`'))) {
+          this._createLines.push(`${textVar} = document.createTextNode(${val});`);
+        } else {
+          this._createLines.push(`${textVar} = document.createTextNode(${this.generateInComponent(arg, 'value')});`);
+        }
+        childrenVar = textVar;
+        props.push(`children: ${childrenVar}`);
       }
     }
 

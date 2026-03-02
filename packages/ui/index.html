@@ -48,6 +48,7 @@
       /popover.rip
       /accordion.rip
       /grid.rip
+      /badge.rip
       /skeleton.rip
       /spinner.rip
       /card.rip
@@ -314,7 +315,7 @@ export WidgetGallery = component
     { id: 'form', name: 'Form', lines: 21, desc: 'Form wrapper with submit handling and validation state.', props: ['@disabled'], events: ['submit'], keys: [], attrs: ['$disabled', '$submitting', '$submitted'] }
     { id: 'grid', name: 'Grid', lines: 799, desc: 'Virtual-scrolling data grid — 100K+ rows at 60fps.', props: ['@data', '@columns', '@rowHeight', '@overscan', '@striped', '@beforeEdit', '@afterEdit'], events: [], keys: ['Arrows', 'Tab', 'Enter', 'F2', 'Esc', 'Home', 'End', 'PgUp', 'PgDn', 'Ctrl+A', 'Ctrl+C', 'Ctrl+V', 'Ctrl+X'], attrs: ['$editing', '$selecting', '$sorted'] }
     { id: 'accordion', name: 'Accordion', lines: 86, desc: 'Expand/collapse sections, single or multiple mode.', props: ['@multiple'], events: ['change'], keys: ['Enter', 'Space', '↕', 'Home', 'End'], attrs: ['$item', '$trigger', '$content', '$open', '$disabled'] }
-    { id: 'badge', name: 'Badge', lines: 0, desc: 'Inline label with variant. Uses native <span> + data-variant.', props: [], events: [], keys: [], attrs: ['$variant'] }
+    { id: 'badge', name: 'Badge', lines: 10, desc: 'Inline label with variant (solid/outline/subtle).', props: ['@variant'], events: [], keys: [], attrs: ['$variant'] }
     { id: 'kbd', name: 'Kbd', lines: 0, desc: 'Semantic keyboard shortcut display. Uses native <kbd> element.', props: [], events: [], keys: [], attrs: [] }
     { id: 'skeleton', name: 'Skeleton', lines: 10, desc: 'Loading placeholder with shimmer animation.', props: ['@width', '@height', '@circle', '@label'], events: [], keys: [], attrs: ['$circle'] }
     { id: 'spinner', name: 'Spinner', lines: 6, desc: 'Loading indicator with accessible status.', props: ['@label', '@size'], events: [], keys: [], attrs: [] }
@@ -497,7 +498,7 @@ export WidgetGallery = component
           h1 "Rip UI"
           button.theme-toggle @click: (=> @_toggleDark())
             if darkMode then "☀" else "☾"
-        p "54 headless, accessible components. Zero CSS, zero dependencies."
+        p "55 headless, accessible components. Zero CSS, zero dependencies."
 
       .toc
         .toc-nav @keydown: @_onTocKeydown
@@ -2016,18 +2017,18 @@ export WidgetGallery = component
       # ================================================================
       .section id: "badge"
         .section-title "Badge"
-          span.badge "pattern"
+          span.badge @click: (=> @_viewSource('badge')), "10 lines ❐"
           .section-nav
             a @click: (=> @_navSection('badge', 'prev')), "‹"
             a @click: (=> @_navSection('badge', 'home')), "⌂"
             a @click: (=> @_navSection('badge', 'next')), "›"
-        .section-desc "Inline label with variant styles. Use a native span with data-variant."
+        .section-desc "Inline label with variant styles."
         .demo-row
           .demo-label "Variants"
           . style: "display:flex;gap:8px;align-items:center"
-            span data-variant: "solid", "Solid"
-            span data-variant: "outline", "Outline"
-            span data-variant: "subtle", "Subtle"
+            Badge "Solid"
+            Badge variant: "outline", "Outline"
+            Badge variant: "subtle", "Subtle"
 
       # ================================================================
       # CARD
