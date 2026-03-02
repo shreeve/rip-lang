@@ -8751,8 +8751,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.72";
-  var BUILD_DATE = "2026-03-02@17:47:10GMT";
+  var VERSION = "3.13.75";
+  var BUILD_DATE = "2026-03-02@18:18:53GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -8823,6 +8823,7 @@ ${mount}.mount(${JSON.stringify(target)});`;
           await (0, eval)(`(async()=>{
 ${js}
 })()`);
+          document.body.classList.add("ready");
         } catch (e) {
           if (e instanceof SyntaxError) {
             console.error(`Rip syntax error in combined output: ${e.message}`);

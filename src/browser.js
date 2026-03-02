@@ -91,6 +91,7 @@ async function processRipScripts() {
 
       try {
         await (0, eval)(`(async()=>{\n${js}\n})()`);
+        document.body.classList.add('ready');
       } catch (e) {
         if (e instanceof SyntaxError) {
           console.error(`Rip syntax error in combined output: ${e.message}`);
