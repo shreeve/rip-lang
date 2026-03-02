@@ -2057,8 +2057,10 @@ export WidgetGallery = component
               button.demo-btn @click: (=> toasts = [...toasts, { message: 'Card action clicked!', type: 'success' }]), "Action"
         .demo-row.card-demo
           Card interactive: true
+            div $header: true
+              h3 "Interactive Card"
             div $content: true
-              "Click or focus this interactive card."
+              "Click or focus this card. It has tabindex and hover effects."
         .api
           dl
             dt "Props"
