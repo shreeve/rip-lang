@@ -1152,6 +1152,8 @@ html.no-transition, html.no-transition * { transition: none !important; }
 
 /* ── Card ── */
 
+.gallery .card-demo { background: none; border: none; padding: 0; }
+
 .gallery .card-demo > div {
   background: white; border: 1px solid #e2e8f0; border-radius: 8px;
   overflow: hidden; transition: box-shadow 0.2s;
