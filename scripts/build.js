@@ -17,17 +17,17 @@ function stamp(js) {
   return js.replace('"0.0.0"', `"${version}"`).replace('"0000-00-00@00:00:00GMT"', `"${buildDate}"`);
 }
 
-// Step 1: Compile app.rip → _app.js (temporary)
-const appJS = compileToJS(readFileSync('./src/app.rip', 'utf-8'));
-writeFileSync('./docs/dist/_app.js', appJS);
+// Step 1: Compile ui.rip → _ui.js (temporary)
+const uiJS = compileToJS(readFileSync('./src/ui.rip', 'utf-8'));
+writeFileSync('./docs/dist/_ui.js', uiJS);
 
-// Step 2: Create entry point that wires browser.js + app.rip together
+// Step 2: Create entry point that wires browser.js + ui.rip together
 writeFileSync('./docs/dist/_entry.js', `\
 import { importRip } from '../../src/browser.js';
 export * from '../../src/browser.js';
-import * as __appExports from './_app.js';
-importRip.modules['app.rip'] = __appExports;
-for (const [k, v] of Object.entries(__appExports)) if (typeof v === 'function') globalThis[k] = v;
+import * as __uiExports from './_ui.js';
+importRip.modules['ui.rip'] = __uiExports;
+for (const [k, v] of Object.entries(__uiExports)) if (typeof v === 'function') globalThis[k] = v;
 `);
 
 // Step 3: Build the bundle
@@ -52,7 +52,7 @@ await build(['./docs/dist/_entry.js'], 'rip.js', false);
 await build(['./docs/dist/_entry.js'], 'rip.min.js', true);
 
 // Clean up intermediates
-try { unlinkSync('./docs/dist/_app.js'); } catch {}
+try { unlinkSync('./docs/dist/_ui.js'); } catch {}
 try { unlinkSync('./docs/dist/_entry.js'); } catch {}
 
 console.log(`\n✨ rip.min.js ready • Version ${version} • ${buildDate}`);

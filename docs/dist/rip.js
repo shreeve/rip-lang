@@ -8739,8 +8739,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.66";
-  var BUILD_DATE = "2026-03-02@02:51:17GMT";
+  var VERSION = "3.13.68";
+  var BUILD_DATE = "2026-03-02@03:09:09GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -8831,7 +8831,7 @@ ${c.js}
     }
     const cfg = document.querySelector("script[data-launch]");
     if (cfg && !globalThis.__ripLaunched) {
-      const ui = importRip.modules?.["app.rip"];
+      const ui = importRip.modules?.["ui.rip"];
       if (ui?.launch) {
         const url = cfg.getAttribute("data-launch") || "";
         const hash = cfg.getAttribute("data-hash");
@@ -8902,9 +8902,9 @@ ${indented}`);
       }
     });
   }
-  // docs/dist/_app.js
-  var exports__app = {};
-  __export(exports__app, {
+  // docs/dist/_ui.js
+  var exports__ui = {};
+  __export(exports__ui, {
     throttle: () => throttle,
     stash: () => stash,
     setContext: () => setContext,
@@ -10028,8 +10028,8 @@ ${indented}`);
   };
 
   // docs/dist/_entry.js
-  importRip.modules["app.rip"] = exports__app;
-  for (const [k, v] of Object.entries(exports__app))
+  importRip.modules["ui.rip"] = exports__ui;
+  for (const [k, v] of Object.entries(exports__ui))
     if (typeof v === "function")
       globalThis[k] = v;
 })();
