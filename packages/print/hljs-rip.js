@@ -138,11 +138,9 @@ export default function(hljs) {
 
   const METHOD_DEF = {
     className: 'function',
-    begin: /[a-zA-Z_$][\w$]*[!?]?\s*:/,
-    end: /[-=]>/,
-    excludeEnd: true,
+    match: /[a-zA-Z_$][\w$]*[!?]?(?=\s*:\s*(?:\([^)]*\)\s*)?[-=]>)/,
     contains: [
-      { className: 'title.function', begin: /[a-zA-Z_$][\w$]*[!?]?/, end: /:/, excludeEnd: true },
+      { className: 'title.function', begin: /[a-zA-Z_$][\w$]*[!?]?/ },
     ],
   };
 
