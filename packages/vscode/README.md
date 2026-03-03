@@ -39,12 +39,28 @@ This is 35 lines of code in the language server — no compiler changes, no sour
 
 ## Tailwind CSS Autocompletion
 
-To enable Tailwind CSS autocompletion inside `.()` CLSX helpers in Rip render templates, add these to your VS Code or Cursor settings:
+Tailwind IntelliSense works automatically in `.rip` files when the
+[Tailwind CSS IntelliSense](https://marketplace.visualstudio.com/items?itemName=bradlc.vscode-tailwindcss)
+extension is installed. The Rip extension configures the class regex patterns
+via `configurationDefaults` — no manual setup needed.
+
+Completions are provided in these contexts:
+
+```coffee
+div.("px-4 py-2 text-sm")          # .() CLSX helper — double or single quotes
+div class: "flex items-center"      # class: attribute
+```
+
+If you need to override the patterns (e.g., to merge with other frameworks),
+add these to your settings:
 
 ```json
 "tailwindCSS.includeLanguages": { "rip": "html" },
 "tailwindCSS.experimental.classRegex": [
-  ["\\.\\(([\\s\\S]*?)\\)", "'([^']*)'"]
+  ["\\.\\(([\\s\\S]*?)\\)", "\"([^\"]*)\""],
+  ["\\.\\(([\\s\\S]*?)\\)", "'([^']*)'"],
+  "class:\\s*\"([^\"]*)\"",
+  "class:\\s*'([^']*)'"
 ]
 ```
 

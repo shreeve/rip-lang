@@ -2,14 +2,10 @@ const vscode = require('vscode');
 const path = require('path');
 const { LanguageClient, TransportKind } = require('vscode-languageclient/node');
 
-// Tailwind CSS IntelliSense — to enable autocompletion for Tailwind classes
-// inside .() CLSX helpers in Rip render templates, add these to your VS Code
-// or Cursor user/workspace settings:
-//
-//   "tailwindCSS.includeLanguages": { "rip": "html" },
-//   "tailwindCSS.experimental.classRegex": [
-//     ["\\.\\(([\\s\\S]*?)\\)", "'([^']*)'"]
-//   ]
+// Tailwind CSS IntelliSense — configured automatically via configurationDefaults
+// in package.json. Covers .() CLSX helpers and class: attributes in .rip files.
+// If you need to customize, override tailwindCSS.experimental.classRegex in your
+// user/workspace settings.
 
 let client;
 

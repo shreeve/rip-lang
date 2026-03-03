@@ -89,7 +89,16 @@
       "[rip-schema]": {
         "editor.tabSize": 2,
         "editor.insertSpaces": true
-      }
+      },
+      "tailwindCSS.includeLanguages": {
+        "rip": "html"
+      },
+      "tailwindCSS.experimental.classRegex": [
+        ["\\.\\(([\\s\\S]*?)\\)", "\"([^\"]*)\""],
+        ["\\.\\(([\\s\\S]*?)\\)", "'([^']*)'"],
+        "class:\\s*\"([^\"]*)\"",
+        "class:\\s*'([^']*)'"
+      ]
     }
   },
   "scripts": {
