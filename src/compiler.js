@@ -3294,6 +3294,7 @@ export class Compiler {
       skipPreamble: this.options.skipPreamble,
       skipRuntimes: this.options.skipRuntimes,
       skipExports: this.options.skipExports,
+      stubComponents: this.options.stubComponents,
       reactiveVars: this.options.reactiveVars,
       sourceMap,
     });

@@ -71,7 +71,7 @@ export function createTypeCheckSettings(ts, overrides = {}) {
 // compiled JS, detects type annotations, and builds bidirectional
 // source maps. Returns everything both the CLI and LSP need.
 export function compileForCheck(filePath, source, compiler) {
-  const result = compiler.compile(source, { sourceMap: true, types: 'emit', skipPreamble: true });
+  const result = compiler.compile(source, { sourceMap: true, types: 'emit', skipPreamble: true, stubComponents: true });
   let code = result.code || '';
   const dts = result.dts ? result.dts.trimEnd() + '\n' : '';
 
@@ -91,17 +91,11 @@ export function compileForCheck(filePath, source, compiler) {
   const hasTypes = hasOwnTypes || importsTyped;
   if (!hasTypes) code = '// @ts-nocheck\n' + code;
 
-  // Component render blocks generate hundreds of untyped compiler internals
-  // (_el0, _inst7, block factories) that TypeScript can't type-check.
-  // The DTS provides the typed API; skip TS checking on the compiled body.
-  const hasComponents = /\bextends __Component\b/.test(code);
-
   // Ensure every file is treated as a module (not a global script)
   if (!/\bexport\b/.test(code) && !/\bimport\b/.test(code)) code += '\nexport {};\n';
 
-  // @ts-nocheck must be on the first line to take effect
-  const tsContent = (hasComponents ? '// @ts-nocheck\n' : '') + (hasTypes ? dts + '\n' : '') + code;
-  const headerLines = (hasComponents ? 1 : 0) + (hasTypes ? countLines(dts + '\n') : 1);
+  const tsContent = (hasTypes ? dts + '\n' : '') + code;
+  const headerLines = hasTypes ? countLines(dts + '\n') : 1;
 
   // Build bidirectional line maps
   const { srcToGen, genToSrc } = buildLineMap(result.reverseMap, result.map, headerLines);

@@ -669,6 +669,8 @@ export function installComponentSupport(CodeGenerator, Lexer) {
    * Pattern: ["component", null, ["block", ...statements]]
    */
   proto.generateComponent = function(head, rest, context, sexpr) {
+    if (this.options.stubComponents) return 'class {}';
+
     const [, body] = rest;
 
     this.usesTemplates = true;
