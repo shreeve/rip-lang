@@ -13,7 +13,7 @@ export Press = component
       slot
 
 export Counter = component
-  @title := "Data Counters"
+  @title :: string := "Data Counters"
   count := @app.data.count or 0
   step  := 1
 
