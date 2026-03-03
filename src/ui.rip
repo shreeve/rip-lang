@@ -33,10 +33,12 @@ export { setContext, getContext, hasContext }
 # based access via get/set methods (e.g., stash.get('users[0].name')).
 # ==============================================================================
 
-STASH   = Symbol('stash')
-SIGNALS = Symbol('signals')
-RAW     = Symbol('raw')
-PROXIES = new WeakMap()
+STASH     = Symbol('stash')
+SIGNALS   = Symbol('signals')
+RAW       = Symbol('raw')
+PERSISTED = Symbol('persisted')
+PROXIES   = new WeakMap()
+
 _keysVersion = 0
 _writeVersion = __state(0)
 
@@ -155,6 +157,28 @@ export stash = (data = {}) -> makeProxy(data)
 export raw = (proxy) -> if proxy?[RAW] then proxy[RAW] else proxy
 
 export isStash = (obj) -> obj?[STASH] is true
+
+export persistStash = (app, opts = {}) ->
+  target = raw(app) or app
+  return if target[PERSISTED]
+  target[PERSISTED] = true
+  storage = if opts.local then localStorage else sessionStorage
+  storageKey = opts.key or '__rip_app'
+  try
+    saved = storage.getItem(storageKey)
+    if saved
+      savedData = JSON.parse(saved)
+      app.data[k] = v for k, v of savedData
+  catch
+    null
+  _save = ->
+    try storage.setItem storageKey, JSON.stringify(raw(app.data))
+    catch then null
+  __effect ->
+    _writeVersion.value
+    t = setTimeout _save, 2000
+    -> clearTimeout t
+  window.addEventListener 'beforeunload', _save
 
 # ==============================================================================
 # Resource — async data loading with reactive loading/error/data states
@@ -930,6 +954,7 @@ export launch = (appBase = '', opts = {}) ->
 
   # Create the unified stash
   app = stash { components: {}, routes: {}, data: {} }
+  globalThis.__ripApp = app
 
   # Hydrate from bundle — any keys populate the stash
   app.data = bundle.data if bundle.data
@@ -938,24 +963,7 @@ export launch = (appBase = '', opts = {}) ->
 
   # Restore persisted state (overrides bundle defaults with saved user state)
   if persist and typeof sessionStorage isnt 'undefined'
-    _storageKey = "__rip_#{appBase}"
-    _storage = if persist is 'local' then localStorage else sessionStorage
-    try
-      saved = _storage.getItem(_storageKey)
-      if saved
-        savedData = JSON.parse(saved)
-        app.data[k] = v for k, v of savedData
-    catch
-      null
-    # Auto-save: debounce 2s after any stash write. Also save on unload.
-    _save = ->
-      try _storage.setItem _storageKey, JSON.stringify(raw(app.data))
-      catch then null
-    __effect ->
-      _writeVersion.value
-      t = setTimeout _save, 2000
-      -> clearTimeout t
-    window.addEventListener 'beforeunload', _save
+    persistStash app, local: persist is 'local', key: "__rip_#{appBase}"
 
   # Create components store and load component sources
   appComponents = createComponents()

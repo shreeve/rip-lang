@@ -2208,6 +2208,7 @@ function __handleComponentError(error, component) {
 class __Component {
   constructor(props = {}) {
     Object.assign(this, props);
+    if (!this.app && globalThis.__ripApp) this.app = globalThis.__ripApp;
     const prev = __pushComponent(this);
     try { this._init(props); } catch (e) { __popComponent(prev); __handleComponentError(e, this); return; }
     __popComponent(prev);

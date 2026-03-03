@@ -79,6 +79,27 @@ async function processRipScripts() {
       }
     }
 
+    // Step 3b: Create app stash for data-src mode (skip if data-launch will handle it)
+    if (!globalThis.__ripApp && runtimeTag && !document.querySelector('script[data-launch]')) {
+      const stashFn = globalThis.stash;
+      if (stashFn) {
+        let initial = {};
+        const stateAttr = runtimeTag.getAttribute('data-state');
+        if (stateAttr) {
+          try { initial = JSON.parse(stateAttr); }
+          catch (e) { console.error('Rip: invalid data-state JSON:', e.message); }
+        }
+        const app = stashFn({ data: initial });
+        globalThis.__ripApp = app;
+        if (typeof window !== 'undefined') window.app = app;
+
+        const persistAttr = runtimeTag.getAttribute('data-persist');
+        if (persistAttr != null && globalThis.persistStash) {
+          globalThis.persistStash(app, { local: persistAttr === 'local' });
+        }
+      }
+    }
+
     if (compiled.length > 0) {
       let js = compiled.map(c => c.js).join('\n');
 
