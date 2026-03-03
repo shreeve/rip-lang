@@ -5174,6 +5174,7 @@ function __handleComponentError(error, component) {
 class __Component {
   constructor(props = {}) {
     Object.assign(this, props);
+    if (!this.app && globalThis.__ripApp) this.app = globalThis.__ripApp;
     const prev = __pushComponent(this);
     try { this._init(props); } catch (e) { __popComponent(prev); __handleComponentError(e, this); return; }
     __popComponent(prev);
@@ -8752,7 +8753,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.75";
-  var BUILD_DATE = "2026-03-02@18:18:53GMT";
+  var BUILD_DATE = "2026-03-03@00:02:43GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -8808,6 +8809,28 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
           compiled.push({ js, url: s.url || "inline" });
         } catch (e) {
           console.error(`Rip compile error in ${s.url || "inline"}:`, e.message);
+        }
+      }
+      if (!globalThis.__ripApp && runtimeTag && !document.querySelector("script[data-launch]")) {
+        const stashFn = globalThis.stash;
+        if (stashFn) {
+          let initial = {};
+          const stateAttr = runtimeTag.getAttribute("data-state");
+          if (stateAttr) {
+            try {
+              initial = JSON.parse(stateAttr);
+            } catch (e) {
+              console.error("Rip: invalid data-state JSON:", e.message);
+            }
+          }
+          const app = stashFn({ data: initial });
+          globalThis.__ripApp = app;
+          if (typeof window !== "undefined")
+            window.app = app;
+          const persistAttr = runtimeTag.getAttribute("data-persist");
+          if (persistAttr != null && globalThis.persistStash) {
+            globalThis.persistStash(app, { local: persistAttr === "local" });
+          }
         }
       }
       if (compiled.length > 0) {
@@ -8945,6 +8968,7 @@ ${indented}`);
     stash: () => stash,
     setContext: () => setContext,
     raw: () => raw,
+    persistStash: () => persistStash,
     launch: () => launch,
     isStash: () => isStash,
     hold: () => hold,
@@ -8958,6 +8982,7 @@ ${indented}`);
     createComponents: () => createComponents
   });
   var PATH_RE;
+  var PERSISTED;
   var PROXIES;
   var RAW;
   var SIGNALS;
@@ -9023,6 +9048,7 @@ ${indented}`);
   STASH = Symbol("stash");
   SIGNALS = Symbol("signals");
   RAW = Symbol("raw");
+  PERSISTED = Symbol("persisted");
   PROXIES = new WeakMap;
   _keysVersion = 0;
   _writeVersion = __state(0);
@@ -9171,6 +9197,43 @@ ${indented}`);
   };
   var isStash = function(obj) {
     return obj?.[STASH] === true;
+  };
+  var persistStash = function(app, opts = {}) {
+    let _save, saved, savedData, storage, storageKey, target;
+    target = raw(app) || app;
+    if (target[PERSISTED])
+      return;
+    target[PERSISTED] = true;
+    storage = opts.local ? localStorage : sessionStorage;
+    storageKey = opts.key || "__rip_app";
+    try {
+      saved = storage.getItem(storageKey);
+      if (saved) {
+        savedData = JSON.parse(saved);
+        for (const k in savedData) {
+          const v = savedData[k];
+          app.data[k] = v;
+        }
+      }
+    } catch {}
+    _save = function() {
+      return (() => {
+        try {
+          return storage.setItem(storageKey, JSON.stringify(raw(app.data)));
+        } catch {
+          return null;
+        }
+      })();
+    };
+    __effect(function() {
+      let t;
+      _writeVersion.value;
+      t = setTimeout(_save, 2000);
+      return function() {
+        return clearTimeout(t);
+      };
+    });
+    return window.addEventListener("beforeunload", _save);
   };
   var createResource = function(fn, opts = {}) {
     let _data, _error, _loading, load, resource;
@@ -9956,7 +10019,7 @@ ${indented}`);
     return connect();
   };
   var launch = async function(appBase = "", opts = {}) {
-    let _save, _storage, _storageKey, app, appComponents, bundle, cached, classesKey, compile2, el, etag, etagKey, hash, headers, persist, renderer, res, resolver, router, saved, savedData, target;
+    let app, appComponents, bundle, cached, classesKey, compile2, el, etag, etagKey, hash, headers, persist, renderer, res, resolver, router, target;
     globalThis.__ripLaunched = true;
     if (typeof appBase === "object") {
       opts = appBase;
@@ -10000,42 +10063,14 @@ ${indented}`);
       throw new Error("launch: no bundle or bundleUrl provided");
     }
     app = stash({ components: {}, routes: {}, data: {} });
+    globalThis.__ripApp = app;
     if (bundle.data)
       app.data = bundle.data;
     if (bundle.routes) {
       app.routes = bundle.routes;
     }
     if (persist && typeof sessionStorage !== "undefined") {
-      _storageKey = `__rip_${appBase}`;
-      _storage = persist === "local" ? localStorage : sessionStorage;
-      try {
-        saved = _storage.getItem(_storageKey);
-        if (saved) {
-          savedData = JSON.parse(saved);
-          for (const k in savedData) {
-            const v = savedData[k];
-            app.data[k] = v;
-          }
-        }
-      } catch {}
-      _save = function() {
-        return (() => {
-          try {
-            return _storage.setItem(_storageKey, JSON.stringify(raw(app.data)));
-          } catch {
-            return null;
-          }
-        })();
-      };
-      __effect(function() {
-        let t;
-        _writeVersion.value;
-        t = setTimeout(_save, 2000);
-        return function() {
-          return clearTimeout(t);
-        };
-      });
-      window.addEventListener("beforeunload", _save);
+      persistStash(app, { local: persist === "local", key: `__rip_${appBase}` });
     }
     appComponents = createComponents();
     if (bundle.components)
