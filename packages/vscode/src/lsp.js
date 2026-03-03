@@ -201,25 +201,23 @@ function publishDiagnostics(filePath) {
         }
       }
     }
-  }
 
-  // Untyped prop hints (at component definitions, not usage sites)
-  if (warnUntypedProps && c.source && componentRegistry.size > 0) {
-    const srcLines = c.source.split('\n');
-    for (const [name, info] of componentRegistry) {
+    // Untyped prop hints (at component definitions, not usage sites)
+    if (warnUntypedProps) for (const [name, info] of componentRegistry) {
       if (info.source !== filePath) continue;
       for (const prop of info.props) {
-        if (prop.type !== 'any') continue;
         for (let s = info.line; s < srcLines.length; s++) {
-          const match = srcLines[s].match(new RegExp('(@' + prop.name + ')\\b'));
+          const match = srcLines[s].match(new RegExp('(@' + prop.name + ')\\s*(::|([:!]?=))'));
           if (match) {
-            const col = srcLines[s].indexOf(match[1]);
-            diagnostics.push({
-              range: { start: { line: s, character: col }, end: { line: s, character: col + match[1].length } },
-              severity: 4,
-              source: 'rip',
-              message: `Prop '${prop.name}' has no type annotation`,
-            });
+            if (match[2] !== '::') {
+              const col = srcLines[s].indexOf(match[1]);
+              diagnostics.push({
+                range: { start: { line: s, character: col }, end: { line: s, character: col + match[1].length } },
+                severity: 4,
+                source: 'rip',
+                message: `Prop '${prop.name}' has no type annotation`,
+              });
+            }
             break;
           }
         }
