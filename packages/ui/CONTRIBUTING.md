@@ -1,8 +1,7 @@
 # Contributing to Rip UI
 
 Internal guide for contributors working on the widget codebase. For usage
-documentation, see [README.md](README.md). For styling philosophy, see
-[STYLING.md](STYLING.md).
+documentation, see [README.md](README.md).
 
 ---
 
@@ -56,7 +55,8 @@ distinct names for locals: `opts` not `items`, `tick` not `step`, `fn` not
 ### `$` Sigil and `data-*` Attributes
 
 In render blocks, use the `$` sigil (`$open`, `$selected`) which compiles to
-`data-*` attributes in the HTML output. Consumers style with CSS `[data-open]`,
+`data-*` attributes in the HTML output. Consumers style with Tailwind's
+`data-[open]:` and `data-[selected]:` variants, or CSS `[data-open]`,
 `[data-selected]` selectors. The widget never applies visual styles — it only
 sets semantic state attributes. This keeps the headless contract clean.
 

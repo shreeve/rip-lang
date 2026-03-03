@@ -1,8 +1,9 @@
 # Rip UI
 
-Headless, accessible UI components written in Rip. Zero dependencies. Zero CSS.
+Headless, accessible UI components written in Rip. Zero dependencies.
 Every widget exposes `$` attributes (compiled to `data-*`) for styling and
-handles keyboard interactions per WAI-ARIA Authoring Practices.
+handles keyboard interactions per WAI-ARIA Authoring Practices. Style with
+Tailwind, vanilla CSS, or any methodology you prefer.
 
 Components are plain `.rip` source files — no build step. The browser compiles
 them on the fly.
@@ -31,7 +32,7 @@ Every widget:
 - Handles all keyboard interactions per WAI-ARIA Authoring Practices
 - Sets correct ARIA attributes automatically
 - Exposes state via `$` sigil (`$open`, `$selected`) for CSS styling
-- Ships zero CSS — styling is entirely yours
+- Ships no CSS — style with Tailwind or any methodology
 - Uses Rip's reactive primitives for all state management
 
 ---
@@ -78,7 +79,7 @@ input value <=> @name
 | Component count | ~40 | 54 |
 | Total source | ShadCN wrappers (~3K LOC) atop Radix (~20K+ LOC) | 5,191 SLOC — everything included |
 | Build step | Required (Next.js, Vite, etc.) | None — browser compiles `.rip` source |
-| Styling | Pre-wired Tailwind (ShadCN) or unstyled (Radix) | Zero CSS — `data-*` contract, any methodology |
+| Styling | Pre-wired Tailwind (ShadCN) or unstyled (Radix) | Headless — `data-*` contract, style with Tailwind or any CSS |
 | Controlled components | `value` + `onChange` callback pair | `<=>` two-way binding |
 | Shared state | React Context + Provider wrappers | `offer` / `accept` keywords |
 | Reactivity | `useState` + `useEffect` + dependency arrays | `:=` / `~=` / `~>` — language-level |
@@ -127,25 +128,32 @@ own.
 
 ## Styling
 
-All widgets ship zero CSS. The contract between behavior and styling is
-`data-*` attributes:
+All widgets are headless — they ship no CSS. The contract between behavior
+and styling is `data-*` attributes:
 
 ```coffee
 # Widget exposes semantic state
 button $open: open?!, $disabled: @disabled?!
 ```
 
+Style with Tailwind's data attribute variants:
+
+```html
+<button class="data-[open]:border-blue-500 data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed">
+```
+
+Or vanilla CSS:
+
 ```css
-/* You write the styles */
-[data-open]     { border-color: var(--color-primary); }
+[data-open]     { border-color: theme('colors.blue.500'); }
 [data-disabled] { opacity: 0.5; cursor: not-allowed; }
 ```
 
-Any CSS methodology works — vanilla CSS, Tailwind, Open Props, a custom
-design system. The widgets don't care.
+Add Tailwind via CDN — no build step needed:
 
-For our recommended approach — design tokens, CSS architecture, dark mode,
-and the rationale behind it — see **[STYLING.md](STYLING.md)**.
+```html
+<script src="https://cdn.tailwindcss.com"></script>
+```
 
 ---
 

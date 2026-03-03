@@ -805,8 +805,8 @@ start port: 3000
 
 ### Rip UI (`packages/ui/`) — Headless UI Components
 
-Accessible, headless interactive components written in Rip. Zero dependencies,
-zero CSS. Every widget exposes `$` attributes (compiled to `data-`* in HTML) for styling and handles
+Accessible, headless interactive components written in Rip. Zero dependencies.
+Every widget exposes `$` attributes (compiled to `data-`* in HTML) for styling and handles
 keyboard interactions per WAI-ARIA Authoring Practices. Widgets are plain
 `.rip` source files — no build step. The browser compiles them on the fly.
 
@@ -1054,8 +1054,8 @@ Then restart `rip server` to pick up the new bundle.
 
 **Documentation in `packages/ui/`:**
 
-- `README.md` — Usage examples, API for every widget, styling guide (Open Props, CSS patterns, dark mode)
-- `NOTES.md` — Architecture rationale, behavioral primitives, per-widget implementation notes, known issues, roadmap
+- `README.md` — Usage examples, API for every widget, Tailwind styling guide
+- `CONTRIBUTING.md` — Widget authoring guide, behavioral primitives, per-widget implementation notes, known issues, roadmap
 
 ### Package Development
 
