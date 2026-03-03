@@ -297,6 +297,11 @@ export class CodeGenerator {
       if (entry.loc) {
         this.sourceMap.addMapping(lineOffset, 0, entry.loc.r, entry.loc.c);
       }
+      if (entry.subLocs) {
+        for (const { lineOffset: lo, loc } of entry.subLocs) {
+          if (loc) this.sourceMap.addMapping(lineOffset + lo, 0, loc.r, loc.c);
+        }
+      }
       lineOffset += entry.code.split('\n').length;
     }
   }
@@ -619,7 +624,12 @@ export class CodeGenerator {
         if (!blockStmts.includes(h) || !generated.endsWith('}')) generated += ';';
       }
       let loc = Array.isArray(stmt) ? stmt.loc : null;
-      return { code: generated, loc };
+      let entry = { code: generated, loc };
+      if (this._pendingComponentLineLocs) {
+        entry.subLocs = this._pendingComponentLineLocs;
+        this._pendingComponentLineLocs = null;
+      }
+      return entry;
     });
     let statementsCode = stmtEntries.map(e => e.code).join('\n');
 

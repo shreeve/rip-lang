@@ -713,35 +713,35 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       } else if (op === 'state') {
         const varName = getMemberName(stmt[1]);
         if (varName) {
-          stateVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]), type: getMemberType(stmt[1]) });
+          stateVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]), type: getMemberType(stmt[1]), loc: stmt.loc });
           memberNames.add(varName);
           reactiveMembers.add(varName);
         }
       } else if (op === 'computed') {
         const varName = getMemberName(stmt[1]);
         if (varName) {
-          derivedVars.push({ name: varName, expr: stmt[2] });
+          derivedVars.push({ name: varName, expr: stmt[2], loc: stmt.loc });
           memberNames.add(varName);
           reactiveMembers.add(varName);
         }
       } else if (op === 'readonly') {
         const varName = getMemberName(stmt[1]);
         if (varName) {
-          readonlyVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]), type: getMemberType(stmt[1]) });
+          readonlyVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]), type: getMemberType(stmt[1]), loc: stmt.loc });
           memberNames.add(varName);
         }
       } else if (op === '=') {
         const varName = getMemberName(stmt[1]);
         if (varName) {
           if (LIFECYCLE_HOOKS.has(varName)) {
-            lifecycleHooks.push({ name: varName, value: stmt[2] });
+            lifecycleHooks.push({ name: varName, value: stmt[2], loc: stmt.loc });
           } else {
             const val = stmt[2];
             if (Array.isArray(val) && (val[0] === '->' || val[0] === '=>')) {
-              methods.push({ name: varName, func: val });
+              methods.push({ name: varName, func: val, loc: stmt.loc });
               memberNames.add(varName);
             } else {
-              stateVars.push({ name: varName, value: val, isPublic: isPublicProp(stmt[1]) });
+              stateVars.push({ name: varName, value: val, isPublic: isPublicProp(stmt[1]), loc: stmt.loc });
               memberNames.add(varName);
               reactiveMembers.add(varName);
             }
@@ -757,9 +757,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
           if (!Array.isArray(pair)) continue;
           const [methodName, funcDef] = pair;
           if (typeof methodName === 'string' && LIFECYCLE_HOOKS.has(methodName)) {
-            lifecycleHooks.push({ name: methodName, value: funcDef });
+            lifecycleHooks.push({ name: methodName, value: funcDef, loc: pair.loc });
           } else if (typeof methodName === 'string') {
-            methods.push({ name: methodName, func: funcDef });
+            methods.push({ name: methodName, func: funcDef, loc: pair.loc });
             memberNames.add(methodName);
           }
         }
@@ -783,9 +783,21 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     this._autoEventHandlers = autoEventHandlers.size > 0 ? autoEventHandlers : null;
 
     const lines = [];
+    const lineLocs = [];
     let blockFactoriesCode = '';
 
-    lines.push('class extends __Component {');
+    let totalLines = 0;
+    const pushLine = (line, loc) => {
+      if (loc) lineLocs.push({ lineOffset: totalLines, loc });
+      lines.push(line);
+      totalLines += line.split('\n').length;
+    };
+    const pushPlain = (line) => {
+      lines.push(line);
+      totalLines += line.split('\n').length;
+    };
+
+    pushPlain('class extends __Component {');
 
     // --- Init (called by __Component constructor) ---
     if (this.options.lspMode) {
@@ -800,47 +812,47 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       const propsType = typedProps.length > 0
         ? `{ ${typedProps.join(', ')}, [key: string]: any }`
         : 'any';
-      lines.push(`  _init(props: ${propsType}) {`);
+      pushPlain(`  _init(props: ${propsType}) {`);
     } else {
-      lines.push('  _init(props) {');
+      pushPlain('  _init(props) {');
     }
 
     // Constants (readonly)
-    for (const { name, value, isPublic } of readonlyVars) {
+    for (const { name, value, isPublic, loc } of readonlyVars) {
       const val = this.generateInComponent(value, 'value');
-      lines.push(isPublic
+      pushLine(isPublic
         ? `    this.${name} = props.${name} ?? ${val};`
-        : `    this.${name} = ${val};`);
+        : `    this.${name} = ${val};`, loc);
     }
 
     // Accepted vars (from ancestor context via getContext)
     for (const name of acceptedVars) {
-      lines.push(`    this.${name} = getContext('${name}');`);
+      pushPlain(`    this.${name} = getContext('${name}');`);
     }
 
     // State variables (__state handles signal passthrough)
-    for (const { name, value, isPublic } of stateVars) {
+    for (const { name, value, isPublic, loc } of stateVars) {
       const val = this.generateInComponent(value, 'value');
-      lines.push(isPublic
+      pushLine(isPublic
         ? `    this.${name} = __state(props.__bind_${name}__ ?? props.${name} ?? ${val});`
-        : `    this.${name} = __state(${val});`);
+        : `    this.${name} = __state(${val});`, loc);
     }
 
     // Computed (derived)
-    for (const { name, expr } of derivedVars) {
+    for (const { name, expr, loc } of derivedVars) {
       if (this.is(expr, 'block')) {
         const transformed = this.transformComponentMembers(expr);
         const body = this.generateFunctionBody(transformed);
-        lines.push(`    this.${name} = __computed(() => ${body});`);
+        pushLine(`    this.${name} = __computed(() => ${body});`, loc);
       } else {
         const val = this.generateInComponent(expr, 'value');
-        lines.push(`    this.${name} = __computed(() => ${val});`);
+        pushLine(`    this.${name} = __computed(() => ${val});`, loc);
       }
     }
 
     // Offered vars (share with descendants via setContext — after all members are initialized)
     for (const name of offeredVars) {
-      lines.push(`    setContext('${name}', this.${name});`);
+      pushPlain(`    setContext('${name}', this.${name});`);
     }
 
     // Effects
@@ -850,36 +862,36 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       if (this.is(effectBody, 'block')) {
         const transformed = this.transformComponentMembers(effectBody);
         const body = this.generateFunctionBody(transformed, [], true);
-        lines.push(`    __effect(${isAsync}() => ${body});`);
+        pushLine(`    __effect(${isAsync}() => ${body});`, effect.loc);
       } else {
         const effectCode = this.generateInComponent(effectBody, 'value');
-        lines.push(`    __effect(${isAsync}() => { ${effectCode}; });`);
+        pushLine(`    __effect(${isAsync}() => { ${effectCode}; });`, effect.loc);
       }
     }
 
-    lines.push('  }');
+    pushPlain('  }');
 
     // --- Methods ---
-    for (const { name, func } of methods) {
+    for (const { name, func, loc } of methods) {
       if (Array.isArray(func) && (func[0] === '->' || func[0] === '=>')) {
         const [, params, methodBody] = func;
         const paramStr = Array.isArray(params) ? params.map(p => this.formatParam(p)).join(', ') : '';
         const transformed = this.reactiveMembers ? this.transformComponentMembers(methodBody) : methodBody;
         const isAsync = this.containsAwait(methodBody);
         const bodyCode = this.generateFunctionBody(transformed, params || []);
-        lines.push(`  ${isAsync ? 'async ' : ''}${name}(${paramStr}) ${bodyCode}`);
+        pushLine(`  ${isAsync ? 'async ' : ''}${name}(${paramStr}) ${bodyCode}`, loc);
       }
     }
 
     // --- Lifecycle hooks ---
-    for (const { name, value } of lifecycleHooks) {
+    for (const { name, value, loc } of lifecycleHooks) {
       if (Array.isArray(value) && (value[0] === '->' || value[0] === '=>')) {
         const [, params, hookBody] = value;
         const paramStr = Array.isArray(params) ? params.map(p => this.formatParam(p)).join(', ') : '';
         const transformed = this.reactiveMembers ? this.transformComponentMembers(hookBody) : hookBody;
         const isAsync = this.containsAwait(hookBody);
         const bodyCode = this.generateFunctionBody(transformed, params || []);
-        lines.push(`  ${isAsync ? 'async ' : ''}${name}(${paramStr}) ${bodyCode}`);
+        pushLine(`  ${isAsync ? 'async ' : ''}${name}(${paramStr}) ${bodyCode}`, loc);
       }
     }
 
@@ -892,31 +904,39 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         blockFactoriesCode = result.blockFactories.join('\n\n') + '\n\n';
       }
 
-      lines.push('  _create() {');
+      pushLine('  _create() {', renderBlock.loc);
       for (const line of result.createLines) {
-        lines.push(`    ${line}`);
+        pushPlain(`    ${line}`);
       }
-      lines.push(`    return ${result.rootVar};`);
-      lines.push('  }');
+      pushPlain(`    return ${result.rootVar};`);
+      pushPlain('  }');
 
       if (!this.options.lspMode && result.setupLines.length > 0) {
-        lines.push('  _setup() {');
+        pushPlain('  _setup() {');
         for (const line of result.setupLines) {
-          lines.push(`    ${line}`);
+          pushPlain(`    ${line}`);
         }
-        lines.push('  }');
+        pushPlain('  }');
       }
     }
 
-    lines.push('}');
+    pushPlain('}');
 
     // Restore context
     this.componentMembers = prevComponentMembers;
     this.reactiveMembers = prevReactiveMembers;
     this._autoEventHandlers = prevAutoEventHandlers;
 
+    // Store line-level source mappings for the parent statement entry
+    if (lineLocs.length > 0) {
+      this._pendingComponentLineLocs = lineLocs;
+    }
+
     // If block factories exist, wrap in IIFE so they're in scope
     if (blockFactoriesCode) {
+      // Adjust lineOffsets for the IIFE wrapper + block factories prefix
+      const prefixLines = blockFactoriesCode.split('\n').length;
+      for (const entry of lineLocs) entry.lineOffset += prefixLines;
       return `(() => {\n${blockFactoriesCode}return ${lines.join('\n')};\n})()`;
     }
 
