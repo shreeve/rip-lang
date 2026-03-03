@@ -89,9 +89,8 @@ function publishDiagnostics(filePath) {
   const c = compiled.get(filePath);
   if (!c) return;
 
-  // Skip diagnostics entirely for untyped files — @ts-nocheck only suppresses
-  // semantic errors, but syntactic errors (e.g. from component template code)
-  // would still leak through.
+  // Skip diagnostics for untyped files — @ts-nocheck suppresses semantic
+  // errors but syntactic errors would still leak through.
   if (!c.hasTypes) {
     connection.sendDiagnostics({ uri: pathToUri(filePath), diagnostics: [] });
     return;

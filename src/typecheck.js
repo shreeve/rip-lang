@@ -36,8 +36,11 @@ export function fromVirtual(p) { return p.endsWith('.rip.ts') ? p.slice(0, -3) :
 // TS error codes to skip — Rip resolves modules differently and
 // treats async return types transparently.
 export const SKIP_CODES = new Set([
-  2307, // Cannot find module
+  2300, // Duplicate identifier (DTS declarations coexist with compiled class bodies)
   2304, // Cannot find name
+  2307, // Cannot find module
+  2393, // Duplicate function implementation
+  2451, // Cannot redeclare block-scoped variable
   1064, // Return type of async function must be Promise
   2582, // Cannot find name 'test' (test runner globals)
   2593, // Cannot find name 'describe' (test runner globals)
@@ -61,100 +64,13 @@ export function createTypeCheckSettings(ts, overrides = {}) {
 
 // ── Shared compilation pipeline ────────────────────────────────────
 
-// Compile a .rip file for type-checking. Merges .d.ts declarations into
-// the compiled JS, detects type annotations, and builds bidirectional
+// Compile a .rip file for type-checking. Prepends DTS declarations to
+// compiled JS, detects type annotations, and builds bidirectional
 // source maps. Returns everything both the CLI and LSP need.
 export function compileForCheck(filePath, source, compiler) {
   const result = compiler.compile(source, { sourceMap: true, types: true, skipPreamble: true });
   let code = result.code || '';
-  let dts = result.dts ? result.dts.trimEnd() + '\n' : '';
-
-  // Strip .d.ts imports — compiled JS already has them
-  dts = dts.replace(/^import\s.*;\s*\n/gm, '');
-
-  // Extract well-formed function signatures and merge into JS.
-  // Leaving them as bare declarations causes TypeScript to treat
-  // them as overload signatures that conflict with the implementations.
-  const funcSigs = new Map();
-  dts = dts.replace(
-    /^(?:export|declare)\s+function\s+(\w+)\(([^)]*)\):\s*(.+);\s*$/gm,
-    (_m, name, params, ret) => { funcSigs.set(name, { params, ret }); return ''; },
-  );
-  dts = dts.replace(/^\s*\n/gm, '');
-
-  // Strip remaining malformed multi-line declarations
-  dts = dts.replace(/(?:export|declare)\s+function\s+\w+\([\s\S]*?\);\s*/g, '');
-  dts = dts.replace(/^\s*\n/gm, '');
-
-  for (const [name, { params, ret }] of funcSigs) {
-    const paramTypes = new Map();
-    if (params.trim()) {
-      for (const p of params.split(',')) {
-        const colon = p.indexOf(':');
-        if (colon !== -1) paramTypes.set(p.slice(0, colon).trim(), p.slice(colon + 1).trim());
-      }
-    }
-    const funcRe = new RegExp(
-      `((?:export\\s+)?(?:async\\s+)?function\\s+${name})\\(([^)]*)\\)(\\s*\\{)`,
-    );
-    code = code.replace(funcRe, (_match, prefix, codeParams, brace) => {
-      const typed = codeParams.split(',').map(p => {
-        const n = p.trim();
-        const t = paramTypes.get(n);
-        return t ? `${n}: ${t}` : n;
-      }).join(', ');
-      return `${prefix}(${typed}): ${ret}${brace}`;
-    });
-  }
-
-  // Extract reactive const declarations (state, computed, readonly, effect)
-  // from DTS and merge their types into the code — same pattern as functions.
-  // DTS: `declare const clicks: Signal<number>;`  →  removed
-  // Code: `const clicks = __state(0);`  →  `const clicks: Signal<number> = __state(0);`
-  const reactiveConsts = new Map();
-  dts = dts.replace(
-    /^(?:export\s+)?(?:declare\s+)?const\s+(\w+)\s*:\s*(.+?);\s*$/gm,
-    (_m, name, type) => { reactiveConsts.set(name, type); return ''; },
-  );
-  dts = dts.replace(/^\s*\n/gm, '');
-
-  for (const [name, type] of reactiveConsts) {
-    code = code.replace(
-      new RegExp(`(const\\s+${name})\\s*=`),
-      (_, prefix) => `${prefix}: ${type} =`,
-    );
-  }
-
-  // Remove component class implementations when the DTS already has
-  // typed class declarations — avoids "Duplicate identifier" conflicts.
-  for (const m of dts.matchAll(/^(?:export\s+)?declare\s+class\s+(\w+)\b/gm)) {
-    const name = m[1];
-    const re = new RegExp(`^export\\s+const\\s+${name}\\s*=\\s*class\\s+extends\\s+\\w+`);
-    const lines = code.split('\n');
-    for (let i = 0; i < lines.length; i++) {
-      if (!re.test(lines[i])) continue;
-      let depth = 0, start = i;
-      for (; i < lines.length; i++) {
-        for (const ch of lines[i]) { if (ch === '{') depth++; else if (ch === '}') depth--; }
-        if (depth <= 0) break;
-      }
-      lines.splice(start, i - start + 1);
-      break;
-    }
-    code = lines.join('\n');
-  }
-
-  // Remove bare `let x;` declarations when the DTS already declares
-  // `let x: Type;` — avoids "Cannot redeclare" conflicts. Handles
-  // both single (`let x;`) and comma-separated (`let x, y;`) forms.
-  const dtsVars = new Set();
-  for (const m of dts.matchAll(/^(?:let|var)\s+(\w+)\s*:/gm)) dtsVars.add(m[1]);
-  if (dtsVars.size) {
-    code = code.replace(/^(let|var)\s+([\w\s,]+);[ \t]*$/gm, (_m, kw, vars) => {
-      const kept = vars.split(',').map(v => v.trim()).filter(v => !dtsVars.has(v));
-      return kept.length ? `${kw} ${kept.join(', ')};` : '';
-    });
-  }
+  const dts = result.dts ? result.dts.trimEnd() + '\n' : '';
 
   // Determine if this file should be type-checked
   const hasOwnTypes = hasTypeAnnotations(source);
