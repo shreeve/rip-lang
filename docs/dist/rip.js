@@ -3500,10 +3500,10 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
     return null;
   }
   function getMemberName(target) {
-    if (typeof target === "string")
-      return target;
-    if (Array.isArray(target) && target[0] === "." && target[1] === "this" && typeof target[2] === "string") {
-      return target[2];
+    if (typeof target === "string" || target instanceof String)
+      return target.valueOf();
+    if (Array.isArray(target) && target[0] === "." && target[1] === "this" && (typeof target[2] === "string" || target[2] instanceof String)) {
+      return target[2].valueOf();
     }
     return null;
   }
@@ -5989,29 +5989,37 @@ if (typeof globalThis !== 'undefined') {
           needsBlank = true;
         }
       }
-      if (this.usesReactivity && !skip) {
-        if (skipRT) {
-          code += `var { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;
+      if (this.options.lspMode && (this.usesReactivity || this.usesTemplates)) {
+        if (needsBlank)
+          code += `
 `;
-        } else if (typeof globalThis !== "undefined" && globalThis.__rip) {
-          code += `const { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;
-`;
-        } else {
-          code += this.getReactiveRuntime();
-        }
+        code += getLspRuntimeDeclarations();
         needsBlank = true;
-      }
-      if (this.usesTemplates && !skip) {
-        if (skipRT) {
-          code += `var { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __Component } = globalThis.__ripComponent;
+      } else {
+        if (this.usesReactivity && !skip) {
+          if (skipRT) {
+            code += `var { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;
 `;
-        } else if (typeof globalThis !== "undefined" && globalThis.__ripComponent) {
-          code += `const { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __Component } = globalThis.__ripComponent;
+          } else if (typeof globalThis !== "undefined" && globalThis.__rip) {
+            code += `const { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;
 `;
-        } else {
-          code += this.getComponentRuntime();
+          } else {
+            code += this.getReactiveRuntime();
+          }
+          needsBlank = true;
         }
-        needsBlank = true;
+        if (this.usesTemplates && !skip) {
+          if (skipRT) {
+            code += `var { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __Component } = globalThis.__ripComponent;
+`;
+          } else if (typeof globalThis !== "undefined" && globalThis.__ripComponent) {
+            code += `const { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __Component } = globalThis.__ripComponent;
+`;
+          } else {
+            code += this.getComponentRuntime();
+          }
+          needsBlank = true;
+        }
       }
       if (this.dataSection !== null && this.dataSection !== undefined && !skip) {
         code += `var DATA;
@@ -8693,12 +8701,14 @@ if (typeof globalThis !== 'undefined') {
         let sourceFile = this.options.filename || "input.rip";
         sourceMap = new SourceMapGenerator(file, sourceFile, source);
       }
+      let lspMode = this.options.mode === "lsp";
       let generator = new CodeGenerator({
         dataSection,
-        skipPreamble: this.options.skipPreamble,
+        skipPreamble: lspMode || this.options.skipPreamble,
         skipRuntimes: this.options.skipRuntimes,
         skipExports: this.options.skipExports,
         reactiveVars: this.options.reactiveVars,
+        lspMode,
         sourceMap
       });
       let code = generator.compile(sexpr);
@@ -8714,6 +8724,11 @@ if (typeof globalThis !== 'undefined') {
       }
       if (typeTokens) {
         dts = emitTypes(typeTokens, sexpr);
+      }
+      if (lspMode && dts) {
+        code = dts.trimEnd() + `
+
+` + code;
       }
       return { tokens, sexpr, code, dts, map, reverseMap, data: dataSection, reactiveVars: generator.reactiveVars };
     }
@@ -8754,9 +8769,33 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   function getComponentRuntime() {
     return new CodeGenerator({}).getComponentRuntime();
   }
+  function getLspRuntimeDeclarations() {
+    return `interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }
+interface Computed<T> { readonly value: T; read(): T; lock(): Computed<T>; free(): Computed<T>; kill(): T; }
+declare function __state<T>(v: T): Signal<T>;
+declare function __computed<T>(fn: () => T): Computed<T>;
+declare function __effect(fn: () => void | (() => void)): () => void;
+declare function __batch<T>(fn: () => T): T;
+declare function __readonly<T>(v: T): Readonly<{ value: T }>;
+declare function __setErrorHandler(handler: ((err: any) => void) | null): ((err: any) => void) | null;
+declare function __handleError(error: any): void;
+declare function __catchErrors<T extends (...args: any[]) => any>(fn: T): T;
+declare function __pushComponent(component: any): any;
+declare function __popComponent(prev: any): void;
+declare function setContext(key: string, value: any): void;
+declare function getContext(key: string): any;
+declare function hasContext(key: string): boolean;
+declare function __clsx(...args: any[]): string;
+declare function __lis(arr: number[]): number[];
+declare function __reconcile(anchor: any, state: any, items: any[], ctx: any, factory: any, keyFn: any, ...outer: any[]): void;
+declare function __transition(el: any, name: string, dir: string, done?: () => void): void;
+declare function __handleComponentError(error: any, component: any): void;
+declare class __Component { constructor(props?: any); mount(target?: any): any; unmount(): void; emit(name: string, detail?: any): void; static mount(target?: any): any; [key: string]: any; }
+`;
+  }
   // src/browser.js
   var VERSION = "3.13.77";
-  var BUILD_DATE = "2026-03-03@05:01:25GMT";
+  var BUILD_DATE = "2026-03-03@07:30:00GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
