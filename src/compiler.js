@@ -3397,10 +3397,14 @@ declare function __computed<T>(fn: () => T): Computed<T>;
 declare function __effect(fn: () => void | (() => void)): () => void;
 declare function __batch<T>(fn: () => T): T;
 declare function __readonly<T>(v: T): Readonly<{ value: T }>;
+declare function __pushComponent(component: any): any;
+declare function __popComponent(prev: any): void;
+declare function __handleComponentError(error: any, component: any): void;
+declare function __clsx(...args: any[]): string;
 declare function setContext(key: string, value: any): void;
 declare function getContext(key: string): any;
 declare function hasContext(key: string): boolean;
-declare class __Component { constructor(props?: any); [key: string]: any; }
+declare class __Component { constructor(props?: any); _create?(): any; _setup?(): void; _root?: any; _children?: any[]; [key: string]: any; }
 `;
 }
 

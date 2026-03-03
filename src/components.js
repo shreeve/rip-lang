@@ -884,11 +884,11 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     }
 
     // --- Render block (fine-grained) ---
-    if (renderBlock && !this.options.lspMode) {
+    if (renderBlock) {
       const renderBody = renderBlock[1];
       const result = this.buildRender(renderBody);
 
-      if (result.blockFactories.length > 0) {
+      if (!this.options.lspMode && result.blockFactories.length > 0) {
         blockFactoriesCode = result.blockFactories.join('\n\n') + '\n\n';
       }
 
@@ -899,7 +899,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       lines.push(`    return ${result.rootVar};`);
       lines.push('  }');
 
-      if (result.setupLines.length > 0) {
+      if (!this.options.lspMode && result.setupLines.length > 0) {
         lines.push('  _setup() {');
         for (const line of result.setupLines) {
           lines.push(`    ${line}`);

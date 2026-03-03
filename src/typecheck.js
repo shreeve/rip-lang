@@ -41,6 +41,8 @@ export const SKIP_CODES = new Set([
   2307, // Cannot find module
   2393, // Duplicate function implementation
   2451, // Cannot redeclare block-scoped variable
+  2554, // Expected N arguments but got M (generated event handler wrappers pass event arg)
+  7006, // Parameter implicitly has 'any' type (generated event callback params)
   1064, // Return type of async function must be Promise
   2582, // Cannot find name 'test' (test runner globals)
   2593, // Cannot find name 'describe' (test runner globals)
