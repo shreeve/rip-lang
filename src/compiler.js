@@ -297,11 +297,6 @@ export class CodeGenerator {
       if (entry.loc) {
         this.sourceMap.addMapping(lineOffset, 0, entry.loc.r, entry.loc.c);
       }
-      if (entry.subLocs) {
-        for (const { lineOffset: lo, loc } of entry.subLocs) {
-          if (loc) this.sourceMap.addMapping(lineOffset + lo, 0, loc.r, loc.c);
-        }
-      }
       lineOffset += entry.code.split('\n').length;
     }
   }
@@ -624,12 +619,7 @@ export class CodeGenerator {
         if (!blockStmts.includes(h) || !generated.endsWith('}')) generated += ';';
       }
       let loc = Array.isArray(stmt) ? stmt.loc : null;
-      let entry = { code: generated, loc };
-      if (this._pendingComponentLineLocs) {
-        entry.subLocs = this._pendingComponentLineLocs;
-        this._pendingComponentLineLocs = null;
-      }
-      return entry;
+      return { code: generated, loc };
     });
     let statementsCode = stmtEntries.map(e => e.code).join('\n');
 
@@ -681,32 +671,26 @@ export class CodeGenerator {
       }
     }
 
-    if (this.options.lspMode && (this.usesReactivity || this.usesTemplates)) {
-      if (needsBlank) code += '\n';
-      code += getLspRuntimeDeclarations();
+    if (this.usesReactivity && !skip) {
+      if (skipRT) {
+        code += 'var { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;\n';
+      } else if (typeof globalThis !== 'undefined' && globalThis.__rip) {
+        code += 'const { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;\n';
+      } else {
+        code += this.getReactiveRuntime();
+      }
       needsBlank = true;
-    } else {
-      if (this.usesReactivity && !skip) {
-        if (skipRT) {
-          code += 'var { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;\n';
-        } else if (typeof globalThis !== 'undefined' && globalThis.__rip) {
-          code += 'const { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;\n';
-        } else {
-          code += this.getReactiveRuntime();
-        }
-        needsBlank = true;
-      }
+    }
 
-      if (this.usesTemplates && !skip) {
-        if (skipRT) {
-          code += 'var { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __Component } = globalThis.__ripComponent;\n';
-        } else if (typeof globalThis !== 'undefined' && globalThis.__ripComponent) {
-          code += 'const { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __Component } = globalThis.__ripComponent;\n';
-        } else {
-          code += this.getComponentRuntime();
-        }
-        needsBlank = true;
+    if (this.usesTemplates && !skip) {
+      if (skipRT) {
+        code += 'var { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __Component } = globalThis.__ripComponent;\n';
+      } else if (typeof globalThis !== 'undefined' && globalThis.__ripComponent) {
+        code += 'const { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __Component } = globalThis.__ripComponent;\n';
+      } else {
+        code += this.getComponentRuntime();
       }
+      needsBlank = true;
     }
 
     if (this.dataSection !== null && this.dataSection !== undefined && !skip) {
@@ -3305,15 +3289,12 @@ export class Compiler {
       sourceMap = new SourceMapGenerator(file, sourceFile, source);
     }
 
-    let lspMode = this.options.mode === 'lsp';
-
     let generator = new CodeGenerator({
       dataSection,
-      skipPreamble: lspMode || this.options.skipPreamble,
+      skipPreamble: this.options.skipPreamble,
       skipRuntimes: this.options.skipRuntimes,
       skipExports: this.options.skipExports,
       reactiveVars: this.options.reactiveVars,
-      lspMode,
       sourceMap,
     });
     let code = generator.compile(sexpr);
@@ -3330,11 +3311,6 @@ export class Compiler {
     // Step 5: Emit .d.ts from annotated tokens + parsed s-expression
     if (typeTokens) {
       dts = emitTypes(typeTokens, sexpr);
-    }
-
-    // LSP mode: prepend DTS to code for a single combined output
-    if (lspMode && dts) {
-      code = dts.trimEnd() + '\n\n' + code;
     }
 
     return { tokens, sexpr, code, dts, map, reverseMap, data: dataSection, reactiveVars: generator.reactiveVars };
@@ -3396,26 +3372,6 @@ export function getReactiveRuntime() {
 
 export function getComponentRuntime() {
   return new CodeGenerator({}).getComponentRuntime();
-}
-
-export function getLspRuntimeDeclarations() {
-  return `\
-interface Signal<T> { value: T; read(): T; }
-interface Computed<T> { readonly value: T; read(): T; }
-declare function __state<T>(v: T): Signal<T>;
-declare function __computed<T>(fn: () => T): Computed<T>;
-declare function __effect(fn: () => void | (() => void)): () => void;
-declare function __batch<T>(fn: () => T): T;
-declare function __readonly<T>(v: T): Readonly<{ value: T }>;
-declare function __pushComponent(component: any): any;
-declare function __popComponent(prev: any): void;
-declare function __handleComponentError(error: any, component: any): void;
-declare function __clsx(...args: any[]): string;
-declare function setContext(key: string, value: any): void;
-declare function getContext(key: string): any;
-declare function hasContext(key: string): boolean;
-declare class __Component { constructor(props?: any); _create?(): any; _setup?(): void; _root?: any; _children?: any[]; [key: string]: any; }
-`;
 }
 
 export { formatSExpr };

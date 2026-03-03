@@ -713,35 +713,35 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       } else if (op === 'state') {
         const varName = getMemberName(stmt[1]);
         if (varName) {
-          stateVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]), type: getMemberType(stmt[1]), loc: stmt.loc });
+          stateVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]), type: getMemberType(stmt[1]) });
           memberNames.add(varName);
           reactiveMembers.add(varName);
         }
       } else if (op === 'computed') {
         const varName = getMemberName(stmt[1]);
         if (varName) {
-          derivedVars.push({ name: varName, expr: stmt[2], loc: stmt.loc });
+          derivedVars.push({ name: varName, expr: stmt[2] });
           memberNames.add(varName);
           reactiveMembers.add(varName);
         }
       } else if (op === 'readonly') {
         const varName = getMemberName(stmt[1]);
         if (varName) {
-          readonlyVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]), type: getMemberType(stmt[1]), loc: stmt.loc });
+          readonlyVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]), type: getMemberType(stmt[1]) });
           memberNames.add(varName);
         }
       } else if (op === '=') {
         const varName = getMemberName(stmt[1]);
         if (varName) {
           if (LIFECYCLE_HOOKS.has(varName)) {
-            lifecycleHooks.push({ name: varName, value: stmt[2], loc: stmt.loc });
+            lifecycleHooks.push({ name: varName, value: stmt[2] });
           } else {
             const val = stmt[2];
             if (Array.isArray(val) && (val[0] === '->' || val[0] === '=>')) {
-              methods.push({ name: varName, func: val, loc: stmt.loc });
+              methods.push({ name: varName, func: val });
               memberNames.add(varName);
             } else {
-              stateVars.push({ name: varName, value: val, isPublic: isPublicProp(stmt[1]), loc: stmt.loc });
+              stateVars.push({ name: varName, value: val, isPublic: isPublicProp(stmt[1]) });
               memberNames.add(varName);
               reactiveMembers.add(varName);
             }
@@ -757,9 +757,9 @@ export function installComponentSupport(CodeGenerator, Lexer) {
           if (!Array.isArray(pair)) continue;
           const [methodName, funcDef] = pair;
           if (typeof methodName === 'string' && LIFECYCLE_HOOKS.has(methodName)) {
-            lifecycleHooks.push({ name: methodName, value: funcDef, loc: pair.loc });
+            lifecycleHooks.push({ name: methodName, value: funcDef });
           } else if (typeof methodName === 'string') {
-            methods.push({ name: methodName, func: funcDef, loc: pair.loc });
+            methods.push({ name: methodName, func: funcDef });
             memberNames.add(methodName);
           }
         }
@@ -783,76 +783,49 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     this._autoEventHandlers = autoEventHandlers.size > 0 ? autoEventHandlers : null;
 
     const lines = [];
-    const lineLocs = [];
     let blockFactoriesCode = '';
 
-    let totalLines = 0;
-    const pushLine = (line, loc) => {
-      if (loc) lineLocs.push({ lineOffset: totalLines, loc });
-      lines.push(line);
-      totalLines += line.split('\n').length;
-    };
-    const pushPlain = (line) => {
-      lines.push(line);
-      totalLines += line.split('\n').length;
-    };
-
-    pushPlain('class extends __Component {');
+    lines.push('class extends __Component {');
 
     // --- Init (called by __Component constructor) ---
-    if (this.options.lspMode) {
-      const typedProps = [];
-      for (const v of [...readonlyVars, ...stateVars]) {
-        if (v.isPublic) {
-          const t = v.type || 'any';
-          typedProps.push(`${v.name}?: ${t}`);
-          typedProps.push(`__bind_${v.name}__?: ${t}`);
-        }
-      }
-      const propsType = typedProps.length > 0
-        ? `{ ${typedProps.join(', ')}, [key: string]: any }`
-        : 'any';
-      pushPlain(`  _init(props: ${propsType}) {`);
-    } else {
-      pushPlain('  _init(props) {');
-    }
+    lines.push('  _init(props) {');
 
     // Constants (readonly)
-    for (const { name, value, isPublic, loc } of readonlyVars) {
+    for (const { name, value, isPublic } of readonlyVars) {
       const val = this.generateInComponent(value, 'value');
-      pushLine(isPublic
+      lines.push(isPublic
         ? `    this.${name} = props.${name} ?? ${val};`
-        : `    this.${name} = ${val};`, loc);
+        : `    this.${name} = ${val};`);
     }
 
     // Accepted vars (from ancestor context via getContext)
     for (const name of acceptedVars) {
-      pushPlain(`    this.${name} = getContext('${name}');`);
+      lines.push(`    this.${name} = getContext('${name}');`);
     }
 
     // State variables (__state handles signal passthrough)
-    for (const { name, value, isPublic, loc } of stateVars) {
+    for (const { name, value, isPublic } of stateVars) {
       const val = this.generateInComponent(value, 'value');
-      pushLine(isPublic
+      lines.push(isPublic
         ? `    this.${name} = __state(props.__bind_${name}__ ?? props.${name} ?? ${val});`
-        : `    this.${name} = __state(${val});`, loc);
+        : `    this.${name} = __state(${val});`);
     }
 
     // Computed (derived)
-    for (const { name, expr, loc } of derivedVars) {
+    for (const { name, expr } of derivedVars) {
       if (this.is(expr, 'block')) {
         const transformed = this.transformComponentMembers(expr);
         const body = this.generateFunctionBody(transformed);
-        pushLine(`    this.${name} = __computed(() => ${body});`, loc);
+        lines.push(`    this.${name} = __computed(() => ${body});`);
       } else {
         const val = this.generateInComponent(expr, 'value');
-        pushLine(`    this.${name} = __computed(() => ${val});`, loc);
+        lines.push(`    this.${name} = __computed(() => ${val});`);
       }
     }
 
     // Offered vars (share with descendants via setContext — after all members are initialized)
     for (const name of offeredVars) {
-      pushPlain(`    setContext('${name}', this.${name});`);
+      lines.push(`    setContext('${name}', this.${name});`);
     }
 
     // Effects
@@ -862,36 +835,36 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       if (this.is(effectBody, 'block')) {
         const transformed = this.transformComponentMembers(effectBody);
         const body = this.generateFunctionBody(transformed, [], true);
-        pushLine(`    __effect(${isAsync}() => ${body});`, effect.loc);
+        lines.push(`    __effect(${isAsync}() => ${body});`);
       } else {
         const effectCode = this.generateInComponent(effectBody, 'value');
-        pushLine(`    __effect(${isAsync}() => { ${effectCode}; });`, effect.loc);
+        lines.push(`    __effect(${isAsync}() => { ${effectCode}; });`);
       }
     }
 
-    pushPlain('  }');
+    lines.push('  }');
 
     // --- Methods ---
-    for (const { name, func, loc } of methods) {
+    for (const { name, func } of methods) {
       if (Array.isArray(func) && (func[0] === '->' || func[0] === '=>')) {
         const [, params, methodBody] = func;
         const paramStr = Array.isArray(params) ? params.map(p => this.formatParam(p)).join(', ') : '';
         const transformed = this.reactiveMembers ? this.transformComponentMembers(methodBody) : methodBody;
         const isAsync = this.containsAwait(methodBody);
         const bodyCode = this.generateFunctionBody(transformed, params || []);
-        pushLine(`  ${isAsync ? 'async ' : ''}${name}(${paramStr}) ${bodyCode}`, loc);
+        lines.push(`  ${isAsync ? 'async ' : ''}${name}(${paramStr}) ${bodyCode}`);
       }
     }
 
     // --- Lifecycle hooks ---
-    for (const { name, value, loc } of lifecycleHooks) {
+    for (const { name, value } of lifecycleHooks) {
       if (Array.isArray(value) && (value[0] === '->' || value[0] === '=>')) {
         const [, params, hookBody] = value;
         const paramStr = Array.isArray(params) ? params.map(p => this.formatParam(p)).join(', ') : '';
         const transformed = this.reactiveMembers ? this.transformComponentMembers(hookBody) : hookBody;
         const isAsync = this.containsAwait(hookBody);
         const bodyCode = this.generateFunctionBody(transformed, params || []);
-        pushLine(`  ${isAsync ? 'async ' : ''}${name}(${paramStr}) ${bodyCode}`, loc);
+        lines.push(`  ${isAsync ? 'async ' : ''}${name}(${paramStr}) ${bodyCode}`);
       }
     }
 
@@ -900,48 +873,35 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       const renderBody = renderBlock[1];
       const result = this.buildRender(renderBody);
 
-      if (!this.options.lspMode && result.blockFactories.length > 0) {
+      if (result.blockFactories.length > 0) {
         blockFactoriesCode = result.blockFactories.join('\n\n') + '\n\n';
       }
 
-      pushLine('  _create() {', renderBlock.loc);
-      for (let i = 0; i < result.createLines.length; i++) {
-        const loc = result.createLineLocs.get(i);
-        if (loc) {
-          pushLine(`    ${result.createLines[i]}`, loc);
-        } else {
-          pushPlain(`    ${result.createLines[i]}`);
-        }
+      lines.push('  _create() {');
+      for (const line of result.createLines) {
+        lines.push(`    ${line}`);
       }
-      pushPlain(`    return ${result.rootVar};`);
-      pushPlain('  }');
+      lines.push(`    return ${result.rootVar};`);
+      lines.push('  }');
 
-      if (!this.options.lspMode && result.setupLines.length > 0) {
-        pushPlain('  _setup() {');
+      if (result.setupLines.length > 0) {
+        lines.push('  _setup() {');
         for (const line of result.setupLines) {
-          pushPlain(`    ${line}`);
+          lines.push(`    ${line}`);
         }
-        pushPlain('  }');
+        lines.push('  }');
       }
     }
 
-    pushPlain('}');
+    lines.push('}');
 
     // Restore context
     this.componentMembers = prevComponentMembers;
     this.reactiveMembers = prevReactiveMembers;
     this._autoEventHandlers = prevAutoEventHandlers;
 
-    // Store line-level source mappings for the parent statement entry
-    if (lineLocs.length > 0) {
-      this._pendingComponentLineLocs = lineLocs;
-    }
-
     // If block factories exist, wrap in IIFE so they're in scope
     if (blockFactoriesCode) {
-      // Adjust lineOffsets for the IIFE wrapper + block factories prefix
-      const prefixLines = blockFactoriesCode.split('\n').length;
-      for (const entry of lineLocs) entry.lineOffset += prefixLines;
       return `(() => {\n${blockFactoriesCode}return ${lines.join('\n')};\n})()`;
     }
 
@@ -993,7 +953,6 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     this._textCount = 0;
     this._blockCount = 0;
     this._createLines = [];
-    this._createLineLocs = new Map();
     this._setupLines = [];
     this._blockFactories = [];
     this._loopVarStack = [];
@@ -1027,7 +986,6 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
     return {
       createLines: this._createLines,
-      createLineLocs: this._createLineLocs,
       setupLines: this._setupLines,
       blockFactories: this._blockFactories,
       rootVar
@@ -1118,7 +1076,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
     // Component instantiation (PascalCase)
     if (headStr && this.isComponent(headStr)) {
-      return this.generateChildComponent(headStr, rest, sexpr.loc);
+      return this.generateChildComponent(headStr, rest);
     }
 
     // Slot projection — replace <slot> with @children in component render
@@ -1813,7 +1771,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
   // generateChildComponent — instantiate a child component
   // --------------------------------------------------------------------------
 
-  proto.generateChildComponent = function(componentName, args, loc) {
+  proto.generateChildComponent = function(componentName, args) {
     this._pendingAutoWire = false;
     const instVar = this.newElementVar('inst');
     const elVar = this.newElementVar('el');
@@ -1821,7 +1779,6 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
     const s = this._self;
     this._createLines.push(`{ const __prev = __pushComponent(${s}); try {`);
-    if (loc && !this._factoryMode) this._createLineLocs.set(this._createLines.length, loc);
     this._createLines.push(`${instVar} = new ${componentName}(${propsCode});`);
     this._createLines.push(`${elVar} = ${instVar}._root = ${instVar}._create();`);
     this._createLines.push(`(${s}._children || (${s}._children = [])).push(${instVar});`);

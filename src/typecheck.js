@@ -41,8 +41,6 @@ export const SKIP_CODES = new Set([
   2307, // Cannot find module
   2393, // Duplicate function implementation
   2451, // Cannot redeclare block-scoped variable
-  2554, // Expected N arguments but got M (generated event handler wrappers pass event arg)
-  7006, // Parameter implicitly has 'any' type (generated event callback params)
   1064, // Return type of async function must be Promise
   2582, // Cannot find name 'test' (test runner globals)
   2593, // Cannot find name 'describe' (test runner globals)
@@ -66,12 +64,13 @@ export function createTypeCheckSettings(ts, overrides = {}) {
 
 // ── Shared compilation pipeline ────────────────────────────────────
 
-// Compile a .rip file for type-checking. Uses mode: 'lsp' which emits
-// DTS + typed runtime declarations + compiled code in a single output.
-// Builds bidirectional source maps for the LSP and CLI checker.
+// Compile a .rip file for type-checking. Prepends DTS declarations to
+// compiled JS, detects type annotations, and builds bidirectional
+// source maps. Returns everything both the CLI and LSP need.
 export function compileForCheck(filePath, source, compiler) {
-  const result = compiler.compile(source, { sourceMap: true, types: 'emit', mode: 'lsp' });
+  const result = compiler.compile(source, { sourceMap: true, types: 'emit', skipPreamble: true });
   let code = result.code || '';
+  const dts = result.dts ? result.dts.trimEnd() + '\n' : '';
 
   // Determine if this file should be type-checked
   const hasOwnTypes = hasTypeAnnotations(source);
@@ -92,9 +91,8 @@ export function compileForCheck(filePath, source, compiler) {
   // Ensure every file is treated as a module (not a global script)
   if (!/\bexport\b/.test(code) && !/\bimport\b/.test(code)) code += '\nexport {};\n';
 
-  const dts = result.dts ? result.dts.trimEnd() + '\n' : '';
-  const tsContent = code;
-  const headerLines = hasTypes && dts ? countLines(dts + '\n') : 1;
+  const tsContent = (hasTypes ? dts + '\n' : '') + code;
+  const headerLines = hasTypes ? countLines(dts + '\n') : 1;
 
   // Build bidirectional line maps
   const { srcToGen, genToSrc } = buildLineMap(result.reverseMap, result.map, headerLines);
