@@ -5,29 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Starter</title>
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-  <style type="text/tailwindcss">
-    :root {
-      --color-text-primary: var(--color-gray-950);
-      --color-text-secondary: var(--color-gray-800);
-      --color-text-tertiary: var(--color-gray-600);
-      --color-bg-primary: var(--color-white);
-      --color-bg-secondary: var(--color-gray-50);
-      --color-bg-tertiary: var(--color-gray-100);
-    }
-
-    @theme {
-      --text-color-primary: var(--color-text-primary);
-      --text-color-secondary: var(--color-text-secondary);
-      --text-color-tertiary: var(--color-text-tertiary);
-      --background-color-primary: var(--color-bg-primary);
-      --background-color-secondary: var(--color-bg-secondary);
-      --background-color-tertiary: var(--color-bg-tertiary);
-    }
-
-    @layer base {
-      body { @apply bg-secondary text-primary antialiased; }
-    }
-  </style>
+  <script>
+    fetch('/index.css').then((r) => r.text()).then((css) => {
+      document.head.appendChild(Object.assign(document.createElement('style'), { type: 'text/tailwindcss', textContent: css }))
+    })
+  </script>
 </head>
 <body>
   <script defer src="/rip/rip.min.js"

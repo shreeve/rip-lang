@@ -17,3 +17,7 @@
   --background-color-secondary: var(--color-bg-secondary);
   --background-color-tertiary: var(--color-bg-tertiary);
 }
+
+@layer base {
+  body { @apply bg-secondary text-primary antialiased; }
+}
