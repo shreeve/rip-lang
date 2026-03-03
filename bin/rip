@@ -32,7 +32,6 @@ Usage:
 Options:
   -c, --compile       Show compiled JavaScript output
   -d, --dts           Show type declarations
-  -l, --lsp           Show LSP TypeScript output (DTS + typed code for IntelliSense)
   -m, --map           Embed inline source map in compiled output
   -h, --help          Show this help message
   -o, --output <file> Write JavaScript to file
@@ -162,7 +161,6 @@ async function main() {
   const showSExpr = ripOptions.includes('-s') || ripOptions.includes('--sexpr');
   const showCompiled = ripOptions.includes('-c') || ripOptions.includes('--compile');
   const generateDts = ripOptions.includes('-d') || ripOptions.includes('--dts');
-  const showLsp = ripOptions.includes('-l') || ripOptions.includes('--lsp');
   const generateMap = ripOptions.includes('-m') || ripOptions.includes('--map');
   const quiet = ripOptions.includes('-q') || ripOptions.includes('--quiet');
 
@@ -176,7 +174,7 @@ async function main() {
   }
 
   // Stdin handling — read into memory; only write temp file for the execute path
-  const hasCompileFlag = showCompiled || showTokens || showSExpr || generateDts || showLsp || generateMap || outputFile;
+  const hasCompileFlag = showCompiled || showTokens || showSExpr || generateDts || generateMap || outputFile;
   let source;
 
   if (!inputFile) {
@@ -257,24 +255,20 @@ async function main() {
 
   try {
     const compiler = new Compiler({ showTokens, showSExpr, quiet,
-      types: (generateDts || showLsp) ? 'emit' : undefined,
+      types: generateDts ? 'emit' : undefined,
       sourceMap: generateMap ? 'inline' : undefined,
-      mode: showLsp ? 'lsp' : undefined,
     });
     const result = compiler.compile(source);
 
     if (outputFile) {
       writeFileSync(outputFile, result.code, 'utf-8');
       if (!quiet) console.log(`Compiled to ${outputFile}`);
-    } else if (showLsp) {
-      if (!quiet) console.log(`// == LSP TypeScript output by Rip ${VERSION} == //\n`);
-      console.log(result.code);
     } else if (showCompiled) {
       if (!quiet) console.log(`// == JavaScript output by Rip ${VERSION} == //\n`);
       console.log(result.code);
     }
 
-    if (generateDts && !showLsp && result.dts) {
+    if (generateDts && result.dts) {
       if (!quiet) console.log(`// == Type declarations == //\n`);
       console.log(result.dts);
     }
