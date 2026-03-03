@@ -1,0 +1,9 @@
+export Button = component
+  # @variant:: "primary | secondary" := "primary"
+  @variant := "primary"
+  @loading := false
+  @disabled := false
+
+  render
+    button disabled: @disabled or @loading
+      slot

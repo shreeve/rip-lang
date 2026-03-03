@@ -1,18 +1,12 @@
 import { get, use, start, notFound } from '@rip-lang/server'
-import { htmlJson, sessions, serve } from '@rip-lang/server/middleware'
+import { serve } from '@rip-lang/server/middleware'
 
-dir = new URL('./app', import.meta.url).pathname
-
-# Serve the Rip app
+dir = import.meta.dir
 use serve
-  dir: dir
-  title: "Form Demo"
-  watch: true
+  dir: "#{dir}/app"
 
-# Diagnostic routes
-get '/ping' -> pong: true
+get '/*.rip' -> @send "#{dir}/app/#{@req.path.slice(1)}", 'text/plain; charset=UTF-8'
 
-# SPA fallback for client-side routing
-notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
+notFound -> @send "#{dir}/app/index.html", 'text/html; charset=UTF-8'
 
 start!

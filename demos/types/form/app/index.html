@@ -3,17 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Form Test</title>
-  <style>
-    body { font-family: system-ui; padding: 2rem; }
-    form { display: flex; flex-direction: column; gap: 1rem; max-width: 300px; }
-    button { padding: 0.5rem 1rem; cursor: pointer; }
-  </style>
+  <title>Form Demo</title>
 </head>
 <body>
-  <script defer src="https://shreeve.github.io/rip-lang/dist/rip.min.js"
-    data-src="form.rip"
-    data-mount="Form">
+  <script defer src="/rip/rip.min.js"
+    data-src="
+      app.rip
+      components/button.rip
+      components/form.rip
+    "
+    data-mount="App"
+    data-reload>
   </script>
 </body>
 </html>

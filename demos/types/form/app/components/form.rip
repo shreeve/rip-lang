@@ -1,0 +1,18 @@
+export Form = component
+  firstName := ""
+  lastName := ""
+  email := ""
+  phone := ""
+  loading := false
+
+  onSubmit: (e) ->
+    console.log "onSubmit!"
+    e.preventDefault()
+    loading = true
+    sleep! 1000
+    loading = false
+
+  render
+    form @submit: @onSubmit
+      Button variant: "secondary", disabled: loading
+        "Update Profile"
