@@ -141,7 +141,7 @@ export function compileForCheck(filePath, source, compiler) {
     }
   }
 
-  return { tsContent, headerLines, hasTypes, srcToGen, genToSrc, source };
+  return { tsContent, headerLines, hasTypes, srcToGen, genToSrc, source, dts };
 }
 
 // ── Source mapping helpers ──────────────────────────────────────────

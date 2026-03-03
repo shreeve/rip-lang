@@ -18,6 +18,9 @@ let ts, compiler, tc, service, rootPath, lastPatchedProgram;
 // Real .rip path → { version, source, tsContent, srcToGen, genToSrc, ... }
 const compiled = new Map();
 
+// Component name → { props: [{ name, type, required }], source, line }
+const componentRegistry = new Map();
+
 // TypeScript sees virtual .ts paths; we translate at the boundary
 function toVirtual(p) { return p + '.ts'; }
 function fromVirtual(p) { return p.endsWith('.rip.ts') ? p.slice(0, -3) : p; }
@@ -44,7 +47,7 @@ connection.onInitialize(async (params) => {
   return {
     capabilities: {
       textDocumentSync: TextDocumentSyncKind.Full,
-      completionProvider: { triggerCharacters: ['.', '"', "'", '/'] },
+      completionProvider: { triggerCharacters: ['.', '"', "'", '/', ':', ' '] },
       hoverProvider: true,
       definitionProvider: true,
       signatureHelpProvider: { triggerCharacters: ['(', ','] },
@@ -77,6 +80,10 @@ function compileRip(filePath, source) {
       ...entry,
     });
 
+    if (entry.dts) {
+      updateComponentRegistry(filePath, source, entry.dts);
+    }
+
     connection.console.log(`[rip] compiled ${path.basename(filePath)}: hasTypes=${entry.hasTypes}, headerLines=${entry.headerLines}`);
     publishDiagnostics(filePath);
   } catch (e) {
@@ -85,49 +92,72 @@ function compileRip(filePath, source) {
 }
 
 function publishDiagnostics(filePath) {
-  if (!service) return;
   const c = compiled.get(filePath);
   if (!c) return;
 
-  // Skip diagnostics for untyped files — @ts-nocheck suppresses semantic
-  // errors but syntactic errors would still leak through.
-  if (!c.hasTypes) {
-    connection.sendDiagnostics({ uri: pathToUri(filePath), diagnostics: [] });
-    return;
-  }
+  const diagnostics = [];
 
-  try {
-    patchTypes();
-    const vf = toVirtual(filePath);
-    const semanticDiags = service.getSemanticDiagnostics(vf);
-    const syntacticDiags = service.getSyntacticDiagnostics(vf);
-    const allDiags = [...syntacticDiags, ...semanticDiags];
+  // TypeScript diagnostics (typed files with TS service)
+  if (service && c.hasTypes) {
+    try {
+      patchTypes();
+      const vf = toVirtual(filePath);
+      const semanticDiags = service.getSemanticDiagnostics(vf);
+      const syntacticDiags = service.getSyntacticDiagnostics(vf);
+      const allDiags = [...syntacticDiags, ...semanticDiags];
 
-    const diagnostics = [];
-    for (const d of allDiags) {
-      if (d.start === undefined) continue;
-      if (tc.SKIP_CODES.has(d.code)) continue;
+      for (const d of allDiags) {
+        if (d.start === undefined) continue;
+        if (tc.SKIP_CODES.has(d.code)) continue;
 
-      const startPos = genToSrcPos(filePath, d.start);
-      const endPos = genToSrcPos(filePath, d.start + (d.length || 1));
+        const startPos = genToSrcPos(filePath, d.start);
+        const endPos = genToSrcPos(filePath, d.start + (d.length || 1));
 
-      if (startPos.line < 0) continue;
+        if (startPos.line < 0) continue;
 
-      const message = ts.flattenDiagnosticMessageText(d.messageText, '\n');
-      diagnostics.push({
-        range: { start: startPos, end: endPos },
-        severity: d.category === 1 ? 1 : d.category === 0 ? 2 : d.category === 2 ? 4 : 3,
-        code: d.code,
-        source: 'rip',
-        message,
-      });
+        const message = ts.flattenDiagnosticMessageText(d.messageText, '\n');
+        diagnostics.push({
+          range: { start: startPos, end: endPos },
+          severity: d.category === 1 ? 1 : d.category === 0 ? 2 : d.category === 2 ? 4 : 3,
+          code: d.code,
+          source: 'rip',
+          message,
+        });
+      }
+    } catch (e) {
+      connection.console.log(`[rip] diagnostics error: ${e.message}`);
     }
-
-    connection.sendDiagnostics({ uri: pathToUri(filePath), diagnostics });
-    connection.console.log(`[rip] diagnostics ${path.basename(filePath)}: ${diagnostics.length} issues`);
-  } catch (e) {
-    connection.console.log(`[rip] diagnostics error: ${e.message}`);
   }
+
+  // Component prop diagnostics
+  if (c.source && componentRegistry.size > 0) {
+    const srcLines = c.source.split('\n');
+    for (let i = 0; i < srcLines.length; i++) {
+      const ctx = detectComponentContext(srcLines[i], srcLines[i].length);
+      if (!ctx?.component) continue;
+      const info = componentRegistry.get(ctx.component);
+      if (!info) continue;
+
+      for (const prop of ctx.existingProps) {
+        if (prop.startsWith('@')) continue;
+        if (prop === 'class' || prop === 'style') continue;
+        if (!info.props.find(p => p.name === prop)) {
+          const col = srcLines[i].indexOf(prop);
+          if (col >= 0) {
+            diagnostics.push({
+              range: { start: { line: i, character: col }, end: { line: i, character: col + prop.length } },
+              severity: 2,
+              source: 'rip',
+              message: `Unknown prop '${prop}' on component ${ctx.component}`,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  connection.sendDiagnostics({ uri: pathToUri(filePath), diagnostics });
+  connection.console.log(`[rip] diagnostics ${path.basename(filePath)}: ${diagnostics.length} issues`);
 }
 
 // ── TypeScript Language Service ────────────────────────────────────
@@ -304,12 +334,228 @@ function unwrapReactiveType(display) {
   return display;
 }
 
+// ── Component IntelliSense infrastructure ──────────────────────────
+
+function parseDTS(dtsString) {
+  const result = new Map();
+  if (!dtsString) return result;
+
+  const lines = dtsString.split('\n');
+  let i = 0;
+
+  while (i < lines.length) {
+    const classMatch = lines[i].match(/^export declare class (\w+)/);
+    if (!classMatch) { i++; continue; }
+
+    const name = classMatch[1];
+    const props = [];
+    let j = i + 1;
+    let foundProps = false;
+
+    while (j < lines.length) {
+      if (/^\}/.test(lines[j])) break;
+
+      if (/constructor\(props\?/.test(lines[j])) {
+        foundProps = true;
+        j++;
+        while (j < lines.length) {
+          if (/^\s*\}\);/.test(lines[j])) { j++; break; }
+          const propMatch = lines[j].match(/^\s+(\w+)(\?)?\s*:\s*(.+);$/);
+          if (propMatch) {
+            props.push({ name: propMatch[1], type: propMatch[3].trim(), required: !propMatch[2] });
+          }
+          j++;
+        }
+        continue;
+      }
+      j++;
+    }
+
+    if (foundProps) {
+      result.set(name, { props, source: null, line: 0 });
+    }
+
+    i = Math.max(i + 1, j);
+  }
+
+  return result;
+}
+
+function updateComponentRegistry(filePath, source, dts) {
+  for (const [name, info] of componentRegistry) {
+    if (info.source === filePath) componentRegistry.delete(name);
+  }
+
+  const parsed = parseDTS(dts);
+  const srcLines = source.split('\n');
+
+  for (const [name, info] of parsed) {
+    let defLine = 0;
+    for (let s = 0; s < srcLines.length; s++) {
+      if (new RegExp('^(?:export\\s+)?' + name + '\\s*=\\s*component\\b').test(srcLines[s].trimStart())) {
+        defLine = s;
+        break;
+      }
+    }
+    componentRegistry.set(name, { ...info, source: filePath, line: defLine });
+  }
+}
+
+function extractUnionValues(typeStr) {
+  if (typeStr === 'boolean') return ['true', 'false'];
+  const values = [];
+  for (const part of typeStr.split('|').map(s => s.trim())) {
+    if (/^["']/.test(part)) values.push(part);
+  }
+  return values;
+}
+
+function getWordAtPosition(text, position) {
+  const lines = text.split('\n');
+  const line = lines[position.line];
+  if (!line) return null;
+  const col = position.character;
+  let start = col, end = col;
+  while (start > 0 && /\w/.test(line[start - 1])) start--;
+  while (end < line.length && /\w/.test(line[end])) end++;
+  return start < end ? line.substring(start, end) : null;
+}
+
+function splitProps(str) {
+  const segments = [];
+  let start = 0, depth = 0, quote = null, colon = -1;
+
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    if (quote) {
+      if (ch === '\\') { i++; continue; }
+      if (ch === quote) quote = null;
+    } else if (ch === '"' || ch === "'") {
+      quote = ch;
+    } else if (ch === '(') {
+      depth++;
+    } else if (ch === ')') {
+      depth--;
+    } else if (ch === ':' && depth === 0 && colon < 0) {
+      colon = i - start;
+    } else if (ch === ',' && depth === 0) {
+      segments.push({ start, end: i, text: str.substring(start, i), colon });
+      start = i + 1;
+      colon = -1;
+    }
+  }
+  segments.push({ start, end: str.length, text: str.substring(start), colon });
+  return segments;
+}
+
+function detectComponentContext(srcLine, col) {
+  if (!srcLine) return null;
+
+  const trimmed = srcLine.trimStart();
+  const indent = srcLine.length - trimmed.length;
+
+  const compMatch = trimmed.match(/^([A-Z]\w*)\b/);
+  if (!compMatch) return null;
+  const component = compMatch[1];
+
+  if (/=\s*component\b/.test(trimmed)) return null;
+  if (!componentRegistry.has(component)) return null;
+
+  const rest = trimmed.substring(component.length);
+  if (rest.length > 0 && rest[0] !== ' ' && rest[0] !== '\t') return null;
+
+  const cursorInTrimmed = col - indent;
+
+  if (cursorInTrimmed <= component.length) {
+    return { component, existingProps: [], currentProp: null, wantValues: false, wantProps: false };
+  }
+
+  const cursorInRest = cursorInTrimmed - component.length;
+  const segments = splitProps(rest);
+
+  const existingProps = [];
+  let currentProp = null;
+  let wantValues = false;
+  let wantProps = false;
+
+  for (const seg of segments) {
+    const inThisSeg = cursorInRest >= seg.start && cursorInRest <= seg.end;
+    const beforeCursor = seg.end < cursorInRest;
+
+    if (seg.colon >= 0) {
+      const key = seg.text.substring(0, seg.colon).trim();
+      const propName = key.replace(/^@/, '');
+
+      if (beforeCursor) {
+        existingProps.push(key.startsWith('@') ? key : propName);
+      } else if (inThisSeg) {
+        const posInSeg = cursorInRest - seg.start;
+        if (posInSeg <= seg.colon) {
+          wantProps = true;
+          currentProp = propName;
+        } else {
+          wantValues = true;
+          currentProp = propName;
+          existingProps.push(key.startsWith('@') ? key : propName);
+        }
+      }
+    } else {
+      if (inThisSeg) wantProps = true;
+    }
+  }
+
+  if (!wantValues && !wantProps) wantProps = true;
+
+  return { component, existingProps, currentProp, wantValues, wantProps };
+}
+
 // ── LSP handlers ───────────────────────────────────────────────────
 
 connection.onCompletion((params) => {
-  if (!service) return [];
   const fp = uriToPath(params.textDocument.uri);
   if (!fp.endsWith('.rip')) return [];
+
+  // Component prop completions
+  const doc = documents.get(params.textDocument.uri);
+  if (doc) {
+    const srcLine = doc.getText().split('\n')[params.position.line];
+    const ctx = detectComponentContext(srcLine, params.position.character);
+    if (ctx) {
+      const info = componentRegistry.get(ctx.component);
+      if (info) {
+        if (ctx.wantProps) {
+          return info.props
+            .filter(p => !ctx.existingProps.includes(p.name))
+            .map(p => ({
+              label: p.name + ':',
+              kind: 5,
+              detail: p.type,
+              insertText: p.name + ': ',
+              sortText: p.required ? '0' + p.name : '1' + p.name,
+            }));
+        }
+        if (ctx.wantValues && ctx.currentProp) {
+          const prop = info.props.find(p => p.name === ctx.currentProp);
+          if (prop) {
+            const values = extractUnionValues(prop.type);
+            if (values.length > 0) {
+              return values.map((v, i) => ({
+                label: v,
+                kind: 12,
+                insertText: v.startsWith('"') ? v : `"${v}"`,
+                sortText: String(i).padStart(3, '0'),
+              }));
+            }
+          }
+        }
+      }
+    }
+    // Space/colon triggered outside component context — don't fall through to TS
+    if (params.context?.triggerCharacter === ' ' || params.context?.triggerCharacter === ':') return [];
+  }
+
+  // TypeScript completions
+  if (!service) return [];
   const offset = srcToOffset(fp, params.position.line, params.position.character);
   if (offset === undefined) return [];
 
@@ -344,9 +590,34 @@ connection.onCompletion((params) => {
 });
 
 connection.onHover((params) => {
-  if (!service) return null;
   const fp = uriToPath(params.textDocument.uri);
   if (!fp.endsWith('.rip')) return null;
+
+  // Component prop hover
+  const doc = documents.get(params.textDocument.uri);
+  if (doc) {
+    const srcLine = doc.getText().split('\n')[params.position.line];
+    const ctx = detectComponentContext(srcLine, params.position.character);
+    if (ctx?.component) {
+      const compInfo = componentRegistry.get(ctx.component);
+      if (compInfo) {
+        if (ctx.currentProp) {
+          const prop = compInfo.props.find(p => p.name === ctx.currentProp);
+          if (prop) {
+            return { contents: { kind: 'markdown', value: `\`\`\`typescript\n(prop) ${prop.name}${prop.required ? '' : '?'}: ${prop.type}\n\`\`\`` } };
+          }
+        }
+        const word = getWordAtPosition(doc.getText(), params.position);
+        if (word === ctx.component) {
+          const propsStr = compInfo.props.map(p => `  ${p.name}${p.required ? '' : '?'}: ${p.type}`).join('\n');
+          return { contents: { kind: 'markdown', value: `\`\`\`typescript\nclass ${ctx.component}\nProps: {\n${propsStr}\n}\n\`\`\`` } };
+        }
+      }
+    }
+  }
+
+  // TypeScript hover
+  if (!service) return null;
   const offset = srcToOffset(fp, params.position.line, params.position.character);
   if (offset === undefined) return null;
 
@@ -362,9 +633,24 @@ connection.onHover((params) => {
 });
 
 connection.onDefinition((params) => {
-  if (!service) return null;
   const fp = uriToPath(params.textDocument.uri);
   if (!fp.endsWith('.rip')) return null;
+
+  // Component go-to-definition
+  const doc = documents.get(params.textDocument.uri);
+  if (doc) {
+    const word = getWordAtPosition(doc.getText(), params.position);
+    if (word && componentRegistry.has(word)) {
+      const compInfo = componentRegistry.get(word);
+      return [{
+        uri: pathToUri(compInfo.source),
+        range: { start: { line: compInfo.line, character: 0 }, end: { line: compInfo.line, character: 0 } },
+      }];
+    }
+  }
+
+  // TypeScript go-to-definition
+  if (!service) return null;
   const offset = srcToOffset(fp, params.position.line, params.position.character);
   if (offset === undefined) return null;
 
@@ -396,9 +682,34 @@ connection.onDefinition((params) => {
 });
 
 connection.onSignatureHelp((params) => {
-  if (!service) return null;
   const fp = uriToPath(params.textDocument.uri);
   if (!fp.endsWith('.rip')) return null;
+
+  // Component signature help
+  const doc = documents.get(params.textDocument.uri);
+  if (doc) {
+    const srcLine = doc.getText().split('\n')[params.position.line];
+    const ctx = detectComponentContext(srcLine, params.position.character);
+    if (ctx?.component) {
+      const compInfo = componentRegistry.get(ctx.component);
+      if (compInfo && compInfo.props.length > 0) {
+        const label = `${ctx.component}(${compInfo.props.map(p => `${p.name}${p.required ? '' : '?'}: ${p.type}`).join(', ')})`;
+        return {
+          signatures: [{
+            label,
+            parameters: compInfo.props.map(p => ({
+              label: `${p.name}${p.required ? '' : '?'}: ${p.type}`,
+            })),
+          }],
+          activeSignature: 0,
+          activeParameter: ctx.existingProps.length,
+        };
+      }
+    }
+  }
+
+  // TypeScript signature help
+  if (!service) return null;
   const offset = srcToOffset(fp, params.position.line, params.position.character);
   if (offset === undefined) return null;
 
