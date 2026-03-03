@@ -13,7 +13,7 @@ const fs = require('fs');
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 
-let ts, compiler, tc, service, rootPath, lastPatchedProgram;
+let ts, compiler, tc, service, rootPath, lastPatchedProgram, warnUntypedProps = true;
 
 // Real .rip path → { version, source, tsContent, srcToGen, genToSrc, ... }
 const compiled = new Map();
@@ -55,7 +55,17 @@ connection.onInitialize(async (params) => {
   };
 });
 
-connection.onInitialized(() => connection.console.log('[rip] ready'));
+connection.onInitialized(() => {
+  connection.console.log('[rip] ready');
+  connection.workspace.getConfiguration({ section: 'rip.types' }).then(config => {
+    if (config?.warnUntypedProps !== undefined) warnUntypedProps = config.warnUntypedProps;
+  }).catch(() => {});
+});
+
+connection.onDidChangeConfiguration(({ settings }) => {
+  warnUntypedProps = settings?.rip?.types?.warnUntypedProps ?? true;
+  for (const fp of compiled.keys()) publishDiagnostics(fp);
+});
 
 // ── Document sync ──────────────────────────────────────────────────
 
@@ -188,6 +198,30 @@ function publishDiagnostics(filePath) {
             source: 'rip',
             message: `Missing required prop '${prop.name}' on component ${ctx.component}`,
           });
+        }
+      }
+    }
+  }
+
+  // Untyped prop hints (at component definitions, not usage sites)
+  if (warnUntypedProps && c.source && componentRegistry.size > 0) {
+    const srcLines = c.source.split('\n');
+    for (const [name, info] of componentRegistry) {
+      if (info.source !== filePath) continue;
+      for (const prop of info.props) {
+        if (prop.type !== 'any') continue;
+        for (let s = info.line; s < srcLines.length; s++) {
+          const match = srcLines[s].match(new RegExp('(@' + prop.name + ')\\b'));
+          if (match) {
+            const col = srcLines[s].indexOf(match[1]);
+            diagnostics.push({
+              range: { start: { line: s, character: col }, end: { line: s, character: col + match[1].length } },
+              severity: 4,
+              source: 'rip',
+              message: `Prop '${prop.name}' has no type annotation`,
+            });
+            break;
+          }
         }
       }
     }

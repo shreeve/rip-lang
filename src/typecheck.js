@@ -322,6 +322,29 @@ export async function runCheck(targetDir, opts = {}) {
       else if (severity === 'warning') totalWarnings++;
     }
 
+    // Untyped component prop checking
+    if (!opts.allowAny && entry.dts) {
+      const dtsLines = entry.dts.split('\n');
+      const srcLines = entry.source.split('\n');
+      for (let d = 0; d < dtsLines.length; d++) {
+        const cm = dtsLines[d].match(/^export declare class (\w+)/);
+        if (!cm) continue;
+        for (let p = d + 1; p < dtsLines.length; p++) {
+          if (/^\}/.test(dtsLines[p])) break;
+          const pm = dtsLines[p].match(/^\s+(\w+)\?\s*:\s*any;$/);
+          if (!pm) continue;
+          const propName = pm[1];
+          for (let s = 0; s < srcLines.length; s++) {
+            if (new RegExp('@' + propName + '\\s*:=').test(srcLines[s])) {
+              errors.push({ line: s + 1, message: `Prop '${propName}' on component ${cm[1]} has no type annotation`, severity: 'error', code: 'rip' });
+              totalErrors++;
+              break;
+            }
+          }
+        }
+      }
+    }
+
     if (errors.length > 0) {
       fileResults.push({ file: fp, errors });
     }
@@ -333,7 +356,7 @@ export async function runCheck(targetDir, opts = {}) {
     for (const e of errors) {
       const loc = `${cyan(rel)}${dim(':')}${yellow(String(e.line))}`;
       const sev = e.severity === 'error' ? red('error') : yellow('warning');
-      console.log(`${loc} ${sev} ${e.message} ${dim(`TS${e.code}`)}`);
+      console.log(`${loc} ${sev} ${e.message} ${dim(typeof e.code === 'number' ? `TS${e.code}` : '')}`);
     }
   }
 
