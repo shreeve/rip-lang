@@ -153,6 +153,43 @@ function publishDiagnostics(filePath) {
           }
         }
       }
+
+      // Value validation: check string literals against union types
+      for (const [propName, value] of ctx.propValues) {
+        const prop = info.props.find(p => p.name === propName);
+        if (!prop) continue;
+        const allowed = extractUnionValues(prop.type);
+        if (allowed.length === 0) continue;
+        const strMatch = value.match(/^["'](.*)["']$/);
+        if (!strMatch) continue;
+        const quoted = `"${strMatch[1]}"`;
+        if (!allowed.some(v => v === quoted || v === `'${strMatch[1]}'`)) {
+          const col = srcLines[i].indexOf(value);
+          if (col >= 0) {
+            diagnostics.push({
+              range: { start: { line: i, character: col }, end: { line: i, character: col + value.length } },
+              severity: 2,
+              source: 'rip',
+              message: `Invalid value ${quoted} for prop '${propName}'. Expected: ${allowed.join(' | ')}`,
+            });
+          }
+        }
+      }
+
+      // Required prop checking
+      for (const prop of info.props) {
+        if (!prop.required) continue;
+        if (ctx.existingProps.includes(prop.name)) continue;
+        const col = srcLines[i].indexOf(ctx.component);
+        if (col >= 0) {
+          diagnostics.push({
+            range: { start: { line: i, character: col }, end: { line: i, character: col + ctx.component.length } },
+            severity: 1,
+            source: 'rip',
+            message: `Missing required prop '${prop.name}' on component ${ctx.component}`,
+          });
+        }
+      }
     }
   }
 
@@ -474,6 +511,7 @@ function detectComponentContext(srcLine, col) {
   const segments = splitProps(rest);
 
   const existingProps = [];
+  const propValues = new Map();
   let currentProp = null;
   let wantValues = false;
   let wantProps = false;
@@ -488,6 +526,7 @@ function detectComponentContext(srcLine, col) {
 
       if (beforeCursor) {
         existingProps.push(key.startsWith('@') ? key : propName);
+        if (!key.startsWith('@')) propValues.set(propName, seg.text.substring(seg.colon + 1).trim());
       } else if (inThisSeg) {
         const posInSeg = cursorInRest - seg.start;
         if (posInSeg <= seg.colon) {
@@ -506,7 +545,7 @@ function detectComponentContext(srcLine, col) {
 
   if (!wantValues && !wantProps) wantProps = true;
 
-  return { component, existingProps, currentProp, wantValues, wantProps };
+  return { component, existingProps, propValues, currentProp, wantValues, wantProps };
 }
 
 // ── LSP handlers ───────────────────────────────────────────────────
