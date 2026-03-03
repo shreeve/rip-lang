@@ -1110,15 +1110,16 @@ in the shared scope).
 
 ### HTML Attributes
 
-
 | Attribute      | On             | Purpose                                                                                               |
 | -------------- | -------------- | ----------------------------------------------------------------------------------------------------- |
 | `data-src`     | runtime script | Whitespace-separated URLs of `.rip` files to fetch and compile                                        |
 | `data-mount`   | runtime script | Component name to instantiate and mount after compilation                                             |
 | `data-target`  | runtime script | Mount target selector (default: `'body'`), pairs with `data-mount`                                    |
+| `data-state`   | runtime script | JSON object to seed `app.data` initial values (e.g. `'{"count": 0}'`), `data-src` mode only           |
 | `data-launch`  | runtime script | Bundle URL for server mode — triggers `launch()` with full app lifecycle                              |
 | `data-hash`    | runtime script | Enable hash-based routing (for `data-launch` apps)                                                    |
 | `data-persist` | runtime script | Enable stash persistence — `data-persist` for sessionStorage, `data-persist="local"` for localStorage |
+| `data-reload`  | runtime script | Connect to `/watch` SSE endpoint for hot reload on file changes                                       |
 
 
 ### Component Mounting
