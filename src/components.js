@@ -905,8 +905,13 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       }
 
       pushLine('  _create() {', renderBlock.loc);
-      for (const line of result.createLines) {
-        pushPlain(`    ${line}`);
+      for (let i = 0; i < result.createLines.length; i++) {
+        const loc = result.createLineLocs.get(i);
+        if (loc) {
+          pushLine(`    ${result.createLines[i]}`, loc);
+        } else {
+          pushPlain(`    ${result.createLines[i]}`);
+        }
       }
       pushPlain(`    return ${result.rootVar};`);
       pushPlain('  }');
@@ -988,6 +993,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     this._textCount = 0;
     this._blockCount = 0;
     this._createLines = [];
+    this._createLineLocs = new Map();
     this._setupLines = [];
     this._blockFactories = [];
     this._loopVarStack = [];
@@ -1021,6 +1027,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
     return {
       createLines: this._createLines,
+      createLineLocs: this._createLineLocs,
       setupLines: this._setupLines,
       blockFactories: this._blockFactories,
       rootVar
@@ -1111,7 +1118,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
     // Component instantiation (PascalCase)
     if (headStr && this.isComponent(headStr)) {
-      return this.generateChildComponent(headStr, rest);
+      return this.generateChildComponent(headStr, rest, sexpr.loc);
     }
 
     // Slot projection — replace <slot> with @children in component render
@@ -1806,7 +1813,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
   // generateChildComponent — instantiate a child component
   // --------------------------------------------------------------------------
 
-  proto.generateChildComponent = function(componentName, args) {
+  proto.generateChildComponent = function(componentName, args, loc) {
     this._pendingAutoWire = false;
     const instVar = this.newElementVar('inst');
     const elVar = this.newElementVar('el');
@@ -1814,6 +1821,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
 
     const s = this._self;
     this._createLines.push(`{ const __prev = __pushComponent(${s}); try {`);
+    if (loc) this._createLineLocs.set(this._createLines.length, loc);
     this._createLines.push(`${instVar} = new ${componentName}(${propsCode});`);
     this._createLines.push(`${elVar} = ${instVar}._root = ${instVar}._create();`);
     this._createLines.push(`(${s}._children || (${s}._children = [])).push(${instVar});`);
