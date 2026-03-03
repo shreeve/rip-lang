@@ -567,7 +567,7 @@ class Manager
               return unless filename.endsWith(watchExt)
             else
               return unless filename is @flags.watch or filename.endsWith("/#{@flags.watch}")
-            return if filename is entryBase or filename.endsWith("/#{entryBase}")
+            return if filename is entryBase
             # Touch entry file to trigger rolling restart
             try
               now = new Date()
