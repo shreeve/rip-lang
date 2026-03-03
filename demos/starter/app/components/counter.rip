@@ -28,25 +28,21 @@ export Counter = component
     else "text-gray-900"
 
   render
-    div.("mt-10 space-y-4")
-      div
+    .("mt-10 space-y-4")
+      .
         h1.("text-xl font-semibold tracking-tight text-gray-900") title
         p.("text-sm text-gray-500") "Reactive state — persists across reload"
 
-      div.("bg-white border border-gray-200 rounded-xl shadow-sm p-6")
-        div.("text-6xl font-bold text-center tabular-nums py-8 transition-colors", countColor) count
+      .("bg-white border border-gray-200 rounded-xl shadow-sm p-6")
+        .("text-6xl font-bold text-center tabular-nums py-8 transition-colors", countColor) count
 
-        div.("flex justify-center gap-2")
-          Press @click: @decrement
-            = "- #{step}"
+        .("flex justify-center gap-2")
+          Press @click: @decrement, "- #{step}"
           Press @click: @reset, "Reset"
-          Press variant: "primary", @click: @increment
-            = "+ #{step}"
+          Press variant: "primary", @click: @increment, "+ #{step}"
 
-      div.("bg-white border border-gray-200 rounded-xl shadow-sm p-6")
-        div.("text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3") "Step Size"
-        div.("flex gap-2 flex-wrap")
-          Press @click: (-> step =   1),   "1"
-          Press @click: (-> step =   5),   "5"
-          Press @click: (-> step =  10),  "10"
-          Press @click: (-> step = 100), "100"
+      .("bg-white border border-gray-200 rounded-xl shadow-sm p-6")
+        .("text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3") "Step Size"
+        .("flex gap-2 flex-wrap")
+          for n in [1, 5, 10, 100]
+            Press variant: (if step is n then "primary" else "default"), @click: (-> step = n), n
