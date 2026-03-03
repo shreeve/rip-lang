@@ -34,14 +34,12 @@ rip server
 
 ### Current Status
 
-
 | Metric       | Value                     |
 | ------------ | ------------------------- |
 | Version      | 3.13.71                   |
 | Tests        | 1,436                     |
 | Dependencies | Zero                      |
 | Self-hosting | Yes (Rip compiles itself) |
-
 
 ---
 
@@ -82,7 +80,6 @@ rip-lang/
 
 ### File Editing Rules
 
-
 | File                      | Can Edit? | Notes                                                           |
 | ------------------------- | --------- | --------------------------------------------------------------- |
 | `src/compiler.js`         | Yes       | Code generator — main work here                                 |
@@ -96,7 +93,6 @@ rip-lang/
 | `rip-loader.js`           | Yes       | Bun plugin — compiles .rip files + rewrites @rip-lang/* imports |
 | `src/grammar/solar.rip`   | Never     | Parser generator (given)                                        |
 | `test/rip/*.rip`          | Yes       | Test files                                                      |
-
 
 ---
 
@@ -231,7 +227,6 @@ Complete node type reference:
 
 Token: `[tag, val]` array with properties:
 
-
 | Property   | Type        | Purpose                                                         |
 | ---------- | ----------- | --------------------------------------------------------------- |
 | `.pre`     | number      | Whitespace count before this token                              |
@@ -239,7 +234,6 @@ Token: `[tag, val]` array with properties:
 | `.loc`     | `{r, c, n}` | Row, column, length                                             |
 | `.spaced`  | boolean     | Sugar for `.pre > 0`                                            |
 | `.newLine` | boolean     | Preceded by a newline                                           |
-
 
 Identifier suffixes: `!` sets `.data.await = true` (dammit operator), `?` sets `.data.predicate = true` (existence check). `as!` in for-loops emits `FORASAWAIT` for `for await`.
 
@@ -334,7 +328,6 @@ if (Array.isArray(body) && body[0] === 'block') {
 
 Rip provides reactivity as **language-level operators**, not library imports:
 
-
 | Operator | Name            | Mnemonic                 | Output                                                 |
 | -------- | --------------- | ------------------------ | ------------------------------------------------------ |
 | `=`      | Assign          | "gets value"             | `let x; x = value`                                     |
@@ -344,7 +337,6 @@ Rip provides reactivity as **language-level operators**, not library imports:
 | `=!`     | Readonly        | "equals, dammit!"        | `const x = value` (just const)                         |
 | `offer`  | Context provide | "share with descendants" | `__state(value)` + `setContext('name', this.name)`     |
 | `accept` | Context consume | "receive from ancestor"  | `this.name = getContext('name')`                       |
-
 
 The reactive runtime is embedded in compiler.js and only included when needed.
 
@@ -366,13 +358,11 @@ export TabContent = component
 
 **Three-tier state model:**
 
-
 | Tier             | Scope              | Mechanism                           | Example                           |
 | ---------------- | ------------------ | ----------------------------------- | --------------------------------- |
 | **Props**        | Parent → child     | `value <=> x`, `placeholder: "..."` | Configuring a Select              |
 | **Offer/Accept** | Ancestor → subtree | `offer`/`accept` keywords           | Tabs sharing `active` with panels |
 | **Stash**        | Application-wide   | Shared reactive proxy               | User email, auth state, theme     |
-
 
 Implementation: `offer`/`accept` are handled as context-sensitive keywords via `classifyKeyword` override in `src/components.js`. They only tokenize as `OFFER`/`ACCEPT` inside component bodies; elsewhere they're plain identifiers. The grammar rules live in `ComponentLine`. The runtime uses the existing `setContext`/`getContext`/`_parent` chain — zero new runtime code.
 
@@ -617,13 +607,11 @@ The Rip extension (`packages/vscode/`) provides IDE support for VS Code and Curs
 
 ### Settings
 
-
 | Setting                    | Default | Description                                |
 | -------------------------- | ------- | ------------------------------------------ |
 | `rip.types.generateOnSave` | `true`  | Auto-generate `.d.ts` on save              |
 | `rip.types.intellisense`   | `true`  | Enable autocomplete/hover/go-to-definition |
 | `rip.compiler.path`        | (auto)  | Path to the `rip` compiler binary          |
-
 
 ### Publishing
 
@@ -706,13 +694,11 @@ test/rip/
 
 ## Documentation Map
 
-
 | File                  | Purpose                                                                         |
 | --------------------- | ------------------------------------------------------------------------------- |
 | **README.md**         | User guide, features, installation                                              |
 | **docs/RIP-LANG.md**  | Full language reference (syntax, operators, reactivity, packages, future ideas) |
 | **docs/RIP-TYPES.md** | Type system specification                                                       |
-
 
 ---
 
@@ -729,14 +715,12 @@ built-in validators, file serving (`@send`), middleware composition,
 multi-worker process manager, hot reloading, automatic HTTPS, mDNS service
 discovery, and request queueing.
 
-
 | File             | Lines  | Role                                                                      |
 | ---------------- | ------ | ------------------------------------------------------------------------- |
 | `api.rip`        | ~662   | Core framework: routing, validation, `read()`, `session`, `@send`, server |
 | `middleware.rip` | ~559   | Built-in middleware: cors, logger, sessions, compression, security        |
 | `server.rip`     | ~1,323 | CLI, workers, load balancing, TLS, mDNS                                   |
 | `server.html`    | ~420   | Built-in dashboard UI                                                     |
-
 
 Key concepts:
 
@@ -765,12 +749,10 @@ Zero-build reactive web framework. The browser loads `rip.min.js`
 and renders with fine-grained DOM updates. Uses Rip's built-in reactive
 primitives directly — one signal graph shared between framework and components.
 
-
 | File        | Lines | Role                                                             |
 | ----------- | ----- | ---------------------------------------------------------------- |
 | `ui.rip`    | ~965  | Unified framework: stash, router (path + hash), renderer, launch |
 | `serve.rip` | ~93   | Server middleware: framework bundle, app bundle, SSE hot-reload  |
-
 
 Key concepts:
 
@@ -810,7 +792,6 @@ Every widget exposes `$` attributes (compiled to `data-`* in HTML) for styling a
 keyboard interactions per WAI-ARIA Authoring Practices. Widgets are plain
 `.rip` source files — no build step. The browser compiles them on the fly.
 
-
 | File            | Lines | What It Does                                                  |
 | --------------- | ----- | ------------------------------------------------------------- |
 | `checkbox.rip`  | 33    | Checkbox and switch toggle                                    |
@@ -824,7 +805,6 @@ keyboard interactions per WAI-ARIA Authoring Practices. Widgets are plain
 | `combobox.rip`  | 152   | Filterable input + listbox                                    |
 | `select.rip`    | 182   | Dropdown with typeahead, ARIA listbox                         |
 | `grid.rip`      | 901   | Virtual-scrolling data grid (100K+ rows at 60fps)             |
-
 
 **Widget conventions:**
 
@@ -1121,7 +1101,6 @@ in the shared scope).
 | `data-persist` | runtime script | Enable stash persistence — `data-persist` for sessionStorage, `data-persist="local"` for localStorage |
 | `data-reload`  | runtime script | Connect to `/watch` SSE endpoint for hot reload on file changes                                       |
 
-
 ### Component Mounting
 
 Every component class has a static `mount(target)` method:
@@ -1147,7 +1126,6 @@ ES module via blob URL.
 
 ### globalThis Registrations
 
-
 | Function            | Purpose                                                              |
 | ------------------- | -------------------------------------------------------------------- |
 | `rip(code)`         | Console REPL — compile and execute Rip code                          |
@@ -1156,15 +1134,12 @@ ES module via blob URL.
 | `__rip`             | Reactive primitives (`__state`, `__computed`, `__effect`, `__batch`) |
 | `__ripComponent`    | Component runtime (`__component`, `__render`, etc.)                  |
 
-
 ### Compiler Options for Browser
-
 
 | Option         | Purpose                                                                                                                                       |
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `skipExports`  | Suppresses `export` keywords in codegen — `export const X` becomes `const X`                                                                  |
 | `skipRuntimes` | Skips reactive/component runtime blocks (already on `globalThis`), uses `var` for helpers to allow safe re-emission across concatenated files |
-
 
 ### Variable Persistence in `rip()`
 
@@ -1200,7 +1175,6 @@ are not inherited by child processes unless `env` is passed explicitly.
 
 ### Known Bun Bugs/Limitations (as of Bun v1.3.9)
 
-
 | Bug                                                                     | Workaround                                    |
 | ----------------------------------------------------------------------- | --------------------------------------------- |
 | `process.env` changes not inherited by `spawn`/`spawnSync`              | Pass `env: process.env` explicitly            |
@@ -1208,13 +1182,11 @@ are not inherited by child processes unless `env` is passed explicitly.
 | Plugin `onResolve` doesn't fire for imports in `onLoad`-compiled source | Do import rewriting inside `onLoad` instead   |
 | `require.resolve({ paths })` ignores `paths` inside plugin handlers     | Use `import.meta.resolve` instead             |
 
-
 ---
 
 ## Playground & Demos
 
 HTML files in `docs/`, all using the shared-scope model with `<script defer>`:
-
 
 | File                 | Purpose                                                                          |
 | -------------------- | -------------------------------------------------------------------------------- |
@@ -1225,7 +1197,6 @@ HTML files in `docs/`, all using the shared-scope model with `<script defer>`:
 | `example/index.html` | Generic app launcher — fetches JSON bundle (requires server)                     |
 | `results/index.html` | Lab Results app — 7 components in shared scope with `data-mount="Home"`          |
 
-
 Static files (`demo.html`, `charts.html`, `sierpinski.html`) work from `file://` — just double-click to open. The playground and example app require `bun run serve` → `http://localhost:3000/`.
 
 ---
@@ -1233,7 +1204,6 @@ Static files (`demo.html`, `charts.html`, `sierpinski.html`) work from `file://`
 ## Language Features
 
 ### Removed (from CoffeeScript / Rip 2.x)
-
 
 | Feature                            | Replacement                   |
 | ---------------------------------- | ----------------------------- |
@@ -1243,9 +1213,7 @@ Static files (`demo.html`, `charts.html`, `sierpinski.html`) work from `file://`
 | `is not` contraction               | `isnt`                        |
 | `for x from iterable`              | `for x as iterable`           |
 
-
 ### Added
-
 
 | Feature               | Syntax           | Purpose                                                          |
 | --------------------- | ---------------- | ---------------------------------------------------------------- |
@@ -1257,9 +1225,7 @@ Static files (`demo.html`, `charts.html`, `sierpinski.html`) work from `file://`
 | Presence check        | `x?!`            | Postfix `?!` — true if truthy, else undefined (Houdini operator) |
 | Optional chain assign | `x?.prop = val`  | Guarded assignment — skips if null/undefined                     |
 
-
 ### Kept
-
 
 | Feature                     | Syntax                    | Compiles to                   |
 | --------------------------- | ------------------------- | ----------------------------- |
@@ -1269,7 +1235,6 @@ Static files (`demo.html`, `charts.html`, `sierpinski.html`) work from `file://`
 | Optional chain assign       | `x?.prop = val`           | `if (x != null) x.prop = val` |
 | Nullish coalescing          | `a ?? b`                  | `a ?? b`                      |
 | Dammit operator             | `fetchData!`              | `await fetchData()`           |
-
 
 ---
 
@@ -1308,7 +1273,6 @@ rip> .js      # Toggle JS display
 
 ### Unique Operators
 
-
 | Operator    | Name            | Example                                                                |
 | ----------- | --------------- | ---------------------------------------------------------------------- |
 | `!`         | Dammit          | `fetchData!` — calls AND awaits                                        |
@@ -1341,11 +1305,9 @@ rip> .js      # Toggle JS display
 | `or return` | Guard           | `x = get() or return err` — early return                               |
 | `?? throw`  | Nullish guard   | `x = get() ?? throw err` — throw if null                               |
 
-
 ### Standard Library
 
 Rip injects 13 global helpers via `globalThis` into every compiled program. Defined in `getStdlibCode()` in `src/compiler.js`, also injected into the CLI REPL (`src/repl.js`) and browser REPL (`docs/index.html`).
-
 
 | Function          | Description                          | Example                            |
 | ----------------- | ------------------------------------ | ---------------------------------- |
@@ -1362,7 +1324,6 @@ Rip injects 13 global helpers via `globalThis` into every compiled program. Defi
 | `todo(msg?)`      | Throw "Not implemented"              | `todo "finish later"`              |
 | `warn(...args)`   | `console.warn` shorthand             | `warn "deprecated"`                |
 | `zip(...arrays)`  | Zip arrays pairwise                  | `zip names, ages`                  |
-
 
 All use `??=` (overridable by redeclaring). The REPL uses `skipPreamble: true` and injects separately via `getStdlibCode()`.
 
