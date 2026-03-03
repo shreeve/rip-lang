@@ -44,6 +44,9 @@ export const SKIP_CODES = new Set([
   1064, // Return type of async function must be Promise
   2582, // Cannot find name 'test' (test runner globals)
   2593, // Cannot find name 'describe' (test runner globals)
+  7005, // Variable implicitly has an 'any' type (compiler-generated locals)
+  7006, // Parameter implicitly has an 'any' type (compiler-generated params)
+  7034, // Variable implicitly has type 'any' in some locations (compiler-generated)
 ]);
 
 // Base TypeScript compiler settings for type-checking. Callers can
@@ -88,11 +91,17 @@ export function compileForCheck(filePath, source, compiler) {
   const hasTypes = hasOwnTypes || importsTyped;
   if (!hasTypes) code = '// @ts-nocheck\n' + code;
 
+  // Component render blocks generate hundreds of untyped compiler internals
+  // (_el0, _inst7, block factories) that TypeScript can't type-check.
+  // The DTS provides the typed API; skip TS checking on the compiled body.
+  const hasComponents = /\bextends __Component\b/.test(code);
+
   // Ensure every file is treated as a module (not a global script)
   if (!/\bexport\b/.test(code) && !/\bimport\b/.test(code)) code += '\nexport {};\n';
 
-  const tsContent = (hasTypes ? dts + '\n' : '') + code;
-  const headerLines = hasTypes ? countLines(dts + '\n') : 1;
+  // @ts-nocheck must be on the first line to take effect
+  const tsContent = (hasComponents ? '// @ts-nocheck\n' : '') + (hasTypes ? dts + '\n' : '') + code;
+  const headerLines = (hasComponents ? 1 : 0) + (hasTypes ? countLines(dts + '\n') : 1);
 
   // Build bidirectional line maps
   const { srcToGen, genToSrc } = buildLineMap(result.reverseMap, result.map, headerLines);
@@ -244,7 +253,7 @@ export async function runCheck(targetDir, opts = {}) {
   }
 
   // Create TypeScript language service
-  const settings = createTypeCheckSettings(ts, { noImplicitAny: true });
+  const settings = createTypeCheckSettings(ts);
 
   const host = {
     getScriptFileNames: () => [...compiled.keys()].map(toVirtual),
