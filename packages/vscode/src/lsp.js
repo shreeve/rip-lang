@@ -536,6 +536,7 @@ function detectComponentContext(srcLine, col) {
           wantValues = true;
           currentProp = propName;
           existingProps.push(key.startsWith('@') ? key : propName);
+          if (!key.startsWith('@')) propValues.set(propName, seg.text.substring(seg.colon + 1).trim());
         }
       }
     } else {
