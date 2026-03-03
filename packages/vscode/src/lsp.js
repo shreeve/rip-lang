@@ -243,7 +243,9 @@ function srcToOffset(filePath, line, col) {
   if (srcLines[line] && genLines[genLine]) {
     const srcText = srcLines[line];
     const genText = genLines[genLine];
-    let wordMatch = srcText.substring(col).match(/^\w+/) || srcText.substring(0, col).match(/\w+$/);
+    const leftPart = srcText.substring(0, col).match(/\w*$/)?.[0] || '';
+    const rightPart = srcText.substring(col).match(/^\w*/)?.[0] || '';
+    let wordMatch = (leftPart + rightPart) ? [leftPart + rightPart] : null;
     if (wordMatch && KEYWORDS.has(wordMatch[0])) {
       const after = srcText.substring(col + wordMatch[0].length).match(/\s+(\w+)/);
       if (after) wordMatch = [after[1]];
