@@ -859,7 +859,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     }
 
     // --- Render block (fine-grained) ---
-    if (renderBlock) {
+    if (renderBlock && !this.options.lspMode) {
       const renderBody = renderBlock[1];
       const result = this.buildRender(renderBody);
 
