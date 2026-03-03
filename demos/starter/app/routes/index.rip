@@ -1,9 +1,9 @@
 export App = component
   render
-    div
-      h1 "Hello, world!"
-      p "Welcome to Rip UI."
-      div style: "display:flex;gap:8px;margin-top:1rem"
+    div.("max-w-2xl mx-auto px-6 py-12")
+      h1.("text-3xl font-bold tracking-tight text-gray-900") "Hello, world!"
+      p.("mt-1 text-gray-500") "Welcome to Rip UI."
+      div.("flex gap-2 mt-4")
         Badge "New"
         Badge variant: "outline", "Beta"
         Badge variant: "subtle", "Draft"

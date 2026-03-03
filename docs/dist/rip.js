@@ -4880,11 +4880,14 @@ ${blockFactoriesCode}return ${lines.join(`
           }
         } else if (arg && !childrenVar) {
           const textVar = this.newTextVar();
-          const val = typeof arg === "string" ? arg.valueOf() : null;
-          if (val && (val.startsWith('"') || val.startsWith("'") || val.startsWith("`"))) {
-            this._createLines.push(`${textVar} = document.createTextNode(${val});`);
+          const exprCode = this.generateInComponent(arg, "value");
+          if (this.hasReactiveDeps(arg)) {
+            this._createLines.push(`${textVar} = document.createTextNode('');`);
+            const body = `${textVar}.data = ${exprCode};`;
+            const effect = this._factoryMode ? `disposers.push(__effect(() => { ${body} }));` : `__effect(() => { ${body} });`;
+            childrenSetupLines.push(effect);
           } else {
-            this._createLines.push(`${textVar} = document.createTextNode(${this.generateInComponent(arg, "value")});`);
+            this._createLines.push(`${textVar} = document.createTextNode(${exprCode});`);
           }
           childrenVar = textVar;
           props.push(`children: ${childrenVar}`);
@@ -8752,8 +8755,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.75";
-  var BUILD_DATE = "2026-03-03@00:02:43GMT";
+  var VERSION = "3.13.77";
+  var BUILD_DATE = "2026-03-03@05:01:25GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();

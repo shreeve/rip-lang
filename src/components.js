@@ -1877,11 +1877,16 @@ export function installComponentSupport(CodeGenerator, Lexer) {
         }
       } else if (arg && !childrenVar) {
         const textVar = this.newTextVar();
-        const val = typeof arg === 'string' ? arg.valueOf() : null;
-        if (val && (val.startsWith('"') || val.startsWith("'") || val.startsWith('`'))) {
-          this._createLines.push(`${textVar} = document.createTextNode(${val});`);
+        const exprCode = this.generateInComponent(arg, 'value');
+        if (this.hasReactiveDeps(arg)) {
+          this._createLines.push(`${textVar} = document.createTextNode('');`);
+          const body = `${textVar}.data = ${exprCode};`;
+          const effect = this._factoryMode
+            ? `disposers.push(__effect(() => { ${body} }));`
+            : `__effect(() => { ${body} });`;
+          childrenSetupLines.push(effect);
         } else {
-          this._createLines.push(`${textVar} = document.createTextNode(${this.generateInComponent(arg, 'value')});`);
+          this._createLines.push(`${textVar} = document.createTextNode(${exprCode});`);
         }
         childrenVar = textVar;
         props.push(`children: ${childrenVar}`);

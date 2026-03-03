@@ -4,9 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Starter</title>
-  <style>
-    body { font-family: system-ui; padding: 2rem; opacity: 0; }
-    body.ready { opacity: 1; }
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style type="text/tailwindcss">
+    body { @apply bg-gray-50 text-gray-900 antialiased opacity-0; }
+    body.ready { @apply opacity-100; }
   </style>
 </head>
 <body>

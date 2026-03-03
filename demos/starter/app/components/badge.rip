@@ -10,6 +10,14 @@
 export Badge = component
   @variant := 'solid'
 
+  classes ~=
+    base = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+    switch @variant
+      when 'solid'   then "#{base} bg-blue-600 text-white"
+      when 'outline'  then "#{base} border border-gray-300 text-gray-700"
+      when 'subtle'  then "#{base} bg-gray-100 text-gray-600"
+      else base
+
   render
-    span $variant: @variant
+    span.(classes) $variant: @variant
       slot

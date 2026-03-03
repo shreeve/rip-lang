@@ -1,3 +1,16 @@
+export Press = component
+  @variant := 'default'
+
+  classes ~=
+    base = "px-4 py-2 text-sm font-medium rounded-lg active:scale-[0.98] transition cursor-pointer"
+    switch @variant
+      when 'primary' then "#{base} bg-blue-600 text-white hover:bg-blue-700"
+      else "#{base} border border-gray-300 bg-white hover:bg-gray-50"
+
+  render
+    button.(classes)
+      slot
+
 export Counter = component
   @title := "Data Counters"
   count := @app.data.count or 0
@@ -9,24 +22,31 @@ export Counter = component
   decrement: -> count -= step
   reset:     -> count = 0
 
+  countColor ~=
+    if count > 0 then "text-emerald-600"
+    else if count < 0 then "text-red-500"
+    else "text-gray-900"
+
   render
-    div
-      .page-header
-        h1.page-title title
-        p.page-subtitle "Reactive state — persists across reload"
+    div.("mt-10 space-y-4")
+      div
+        h1.("text-xl font-semibold tracking-tight text-gray-900") title
+        p.("text-sm text-gray-500") "Reactive state — persists across reload"
 
-      .card
-        .counter-display count
+      div.("bg-white border border-gray-200 rounded-xl shadow-sm p-6")
+        div.("text-6xl font-bold text-center tabular-nums py-8 transition-colors", countColor) count
 
-        .counter-controls
-          button.btn @click: @decrement, "- ${step}"
-          button.btn @click: @reset, "Reset"
-          button.btn.btn-primary @click: @increment, "+ ${step}"
+        div.("flex justify-center gap-2")
+          Press @click: @decrement
+            = "- #{step}"
+          Press @click: @reset, "Reset"
+          Press variant: "primary", @click: @increment
+            = "+ #{step}"
 
-      .card
-        .card-title "Step Size"
-        .btn-group
-          button.btn @click: (-> step = 1), "1"
-          button.btn @click: (-> step = 5), "5"
-          button.btn @click: (-> step = 10), "10"
-          button.btn @click: (-> step = 100), "100"
+      div.("bg-white border border-gray-200 rounded-xl shadow-sm p-6")
+        div.("text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3") "Step Size"
+        div.("flex gap-2 flex-wrap")
+          Press @click: (-> step =   1),   "1"
+          Press @click: (-> step =   5),   "5"
+          Press @click: (-> step =  10),  "10"
+          Press @click: (-> step = 100), "100"

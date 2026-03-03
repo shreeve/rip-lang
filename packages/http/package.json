@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/http",
-  "version": "1.1.55",
+  "version": "1.1.56",
   "description": "Zero-dependency HTTP client for Rip - ky-inspired convenience over native fetch",
   "type": "module",
   "main": "http.rip",
@@ -28,7 +28,7 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": ">=3.13.76"
+    "rip-lang": ">=3.13.77"
   },
   "files": [
     "http.rip",
