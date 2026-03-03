@@ -107,6 +107,16 @@ function isPublicProp(target) {
   return Array.isArray(target) && target[0] === '.' && target[1] === 'this';
 }
 
+/**
+ * Extract type annotation from s-expression target node.
+ * Type annotations are stored as .type on String objects by the type rewriter.
+ */
+function getMemberType(target) {
+  if (target instanceof String && target.type) return target.type;
+  if (Array.isArray(target) && target[2] instanceof String && target[2].type) return target[2].type;
+  return null;
+}
+
 // ============================================================================
 // Prototype Installation
 // ============================================================================
@@ -703,7 +713,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       } else if (op === 'state') {
         const varName = getMemberName(stmt[1]);
         if (varName) {
-          stateVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]) });
+          stateVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]), type: getMemberType(stmt[1]) });
           memberNames.add(varName);
           reactiveMembers.add(varName);
         }
@@ -717,7 +727,7 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       } else if (op === 'readonly') {
         const varName = getMemberName(stmt[1]);
         if (varName) {
-          readonlyVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]) });
+          readonlyVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]), type: getMemberType(stmt[1]) });
           memberNames.add(varName);
         }
       } else if (op === '=') {
@@ -778,7 +788,22 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     lines.push('class extends __Component {');
 
     // --- Init (called by __Component constructor) ---
-    lines.push('  _init(props) {');
+    if (this.options.lspMode) {
+      const typedProps = [];
+      for (const v of [...readonlyVars, ...stateVars]) {
+        if (v.isPublic) {
+          const t = v.type || 'any';
+          typedProps.push(`${v.name}?: ${t}`);
+          typedProps.push(`__bind_${v.name}__?: ${t}`);
+        }
+      }
+      const propsType = typedProps.length > 0
+        ? `{ ${typedProps.join(', ')}, [key: string]: any }`
+        : 'any';
+      lines.push(`  _init(props: ${propsType}) {`);
+    } else {
+      lines.push('  _init(props) {');
+    }
 
     // Constants (readonly)
     for (const { name, value, isPublic } of readonlyVars) {
