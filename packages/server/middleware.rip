@@ -487,7 +487,7 @@ export serve = (opts = {}) ->
   appDir        = opts.dir or '.'
   routesDir     = "#{appDir}/#{opts.routes or 'routes'}"
   componentDirs = (opts.components or ['components']).map (d) -> "#{appDir}/#{d}"
-  enableWatch   = opts.watch ? opts.watch : process.env.SOCKET_PREFIX?
+  enableWatch   = if opts.watch? then opts.watch else process.env.SOCKET_PREFIX?
   appState      = opts.state or null
   appTitle      = opts.title or null
 
