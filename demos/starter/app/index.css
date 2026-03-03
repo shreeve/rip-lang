@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+:root {
+  --color-text-primary: var(--color-gray-950);
+  --color-text-secondary: var(--color-gray-800);
+  --color-text-tertiary: var(--color-gray-600);
+  --color-bg-primary: var(--color-white);
+  --color-bg-secondary: var(--color-gray-50);
+  --color-bg-tertiary: var(--color-gray-100);
+}
+
+@theme {
+  --text-color-primary: var(--color-text-primary);
+  --text-color-secondary: var(--color-text-secondary);
+  --text-color-tertiary: var(--color-text-tertiary);
+  --background-color-primary: var(--color-bg-primary);
+  --background-color-secondary: var(--color-bg-secondary);
+  --background-color-tertiary: var(--color-bg-tertiary);
+}

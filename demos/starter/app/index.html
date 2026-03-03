@@ -4,10 +4,29 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Starter</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   <style type="text/tailwindcss">
-    body { @apply bg-gray-50 text-gray-900 antialiased opacity-0; }
-    body.ready { @apply opacity-100; }
+    :root {
+      --color-text-primary: var(--color-gray-950);
+      --color-text-secondary: var(--color-gray-800);
+      --color-text-tertiary: var(--color-gray-600);
+      --color-bg-primary: var(--color-white);
+      --color-bg-secondary: var(--color-gray-50);
+      --color-bg-tertiary: var(--color-gray-100);
+    }
+
+    @theme {
+      --text-color-primary: var(--color-text-primary);
+      --text-color-secondary: var(--color-text-secondary);
+      --text-color-tertiary: var(--color-text-tertiary);
+      --background-color-primary: var(--color-bg-primary);
+      --background-color-secondary: var(--color-bg-secondary);
+      --background-color-tertiary: var(--color-bg-tertiary);
+    }
+
+    @layer base {
+      body { @apply bg-secondary text-primary antialiased; }
+    }
   </style>
 </head>
 <body>
