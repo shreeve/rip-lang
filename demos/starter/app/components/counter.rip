@@ -1,10 +1,11 @@
 export Press = component
-  @variant := 'default'
+  @variant:: 'primary' | 'special' | 'default' := 'default'
 
   classes ~=
     base = "px-4 py-2 text-sm font-medium rounded-lg active:scale-[0.98] transition cursor-pointer"
     switch @variant
       when 'primary' then "#{base} bg-blue-600 text-white hover:bg-blue-700"
+      when 'special' then "#{base} bg-green-600 text-white hover:bg-green-700"
       else "#{base} border border-gray-300 bg-white hover:bg-gray-50"
 
   render
@@ -45,4 +46,4 @@ export Counter = component
         .("text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3") "Step Size"
         .("flex gap-2 flex-wrap")
           for n in [1, 5, 10, 100]
-            Press variant: (if step is n then "primary" else "default"), @click: (-> step = n), n
+            Press variant: (if step is n then "special" else "default"), @click: (-> step = n), n

@@ -24,7 +24,7 @@ hljs.registerLanguage 'rip', ripLanguage
 args = process.argv.slice(2)
 
 if args.includes('-v') or args.includes('--version')
-  console.log "rip-print 1.0.2"
+  console.log "rip-print 1.1.59"
   process.exit(0)
 
 if args.includes('-h') or args.includes('--help')
@@ -432,44 +432,21 @@ html = """
         var sizeBtn = document.querySelector('.size-btn[data-size="' + savedSize + '"]');
         if (sizeBtn) sizeBtn.click();
       }
-
-      // Service worker: cache page so refresh works after server exits
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(function() {});
-      }
     </script>
   </body>
   </html>
   """
 
 # ==============================================================================
-# Serve and open browser (service worker caches page for offline refresh)
+# Serve and open browser
 # ==============================================================================
 
-swScript = """\
-  self.addEventListener('install', function(e) { self.skipWaiting(); });
-  self.addEventListener('activate', function(e) { e.waitUntil(self.clients.claim()); });
-  self.addEventListener('fetch', function(e) {
-    e.respondWith(caches.match(e.request).then(function(r) {
-      return r || fetch(e.request).then(function(res) {
-        var c = res.clone();
-        caches.open('rip-print').then(function(cache) { cache.put(e.request, c); });
-        return res;
-      });
-    }));
-  });
-  """
-
-hits = 0
+served = false
 
 server = Bun.serve
   port: 9111
-  fetch: (req) ->
-    url = new URL(req.url)
-    if url.pathname is '/sw.js'
-      hits++
-      return new Response swScript, headers: { 'Content-Type': 'application/javascript' }
-    hits++
+  fetch: ->
+    served = true
     new Response html, headers: { 'Content-Type': 'text/html; charset=utf-8' }
 
 console.log "\nOpening browser..."
@@ -484,9 +461,8 @@ try
 catch
   console.log "Visit: http://localhost:#{server.port}/"
 
-# Exit once page and service worker are served (refresh works in Chrome)
 poll = setInterval ->
-  if hits >= 2
+  if served
     clearInterval(poll)
     setTimeout ->
       server.stop()

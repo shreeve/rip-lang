@@ -260,9 +260,13 @@
       "patterns": [{ "include": "#type_expression" }]
     },
     {
-      "comment": "Type annotation: name:: Type",
-      "begin": "(::)(?!=)",
-      "beginCaptures": { "1": { "name": "keyword.operator.type-annotation.rip" } },
+      "comment": "Type annotation: name:: Type or @name :: Type",
+      "begin": "(?:(@)([a-zA-Z_$]\\w*))?\\s*(::)(?!=)",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.variable.rip" },
+        "2": { "name": "variable.other.readwrite.instance.rip" },
+        "3": { "name": "keyword.operator.type-annotation.rip" }
+      },
       "end": "(?=\\s*(?:=(?![>=])|:=|~=|~>|=!|<=>|\\)|,|->))|$|(?=#)",
       "contentName": "meta.type.rip",
       "patterns": [{ "include": "#type_expression" }]

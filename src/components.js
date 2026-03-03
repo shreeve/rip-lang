@@ -91,9 +91,10 @@ function extractInputType(pairs) {
  * Handles both [".", "this", name] (@property) and plain string.
  */
 function getMemberName(target) {
-  if (typeof target === 'string') return target;
-  if (Array.isArray(target) && target[0] === '.' && target[1] === 'this' && typeof target[2] === 'string') {
-    return target[2];
+  if (typeof target === 'string' || target instanceof String) return target.valueOf();
+  if (Array.isArray(target) && target[0] === '.' && target[1] === 'this' &&
+      (typeof target[2] === 'string' || target[2] instanceof String)) {
+    return target[2].valueOf();
   }
   return null;
 }
