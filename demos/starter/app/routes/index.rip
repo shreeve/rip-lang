@@ -7,4 +7,4 @@ export App = component
         Badge "New"
         Badge variant: "outline", "Beta"
         Badge variant: "subtle", "Draft"
-      Counter
+      Counter title: "My Cool Counter"
