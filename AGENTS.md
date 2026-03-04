@@ -19,7 +19,7 @@ echo 'your code' | ./bin/rip -s  # S-expressions (parser)
 echo 'your code' | ./bin/rip -c  # JavaScript (codegen)
 
 # Run tests
-bun run test                             # All tests (1455)
+bun run test                             # All tests (1457)
 bun test/runner.js test/rip/FILE.rip     # Specific file
 
 # Rebuild parser (after grammar changes)
@@ -37,7 +37,7 @@ rip server
 | Metric       | Value                     |
 | ------------ | ------------------------- |
 | Version      | 3.13.71                   |
-| Tests        | 1,455                     |
+| Tests        | 1,457                     |
 | Dependencies | Zero                      |
 | Self-hosting | Yes (Rip compiles itself) |
 
@@ -74,7 +74,7 @@ rip-lang/
 ├── docs/
 │   ├── RIP-LANG.md      # Language reference (includes reactivity, future ideas)
 │   └── RIP-TYPES.md     # Type system specification
-├── test/rip/            # 26 test files (1,455 tests)
+├── test/rip/            # 26 test files (1,457 tests)
 └── scripts/             # Build utilities (all .js — run via `bun run <name>`)
 ```
 
@@ -424,6 +424,17 @@ div                       div(->
   span "hello"              span("hello"))
 ```
 
+Tag class patterns in render blocks:
+
+```coffee
+div.card                     # static class: <div class="card">
+.card                        # implicit div: <div class="card">
+div.card.active              # multiple: <div class="card active">
+.("flex-1 p-4")             # dynamic: <div class="flex-1 p-4"> (via __clsx)
+.card.("flex-1 p-4")        # combined: <div class="card flex-1 p-4">
+.card.primary.("flex", x)   # multiple static + dynamic args
+```
+
 Key mechanisms:
 
 - `**startsWithTag**` — backward scan to determine if current line starts with a template tag
@@ -671,7 +682,7 @@ code "name", "x + y", "(x + y)"
 fail "name", "invalid syntax"
 ```
 
-### Test Files (26 files, 1,455 tests)
+### Test Files (26 files, 1,457 tests)
 
 ```
 test/rip/

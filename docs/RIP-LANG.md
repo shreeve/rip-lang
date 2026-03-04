@@ -1482,6 +1482,10 @@ App = component
   name := "world"
   render
     div.card                       # element with class
+    .card                          # implicit div with class
+    .card.active                   # multiple static classes
+    .("flex-1 p-4")               # dynamic classes (Tailwind etc.)
+    .card.("flex-1 p-4")          # static + dynamic combined
       h1#title "Hello"             # element with id
       span name                    # reactive text
       input value <=> name         # two-way binding
