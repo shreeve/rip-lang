@@ -34,7 +34,7 @@ export App = component
         Separator
 
         h2.("text-lg font-semibold") "Checkboxes"
-        .("space-y-2")
+        .("flex flex-wrap gap-x-6 gap-y-1")
           Checkbox checked <=> notifications
             span "Enable notifications"
           Checkbox checked <=> darkMode
