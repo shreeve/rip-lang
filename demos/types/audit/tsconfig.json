@@ -1,27 +1,12 @@
 {
   "compilerOptions": {
-    // Environment setup & latest features
-    "lib": ["esnext", "dom"],
-    "target": "esnext",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
     "module": "preserve",
     "moduleDetection": "force",
-
-    // Bundler mode
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true,
     "noEmit": true,
-
-    // Best practices
-    "strict": true,
     "skipLibCheck": true,
-    "noFallthroughCasesInSwitch": true,
-    "noUncheckedIndexedAccess": true,
-    "noImplicitOverride": true,
-
-    // Some stricter flags (disabled by default)
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noPropertyAccessFromIndexSignature": false
+    "strict": true,
+    "noFallthroughCasesInSwitch": true
   }
 }

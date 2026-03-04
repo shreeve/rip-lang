@@ -109,3 +109,12 @@ Each `.rip` file has a `.ts` companion with equivalent TypeScript for
 side-by-side IntelliSense comparison.
 
 Style: no semicolons, single quotes, trailing commas in multi-line.
+
+## Key Differences from TypeScript
+
+**No type inference.** Rip compiles `x = expr` as `let x; x = expr;`
+(split declaration), so TypeScript sees `let x;` → `any` and can't
+infer the type from the assignment. Every variable that participates
+in type checking must have an explicit `::` annotation. In TypeScript,
+`const x = expr` infers the type automatically. This means Rip's `.rip`
+files are more verbose than their `.ts` equivalents for derived values.
