@@ -164,23 +164,38 @@ function publishDiagnostics(filePath) {
         }
       }
 
-      // Value validation: check string literals against union types
+      // Value validation: type mismatches and invalid union values
       for (const [propName, value] of ctx.propValues) {
         const prop = info.props.find(p => p.name === propName);
         if (!prop) continue;
-        const allowed = extractUnionValues(prop.type);
-        if (allowed.length === 0) continue;
-        const strMatch = value.match(/^["'](.*)["']$/);
-        if (!strMatch) continue;
-        const quoted = `"${strMatch[1]}"`;
-        if (!allowed.some(v => v === quoted || v === `'${strMatch[1]}'`)) {
+        const isStr = /^["']/.test(value);
+        const isNum = /^\d/.test(value);
+        const isBool = value === 'true' || value === 'false';
+        const type = prop.type;
+
+        let msg = null;
+        if (type === 'string' && !isStr) msg = `Expected a string for prop '${propName}'`;
+        else if (type === 'number' && !isNum) msg = `Expected a number for prop '${propName}'`;
+        else if (type === 'boolean' && !isBool) msg = `Expected a boolean for prop '${propName}'`;
+        else {
+          const allowed = extractUnionValues(type);
+          if (allowed.length > 0 && isStr) {
+            const strMatch = value.match(/^["'](.*)["']$/);
+            if (strMatch) {
+              const quoted = `"${strMatch[1]}"`;
+              if (!allowed.some(v => v === quoted || v === `'${strMatch[1]}'`))
+                msg = `Invalid value ${quoted} for prop '${propName}'. Expected: ${allowed.join(' | ')}`;
+            }
+          }
+        }
+        if (msg) {
           const col = srcLines[i].indexOf(value);
           if (col >= 0) {
             diagnostics.push({
               range: { start: { line: i, character: col }, end: { line: i, character: col + value.length } },
               severity: 2,
               source: 'rip',
-              message: `Invalid value ${quoted} for prop '${propName}'. Expected: ${allowed.join(' | ')}`,
+              message: msg,
             });
           }
         }
