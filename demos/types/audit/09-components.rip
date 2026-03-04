@@ -5,32 +5,60 @@ export Button = component
   @loading:: boolean := false
   @disabled:: boolean := false
 
-export Select = component
-  @options:: string[]
+  bg ~= if variant is "primary" then "#0066ff" else "#e5e5e5"
+  fg ~= if variant is "primary" then "#fff" else "#333"
+
+  render
+    button style: "background: #{bg}; color: #{fg}", disabled: disabled or loading
+      if loading
+        "Loading..."
+      else
+        slot
+
+export Input = component
   @label:: string := ""
-  @placeholder:: string := "Select..."
+  @type:: string := "text"
+  @placeholder:: string := ""
   @value:: string := ""
   @error:: string := ""
 
-# ── Parent renders children with typed props ──
+  render
+    fieldset
+      if label
+        label label
+      input type: type, placeholder: placeholder, value: value
+      if error
+        div error
 
-export App = component
-  @title:: string := "My App"
-  role:: string := "admin"
+# ── Parent: sign-in form ──
+
+export Form = component
+  @title:: string := "Sign In"
+  email:: string := ""
+  password:: string := ""
   loading := false
 
-  isAdmin ~= role is "admin"
-
-  toggle: -> loading = not loading
+  onSubmit: (e) ->
+    e.preventDefault()
+    loading = true
+    p "Signing in: #{email}"
+    loading = false
 
   render
-    div
+    form @submit: @onSubmit
       h1 title
-      Button variant: "primary", loading: loading, @click: @toggle
-        "Save changes"
-      Button "Cancel"
-      Select options: ["a", "b", "c"], value: "a" if isAdmin
-      Select options: ["x", "y"]
+      Input
+        label: "Email"
+        type: "email"
+        placeholder: "jane@example.com"
+        value <=> email
+      Input
+        label: "Password"
+        type: "password"
+        placeholder: "••••••••"
+        value <=> password
+      Button type: "submit", variant: "primary", loading: loading
+        "Sign In"
 
 # ── Negative: wrong prop types must be caught ──
 
@@ -38,5 +66,5 @@ export App = component
 badBtn:: Button = new Button({ variant: "danger" })
 # @ts-expect-error — disabled expects boolean
 badBtn2:: Button = new Button({ disabled: "yes" })
-# @ts-expect-error — wrong type for options
-badSel:: Select = new Select({ options: 123 })
+# @ts-expect-error — wrong type for label
+badInput:: Input = new Input({ label: 123 })

@@ -92,6 +92,10 @@ overall health of Rip's type story — not just this audit.
 | `void` return annotation      | ❌      | `void` is reserved; use `!` operator (`def fn!`) instead            |
 | Enum exhaustiveness           | ❌      | Enums emit .d.ts but switch narrowing absent                        |
 | Type narrowing (control flow) | ❌      | TS narrows compiled JS, not Rip source                              |
+| Element type inheritance      | ❌      | No way to inherit an HTML element's full type surface; wrapper components must declare each prop manually |
+| Event handler typing          | ❌      | Handler params are untyped — `(e) ->` gives `any`, no typed event objects |
+| Generic components            | ❌      | Can't parameterize components by type (e.g. a typed select where value type flows through props) |
+| Context typing (offer/accept) | ❌      | `offer`/`accept` have no type annotations; shared values are untyped  |
 
 **Highest-ROI gap:** Type safety inside component bodies. The code section
 redeclares all props/state without types, so TypeScript can't validate
