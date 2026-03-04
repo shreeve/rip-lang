@@ -80,7 +80,7 @@ overall health of Rip's type story — not just this audit.
 | Cross-file type flow          | ✅      | Via .d.ts; untyped files get `@ts-nocheck`                          |
 | Nullable safety               | 🔶      | `strictNullChecks` is on but many codes suppressed                  |
 | Discriminated union narrow.   | 🔶      | Types declarable, narrowing doesn't flow                            |
-| Component prop types          | 🔶      | Annotations work; cross-file prop checking is limited               |
+| Component prop types          | ❌      | .d.ts emits typed constructors but no safety inside component body  |
 | Generic types                 | 🔶      | Declarable; .d.ts emission has some gaps                            |
 | Readonly / immutability       | 🔶      | `=!` → const; deep readonly not checked                             |
 | Async/await unwrapping        | 🔶      | `!` operator awaits; return type sometimes `any`                    |
@@ -93,8 +93,11 @@ overall health of Rip's type story — not just this audit.
 | Enum exhaustiveness           | ❌      | Enums emit .d.ts but switch narrowing absent                        |
 | Type narrowing (control flow) | ❌      | TS narrows compiled JS, not Rip source                              |
 
-**Highest-ROI gap:** Component prop types across files. In UI-heavy apps
-80% of type errors are at component boundaries.
+**Highest-ROI gap:** Type safety inside component bodies. The code section
+redeclares all props/state without types, so TypeScript can't validate
+assignments, method calls, or child component prop values in render blocks.
+In a real app 90% of code lives inside components — without this, the type
+system is effectively invisible where it matters most.
 
 ## Adding a Feature
 
@@ -116,6 +119,7 @@ side-by-side IntelliSense comparison.
 - **No semicolons** — never append `;` to any line
 - **Single quotes** — use `'string'` not `"string"`
 - **Trailing commas** — in multi-line objects and arrays
+- **`type` over `interface`** — use `type X = { ... }` not `interface X { ... }` (except in `05-interfaces.ts` which tests `interface` specifically)
 
 ## Markdown Table Formatting
 

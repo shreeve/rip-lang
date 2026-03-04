@@ -1,46 +1,66 @@
 // 09-components.ts — Typed component props
 //
-// Rip's component system has no direct TypeScript equivalent.
-// This file shows the closest structural approximation: typed
-// prop interfaces that mirror what Rip's @prop:: annotations produce.
+// Rip components have no direct TS equivalent. The closest analog
+// is React-style typed props: define prop interfaces, write render
+// functions that accept them, then get full type safety at the call
+// site — exactly what Rip's @prop:: annotations achieve.
 
-// In Rip: export Button = component with @variant:: 'primary' | 'secondary' := 'primary'
-// The .d.ts that Rip emits is essentially a class with typed properties.
+// ── Prop types (what Rip's .d.ts emits) ──
 
-interface ButtonProps {
-  variant: 'primary' | 'secondary'
-  compact: boolean
-  loading: boolean
-  label: string
-  notes: string
+type ButtonProps = {
+  variant?: 'primary' | 'secondary'
+  loading?: boolean
+  disabled?: boolean
+  children?: string // slot content in Rip
 }
 
-class Button {
-  variant: 'primary' | 'secondary' = 'primary'
-  compact: boolean = false
-  loading: boolean = false
-  readonly label: string = 'Click me'
-  notes!: string
-  disabled: boolean = false
-}
-
-interface SelectProps {
+type SelectProps = {
   options: string[]
-  value: string
-  error: string | boolean
+  label?: string
+  placeholder?: string
+  value?: string
+  error?: string
 }
 
-class Select {
-  readonly options: string[] = []
-  value: string = ''
-  error: string | boolean = false
+// ── Components as render functions (React-style) ──
+
+function Button(props: ButtonProps = {}) {
+  const { variant = 'primary', loading = false, disabled = false } = props
+  return { variant, loading, disabled }
+}
+
+function Select(props: SelectProps) {
+  const { options, label = '', placeholder = 'Select...', value = '', error = '' } = props
+  return { options, label, placeholder, value, error }
+}
+
+// ── Parent renders children with type-safe props ──
+
+function App(props: { title?: string } = {}) {
+  const title = props.title ?? 'My App'
+  const role = 'admin'
+  let loading = false
+
+  // Computed — mirrors `isAdmin ~= role is "admin"`
+  const isAdmin = role === 'admin'
+
+  // Method — mirrors `toggle: -> loading = not loading`
+  const toggle = () => { loading = !loading }
+
+  // Correct usage — TypeScript validates every prop
+  const ok1 = Button({ variant: 'primary', loading, children: 'Save changes' })
+  const ok2 = Button({ children: 'Cancel' })
+  const ok3 = Select(isAdmin ? { options: ['a', 'b', 'c'], value: 'a' } : { options: [] })
+  const ok4 = Select({ options: ['x', 'y'] })
+
+  return { title, toggle, ok1, ok2, ok3, ok4 }
 }
 
 // ── Negative: wrong prop types must be caught ──
 
 // @ts-expect-error — wrong variant literal
-const badBtn = new Button({ variant: 'danger', notes: 'x' })
-// @ts-expect-error — missing required prop (notes)
-const badBtn2 = new Button({ variant: 'primary' })
+const badBtn = Button({ variant: 'danger' })
+// @ts-expect-error — disabled expects boolean
+const badBtn2 = Button({ disabled: 'yes' })
 // @ts-expect-error — wrong type for options
-const badSel = new Select({ options: 123 })
+const badSel = Select({ options: 123 })

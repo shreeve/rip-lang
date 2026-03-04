@@ -1,32 +1,42 @@
 # 09-components.rip — Typed component props
-#
-# Tier 1 — Foundational. Props are the public API of every component.
-# Without typed props, component consumers get no IntelliSense.
 
 export Button = component
   @variant:: "primary" | "secondary" := "primary"
-  @compact:: boolean := false
   @loading:: boolean := false
-  @label:: string =! "Click me"
-  @notes:: string
-  disabled:: boolean := false
+  @disabled:: boolean := false
 
 export Select = component
-  @options:: string[] =! []
+  @options:: string[]
+  @label:: string := ""
+  @placeholder:: string := "Select..."
   @value:: string := ""
-  @error:: string | boolean := false
+  @error:: string := ""
+
+# ── Parent renders children with typed props ──
+
+export App = component
+  @title:: string := "My App"
+  role:: string := "admin"
+  loading := false
+
+  isAdmin ~= role is "admin"
+
+  toggle: -> loading = not loading
+
+  render
+    div
+      h1 title
+      Button variant: "primary", loading: loading, @click: @toggle
+        "Save changes"
+      Button "Cancel"
+      Select options: ["a", "b", "c"], value: "a" if isAdmin
+      Select options: ["x", "y"]
 
 # ── Negative: wrong prop types must be caught ──
-#
-# Component constructor types are emitted in .d.ts meaning prop
-# type checking works on instantiation. However, components can't
-# be instantiated without the browser runtime, so these tests use
-# the .ts companion instead. The .rip negatives below verify what
-# rip check can catch.
 
 # @ts-expect-error — wrong variant literal
-badBtn:: Button = new Button({ variant: "danger", notes: "x" })
-# @ts-expect-error — missing required prop (notes)
-badBtn2:: Button = new Button({ variant: "primary" })
+badBtn:: Button = new Button({ variant: "danger" })
+# @ts-expect-error — disabled expects boolean
+badBtn2:: Button = new Button({ disabled: "yes" })
 # @ts-expect-error — wrong type for options
 badSel:: Select = new Select({ options: 123 })
