@@ -1,4 +1,4 @@
-# 09-reactive.rip — Typed reactive state (:=, ~=, ~>, =!)
+# 08-reactive.rip — Typed reactive state (:=, ~=, ~>, =!)
 #
 # Tier 1 — Foundational. Reactive operators are Rip's core innovation;
 # typed reactive state blocks nearly all real component type safety.

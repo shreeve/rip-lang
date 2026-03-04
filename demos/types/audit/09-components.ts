@@ -1,4 +1,4 @@
-// 10-components.ts — Typed component props
+// 09-components.ts — Typed component props
 //
 // Rip's component system has no direct TypeScript equivalent.
 // This file shows the closest structural approximation: typed

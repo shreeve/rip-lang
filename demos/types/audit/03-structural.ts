@@ -51,6 +51,13 @@ type TreeNode = {
   children: TreeNode[]
 }
 
+// Generic structural type
+type PagedResult<T> = {
+  data: T[]
+  page: number
+  total: number
+}
+
 // ── Use the types ──
 
 const dim: Dimensions = { width: 800, height: 600 }
@@ -85,6 +92,9 @@ console.log('field:', field)
 console.log('fullField:', fullField)
 console.log('tree root:', tree.value)
 
+const paged: PagedResult<string> = { data: ['a', 'b'], page: 1, total: 2 }
+console.log('paged:', paged)
+
 // ── Negative: wrong types must be caught ──
 
 // @ts-expect-error — missing required field (height)
@@ -97,3 +107,5 @@ const badExtra: Dimensions = { width: 800, height: 600, depth: 100 }
 const badResp: ApiResponse = { data: { items: [1, 2], total: 2 }, meta: { page: 1, limit: 10, hasMore: false } }
 // @ts-expect-error — missing required field (value must be passed even if undefined)
 const badField: FormField = { label: 'Name' }
+// @ts-expect-error — wrong element type in generic structural type
+const badPaged: PagedResult<string> = { data: [1, 2], page: 1, total: 2 }

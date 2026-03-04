@@ -1,4 +1,4 @@
-# 12-exports.rip — Export type / import type
+# 11-exports.rip — Export type / import type
 #
 # Tier 3 — Important but deferrable. Type-only exports and imports
 # that are erased at runtime.

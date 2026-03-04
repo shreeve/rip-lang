@@ -1,4 +1,4 @@
-// 14-enums.ts — Enum declarations and exhaustiveness
+// 13-enums.ts — Enum declarations and exhaustiveness
 
 // Numeric enum (auto-incrementing)
 enum Direction {

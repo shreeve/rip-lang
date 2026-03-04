@@ -1,4 +1,4 @@
-// 13-generic-calls.ts — Generic function calls
+// 12-generic-calls.ts — Generic function calls
 
 type User = {
   id: number

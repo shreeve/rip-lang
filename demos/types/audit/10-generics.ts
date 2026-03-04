@@ -1,4 +1,4 @@
-// 11-generics.ts — Generic types in function return position
+// 10-generics.ts — Generic types in function return position
 
 type User = {
   id: number
