@@ -11,9 +11,9 @@ let tags: string[] = []
 
 // Typed computed (~=) — in Rip, ~= creates a reactive computed
 // TS has no built-in computed; we use getters as the closest analog
-const clicksDoubled: number = clicks * 2
-const greeting: string = `Hello, ${username}!`
-const hasTags: boolean = tags.length > 0
+const clicksDoubled = clicks * 2
+const greeting = `Hello, ${username}!`
+const hasTags = tags.length > 0
 
 // Typed readonly (=!) — compiles to plain const, identical in TS
 const MAX_RETRIES: number = 3

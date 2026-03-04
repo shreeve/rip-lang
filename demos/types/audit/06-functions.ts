@@ -94,14 +94,14 @@ const badRet5: number = isPositive(1)
 // ── Arrow functions and array transforms ──
 
 const nums: number[] = [1, 2, 3, 4, 5]
-const doubled: number[] = nums.map((x) => x * 2)
-const evens: number[] = nums.filter((x) => x % 2 === 0)
-const arrTotal: number = nums.reduce((acc, x) => acc + x, 0)
+const doubled = nums.map((x) => x * 2)
+const evens = nums.filter((x) => x % 2 === 0)
+const arrTotal = nums.reduce((acc, x) => acc + x, 0)
 
 const words: string[] = ['hello', 'world', 'rip']
-const upper: string[] = words.map((w) => w.toUpperCase())
-const long: string[] = words.filter((w) => w.length > 3)
-const joined: string = words.join(', ')
+const upper = words.map((w) => w.toUpperCase())
+const long = words.filter((w) => w.length > 3)
+const joined = words.join(', ')
 
 console.log('doubled:', doubled)
 console.log('evens:', evens)

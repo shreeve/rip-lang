@@ -13,10 +13,6 @@ User ::= type
   email: string
   phone?: string
 
-Point ::= type
-  x: number
-  y: number
-
 # ── Use: cross-file typed function calls ──
 
 user:: User = {
@@ -27,8 +23,8 @@ user:: User = {
   phone: "555-0100"
 }
 
-point:: Point = makePoint(10, 20)
-total:: number = sum(1, 2, 3, 4)
+point = makePoint(10, 20)
+total = sum(1, 2, 3, 4)
 
 console.log "user:", user.firstName, user.lastName
 console.log "point:", point

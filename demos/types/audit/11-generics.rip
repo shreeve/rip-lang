@@ -46,7 +46,7 @@ def getEntries():: Map<string, number>
 
 # ── Use the types ──
 
-entries:: Map<string, number> = getEntries()
+entries = getEntries()
 console.log "entries:", entries
 
 # ── Negative: wrong types must be caught ──

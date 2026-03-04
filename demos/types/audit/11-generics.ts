@@ -51,7 +51,7 @@ function getEntries(): Map<string, number> {
 
 // ── Use the types ──
 
-const entries: Map<string, number> = getEntries()
+const entries = getEntries()
 console.log('entries:', entries)
 
 // ── Negative: wrong types must be caught ──

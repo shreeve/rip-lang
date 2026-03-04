@@ -10,11 +10,6 @@ type User = {
   phone?: string
 }
 
-type Point = {
-  x: number
-  y: number
-}
-
 // ── Use: cross-file typed function calls ──
 
 const user: User = {
@@ -25,8 +20,8 @@ const user: User = {
   phone: '555-0100',
 }
 
-const point: Point = makePoint(10, 20)
-const total: number = sum(1, 2, 3, 4)
+const point = makePoint(10, 20)
+const total = sum(1, 2, 3, 4)
 
 console.log('user:', user.firstName, user.lastName)
 console.log('point:', point)
