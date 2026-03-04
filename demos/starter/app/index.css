@@ -21,3 +21,12 @@
 @layer base {
   body { @apply bg-secondary text-primary antialiased; }
 }
+
+@layer components {
+  [data-part="Badge"] {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+    &[data-variant="solid"]   { @apply bg-blue-600 text-white; }
+    &[data-variant="outline"] { @apply border border-current text-blue-600; }
+    &[data-variant="subtle"]  { @apply bg-blue-50 text-blue-700; }
+  }
+}

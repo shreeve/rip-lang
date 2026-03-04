@@ -896,7 +896,10 @@ export class CodeGenerator {
       targetCode = this.generate(target, 'value');
     }
 
+    const prevComponentName = this._componentName;
+    if (this.is(value, 'component') && (typeof target === 'string' || target instanceof String)) this._componentName = str(target);
     let valueCode = this.generate(value, 'value');
+    this._componentName = prevComponentName;
     let isObjLit = this.is(value, 'object');
     if (!isObjLit) valueCode = this.unwrap(valueCode);
 
@@ -2067,11 +2070,23 @@ export class CodeGenerator {
     let [decl] = rest;
     if (this.options.skipExports) {
       if (Array.isArray(decl) && decl.every(i => typeof i === 'string')) return '';
-      if (this.is(decl, '=')) return `const ${decl[1]} = ${this.generate(decl[2], 'value')}`;
+      if (this.is(decl, '=')) {
+        const prev = this._componentName;
+        if (this.is(decl[2], 'component')) this._componentName = str(decl[1]);
+        const result = `const ${decl[1]} = ${this.generate(decl[2], 'value')}`;
+        this._componentName = prev;
+        return result;
+      }
       return this.generate(decl, 'statement');
     }
     if (Array.isArray(decl) && decl.every(i => typeof i === 'string')) return `export { ${decl.join(', ')} }`;
-    if (this.is(decl, '=')) return `export const ${decl[1]} = ${this.generate(decl[2], 'value')}`;
+    if (this.is(decl, '=')) {
+      const prev = this._componentName;
+      if (this.is(decl[2], 'component')) this._componentName = str(decl[1]);
+      const result = `export const ${decl[1]} = ${this.generate(decl[2], 'value')}`;
+      this._componentName = prev;
+      return result;
+    }
     return `export ${this.generate(decl, 'statement')}`;
   }
 
@@ -3294,6 +3309,7 @@ export class Compiler {
       skipPreamble: this.options.skipPreamble,
       skipRuntimes: this.options.skipRuntimes,
       skipExports: this.options.skipExports,
+      skipDataPart: this.options.skipDataPart,
       stubComponents: this.options.stubComponents,
       reactiveVars: this.options.reactiveVars,
       sourceMap,

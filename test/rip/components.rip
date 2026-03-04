@@ -6,7 +6,7 @@
 # rendering, hyphenated attributes, DOM properties, expression-as-text,
 # computed/effect block bodies, and edge cases.
 
-opts = { skipPreamble: true, skipRuntimes: true }
+opts = { skipPreamble: true, skipRuntimes: true, skipDataPart: true }
 
 # ==============================================================================
 # Basic Rendering — elements and text nodes

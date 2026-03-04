@@ -1267,6 +1267,10 @@ export function installComponentSupport(CodeGenerator, Lexer) {
       this._createLines.push(`${elVar}.id = '${id}';`);
     }
 
+    if (this._componentName && this._elementCount === 1 && !this._factoryMode && !this.options.skipDataPart) {
+      this._createLines.push(`${elVar}.setAttribute('data-part', '${this._componentName}');`);
+    }
+
     const autoWireClaimed = this._claimAutoWire(elVar);
 
     // Defer class emission when selector classes exist so class: attributes merge

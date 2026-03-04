@@ -315,7 +315,7 @@ code "computed postfix ternary compiles to JS ternary", '''
       return this._el0;
     }
   }
-  ''', { skipPreamble: true, skipRuntimes: true }
+  ''', { skipPreamble: true, skipRuntimes: true, skipDataPart: true }
 
 code "render block with identifier property value compiles to reactive setAttribute", '''
   export Bar = component
@@ -340,4 +340,4 @@ code "render block with identifier property value compiles to reactive setAttrib
       __effect(() => { this._el0.setAttribute('href', this.href.value); });
     }
   }
-  ''', { skipPreamble: true, skipRuntimes: true }
+  ''', { skipPreamble: true, skipRuntimes: true, skipDataPart: true }
