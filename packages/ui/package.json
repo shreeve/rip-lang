@@ -1,6 +1,6 @@
 {
   "name": "@rip-lang/ui",
-  "version": "0.3.30",
+  "version": "0.3.31",
   "description": "Headless, accessible UI components written in Rip — zero CSS, zero dependencies",
   "type": "module",
   "keywords": [
@@ -31,7 +31,7 @@
   "author": "Steve Shreeve <steve.shreeve@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "rip-lang": ">=3.13.85"
+    "rip-lang": ">=3.13.86"
   },
   "files": [
     "*.rip",
