@@ -59,7 +59,7 @@ Each file exercises a specific type feature. Status key:
 | 07-integration.rip   | Cross-module imports of typed functions                        | pass   | Cross-file type flow via .d.ts                |
 | 08-reactive.rip      | `:: T :=`, `:: T ~=`, `:: T =!`, `:: T ~>`                  | pass   | Tier 1 — reactive state annotations           |
 | 09-components.rip    | `@prop:: T :=`, `@prop:: T =!`                               | pass   | Tier 1 — component prop annotations           |
-| 10-generics.rip      | `:: Promise<T>`, `:: Map<K,V>` on returns                    | pass   | Tier 2 — generic return types                 |
+| 10-validation.rip    | Runtime validation of API responses                          | pass   | Tier 2 — Rip erases types; TS+Zod validates   |
 | 11-exports.rip       | `export ... ::=` named type export                            | pass   | Tier 3 — `import type` not yet supported      |
 | 12-generic-calls.rip | `:: Map<K,V>` on variables (Rip idiom)                        | pass   | Tier 3 — generic call-site syntax unnecessary |
 | 13-enums.rip         | `enum` (numeric, string), typed switch                        | pass   | Exhaustiveness checking not yet supported     |
@@ -82,6 +82,7 @@ overall health of Rip's type story — not just this audit.
 | Discriminated union narrow.   | 🔶      | Types declarable, narrowing doesn't flow                            |
 | Component prop types          | ❌      | .d.ts emits typed constructors but no safety inside component body  |
 | Generic types                 | 🔶      | Declarable; .d.ts emission has some gaps                            |
+| Runtime return-type validation | ❌      | Return types are erased — `response.json()` is unvalidated `any`; no schema.parse() equivalent |
 | Readonly / immutability       | 🔶      | `=!` → const; deep readonly not checked                             |
 | Async/await unwrapping        | 🔶      | `!` operator awaits; return type sometimes `any`                    |
 | Reactive hover types          | ❌      | `:=`/`~=` hover shows `any` — code section redeclares without type  |

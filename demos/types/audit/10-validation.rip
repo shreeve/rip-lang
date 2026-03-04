@@ -1,0 +1,21 @@
+# 10-validation.rip — Runtime validation of API responses
+#
+# Tier 2 — Essential for real apps. Every typed API call needs
+# validated responses, not blind trust in response.json().
+#
+# Gap: return type annotations are erased — response.json() is
+# unvalidated `any` at runtime. The .d.ts tells callers it's a
+# User, but nothing actually checks. In TS+Zod, schema.parse()
+# validates at runtime AND the inferred type checks every field
+# access at compile time (wrong property, wrong nullability, etc).
+
+User ::= type
+  id: number
+  email: string
+  firstName?: string
+  lastName?: string
+  phone?: string
+
+def fetchUser(id:: number):: Promise<User>
+  response = await fetch("/api/users/#{id}")
+  response.json()
