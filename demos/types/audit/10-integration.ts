@@ -1,6 +1,6 @@
 // 10-integration.ts — Cross-module integration test
 
-import { add, greet, makePoint, formatAddress, calculateTotal, validateOrder } from './07-functions.js'
+import { add, greet, makePoint, sum, isPositive } from './07-functions.js'
 
 type User = {
   id: number
@@ -8,7 +8,6 @@ type User = {
   lastName: string
   email: string
   phone?: string
-  bio?: string
 }
 
 type Point = {
@@ -16,32 +15,8 @@ type Point = {
   y: number
 }
 
-type Address = {
-  street: string
-  city: string
-  state: string
-  zip: string
-  country?: string
-}
+// ── Use: cross-file typed function calls ──
 
-type OrderItem = {
-  productId: number
-  quantity: number
-  unitPrice: number
-  discount?: number
-}
-
-type Order = {
-  id: number
-  customerId: number
-  status: string
-  items: OrderItem[]
-  total: number
-  createdAt: string
-  shippedAt?: string
-}
-
-// Create typed instances
 const user: User = {
   id: 1,
   firstName: 'Jane',
@@ -51,41 +26,16 @@ const user: User = {
 }
 
 const point: Point = makePoint(10, 20)
+const total: number = sum(1, 2, 3, 4)
 
-const addr: Address = {
-  street: '123 Main St',
-  city: 'Springfield',
-  state: 'IL',
-  zip: '62704',
-  country: 'US',
-}
-
-const order: Order = {
-  id: 1001,
-  customerId: user.id,
-  status: 'submitted',
-  items: [
-    { productId: 1, quantity: 2, unitPrice: 29.99 },
-    { productId: 2, quantity: 1, unitPrice: 49.99, discount: 5.00 },
-  ],
-  total: 0,
-  createdAt: new Date().toISOString(),
-}
-order.total = calculateTotal(order.items)
-
-console.log('--- Integration test ---')
 console.log('user:', user.firstName, user.lastName)
 console.log('point:', point)
 console.log('add(3, 4):', add(3, 4))
 console.log('greet(\'World\'):', greet('World'))
-console.log('address:', formatAddress(addr))
-console.log('order total:', order.total)
-console.log('validation:', validateOrder(order))
-console.log('✓ All type-safe code executed successfully')
+console.log('sum(1..4):', total)
+console.log('isPositive(5):', isPositive(5))
 
 // ── Negative: wrong types must be caught ──
-//
-// Cross-file calls use .d.ts signatures, so argument type checking works.
 
 // @ts-expect-error — string arguments where numbers expected
 const badAdd: number = add('a', 'b')

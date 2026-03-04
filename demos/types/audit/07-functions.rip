@@ -4,127 +4,90 @@ Point ::= type
   x: number
   y: number
 
-Address ::= type
-  street: string
-  city: string
-  state: string
-  zip: string
-  country?: string
+# ── Declare: typed functions ──
 
-OrderItem ::= type
-  productId: number
-  quantity: number
-  unitPrice: number
-  discount?: number
-
-Order ::= type
-  id: number
-  customerId: number
-  status: string
-  items: OrderItem[]
-  total: number
-  createdAt: string
-  shippedAt?: string
-
-# Basic typed function
 export def add(a:: number, b:: number):: number
   a + b
 
-export def greet(n:: string):: string
-  "Hello, #{n}!"
-
-export def timestamp():: number
-  Date.now()
+export def greet(name:: string):: string
+  "Hello, #{name}!"
 
 export def clamp(val:: number, lo:: number, hi:: number):: number
   Math.max(lo, Math.min(hi, val))
 
-export def makeRange(start:: number, end:: number):: number[]
-  range = []
-  i = start
-  while i <= end
-    range.push(i)
-    i++
-  range
-
-# Object return with structural type
 export def makePoint(x:: number, y:: number):: Point
   { x, y }
 
-# Union return type
 export def parse(input:: string):: number | null
   num = parseInt(input)
   if isNaN(num) then null else num
 
-# Type narrowing
-export def describe(val:: string | number):: string
-  if typeof val == "string"
-    "String: #{val}"
-  else
-    "Number: #{val}"
-
-# Rest parameters
 export def sum(...nums:: number[]):: number
   nums.reduce ((a, b) => a + b), 0
 
 export def isPositive(n:: number):: boolean
   n > 0
 
-# Function taking typed object param
-export def formatAddress(addr:: Address):: string
-  parts = [addr.street, addr.city, addr.state, addr.zip]
-  if addr.country
-    parts.push(addr.country)
-  parts.join(", ")
+# Default param (emits title?: string in .d.ts)
+export def formal(name:: string, title:: string = "Mr"):: string
+  "#{title} #{name}"
 
-# Function taking typed array param
-export def calculateTotal(lineItems:: OrderItem[]):: number
-  lineItems.reduce ((total, item) ->
-    price = item.unitPrice * item.quantity
-    discount = item.discount or 0
-    total + price - discount
-  ), 0
+# Void return (! suppresses return value)
+export def logMsg!(msg:: string)
+  console.log msg
 
-export def validateOrder(order:: Order):: string[]
-  errors = []
-  if order.items.length is 0
-    errors.push("Order must have at least one item")
-  if order.total < 0
-    errors.push("Total cannot be negative")
-  errors
+# ── Use: typed results prove return types flow ──
+# (untyped `result = add(1, 2)` won't show type on hover —
+#  Rip compiles to `let result; result = ...` so TS sees `any`)
 
-# Functions with any-typed params (workaround for no generics)
-export def first(arr:: any[]):: any
-  arr[0]
+result1:: number        = add(3, 4)
+result2:: string        = greet("World")
+result3:: number        = clamp(15, 0, 10)
+result4:: Point         = makePoint(1, 2)
+result5:: number | null = parse("42")
+result6:: number        = sum(1, 2, 3, 4)
+result7:: boolean       = isPositive(5)
+result8:: string        = formal("Smith")
+result9:: string        = formal("Smith", "Dr")
+logMsg!("hello")
 
-export def last(arr:: any[]):: any
-  arr[arr.length - 1]
+console.log result1, result2, result3, result4, result5, result6, result7, result8, result9
 
-export def uniq(arr:: any[]):: any[]
-  [...new Set(arr)]
+# ── Negative: wrong param types ──
 
-# Exercise
-console.log "add(3, 4):", add(3, 4)
-console.log "greet('World'):", greet("World")
-console.log "clamp(15, 0, 10):", clamp(15, 0, 10)
-console.log "makeRange(1, 5):", makeRange(1, 5)
-console.log "sum(1, 2, 3, 4):", sum(1, 2, 3, 4)
-console.log "isPositive(5):", isPositive(5)
-console.log "parse('42'):", parse("42")
-console.log "parse('abc'):", parse("abc")
-console.log "describe('hello'):", describe("hello")
-console.log "describe(42):", describe(42)
-console.log "first([10, 20, 30]):", first([10, 20, 30])
-console.log "last([10, 20, 30]):", last([10, 20, 30])
-console.log "uniq([1, 2, 2, 3, 3]):", uniq([1, 2, 2, 3, 3])
-
-# ── Negative: wrong types must be caught ──
-#
-# NOTE: Same-file function calls can't check argument types — the
-# compiled JS has untyped params. Arity and return-type mismatches
-# are still caught. Cross-file calls (via .d.ts) get full checking.
-
+# @ts-expect-error — string args where numbers expected
+badAdd:: number = add("a", "b")
+# @ts-expect-error — number arg where string expected
+badGreet:: string = greet(42)
 # @ts-expect-error — too few arguments
 badClamp:: number = clamp(5, 0)
-# @ts-expect-error — wrong return type annotation (sum returns number)
-badSum:: string = sum(1, 2, 3)
+# @ts-expect-error — boolean arg where number expected
+badPoint:: Point = makePoint(true, false)
+# @ts-expect-error — number arg where string expected
+badParse:: number | null = parse(123)
+# @ts-expect-error — string args where numbers expected
+badSum:: number = sum("a", "b")
+# @ts-expect-error — string arg where number expected
+badPos:: boolean = isPositive("five")
+
+# ── Negative: wrong return types ──
+
+# @ts-expect-error — add returns number, not string
+badRet1:: string = add(1, 2)
+# @ts-expect-error — greet returns string, not number
+badRet2:: number = greet("hi")
+# @ts-expect-error — makePoint returns Point, not string
+badRet3:: string = makePoint(1, 2)
+# @ts-expect-error — sum returns number, not boolean
+badRet4:: boolean = sum(1, 2, 3)
+# @ts-expect-error — isPositive returns boolean, not number
+badRet5:: number = isPositive(1)
+
+# ── Known gaps ──
+#
+# Optional params: `def foo(x:: string, y?:: string)` compiles and runs,
+# but .d.ts drops the `?` — emits `y: string` instead of `y?: string`.
+# Use default params as a workaround: `y:: string = ""` emits `y?: string`.
+#
+# Named/destructured params: `def foo({name:: string, age:: number})`
+# fails to parse — type annotations inside destructuring aren't supported.

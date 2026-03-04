@@ -56,10 +56,10 @@ Each file exercises a specific type feature. Status key:
 | 04-nullable.rip      | `:: T \| undefined`, `:: T \| null`, optional `?` | pass  |                                                |
 | 05-unions.rip        | Inline unions, block unions, discriminated   | pass       | Narrowing not checked — see gap table          |
 | 06-interfaces.rip    | `interface`, `extends`, optional members     | pass       |                                                |
-| 07-functions.rip     | `::` on params/returns, rest, union returns  | pass       | Same-file arg types not checked — see file     |
+| 07-functions.rip     | `::` on params/returns, rest, union returns  | pass       | 12 negative tests (7 param + 5 return)         |
 | 08-arrows.rip        | `::` on arrow results (map/filter/reduce)    | pass       |                                                |
 | 09-domain.rip        | Nested types, generic structs (`T`)          | pass       |                                                |
-| 10-integration.rip   | Cross-module imports of typed functions       | pass       | Cross-file arg types not checked yet           |
+| 10-integration.rip   | Cross-module imports of typed functions       | pass       | Cross-file type flow via .d.ts                 |
 | 11-reactive.rip      | `:: T :=`, `:: T ~=`, `:: T =!`, `:: T ~>`  | pass       | Tier 1 — reactive state annotations           |
 | 12-components.rip    | `@prop:: T :=`, `@prop:: T =!`               | pass       | Tier 1 — component prop annotations           |
 | 13-generics.rip      | `:: Promise<T>`, `:: Map<K,V>` on returns    | pass       | Tier 2 — generic return types                  |
@@ -87,6 +87,9 @@ overall health of Rip's type story — not just this audit.
 | Generic types               | 🔶     | Declarable; .d.ts emission has some gaps          |
 | Readonly / immutability     | 🔶     | `=!` → const; deep readonly not checked           |
 | Async/await unwrapping      | 🔶     | `!` operator awaits; return type sometimes `any`  |
+| Optional param `?` in .d.ts | ❌     | `y?:: T` emits `y: T` — drops the `?`; use default param workaround |
+| Destructured typed params   | ❌     | `{name:: string}` in params fails to parse        |
+| `void` return annotation    | ❌     | `void` is reserved; use `!` operator (`def fn!`) instead |
 | Enum exhaustiveness         | ❌     | Enums emit .d.ts but switch narrowing absent      |
 | Type narrowing (control flow)| ❌    | TS narrows compiled JS, not Rip source            |
 

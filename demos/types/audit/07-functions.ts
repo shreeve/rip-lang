@@ -5,79 +5,29 @@ type Point = {
   y: number
 }
 
-type Address = {
-  street: string
-  city: string
-  state: string
-  zip: string
-  country?: string
-}
+// ── Declare: typed functions ──
 
-type OrderItem = {
-  productId: number
-  quantity: number
-  unitPrice: number
-  discount?: number
-}
-
-type Order = {
-  id: number
-  customerId: number
-  status: string
-  items: OrderItem[]
-  total: number
-  createdAt: string
-  shippedAt?: string
-}
-
-// Basic typed function
 export function add(a: number, b: number): number {
   return a + b
 }
 
-export function greet(n: string): string {
-  return `Hello, ${n}!`
-}
-
-export function timestamp(): number {
-  return Date.now()
+export function greet(name: string): string {
+  return `Hello, ${name}!`
 }
 
 export function clamp(val: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, val))
 }
 
-export function makeRange(start: number, end: number): number[] {
-  const range: number[] = []
-  let i = start
-  while (i <= end) {
-    range.push(i)
-    i++
-  }
-  return range
-}
-
-// Object return with structural type
 export function makePoint(x: number, y: number): Point {
   return { x, y }
 }
 
-// Union return type
 export function parse(input: string): number | null {
   const num = parseInt(input)
   return isNaN(num) ? null : num
 }
 
-// Type narrowing
-export function describe(val: string | number): string {
-  if (typeof val === 'string') {
-    return `String: ${val}`
-  } else {
-    return `Number: ${val}`
-  }
-}
-
-// Rest parameters
 export function sum(...nums: number[]): number {
   return nums.reduce((a, b) => a + b, 0)
 }
@@ -86,70 +36,74 @@ export function isPositive(n: number): boolean {
   return n > 0
 }
 
-// Function taking typed object param
-export function formatAddress(addr: Address): string {
-  const parts = [addr.street, addr.city, addr.state, addr.zip]
-  if (addr.country) {
-    parts.push(addr.country)
-  }
-  return parts.join(', ')
+// Default param
+export function formal(name: string, title: string = 'Mr'): string {
+  return `${title} ${name}`
 }
 
-// Function taking typed array param
-export function calculateTotal(lineItems: OrderItem[]): number {
-  return lineItems.reduce((total, item) => {
-    const price = item.unitPrice * item.quantity
-    const discount = item.discount || 0
-    return total + price - discount
-  }, 0)
+// Void return
+export function logMsg(msg: string): void {
+  console.log(msg)
 }
 
-export function validateOrder(order: Order): string[] {
-  const errors: string[] = []
-  if (order.items.length === 0) {
-    errors.push('Order must have at least one item')
-  }
-  if (order.total < 0) {
-    errors.push('Total cannot be negative')
-  }
-  return errors
-}
+// ── Use: let TS infer return types from function signatures ──
 
-// Functions with any-typed params (workaround for no generics)
-export function first(arr: any[]): any {
-  return arr[0]
-}
+const result1 = add(3, 4)
+const result2 = greet('World')
+const result3 = clamp(15, 0, 10)
+const result4 = makePoint(1, 2)
+const result5 = parse('42')
+const result6 = sum(1, 2, 3, 4)
+const result7 = isPositive(5)
+const result8 = formal('Smith')
+const result9 = formal('Smith', 'Dr')
+logMsg('hello')
 
-export function last(arr: any[]): any {
-  return arr[arr.length - 1]
-}
+console.log(result1, result2, result3, result4, result5, result6, result7, result8, result9)
 
-export function uniq(arr: any[]): any[] {
-  return [...new Set(arr)]
-}
+// ── Negative: wrong param types ──
 
-// Exercise
-console.log('add(3, 4):', add(3, 4))
-console.log('greet(\'World\'):', greet('World'))
-console.log('clamp(15, 0, 10):', clamp(15, 0, 10))
-console.log('makeRange(1, 5):', makeRange(1, 5))
-console.log('sum(1, 2, 3, 4):', sum(1, 2, 3, 4))
-console.log('isPositive(5):', isPositive(5))
-console.log('parse(\'42\'):', parse('42'))
-console.log('parse(\'abc\'):', parse('abc'))
-console.log('describe(\'hello\'):', describe('hello'))
-console.log('describe(42):', describe(42))
-console.log('first([10, 20, 30]):', first([10, 20, 30]))
-console.log('last([10, 20, 30]):', last([10, 20, 30]))
-console.log('uniq([1, 2, 2, 3, 3]):', uniq([1, 2, 2, 3, 3]))
-
-// ── Negative: wrong types must be caught ──
-//
-// NOTE: Same-file function calls can't check argument types — the
-// compiled JS has untyped params. Arity and return-type mismatches
-// are still caught. Cross-file calls (via .d.ts) get full checking.
-
+// @ts-expect-error — string args where numbers expected
+const badAdd: number = add('a', 'b')
+// @ts-expect-error — number arg where string expected
+const badGreet: string = greet(42)
 // @ts-expect-error — too few arguments
 const badClamp: number = clamp(5, 0)
-// @ts-expect-error — wrong return type annotation (sum returns number)
-const badSum: string = sum(1, 2, 3)
+// @ts-expect-error — boolean arg where number expected
+const badPoint: Point = makePoint(true, false)
+// @ts-expect-error — number arg where string expected
+const badParse: number | null = parse(123)
+// @ts-expect-error — string args where numbers expected
+const badSum: number = sum('a', 'b')
+// @ts-expect-error — string arg where number expected
+const badPos: boolean = isPositive('five')
+
+// ── Negative: wrong return types ──
+
+// @ts-expect-error — add returns number, not string
+const badRet1: string = add(1, 2)
+// @ts-expect-error — greet returns string, not number
+const badRet2: number = greet('hi')
+// @ts-expect-error — makePoint returns Point, not string
+const badRet3: string = makePoint(1, 2)
+// @ts-expect-error — sum returns number, not boolean
+const badRet4: boolean = sum(1, 2, 3)
+// @ts-expect-error — isPositive returns boolean, not number
+const badRet5: number = isPositive(1)
+
+// ── Works in TS but not in Rip (see .rip known gaps) ──
+
+// Optional param — TS handles natively
+export function greetOpt(name: string, title?: string): string {
+  return title ? `${title} ${name}` : name
+}
+
+// Named/destructured param — TS handles natively
+export function createUser({ name, age }: { name: string, age: number }): string {
+  return `${name} is ${age}`
+}
+
+const r10 = greetOpt('Smith')
+const r11 = greetOpt('Smith', 'Dr')
+const r12 = createUser({ name: 'Jane', age: 30 })
+console.log(r10, r11, r12)

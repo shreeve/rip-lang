@@ -1,10 +1,10 @@
 # 10-integration.rip — Cross-module integration test
 #
 # This is the only file that imports from multiple audit files.
-# If models.rip or 07-functions.rip break, this breaks too —
-# but every other feature file stays independently checkable.
+# If 07-functions.rip breaks, this breaks too — but every other
+# feature file stays independently checkable.
 
-import { add, greet, makePoint, formatAddress, calculateTotal, validateOrder } from './07-functions.rip'
+import { add, greet, makePoint, sum, isPositive } from './07-functions.rip'
 
 User ::= type
   id: number
@@ -12,35 +12,13 @@ User ::= type
   lastName: string
   email: string
   phone?: string
-  bio?: string
 
 Point ::= type
   x: number
   y: number
 
-Address ::= type
-  street: string
-  city: string
-  state: string
-  zip: string
-  country?: string
+# ── Use: cross-file typed function calls ──
 
-OrderItem ::= type
-  productId: number
-  quantity: number
-  unitPrice: number
-  discount?: number
-
-Order ::= type
-  id: number
-  customerId: number
-  status: string
-  items: OrderItem[]
-  total: number
-  createdAt: string
-  shippedAt?: string
-
-# Create typed instances
 user:: User = {
   id: 1
   firstName: "Jane"
@@ -50,43 +28,16 @@ user:: User = {
 }
 
 point:: Point = makePoint(10, 20)
+total:: number = sum(1, 2, 3, 4)
 
-addr:: Address = {
-  street: "123 Main St"
-  city: "Springfield"
-  state: "IL"
-  zip: "62704"
-  country: "US"
-}
-
-order:: Order = {
-  id: 1001
-  customerId: user.id
-  status: "submitted"
-  items: [
-    { productId: 1, quantity: 2, unitPrice: 29.99 }
-    { productId: 2, quantity: 1, unitPrice: 49.99, discount: 5.00 }
-  ]
-  total: 0
-  createdAt: new Date().toISOString()
-}
-order.total = calculateTotal(order.items)
-
-console.log "--- Integration test ---"
 console.log "user:", user.firstName, user.lastName
 console.log "point:", point
 console.log "add(3, 4):", add(3, 4)
 console.log "greet('World'):", greet("World")
-console.log "address:", formatAddress(addr)
-console.log "order total:", order.total
-console.log "validation:", validateOrder(order)
-console.log "✓ All type-safe code executed successfully"
+console.log "sum(1..4):", total
+console.log "isPositive(5):", isPositive(5)
 
 # ── Negative: wrong types must be caught ──
-#
-# Cross-file function argument checking doesn't work yet in rip check —
-# the import resolves but arg types aren't enforced. The .ts companion
-# has the full set of negatives that DO work in bunx tsc.
 
 # @ts-expect-error — missing required fields on User
 badUser:: User = { id: 1, email: "x@y.com" }
