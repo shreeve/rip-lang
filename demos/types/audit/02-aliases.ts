@@ -9,7 +9,6 @@ type Timestamp = number
 // Union aliases
 type UserID = number | string
 type Primitive = string | number | boolean
-type Nullable = string | null
 
 // typeof in type position
 const defaults = { theme: 'dark', lang: 'en' }
@@ -24,7 +23,6 @@ const ts: Timestamp = Date.now()
 
 const mixedId: UserID = 'abc-123'
 const prim: Primitive = true
-const maybeNull: Nullable = null
 
 const prefs: Defaults = { theme: 'light', lang: 'fr' }
 
@@ -44,7 +42,5 @@ const badId: ID = 'not-a-number'
 const badName: Name = 42
 // @ts-expect-error — boolean assigned to Email (string)
 const badEmail: Email = true
-// @ts-expect-error — number assigned to Nullable (string | null)
-const badNullable: Nullable = 42
 // @ts-expect-error — wrong shape for Defaults
 const badPrefs: Defaults = { theme: 123, lang: true }

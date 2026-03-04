@@ -108,7 +108,11 @@ overall health of Rip's type story — not just this audit.
 Each `.rip` file has a `.ts` companion with equivalent TypeScript for
 side-by-side IntelliSense comparison.
 
-Style: no semicolons, single quotes, trailing commas in multi-line.
+**Style rules for `.ts` files (mandatory):**
+
+- **No semicolons** — never append `;` to any line
+- **Single quotes** — use `'string'` not `"string"`
+- **Trailing commas** — in multi-line objects and arrays
 
 ## Key Differences from TypeScript
 

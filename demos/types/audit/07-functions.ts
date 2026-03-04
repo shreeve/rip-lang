@@ -150,6 +150,6 @@ console.log('uniq([1, 2, 2, 3, 3]):', uniq([1, 2, 2, 3, 3]))
 // are still caught. Cross-file calls (via .d.ts) get full checking.
 
 // @ts-expect-error — too few arguments
-const badClamp: number = clamp(5, 0);
+const badClamp: number = clamp(5, 0)
 // @ts-expect-error — wrong return type annotation (sum returns number)
-const badSum: string = sum(1, 2, 3);
+const badSum: string = sum(1, 2, 3)
