@@ -16,8 +16,8 @@ const greeting = `Hello, ${username}!`
 const hasTags = tags.length > 0
 
 // Typed readonly (=!) — compiles to plain const, identical in TS
-const MAX_RETRIES: number = 3
-const API_VERSION: string = 'v2'
+const MAX_RETRIES = 3
+const API_VERSION = 'v2'
 
 // Typed effect (~>) — in Rip, ~> creates a reactive side-effect
 // TS has no equivalent; a plain function call is the closest analog
@@ -44,3 +44,8 @@ const badName: string = 42
 const badEnabled: boolean = 'yes'
 // @ts-expect-error — number[] assigned to string[] state
 const badTags: string[] = [1, 2, 3]
+
+// @ts-expect-error — string assigned to number readonly
+const badMax: number = 'nope'
+// @ts-expect-error — number assigned to string computed
+const badComputed: string = clicks * 2

@@ -84,6 +84,7 @@ overall health of Rip's type story — not just this audit.
 | Generic types                 | 🔶      | Declarable; .d.ts emission has some gaps                            |
 | Readonly / immutability       | 🔶      | `=!` → const; deep readonly not checked                             |
 | Async/await unwrapping        | 🔶      | `!` operator awaits; return type sometimes `any`                    |
+| Reactive hover types          | ❌      | `:=`/`~=` hover shows `any` — code section redeclares without type  |
 | Go-to-definition on imports   | ❌      | Import lines unmapped; works at call sites only                     |
 | Unresolved import paths       | ❌      | `rip check` doesn't flag imports to nonexistent files               |
 | Optional param `?` in .d.ts   | ❌      | `y?:: T` emits `y: T` — drops the `?`; use default param workaround |
