@@ -40,7 +40,9 @@ export const SKIP_CODES = new Set([
   2304, // Cannot find name
   2307, // Cannot find module
   2389, // Function implementation name must match overload (DTS + compiled body)
+  2391, // Function implementation is missing (DTS overload sigs separated from implementations)
   2393, // Duplicate function implementation
+  2394, // Overload signature not compatible with implementation (untyped compiled params)
   2451, // Cannot redeclare block-scoped variable
   2567, // Enum declarations can only merge with namespace or other enum (DTS + compiled body)
   1064, // Return type of async function must be Promise
@@ -96,8 +98,60 @@ export function compileForCheck(filePath, source, compiler) {
   // Ensure every file is treated as a module (not a global script)
   if (!/\bexport\b/.test(code) && !/\bimport\b/.test(code)) code += '\nexport {};\n';
 
-  let tsContent = (hasTypes ? dts + '\n' : '') + code;
-  const headerLines = hasTypes ? countLines(dts + '\n') : 1;
+  // Interleave function overload signatures from DTS header into the code
+  // section, immediately before their implementations. TypeScript requires
+  // overload signatures adjacent to the implementation — without this, TS
+  // reports error 2391 ("Function implementation is missing or not immediately
+  // following the declaration"). Moving signatures into the code also enables
+  // proper call-site type checking of function parameters.
+  let headerDts = dts;
+  if (hasTypes && dts && code) {
+    const dl = dts.split('\n');
+    const cl = code.split('\n');
+    const fnSigs = [];
+    for (let i = 0; i < dl.length; i++) {
+      const m = dl[i].match(/^(?:export\s+)?(?:declare\s+)?function\s+(\w+)/);
+      if (m) fnSigs.push({ name: m[1], sig: dl[i], idx: i });
+    }
+    if (fnSigs.length > 0) {
+      const injections = [];
+      const moved = new Set();
+      for (const fn of fnSigs) {
+        const pat = new RegExp(`^(?:export\\s+)?(?:async\\s+)?function\\s+${fn.name}\\s*[(<]`);
+        for (let j = 0; j < cl.length; j++) {
+          if (pat.test(cl[j])) {
+            injections.push({ codeLine: j, sig: fn.sig });
+            moved.add(fn.idx);
+            break;
+          }
+        }
+      }
+      if (injections.length > 0) {
+        injections.sort((a, b) => a.codeLine - b.codeLine);
+        // Adjust reverseMap: each injection shifts subsequent code lines down by 1
+        if (result.reverseMap) {
+          for (const [, entry] of result.reverseMap) {
+            let offset = 0;
+            for (const inj of injections) {
+              if (inj.codeLine <= entry.genLine + offset) offset++;
+            }
+            entry.genLine += offset;
+          }
+        }
+        // Insert signatures bottom-up to preserve indices.
+        // Strip 'declare ' — signatures must be non-ambient to match implementations.
+        for (let k = injections.length - 1; k >= 0; k--) {
+          cl.splice(injections[k].codeLine, 0, injections[k].sig.replace(/^declare /, ''));
+        }
+        code = cl.join('\n');
+        // Rebuild header DTS without the moved function signatures
+        headerDts = dl.filter((_, i) => !moved.has(i)).join('\n').trimEnd() + '\n';
+      }
+    }
+  }
+
+  let tsContent = (hasTypes ? headerDts + '\n' : '') + code;
+  const headerLines = hasTypes ? countLines(headerDts + '\n') : 1;
 
   // Build bidirectional line maps
   const { srcToGen, genToSrc } = buildLineMap(result.reverseMap, result.map, headerLines);
@@ -109,8 +163,8 @@ export function compileForCheck(filePath, source, compiler) {
   // Map DTS declaration lines back to source lines (bidirectional).
   // Covers: let/var declarations, type aliases, interfaces, enums, classes.
   // This enables hover, go-to-definition, and diagnostics for type-only code.
-  if (hasTypes && dts) {
-    const dtsLines = dts.split('\n');
+  if (hasTypes && headerDts) {
+    const dtsLines = headerDts.split('\n');
     const srcLines = source.split('\n');
     for (let i = 0; i < dtsLines.length; i++) {
       const line = dtsLines[i];
