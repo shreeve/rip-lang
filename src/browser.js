@@ -125,6 +125,11 @@ async function processRipScripts() {
         if (persistAttr != null && globalThis.persistStash) {
           globalThis.persistStash(app, { local: persistAttr === 'local' });
         }
+
+        const routerAttr = runtimeTag.getAttribute('data-router');
+        if (routerAttr != null) {
+          app.router = routerAttr === 'hash' ? 'hash' : 'history';
+        }
       }
     }
 

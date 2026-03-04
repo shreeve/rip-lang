@@ -8766,7 +8766,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.84";
-  var BUILD_DATE = "2026-03-04@02:35:15GMT";
+  var BUILD_DATE = "2026-03-04@02:50:52GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -8871,6 +8871,10 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
           const persistAttr = runtimeTag.getAttribute("data-persist");
           if (persistAttr != null && globalThis.persistStash) {
             globalThis.persistStash(app, { local: persistAttr === "local" });
+          }
+          const routerAttr = runtimeTag.getAttribute("data-router");
+          if (routerAttr != null) {
+            app.router = routerAttr === "hash" ? "hash" : "history";
           }
         }
       }

@@ -1096,7 +1096,7 @@ in the shared scope).
 | `data-mount`   | runtime script | Component name to instantiate and mount after compilation                                             |
 | `data-target`  | runtime script | Mount target selector (default: `'body'`), pairs with `data-mount`                                    |
 | `data-state`   | runtime script | JSON object to seed `app.data` initial values (e.g. `'{"count": 0}'`)                                 |
-| `data-hash`    | runtime script | Enable hash-based routing                                                                             |
+| `data-router`  | runtime script | Enable routing — absent: none, present/`"history"`: history mode, `"hash"`: hash mode                 |
 | `data-persist` | runtime script | Enable stash persistence — `data-persist` for sessionStorage, `data-persist="local"` for localStorage |
 | `data-reload`  | runtime script | Connect to `/watch` SSE endpoint for hot reload on file changes                                       |
 
