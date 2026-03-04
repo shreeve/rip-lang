@@ -43,7 +43,7 @@ export Counter = component
           Press variant: "primary", @click: @increment, "+ #{step}"
 
       .("bg-white border border-gray-200 rounded-xl shadow-sm p-6")
-        .("text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3") "Step Size"
-        .("flex gap-2 flex-wrap")
+        .("text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3 text-center") "Step Size"
+        .("flex gap-2 flex-wrap justify-center")
           for n in [1, 5, 10, 100]
             Press variant: (if step is n then "special" else "default"), @click: (-> step = n), n

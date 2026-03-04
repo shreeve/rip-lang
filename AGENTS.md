@@ -881,7 +881,7 @@ including HTML tag names like `= nav.dataset.trigger` or `= link.href`.
 ```coffee
 use serve
   dir: dir
-  components: ['components', '../../../packages/ui']
+  bundle: ['components', '../../../packages/ui']
 ```
 
 All widgets become available by name (`Select`, `Dialog`, `Grid`, etc.) in
@@ -911,7 +911,7 @@ import { get, use, start, notFound } from '@rip-lang/server'
 import { serve } from '@rip-lang/server/middleware'
 
 dir = import.meta.dir
-use serve dir: dir, components: ['.'], watch: true
+use serve dir: dir, bundle: ['.'], watch: true
 get '/*.rip', -> @send "#{dir}/#{@req.path.slice(1)}", 'text/plain; charset=UTF-8'
 notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 start port: 3005
@@ -925,7 +925,7 @@ Hot reload: `rip server` from `packages/ui/` gives auto-HTTPS + mDNS
 The SSE connection drops and EventSource auto-reconnects. The browser
 script detects the reconnection and calls `location.reload()`.
 - `**.html`/`.css` changes**: The serve middleware's `watchDirs` (registered
-via `components: ['.']` and `watch: true`) detects the change and broadcasts
+via `bundle: ['.']` and `watch: true`) detects the change and broadcasts
 a `reload` SSE event directly — no rolling restart needed. The event's
 `data` field distinguishes change types: `.css` changes send `data: styles`
 (client refreshes stylesheets only, no full page reload) while `.html`/`.rip`

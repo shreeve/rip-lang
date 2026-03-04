@@ -17,7 +17,7 @@ Add the components directory to your serve middleware:
 ```coffee
 use serve
   dir: dir
-  components: ['components', '../../../packages/ui']
+  bundle: ['components', '../../../packages/ui']
 ```
 
 All widgets become available by name (`Select`, `Dialog`, `Grid`, etc.) in the

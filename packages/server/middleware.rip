@@ -475,7 +475,7 @@ pre{margin:0;white-space:pre-wrap;word-break:break-word}
 # Options:
 #   dir:        string    — app directory on disk (default: '.')
 #   routes:     string    — page components directory, relative to dir (default: 'routes')
-#   components: string[]  — shared component directories, relative to dir (default: ['components'])
+#   bundle:     string[]  — directories to bundle for data-launch (default: ['components'])
 #   app:        string    — URL mount point (default: '')
 #   title:      string    — document title
 #   state:      object    — initial app state passed via bundle
@@ -486,7 +486,7 @@ export serve = (opts = {}) ->
   prefix        = opts.app or ''
   appDir        = opts.dir or '.'
   routesDir     = "#{appDir}/#{opts.routes or 'routes'}"
-  componentDirs = (opts.components or ['components']).map (d) -> "#{appDir}/#{d}"
+  componentDirs = (opts.bundle or opts.components or ['components']).map (d) -> "#{appDir}/#{d}"
   enableWatch   = if opts.watch? then opts.watch else process.env.SOCKET_PREFIX?
   appState      = opts.state or null
   appTitle      = opts.title or null

@@ -342,7 +342,7 @@ import { get, use, start, notFound } from '@rip-lang/server'
 import { serve } from '@rip-lang/server/middleware'
 
 dir = import.meta.dir
-use serve dir: dir, components: ['.'], watch: true
+use serve dir: dir, bundle: ['.'], watch: true
 get '/*.rip', -> @send "#{dir}/#{@req.path.slice(1)}", 'text/plain; charset=UTF-8'
 notFound -> @send "#{dir}/index.html", 'text/html; charset=UTF-8'
 start port: 3005
