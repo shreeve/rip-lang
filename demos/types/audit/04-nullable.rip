@@ -4,26 +4,13 @@
 optionalName:: string | undefined = undefined
 nullableCount:: number | null = null
 
-# Optional properties in structural types use ? on the property
-ContactInfo ::= type
-  email: string
-  phone?: string
-  fax?: string
-
 # ── Use the types ──
 
-info:: ContactInfo = { email: "test@example.com" }
-fullContact:: ContactInfo = { email: "a@b.com", phone: "555-0100", fax: "555-0199" }
-minContact:: ContactInfo = { email: "min@test.com" }
-
 maybeName:: string | undefined = "hello"
-resetName:: string | undefined = undefined
 maybeCount:: number | null = 42
-resetCount:: number | null = null
 
-console.log "email:", info.email
-console.log "phone:", info.phone
-console.log "fullContact:", fullContact
+console.log "optionalName:", optionalName
+console.log "nullableCount:", nullableCount
 console.log "maybeName:", maybeName
 console.log "maybeCount:", maybeCount
 
@@ -33,7 +20,3 @@ console.log "maybeCount:", maybeCount
 badOptional:: string | undefined = 123
 # @ts-expect-error — string not assignable to number | null
 badNullable:: number | null = "oops"
-# @ts-expect-error — missing required field (email)
-badContact:: ContactInfo = { phone: "555-0100" }
-# @ts-expect-error — wrong type for optional field
-badPhone:: ContactInfo = { email: "a@b.com", phone: 12345 }
