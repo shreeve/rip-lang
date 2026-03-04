@@ -8785,8 +8785,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.88";
-  var BUILD_DATE = "2026-03-04@05:54:21GMT";
+  var VERSION = "3.13.90";
+  var BUILD_DATE = "2026-03-04@06:22:39GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -8973,13 +8973,17 @@ ${c.js}
       es.addEventListener("reload", (e) => {
         if (e.data === "styles") {
           const t = Date.now();
+          let refreshed = 0;
           document.querySelectorAll('link[rel="stylesheet"]').forEach((l) => {
             if (new URL(l.href).origin !== location.origin)
               return;
             const url = new URL(l.href);
             url.searchParams.set("_r", t);
             l.href = url.toString();
+            refreshed++;
           });
+          if (!refreshed)
+            location.reload();
         } else {
           location.reload();
         }

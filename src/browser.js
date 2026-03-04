@@ -197,12 +197,15 @@ async function processRipScripts() {
     es.addEventListener('reload', (e) => {
       if (e.data === 'styles') {
         const t = Date.now();
+        let refreshed = 0;
         document.querySelectorAll('link[rel="stylesheet"]').forEach(l => {
           if (new URL(l.href).origin !== location.origin) return;
           const url = new URL(l.href);
           url.searchParams.set('_r', t);
           l.href = url.toString();
+          refreshed++;
         });
+        if (!refreshed) location.reload();
       } else {
         location.reload();
       }

@@ -577,6 +577,7 @@ export serve = (opts = {}) ->
   if enableWatch and process.env.SOCKET_PREFIX
     ctl = "/tmp/#{process.env.SOCKET_PREFIX}.ctl.sock"
 
+    # FIXME: If bundles are subdirectories of appDir, will this be redundant?
     watchDirs = [appDir]
     for [_, bdirs] as bundles
       watchDirs.push(...bdirs)
