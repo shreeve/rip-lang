@@ -23,10 +23,6 @@ interface Dog extends Animal {
   breed: string
 }
 
-interface Serializable {
-  toJSON: () => string
-}
-
 // Interface with optional members
 interface HttpOptions {
   method?: string
