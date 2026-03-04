@@ -48,6 +48,21 @@ console.log "result:", result
 console.log "circle:", circle
 console.log "rect:", rect
 
+# ── Switch narrowing ──
+#
+# Gap: Rip can't narrow discriminated unions in switch branches.
+# TypeScript knows shape is { kind: 'circle', radius } in the
+# circle case — accessing .radius is safe. In Rip, rip check
+# can't verify that .radius exists after checking kind.
+
+def area(shape:: Shape):: number
+  switch shape.kind
+    when "circle" then Math.PI * shape.radius ** 2
+    when "rect" then shape.width * shape.height
+
+console.log "circle area:", area(circle)
+console.log "rect area:", area(rect)
+
 # ── Negative: wrong types must be caught ──
 
 # @ts-expect-error — invalid literal not in Status union

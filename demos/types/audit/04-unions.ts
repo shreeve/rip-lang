@@ -47,6 +47,22 @@ console.log('result:', result)
 console.log('circle:', circle)
 console.log('rect:', rect)
 
+// ── Switch narrowing ──
+//
+// TypeScript narrows the type in each case branch. After checking
+// kind === 'circle', TS knows shape has .radius — accessing .width
+// would be an error. Rip can't do this.
+
+function area(shape: Shape): number {
+  switch (shape.kind) {
+    case 'circle': return Math.PI * shape.radius ** 2
+    case 'rect': return shape.width * shape.height
+  }
+}
+
+console.log('circle area:', area(circle))
+console.log('rect area:', area(rect))
+
 // ── Negative: wrong types must be caught ──
 
 // @ts-expect-error — invalid literal not in Status union

@@ -53,14 +53,13 @@ Each file exercises a specific type feature. Status key:
 | 01-basic.rip         | `::` on variables, nullable (`T \| null`, `T \| undefined`) | pass   |                                               |
 | 02-aliases.rip       | `::=` aliases (simple, union, typeof)                        | pass   |                                               |
 | 03-structural.rip    | `::= type` blocks, optional, readonly, recursive, generic    | pass   | Includes `PagedResult<T>` generic struct      |
-| 04-unions.rip        | Inline unions, block unions, discriminated                    | pass   | Narrowing not checked — see gap table         |
+| 04-unions.rip        | Inline, block, discriminated unions + switch narrowing        | pass   | Narrowing not checked — see gap table         |
 | 05-interfaces.rip    | `interface`, `extends`, optional members                      | pass   |                                               |
 | 06-functions.rip     | Typed functions, arrows, and array transforms                 | pass   | 15 negative tests (7 param + 5 return + 3 array) |
 | 07-integration.rip   | Cross-module imports of typed functions                        | pass   | Cross-file type flow via .d.ts                |
 | 08-reactive.rip      | `:: T :=`, `:: T ~=`, `:: T =!`, `:: T ~>`                  | pass   | Tier 1 — reactive state annotations           |
 | 09-components.rip    | `@prop:: T :=`, `@prop:: T =!`                               | pass   | Tier 1 — component prop annotations           |
 | 10-validation.rip    | Runtime validation of API responses                          | pass   | Tier 2 — Rip erases types; TS+Zod validates   |
-| 11-enums.rip         | `enum` (numeric, string), typed switch                        | pass   | Exhaustiveness checking not yet supported     |
 
 ## Type Safety Gap Analysis
 
