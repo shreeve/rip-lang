@@ -112,9 +112,10 @@
     }
   },
   "scripts": {
-    "build": "esbuild src/extension.js --bundle --outfile=dist/extension.js --format=cjs --platform=node --external:vscode --minify && esbuild src/lsp.js --bundle --outfile=dist/lsp.js --format=cjs --platform=node --external:typescript --minify",
-    "package": "rm -f rip-*.vsix && bun run build && npx @vscode/vsce package --no-dependencies --skip-license",
-    "install-ext": "bun run package && cursor --install-extension rip-*.vsix --force"
+    "build": "bunx esbuild src/extension.js --bundle --outfile=dist/extension.js --format=cjs --platform=node --external:vscode --minify && bunx esbuild src/lsp.js --bundle --outfile=dist/lsp.js --format=cjs --platform=node --external:typescript --minify",
+    "package": "rm -f rip-*.vsix && bun run build && bunx @vscode/vsce package --no-dependencies --skip-license",
+    "install-vscode": "bun run package && code --install-extension rip-*.vsix --force",
+    "install-cursor": "bun run package && cursor --install-extension rip-*.vsix --force"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1",
