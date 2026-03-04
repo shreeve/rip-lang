@@ -1,10 +1,55 @@
 export App = component
+  isBold := false
+  isItalic := false
+  isUnderline := false
+  notifications := true
+  darkMode := false
+  autoSave := false
+  progress := 35
+
+  advance: -> progress = Math.min(100, progress + 15)
+  resetProgress: -> progress = 0
+
   render
-    div.("mx-auto max-w-2xl px-6 py-12")
-      h1.("text-3xl font-bold tracking-tight") "Hello, world!"
-      p.("mt-1 text-secondary") "Welcome to Rip UI."
-      div.("flex gap-2 mt-4")
-        Badge "New"
-        Badge variant: "outline", "Beta"
-        Badge variant: "subtle", "Draft"
-      Counter title: "My Cool Counter"
+    .("mx-auto max-w-2xl px-6 py-12 space-y-10")
+      .
+        h1.("text-3xl font-bold tracking-tight") "Hello, world!"
+        p.("mt-1 text-secondary") "Welcome to Rip UI."
+
+      .("space-y-6")
+        h2.("text-lg font-semibold") "Badges"
+        .("flex gap-2")
+          Badge "New"
+          Badge variant: "outline", "Beta"
+          Badge variant: "subtle", "Draft"
+
+        Separator
+
+        h2.("text-lg font-semibold") "Toggles"
+        .("flex gap-2")
+          Toggle pressed <=> isBold, "Bold"
+          Toggle pressed <=> isItalic, "Italic"
+          Toggle pressed <=> isUnderline, "Underline"
+
+        Separator
+
+        h2.("text-lg font-semibold") "Checkboxes"
+        .("space-y-2")
+          Checkbox checked <=> notifications
+            span "Enable notifications"
+          Checkbox checked <=> darkMode
+            span "Dark mode"
+          Checkbox checked <=> autoSave, disabled: true
+            span "Auto-save (coming soon)"
+
+        Separator
+
+        h2.("text-lg font-semibold") "Progress"
+        .("space-y-3")
+          Progress value: progress, max: 100
+          .("flex items-center gap-3")
+            button.("px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 cursor-pointer") @click: @advance, "Advance"
+            button.("px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 hover:bg-gray-50 cursor-pointer") @click: @resetProgress, "Reset"
+            span.("text-sm text-tertiary") "#{progress}%"
+
+      Counter title: "My Cool Counters"
