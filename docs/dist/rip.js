@@ -8766,7 +8766,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.84";
-  var BUILD_DATE = "2026-03-04@02:57:59GMT";
+  var BUILD_DATE = "2026-03-04@03:00:25GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -8942,7 +8942,7 @@ ${c.js}
         }
       }
     }
-    if (runtimeTag?.hasAttribute("data-reload")) {
+    if (runtimeTag?.hasAttribute("data-reload") && !globalThis.__ripLaunched) {
       let ready = false;
       const es = new EventSource("/watch");
       es.addEventListener("connected", () => {

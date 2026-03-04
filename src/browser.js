@@ -186,7 +186,8 @@ async function processRipScripts() {
   }
 
   // Step 6: data-reload enables SSE hot-reload from dev server
-  if (runtimeTag?.hasAttribute('data-reload')) {
+  // Skip if launch() was called — it connects its own SSE watch.
+  if (runtimeTag?.hasAttribute('data-reload') && !globalThis.__ripLaunched) {
     let ready = false;
     const es = new EventSource('/watch');
     es.addEventListener('connected', () => {
