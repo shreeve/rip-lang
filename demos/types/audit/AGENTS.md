@@ -118,3 +118,10 @@ infer the type from the assignment. Every variable that participates
 in type checking must have an explicit `::` annotation. In TypeScript,
 `const x = expr` infers the type automatically. This means Rip's `.rip`
 files are more verbose than their `.ts` equivalents for derived values.
+
+**Hover types only at declarations.** In TypeScript, hovering any usage
+of a variable shows its type. In Rip, type hover only works at the
+declaration site — hovering a later usage of the same variable shows
+nothing. The VS Code extension proxies hover requests through a
+line-based reverse source map that only connects declaration lines,
+not every reference.
