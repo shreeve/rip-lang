@@ -52,6 +52,7 @@ console.log('person:', person)
 console.log('cat:', cat)
 console.log('dog:', dog)
 console.log('opts:', opts)
+console.log('minOpts:', minOpts)
 
 // ── Negative: wrong types must be caught ──
 

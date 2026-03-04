@@ -27,6 +27,7 @@ const clickLogger: Function = () => console.log('clicks changed:', clicks)
 
 console.log('clicks:', clicks)
 console.log('username:', username)
+console.log('enabled:', enabled)
 console.log('clicksDoubled:', clicksDoubled)
 console.log('greeting:', greeting)
 console.log('hasTags:', hasTags)
