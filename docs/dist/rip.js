@@ -8766,7 +8766,7 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   }
   // src/browser.js
   var VERSION = "3.13.84";
-  var BUILD_DATE = "2026-03-04@02:50:52GMT";
+  var BUILD_DATE = "2026-03-04@02:57:59GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -8815,97 +8815,129 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
         if (r.status === "rejected")
           console.warn("Rip: fetch failed:", r.reason.message);
       }
-      const expanded = [];
+      const bundles = [];
+      const individual = [];
       for (const s of sources) {
-        if (s.bundle) {
-          const comps = s.bundle.components || {};
-          for (const [name, code] of Object.entries(comps)) {
-            expanded.push({ code, url: name });
-          }
-          if (s.bundle.data) {
-            if (!s.bundle._dataMerged) {
-              s.bundle._dataMerged = true;
-              const stateAttr = runtimeTag?.getAttribute("data-state");
-              let initial = {};
-              if (stateAttr) {
-                try {
-                  initial = JSON.parse(stateAttr);
-                } catch {}
-              }
-              Object.assign(initial, s.bundle.data);
-              runtimeTag?.setAttribute("data-state", JSON.stringify(initial));
-            }
-          }
-        } else if (s.code) {
-          expanded.push(s);
-        }
+        if (s.bundle)
+          bundles.push(s.bundle);
+        else if (s.code)
+          individual.push(s);
       }
-      const opts = { skipRuntimes: true, skipExports: true };
-      const compiled = [];
-      for (const s of expanded) {
-        if (!s.code)
-          continue;
-        try {
-          const js = compileToJS(s.code, opts);
-          compiled.push({ js, url: s.url || "inline" });
-        } catch (e) {
-          console.error(`Rip compile error in ${s.url || "inline"}:`, e.message);
-        }
-      }
-      if (!globalThis.__ripApp && runtimeTag) {
-        const stashFn = globalThis.stash;
-        if (stashFn) {
-          let initial = {};
-          const stateAttr = runtimeTag.getAttribute("data-state");
-          if (stateAttr) {
+      const routerAttr = runtimeTag?.getAttribute("data-router");
+      const hasRouter = routerAttr != null;
+      if (hasRouter && bundles.length > 0) {
+        const opts = { skipRuntimes: true, skipExports: true };
+        if (individual.length > 0) {
+          let js = "";
+          for (const s of individual) {
             try {
-              initial = JSON.parse(stateAttr);
+              js += compileToJS(s.code, opts) + `
+`;
             } catch (e) {
-              console.error("Rip: invalid data-state JSON:", e.message);
+              console.error(`Rip compile error in ${s.url || "inline"}:`, e.message);
             }
           }
-          const app = stashFn({ data: initial });
-          globalThis.__ripApp = app;
-          if (typeof window !== "undefined")
-            window.app = app;
-          const persistAttr = runtimeTag.getAttribute("data-persist");
-          if (persistAttr != null && globalThis.persistStash) {
-            globalThis.persistStash(app, { local: persistAttr === "local" });
-          }
-          const routerAttr = runtimeTag.getAttribute("data-router");
-          if (routerAttr != null) {
-            app.router = routerAttr === "hash" ? "hash" : "history";
-          }
-        }
-      }
-      if (compiled.length > 0) {
-        let js = compiled.map((c) => c.js).join(`
-`);
-        const mount = runtimeTag?.getAttribute("data-mount");
-        if (mount) {
-          const target = runtimeTag.getAttribute("data-target") || "body";
-          js += `
-${mount}.mount(${JSON.stringify(target)});`;
-        }
-        try {
-          await (0, eval)(`(async()=>{
+          if (js) {
+            try {
+              await (0, eval)(`(async()=>{
 ${js}
 })()`);
-          document.body.classList.add("ready");
-        } catch (e) {
-          if (e instanceof SyntaxError) {
-            console.error(`Rip syntax error in combined output: ${e.message}`);
-            for (const c of compiled) {
+            } catch (e) {
+              console.error("Rip runtime error:", e);
+            }
+          }
+        }
+        const ui = importRip.modules?.["ui.rip"];
+        if (ui?.launch) {
+          const appBundle = bundles[bundles.length - 1];
+          const persistAttr = runtimeTag.getAttribute("data-persist");
+          const launchOpts = { bundle: appBundle, hash: routerAttr === "hash" };
+          if (persistAttr != null)
+            launchOpts.persist = persistAttr === "local" ? "local" : true;
+          await ui.launch("", launchOpts);
+        }
+      } else {
+        const expanded = [];
+        for (const b of bundles) {
+          for (const [name, code] of Object.entries(b.components || {})) {
+            expanded.push({ code, url: name });
+          }
+          if (b.data) {
+            const stateAttr = runtimeTag?.getAttribute("data-state");
+            let initial = {};
+            if (stateAttr) {
               try {
-                new Function(`(async()=>{
-${c.js}
-})()`);
-              } catch (e2) {
-                console.error(`  → source: ${c.url}`, e2.message);
+                initial = JSON.parse(stateAttr);
+              } catch {}
+            }
+            Object.assign(initial, b.data);
+            runtimeTag?.setAttribute("data-state", JSON.stringify(initial));
+          }
+        }
+        expanded.push(...individual);
+        const opts = { skipRuntimes: true, skipExports: true };
+        const compiled = [];
+        for (const s of expanded) {
+          if (!s.code)
+            continue;
+          try {
+            const js = compileToJS(s.code, opts);
+            compiled.push({ js, url: s.url || "inline" });
+          } catch (e) {
+            console.error(`Rip compile error in ${s.url || "inline"}:`, e.message);
+          }
+        }
+        if (!globalThis.__ripApp && runtimeTag) {
+          const stashFn = globalThis.stash;
+          if (stashFn) {
+            let initial = {};
+            const stateAttr = runtimeTag.getAttribute("data-state");
+            if (stateAttr) {
+              try {
+                initial = JSON.parse(stateAttr);
+              } catch (e) {
+                console.error("Rip: invalid data-state JSON:", e.message);
               }
             }
-          } else {
-            console.error("Rip runtime error:", e);
+            const app = stashFn({ data: initial });
+            globalThis.__ripApp = app;
+            if (typeof window !== "undefined")
+              window.app = app;
+            const persistAttr = runtimeTag.getAttribute("data-persist");
+            if (persistAttr != null && globalThis.persistStash) {
+              globalThis.persistStash(app, { local: persistAttr === "local" });
+            }
+          }
+        }
+        if (compiled.length > 0) {
+          let js = compiled.map((c) => c.js).join(`
+`);
+          const mount = runtimeTag?.getAttribute("data-mount");
+          if (mount) {
+            const target = runtimeTag.getAttribute("data-target") || "body";
+            js += `
+${mount}.mount(${JSON.stringify(target)});`;
+          }
+          try {
+            await (0, eval)(`(async()=>{
+${js}
+})()`);
+            document.body.classList.add("ready");
+          } catch (e) {
+            if (e instanceof SyntaxError) {
+              console.error(`Rip syntax error in combined output: ${e.message}`);
+              for (const c of compiled) {
+                try {
+                  new Function(`(async()=>{
+${c.js}
+})()`);
+                } catch (e2) {
+                  console.error(`  → source: ${c.url}`, e2.message);
+                }
+              }
+            } else {
+              console.error("Rip runtime error:", e);
+            }
           }
         }
       }

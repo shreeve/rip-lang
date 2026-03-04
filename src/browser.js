@@ -70,91 +70,116 @@ async function processRipScripts() {
       if (r.status === 'rejected') console.warn('Rip: fetch failed:', r.reason.message);
     }
 
-    // Step 3b: Expand bundles into individual sources
-    const expanded = [];
+    // Separate bundles from individual sources
+    const bundles = [];
+    const individual = [];
     for (const s of sources) {
-      if (s.bundle) {
-        const comps = s.bundle.components || {};
-        for (const [name, code] of Object.entries(comps)) {
+      if (s.bundle) bundles.push(s.bundle);
+      else if (s.code) individual.push(s);
+    }
+
+    const routerAttr = runtimeTag?.getAttribute('data-router');
+    const hasRouter = routerAttr != null;
+
+    // Step 3b: If data-router is present and we have a bundle, use launch()
+    // for full routing support. Otherwise compile everything upfront.
+    if (hasRouter && bundles.length > 0) {
+      // Compile non-bundle sources (inline scripts, individual .rip files)
+      const opts = { skipRuntimes: true, skipExports: true };
+      if (individual.length > 0) {
+        let js = '';
+        for (const s of individual) {
+          try { js += compileToJS(s.code, opts) + '\n'; }
+          catch (e) { console.error(`Rip compile error in ${s.url || 'inline'}:`, e.message); }
+        }
+        if (js) {
+          try { await (0, eval)(`(async()=>{\n${js}\n})()`); }
+          catch (e) { console.error('Rip runtime error:', e); }
+        }
+      }
+
+      // Launch with the last bundle (app bundle) — handles router, renderer, stash
+      const ui = importRip.modules?.['ui.rip'];
+      if (ui?.launch) {
+        const appBundle = bundles[bundles.length - 1];
+        const persistAttr = runtimeTag.getAttribute('data-persist');
+        const launchOpts = { bundle: appBundle, hash: routerAttr === 'hash' };
+        if (persistAttr != null) launchOpts.persist = persistAttr === 'local' ? 'local' : true;
+        await ui.launch('', launchOpts);
+      }
+    } else {
+      // No routing — expand bundles into individual sources, compile everything
+      const expanded = [];
+      for (const b of bundles) {
+        for (const [name, code] of Object.entries(b.components || {})) {
           expanded.push({ code, url: name });
         }
-        if (s.bundle.data) {
-          if (!s.bundle._dataMerged) {
-            s.bundle._dataMerged = true;
-            const stateAttr = runtimeTag?.getAttribute('data-state');
-            let initial = {};
-            if (stateAttr) {
-              try { initial = JSON.parse(stateAttr); } catch {}
+        if (b.data) {
+          const stateAttr = runtimeTag?.getAttribute('data-state');
+          let initial = {};
+          if (stateAttr) { try { initial = JSON.parse(stateAttr); } catch {} }
+          Object.assign(initial, b.data);
+          runtimeTag?.setAttribute('data-state', JSON.stringify(initial));
+        }
+      }
+      expanded.push(...individual);
+
+      const opts = { skipRuntimes: true, skipExports: true };
+      const compiled = [];
+      for (const s of expanded) {
+        if (!s.code) continue;
+        try {
+          const js = compileToJS(s.code, opts);
+          compiled.push({ js, url: s.url || 'inline' });
+        } catch (e) {
+          console.error(`Rip compile error in ${s.url || 'inline'}:`, e.message);
+        }
+      }
+
+      // Create app stash
+      if (!globalThis.__ripApp && runtimeTag) {
+        const stashFn = globalThis.stash;
+        if (stashFn) {
+          let initial = {};
+          const stateAttr = runtimeTag.getAttribute('data-state');
+          if (stateAttr) {
+            try { initial = JSON.parse(stateAttr); }
+            catch (e) { console.error('Rip: invalid data-state JSON:', e.message); }
+          }
+          const app = stashFn({ data: initial });
+          globalThis.__ripApp = app;
+          if (typeof window !== 'undefined') window.app = app;
+
+          const persistAttr = runtimeTag.getAttribute('data-persist');
+          if (persistAttr != null && globalThis.persistStash) {
+            globalThis.persistStash(app, { local: persistAttr === 'local' });
+          }
+        }
+      }
+
+      // Execute all compiled code in shared scope
+      if (compiled.length > 0) {
+        let js = compiled.map(c => c.js).join('\n');
+
+        const mount = runtimeTag?.getAttribute('data-mount');
+        if (mount) {
+          const target = runtimeTag.getAttribute('data-target') || 'body';
+          js += `\n${mount}.mount(${JSON.stringify(target)});`;
+        }
+
+        try {
+          await (0, eval)(`(async()=>{\n${js}\n})()`);
+          document.body.classList.add('ready');
+        } catch (e) {
+          if (e instanceof SyntaxError) {
+            console.error(`Rip syntax error in combined output: ${e.message}`);
+            for (const c of compiled) {
+              try { new Function(`(async()=>{\n${c.js}\n})()`); }
+              catch (e2) { console.error(`  → source: ${c.url}`, e2.message); }
             }
-            Object.assign(initial, s.bundle.data);
-            runtimeTag?.setAttribute('data-state', JSON.stringify(initial));
+          } else {
+            console.error('Rip runtime error:', e);
           }
-        }
-      } else if (s.code) {
-        expanded.push(s);
-      }
-    }
-
-    const opts = { skipRuntimes: true, skipExports: true };
-    const compiled = [];
-    for (const s of expanded) {
-      if (!s.code) continue;
-      try {
-        const js = compileToJS(s.code, opts);
-        compiled.push({ js, url: s.url || 'inline' });
-      } catch (e) {
-        console.error(`Rip compile error in ${s.url || 'inline'}:`, e.message);
-      }
-    }
-
-    // Step 4: Create app stash
-    if (!globalThis.__ripApp && runtimeTag) {
-      const stashFn = globalThis.stash;
-      if (stashFn) {
-        let initial = {};
-        const stateAttr = runtimeTag.getAttribute('data-state');
-        if (stateAttr) {
-          try { initial = JSON.parse(stateAttr); }
-          catch (e) { console.error('Rip: invalid data-state JSON:', e.message); }
-        }
-        const app = stashFn({ data: initial });
-        globalThis.__ripApp = app;
-        if (typeof window !== 'undefined') window.app = app;
-
-        const persistAttr = runtimeTag.getAttribute('data-persist');
-        if (persistAttr != null && globalThis.persistStash) {
-          globalThis.persistStash(app, { local: persistAttr === 'local' });
-        }
-
-        const routerAttr = runtimeTag.getAttribute('data-router');
-        if (routerAttr != null) {
-          app.router = routerAttr === 'hash' ? 'hash' : 'history';
-        }
-      }
-    }
-
-    // Step 5: Execute all compiled code in shared scope
-    if (compiled.length > 0) {
-      let js = compiled.map(c => c.js).join('\n');
-
-      const mount = runtimeTag?.getAttribute('data-mount');
-      if (mount) {
-        const target = runtimeTag.getAttribute('data-target') || 'body';
-        js += `\n${mount}.mount(${JSON.stringify(target)});`;
-      }
-
-      try {
-        await (0, eval)(`(async()=>{\n${js}\n})()`);
-        document.body.classList.add('ready');
-      } catch (e) {
-        if (e instanceof SyntaxError) {
-          console.error(`Rip syntax error in combined output: ${e.message}`);
-          for (const c of compiled) {
-            try { new Function(`(async()=>{\n${c.js}\n})()`); }
-            catch (e2) { console.error(`  → source: ${c.url}`, e2.message); }
-          }
-        } else {
-          console.error('Rip runtime error:', e);
         }
       }
     }
