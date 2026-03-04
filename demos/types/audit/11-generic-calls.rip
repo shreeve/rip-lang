@@ -1,4 +1,4 @@
-# 12-generic-calls.rip — Generic function calls
+# 11-generic-calls.rip — Generic function calls
 #
 # Tier 3 — Important but deferrable. Explicit type arguments on calls.
 # Most use cases can be handled the Rip way: annotate the variable.
