@@ -19,3 +19,16 @@ User ::= type
 
 # weekMap = new Map<number, string[]>()    # TypeScript way
 weekMap:: Map<number, string[]> = new Map()  # Rip way
+
+# ── Use the types ──
+
+scores:: Map<string, number> = new Map()
+scores.set("alice", 95)
+scores.set("bob", 87)
+console.log "weekMap:", weekMap
+console.log "scores:", scores
+
+# ── Negative: wrong types must be caught ──
+
+# @ts-expect-error — wrong value type (string[] not assignable to number)
+badMap:: Map<string, number> = new Map([["a", [1, 2]]])

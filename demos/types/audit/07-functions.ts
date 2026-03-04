@@ -142,3 +142,14 @@ console.log('describe(42):', describe(42))
 console.log('first([10, 20, 30]):', first([10, 20, 30]))
 console.log('last([10, 20, 30]):', last([10, 20, 30]))
 console.log('uniq([1, 2, 2, 3, 3]):', uniq([1, 2, 2, 3, 3]))
+
+// ── Negative: wrong types must be caught ──
+//
+// NOTE: Same-file function calls can't check argument types — the
+// compiled JS has untyped params. Arity and return-type mismatches
+// are still caught. Cross-file calls (via .d.ts) get full checking.
+
+// @ts-expect-error — too few arguments
+const badClamp: number = clamp(5, 0);
+// @ts-expect-error — wrong return type annotation (sum returns number)
+const badSum: string = sum(1, 2, 3);

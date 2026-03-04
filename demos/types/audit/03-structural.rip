@@ -12,7 +12,7 @@ Config ::= type
   ssl?: boolean
   timeout?: number
 
-# Nested structures — flatten into separate types to avoid .d.ts emission bugs
+# Nested structures
 ResponseData ::= type
   items: string[]
   total: number
@@ -37,8 +37,39 @@ TreeNode ::= type
   value: string
   children: TreeNode[]
 
-# Exercise
+# ── Use the types ──
+
 dim:: Dimensions = { width: 800, height: 600 }
 cfg:: Config = { host: "localhost", port: 3000 }
+fullCfg:: Config = { host: "prod.example.com", port: 443, ssl: true, timeout: 5000 }
+
+resp:: ApiResponse = {
+  data: { items: ["a", "b"], total: 2 }
+  meta: { page: 1, limit: 10, hasMore: false }
+}
+
+frozen:: ImmutableConfig = { host: "localhost", port: 3000, ssl: true }
+
+tree:: TreeNode = {
+  value: "root"
+  children: [
+    { value: "left", children: [] }
+    { value: "right", children: [{ value: "deep", children: [] }] }
+  ]
+}
+
 console.log "dimensions:", dim
 console.log "config:", cfg
+console.log "response items:", resp.data.items
+console.log "tree root:", tree.value
+
+# ── Negative: wrong types must be caught ──
+
+# @ts-expect-error — missing required field (height)
+badDim:: Dimensions = { width: 800 }
+# @ts-expect-error — wrong field type
+badCfg:: Config = { host: 123, port: 3000 }
+# @ts-expect-error — extra unknown field
+badExtra:: Dimensions = { width: 800, height: 600, depth: 100 }
+# @ts-expect-error — nested wrong type
+badResp:: ApiResponse = { data: { items: [1, 2], total: 2 }, meta: { page: 1, limit: 10, hasMore: false } }

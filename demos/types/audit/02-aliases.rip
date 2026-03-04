@@ -11,8 +11,38 @@ UserID ::= number | string
 Primitive ::= string | number | boolean
 Nullable ::= string | null
 
-# typeof in type position — extract a type from a runtime value
-# Note: the source variable must itself be typed for `rip check` to work,
-# since untyped variables don't get .d.ts declarations.
+# typeof in type position
 defaults = { theme: "dark", lang: "en" }
 Defaults ::= typeof defaults
+
+# ── Use the aliases ──
+
+userId:: ID = 42
+name:: Name = "Jane"
+email:: Email = "jane@example.com"
+ts:: Timestamp = Date.now()
+
+mixedId:: UserID = "abc-123"
+prim:: Primitive = true
+maybeNull:: Nullable = null
+
+prefs:: Defaults = { theme: "light", lang: "fr" }
+
+console.log "userId:", userId
+console.log "name:", name
+console.log "email:", email
+console.log "ts:", ts
+console.log "mixedId:", mixedId
+console.log "prim:", prim
+console.log "prefs:", prefs
+
+# ── Negative: wrong types must be caught ──
+
+# @ts-expect-error — string assigned to ID (number)
+badId:: ID = "not-a-number"
+# @ts-expect-error — number assigned to Name (string)
+badName:: Name = 42
+# @ts-expect-error — boolean assigned to Email (string)
+badEmail:: Email = true
+# @ts-expect-error — number assigned to Nullable (string | null)
+badNullable:: Nullable = 42

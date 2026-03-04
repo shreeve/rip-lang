@@ -55,15 +55,15 @@ Each file exercises a specific type feature. Status key:
 | 03-structural.rip    | `::= type` blocks, optional, readonly, recursive | pass   |                                                |
 | 04-nullable.rip      | `:: T \| undefined`, `:: T \| null`, optional `?` | pass  |                                                |
 | 05-unions.rip        | Inline unions, block unions, discriminated   | pass       | Narrowing not checked — see gap table          |
-| 06-interfaces.rip    | `interface`, `extends`, optional members     | check-only | Declaration-only, no runtime exercise          |
-| 07-functions.rip     | `::` on params/returns, rest, union returns  | pass       |                                                |
+| 06-interfaces.rip    | `interface`, `extends`, optional members     | pass       |                                                |
+| 07-functions.rip     | `::` on params/returns, rest, union returns  | pass       | Same-file arg types not checked — see file     |
 | 08-arrows.rip        | `::` on arrow results (map/filter/reduce)    | pass       |                                                |
 | 09-domain.rip        | Nested types, generic structs (`T`)          | pass       |                                                |
-| 10-integration.rip   | Cross-module imports of typed functions       | pass       | Only file with imports (from 07-functions)     |
+| 10-integration.rip   | Cross-module imports of typed functions       | pass       | Cross-file arg types not checked yet           |
 | 11-reactive.rip      | `:: T :=`, `:: T ~=`, `:: T =!`, `:: T ~>`  | pass       | Tier 1 — reactive state annotations           |
 | 12-components.rip    | `@prop:: T :=`, `@prop:: T =!`               | pass       | Tier 1 — component prop annotations           |
 | 13-generics.rip      | `:: Promise<T>`, `:: Map<K,V>` on returns    | pass       | Tier 2 — generic return types                  |
-| 14-exports.rip       | `export ... ::=` named type export            | check-only | Tier 3 — `import type` not yet supported       |
+| 14-exports.rip       | `export ... ::=` named type export            | pass       | Tier 3 — `import type` not yet supported       |
 | 15-generic-calls.rip | `:: Map<K,V>` on variables (Rip idiom)        | pass       | Tier 3 — generic call-site syntax unnecessary  |
 | 16-enums.rip         | `enum` (numeric, string), typed switch        | pass       | Exhaustiveness checking not yet supported       |
 

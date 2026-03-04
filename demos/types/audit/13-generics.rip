@@ -43,3 +43,16 @@ def createOrder(cart:: OrderItem[]):: Promise<Order>
 
 def getEntries():: Map<string, number>
   new Map()
+
+# ── Use the types ──
+
+entries:: Map<string, number> = getEntries()
+console.log "entries:", entries
+
+# ── Negative: wrong types must be caught ──
+#
+# Generic return types are emitted in .d.ts but the function bodies
+# are compiled JS with untyped params. Return-type mismatches work.
+
+# @ts-expect-error — Map<string,number> not assignable to string
+badEntries:: string = getEntries()

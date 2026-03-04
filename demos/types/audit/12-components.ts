@@ -35,3 +35,12 @@ class Select {
   value: string = ''
   error: string | boolean = false
 }
+
+// ── Negative: wrong prop types must be caught ──
+
+// @ts-expect-error — wrong variant literal
+const badBtn = new Button({ variant: "danger", notes: "x" });
+// @ts-expect-error — missing required prop (notes)
+const badBtn2 = new Button({ variant: "primary" });
+// @ts-expect-error — wrong type for options
+const badSel = new Select({ options: 123 });

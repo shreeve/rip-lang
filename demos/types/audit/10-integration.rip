@@ -81,3 +81,12 @@ console.log "address:", formatAddress(addr)
 console.log "order total:", order.total
 console.log "validation:", validateOrder(order)
 console.log "✓ All type-safe code executed successfully"
+
+# ── Negative: wrong types must be caught ──
+#
+# Cross-file function argument checking doesn't work yet in rip check —
+# the import resolves but arg types aren't enforced. The .ts companion
+# has the full set of negatives that DO work in bunx tsc.
+
+# @ts-expect-error — missing required fields on User
+badUser:: User = { id: 1, email: "x@y.com" }

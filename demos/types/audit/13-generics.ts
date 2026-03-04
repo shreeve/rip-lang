@@ -46,5 +46,17 @@ async function createOrder(cart: OrderItem[]): Promise<Order> {
 }
 
 function getEntries(): Map<string, number> {
-  return new Map()
+  return new Map();
 }
+
+// ── Use the types ──
+
+const entries: Map<string, number> = getEntries();
+console.log("entries:", entries);
+
+// ── Negative: wrong types must be caught ──
+
+// @ts-expect-error — Map<string,number> not assignable to string
+const badEntries: string = getEntries();
+// @ts-expect-error — wrong generic type argument
+const badMap: Map<number, number> = getEntries();

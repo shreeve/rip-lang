@@ -15,3 +15,18 @@ export Select = component
   @options:: string[] =! []
   @value:: string := ""
   @error:: string | boolean := false
+
+# ── Negative: wrong prop types must be caught ──
+#
+# Component constructor types are emitted in .d.ts meaning prop
+# type checking works on instantiation. However, components can't
+# be instantiated without the browser runtime, so these tests use
+# the .ts companion instead. The .rip negatives below verify what
+# rip check can catch.
+
+# @ts-expect-error — wrong variant literal
+badBtn:: Button = new Button({ variant: "danger", notes: "x" })
+# @ts-expect-error — missing required prop (notes)
+badBtn2:: Button = new Button({ variant: "primary" })
+# @ts-expect-error — wrong type for options
+badSel:: Select = new Select({ options: 123 })

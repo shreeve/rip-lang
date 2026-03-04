@@ -73,12 +73,23 @@ const order: Order = {
 }
 order.total = calculateTotal(order.items)
 
-console.log('--- Integration test ---')
-console.log('user:', user.firstName, user.lastName)
-console.log('point:', point)
-console.log('add(3, 4):', add(3, 4))
-console.log('greet(\'World\'):', greet('World'))
-console.log('address:', formatAddress(addr))
-console.log('order total:', order.total)
-console.log('validation:', validateOrder(order))
-console.log('✓ All type-safe code executed successfully')
+console.log('--- Integration test ---');
+console.log('user:', user.firstName, user.lastName);
+console.log('point:', point);
+console.log('add(3, 4):', add(3, 4));
+console.log('greet(\'World\'):', greet('World'));
+console.log('address:', formatAddress(addr));
+console.log('order total:', order.total);
+console.log('validation:', validateOrder(order));
+console.log('✓ All type-safe code executed successfully');
+
+// ── Negative: wrong types must be caught ──
+//
+// Cross-file calls use .d.ts signatures, so argument type checking works.
+
+// @ts-expect-error — string arguments where numbers expected
+const badAdd: number = add("a", "b");
+// @ts-expect-error — number argument where string expected
+const badGreet: string = greet(42);
+// @ts-expect-error — missing required fields on User
+const badUser: User = { id: 1, email: "x@y.com" };

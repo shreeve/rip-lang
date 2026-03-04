@@ -17,4 +17,17 @@ type User = {
 //   result:: User = schema.parse(rawData)
 
 // Generic variable annotation — same in both languages
-const weekMap: Map<number, string[]> = new Map()
+const weekMap: Map<number, string[]> = new Map();
+
+// ── Use the types ──
+
+const scores: Map<string, number> = new Map();
+scores.set("alice", 95);
+scores.set("bob", 87);
+console.log("weekMap:", weekMap);
+console.log("scores:", scores);
+
+// ── Negative: wrong types must be caught ──
+
+// @ts-expect-error — wrong value type (string[] not assignable to number)
+const badMap: Map<string, number> = new Map([["a", [1, 2]]]);

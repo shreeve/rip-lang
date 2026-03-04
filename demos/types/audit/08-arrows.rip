@@ -5,6 +5,23 @@ doubled:: number[] = nums.map (x) => x * 2
 evens:: number[] = nums.filter (x) => x % 2 == 0
 total:: number = nums.reduce ((acc, x) => acc + x), 0
 
+words:: string[] = ["hello", "world", "rip"]
+upper:: string[] = words.map (w) => w.toUpperCase()
+long:: string[] = words.filter (w) => w.length > 3
+joined:: string = words.join(", ")
+
 console.log "doubled:", doubled
 console.log "evens:", evens
 console.log "total:", total
+console.log "upper:", upper
+console.log "long:", long
+console.log "joined:", joined
+
+# ── Negative: wrong types must be caught ──
+
+# @ts-expect-error — map returns number[], not string[]
+badMap:: string[] = nums.map (x) => x * 2
+# @ts-expect-error — filter returns number[], not string[]
+badFilter:: string[] = nums.filter (x) => x > 2
+# @ts-expect-error — reduce returns number, not string
+badReduce:: string = nums.reduce ((acc, x) => acc + x), 0

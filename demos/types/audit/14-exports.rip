@@ -11,3 +11,13 @@ export UserIDNumber ::= number
 
 # Mixed export (values + types) — not yet supported
 # export { formatDate, type DateFormat } from "./dates.rip"
+
+# ── Use the types ──
+
+id:: UserIDNumber = 42
+console.log "id:", id
+
+# ── Negative: wrong types must be caught ──
+
+# @ts-expect-error — string not assignable to UserIDNumber (number)
+badId:: UserIDNumber = "not-a-number"
