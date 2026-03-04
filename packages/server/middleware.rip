@@ -473,20 +473,28 @@ pre{margin:0;white-space:pre-wrap;word-break:break-word}
 # Hot-reload SSE is handled by rip-server; this middleware registers watch dirs.
 #
 # Options:
-#   dir:        string    — app directory on disk (default: '.')
-#   routes:     string    — page components directory, relative to dir (default: 'routes')
-#   bundle:     string[]  — directories to scan for the bundle endpoint (default: ['components'])
-#   app:        string    — URL mount point (default: '')
-#   title:      string    — document title
-#   state:      object    — initial app state passed via bundle
-#   watch:      boolean   — enable hot-reload (registers watch dirs with rip-server)
+#   dir:        string          — app directory on disk (default: '.')
+#   routes:     string          — page components directory, relative to dir (default: 'routes')
+#   bundle:     string[]|object — directories for bundle endpoint(s) (default: ['components'])
+#                                 Array: single bundle at {prefix}/bundle (legacy)
+#                                 Object: named bundles — { ui: [...], app: [...] } → {prefix}/ui, {prefix}/app
+#   app:        string          — URL mount point (default: '')
+#   title:      string          — document title
+#   state:      object          — initial app state passed via bundle
+#   watch:      boolean         — enable hot-reload (registers watch dirs with rip-server)
 #
 
 export serve = (opts = {}) ->
   prefix        = opts.app or ''
   appDir        = opts.dir or '.'
   routesDir     = "#{appDir}/#{opts.routes or 'routes'}"
-  componentDirs = (opts.bundle or opts.components or ['components']).map (d) -> "#{appDir}/#{d}"
+  rawBundle = opts.bundle or opts.components or ['components']
+  bundles = new Map()
+  if Array.isArray(rawBundle)
+    bundles.set 'bundle', rawBundle.map (d) -> "#{appDir}/#{d}"
+  else if typeof rawBundle is 'object'
+    for name, dirs of rawBundle
+      bundles.set name, dirs.map (d) -> "#{appDir}/#{d}"
   enableWatch   = if opts.watch? then opts.watch else process.env.SOCKET_PREFIX?
   appState      = opts.state or null
   appTitle      = opts.title or null
@@ -524,47 +532,56 @@ export serve = (opts = {}) ->
     return unless path.startsWith(appDirResolved)
     @send path, 'text/x-rip; charset=UTF-8' if existsSync(path)
 
-  # Route: {prefix}/bundle — all components + app data as JSON (cached + Brotli)
+  # Routes: {prefix}/{name} — per-bundle JSON endpoints (cached + Brotli)
   # Built once per worker on first request, then served from memory with ETag/304.
-  # For production at scale, consider disk-based caching: hash the canonical
-  # directory path, use the mtime as a version key, write .br files to a .cache/
-  # directory, and use sendfile for zero-copy serving.
-  bundleCache = { json: null, br: null, etag: null }
+  bundleCaches = new Map()
 
-  buildBundle = ->
+  buildNamedBundle = (name, dirs, includeRoutes = false) ->
     { brotliCompressSync } = require 'zlib'
     glob = new Bun.Glob("**/*.rip")
     components = {}
-    for path in Array.from(glob.scanSync(routesDir)).sort()
-      components["components/#{path}"] = Bun.file("#{routesDir}/#{path}").text!
-    for dir in componentDirs
+    if includeRoutes
+      for path in Array.from(glob.scanSync(routesDir)).sort()
+        components["components/#{path}"] = Bun.file("#{routesDir}/#{path}").text!
+    for dir in dirs
       for path in Array.from(glob.scanSync(dir)).sort()
         continue if path is 'index.rip' or path.endsWith('/index.rip')
         key = "components/_lib/#{path}"
         components[key] = Bun.file("#{dir}/#{path}").text! unless components[key]
-    data = {}
-    data.title = appTitle if appTitle
-    data.watch = enableWatch
-    if appState
-      data[k] = v for k, v of appState
-    bundleCache.json = JSON.stringify({ components, data })
-    bundleCache.br = brotliCompressSync(bundleCache.json)
-    bundleCache.etag = "W/\"#{Bun.hash(bundleCache.json).toString(36)}\""
+    bundle = { components }
+    if includeRoutes
+      data = {}
+      data.title = appTitle if appTitle
+      data.watch = enableWatch
+      if appState
+        data[k] = v for k, v of appState
+      bundle.data = data
+    cache = { json: null, br: null, etag: null }
+    cache.json = JSON.stringify(bundle)
+    cache.br = brotliCompressSync(cache.json)
+    cache.etag = "W/\"#{Bun.hash(cache.json).toString(36)}\""
+    bundleCaches.set name, cache
 
-  get "#{prefix}/bundle", (c) ->
-    buildBundle! unless bundleCache.json
-    if c.req.header('if-none-match') is bundleCache.etag
-      return new Response(null, { status: 304, headers: { 'ETag': bundleCache.etag, 'Cache-Control': 'no-cache' } })
-    useBr = (c.req.header('accept-encoding') or '').includes('br')
-    headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', 'ETag': bundleCache.etag }
-    headers['Content-Encoding'] = 'br' if useBr
-    new Response (if useBr then bundleCache.br else bundleCache.json), { headers }
+  for [name, dirs] as bundles
+    get "#{prefix}/#{name}", (c) ->
+      cache = bundleCaches.get(name)
+      buildNamedBundle(name, dirs, (name is 'app') or (bundles.size is 1)) unless cache
+      cache = bundleCaches.get(name)
+      if c.req.header('if-none-match') is cache.etag
+        return new Response(null, { status: 304, headers: { 'ETag': cache.etag, 'Cache-Control': 'no-cache' } })
+      useBr = (c.req.header('accept-encoding') or '').includes('br')
+      headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', 'ETag': cache.etag }
+      headers['Content-Encoding'] = 'br' if useBr
+      new Response (if useBr then cache.br else cache.json), { headers }
 
   # Register watch directories with rip-server via control socket
   if enableWatch and process.env.SOCKET_PREFIX
     ctl = "/tmp/#{process.env.SOCKET_PREFIX}.ctl.sock"
-    dirs = [appDir].filter existsSync
-    body = JSON.stringify({ op: 'watch', prefix, dirs })
+    watchDirs = [appDir]
+    for [_, bdirs] as bundles
+      watchDirs.push(...bdirs)
+    watchDirs = watchDirs.filter existsSync
+    body = JSON.stringify({ op: 'watch', prefix, dirs: watchDirs })
     fetch('http://localhost/watch', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl }).catch (e) ->
       console.warn "[Rip] Watch registration failed: #{e.message}"
 

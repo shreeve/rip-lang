@@ -8,7 +8,9 @@ import './api/routes/index.rip'
 dir = import.meta.dir
 use serve
   dir: "#{dir}/app"
-  bundle: ['routes', 'components', '../../../packages/ui']
+  bundle:
+    ui:  ['../../../packages/ui']
+    app: ['routes', 'components']
   watch: true
 
 get '/*.rip' -> @send "#{dir}/app/#{@req.path.slice(1)}", 'text/plain; charset=UTF-8'

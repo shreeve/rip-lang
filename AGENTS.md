@@ -876,13 +876,20 @@ own line in a render block is parsed as a tag named `item` with CSS class
 expressions as text: `= item.textContent`. This works for any case,
 including HTML tag names like `= nav.dataset.trigger` or `= link.href`.
 
-**Integration:** Add the widgets directory to your serve middleware:
+**Integration:** Add the widgets directory as a named bundle in your serve middleware:
 
 ```coffee
 use serve
   dir: dir
-  bundle: ['components', '../../../packages/ui']
+  bundle:
+    ui:  ['../../../packages/ui']
+    app: ['routes', 'components']
 ```
+
+Then load both bundles in HTML via `data-src="ui app"`. Each named bundle
+gets its own endpoint (`{prefix}/ui`, `{prefix}/app`), cache, and ETag.
+The legacy flat-array format (`bundle: ['components']`) still works and
+creates a single bundle at `{prefix}/bundle`.
 
 All widgets become available by name (`Select`, `Dialog`, `Grid`, etc.) in
 the shared scope — no imports needed.
