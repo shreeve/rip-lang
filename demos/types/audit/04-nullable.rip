@@ -1,0 +1,15 @@
+# 04-nullable.rip — Nullable and optional types
+
+# Nullable variables use explicit unions (string | undefined, etc.)
+optionalName:: string | undefined = undefined
+nullableCount:: number | null = null
+
+# Optional properties in structural types use ? on the property
+ContactInfo ::= type
+  email: string
+  phone?: string
+  fax?: string
+
+info:: ContactInfo = { email: "test@example.com" }
+console.log "email:", info.email
+console.log "phone:", info.phone

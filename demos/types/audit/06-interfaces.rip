@@ -1,0 +1,30 @@
+# 06-interfaces.rip — Interfaces, extension, and composition
+
+interface Identifiable
+  id: number
+
+interface Timestamped
+  createdAt: string
+  updatedAt: string
+
+interface Named
+  name: string
+
+interface Animal
+  name: string
+  sound: string
+  legs: number
+
+interface Dog extends Animal
+  breed: string
+
+interface Serializable
+  toJSON: () => string
+
+# Interface with optional members
+# Note: Record<> inside interfaces causes .d.ts field merging.
+# Use simple types or omit Record<> fields.
+interface HttpOptions
+  method?: string
+  body?: string
+  timeout?: number

@@ -1,0 +1,58 @@
+# 01-basic.rip — Basic type annotations on variables
+
+count:: number = 0
+label:: string = "Rip"
+active:: boolean = true
+ratio:: number = 3.14
+items:: string[] = ["alpha", "bravo", "charlie"]
+ids:: number[] = [1, 2, 3]
+pair:: [string, number] = ["hello", 42]
+
+# ── Derive and verify types ──
+#
+# NOTE: Rip compiles `let x;` separate from `x = expr;`, so TypeScript
+# can't infer the type from the assignment. Variables MUST use `::` to
+# participate in type checking. This is a design difference from TS,
+# where `const x = expr` lets the checker infer the type automatically.
+
+total:: number = count + ratio
+greeting:: string = "#{label} is #{active}"
+first:: string = items[0]
+allIds:: number = ids.reduce ((a, b) -> a + b), 0
+pairLabel:: string = pair[0]
+pairValue:: number = pair[1]
+
+console.log "total:", total
+console.log "greeting:", greeting
+console.log "first:", first
+console.log "allIds:", allIds
+console.log "pairLabel:", pairLabel
+console.log "pairValue:", pairValue
+
+# ── Negative: wrong types must be caught ──
+
+# Wrong literals assigned to annotated variables
+# @ts-expect-error — string assigned to number
+badCount:: number = "oops"
+# @ts-expect-error — number assigned to string
+badLabel:: string = 42
+# @ts-expect-error — string assigned to boolean
+badActive:: boolean = "yes"
+# @ts-expect-error — string[] assigned to number[]
+badIds:: number[] = ["a", "b"]
+# @ts-expect-error — swapped tuple members
+badPair:: [string, number] = [123, "hello"]
+
+# Wrong types on derived expressions
+# @ts-expect-error — number + number can't be string
+badTotal:: string = count + ratio
+# @ts-expect-error — string interpolation can't be number
+badGreeting:: number = "#{label} is #{active}"
+# @ts-expect-error — string[] element can't be boolean
+badFirst:: boolean = items[0]
+# @ts-expect-error — reduce of number[] can't be string
+badAllIds:: string = ids.reduce ((a, b) -> a + b), 0
+# @ts-expect-error — tuple[0] is string, not number
+badPairLabel:: number = pair[0]
+# @ts-expect-error — tuple[1] is number, not string
+badPairValue:: string = pair[1]

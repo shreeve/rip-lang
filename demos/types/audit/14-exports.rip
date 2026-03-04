@@ -1,0 +1,13 @@
+# 14-exports.rip — Export type / import type
+#
+# Tier 3 — Important but deferrable. Type-only exports and imports
+# that are erased at runtime.
+
+# Named type export
+export UserIDNumber ::= number
+
+# Type-only import (not yet supported)
+# import type { User, Order } from "./models.rip"
+
+# Mixed export (values + types) — not yet supported
+# export { formatDate, type DateFormat } from "./dates.rip"

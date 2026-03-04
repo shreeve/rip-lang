@@ -1,0 +1,39 @@
+# 16-enums.rip — Enum declarations and exhaustiveness
+#
+# Rip enums emit both runtime JS and .d.ts declarations.
+# Exhaustiveness checking (catching missing switch cases) is not
+# yet supported — TypeScript sees the enum but the compiled JS
+# doesn't preserve enough info for switch narrowing.
+
+# Numeric enum (auto-incrementing)
+enum Direction
+  North
+  South
+  East
+  West
+
+# String-valued enum
+enum Color
+  Red = "red"
+  Green = "green"
+  Blue = "blue"
+
+# Mixed use in typed functions
+def move(dir:: Direction):: string
+  switch dir
+    when Direction.North then "up"
+    when Direction.South then "down"
+    when Direction.East then "right"
+    when Direction.West then "left"
+
+def colorName(c:: Color):: string
+  switch c
+    when Color.Red then "Red"
+    when Color.Green then "Green"
+    when Color.Blue then "Blue"
+
+# Exercise
+console.log "move(North):", move(Direction.North)
+console.log "move(West):", move(Direction.West)
+console.log "Color.Red:", Color.Red
+console.log "colorName(Blue):", colorName(Color.Blue)

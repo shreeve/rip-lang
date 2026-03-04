@@ -1,0 +1,44 @@
+# 03-structural.rip — Structural types with the `type` keyword
+
+# Basic structure
+Dimensions ::= type
+  width: number
+  height: number
+
+# With optional properties
+Config ::= type
+  host: string
+  port: number
+  ssl?: boolean
+  timeout?: number
+
+# Nested structures — flatten into separate types to avoid .d.ts emission bugs
+ResponseData ::= type
+  items: string[]
+  total: number
+
+ResponseMeta ::= type
+  page: number
+  limit: number
+  hasMore: boolean
+
+ApiResponse ::= type
+  data: ResponseData
+  meta: ResponseMeta
+
+# With readonly fields
+ImmutableConfig ::= type
+  readonly host: string
+  readonly port: number
+  readonly ssl: boolean
+
+# Recursive type
+TreeNode ::= type
+  value: string
+  children: TreeNode[]
+
+# Exercise
+dim:: Dimensions = { width: 800, height: 600 }
+cfg:: Config = { host: "localhost", port: 3000 }
+console.log "dimensions:", dim
+console.log "config:", cfg

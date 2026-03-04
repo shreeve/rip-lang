@@ -1,0 +1,33 @@
+# 05-unions.rip — Union types (inline, block, discriminated)
+
+# Inline unions
+Status ::= "pending" | "active" | "done"
+Result ::= "success" | "error" | "timeout"
+
+# Block unions (diff-friendly vertical form)
+HttpMethod ::=
+  | "GET"
+  | "POST"
+  | "PUT"
+  | "PATCH"
+  | "DELETE"
+
+LogLevel ::=
+  | "debug"
+  | "info"
+  | "warn"
+  | "error"
+  | "fatal"
+
+# Discriminated unions — block form with inline object members
+# .d.ts formatting is ugly (properties on one line, commas) but valid TypeScript
+Shape ::=
+  | { kind: "circle", radius: number }
+  | { kind: "rect", width: number, height: number }
+
+status:: Status = "active"
+method:: HttpMethod = "GET"
+level:: LogLevel = "info"
+console.log "status:", status
+console.log "method:", method
+console.log "level:", level

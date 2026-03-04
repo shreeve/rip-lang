@@ -39,8 +39,10 @@ export const SKIP_CODES = new Set([
   2300, // Duplicate identifier (DTS declarations coexist with compiled class bodies)
   2304, // Cannot find name
   2307, // Cannot find module
+  2389, // Function implementation name must match overload (DTS + compiled body)
   2393, // Duplicate function implementation
   2451, // Cannot redeclare block-scoped variable
+  2567, // Enum declarations can only merge with namespace or other enum (DTS + compiled body)
   1064, // Return type of async function must be Promise
   2582, // Cannot find name 'test' (test runner globals)
   2593, // Cannot find name 'describe' (test runner globals)
@@ -94,11 +96,15 @@ export function compileForCheck(filePath, source, compiler) {
   // Ensure every file is treated as a module (not a global script)
   if (!/\bexport\b/.test(code) && !/\bimport\b/.test(code)) code += '\nexport {};\n';
 
-  const tsContent = (hasTypes ? dts + '\n' : '') + code;
+  let tsContent = (hasTypes ? dts + '\n' : '') + code;
   const headerLines = hasTypes ? countLines(dts + '\n') : 1;
 
   // Build bidirectional line maps
   const { srcToGen, genToSrc } = buildLineMap(result.reverseMap, result.map, headerLines);
+
+  // Snapshot code-section mappings before DTS mapping can overwrite them.
+  // Needed by @ts-expect-error injection which must target code lines, not DTS.
+  const codeSrcToGen = new Map(srcToGen);
 
   // Map DTS declaration lines back to source lines (bidirectional).
   // Covers: let/var declarations, type aliases, interfaces, enums, classes.
@@ -141,6 +147,50 @@ export function compileForCheck(filePath, source, compiler) {
           genToSrc.set(genA + d, srcA + d);
         }
       }
+    }
+  }
+
+  // Inject @ts-expect-error directives from Rip source into the generated
+  // TypeScript.  This lets TypeScript natively suppress expected errors and
+  // report TS2578 for unused directives — works in both CLI and LSP.
+  if (hasTypes) {
+    const srcLines = source.split('\n');
+    const injects = [];
+    for (let s = 0; s < srcLines.length; s++) {
+      const m = srcLines[s].match(/^\s*#\s*(@ts-expect-error\b.*)/);
+      if (m) {
+        const nextSrc = s + 1;
+        // Prefer code-section line (where the assignment lives and TS reports
+        // the error) over the DTS declaration line.
+        let genLine = codeSrcToGen.get(nextSrc);
+        if (genLine === undefined) {
+          genLine = srcToGen.get(nextSrc);
+          if (genLine !== undefined && genLine < headerLines) genLine = undefined;
+        }
+        if (genLine !== undefined) {
+          injects.push({ genLine, srcLine: s, comment: `// ${m[1]}` });
+        }
+      }
+    }
+    if (injects.length > 0) {
+      // Sort descending so bottom-up insertion doesn't shift earlier positions
+      injects.sort((a, b) => b.genLine - a.genLine);
+      const tsLines = tsContent.split('\n');
+      for (const { genLine, srcLine, comment } of injects) {
+        tsLines.splice(genLine, 0, comment);
+        // Shift existing gen→src mappings at or after the insertion point
+        const shifted = new Map();
+        for (const [g, s] of genToSrc) shifted.set(g >= genLine ? g + 1 : g, s);
+        shifted.set(genLine, srcLine);
+        genToSrc.clear();
+        for (const [g, s] of shifted) genToSrc.set(g, s);
+        // Shift existing src→gen mappings that pointed at or past the insertion
+        for (const [s, g] of srcToGen) {
+          if (g >= genLine) srcToGen.set(s, g + 1);
+        }
+        srcToGen.set(srcLine, genLine);
+      }
+      tsContent = tsLines.join('\n');
     }
   }
 

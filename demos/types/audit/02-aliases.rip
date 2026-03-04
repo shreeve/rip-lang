@@ -1,0 +1,18 @@
+# 02-aliases.rip — Type aliases (simple, union, typeof)
+
+# Simple aliases
+ID ::= number
+Name ::= string
+Email ::= string
+Timestamp ::= number
+
+# Union aliases
+UserID ::= number | string
+Primitive ::= string | number | boolean
+Nullable ::= string | null
+
+# typeof in type position — extract a type from a runtime value
+# Note: the source variable must itself be typed for `rip check` to work,
+# since untyped variables don't get .d.ts declarations.
+defaults = { theme: "dark", lang: "en" }
+Defaults ::= typeof defaults

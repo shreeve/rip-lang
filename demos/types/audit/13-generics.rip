@@ -1,0 +1,45 @@
+# 13-generics.rip — Generic types in function return position
+#
+# Tier 2 — Essential for real apps. Every typed API call needs
+# Promise<T> return types to propagate types to callers.
+
+User ::= type
+  id: number
+  firstName: string
+  lastName: string
+  email: string
+  phone?: string
+  bio?: string
+
+OrderItem ::= type
+  productId: number
+  quantity: number
+  unitPrice: number
+  discount?: number
+
+Order ::= type
+  id: number
+  customerId: number
+  status: string
+  items: OrderItem[]
+  total: number
+  createdAt: string
+  shippedAt?: string
+
+def fetchUser(id:: number):: Promise<User>
+  response = await fetch("/api/users/#{id}")
+  response.json()
+
+def fetchUsers():: Promise<User[]>
+  response = await fetch("/api/users")
+  data = await response.json()
+  data.users
+
+def createOrder(cart:: OrderItem[]):: Promise<Order>
+  response = await fetch "/api/orders",
+    method: "POST"
+    body: JSON.stringify(cart)
+  response.json()
+
+def getEntries():: Map<string, number>
+  new Map()

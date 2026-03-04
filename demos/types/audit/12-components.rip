@@ -1,0 +1,17 @@
+# 12-components.rip — Typed component props
+#
+# Tier 1 — Foundational. Props are the public API of every component.
+# Without typed props, component consumers get no IntelliSense.
+
+export Button = component
+  @variant:: "primary" | "secondary" := "primary"
+  @compact:: boolean := false
+  @loading:: boolean := false
+  @label:: string =! "Click me"
+  @notes:: string
+  disabled:: boolean := false
+
+export Select = component
+  @options:: string[] =! []
+  @value:: string := ""
+  @error:: string | boolean := false
