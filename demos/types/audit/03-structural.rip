@@ -32,6 +32,12 @@ ImmutableConfig ::= type
   readonly port: number
   readonly ssl: boolean
 
+# Optional vs required-but-undefined (distinct in TS)
+FormField ::= type
+  label: string
+  value: string | undefined
+  placeholder?: string
+
 # Recursive type
 TreeNode ::= type
   value: string
@@ -58,9 +64,17 @@ tree:: TreeNode = {
   ]
 }
 
+# value is required (must pass key), placeholder is optional (can omit key)
+field:: FormField = { label: "Name", value: undefined }
+fullField:: FormField = { label: "Email", value: "test@example.com", placeholder: "you@domain.com" }
+
 console.log "dimensions:", dim
 console.log "config:", cfg
+console.log "fullCfg:", fullCfg
 console.log "response items:", resp.data.items
+console.log "frozen:", frozen
+console.log "field:", field
+console.log "fullField:", fullField
 console.log "tree root:", tree.value
 
 # ── Negative: wrong types must be caught ──
@@ -73,3 +87,5 @@ badCfg:: Config = { host: 123, port: 3000 }
 badExtra:: Dimensions = { width: 800, height: 600, depth: 100 }
 # @ts-expect-error — nested wrong type
 badResp:: ApiResponse = { data: { items: [1, 2], total: 2 }, meta: { page: 1, limit: 10, hasMore: false } }
+# @ts-expect-error — missing required field (value must be passed even if undefined)
+badField:: FormField = { label: "Name" }
