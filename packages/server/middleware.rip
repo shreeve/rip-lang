@@ -525,6 +525,10 @@ export serve = (opts = {}) ->
     @send path, 'text/x-rip; charset=UTF-8' if existsSync(path)
 
   # Route: {prefix}/bundle — all components + app data as JSON (cached + Brotli)
+  # Built once per worker on first request, then served from memory with ETag/304.
+  # For production at scale, consider disk-based caching: hash the canonical
+  # directory path, use the mtime as a version key, write .br files to a .cache/
+  # directory, and use sendfile for zero-copy serving.
   bundleCache = { json: null, br: null, etag: null }
 
   buildBundle = ->
