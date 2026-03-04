@@ -1,4 +1,4 @@
-# 12-enums.rip — Enum declarations and exhaustiveness
+# 11-enums.rip — Enum declarations and exhaustiveness
 #
 # Rip enums emit both runtime JS and .d.ts declarations.
 # Exhaustiveness checking (catching missing switch cases) is not
