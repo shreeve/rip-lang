@@ -151,7 +151,7 @@ function publishDiagnostics(filePath) {
       for (const prop of ctx.existingProps) {
         if (prop.startsWith('@')) continue;
         if (prop === 'class' || prop === 'style') continue;
-        if (!info.props.find(p => p.name === prop)) {
+        if (!info.props.some(p => p.name === prop)) {
           const col = srcLines[i].indexOf(prop);
           if (col >= 0) {
             diagnostics.push({
@@ -173,17 +173,19 @@ function publishDiagnostics(filePath) {
         const isBool = value === 'true' || value === 'false';
         const type = prop.type;
 
+        const isLiteral = isStr || isNum || isBool;
         let msg = null;
+        if (!isLiteral) continue;
         if (type === 'string' && !isStr) msg = `Expected a string for prop '${propName}'`;
         else if (type === 'number' && !isNum) msg = `Expected a number for prop '${propName}'`;
         else if (type === 'boolean' && !isBool) msg = `Expected a boolean for prop '${propName}'`;
         else {
           const allowed = extractUnionValues(type);
           if (allowed.length > 0 && isStr) {
-            const strMatch = value.match(/^["'](.*)["']$/);
+            const strMatch = value.match(/^(["'])(.*)\1$/);
             if (strMatch) {
-              const quoted = `"${strMatch[1]}"`;
-              if (!allowed.some(v => v === quoted || v === `'${strMatch[1]}'`))
+              const quoted = `"${strMatch[2]}"`;
+              if (!allowed.some(v => v === quoted || v === `'${strMatch[2]}'`))
                 msg = `Invalid value ${quoted} for prop '${propName}'. Expected: ${allowed.join(' | ')}`;
             }
           }
@@ -218,10 +220,10 @@ function publishDiagnostics(filePath) {
     }
 
     // Untyped prop hints (at component definitions, not usage sites)
-    if (warnUntypedProps) for (const [name, info] of componentRegistry) {
-      if (info.source !== filePath) continue;
-      for (const prop of info.props) {
-        for (let s = info.line; s < srcLines.length; s++) {
+    if (warnUntypedProps) for (const [name, compDef] of componentRegistry) {
+      if (compDef.source !== filePath) continue;
+      for (const prop of compDef.props) {
+        for (let s = compDef.line; s < srcLines.length; s++) {
           const match = srcLines[s].match(new RegExp('(@' + prop.name + ')\\s*(::|([:!]?=))'));
           if (match) {
             if (match[2] !== '::') {
@@ -551,7 +553,7 @@ function detectComponentContext(srcLine, col) {
   const cursorInTrimmed = col - indent;
 
   if (cursorInTrimmed <= component.length) {
-    return { component, existingProps: [], currentProp: null, wantValues: false, wantProps: false };
+    return { component, existingProps: [], propValues: new Map(), currentProp: null, wantValues: false, wantProps: false };
   }
 
   const cursorInRest = cursorInTrimmed - component.length;

@@ -3,7 +3,7 @@
 Headless, accessible UI components written in Rip. Zero dependencies.
 Every widget exposes `$` attributes (compiled to `data-*`) for styling and
 handles keyboard interactions per WAI-ARIA Authoring Practices. Style with
-Tailwind, vanilla CSS, or any methodology you prefer.
+Tailwind using `data-[attr]:` variants.
 
 Components are plain `.rip` source files — no build step. The browser compiles
 them on the fly.
@@ -31,8 +31,8 @@ rip server
 Every widget:
 - Handles all keyboard interactions per WAI-ARIA Authoring Practices
 - Sets correct ARIA attributes automatically
-- Exposes state via `$` sigil (`$open`, `$selected`) for CSS styling
-- Ships no CSS — style with Tailwind or any methodology
+- Exposes state via `$` sigil (`$open`, `$selected`) — style with Tailwind's `data-[attr]:` variants
+- Ships no CSS — you bring Tailwind classes
 - Uses Rip's reactive primitives for all state management
 
 ---
@@ -54,6 +54,7 @@ to know to use these widgets:
 | `ref:` | DOM ref | `ref: "_panel"` — saves DOM element reference |
 | `slot` | Children | Projects parent-provided content into the component |
 | `offer` / `accept` | Context | Share reactive state between ancestor and descendant components |
+| `::` | Type | `@variant:: string := "default"` — typed prop (enables IDE completions + diagnostics) |
 
 Two-way binding example — React vs Rip:
 
@@ -79,7 +80,7 @@ input value <=> @name
 | Component count | ~40 | 54 |
 | Total source | ShadCN wrappers (~3K LOC) atop Radix (~20K+ LOC) | 5,191 SLOC — everything included |
 | Build step | Required (Next.js, Vite, etc.) | None — browser compiles `.rip` source |
-| Styling | Pre-wired Tailwind (ShadCN) or unstyled (Radix) | Headless — `data-*` contract, style with Tailwind or any CSS |
+| Styling | Pre-wired Tailwind (ShadCN) or unstyled (Radix) | Headless — `data-*` contract, styled with Tailwind |
 | Controlled components | `value` + `onChange` callback pair | `<=>` two-way binding |
 | Shared state | React Context + Provider wrappers | `offer` / `accept` keywords |
 | Reactivity | `useState` + `useEffect` + dependency arrays | `:=` / `~=` / `~>` — language-level |
@@ -105,11 +106,7 @@ development, save and see — SSE-based hot reload.
 **Source as distribution.** Components are served as `.rip` source files.
 Read them, understand them, modify them.
 
-### Why We Build Our Own
-
-Radix and Base UI implement proven WAI-ARIA patterns, but they require
-React. Rip reimplements the same behavioral patterns using its own
-primitives:
+### Component Primitives
 
 | Capability | React | Rip |
 |-----------|-------|-----|
@@ -119,41 +116,85 @@ primitives:
 | Two-way binding | `value` + `onChange` pair | `<=>` operator |
 | Reactivity | Hooks + dependency arrays | `:=` / `~=` / `~>` |
 
-This lets Rip use the **right pattern for each widget**: single-component
-for data-driven widgets (Select, Combobox, Menu), compositional via
-`offer`/`accept` when children contain complex content the parent shouldn't
-own.
-
 ---
 
-## Styling
+## Styling with Tailwind
 
-All widgets are headless — they ship no CSS. The contract between behavior
-and styling is `data-*` attributes:
+Widgets are headless — they ship no CSS. Each widget exposes semantic state
+through `$` attributes that compile to `data-*` in HTML. Style them with
+Tailwind's data attribute variants.
 
-```coffee
-# Widget exposes semantic state
-button $open: open?!, $disabled: @disabled?!
-```
-
-Style with Tailwind's data attribute variants:
-
-```html
-<button class="data-[open]:border-blue-500 data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed">
-```
-
-Or vanilla CSS:
-
-```css
-[data-open]     { border-color: theme('colors.blue.500'); }
-[data-disabled] { opacity: 0.5; cursor: not-allowed; }
-```
-
-Add Tailwind via CDN — no build step needed:
+### Setup
 
 ```html
 <script src="https://cdn.tailwindcss.com"></script>
 ```
+
+### The `data-*` Contract
+
+Widgets set `data-*` attributes to reflect their state. Tailwind targets
+these with `data-[attr]:` variants:
+
+```coffee
+# Widget source — behavior only, zero styling
+button $open: open?!, $disabled: @disabled?!
+div $highlighted: (idx is highlightedIndex)?!
+div $selected: (@value is current)?!
+```
+
+```html
+<!-- Your markup — Tailwind classes -->
+<button class="border border-gray-300 rounded-lg px-4 py-2
+  data-[open]:border-blue-500 data-[open]:ring-2 data-[open]:ring-blue-200
+  data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed">
+```
+
+### Common Patterns
+
+**Button:**
+
+```html
+<button class="inline-flex items-center gap-2 px-4 py-2 rounded-lg
+  bg-blue-600 text-white font-medium
+  hover:bg-blue-700 active:scale-[0.98] transition
+  data-[disabled]:opacity-50 data-[disabled]:cursor-not-allowed">
+```
+
+**Select trigger:**
+
+```html
+<button class="inline-flex items-center justify-between w-full px-3 py-2
+  border border-gray-300 rounded-lg bg-white
+  data-[open]:border-blue-500 data-[open]:ring-2 data-[open]:ring-blue-200">
+```
+
+**Select option:**
+
+```html
+<div class="px-3 py-2 rounded cursor-pointer
+  data-[highlighted]:bg-gray-100
+  data-[selected]:font-semibold data-[selected]:text-blue-600">
+```
+
+**Dialog overlay:**
+
+```html
+<div class="fixed inset-0 bg-black/50 flex items-center justify-center">
+  <div class="bg-white rounded-xl shadow-xl p-6 max-w-md w-full">
+```
+
+### Dark Mode
+
+Use Tailwind's `dark:` variant with a class-based toggle:
+
+```html
+<html class="dark">
+  <!-- dark:bg-gray-900 dark:text-gray-100 etc. -->
+```
+
+Or define semantic color tokens in your Tailwind config and reference them
+throughout — `bg-surface`, `text-primary`, `border-muted` — so dark mode
+is a single token swap, not per-element `dark:` classes.
 
 ---
 

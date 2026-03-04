@@ -52,6 +52,23 @@ distinct names for locals: `opts` not `items`, `tick` not `step`, `fn` not
 `filter`. When debugging mysterious state corruption, check compiled JS output
 (`rip -c file.rip`) and search for unexpected `this.propName.value =` assignments.
 
+### Type Your Props
+
+Adding `::` type annotations to props enables IDE IntelliSense — completions,
+hover info, and diagnostics — for every component that uses yours:
+
+```coffee
+@variant:: 'primary' | 'outline' | 'subtle' := 'primary'
+@disabled:: boolean := false
+@label:: string := ''
+```
+
+Without `::`, the prop is untyped (`any`) and the IDE cannot validate values
+or offer completions. `rip check` treats untyped props as errors by default;
+use `rip check --allow-any` to suppress. The VS Code setting
+`rip.types.warnUntypedProps` controls whether the editor shows hints on
+untyped prop definitions.
+
 ### `$` Sigil and `data-*` Attributes
 
 In render blocks, use the `$` sigil (`$open`, `$selected`) which compiles to
@@ -230,55 +247,43 @@ anchorPosition = (anchor, floating, opts = {}) ->
 - Typeahead buffer clears after 500ms (matches native `<select>` behavior)
 - Hidden slot pattern for declarative option reading
 - Positioning: manual `getBoundingClientRect` with basic flip (up when overflowing)
-- No multi-select mode yet
 
 ### Combobox
-- No internal filtering — consumer controls via `@filter` callback
-- No debounce on `@filter` (consumer's responsibility — intentional)
+- Consumer controls filtering via `@filter` callback (no internal filtering, no debounce)
 - Highlighted index resets to -1 on each input change
-- **Prop-shadowing incident:** `items = @getItems()` was rewritten to
-  `this.items.value = this.getItems()`, corrupting the data source. Renamed to `opts`.
 
 ### Dialog
 - Focus trap set up in `setTimeout` (after dialog renders)
 - Internal storage (`_prevFocus`, `_cleanupTrap`) uses plain `=` not `:=`
-- No `closeOnOverlayClick` or `closeOnEscape` toggle props yet
 - Enter/exit animations handled via CSS on `[data-open]`
 
 ### Toast
-- No stacking/queue system — each Toast is independent
+- Each Toast is independent (no stacking/queue system)
 - 200ms leave animation duration is hardcoded
-- Consider building a `ToastContainer` companion for stacked notifications
 
 ### Popover
-- No arrow/caret element
-- Uses `[data-trigger]` and `[data-content]` children for structure (dual-slot resolved)
+- Uses `[data-trigger]` and `[data-content]` children for structure
 
 ### Tooltip
 - Show delay 300ms, instant hide + 150ms animation
-- No interactive mode (hovering the tooltip itself keeps it open)
-- Touch devices should probably skip delay and show on long-press — not implemented
 
 ### Tabs
 - Content discovered by querying `[data-tab]`/`[data-panel]` inside component
-- Deeply nested tabs won't be found (must be direct-ish children)
-- No lazy loading of panel content
+- Deeply nested tabs must be direct-ish children
 
 ### Grid
 - Hybrid: reactive rendering for structure, imperative DOM for scroll hot path
 - DOM recycling pool (`_trPool`) never shrinks — avoids create/destroy cycles on resize
-- Clipboard: TSV format per RFC 4180 (no multi-line quoted fields)
+- Clipboard: TSV format per RFC 4180
 - `requestAnimationFrame` throttle coalesces scroll events
 - `contain: strict` and `will-change: transform` recommended as user styles
-- Missing: frozen columns, CellRange model, variable row height, column reorder, undo/redo
 
 ### Accordion
-- ARIA attributes (`aria-expanded`, `aria-controls`, `role="region"`) now implemented
+- ARIA attributes: `aria-expanded`, `aria-controls`, `role="region"`
 - `openItems` Set replaced with new Set on each toggle to trigger reactivity
 
 ### Menu
-- Hidden-slot pattern adopted (same as Select) — structural issue resolved
-- No submenu, divider, or typeahead support
+- Hidden-slot pattern (same as Select) for item discovery
 - Disabled items skipped on click but not keyboard navigation
 
 ---
@@ -287,33 +292,6 @@ anchorPosition = (anchor, floating, opts = {}) ->
 
 **Grid — hardcoded selection color.** `#3b82f6` in the selection overlay should
 be `var(--grid-selection-color, #3b82f6)`.
-
-### Resolved
-
-These were documented as issues and have been fixed:
-
-- **Accordion wiring** — ARIA attributes (`aria-expanded`, `aria-controls`,
-  `role="region"`) and event wiring are now implemented
-- **Menu hidden-slot** — adopted the same `_slot` + `display:none` pattern
-  that Select uses for item discovery
-- **Popover dual-slot** — restructured to query `[data-trigger]` and
-  `[data-content]` children explicitly
-
----
-
-## Bugs Found and Fixed
-
-| Widget | Bug | Fix |
-|--------|-----|-----|
-| tabs.rip | `panel.dataset.tab` instead of `.panel` — panels permanently hidden | Changed to `panel.dataset.panel` |
-| tabs.rip | `onMount:` — not a lifecycle hook, auto-select never fired | Changed to `mounted:` |
-| toast.rip | `onMount:` — timer never started, toasts never auto-dismissed | Changed to `mounted:` |
-| grid.rip | `handleMousemove` updated anchor instead of active — broke Shift+key | Fixed to update `activeRow/Col` |
-| grid.rip | `_parseTSV` used `indexOf` to detect last line — found wrong empty string | Changed to loop index `li` |
-| dialog.rip | `_unlockScroll := null` defined but never used | Removed |
-| dialog.rip | `_prevFocus`/`_cleanupTrap` used `:=` unnecessarily | Changed to `=` |
-| grid.rip | `_prevStart`/`_prevEnd` defined but never read | Removed |
-| popover.rip | No `aria-expanded` or `aria-haspopup` on trigger | Added both |
 
 ---
 
@@ -326,7 +304,7 @@ inlined code is simple enough that duplication is preferable to indirection.
 
 ### Slot Discovery
 Tabs, Accordion, Select, and Combobox discover children by querying `data-*`
-attributes. If Rip UI gets a structured slot/children API, these should adopt it.
+attributes.
 
 ### CSS Hot Reload
 Save a `.css` file and the browser picks up changes without losing component
@@ -352,13 +330,6 @@ No widget has tests yet. Priority:
 7. **Grid: CellRange model** — unlocks multi-range selection (Ctrl+click)
 8. **Grid: undo/redo** — ~40 lines on top of existing `commitEditor`
 9. **Publish** — document integration, link from main README
-
-### Completed
-
-- ~~Fix Menu structural issue~~ — hidden-slot pattern adopted
-- ~~Fix Accordion wiring~~ — ARIA attributes and events wired
-- ~~Resolve Popover dual-slot~~ — restructured with `data-trigger`/`data-content`
-- ~~Dark mode tokens in gallery~~ — `[data-theme="dark"]` block in `index.css`
 
 ---
 
