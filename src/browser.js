@@ -26,9 +26,11 @@ const dedent = s => {
   return s.replace(RegExp(`^[ \t]{${i}}`, 'gm'), '').trim();
 }
 
-// Browser runtime: collect all <script type="text/rip"> sources (inline + src)
-// plus any data-src URLs on the runtime tag, compile them all with shared-scope
-// options, and execute as one async IIFE. Then handle data-launch for server mode.
+// Browser runtime: collect all sources (inline scripts, data-src files, bundles),
+// compile them in a shared scope, and execute as one async IIFE.
+//
+// data-src URLs ending in .rip are fetched as individual source files.
+// All other URLs are fetched as JSON bundles containing multiple files.
 async function processRipScripts() {
   const sources = [];
 
@@ -51,25 +53,51 @@ async function processRipScripts() {
     }
   }
 
-  // Step 3: Fetch externals, compile all, execute in shared scope
+  // Step 3: Fetch externals — .rip URLs as source text, others as JSON bundles
   if (sources.length > 0) {
-    await Promise.all(sources.map(async (s) => {
+    const results = await Promise.allSettled(sources.map(async (s) => {
       if (!s.url) return;
-      try {
-        const res = await fetch(s.url);
-        if (!res.ok) {
-          console.error(`Rip: failed to fetch ${s.url} (${res.status})`);
-          return;
-        }
+      const res = await fetch(s.url);
+      if (!res.ok) throw new Error(`${s.url} (${res.status})`);
+      if (s.url.endsWith('.rip')) {
         s.code = await res.text();
-      } catch (e) {
-        console.error(`Rip: failed to fetch ${s.url}:`, e.message);
+      } else {
+        const bundle = await res.json();
+        s.bundle = bundle;
       }
     }));
+    for (const r of results) {
+      if (r.status === 'rejected') console.warn('Rip: fetch failed:', r.reason.message);
+    }
+
+    // Step 3b: Expand bundles into individual sources
+    const expanded = [];
+    for (const s of sources) {
+      if (s.bundle) {
+        const comps = s.bundle.components || {};
+        for (const [name, code] of Object.entries(comps)) {
+          expanded.push({ code, url: name });
+        }
+        if (s.bundle.data) {
+          if (!s.bundle._dataMerged) {
+            s.bundle._dataMerged = true;
+            const stateAttr = runtimeTag?.getAttribute('data-state');
+            let initial = {};
+            if (stateAttr) {
+              try { initial = JSON.parse(stateAttr); } catch {}
+            }
+            Object.assign(initial, s.bundle.data);
+            runtimeTag?.setAttribute('data-state', JSON.stringify(initial));
+          }
+        }
+      } else if (s.code) {
+        expanded.push(s);
+      }
+    }
 
     const opts = { skipRuntimes: true, skipExports: true };
     const compiled = [];
-    for (const s of sources) {
+    for (const s of expanded) {
       if (!s.code) continue;
       try {
         const js = compileToJS(s.code, opts);
@@ -79,8 +107,8 @@ async function processRipScripts() {
       }
     }
 
-    // Step 3b: Create app stash for data-src mode (skip if data-launch will handle it)
-    if (!globalThis.__ripApp && runtimeTag && !document.querySelector('script[data-launch]')) {
+    // Step 4: Create app stash
+    if (!globalThis.__ripApp && runtimeTag) {
       const stashFn = globalThis.stash;
       if (stashFn) {
         let initial = {};
@@ -100,10 +128,10 @@ async function processRipScripts() {
       }
     }
 
+    // Step 5: Execute all compiled code in shared scope
     if (compiled.length > 0) {
       let js = compiled.map(c => c.js).join('\n');
 
-      // Step 4: Append data-mount call inside the shared IIFE
       const mount = runtimeTag?.getAttribute('data-mount');
       if (mount) {
         const target = runtimeTag.getAttribute('data-target') || 'body';
@@ -124,21 +152,6 @@ async function processRipScripts() {
           console.error('Rip runtime error:', e);
         }
       }
-    }
-  }
-
-  // Step 5: data-launch triggers launch() for server mode
-  const cfg = document.querySelector('script[data-launch]');
-  if (cfg && !globalThis.__ripLaunched) {
-    const ui = importRip.modules?.['ui.rip'];
-    if (ui?.launch) {
-      const url = cfg.getAttribute('data-launch') || '';
-      const hash = cfg.getAttribute('data-hash');
-      const persist = cfg.getAttribute('data-persist');
-      const opts = { hash: hash !== 'false' };
-      if (url) opts.bundleUrl = url;
-      if (persist != null) opts.persist = persist === 'local' ? 'local' : true;
-      await ui.launch('', opts);
     }
   }
 
@@ -233,9 +246,8 @@ if (typeof globalThis !== 'undefined') {
   globalThis.__ripExports = { compile, compileToJS, formatSExpr, getStdlibCode, VERSION, BUILD_DATE, getReactiveRuntime, getComponentRuntime };
 }
 
-// Auto-process <script type="text/rip"> blocks and handle data-launch.
-// Deferred via queueMicrotask so bundled entry code (e.g. rip.min.js registering
-// importRip.modules) runs before script processing begins.
+// Auto-process <script type="text/rip"> blocks and data-src sources.
+// Deferred via queueMicrotask so bundled entry code runs before script processing.
 if (typeof document !== 'undefined') {
   globalThis.__ripScriptsReady = new Promise(resolve => {
     const run = () => processRipScripts().then(resolve);

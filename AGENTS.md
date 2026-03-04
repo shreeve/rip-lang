@@ -757,8 +757,8 @@ primitives directly — one signal graph shared between framework and components
 Key concepts:
 
 - **Shared scope** — Inline `<script type="text/rip">` tags are compiled and executed in one shared IIFE. Components use `export` to make themselves visible to other tags; exports are stripped to `const` declarations in the shared scope.
-- **Server mode** — When `data-launch` is present on a script tag, the `serve` middleware provides the bundle. `use serve dir: dir` registers routes for the framework bundle (`/rip/rip.min.js`), app bundle (`/{app}/bundle`), and SSE hot-reload (`/{app}/watch`).
-- `**launch(appBase)`** — Client-side: fetches the app bundle, hydrates the stash, starts the router and renderer
+- **Bundle mode** — URLs in `data-src` that don't end in `.rip` are fetched as JSON bundles containing multiple files. The serve middleware provides bundles at `/{app}/bundle`.
+- **Stash** — Created from `data-state` JSON. Bundle data is merged automatically.
 - `**component` / `render**` — Two keywords added to Rip for defining components with reactive state (`:=`), computed (`~=`), effects (`~>`)
 - **File-based routing** — `pages/users/[id].rip` → `/users/:id` (Next.js-style). Shared components go in `components/`.
 - **Unified stash** — Deep reactive proxy with path navigation, uses `__state` from Rip's built-in reactive runtime
@@ -902,8 +902,8 @@ the shared scope — no imports needed.
 
 **Widget Gallery dev server (`packages/ui/`):**
 
-The widget gallery uses `data-src` mode (not `data-launch`) for testing individual
-widgets. The dev server is `index.rip` (14 lines) and the gallery is `index.html`.
+The widget gallery uses `data-src` mode for testing individual widgets.
+The dev server is `index.rip` (14 lines) and the gallery is `index.html`.
 
 ```coffee
 # index.rip — minimal dev server
@@ -1082,22 +1082,21 @@ in the shared scope).
 
 1. Collect `data-src` URLs from the runtime `<script>` tag (whitespace-separated)
 2. Collect all `<script type="text/rip">` tags (inline `textContent` or external `src`)
-3. Fetch all external URLs in parallel via `Promise.all`
-4. Compile each source with `{ skipRuntimes: true, skipExports: true }`
-5. If `data-mount` is present, append `Component.mount(target)` to the compiled code
-6. Execute everything as one shared async IIFE
-7. If `data-launch` is present, call `launch()` with the bundle URL (server mode)
+3. Fetch all URLs via `Promise.allSettled` — `.rip` URLs as source text, others as JSON bundles
+4. Expand bundles into individual sources, merge bundle data into `data-state`
+5. Compile each source with `{ skipRuntimes: true, skipExports: true }`
+6. If `data-mount` is present, append `Component.mount(target)` to the compiled code
+7. Execute everything as one shared async IIFE
 
 ### HTML Attributes
 
 | Attribute      | On             | Purpose                                                                                               |
 | -------------- | -------------- | ----------------------------------------------------------------------------------------------------- |
-| `data-src`     | runtime script | Whitespace-separated URLs of `.rip` files to fetch and compile                                        |
+| `data-src`     | runtime script | Whitespace-separated URLs — `.rip` files fetched as source, others as JSON bundles                    |
 | `data-mount`   | runtime script | Component name to instantiate and mount after compilation                                             |
 | `data-target`  | runtime script | Mount target selector (default: `'body'`), pairs with `data-mount`                                    |
-| `data-state`   | runtime script | JSON object to seed `app.data` initial values (e.g. `'{"count": 0}'`), `data-src` mode only           |
-| `data-launch`  | runtime script | Bundle URL for server mode — triggers `launch()` with full app lifecycle                              |
-| `data-hash`    | runtime script | Enable hash-based routing (for `data-launch` apps)                                                    |
+| `data-state`   | runtime script | JSON object to seed `app.data` initial values (e.g. `'{"count": 0}'`)                                 |
+| `data-hash`    | runtime script | Enable hash-based routing                                                                             |
 | `data-persist` | runtime script | Enable stash persistence — `data-persist` for sessionStorage, `data-persist="local"` for localStorage |
 | `data-reload`  | runtime script | Connect to `/watch` SSE endpoint for hot reload on file changes                                       |
 

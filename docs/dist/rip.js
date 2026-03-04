@@ -3510,6 +3510,13 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
   function isPublicProp(target) {
     return Array.isArray(target) && target[0] === "." && target[1] === "this";
   }
+  function getMemberType(target) {
+    if (target instanceof String && target.type)
+      return target.type;
+    if (Array.isArray(target) && target[2] instanceof String && target[2].type)
+      return target[2].type;
+    return null;
+  }
   function installComponentSupport(CodeGenerator, Lexer2) {
     let meta = (node, key) => node instanceof String ? node[key] : undefined;
     const origClassify = Lexer2.prototype.classifyKeyword;
@@ -3918,6 +3925,8 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
       return sexpr.map((item) => this.transformComponentMembers(item));
     };
     proto.generateComponent = function(head, rest, context, sexpr) {
+      if (this.options.stubComponents)
+        return "class {}";
       const [, body] = rest;
       this.usesTemplates = true;
       this.usesReactivity = true;
@@ -3956,7 +3965,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         } else if (op === "state") {
           const varName = getMemberName(stmt[1]);
           if (varName) {
-            stateVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]) });
+            stateVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]), type: getMemberType(stmt[1]) });
             memberNames.add(varName);
             reactiveMembers.add(varName);
           }
@@ -3970,7 +3979,7 @@ Expecting ${expected.join(", ")}, got '${this.tokenNames[symbol] || symbol}'`;
         } else if (op === "readonly") {
           const varName = getMemberName(stmt[1]);
           if (varName) {
-            readonlyVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]) });
+            readonlyVars.push({ name: varName, value: stmt[2], isPublic: isPublicProp(stmt[1]), type: getMemberType(stmt[1]) });
             memberNames.add(varName);
           }
         } else if (op === "=") {
@@ -5989,37 +5998,29 @@ if (typeof globalThis !== 'undefined') {
           needsBlank = true;
         }
       }
-      if (this.options.lspMode && (this.usesReactivity || this.usesTemplates)) {
-        if (needsBlank)
-          code += `
+      if (this.usesReactivity && !skip) {
+        if (skipRT) {
+          code += `var { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;
 `;
-        code += getLspRuntimeDeclarations();
+        } else if (typeof globalThis !== "undefined" && globalThis.__rip) {
+          code += `const { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;
+`;
+        } else {
+          code += this.getReactiveRuntime();
+        }
         needsBlank = true;
-      } else {
-        if (this.usesReactivity && !skip) {
-          if (skipRT) {
-            code += `var { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;
+      }
+      if (this.usesTemplates && !skip) {
+        if (skipRT) {
+          code += `var { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __Component } = globalThis.__ripComponent;
 `;
-          } else if (typeof globalThis !== "undefined" && globalThis.__rip) {
-            code += `const { __state, __computed, __effect, __batch, __readonly, __setErrorHandler, __handleError, __catchErrors } = globalThis.__rip;
+        } else if (typeof globalThis !== "undefined" && globalThis.__ripComponent) {
+          code += `const { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __Component } = globalThis.__ripComponent;
 `;
-          } else {
-            code += this.getReactiveRuntime();
-          }
-          needsBlank = true;
+        } else {
+          code += this.getComponentRuntime();
         }
-        if (this.usesTemplates && !skip) {
-          if (skipRT) {
-            code += `var { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __Component } = globalThis.__ripComponent;
-`;
-          } else if (typeof globalThis !== "undefined" && globalThis.__ripComponent) {
-            code += `const { __pushComponent, __popComponent, setContext, getContext, hasContext, __clsx, __lis, __reconcile, __transition, __handleComponentError, __Component } = globalThis.__ripComponent;
-`;
-          } else {
-            code += this.getComponentRuntime();
-          }
-          needsBlank = true;
-        }
+        needsBlank = true;
       }
       if (this.dataSection !== null && this.dataSection !== undefined && !skip) {
         code += `var DATA;
@@ -8701,14 +8702,13 @@ if (typeof globalThis !== 'undefined') {
         let sourceFile = this.options.filename || "input.rip";
         sourceMap = new SourceMapGenerator(file, sourceFile, source);
       }
-      let lspMode = this.options.mode === "lsp";
       let generator = new CodeGenerator({
         dataSection,
-        skipPreamble: lspMode || this.options.skipPreamble,
+        skipPreamble: this.options.skipPreamble,
         skipRuntimes: this.options.skipRuntimes,
         skipExports: this.options.skipExports,
+        stubComponents: this.options.stubComponents,
         reactiveVars: this.options.reactiveVars,
-        lspMode,
         sourceMap
       });
       let code = generator.compile(sexpr);
@@ -8724,11 +8724,6 @@ if (typeof globalThis !== 'undefined') {
       }
       if (typeTokens) {
         dts = emitTypes(typeTokens, sexpr);
-      }
-      if (lspMode && dts) {
-        code = dts.trimEnd() + `
-
-` + code;
       }
       return { tokens, sexpr, code, dts, map, reverseMap, data: dataSection, reactiveVars: generator.reactiveVars };
     }
@@ -8769,33 +8764,9 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
   function getComponentRuntime() {
     return new CodeGenerator({}).getComponentRuntime();
   }
-  function getLspRuntimeDeclarations() {
-    return `interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }
-interface Computed<T> { readonly value: T; read(): T; lock(): Computed<T>; free(): Computed<T>; kill(): T; }
-declare function __state<T>(v: T): Signal<T>;
-declare function __computed<T>(fn: () => T): Computed<T>;
-declare function __effect(fn: () => void | (() => void)): () => void;
-declare function __batch<T>(fn: () => T): T;
-declare function __readonly<T>(v: T): Readonly<{ value: T }>;
-declare function __setErrorHandler(handler: ((err: any) => void) | null): ((err: any) => void) | null;
-declare function __handleError(error: any): void;
-declare function __catchErrors<T extends (...args: any[]) => any>(fn: T): T;
-declare function __pushComponent(component: any): any;
-declare function __popComponent(prev: any): void;
-declare function setContext(key: string, value: any): void;
-declare function getContext(key: string): any;
-declare function hasContext(key: string): boolean;
-declare function __clsx(...args: any[]): string;
-declare function __lis(arr: number[]): number[];
-declare function __reconcile(anchor: any, state: any, items: any[], ctx: any, factory: any, keyFn: any, ...outer: any[]): void;
-declare function __transition(el: any, name: string, dir: string, done?: () => void): void;
-declare function __handleComponentError(error: any, component: any): void;
-declare class __Component { constructor(props?: any); mount(target?: any): any; unmount(): void; emit(name: string, detail?: any): void; static mount(target?: any): any; [key: string]: any; }
-`;
-  }
   // src/browser.js
-  var VERSION = "3.13.77";
-  var BUILD_DATE = "2026-03-03@07:30:00GMT";
+  var VERSION = "3.13.84";
+  var BUILD_DATE = "2026-03-04@02:35:15GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
@@ -8827,23 +8798,51 @@ declare class __Component { constructor(props?: any); mount(target?: any): any; 
       }
     }
     if (sources.length > 0) {
-      await Promise.all(sources.map(async (s) => {
+      const results = await Promise.allSettled(sources.map(async (s) => {
         if (!s.url)
           return;
-        try {
-          const res = await fetch(s.url);
-          if (!res.ok) {
-            console.error(`Rip: failed to fetch ${s.url} (${res.status})`);
-            return;
-          }
+        const res = await fetch(s.url);
+        if (!res.ok)
+          throw new Error(`${s.url} (${res.status})`);
+        if (s.url.endsWith(".rip")) {
           s.code = await res.text();
-        } catch (e) {
-          console.error(`Rip: failed to fetch ${s.url}:`, e.message);
+        } else {
+          const bundle = await res.json();
+          s.bundle = bundle;
         }
       }));
+      for (const r of results) {
+        if (r.status === "rejected")
+          console.warn("Rip: fetch failed:", r.reason.message);
+      }
+      const expanded = [];
+      for (const s of sources) {
+        if (s.bundle) {
+          const comps = s.bundle.components || {};
+          for (const [name, code] of Object.entries(comps)) {
+            expanded.push({ code, url: name });
+          }
+          if (s.bundle.data) {
+            if (!s.bundle._dataMerged) {
+              s.bundle._dataMerged = true;
+              const stateAttr = runtimeTag?.getAttribute("data-state");
+              let initial = {};
+              if (stateAttr) {
+                try {
+                  initial = JSON.parse(stateAttr);
+                } catch {}
+              }
+              Object.assign(initial, s.bundle.data);
+              runtimeTag?.setAttribute("data-state", JSON.stringify(initial));
+            }
+          }
+        } else if (s.code) {
+          expanded.push(s);
+        }
+      }
       const opts = { skipRuntimes: true, skipExports: true };
       const compiled = [];
-      for (const s of sources) {
+      for (const s of expanded) {
         if (!s.code)
           continue;
         try {
@@ -8853,7 +8852,7 @@ declare class __Component { constructor(props?: any); mount(target?: any): any; 
           console.error(`Rip compile error in ${s.url || "inline"}:`, e.message);
         }
       }
-      if (!globalThis.__ripApp && runtimeTag && !document.querySelector("script[data-launch]")) {
+      if (!globalThis.__ripApp && runtimeTag) {
         const stashFn = globalThis.stash;
         if (stashFn) {
           let initial = {};
@@ -8905,21 +8904,6 @@ ${c.js}
             console.error("Rip runtime error:", e);
           }
         }
-      }
-    }
-    const cfg = document.querySelector("script[data-launch]");
-    if (cfg && !globalThis.__ripLaunched) {
-      const ui = importRip.modules?.["ui.rip"];
-      if (ui?.launch) {
-        const url = cfg.getAttribute("data-launch") || "";
-        const hash = cfg.getAttribute("data-hash");
-        const persist = cfg.getAttribute("data-persist");
-        const opts = { hash: hash !== "false" };
-        if (url)
-          opts.bundleUrl = url;
-        if (persist != null)
-          opts.persist = persist === "local" ? "local" : true;
-        await ui.launch("", opts);
       }
     }
     if (runtimeTag?.hasAttribute("data-reload")) {
