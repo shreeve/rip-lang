@@ -19,11 +19,18 @@ LogLevel ::=
   | "error"
   | "fatal"
 
-# Discriminated unions — block form with inline object members
-# .d.ts formatting is ugly (properties on one line, commas) but valid TypeScript
-Shape ::=
-  | { kind: "circle", radius: number }
-  | { kind: "rect", width: number, height: number }
+# Discriminated unions — named variants composed into a union
+# (inline object syntax produces malformed .d.ts, so use named types)
+Circle ::= type
+  kind: "circle"
+  radius: number
+
+Rect ::= type
+  kind: "rect"
+  width: number
+  height: number
+
+Shape ::= Circle | Rect
 
 # ── Use the types ──
 

@@ -19,10 +19,10 @@ type LogLevel =
   | 'error'
   | 'fatal'
 
-// Discriminated unions
-type Shape =
-  | { kind: 'circle'; radius: number }
-  | { kind: 'rect'; width: number; height: number }
+// Discriminated unions — named variants composed into a union
+type Circle = { kind: 'circle', radius: number }
+type Rect = { kind: 'rect', width: number, height: number }
+type Shape = Circle | Rect
 
 // ── Use the types ──
 
