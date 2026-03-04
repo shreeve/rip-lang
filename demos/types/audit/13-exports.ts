@@ -1,4 +1,4 @@
-// 14-exports.ts — Export type / import type
+// 13-exports.ts — Export type / import type
 
 // Named type export
 export type UserIDNumber = number

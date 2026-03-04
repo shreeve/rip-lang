@@ -1,4 +1,4 @@
-// 08-arrows.ts — Typed arrow functions and array transforms
+// 07-arrows.ts — Typed arrow functions and array transforms
 
 const nums: number[] = [1, 2, 3, 4, 5]
 const doubled: number[] = nums.map((x) => x * 2)

@@ -48,50 +48,49 @@ Each file exercises a specific type feature. Status key:
 - **fail** — `rip check` or runtime reports errors
 - **partial** — some features in the file work, others don't
 
-| File                 | Feature                                      | Status     | Notes                                          |
-| -------------------- | -------------------------------------------- | ---------- | ---------------------------------------------- |
-| 01-basic.rip         | `::` on variables (primitives, generics, tuples) | pass   |                                                |
-| 02-aliases.rip       | `::=` aliases (simple, union, typeof)        | pass       |                                                |
-| 03-structural.rip    | `::= type` blocks, optional, readonly, recursive | pass   |                                                |
-| 04-nullable.rip      | `:: T \| undefined`, `:: T \| null`, optional `?` | pass  |                                                |
-| 05-unions.rip        | Inline unions, block unions, discriminated   | pass       | Narrowing not checked — see gap table          |
-| 06-interfaces.rip    | `interface`, `extends`, optional members     | pass       |                                                |
-| 07-functions.rip     | `::` on params/returns, rest, union returns  | pass       | 12 negative tests (7 param + 5 return)         |
-| 08-arrows.rip        | `::` on arrow results (map/filter/reduce)    | pass       |                                                |
-| 09-domain.rip        | Nested types, generic structs (`T`)          | pass       |                                                |
-| 10-integration.rip   | Cross-module imports of typed functions       | pass       | Cross-file type flow via .d.ts                 |
-| 11-reactive.rip      | `:: T :=`, `:: T ~=`, `:: T =!`, `:: T ~>`  | pass       | Tier 1 — reactive state annotations           |
-| 12-components.rip    | `@prop:: T :=`, `@prop:: T =!`               | pass       | Tier 1 — component prop annotations           |
-| 13-generics.rip      | `:: Promise<T>`, `:: Map<K,V>` on returns    | pass       | Tier 2 — generic return types                  |
-| 14-exports.rip       | `export ... ::=` named type export            | pass       | Tier 3 — `import type` not yet supported       |
-| 15-generic-calls.rip | `:: Map<K,V>` on variables (Rip idiom)        | pass       | Tier 3 — generic call-site syntax unnecessary  |
-| 16-enums.rip         | `enum` (numeric, string), typed switch        | pass       | Exhaustiveness checking not yet supported       |
+| File                 | Feature                                                     | Status | Notes                                         |
+| -------------------- | ----------------------------------------------------------- | ------ | --------------------------------------------- |
+| 01-basic.rip         | `::` on variables, nullable (`T \| null`, `T \| undefined`) | pass   |                                               |
+| 02-aliases.rip       | `::=` aliases (simple, union, typeof)                       | pass   |                                               |
+| 03-structural.rip    | `::= type` blocks, optional, readonly, recursive            | pass   |                                               |
+| 04-unions.rip        | Inline unions, block unions, discriminated                  | pass   | Narrowing not checked — see gap table         |
+| 05-interfaces.rip    | `interface`, `extends`, optional members                    | pass   |                                               |
+| 06-functions.rip     | `::` on params/returns, rest, union returns                 | pass   | 12 negative tests (7 param + 5 return)        |
+| 07-arrows.rip        | `::` on arrow results (map/filter/reduce)                   | pass   |                                               |
+| 08-domain.rip        | Nested types, generic structs (`T`)                         | pass   |                                               |
+| 09-integration.rip   | Cross-module imports of typed functions                     | pass   | Cross-file type flow via .d.ts                |
+| 10-reactive.rip      | `:: T :=`, `:: T ~=`, `:: T =!`, `:: T ~>`                  | pass   | Tier 1 — reactive state annotations           |
+| 11-components.rip    | `@prop:: T :=`, `@prop:: T =!`                              | pass   | Tier 1 — component prop annotations           |
+| 12-generics.rip      | `:: Promise<T>`, `:: Map<K,V>` on returns                   | pass   | Tier 2 — generic return types                 |
+| 13-exports.rip       | `export ... ::=` named type export                          | pass   | Tier 3 — `import type` not yet supported      |
+| 14-generic-calls.rip | `:: Map<K,V>` on variables (Rip idiom)                      | pass   | Tier 3 — generic call-site syntax unnecessary |
+| 15-enums.rip         | `enum` (numeric, string), typed switch                      | pass   | Exhaustiveness checking not yet supported     |
 
 ## Type Safety Gap Analysis
 
 What `rip check` catches today vs. what it doesn't. This tracks the
 overall health of Rip's type story — not just this audit.
 
-| Category                    | Status | Notes                                             |
-| --------------------------- | ------ | ------------------------------------------------- |
-| Variable type mismatches    | ✅     | Same-file typed variables                         |
-| Function argument types     | ✅     | Same-file typed functions                         |
-| Function return types       | ✅     | Same-file typed functions                         |
-| Object shape checking       | ✅     | Missing fields, extra fields                      |
-| Property access checking    | ✅     | Typos, nonexistent fields                         |
-| Union value checking        | ✅     | Literal unions validated                          |
-| Cross-file type flow        | ✅     | Via .d.ts; untyped files get `@ts-nocheck`        |
-| Nullable safety             | 🔶     | `strictNullChecks` is on but many codes suppressed |
-| Discriminated union narrow. | 🔶     | Types declarable, narrowing doesn't flow          |
-| Component prop types        | 🔶     | Annotations work; cross-file prop checking is limited |
-| Generic types               | 🔶     | Declarable; .d.ts emission has some gaps          |
-| Readonly / immutability     | 🔶     | `=!` → const; deep readonly not checked           |
-| Async/await unwrapping      | 🔶     | `!` operator awaits; return type sometimes `any`  |
-| Optional param `?` in .d.ts | ❌     | `y?:: T` emits `y: T` — drops the `?`; use default param workaround |
-| Destructured typed params   | ❌     | `{name:: string}` in params fails to parse        |
-| `void` return annotation    | ❌     | `void` is reserved; use `!` operator (`def fn!`) instead |
-| Enum exhaustiveness         | ❌     | Enums emit .d.ts but switch narrowing absent      |
-| Type narrowing (control flow)| ❌    | TS narrows compiled JS, not Rip source            |
+| Category                      | Status | Notes                                                               |
+| ----------------------------- | ------ | ------------------------------------------------------------------- |
+| Variable type mismatches      | ✅      | Same-file typed variables                                           |
+| Function argument types       | ✅      | Same-file typed functions                                           |
+| Function return types         | ✅      | Same-file typed functions                                           |
+| Object shape checking         | ✅      | Missing fields, extra fields                                        |
+| Property access checking      | ✅      | Typos, nonexistent fields                                           |
+| Union value checking          | ✅      | Literal unions validated                                            |
+| Cross-file type flow          | ✅      | Via .d.ts; untyped files get `@ts-nocheck`                          |
+| Nullable safety               | 🔶      | `strictNullChecks` is on but many codes suppressed                  |
+| Discriminated union narrow.   | 🔶      | Types declarable, narrowing doesn't flow                            |
+| Component prop types          | 🔶      | Annotations work; cross-file prop checking is limited               |
+| Generic types                 | 🔶      | Declarable; .d.ts emission has some gaps                            |
+| Readonly / immutability       | 🔶      | `=!` → const; deep readonly not checked                             |
+| Async/await unwrapping        | 🔶      | `!` operator awaits; return type sometimes `any`                    |
+| Optional param `?` in .d.ts   | ❌      | `y?:: T` emits `y: T` — drops the `?`; use default param workaround |
+| Destructured typed params     | ❌      | `{name:: string}` in params fails to parse                          |
+| `void` return annotation      | ❌      | `void` is reserved; use `!` operator (`def fn!`) instead            |
+| Enum exhaustiveness           | ❌      | Enums emit .d.ts but switch narrowing absent                        |
+| Type narrowing (control flow) | ❌      | TS narrows compiled JS, not Rip source                              |
 
 **Highest-ROI gap:** Component prop types across files. In UI-heavy apps
 80% of type errors are at component boundaries.
@@ -116,6 +115,15 @@ side-by-side IntelliSense comparison.
 - **No semicolons** — never append `;` to any line
 - **Single quotes** — use `'string'` not `"string"`
 - **Trailing commas** — in multi-line objects and arrays
+
+## Markdown Table Formatting
+
+After editing any markdown table in this file, **re-align all columns**
+so that every `|` in the same column lines up and cell content is
+padded with consistent spacing. Use a single space after and before
+each `|`. The separator row (`| --- |`) dashes must span the full
+column width. Never leave ragged columns — tables must look correct
+in both source and rendered views.
 
 ## Key Differences from TypeScript
 

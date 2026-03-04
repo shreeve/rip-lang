@@ -1,4 +1,4 @@
-# 13-generics.rip — Generic types in function return position
+# 12-generics.rip — Generic types in function return position
 #
 # Tier 2 — Essential for real apps. Every typed API call needs
 # Promise<T> return types to propagate types to callers.

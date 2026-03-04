@@ -1,4 +1,4 @@
-# 05-unions.rip — Union types (inline, block, discriminated)
+# 04-unions.rip — Union types (inline, block, discriminated)
 
 # Inline unions
 Status ::= "pending" | "active" | "done"

@@ -1,4 +1,4 @@
-// 09-domain.ts — Complex domain modeling with generics
+// 08-domain.ts — Complex domain modeling with generics
 
 type Address = {
   street: string

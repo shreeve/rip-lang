@@ -1,4 +1,4 @@
-# 12-components.rip — Typed component props
+# 11-components.rip — Typed component props
 #
 # Tier 1 — Foundational. Props are the public API of every component.
 # Without typed props, component consumers get no IntelliSense.

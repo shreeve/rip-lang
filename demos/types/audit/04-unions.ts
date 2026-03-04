@@ -1,4 +1,4 @@
-// 05-unions.ts — Union types (inline, block, discriminated)
+// 04-unions.ts — Union types (inline, block, discriminated)
 
 // Inline unions
 type Status = 'pending' | 'active' | 'done'

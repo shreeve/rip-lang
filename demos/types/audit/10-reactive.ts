@@ -1,4 +1,4 @@
-// 11-reactive.ts — Typed reactive state (:=, ~=, ~>, =!)
+// 10-reactive.ts — Typed reactive state (:=, ~=, ~>, =!)
 //
 // Rip's reactive operators have no direct TypeScript equivalent.
 // This file shows the closest plain-TS approximation for each.

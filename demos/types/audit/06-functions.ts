@@ -1,4 +1,4 @@
-// 07-functions.ts — Typed function params, returns, and patterns
+// 06-functions.ts — Typed function params, returns, and patterns
 
 type Point = {
   x: number

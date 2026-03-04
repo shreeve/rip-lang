@@ -1,4 +1,4 @@
-# 08-arrows.rip — Typed arrow functions and array transforms
+# 07-arrows.rip — Typed arrow functions and array transforms
 
 nums:: number[] = [1, 2, 3, 4, 5]
 doubled:: number[] = nums.map (x) => x * 2

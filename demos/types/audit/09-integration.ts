@@ -1,6 +1,6 @@
-// 10-integration.ts — Cross-module integration test
+// 09-integration.ts — Cross-module integration test
 
-import { add, greet, makePoint, sum, isPositive } from './07-functions.js'
+import { add, greet, makePoint, sum, isPositive } from './06-functions.js'
 
 type User = {
   id: number

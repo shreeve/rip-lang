@@ -1,4 +1,4 @@
-// 01-basic.ts — Basic type annotations on variables
+// 01-basic.ts — Basic type annotations on variables (incl. nullable)
 
 const count: number = 0
 const label: string = 'Rip'
@@ -51,3 +51,20 @@ const badAllIds: string = ids.reduce((a, b) => a + b, 0)
 const badPairLabel: number = pair[0]
 // @ts-expect-error — tuple[1] is number, not string
 const badPairValue: string = pair[1]
+
+// ── Nullable and optional types ──
+
+let optionalName: string | undefined = undefined
+let nullableCount: number | null = null
+const maybeName: string | undefined = 'hello'
+const maybeCount: number | null = 42
+
+console.log('optionalName:', optionalName)
+console.log('nullableCount:', nullableCount)
+console.log('maybeName:', maybeName)
+console.log('maybeCount:', maybeCount)
+
+// @ts-expect-error — number not assignable to string | undefined
+const badOptional: string | undefined = 123
+// @ts-expect-error — string not assignable to number | null
+const badNullable: number | null = 'oops'

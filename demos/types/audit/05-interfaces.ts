@@ -1,4 +1,4 @@
-// 06-interfaces.ts — Interfaces, extension, and composition
+// 05-interfaces.ts — Interfaces, extension, and composition
 
 interface Identifiable {
   id: number

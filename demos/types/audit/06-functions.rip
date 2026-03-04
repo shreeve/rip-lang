@@ -1,4 +1,4 @@
-# 07-functions.rip — Typed function params, returns, and patterns
+# 06-functions.rip — Typed function params, returns, and patterns
 
 Point ::= type
   x: number

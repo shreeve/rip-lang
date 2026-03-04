@@ -1,4 +1,4 @@
-# 06-interfaces.rip — Interfaces, extension, and composition
+# 05-interfaces.rip — Interfaces, extension, and composition
 
 interface Identifiable
   id: number
