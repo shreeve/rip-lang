@@ -1129,18 +1129,29 @@ export function installComponentSupport(CodeGenerator, Lexer) {
     // Call expression: (tag.class args...) or ((tag.class) args...)
     if (Array.isArray(head)) {
       // Nested dynamic class call: (((. div __clsx) "classes") children)
+      // Also handles combined: (((. (. div step-card) __clsx) "classes") children)
       if (Array.isArray(head[0]) && head[0][0] === '.' &&
           (head[0][2] === '__clsx' || (head[0][2] instanceof String && head[0][2].valueOf() === '__clsx'))) {
-        const tag = typeof head[0][1] === 'string' ? head[0][1] : head[0][1].valueOf();
+        const tagExpr = head[0][1];
         const classExprs = head.slice(1);
+        if (Array.isArray(tagExpr)) {
+          const { tag, classes, id } = this.collectTemplateClasses(tagExpr);
+          if (tag) {
+            const staticArgs = classes.map(c => `"${c}"`);
+            return this.generateDynamicTag(tag, classExprs, rest, staticArgs, id);
+          }
+        }
+        const tag = typeof tagExpr === 'string' ? tagExpr : tagExpr.valueOf();
         return this.generateDynamicTag(tag, classExprs, rest);
       }
 
       const { tag, classes, id } = this.collectTemplateClasses(head);
       if (tag && this.isHtmlTag(tag)) {
-        // Dynamic class syntax: div.("classes") → (. div __clsx) "classes"
-        if (classes.length === 1 && classes[0] === '__clsx') {
-          return this.generateDynamicTag(tag, rest, []);
+        // Dynamic class syntax: div.("classes") or div.card.("classes")
+        if (classes.length > 0 && classes[classes.length - 1] === '__clsx') {
+          const staticClasses = classes.slice(0, -1);
+          const staticArgs = staticClasses.map(c => `"${c}"`);
+          return this.generateDynamicTag(tag, rest, [], staticArgs, id);
         }
         return this.generateTag(tag, classes, rest, id);
       }
@@ -1314,18 +1325,19 @@ export function installComponentSupport(CodeGenerator, Lexer) {
   // generateDynamicTag — tag with .() CLSX dynamic classes
   // --------------------------------------------------------------------------
 
-  proto.generateDynamicTag = function(tag, classExprs, children) {
+  proto.generateDynamicTag = function(tag, classExprs, children, staticClassArgs, id) {
     const elVar = this.newElementVar();
     if (SVG_TAGS.has(tag) || this._svgDepth > 0) {
       this._createLines.push(`${elVar} = document.createElementNS('${SVG_NS}', '${tag}');`);
     } else {
       this._createLines.push(`${elVar} = document.createElement('${tag}');`);
     }
+    if (id) this._createLines.push(`${elVar}.id = '${id}';`);
 
     const autoWireClaimed = this._claimAutoWire(elVar);
 
     // Defer className emission so class: attributes can merge with .() classes
-    const classArgs = classExprs.map(e => this.generateInComponent(e, 'value'));
+    const classArgs = [...(staticClassArgs || []), ...classExprs.map(e => this.generateInComponent(e, 'value'))];
     const prevClassArgs = this._pendingClassArgs;
     const prevClassEl = this._pendingClassEl;
     this._pendingClassArgs = classArgs;

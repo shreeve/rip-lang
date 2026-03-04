@@ -1139,6 +1139,49 @@ code "dynamic classes with .()", '''
   }
   ''', opts
 
+code "combined static + dynamic classes: .card.('flex-1')", '''
+  export A = component
+    render
+      .card.("flex-1 p-4")
+        . "hello"
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {
+    }
+    _create() {
+      this._el0 = document.createElement('div');
+      this._el1 = document.createElement('div');
+      this._t0 = document.createTextNode("hello");
+      this._el1.appendChild(this._t0);
+      this._el0.appendChild(this._el1);
+      return this._el0;
+    }
+    _setup() {
+      __effect(() => { this._el0.className = __clsx("card", "flex-1 p-4"); });
+    }
+  }
+  ''', opts
+
+code "multiple static + dynamic: .card.primary.('flex', active && 'on')", '''
+  export A = component
+    active := true
+    render
+      .card.primary.("flex", active && "on")
+  ''', '''
+  export const A = class extends __Component {
+    _init(props) {
+      this.active = __state(true);
+    }
+    _create() {
+      this._el0 = document.createElement('div');
+      return this._el0;
+    }
+    _setup() {
+      __effect(() => { this._el0.className = __clsx("card", "primary", "flex", (this.active.value && "on")); });
+    }
+  }
+  ''', opts
+
 code "static class merged with reactive class attr", '''
   export A = component
     isActive := true

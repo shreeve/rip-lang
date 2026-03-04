@@ -1903,7 +1903,54 @@
       this.emit("JS", script, { len, data: { here: match[0].startsWith("```") } });
       return len;
     }
+    wordLiteral() {
+      if (this.chunk[0] !== "%" || this.chunk[1] !== "w")
+        return 0;
+      let opener = this.chunk[2];
+      if (!opener || /\s/.test(opener))
+        return 0;
+      let PAIRS = { "[": "]", "(": ")", "{": "}", "<": ">" };
+      let closer = PAIRS[opener] || opener;
+      let paired = closer !== opener;
+      let depth = 1;
+      let i = 3;
+      while (i < this.chunk.length && depth > 0) {
+        let ch = this.chunk[i];
+        if (ch === "\\") {
+          i += 2;
+          continue;
+        }
+        if (paired && ch === opener)
+          depth++;
+        if (ch === closer)
+          depth--;
+        if (depth > 0)
+          i++;
+      }
+      if (depth !== 0)
+        return 0;
+      let content = this.chunk.slice(3, i);
+      let total = i + 1;
+      let words = [];
+      if (content.trim()) {
+        let raw = content.trim().split(/(?<!\\)\s+/);
+        for (let w of raw) {
+          words.push(w.replace(/\\ /g, " "));
+        }
+      }
+      this.emit("[", "[", { len: total });
+      for (let j = 0;j < words.length; j++) {
+        if (j > 0)
+          this.emit(",", ",");
+        this.emit("STRING", `"${words[j]}"`);
+      }
+      this.emit("]", "]");
+      return total;
+    }
     literalToken() {
+      let wl = this.wordLiteral();
+      if (wl)
+        return wl;
       let match = OPERATOR_RE.exec(this.chunk);
       let val = match ? match[0] : this.chunk.charAt(0);
       let tag = val;
@@ -4294,14 +4341,24 @@ ${blockFactoriesCode}return ${lines.join(`
       }
       if (Array.isArray(head)) {
         if (Array.isArray(head[0]) && head[0][0] === "." && (head[0][2] === "__clsx" || head[0][2] instanceof String && head[0][2].valueOf() === "__clsx")) {
-          const tag2 = typeof head[0][1] === "string" ? head[0][1] : head[0][1].valueOf();
+          const tagExpr = head[0][1];
           const classExprs = head.slice(1);
+          if (Array.isArray(tagExpr)) {
+            const { tag: tag3, classes: classes2, id: id2 } = this.collectTemplateClasses(tagExpr);
+            if (tag3) {
+              const staticArgs = classes2.map((c) => `"${c}"`);
+              return this.generateDynamicTag(tag3, classExprs, rest, staticArgs, id2);
+            }
+          }
+          const tag2 = typeof tagExpr === "string" ? tagExpr : tagExpr.valueOf();
           return this.generateDynamicTag(tag2, classExprs, rest);
         }
         const { tag, classes, id } = this.collectTemplateClasses(head);
         if (tag && this.isHtmlTag(tag)) {
-          if (classes.length === 1 && classes[0] === "__clsx") {
-            return this.generateDynamicTag(tag, rest, []);
+          if (classes.length > 0 && classes[classes.length - 1] === "__clsx") {
+            const staticClasses = classes.slice(0, -1);
+            const staticArgs = staticClasses.map((c) => `"${c}"`);
+            return this.generateDynamicTag(tag, rest, [], staticArgs, id);
           }
           return this.generateTag(tag, classes, rest, id);
         }
@@ -4436,15 +4493,17 @@ ${blockFactoriesCode}return ${lines.join(`
       this._emitAutoWire(elVar, autoWireClaimed);
       return elVar;
     };
-    proto.generateDynamicTag = function(tag, classExprs, children) {
+    proto.generateDynamicTag = function(tag, classExprs, children, staticClassArgs, id) {
       const elVar = this.newElementVar();
       if (SVG_TAGS.has(tag) || this._svgDepth > 0) {
         this._createLines.push(`${elVar} = document.createElementNS('${SVG_NS}', '${tag}');`);
       } else {
         this._createLines.push(`${elVar} = document.createElement('${tag}');`);
       }
+      if (id)
+        this._createLines.push(`${elVar}.id = '${id}';`);
       const autoWireClaimed = this._claimAutoWire(elVar);
-      const classArgs = classExprs.map((e) => this.generateInComponent(e, "value"));
+      const classArgs = [...staticClassArgs || [], ...classExprs.map((e) => this.generateInComponent(e, "value"))];
       const prevClassArgs = this._pendingClassArgs;
       const prevClassEl = this._pendingClassEl;
       this._pendingClassArgs = classArgs;
@@ -8785,8 +8844,8 @@ globalThis.zip    ??= (...a) => a[0].map((_, i) => a.map(b => b[i]));
     return new CodeGenerator({}).getComponentRuntime();
   }
   // src/browser.js
-  var VERSION = "3.13.90";
-  var BUILD_DATE = "2026-03-04@06:22:39GMT";
+  var VERSION = "3.13.91";
+  var BUILD_DATE = "2026-03-04@21:40:01GMT";
   if (typeof globalThis !== "undefined") {
     if (!globalThis.__rip)
       new Function(getReactiveRuntime())();
