@@ -22,6 +22,7 @@
 import { get, post, read, start, use } from '@rip-lang/server'
 import { cors } from '@rip-lang/server/middleware'
 import { version as VERSION } from './package.json'
+import { existsSync, unlinkSync } from 'fs'
 
 # Database access via pure Bun FFI
 duckdb = import!('./lib/duckdb.mjs')
@@ -102,12 +103,40 @@ portArg = do ->
   null
 port = parseInt(process.env.DB_PORT or portArg) or 4213
 
-# Open database and create persistent connection
-db = open(path)
+# Open database (with WAL recovery on failure)
+try
+  db = open path
+catch e
+  walPath = "#{path}.wal"
+  if existsSync walPath
+    console.warn "[rip-db] WAL replay failed — deleting #{walPath} and retrying"
+    unlinkSync walPath
+    db = open path
+  else
+    throw e
+
 conn = db.connect()
 console.log "rip-db: DuckDB #{duckdbVersion()}"
 console.log "rip-db: rip-db v#{VERSION}"
 console.log "rip-db: source #{path}"
+
+# Periodic checkpoint (flush WAL to main file every 5 minutes)
+checkpoint = -> try conn.query 'CHECKPOINT'
+checkpointTimer = setInterval checkpoint, 5 * 60 * 1000
+
+# Graceful shutdown: checkpoint, disconnect, close
+shuttingDown = false
+shutdown = ->
+  return if shuttingDown
+  shuttingDown = true
+  clearInterval checkpointTimer if checkpointTimer
+  checkpoint()
+  try conn.close!
+  try db.close!
+  exit!
+
+process.on 'SIGINT',  shutdown
+process.on 'SIGTERM', shutdown
 
 # ==============================================================================
 # Helpers
@@ -294,7 +323,7 @@ post '/ddb/run' ->
 
 # POST /shutdown — Gracefully close the database and exit
 post '/shutdown' ->
-  setImmediate -> db.close(); process.exit 0
+  setImmediate shutdown
   { ok: true }
 
 # POST /ddb/interrupt — Cancel running query
