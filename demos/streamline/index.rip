@@ -22,6 +22,8 @@ use sessions name: config.session.name, maxAge: config.session.maxAge
 use serve
   dir: dir
   title: config.app.name
+  bundle:
+    app: ['components']
   watch: true
 
 get '/favicon.ico' -> @cache '1y'; @send "#{dir}/favicon.png", 'image/png'

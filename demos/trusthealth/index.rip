@@ -7,7 +7,11 @@ import { serve } from '@rip-lang/server/middleware'
 
 dir = import.meta.dir
 
-use serve dir: dir, title: 'Trust Health'
+use serve
+  dir: dir
+  title: 'Trust Health'
+  bundle:
+    app: ['components']
 
 get '/css/*'    -> @send "#{dir}#{@req.path}"
 get '/images/*' -> @send "#{dir}#{@req.path}"
