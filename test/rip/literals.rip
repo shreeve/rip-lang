@@ -114,3 +114,29 @@ test 'multiple JS variables', '''
   ```
   a + b + c
   ''', 60
+
+# ==============================================================================
+# Word Literals: %w
+# ==============================================================================
+
+# Basic word arrays
+test "%w with brackets", '%w[foo bar baz]', ['foo', 'bar', 'baz']
+test "%w with parens", '%w(one two three)', ['one', 'two', 'three']
+test "%w with braces", '%w{x y z}', ['x', 'y', 'z']
+test "%w with angle brackets", '%w<alpha beta gamma>', ['alpha', 'beta', 'gamma']
+
+# Symmetric delimiters
+test "%w with pipes", '%w|red green blue|', ['red', 'green', 'blue']
+test "%w with exclamation", '%w!yes no maybe!', ['yes', 'no', 'maybe']
+test "%w with slashes", '%w/up down left right/', ['up', 'down', 'left', 'right']
+
+# Whitespace handling
+test "%w trims whitespace", '%w[  foo   bar   baz  ]', ['foo', 'bar', 'baz']
+test "%w single word", '%w[hello]', ['hello']
+test "%w empty", '%w[]', []
+
+# Escaped spaces
+test "%w escaped space", '%w[foo\\ bar baz]', ['foo bar', 'baz']
+
+# Code generation
+code "%w generates array", "%w[a b c]", "['a', 'b', 'c']"

@@ -100,6 +100,8 @@ binary = 0b1010
 # Arrays
 items = [1, 2, 3]
 matrix = [[1, 2], [3, 4]]
+words = %w[foo bar baz]       # ["foo", "bar", "baz"]
+colors = %w(red green blue)   # any delimiter: [] () {} <> || !! etc.
 
 # Objects
 user = {name: "Alice", age: 30}
@@ -2061,6 +2063,9 @@ a =~ /pat/     # regex match, captures in _
 a[/pat/, 1]    # regex extract
 a?             # existence check (a != null)
 a ?? b         # nullish coalescing
+
+# Word arrays
+%w[foo bar baz]   # ["foo", "bar", "baz"] — Ruby-style word literal
 
 # Two-way binding (render blocks)
 input value <=> @name      # bidirectional reactive binding

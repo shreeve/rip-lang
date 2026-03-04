@@ -1101,10 +1101,62 @@ export class Lexer {
   }
 
   // --------------------------------------------------------------------------
+  // Word Literal: %w[foo bar baz] → ["foo", "bar", "baz"]
+  // --------------------------------------------------------------------------
+
+  wordLiteral() {
+    if (this.chunk[0] !== '%' || this.chunk[1] !== 'w') return 0;
+    let opener = this.chunk[2];
+    if (!opener || /\s/.test(opener)) return 0;
+
+    let PAIRS = {'[': ']', '(': ')', '{': '}', '<': '>'};
+    let closer = PAIRS[opener] || opener;
+    let paired = closer !== opener;
+
+    // Scan for the closing delimiter, counting nested pairs
+    let depth = 1;
+    let i = 3;
+    while (i < this.chunk.length && depth > 0) {
+      let ch = this.chunk[i];
+      if (ch === '\\') { i += 2; continue; }
+      if (paired && ch === opener) depth++;
+      if (ch === closer) depth--;
+      if (depth > 0) i++;
+    }
+    if (depth !== 0) return 0;
+
+    let content = this.chunk.slice(3, i);
+    let total = i + 1; // %w + opener + content + closer
+
+    // Split on whitespace, handling backslash-space escapes
+    let words = [];
+    if (content.trim()) {
+      let raw = content.trim().split(/(?<!\\)\s+/);
+      for (let w of raw) {
+        words.push(w.replace(/\\ /g, ' '));
+      }
+    }
+
+    // Emit tokens: [ STRING , STRING , STRING ]
+    this.emit('[', '[', {len: total});
+    for (let j = 0; j < words.length; j++) {
+      if (j > 0) this.emit(',', ',');
+      this.emit('STRING', `"${words[j]}"`);
+    }
+    this.emit(']', ']');
+
+    return total;
+  }
+
+  // --------------------------------------------------------------------------
   // 9. Literal Token (operators, punctuation, everything else)
   // --------------------------------------------------------------------------
 
   literalToken() {
+    // %w word literal: %w[foo bar baz] → ["foo", "bar", "baz"]
+    let wl = this.wordLiteral();
+    if (wl) return wl;
+
     let match = OPERATOR_RE.exec(this.chunk);
     let val = match ? match[0] : this.chunk.charAt(0);
     let tag = val;

@@ -19,7 +19,7 @@ echo 'your code' | ./bin/rip -s  # S-expressions (parser)
 echo 'your code' | ./bin/rip -c  # JavaScript (codegen)
 
 # Run tests
-bun run test                             # All tests (1436)
+bun run test                             # All tests (1455)
 bun test/runner.js test/rip/FILE.rip     # Specific file
 
 # Rebuild parser (after grammar changes)
@@ -37,7 +37,7 @@ rip server
 | Metric       | Value                     |
 | ------------ | ------------------------- |
 | Version      | 3.13.71                   |
-| Tests        | 1,436                     |
+| Tests        | 1,455                     |
 | Dependencies | Zero                      |
 | Self-hosting | Yes (Rip compiles itself) |
 
@@ -74,7 +74,7 @@ rip-lang/
 ├── docs/
 │   ├── RIP-LANG.md      # Language reference (includes reactivity, future ideas)
 │   └── RIP-TYPES.md     # Type system specification
-├── test/rip/            # 26 test files (1,436 tests)
+├── test/rip/            # 26 test files (1,455 tests)
 └── scripts/             # Build utilities (all .js — run via `bun run <name>`)
 ```
 
@@ -671,7 +671,7 @@ code "name", "x + y", "(x + y)"
 fail "name", "invalid syntax"
 ```
 
-### Test Files (26 files, 1,436 tests)
+### Test Files (26 files, 1,455 tests)
 
 ```
 test/rip/
@@ -1312,6 +1312,7 @@ rip> .js      # Toggle JS display
 | `it`        | Implicit param  | `-> it > 5` — auto-injected parameter                                  |
 | `or return` | Guard           | `x = get() or return err` — early return                               |
 | `?? throw`  | Nullish guard   | `x = get() ?? throw err` — throw if null                               |
+| `%w`        | Word literal    | `%w[foo bar baz]` — `["foo", "bar", "baz"]` (Ruby-style)              |
 
 ### Standard Library
 
