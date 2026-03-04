@@ -84,6 +84,7 @@ overall health of Rip's type story — not just this audit.
 | Generic types                 | 🔶      | Declarable; .d.ts emission has some gaps                            |
 | Readonly / immutability       | 🔶      | `=!` → const; deep readonly not checked                             |
 | Async/await unwrapping        | 🔶      | `!` operator awaits; return type sometimes `any`                    |
+| Go-to-definition on imports   | ❌      | Import lines unmapped; works at call sites only                     |
 | Optional param `?` in .d.ts   | ❌      | `y?:: T` emits `y: T` — drops the `?`; use default param workaround |
 | Destructured typed params     | ❌      | `{name:: string}` in params fails to parse                          |
 | `void` return annotation      | ❌      | `void` is reserved; use `!` operator (`def fn!`) instead            |

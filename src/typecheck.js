@@ -161,13 +161,14 @@ export function compileForCheck(filePath, source, compiler) {
   const codeSrcToGen = new Map(srcToGen);
 
   // Map DTS declaration lines back to source lines (bidirectional).
-  // Covers: let/var declarations, type aliases, interfaces, enums, classes.
+  // Covers: imports, let/var declarations, type aliases, interfaces, enums, classes.
   // This enables hover, go-to-definition, and diagnostics for type-only code.
   if (hasTypes && headerDts) {
     const dtsLines = headerDts.split('\n');
     const srcLines = source.split('\n');
     for (let i = 0; i < dtsLines.length; i++) {
       const line = dtsLines[i];
+
       const m = line.match(/^(?:export\s+)?(?:declare\s+)?(?:let|var|type|interface|enum|class)\s+(\w+)/);
       if (!m) continue;
       const name = m[1];
