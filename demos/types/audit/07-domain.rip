@@ -1,4 +1,4 @@
-# 08-domain.rip — Complex domain modeling with generics
+# 07-domain.rip — Complex domain modeling with generics
 
 Address ::= type
   street: string

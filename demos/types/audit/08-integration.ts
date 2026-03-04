@@ -1,4 +1,4 @@
-// 09-integration.ts — Cross-module integration test
+// 08-integration.ts — Cross-module integration test
 
 import { add, greet, makePoint, sum, isPositive } from './06-functions.js'
 

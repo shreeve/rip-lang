@@ -1,4 +1,4 @@
-# 06-functions.rip — Typed function params, returns, and patterns
+# 06-functions.rip — Typed functions, arrows, and array transforms
 
 Point ::= type
   x: number
@@ -82,6 +82,32 @@ badRet3:: string = makePoint(1, 2)
 badRet4:: boolean = sum(1, 2, 3)
 # @ts-expect-error — isPositive returns boolean, not number
 badRet5:: number = isPositive(1)
+
+# ── Arrow functions and array transforms ──
+
+nums:: number[] = [1, 2, 3, 4, 5]
+doubled:: number[] = nums.map (x) => x * 2
+evens:: number[] = nums.filter (x) => x % 2 == 0
+arrTotal:: number = nums.reduce ((acc, x) => acc + x), 0
+
+words:: string[] = ["hello", "world", "rip"]
+upper:: string[] = words.map (w) => w.toUpperCase()
+long:: string[] = words.filter (w) => w.length > 3
+joined:: string = words.join(", ")
+
+console.log "doubled:", doubled
+console.log "evens:", evens
+console.log "arrTotal:", arrTotal
+console.log "upper:", upper
+console.log "long:", long
+console.log "joined:", joined
+
+# @ts-expect-error — map returns number[], not string[]
+badMap:: string[] = nums.map (x) => x * 2
+# @ts-expect-error — filter returns number[], not string[]
+badFilter:: string[] = nums.filter (x) => x > 2
+# @ts-expect-error — reduce returns number, not string
+badReduce:: string = nums.reduce ((acc, x) => acc + x), 0
 
 # ── Known gaps ──
 #

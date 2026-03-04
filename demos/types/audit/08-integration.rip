@@ -1,4 +1,4 @@
-# 09-integration.rip — Cross-module integration test
+# 08-integration.rip — Cross-module integration test
 #
 # This is the only file that imports from multiple audit files.
 # If 06-functions.rip breaks, this breaks too — but every other

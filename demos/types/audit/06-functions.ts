@@ -1,4 +1,4 @@
-// 06-functions.ts — Typed function params, returns, and patterns
+// 06-functions.ts — Typed functions, arrows, and array transforms
 
 type Point = {
   x: number
@@ -90,6 +90,32 @@ const badRet3: string = makePoint(1, 2)
 const badRet4: boolean = sum(1, 2, 3)
 // @ts-expect-error — isPositive returns boolean, not number
 const badRet5: number = isPositive(1)
+
+// ── Arrow functions and array transforms ──
+
+const nums: number[] = [1, 2, 3, 4, 5]
+const doubled: number[] = nums.map((x) => x * 2)
+const evens: number[] = nums.filter((x) => x % 2 === 0)
+const arrTotal: number = nums.reduce((acc, x) => acc + x, 0)
+
+const words: string[] = ['hello', 'world', 'rip']
+const upper: string[] = words.map((w) => w.toUpperCase())
+const long: string[] = words.filter((w) => w.length > 3)
+const joined: string = words.join(', ')
+
+console.log('doubled:', doubled)
+console.log('evens:', evens)
+console.log('arrTotal:', arrTotal)
+console.log('upper:', upper)
+console.log('long:', long)
+console.log('joined:', joined)
+
+// @ts-expect-error — map returns number[], not string[]
+const badMap: string[] = nums.map((x) => x * 2)
+// @ts-expect-error — filter returns number[], not string[]
+const badFilter: string[] = nums.filter((x) => x > 2)
+// @ts-expect-error — reduce returns number, not string
+const badReduce: string = nums.reduce((acc, x) => acc + x, 0)
 
 // ── Works in TS but not in Rip (see .rip known gaps) ──
 
