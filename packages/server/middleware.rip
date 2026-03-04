@@ -564,7 +564,7 @@ export serve = (opts = {}) ->
 
   for [name, dirs] as bundles
     get "#{prefix}/#{name}", (c) ->
-      buildNamedBundle(name, dirs, (name is 'app') or (bundles.size is 1)) unless bundleCaches.has(name)
+      await buildNamedBundle(name, dirs, (name is 'app') or (bundles.size is 1)) unless bundleCaches.has(name)
       cache = bundleCaches.get(name)
       if c.req.header('if-none-match') is cache.etag
         return new Response(null, { status: 304, headers: { 'ETag': cache.etag, 'Cache-Control': 'no-cache' } })
