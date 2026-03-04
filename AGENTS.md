@@ -1090,15 +1090,17 @@ in the shared scope).
 
 ### HTML Attributes
 
-| Attribute      | On             | Purpose                                                                                               |
-| -------------- | -------------- | ----------------------------------------------------------------------------------------------------- |
-| `data-src`     | runtime script | Whitespace-separated URLs — `.rip` files fetched as source, others as JSON bundles                    |
-| `data-mount`   | runtime script | Component name to instantiate and mount after compilation                                             |
-| `data-target`  | runtime script | Mount target selector (default: `'body'`), pairs with `data-mount`                                    |
-| `data-state`   | runtime script | JSON object to seed `app.data` initial values (e.g. `'{"count": 0}'`)                                 |
-| `data-router`  | runtime script | Enable routing — absent: none, present/`"history"`: history mode, `"hash"`: hash mode                 |
-| `data-persist` | runtime script | Enable stash persistence — `data-persist` for sessionStorage, `data-persist="local"` for localStorage |
-| `data-reload`  | runtime script | Connect to `/watch` SSE endpoint for hot reload on file changes                                       |
+All attributes go on the runtime `<script>` tag. None are required.
+
+| Attribute      | Default  | Notes                                                                                                  |
+| -------------- | -------- | ------------------------------------------------------------------------------------------------------ |
+| `data-src`     | (none)   | Whitespace-separated URLs to load. `.rip` URLs fetched as source text, all others fetched as JSON bundles. Sources compile into one shared scope. |
+| `data-mount`   | (none)   | Component name to instantiate and mount after all sources are compiled.                                |
+| `data-target`  | `'body'` | CSS selector for the mount target. Pairs with `data-mount`.                                            |
+| `data-state`   | `{}`     | JSON object to seed the app stash. Bundle data is merged in automatically.                             |
+| `data-router`  | off      | Enables client-side routing. Present with no value or `"history"`: history mode (`pushState`). `"hash"`: hash mode (`#/path`). Absent: no routing. |
+| `data-persist` | off      | Persist the app stash across page reloads. Present with no value: sessionStorage. `"local"`: localStorage. |
+| `data-reload`  | off      | Connect to `/watch` SSE endpoint for hot reload. CSS changes refresh stylesheets only; other changes trigger full page reload. |
 
 ### Component Mounting
 
