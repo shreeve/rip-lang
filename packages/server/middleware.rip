@@ -577,16 +577,11 @@ export serve = (opts = {}) ->
   if enableWatch and process.env.SOCKET_PREFIX
     ctl = "/tmp/#{process.env.SOCKET_PREFIX}.ctl.sock"
 
-    # NOTE: Original method, watches specific directories
-    # watchDirs = [appDir]
-    # for [_, bdirs] as bundles
-    #   watchDirs.push(...bdirs)
-    # watchDirs = watchDirs.filter existsSync
-    # body = JSON.stringify({ op: 'watch', prefix, dirs: watchDirs })
-
-    # NOTE: New method, watches all directories in the app
-    dirs = [appDir].filter existsSync
-    body = JSON.stringify({ op: 'watch', prefix, dirs })
+    watchDirs = [appDir]
+    for [_, bdirs] as bundles
+      watchDirs.push(...bdirs)
+    watchDirs = watchDirs.filter existsSync
+    body = JSON.stringify({ op: 'watch', prefix, dirs: watchDirs })
 
     fetch('http://localhost/watch', { method: 'POST', body, headers: { 'content-type': 'application/json' }, unix: ctl }).catch (e) ->
       console.warn "[Rip] Watch registration failed: #{e.message}"
