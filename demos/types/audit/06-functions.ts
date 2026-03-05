@@ -129,7 +129,6 @@ export function createUser({ name, age }: { name: string, age: number }): string
   return `${name} is ${age}`
 }
 
-const r10 = greetOpt('Smith')
-const r11 = greetOpt('Smith', 'Dr')
-const r12 = createUser({ name: 'Jane', age: 30 })
-console.log(r10, r11, r12)
+greetOpt('Smith')
+greetOpt('Smith', 'Dr')
+createUser({ name: 'Jane', age: 30 })

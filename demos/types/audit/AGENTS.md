@@ -6,35 +6,27 @@ Independent test files for every Rip type system feature. Each file compiles and
 
 When asked to verify, validate, or check any audit file, run ALL of these commands from `demos/types/audit/`. No exceptions — don't ask the user which commands to run, just run them all.
 
-**Single file** (replace FILE with the target, e.g. `01-basic.rip`):
+**Single file** (replace FILE with the target, e.g. `01-basic`):
 
 ```bash
-rip FILE.rip      # 1. run the file — check runtime output
-rip -c FILE.rip   # 2. inspect compiled JS
-rip -d FILE.rip   # 3. inspect generated .d.ts
+rip FILE.rip        # 1. run the .rip file
+bun run FILE.ts     # 2. run the .ts companion
+rip -c FILE.rip     # 3. inspect compiled JS
+rip -d FILE.rip     # 4. inspect generated .d.ts
 ```
 
 **Full suite** (always run after single-file checks):
 
 ```bash
-rip check         # 4. type-check all .rip files
-bunx tsc          # 5. type-check all .ts files
+rip check                                                                 # 5. type-check all .rip files
+bunx tsc                                                                  # 6. type-check all .ts files
+for f in *.rip; do printf "\n── %s ──\n" "$f" && rip "$f"; done           # 7. run all .rip
+for f in *.ts *.tsx; do printf "\n── %s ──\n" "$f" && bun run "$f"; done  # 8. run all .ts
 ```
 
-All five commands must pass. Report results in a summary table.
+All commands must pass. 09-components (.rip and .tsx) and 10-validation (.rip and .ts) are silent at runtime but type-check correctly. Report results in a summary table. If errors appear, isolate with single-file commands. Update the status table below as features are fixed or regress.
 
-## Validation Workflow
-
-After any change to the type system (`src/types.js`, `src/typecheck.js`, `src/compiler.js` type-related code, or `src/lexer.js` type rewriting):
-
-```bash
-rip check     # 1. check .rip files
-bunx tsc      # 2. check .ts files
-```
-
-If errors appear, isolate with single-file commands above. Update the status table below as features are fixed or regress.
-
-## Feature Status
+## Feature **Status**
 
 Each file exercises a specific type feature. Status key:
 
@@ -43,18 +35,19 @@ Each file exercises a specific type feature. Status key:
 - **fail** — `rip check` or runtime reports errors
 - **partial** — some features in the file work, others don't
 
-| File               | Feature                                                     | Status | Notes                                            |
-| ------------------ | ----------------------------------------------------------- | ------ | ------------------------------------------------ |
-| 01-basic.rip       | `::` on variables, nullable (`T \| null`, `T \| undefined`) | pass   |                                                  |
-| 02-aliases.rip     | `::=` aliases (simple, union, typeof)                       | pass   |                                                  |
-| 03-structural.rip  | `::= type` blocks, optional, readonly, recursive, generic   | pass   | Includes `PagedResult<T>` generic struct         |
-| 04-unions.rip      | Inline, block, discriminated unions + switch narrowing      | pass   | Narrowing not checked — see gap table            |
-| 05-interfaces.rip  | `interface`, `extends`, optional members                    | pass   |                                                  |
-| 06-functions.rip   | Typed functions, arrows, and array transforms               | pass   | 15 negative tests (7 param + 5 return + 3 array) |
-| 07-integration.rip | Cross-module imports of typed functions                     | pass   | Cross-file type flow via .d.ts                   |
-| 08-reactive.rip    | `:: T :=`, `:: T ~=`, `:: T =!`, `:: T ~>`                  | pass   | Tier 1 — reactive state annotations              |
-| 09-components.rip  | `@prop:: T :=`, `@prop:: T =!`                              | pass   | Tier 1 — component prop annotations              |
-| 10-validation.rip  | Runtime validation of API responses                         | pass   | Tier 2 — Rip erases types; TS+Zod validates      |
+| File               | Feature                                                     | Status | Notes                                             |
+| ------------------ | ----------------------------------------------------------- | ------ | ------------------------------------------------- |
+| 01-basic.rip       | `::` on variables, nullable (`T \| null`, `T \| undefined`) | pass   |                                                   |
+| 02-aliases.rip     | `::=` aliases (simple, union, typeof)                       | pass   |                                                   |
+| 03-structural.rip  | `::= type` blocks, optional, readonly, recursive, generic   | pass   | Includes `PagedResult<T>` generic struct          |
+| 04-unions.rip      | Inline, block, discriminated unions + switch narrowing      | pass   | Narrowing not checked — see gap table             |
+| 05-interfaces.rip  | `interface`, `extends`, optional members                    | pass   |                                                   |
+| 06-functions.rip   | Typed functions, arrows, and array transforms               | pass   | 15 negative tests (7 param + 5 return + 3 array)  |
+| 07-integration.rip | Cross-module imports of typed functions                     | pass   | Cross-file type flow via .d.ts                    |
+| 08-reactive.rip    | `:: T :=`, `:: T ~=`, `:: T =!`, `:: T ~>`                  | pass   | Tier 1 — reactive state annotations               |
+| 09-components.rip  | `@prop:: T :=`, `@prop:: T =!`                              | pass   | Tier 1 — component prop annotations               |
+| 10-validation.rip  | Runtime validation of API responses                         | pass   | Tier 2 — Rip erases types; TS+Zod validates       |
+| 11-inference.rip   | Type inference on unannotated variables                     | pass   | Top-level works; block/destructure/any are gaps   |
 
 ## Type Safety Gap Analysis
 
@@ -111,5 +104,3 @@ Each `.rip` file has a `.ts` companion with equivalent TypeScript for side-by-si
 - **Single quotes** — use `'string'` not `"string"`
 - **Trailing commas** — in multi-line objects and arrays
 - **`type` over `interface`** — use `type X = { ... }` not `interface X { ... }` (except in `05-interfaces.ts` which tests `interface` specifically)
-
-
