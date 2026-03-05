@@ -29,7 +29,6 @@ packages/vscode/dist/
 
 # Project-specific
 notes.txt
-/apps/
 /apps/candor/
 /apps/trustlabs/
 /apps/websites/
