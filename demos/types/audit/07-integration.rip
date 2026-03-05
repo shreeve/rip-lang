@@ -25,3 +25,19 @@ badPoint = makePoint(true, false)
 badSum = sum("a", "b")
 # @ts-expect-error — string argument where number expected
 badPos = isPositive("five")
+
+# ── Gap: unresolved import paths ──
+#
+# `rip check` doesn't flag imports to nonexistent files.
+# The following import would silently succeed in `rip check`
+# because the .d.ts for this file doesn't include the import
+# statement — types are erased, and the import is just a runtime
+# concern. TypeScript catches this immediately:
+#   import { x } from './nonexistent'  // TS: Cannot find module
+#
+# In a real Rip project, a typo in an import path won't surface
+# until runtime. This is because `rip check` only type-checks
+# the .d.ts declarations and compiled JS — it doesn't verify
+# that import specifiers resolve to actual files.
+#
+# Tracked in AGENTS.md gap table under "Unresolved import paths".

@@ -25,3 +25,10 @@ const badPoint = makePoint(true, false)
 const badSum = sum('a', 'b')
 // @ts-expect-error — string argument where number expected
 const badPos = isPositive('five')
+
+// ── Unresolved import paths ──
+//
+// TypeScript catches nonexistent imports immediately:
+//   import { x } from './nonexistent'  // Cannot find module
+// Rip's `rip check` doesn't verify import specifiers resolve
+// to actual files — the error only surfaces at runtime.

@@ -80,3 +80,20 @@ badMethod:: HttpMethod = "FETCH"
 badLevel:: LogLevel = "trace"
 # @ts-expect-error — number not assignable to Result
 badResult:: Result = 0
+
+# ── Gap: enum exhaustiveness ──
+#
+# In TypeScript, a switch on a discriminated union or enum with no
+# default branch must cover all cases — the compiler enforces this.
+# For example, adding a new Shape variant (`Triangle`) without
+# updating the `area` function above would produce:
+#   "Function lacks ending return statement and return type does
+#    not include 'undefined'."
+#
+# In Rip, `rip check` doesn't verify switch exhaustiveness. The
+# `area` function above handles "circle" and "rect" — if we added
+# a Triangle variant to Shape, `rip check` would not flag the
+# missing case. The error only surfaces at runtime (returning
+# undefined instead of a number).
+#
+# Tracked in AGENTS.md gap table under "Enum exhaustiveness".

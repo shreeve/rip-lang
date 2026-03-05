@@ -88,3 +88,30 @@ const badBtn = <Button variant='danger' />
 const badBtn2 = <Button disabled='yes' />
 // @ts-expect-error — wrong type for label
 const badInput = <Input label={123} />
+
+// ── Event handler typing ──
+//
+// TypeScript + React gives typed event handlers automatically:
+// onSubmit in the Form above gets React.FormEvent<HTMLFormElement>.
+// onClick on <button> gives React.MouseEvent<HTMLButtonElement>.
+// In Rip, `(e) ->` gives `any` for all handler params.
+
+// ── Element type inheritance ──
+//
+// ComponentProps<'input'> (used by InputProps above) gives ALL of
+// <input>'s props — onChange, onFocus, aria-*, etc. — for free.
+// In Rip, each prop must be listed explicitly or it's unknown.
+
+// ── Generic components ──
+//
+// TypeScript supports generic components:
+//   function Select<T>({ options, value }: { options: T[], value: T }) { ... }
+// The caller gets type-safe option/value types. Rip can't parameterize
+// components by type — options and value are unrelated types.
+
+// ── Context typing ──
+//
+// React.createContext<T>() carries the type to all consumers:
+//   const TabsContext = createContext<string>('overview')
+//   const active = useContext(TabsContext)  // typed as string
+// Rip's offer/accept have no type annotations — values are untyped.

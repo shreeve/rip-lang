@@ -73,3 +73,13 @@ const badMethod: HttpMethod = 'FETCH'
 const badLevel: LogLevel = 'trace'
 // @ts-expect-error — number not assignable to Result
 const badResult: Result = 0
+
+// ── Enum exhaustiveness ──
+//
+// TypeScript enforces exhaustive switch handling. The `area` function
+// above must handle all Shape variants — adding Triangle without
+// updating the switch would produce:
+//   "Function lacks ending return statement and return type does
+//    not include 'undefined'."
+// Rip's `rip check` doesn't verify this — missing cases only fail
+// at runtime.

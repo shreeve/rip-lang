@@ -35,64 +35,78 @@ Each file exercises a specific type feature. Status key:
 - **fail** — `rip check` or runtime reports errors
 - **partial** — some features in the file work, others don't
 
-| File               | Feature                                                     | Status | Notes                                             |
-| ------------------ | ----------------------------------------------------------- | ------ | ------------------------------------------------- |
-| 01-basic.rip       | `::` on variables, nullable (`T \| null`, `T \| undefined`) | pass   |                                                   |
-| 02-aliases.rip     | `::=` aliases (simple, union, typeof)                       | pass   |                                                   |
-| 03-structural.rip  | `::= type` blocks, optional, readonly, recursive, generic   | pass   | Includes `PagedResult<T>` generic struct          |
-| 04-unions.rip      | Inline, block, discriminated unions + switch narrowing      | pass   | Narrowing not checked — see gap table             |
-| 05-interfaces.rip  | `interface`, `extends`, optional members                    | pass   |                                                   |
-| 06-functions.rip   | Typed functions, arrows, and array transforms               | pass   | 15 negative tests (7 param + 5 return + 3 array)  |
-| 07-integration.rip | Cross-module imports of typed functions                     | pass   | Cross-file type flow via .d.ts                    |
-| 08-reactive.rip    | `:: T :=`, `:: T ~=`, `:: T =!`, `:: T ~>`                  | pass   | Tier 1 — reactive state annotations               |
-| 09-components.rip  | `@prop:: T :=`, `@prop:: T =!`                              | pass   | Tier 1 — component prop annotations               |
-| 10-validation.rip  | Runtime validation of API responses                         | pass   | Tier 2 — Rip erases types; TS+Zod validates       |
-| 11-inference.rip   | Type inference on unannotated variables                     | pass   | Top-level works; block/destructure/any are gaps   |
+| File               | Feature                                                     | Status | Notes                                            |
+| ------------------ | ----------------------------------------------------------- | ------ | ------------------------------------------------ |
+| 01-basic.rip       | `::` on variables, nullable (`T \| null`, `T \| undefined`) | pass   |                                                  |
+| 02-aliases.rip     | `::=` aliases (simple, union, typeof)                       | pass   |                                                  |
+| 03-structural.rip  | `::= type` blocks, optional, readonly, recursive, generic   | pass   | Includes `PagedResult<T>` generic struct         |
+| 04-unions.rip      | Inline, block, discriminated unions + switch narrowing      | pass   | Narrowing not checked — see gap table            |
+| 05-interfaces.rip  | `interface`, `extends`, optional members                    | pass   |                                                  |
+| 06-functions.rip   | Typed functions, arrows, and array transforms               | pass   | 15 negative tests (7 param + 5 return + 3 array) |
+| 07-integration.rip | Cross-module imports of typed functions                     | pass   | Cross-file type flow via .d.ts                   |
+| 08-reactive.rip    | `:: T :=`, `:: T ~=`, `:: T =!`, `:: T ~>`                  | pass   | Tier 1 — reactive state annotations              |
+| 09-components.rip  | `@prop:: T :=`, `@prop:: T =!`                              | pass   | Tier 1 — component prop annotations              |
+| 10-validation.rip  | Runtime validation + async/await (`!` operator)             | pass   | Tier 2 — Rip erases types; TS+Zod validates      |
+| 11-inference.rip   | Type inference on unannotated variables                     | pass   | Top-level works; block/destructure/any are gaps  |
 
 ## Type Safety Gap Analysis
 
-What `rip check` catches today vs. what it doesn't. This tracks the overall health of Rip's type story — not just this audit.
+What `rip check` catches today vs. what it doesn't. This tracks the overall health of Rip's type story — not just this audit. Grouped by status, ordered by importance within each group.
 
-| Category                         | Status | Notes                                                                                                    |
-| -------------------------------- | ------ | -------------------------------------------------------------------------------------------------------- |
-| Variable type mismatches         | ✅      | Same-file typed variables                                                                                |
-| Function argument types          | ✅      | Same-file typed functions                                                                                |
-| Function return types            | ✅      | Same-file typed functions                                                                                |
-| Object shape checking            | ✅      | Missing fields, extra fields                                                                             |
-| Property access checking         | ✅      | Typos, nonexistent fields                                                                                |
-| Union value checking             | ✅      | Literal unions validated                                                                                 |
-| Cross-file type flow             | ✅      | Via .d.ts; untyped files get `@ts-nocheck`                                                               |
-| Nullable safety                  | 🔶      | `strictNullChecks` is on but many codes suppressed                                                       |
-| Discriminated union narrowing    | 🔶      | Types declarable, narrowing doesn't flow in `rip check`                                                  |
-| Component prop types             | ❌      | .d.ts emits typed constructors but no safety inside component body                                       |
-| Generic types                    | 🔶      | Declarable; .d.ts emission has some gaps                                                                 |
-| Runtime return-type validation   | ❌      | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent         |
-| Readonly / immutability          | 🔶      | `=!` → const; deep readonly not checked                                                                  |
-| Async/await unwrapping           | 🔶      | `!` operator awaits; return type sometimes `any`                                                         |
-| Type inference (split decl.)     | 🔶      | Top-level `x = expr` inferred via `patchUninitializedTypes`; block-scoped, destructured, and `any` RHS are gaps |
-| Hover types                      | ❌      | Hover only works at declaration site; later usages show nothing. Reactive `:=`/`~=` always show `any`    |
-| Go-to-definition on imports      | ❌      | Import lines unmapped; works at call sites only                                                          |
-| Unresolved import paths          | ❌      | `rip check` doesn't flag imports to nonexistent files                                                    |
-| Optional param `?` in .d.ts      | ❌      | `y?:: T` emits `y: T` — drops the `?`; use default param workaround                                      |
-| Destructured typed params        | ❌      | `{name:: string}` in params fails to parse                                                               |
-| `void` return annotation         | ❌      | `void` is reserved; use `!` operator (`def fn!`) instead                                                 |
-| Enum exhaustiveness              | ❌      | Switch narrowing works in .ts but `rip check` doesn't verify exhaustiveness                              |
-| Type narrowing (control flow)    | ❌      | TS narrows compiled JS, not Rip source                                                                   |
-| Element type inheritance         | ❌      | No way to inherit HTML element's full type surface; wrappers must declare each prop manually             |
-| Event handler typing             | ❌      | Handler params are untyped — `(e) ->` gives `any`, no typed event objects                                |
-| Generic components               | ❌      | Can't parameterize components by type (e.g. typed select where value type flows through props)           |
-| Context typing (offer/accept)    | ❌      | `offer`/`accept` have no type annotations; shared values are untyped                                     |
-| Inline discriminated union .d.ts | ❌      | `Shape ::= \| { kind: "circle" } \| { ... }` emits malformed .d.ts; split into named types as workaround |
+### ✅ Working
 
-**Highest-ROI gap:** Type safety inside component bodies. The code section redeclares all props/state without types, so TypeScript can't validate assignments, method calls, or child component prop values in render blocks. In a real app 90% of code lives inside components — without this, the type system is effectively invisible where it matters most.
+| Category                 | Tested In      | Notes                                      |
+| ------------------------ | -------------- | ------------------------------------------ |
+| Variable type mismatches | 01-basic       | Same-file typed variables                  |
+| Object shape checking    | 03-structural  | Missing fields, extra fields               |
+| Union value checking     | 04-unions      | Literal unions validated                   |
+| Property access checking | 03-structural  | Typos, nonexistent fields                  |
+| Function argument types  | 06-functions   | Same-file typed functions                  |
+| Function return types    | 06-functions   | Same-file typed functions                  |
+| Cross-file type flow     | 07-integration | Via .d.ts; untyped files get `@ts-nocheck` |
 
-## Adding a Feature
+### 🔶 Partial
 
-1. Create a new numbered file (e.g. `11-feature.rip`)
-2. Define any needed types locally (type-only imports fail at runtime since types are erased)
-3. Include a runtime exercise section so the file can both `rip check` and `rip FILE.rip`
-4. Run `rip check` to verify
-5. Add a row to the Feature Status table above
+| Category                      | Tested In     | Notes                                                                                                                                         |
+| ----------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Nullable safety               | 01-basic      | `strictNullChecks` is on but many codes suppressed                                                                                            |
+| Readonly / immutability       | 03-structural | `=!` → const; deep readonly not checked                                                                                                       |
+| Generic types                 | 03-structural | Declarable; .d.ts emission has some gaps                                                                                                      |
+| Discriminated union narrowing | 04-unions     | Types declarable, narrowing doesn't flow in `rip check`                                                                                       |
+| Async/await unwrapping        | 10-validation | `!` operator compiles to `await`; with return type annotation TS correctly unwraps `Promise<T>` → `T`; without annotation the result is `any` |
+| Type inference (split decl.)  | 11-inference  | Top-level `x = expr` inferred via `patchUninitializedTypes`; block-scoped, destructured, and `any` RHS are gaps                               |
+
+### ❌ Not working
+
+**Compiler / type-checker gaps** (affect `rip check` correctness):
+
+| Category                         | Tested In                | Notes                                                                                                                 |
+| -------------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| Component prop types             | 09-components            | .d.ts emits typed constructors but no safety inside component body — **highest-ROI gap** (90% of app code lives here) |
+| Event handler typing             | 09-components            | Handler params are untyped — `(e) ->` gives `any`, no typed event objects                                             |
+| Runtime return-type validation   | 10-validation            | Return types are erased — `response.json()` is unvalidated `any`; no `schema.parse()` equivalent                      |
+| Type narrowing (control flow)    | 04-unions *(comment)*    | TS narrows compiled JS, not Rip source                                                                                |
+| Destructured typed params        | 06-functions *(comment)* | `{name:: string}` in params fails to parse                                                                            |
+| Optional param `?` in .d.ts      | 06-functions *(comment)* | `y?:: T` emits `y: T` — drops the `?`; use default param workaround                                                   |
+| `void` return annotation         | 06-functions *(comment)* | `void` is reserved; use `!` operator (`def fn!`) instead                                                              |
+| Unresolved import paths          | 07-integration           | `rip check` doesn't flag imports to nonexistent files                                                                 |
+| Enum exhaustiveness              | 04-unions                | Switch narrowing works in .ts but `rip check` doesn't verify exhaustiveness                                           |
+| Inline discriminated union .d.ts | 04-unions *(comment)*    | `Shape ::= \| { kind: "circle" } \| { ... }` emits malformed .d.ts; split into named types as workaround              |
+
+**Component model gaps** (would need language-level changes):
+
+| Category                      | Tested In     | Notes                                                                                          |
+| ----------------------------- | ------------- | ---------------------------------------------------------------------------------------------- |
+| Element type inheritance      | 09-components | No way to inherit HTML element's full type surface; wrappers must declare each prop manually   |
+| Generic components            | 09-components | Can't parameterize components by type (e.g. typed select where value type flows through props) |
+| Context typing (offer/accept) | 09-components | `offer`/`accept` have no type annotations; shared values are untyped                           |
+
+**IDE-only gaps** (require VS Code extension changes, not testable in audit files):
+
+| Category                    | Tested In    | Notes                                                                                                 |
+| --------------------------- | ------------ | ----------------------------------------------------------------------------------------------------- |
+| Hover types                 | *(IDE only)* | Hover only works at declaration site; later usages show nothing. Reactive `:=`/`~=` always show `any` |
+| Go-to-definition on imports | *(IDE only)* | Import lines unmapped; works at call sites only                                                       |
 
 ## TypeScript Companions
 
