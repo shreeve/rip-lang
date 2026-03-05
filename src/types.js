@@ -932,9 +932,14 @@ export function emitTypes(tokens, sexpr = null) {
   let preamble = [];
   if (usesSignal) {
     preamble.push('interface Signal<T> { value: T; read(): T; lock(): Signal<T>; free(): Signal<T>; kill(): T; }');
+    preamble.push('declare function __state<T>(value: T): Signal<T>;');
   }
   if (usesComputed) {
     preamble.push('interface Computed<T> { readonly value: T; read(): T; lock(): Computed<T>; free(): Computed<T>; kill(): T; }');
+    preamble.push('declare function __computed<T>(fn: () => T): Computed<T>;');
+  }
+  if (usesSignal || usesComputed) {
+    preamble.push('declare function __effect(fn: () => void | (() => void)): () => void;');
   }
   if (preamble.length > 0) {
     preamble.push('');

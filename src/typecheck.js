@@ -187,6 +187,42 @@ export function compileForCheck(filePath, source, compiler) {
     }
   }
 
+  // Annotate reactive/readonly/computed const assignments with their declared
+  // types from the DTS header, and remove the corresponding `declare const`
+  // from the header. This enables TypeScript to check initializer values
+  // against type annotations: `const x: Signal<number> = __state("oops")`
+  // produces a real type error, whereas two separate declarations
+  // (`declare const x: Signal<number>` + `const x = __state("oops")`)
+  // only produce a duplicate-identifier error (2451), which is suppressed.
+  if (hasTypes && headerDts && code) {
+    const dl = headerDts.split('\n');
+    const cl = code.split('\n');
+    const constTypes = new Map();
+
+    for (let i = 0; i < dl.length; i++) {
+      const m = dl[i].match(/^(?:export\s+)?declare\s+const\s+(\w+):\s+(.+);$/);
+      if (m) constTypes.set(m[1], { type: m[2], idx: i });
+    }
+
+    if (constTypes.size > 0) {
+      const movedDts = new Set();
+
+      for (let j = 0; j < cl.length; j++) {
+        const cm = cl[j].match(/^((?:export\s+)?const\s+)(\w+)(\s*=\s*)/);
+        if (cm && constTypes.has(cm[2])) {
+          const entry = constTypes.get(cm[2]);
+          cl[j] = cm[1] + cm[2] + ': ' + entry.type + cm[3] + cl[j].slice(cm[0].length);
+          movedDts.add(entry.idx);
+        }
+      }
+
+      if (movedDts.size > 0) {
+        code = cl.join('\n');
+        headerDts = dl.filter((_, i) => !movedDts.has(i)).join('\n').trimEnd() + '\n';
+      }
+    }
+  }
+
   let tsContent = (hasTypes ? headerDts + '\n' : '') + code;
   const headerLines = hasTypes ? countLines(headerDts + '\n') : 1;
 
