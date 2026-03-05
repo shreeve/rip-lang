@@ -138,8 +138,8 @@ export Form = component
 #   export TabContent = component
 #     accept active                # active is `any` here too
 #
-# In React/TS, createContext<T>() carries the type:
-#   const TabsContext = createContext<string>('overview')
-# Consumers get typed values automatically.
+# In React/TS, most apps use zustand for global typed state:
+#   const useStore = create<{ active: string }>(...)
+#   const active = useStore((s) => s.active)  // typed as string
 #
 # Tracked in AGENTS.md gap table under "Context typing (offer/accept)".

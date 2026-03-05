@@ -111,7 +111,8 @@ const badInput = <Input label={123} />
 
 // ── Context typing ──
 //
-// React.createContext<T>() carries the type to all consumers:
-//   const TabsContext = createContext<string>('overview')
-//   const active = useContext(TabsContext)  // typed as string
-// Rip's offer/accept have no type annotations — values are untyped.
+// In practice, most React apps use zustand over createContext for
+// global typed state — less boilerplate, same functionality:
+//   const useStore = create<{ active: string }>((set) => ({ active: 'overview' }))
+//   const active = useStore((s) => s.active)  // typed as string
+// Rip's offer/accept have no type annotations — shared values are untyped.
