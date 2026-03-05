@@ -6,10 +6,10 @@ username:: string := "Rip"
 enabled:: boolean := true
 tags:: string[] := []
 
-# Typed computed (~=)
-clicksDoubled:: number ~= clicks * 2
-greeting:: string ~= "Hello, #{username}!"
-hasTags:: boolean ~= tags.length > 0
+# Computed (~=) — inferred from expression
+clicksDoubled ~= clicks * 2
+greeting ~= "Hello, #{username}!"
+hasTags ~= tags.length > 0
 
 # Typed readonly (=!) — compiles to plain `const`, no reactive runtime
 MAX_RETRIES:: number =! 3

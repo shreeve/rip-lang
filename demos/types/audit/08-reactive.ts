@@ -24,10 +24,10 @@ function ReactiveDemo() {
   const [enabled] = useState<boolean>(true)
   const [tags] = useState<string[]>([])
 
-  // Typed computed (~=) — plain derivation, no useMemo needed
-  const clicksDoubled: number = clicks * 2
-  const greeting: string = `Hello, ${username}!`
-  const hasTags: boolean = tags.length > 0
+  // Computed (~=) — inferred from expression
+  const clicksDoubled = clicks * 2
+  const greeting = `Hello, ${username}!`
+  const hasTags = tags.length > 0
 
   // Typed effect (~>) — runs in render body for SSR output
   console.log('clicks changed:', clicks)
