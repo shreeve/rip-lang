@@ -17,10 +17,11 @@
 import { use, start, notFound } from '@rip-lang/server'
 import { serve } from '@rip-lang/server/middleware'
 import { statSync, readdirSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join, resolve, basename } from 'node:path'
 
 root = resolve(process.env.APP_BASE_DIR or process.cwd())
 rootSlash = root + '/'
+rootName = basename(root) or root
 
 use serve dir: root, bundle: [], watch: true
 
@@ -37,10 +38,17 @@ fmtSize = (n) ->
   "#{n.toFixed(1)} TB"
 
 fmtDate = (ms) ->
-  new Date(ms).toLocaleString undefined,
-    year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit'
+  d = new Date(ms)
+  mo = d.toLocaleString('en', { month: 'short' })
+  day = String(d.getDate()).padStart(2, '0')
+  year = d.getFullYear()
+  hour = d.getHours()
+  min = String(d.getMinutes()).padStart(2, '0')
+  ampm = if hour >= 12 then 'PM' else 'AM'
+  hour = hour % 12 or 12
+  "#{mo} #{day}, #{year} at #{hour}:#{min} #{ampm}"
 
-ICONS =
+EXT_ICONS =
   html: '🌐', htm: '🌐', css: '🎨', js: '📜', mjs: '📜', ts: '📜'
   json: '📋', rip: '⚡', md: '📝', txt: '📝', pdf: '📕'
   png: '🖼️', jpg: '🖼️', jpeg: '🖼️', gif: '🖼️', svg: '🖼️', webp: '🖼️', ico: '🖼️'
@@ -48,11 +56,20 @@ ICONS =
   mp3: '🎵', ogg: '🎵', wav: '🎵', mp4: '🎬', webm: '🎬'
   woff: '🔤', woff2: '🔤', ttf: '🔤', otf: '🔤'
 
-icon = (name) ->
-  ICONS[name.slice(name.lastIndexOf('.') + 1).toLowerCase()] or '📄'
+fileIcon = (name) ->
+  EXT_ICONS[name.slice(name.lastIndexOf('.') + 1).toLowerCase()] or '📄'
 
-tr = (ic, href, label, size = '', date = '') ->
-  "<tr><td class=\"i\">#{ic}</td><td><a href=\"#{esc href}\">#{esc label}</a></td><td class=\"s\">#{size}</td><td class=\"d\">#{date}</td></tr>"
+row = (ic, href, label, size = '', date = '') ->
+  "<tr><td class=\"ic\">#{ic}</td><td><a href=\"#{esc href}\">#{esc label}</a></td><td class=\"sz\">#{size}</td><td class=\"dt\">#{date}</td></tr>"
+
+breadcrumbs = (reqPath) ->
+  parts = reqPath.split('/').filter((p) -> p)
+  crumbs = "<a href=\"/\">#{esc rootName}</a>"
+  href = ''
+  for part in parts
+    href += "/#{part}"
+    crumbs += " <span class=\"sep\">/</span> <a href=\"#{href}/\">#{esc part}</a>"
+  crumbs
 
 # --- Directory Index ---
 
@@ -67,45 +84,139 @@ renderIndex = (reqPath, fsPath) ->
   files.sort()
 
   rows = []
-  rows.push tr('📁', '../', 'Parent Directory') if reqPath isnt '/'
+  rows.push row('📁', '../', '..') if reqPath isnt '/'
   for d in dirs
-    rows.push tr('📁', "#{d}/", "#{d}/")
+    rows.push row('📁', "#{d}/", d)
   for f in files
     try
       s = statSync(join(fsPath, f))
-      rows.push tr(icon(f), f, f, fmtSize(s.size), fmtDate(s.mtimeMs))
+      rows.push row(fileIcon(f), f, f, fmtSize(s.size), fmtDate(s.mtimeMs))
     catch
-      rows.push tr(icon(f), f, f)
+      rows.push row(fileIcon(f), f, f)
 
-  title = esc(reqPath)
+  numDirs = dirs.length
+  numFiles = files.length
+  summary = []
+  summary.push "#{numDirs} folder#{if numDirs isnt 1 then 's' else ''}" if numDirs > 0
+  summary.push "#{numFiles} file#{if numFiles isnt 1 then 's' else ''}" if numFiles > 0
+
   """
   <!DOCTYPE html>
   <html lang="en">
   <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Index of #{title}</title>
+  <title>Index of #{esc reqPath}</title>
   <style>
-  *{margin:0;padding:0;box-sizing:border-box}
-  body{font-family:ui-monospace,'SF Mono',Menlo,Monaco,monospace;background:#fafafa;color:#333;padding:24px 40px}
-  h1{font-size:16px;font-weight:600;color:#111;padding:12px 0;border-bottom:2px solid #e1e4e8;margin-bottom:4px}
-  table{width:100%;border-collapse:collapse}
-  th{text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e1e4e8}
-  td{padding:5px 12px;border-bottom:1px solid #f0f0f0;font-size:13px}
-  a{color:#0969da;text-decoration:none}a:hover{text-decoration:underline}
-  tr:hover td{background:#f0f7ff}
-  .i{width:28px;text-align:center}.s{width:100px;text-align:right;color:#666}.d{width:200px;color:#666}th.s{text-align:right}
-  @media(max-width:600px){body{padding:16px}.d,th.d{display:none}}
+  :root {
+    --bg: #f3f6f7;
+    --card: #fff;
+    --border: #e5e7eb;
+    --border-row: #f0f0f0;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --link: #2563eb;
+    --link-visited: #7c3aed;
+    --hover-bg: #f0f7ff;
+    --head-bg: #fafbfc;
+    --sep: #cbd5e1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1117;
+      --card: #161b22;
+      --border: #30363d;
+      --border-row: #21262d;
+      --text: #c9d1d9;
+      --muted: #8b949e;
+      --link: #58a6ff;
+      --link-visited: #bc8cff;
+      --hover-bg: #1c2129;
+      --head-bg: #1c2129;
+      --sep: #484f58;
+    }
+  }
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--text);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 960px; margin: 2.5rem auto; padding: 0 1rem; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+  }
+  .bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: .875rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    gap: 1rem;
+  }
+  .crumbs { font-size: .9375rem; font-weight: 500; }
+  .crumbs a { color: var(--link); text-decoration: none; }
+  .crumbs a:hover { text-decoration: underline; }
+  .sep { color: var(--sep); margin: 0 .3rem; font-weight: 400; }
+  .meta { font-size: .8125rem; color: var(--muted); white-space: nowrap; }
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    position: sticky; top: 0;
+    background: var(--head-bg);
+    text-align: left;
+    padding: .625rem 1.25rem;
+    font-size: .6875rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: .5rem 1.25rem;
+    border-bottom: 1px solid var(--border-row);
+    font-size: .875rem;
+    vertical-align: middle;
+  }
+  tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--hover-bg); }
+  td a { color: var(--link); text-decoration: none; }
+  td a:hover { color: var(--link); text-decoration: underline; }
+  td a:visited { color: var(--link-visited); }
+  .ic { width: 2.5rem; text-align: center; font-size: 1.125rem; }
+  .sz { width: 6rem; text-align: right; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .dt { color: var(--muted); white-space: nowrap; }
+  th.sz { text-align: right; }
+  @media (max-width: 640px) {
+    .wrap { margin: 1rem auto; }
+    td, th { padding: .5rem .75rem; }
+    .dt, th.dt { display: none; }
+    .bar { padding: .75rem 1rem; }
+  }
   </style>
   </head>
   <body>
-  <h1>Index of #{title}</h1>
+  <div class="wrap">
+  <div class="card">
+  <div class="bar">
+    <div class="crumbs">#{breadcrumbs reqPath}</div>
+    <div class="meta">#{summary.join(' &middot; ')}</div>
+  </div>
   <table>
-  <thead><tr><th></th><th>Name</th><th class="s">Size</th><th class="d">Modified</th></tr></thead>
+  <thead><tr><th></th><th>Name</th><th class="sz">Size</th><th class="dt">Modified</th></tr></thead>
   <tbody>
   #{rows.join('\n')}
   </tbody>
   </table>
+  </div>
+  </div>
   </body>
   </html>
   """
