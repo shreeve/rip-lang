@@ -42,8 +42,5 @@ badId:: ID = "not-a-number"
 badName:: Name = 42
 # @ts-expect-error — boolean assigned to Email (string)
 badEmail:: Email = true
-# SKIP: rip check can't resolve `typeof defaults` on untyped vars —
-# the .d.ts doesn't capture the shape, so this test is unused.
-# Works in the .ts companion.
 # @ts-expect-error — wrong shape for Defaults
-# badPrefs:: Defaults = { theme: 123, lang: true }
+badPrefs:: Defaults = { theme: 123, lang: true }
