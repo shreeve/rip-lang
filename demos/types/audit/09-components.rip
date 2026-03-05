@@ -7,6 +7,7 @@
 # ── Components ──
 
 export Button = component
+  @type:: string := "button"
   @variant:: "primary" | "secondary" := "primary"
   @loading:: boolean := false
   @disabled:: boolean := false
@@ -15,7 +16,7 @@ export Button = component
   fg ~= if variant is "primary" then "#fff" else "#333"
 
   render
-    button style: "background: #{bg}; color: #{fg}", disabled: disabled or loading
+    button type: type, style: "background: #{bg}; color: #{fg}", disabled: disabled or loading
       if loading
         "Loading..."
       else
