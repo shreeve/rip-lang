@@ -224,7 +224,7 @@ renderIndex = (reqPath, fsPath) ->
 # --- Request Handler ---
 
 notFound ->
-  reqPath = @req.path
+  reqPath = try decodeURIComponent(@req.path) catch then @req.path
   path = resolve(root, reqPath.slice(1))
 
   unless path is root or path.startsWith(rootSlash)
