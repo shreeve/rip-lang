@@ -1,0 +1,274 @@
+# ==============================================================================
+# @rip-lang/db MCP Server — DuckDB queries over rip-db HTTP
+# ==============================================================================
+#
+# MCP stdio server that proxies tool calls to a rip-db HTTP endpoint.
+# Zero dependencies — pure Rip, native fetch.
+#
+# Usage:
+#   rip mcp.rip                              # default: http://localhost:4213
+#   rip mcp.rip --url http://localhost:8080   # custom endpoint
+#
+# Cursor MCP config (~/.cursor/mcp.json):
+#   {
+#     "mcpServers": {
+#       "duckdb": {
+#         "command": "rip",
+#         "args": ["/path/to/packages/db/mcp.rip"]
+#       }
+#     }
+#   }
+#
+# ==============================================================================
+
+import { createInterface } from 'readline'
+
+# Configuration
+MAX_ROWS =! 1024
+MAX_CHARS =! 50000
+VERSION =! '1.0.0'
+
+dbUrl = do ->
+  args = process.argv.slice(2)
+  idx = args.indexOf('--url')
+  if idx >= 0 and args[idx + 1] then args[idx + 1] else 'http://localhost:4213'
+
+log = (...args) -> console.error '[mcp-duckdb]', ...args
+
+# ==============================================================================
+# HTTP — talk to rip-db
+# ==============================================================================
+
+sql = (query) ->
+  resp = await fetch "#{dbUrl}/sql",
+    method: 'POST'
+    headers: { 'Content-Type': 'application/json' }
+    body: JSON.stringify({ sql: query })
+  await resp.json()
+
+# ==============================================================================
+# Tools
+# ==============================================================================
+
+TOOLS =! [
+  {
+    name: 'execute_query'
+    description: 'Execute a SQL query on the DuckDB database. Use DuckDB SQL dialect.'
+    inputSchema:
+      type: 'object'
+      properties:
+        sql: { type: 'string', description: 'SQL query to execute' }
+      required: ['sql']
+    annotations: { readOnlyHint: false, destructiveHint: true }
+  }
+  {
+    name: 'list_tables'
+    description: 'List all tables and views in the database with their types and comments.'
+    inputSchema:
+      type: 'object'
+      properties: {}
+    annotations: { readOnlyHint: true, destructiveHint: false }
+  }
+  {
+    name: 'list_columns'
+    description: 'List all columns of a table with their types, nullability, and comments.'
+    inputSchema:
+      type: 'object'
+      properties:
+        table: { type: 'string', description: 'Table or view name' }
+      required: ['table']
+    annotations: { readOnlyHint: true, destructiveHint: false }
+  }
+]
+
+# --- execute_query ---
+
+executeQuery = (params) ->
+  query = params.sql
+  return { success: false, error: 'Missing sql parameter' } unless query
+
+  try
+    result = await sql(query)
+    return { success: false, error: result.error } if result.error
+
+    columns = result.meta?.map((c) -> c.name) or []
+    columnTypes = result.meta?.map((c) -> c.type) or []
+    rows = result.data or []
+    rowCount = rows.length
+
+    truncated = false
+    warning = null
+
+    if rowCount > MAX_ROWS
+      rows = rows.slice(0, MAX_ROWS)
+      truncated = true
+      warning = "Results limited to #{MAX_ROWS} rows. Query returned more data."
+
+    output = { success: true, columns, columnTypes, rows, rowCount: rows.length }
+    output.truncated = true if truncated
+
+    json = JSON.stringify(output)
+    while json.length > MAX_CHARS and rows.length > 1
+      cut = Math.max(1, Math.floor(rows.length / 10))
+      rows = rows.slice(0, rows.length - cut)
+      output.rows = rows
+      output.rowCount = rows.length
+      output.truncated = true
+      json = JSON.stringify(output)
+      warning = "Results limited to #{rows.length} rows due to #{Math.floor(MAX_CHARS / 1000)}KB output size limit."
+
+    output.warning = warning if warning
+    output
+  catch err
+    { success: false, error: err.message, errorType: err.constructor?.name or 'Error' }
+
+# --- list_tables ---
+
+listTables = ->
+  try
+    result = await sql """
+      SELECT schema_name as schema, table_name as name, 'table' as type, comment
+      FROM duckdb_tables() WHERE database_name = current_database()
+      UNION ALL
+      SELECT schema_name as schema, view_name as name, 'view' as type, comment
+      FROM duckdb_views() WHERE database_name = current_database()
+      ORDER BY schema, type, name
+      """
+    return { success: false, error: result.error } if result.error
+    meta = result.meta or []
+    tables = (result.data or []).map (row) ->
+      obj = {}
+      obj[meta[i].name] = row[i] for i in [0...meta.length]
+      obj
+    tableCount = tables.filter((t) -> t.type is 'table').length
+    viewCount = tables.filter((t) -> t.type is 'view').length
+    { success: true, tables, tableCount, viewCount }
+  catch err
+    { success: false, error: err.message, errorType: err.constructor?.name or 'Error' }
+
+# --- list_columns ---
+
+listColumns = (params) ->
+  table = params.table
+  return { success: false, error: 'Missing table parameter' } unless table
+  safe = table.replace(/[^a-zA-Z0-9_]/g, '')
+
+  try
+    result = await sql """
+      SELECT column_name as name, data_type as type,
+             is_nullable = 'YES' as nullable, comment
+      FROM duckdb_columns()
+      WHERE database_name = current_database()
+        AND table_name = '#{safe}'
+      ORDER BY column_index
+      """
+    return { success: false, error: result.error } if result.error
+    meta = result.meta or []
+    columns = (result.data or []).map (row) ->
+      obj = {}
+      obj[meta[i].name] = row[i] for i in [0...meta.length]
+      obj
+    { success: true, table: safe, columns, columnCount: columns.length }
+  catch err
+    { success: false, error: err.message, errorType: err.constructor?.name or 'Error' }
+
+# ==============================================================================
+# Server Instructions — DuckDB SQL reference for the LLM
+# ==============================================================================
+
+INSTRUCTIONS =! """\
+  You are connected to a DuckDB database via rip-db. Use DuckDB SQL dialect.
+
+  Available tools: execute_query, list_tables, list_columns.
+  Start by calling list_tables to discover what's available.
+
+  DuckDB SQL quick reference:
+  - FROM-first: FROM my_table WHERE x > 10 SELECT x, y
+  - SELECT without FROM: SELECT 42, current_date
+  - Flexible columns: SELECT * EXCLUDE (col1, col2), SELECT * REPLACE (expr AS col)
+  - Column patterns: SELECT COLUMNS('price.*') FROM t
+  - GROUP BY ALL: automatically groups by all non-aggregate columns
+  - ORDER BY ALL: orders by all selected columns
+  - QUALIFY: filter window function results — SELECT *, row_number() OVER (PARTITION BY g ORDER BY x) as rn FROM t QUALIFY rn = 1
+  - arg_max/arg_min: arg_max(value, order_col) — value at max of order_col per group
+  - SUMMARIZE: SUMMARIZE table_name — quick column statistics (count, min, max, avg, nulls)
+  - Sample: SELECT * FROM table USING SAMPLE 5
+  - Date: date_trunc('month', d), strftime(d, '%Y-%m'), EXTRACT(year FROM d)
+  - JSON: col->>'key', col->'$.nested.path', json_extract(col, '$.key')
+  - Lists: [1, 2, 3], list_transform(l, x -> x * 2), list_filter(l, x -> x > 0)
+  - Structs: {'a': 1, 'b': 2}, struct.field
+  - PIVOT / UNPIVOT for reshaping data
+  - PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY col) for medians
+  - Window: SUM(x) OVER (PARTITION BY g ORDER BY d ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)
+  - CTEs: WITH t AS (...) SELECT * FROM t
+
+  Best practices:
+  - Filter early with WHERE to reduce data before aggregation
+  - Use CTEs for readability
+  - Avoid SELECT * in production queries — select only needed columns
+  - Use LIMIT when exploring large tables
+  """
+
+# ==============================================================================
+# MCP Protocol — JSON-RPC 2.0 over stdio
+# ==============================================================================
+
+respond = (id, result) ->
+  JSON.stringify({ jsonrpc: '2.0', id, result })
+
+dispatch = (msg) ->
+  { id, method, params } = msg
+
+  switch method
+    when 'initialize'
+      respond id,
+        protocolVersion: '2024-11-05'
+        capabilities: { tools: {} }
+        serverInfo: { name: 'rip-db-mcp', version: VERSION }
+        instructions: INSTRUCTIONS
+
+    when 'notifications/initialized'
+      null
+
+    when 'tools/list'
+      respond id, { tools: TOOLS }
+
+    when 'tools/call'
+      name = params?.name
+      args = params?.arguments or {}
+
+      if name is 'execute_query'
+        result = await executeQuery(args)
+      else if name is 'list_tables'
+        result = await listTables()
+      else if name is 'list_columns'
+        result = await listColumns(args)
+      else
+        result = { success: false, error: "Unknown tool: #{name}" }
+
+      isError = not result.success
+      text = JSON.stringify(result)
+      respond id, { content: [{ type: 'text', text }], isError }
+
+    else
+      if id?
+        respond id, { error: { code: -32601, message: "Unknown method: #{method}" } }
+      else
+        null
+
+# ==============================================================================
+# Main — read stdin line by line, dispatch, write to stdout
+# ==============================================================================
+
+log "Starting (rip-db at #{dbUrl})"
+
+rl = createInterface({ input: process.stdin })
+rl.on 'line', (line) ->
+  return unless line.trim()
+  try
+    msg = JSON.parse(line)
+    result = await dispatch(msg)
+    if result
+      process.stdout.write result + '\n'
+  catch err
+    log "Error: #{err.message}"
