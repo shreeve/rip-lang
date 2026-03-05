@@ -108,6 +108,21 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 | Function return types    | 06-functions   | Same-file typed functions                  |
 | Cross-file type flow     | 07-integration | Via .d.ts; untyped files get `@ts-nocheck` |
 
+### Suppressed error codes
+
+`rip check` runs TypeScript under the hood but suppresses 16 error codes (defined in `SKIP_CODES` in [src/typecheck.js](../../../src/typecheck.js)). Most suppressions are necessary — Rip's compilation model produces patterns that confuse TS (DTS coexisting with compiled bodies, module resolution, etc.). But three categories directly weaken type safety:
+
+| Suppressed codes | What they hide | Impact on audit |
+| --- | --- | --- |
+| 7005, 7006, 7034 | Implicit `any` on variables and params | Root cause of the component prop gap — TS *would* flag untyped props inside component bodies, but these codes suppress it |
+| 2304 | Cannot find name | Masks references to undefined variables; contributes to unresolved import gap |
+| 2300, 2451 | Duplicate identifiers | Necessary (DTS + compiled body coexist) but also hides real shadowing bugs |
+| 2307 | Cannot find module | Rip resolves modules differently, but this also masks genuinely broken imports |
+
+The remaining codes (2389, 2391, 2393, 2394, 2567, 1064, 2582, 2593) are structural — they exist because Rip's compilation model inherently produces overload/duplicate patterns that TS doesn't expect. These are safe to suppress.
+
+Reducing the implicit-any suppressions (7005/7006/7034) is the single highest-leverage change for type safety — it would surface errors in every component body and untyped function. The tradeoff: it would also flag every intentionally untyped variable in untyped files, so it likely needs a per-file opt-in (e.g. only enforce when the file has `::` annotations).
+
 ## TypeScript Companions
 
 Each `.rip` file has a `.ts` companion with equivalent TypeScript for side-by-side IntelliSense comparison.
