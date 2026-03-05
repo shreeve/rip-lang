@@ -1,4 +1,4 @@
-// 10-validation.ts — Runtime validation of API responses
+// 10-validation.ts — Runtime validation + async/await
 //
 // Rip's return type annotations are erased — no runtime validation.
 // TypeScript + Zod gives both: schemas define the shape once,
@@ -52,14 +52,27 @@ console.log(`email: ${bob.email}`)
 console.log(`name: ${bob.firstName ?? '(anon)'}`)
 console.log(`phone: ${bob.phone ?? '(none)'}`)
 
-// ── Negative tests (type errors caught at compile time) ──
+// ── Async/await (equivalent of Rip's ! operator) ──
 
-async function _negativeTests() {
-  const user = await fetchUser(1)
-  // @ts-expect-error — property doesn't exist on User
-  user.username
-  // @ts-expect-error — id is number, not string
-  const id: string = user.id
-  // @ts-expect-error — firstName is string | null, not string
-  const name: string = user.firstName
+async function delay(ms: number): Promise<string> {
+  await new Promise(r => setTimeout(r, ms))
+  return `done after ${ms}ms`
 }
+
+const r1: string = await delay(50)
+console.log(`r1: ${r1}`)
+
+// If we wrote `const r2: number = await delay(50)`, tsc catches:
+//   "Type 'string' is not assignable to type 'number'" ✓
+
+// Without return annotation, TS infers return type (no gap in TS)
+async function delayUntyped(ms: number) {
+  await new Promise(r => setTimeout(r, ms))
+  return `untyped after ${ms}ms`
+}
+
+const r3 = await delayUntyped(50)
+console.log(`r3: ${r3}`)
+// In TS this IS caught — delayUntyped infers Promise<string>
+// @ts-expect-error — string is not assignable to number
+const r4: number = r3

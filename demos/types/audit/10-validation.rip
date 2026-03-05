@@ -1,4 +1,4 @@
-# 10-validation.rip — Runtime validation of API responses
+# 10-validation.rip — Runtime validation + async/await (! operator)
 #
 # Tier 2 — Essential for real apps. Every typed API call needs
 # validated responses, not blind trust in response.json().
@@ -17,7 +17,7 @@ User ::= type
   phone: string | null
 
 def fetchUser(id:: number):: Promise<User>
-  response = await fetch("/api/users/#{id}")
+  response = fetch! "/api/users/#{id}"
   response.json()
 
 # ── Runtime exercise ──
@@ -44,3 +44,27 @@ console.log "id: #{bob.id}"
 console.log "email: #{bob.email}"
 console.log "name: #{bob.firstName ?? '(anon)'}"
 console.log "phone: #{bob.phone ?? '(none)'}"
+
+# ── Async/await with ! operator ──
+
+def delay(ms:: number):: Promise<string>
+  sleep! ms
+  "done after #{ms}ms"
+
+# ! operator: calls + awaits in one step
+r1:: string = delay! 50
+console.log "r1: #{r1}"
+
+# If we wrote `r2:: number = delay! 50`, rip check catches:
+#   "Type 'string' is not assignable to type 'number'" ✓
+# (@ts-expect-error doesn't work here — shadow file line misalignment)
+
+# Without return annotation, awaited result is `any` (gap)
+def delayUntyped(ms:: number)
+  sleep! ms
+  "untyped after #{ms}ms"
+
+r3 = delayUntyped! 50
+console.log "r3: #{r3}"
+# r3 is any — this should error but doesn't (no return annotation)
+r4:: number = r3
