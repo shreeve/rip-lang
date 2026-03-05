@@ -1,4 +1,10 @@
 # 09-components.rip — Typed component props
+#
+# Rip components define typed props with @prop:: type := default.
+# The component definitions emit typed DTS declarations.
+# Prop type checking on construction is a known gap (see bottom of file).
+
+# ── Components ──
 
 export Button = component
   @variant:: "primary" | "secondary" := "primary"
@@ -30,8 +36,6 @@ export Input = component
       if error
         div error
 
-# ── Parent: sign-in form ──
-
 export Form = component
   @title:: string := "Sign In"
   email:: string := ""
@@ -60,11 +64,23 @@ export Form = component
       Button type: "submit", variant: "primary", loading: loading
         "Sign In"
 
-# ── Negative: wrong prop types must be caught ──
-
-# @ts-expect-error — wrong variant literal
-badBtn:: Button = new Button({ variant: "danger" })
-# @ts-expect-error — disabled expects boolean
-badBtn2:: Button = new Button({ disabled: "yes" })
-# @ts-expect-error — wrong type for label
-badInput:: Input = new Input({ label: 123 })
+# ── Gap: type safety inside component bodies ──
+#
+# The real gap is not constructor prop checking — it's that types are
+# invisible inside the component body where props are actually used.
+# The compiled code redeclares all props as untyped variables (from
+# signal unwrapping), so TypeScript sees them as `any`. For example:
+#
+#   export Button = component
+#     @variant:: "primary" | "secondary" := "primary"
+#
+#     # These should be caught but aren't:
+#     bad = variant + 5          # string + number — no error
+#     bad = variant is "danger"  # impossible comparison — no error
+#
+# In a real app, 90% of code lives inside component bodies — render
+# blocks, event handlers, computeds, methods. Without typed props
+# flowing through, the type system is effectively invisible where
+# it matters most.
+#
+# Tracked in AGENTS.md gap table under "Component prop types".
