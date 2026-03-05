@@ -72,11 +72,11 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 **Component model gaps** (would need language-level changes):
 
-| Category                      | Tested In     | Notes                                                                                          |
-| ----------------------------- | ------------- | ---------------------------------------------------------------------------------------------- |
-| Shared state typing (stash)   | 09-components | Stash is untyped — any path/value accepted; zustand equivalent is fully typed (see .tsx)       |
-| Element type inheritance      | 09-components | No way to inherit HTML element's full type surface; wrappers must declare each prop manually   |
-| Generic components            | 09-components | Can't parameterize components by type (e.g. typed select where value type flows through props) |
+| Category                    | Tested In     | Notes                                                                                          |
+| --------------------------- | ------------- | ---------------------------------------------------------------------------------------------- |
+| Shared state typing (stash) | 09-components | Stash is untyped — any path/value accepted; zustand equivalent is fully typed (see .tsx)       |
+| Element type inheritance    | 09-components | No way to inherit HTML element's full type surface; wrappers must declare each prop manually   |
+| Generic components          | 09-components | Can't parameterize components by type (e.g. typed select where value type flows through props) |
 
 **IDE-only gaps** (require VS Code extension changes, not testable in audit files):
 
@@ -112,12 +112,12 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 `rip check` runs TypeScript under the hood but suppresses 16 error codes (defined in `SKIP_CODES` in [src/typecheck.js](../../../src/typecheck.js)). Most suppressions are necessary — Rip's compilation model produces patterns that confuse TS (DTS coexisting with compiled bodies, module resolution, etc.). But three categories directly weaken type safety:
 
-| Suppressed codes | What they hide | Impact on audit |
-| --- | --- | --- |
+| Suppressed codes | What they hide                         | Impact on audit                                                                                                           |
+| ---------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | 7005, 7006, 7034 | Implicit `any` on variables and params | Root cause of the component prop gap — TS *would* flag untyped props inside component bodies, but these codes suppress it |
-| 2304 | Cannot find name | Masks references to undefined variables; contributes to unresolved import gap |
-| 2300, 2451 | Duplicate identifiers | Necessary (DTS + compiled body coexist) but also hides real shadowing bugs |
-| 2307 | Cannot find module | Rip resolves modules differently, but this also masks genuinely broken imports |
+| 2304             | Cannot find name                       | Masks references to undefined variables; contributes to unresolved import gap                                             |
+| 2300, 2451       | Duplicate identifiers                  | Necessary (DTS + compiled body coexist) but also hides real shadowing bugs                                                |
+| 2307             | Cannot find module                     | Rip resolves modules differently, but this also masks genuinely broken imports                                            |
 
 The remaining codes (2389, 2391, 2393, 2394, 2567, 1064, 2582, 2593) are structural — they exist because Rip's compilation model inherently produces overload/duplicate patterns that TS doesn't expect. These are safe to suppress.
 
