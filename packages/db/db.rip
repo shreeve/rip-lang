@@ -124,15 +124,14 @@ console.log "rip-db: source #{path}"
 checkpoint = -> try conn.query 'CHECKPOINT'
 checkpointTimer = setInterval checkpoint, 5 * 60 * 1000
 
-# Graceful shutdown: checkpoint, disconnect, close
+# Graceful shutdown: checkpoint and exit (DuckDB FFI close segfaults in Bun)
 shuttingDown = false
 shutdown = ->
   return if shuttingDown
+  p "\n\nrip-db: shutting down server"
   shuttingDown = true
   clearInterval checkpointTimer if checkpointTimer
-  checkpoint()
-  try conn.close!
-  try db.close!
+  try checkpoint()
   exit!
 
 process.on 'SIGINT',  shutdown
