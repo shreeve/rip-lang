@@ -109,10 +109,24 @@ const badInput = <Input label={123} />
 // The caller gets type-safe option/value types. Rip can't parameterize
 // components by type — options and value are unrelated types.
 
-// ── Context typing ──
+// ── Shared state typing ──
 //
-// In practice, most React apps use zustand over createContext for
-// global typed state — less boilerplate, same functionality:
-//   const useStore = create<{ active: string }>((set) => ({ active: 'overview' }))
-//   const active = useStore((s) => s.active)  // typed as string
-// Rip's offer/accept have no type annotations — shared values are untyped.
+// In practice, shared client state in React uses zustand — not
+// Context. This is the equivalent of Rip's stash.
+//
+//   Rip (what you'd use)    │ React (what you'd use)   │ Scope
+//   ────────────────────────┼──────────────────────────┼─────────────────
+//   stash                   │ zustand                  │ global client state
+//   offer / accept          │ React Context            │ ancestor → subtree (niche)
+//   (fetch + :=)            │ react-query / loader     │ async server state
+//
+// zustand — global client state (typed from creation):
+//   const useStore = create<{ theme: string }>(set => ({ theme: 'light' }))
+//   const theme = useStore(s => s.theme)  // typed as string
+//
+// react-query — async server state (typed):
+//   const { data } = useQuery<User>({ queryKey: ['user'], queryFn: fetchUser })
+//   data.name  // typed as string
+//
+// Rip's stash and offer/accept have no type annotations.
+// Both zustand and react-query carry types through to consumers.

@@ -127,19 +127,37 @@ export Form = component
 #
 # Tracked in AGENTS.md gap table under "Generic components".
 
-# ── Gap: context typing (offer/accept) ──
+# ── Gap: shared state typing (stash, offer/accept) ──
 #
-# `offer` and `accept` have no type annotations. The shared
-# value is completely untyped:
+# In practice, shared client state in Rip uses the stash — a global
+# reactive proxy seeded from data-state. This is the equivalent of
+# zustand in React: global, simple, no boilerplate.
+#
+#   Rip (what you'd use)    │ React (what you'd use)   │ Scope
+#   ────────────────────────┼──────────────────────────┼─────────────────
+#   stash                   │ zustand                  │ global client state
+#   offer / accept          │ React Context            │ ancestor → subtree (niche)
+#   (fetch + :=)            │ react-query / loader     │ async server state
+#
+# stash — the common case (works today, untyped):
+#
+#   # <script data-state='{"user": null, "theme": "light"}'>
+#   # components read/write stash.user, stash.theme anywhere
+#
+# offer/accept — tree-scoped sharing (niche, like React Context):
 #
 #   export Tabs = component
-#     offer active := 'overview'   # active is `any` to consumers
+#     offer active := 'overview'
 #
 #   export TabContent = component
-#     accept active                # active is `any` here too
+#     accept active
 #
-# In React/TS, most apps use zustand for global typed state:
-#   const useStore = create<{ active: string }>(...)
-#   const active = useStore((s) => s.active)  // typed as string
+# The gap: neither stash nor offer/accept carry type annotations.
+# In zustand, the store is typed from creation:
+#   const useStore = create<{ theme: string }>(...)
+#   const theme = useStore(s => s.theme)  // typed as string
+#
+# Rip also has no equivalent of react-query for typed async
+# server state — fetched data goes into untyped stash/state.
 #
 # Tracked in AGENTS.md gap table under "Context typing (offer/accept)".
