@@ -127,37 +127,71 @@ export Form = component
 #
 # Tracked in AGENTS.md gap table under "Generic components".
 
-# ── Gap: shared state typing (stash, offer/accept) ──
+# ── Stash vs zustand: shared client state (shopping cart) ──
 #
-# In practice, shared client state in Rip uses the stash — a global
-# reactive proxy seeded from data-state. This is the equivalent of
-# zustand in React: global, simple, no boilerplate.
+# A shopping cart is pure client state — created in the browser,
+# shared across routes/components, persisted to localStorage.
+# This is exactly what stash and zustand are for.
+
+# Define the cart shape (Rip can express this type):
+CartItem ::= type
+  id: number
+  name: string
+  price: number
+  quantity: number
+
+# In a real Rip app, the stash is seeded (possibly empty) and shared:
+#   <script data-state='{"cart": {"items": []}}'>
 #
-#   Rip (what you'd use)    │ React (what you'd use)   │ Scope
-#   ────────────────────────┼──────────────────────────┼─────────────────
-#   stash                   │ zustand                  │ global client state
-#   offer / accept          │ React Context            │ ancestor → subtree (niche)
-#   (fetch + :=)            │ react-query / loader     │ async server state
+# There is ONE global stash per app — a deep reactive proxy. Different
+# "stores" are just paths within it (stash.cart, stash.theme, etc.).
+# This is unlike zustand, where each store is a separate create() call.
+# Below we simulate this with a module-level object — the access pattern
+# is identical to how components use stash in the browser.
+
+stash:: { cart: { items: CartItem[] } } = { cart: { items: [] } }
+
+def addItem(item:: CartItem)
+  stash.cart.items = [...stash.cart.items, item]
+
+def removeItem(item:: CartItem)
+  stash.cart.items = stash.cart.items.filter (i) -> i.id isnt item.id
+
+def total():: number
+  stash.cart.items.reduce ((sum:: number, i) -> sum + i.price * i.quantity), 0
+
+export CartBadge = component
+  render
+    span "#{stash.cart.items.length} items"
+
+export CartTotal = component
+  render
+    div
+      span "Total: $#{total()}"
+
+export AddToCart = component
+  add: ->
+    addItem { id: 1, name: "Widget", price: 9.99, quantity: 1 }
+
+  render
+    button @click: @add, "Add to Cart"
+
+# ── What stash can't catch (all of these compile silently) ──
 #
-# stash — the common case (works today, untyped):
+#   stash.cart.items = "not an array"        # wrong type
+#   addItem { broken: true }                 # wrong item shape
+#   stash.cart.item                          # typo — 'item' not 'items'
+#   stash.cart.tax                           # nonexistent path
+#   removeItem 42                            # wrong arg type — number for CartItem
 #
-#   # <script data-state='{"user": null, "theme": "light"}'>
-#   # components read/write stash.user, stash.theme anywhere
+# CartItem type exists but has NO connection to the stash object or
+# the addItem/removeItem/total functions. It generates a .d.ts
+# declaration but doesn't constrain anything at compile time.
+# The stash is a plain reactive proxy — any property access or
+# assignment is valid.
 #
-# offer/accept — tree-scoped sharing (niche, like React Context):
+# In zustand (see 09-components.tsx), ALL of these are caught at
+# compile time. The store is typed from creation and every
+# selector/mutation is checked.
 #
-#   export Tabs = component
-#     offer active := 'overview'
-#
-#   export TabContent = component
-#     accept active
-#
-# The gap: neither stash nor offer/accept carry type annotations.
-# In zustand, the store is typed from creation:
-#   const useStore = create<{ theme: string }>(...)
-#   const theme = useStore(s => s.theme)  // typed as string
-#
-# Rip also has no equivalent of react-query for typed async
-# server state — fetched data goes into untyped stash/state.
-#
-# Tracked in AGENTS.md gap table under "Context typing (offer/accept)".
+# Tracked in AGENTS.md gap table under "Shared state typing (stash)".

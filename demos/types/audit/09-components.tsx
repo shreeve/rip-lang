@@ -109,24 +109,70 @@ const badInput = <Input label={123} />
 // The caller gets type-safe option/value types. Rip can't parameterize
 // components by type — options and value are unrelated types.
 
-// ── Shared state typing ──
-//
-// In practice, shared client state in React uses zustand — not
-// Context. This is the equivalent of Rip's stash.
-//
-//   Rip (what you'd use)    │ React (what you'd use)   │ Scope
-//   ────────────────────────┼──────────────────────────┼─────────────────
-//   stash                   │ zustand                  │ global client state
-//   offer / accept          │ React Context            │ ancestor → subtree (niche)
-//   (fetch + :=)            │ react-query / loader     │ async server state
-//
-// zustand — global client state (typed from creation):
-//   const useStore = create<{ theme: string }>(set => ({ theme: 'light' }))
-//   const theme = useStore(s => s.theme)  // typed as string
-//
-// react-query — async server state (typed):
-//   const { data } = useQuery<User>({ queryKey: ['user'], queryFn: fetchUser })
-//   data.name  // typed as string
-//
-// Rip's stash and offer/accept have no type annotations.
-// Both zustand and react-query carry types through to consumers.
+// ── Stash vs zustand: shared client state (shopping cart) ──
+
+import { create } from 'zustand'
+
+// Same shape as CartItem in 09-components.rip
+type CartItem = {
+  id: number
+  name: string
+  price: number
+  quantity: number
+}
+
+type Cart = Readonly<{
+  items: CartItem[]
+  addItem: (item: CartItem) => void
+  removeItem: (item: CartItem) => void
+  total: () => number
+}>
+
+const useCart = create<Cart>()((set, get) => ({
+  items: [],
+  addItem: (item) => set((s) => ({ items: [...s.items, item] })),
+  removeItem: (item) => set((s) => ({ items: s.items.filter((i) => i.id !== item.id) })),
+  total: () => get().items.reduce((sum, i) => sum + i.price * i.quantity, 0),
+}))
+
+// Components — every selector is typed
+
+function CartBadge() {
+  const items = useCart((s) => s.items)              // typed: CartItem[]
+  return <span>{items.length} items</span>
+}
+
+function CartTotal() {
+  const total = useCart((s) => s.total)              // typed: () => number
+  return <div>Total: ${total()}</div>
+}
+
+function AddToCart() {
+  const addItem = useCart((s) => s.addItem)          // typed: (item: CartItem) => void
+  return (
+    <button onClick={() => addItem({ id: 1, name: 'Widget', price: 9.99, quantity: 1 })}>
+      Add to Cart
+    </button>
+  )
+}
+
+// ── Negative tests: zustand catches every mistake ──
+
+// @ts-expect-error — wrong type: items should be CartItem[], not string
+const bad1 = create<Cart>(() => ({ items: 'not an array', addItem: () => {}, removeItem: () => {}, total: () => 0 }))
+
+// @ts-expect-error — wrong item shape: missing required fields
+const bad2 = useCart((s) => s.addItem({ broken: true }))
+
+// @ts-expect-error — typo: 'item' doesn't exist, it's 'items'
+const bad3 = useCart((s) => s.item)
+
+// @ts-expect-error — nonexistent path
+const bad4 = useCart((s) => s.tax)
+
+// @ts-expect-error — wrong arg type: number instead of CartItem
+const bad5 = useCart((s) => s.removeItem(42))
+
+// All five caught at compile time. In Rip's stash, all five
+// compile silently — the types exist in .d.ts but have no
+// connection to the stash proxy.

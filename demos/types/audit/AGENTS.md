@@ -74,9 +74,9 @@ What `rip check` catches today vs. what it doesn't. This tracks the overall heal
 
 | Category                      | Tested In     | Notes                                                                                          |
 | ----------------------------- | ------------- | ---------------------------------------------------------------------------------------------- |
+| Shared state typing (stash)   | 09-components | Stash is untyped — any path/value accepted; zustand equivalent is fully typed (see .tsx)       |
 | Element type inheritance      | 09-components | No way to inherit HTML element's full type surface; wrappers must declare each prop manually   |
 | Generic components            | 09-components | Can't parameterize components by type (e.g. typed select where value type flows through props) |
-| Context typing (offer/accept) | 09-components | `offer`/`accept` have no type annotations; shared values are untyped                           |
 
 **IDE-only gaps** (require VS Code extension changes, not testable in audit files):
 
