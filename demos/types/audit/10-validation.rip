@@ -12,10 +12,35 @@
 User ::= type
   id: number
   email: string
-  firstName?: string
-  lastName?: string
-  phone?: string
+  firstName: string | null
+  lastName: string | null
+  phone: string | null
 
 def fetchUser(id:: number):: Promise<User>
   response = await fetch("/api/users/#{id}")
   response.json()
+
+# ── Runtime exercise ──
+
+alice:: User =
+  id: 1
+  email: 'alice@example.com'
+  firstName: 'Alice'
+  lastName: 'Smith'
+  phone: '555-1234'
+
+bob:: User =
+  id: 2
+  email: 'bob@example.com'
+  firstName: null
+  lastName: null
+  phone: null
+
+console.log "id: #{alice.id}"
+console.log "email: #{alice.email}"
+console.log "name: #{alice.firstName} #{alice.lastName}"
+console.log "phone: #{alice.phone}"
+console.log "id: #{bob.id}"
+console.log "email: #{bob.email}"
+console.log "name: #{bob.firstName ?? '(anon)'}"
+console.log "phone: #{bob.phone ?? '(none)'}"

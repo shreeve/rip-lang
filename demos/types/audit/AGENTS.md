@@ -24,7 +24,7 @@ for f in *.rip; do printf "\n── %s ──\n" "$f" && rip "$f"; done         
 for f in *.ts *.tsx; do printf "\n── %s ──\n" "$f" && bun run "$f"; done  # 8. run all .ts
 ```
 
-All commands must pass. 09-components (.rip and .tsx) and 10-validation (.rip and .ts) are silent at runtime but type-check correctly. Report results in a summary table. If errors appear, isolate with single-file commands. Update the status table below as features are fixed or regress.
+All commands must pass. 09-components (.rip and .tsx) are silent at runtime but type-check correctly. Report results in a summary table. If errors appear, isolate with single-file commands. Update the status table below as features are fixed or regress.
 
 ## Feature **Status**
 

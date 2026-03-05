@@ -22,19 +22,40 @@ type User = z.infer<typeof UserSchema>
 
 async function fetchUser(id: number): Promise<User> {
   const response = await fetch(`/api/users/${id}`)
-  // parse() throws ZodError on contract violations — per-field
-  // details with expected vs received types. Left unhandled so
-  // Sentry (or similar) captures them in production.
   return UserSchema.parse(await response.json())
 }
 
-// ── Consume the type (field access is type-checked) ──
+// ── Runtime exercise ──
 
-async function demo() {
+const alice: User = UserSchema.parse({
+  id: 1,
+  email: 'alice@example.com',
+  firstName: 'Alice',
+  lastName: 'Smith',
+  phone: '555-1234',
+})
+
+const bob: User = UserSchema.parse({
+  id: 2,
+  email: 'bob@example.com',
+  firstName: null,
+  lastName: null,
+  phone: null,
+})
+
+console.log(`id: ${alice.id}`)
+console.log(`email: ${alice.email}`)
+console.log(`name: ${alice.firstName} ${alice.lastName}`)
+console.log(`phone: ${alice.phone}`)
+console.log(`id: ${bob.id}`)
+console.log(`email: ${bob.email}`)
+console.log(`name: ${bob.firstName ?? '(anon)'}`)
+console.log(`phone: ${bob.phone ?? '(none)'}`)
+
+// ── Negative tests (type errors caught at compile time) ──
+
+async function _negativeTests() {
   const user = await fetchUser(1)
-  console.log(user.firstName, user.email)
-
-  // user is fully type-safe — these all fail at compile time:
   // @ts-expect-error — property doesn't exist on User
   user.username
   // @ts-expect-error — id is number, not string
